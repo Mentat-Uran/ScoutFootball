@@ -9,9 +9,10 @@ def build_default_architecture() -> ProjectArchitecture:
     return ProjectArchitecture(
         package_name="scoutlab",
         status=(
-            "Phase 9 Streamlit MVP initialized; "
-            "adapter, bridge-building, feature-store, baseline-model, "
-            "and interactive visualization primitives exist."
+            "Phase 10 pipeline and API layer initialized; "
+            "CLI ingest/build-features/train/validate/serve commands, "
+            "data validation gates, probability calibration, "
+            "FastAPI draft, and Streamlit MVP all operational."
         ),
         module_boundaries=(
             ModuleBoundary(
@@ -158,6 +159,12 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv sync",
             "uv run pytest",
             "uv run ruff check .",
-            "uv run python -m scoutlab",
+            "uv run python -m scoutlab info",
+            "uv run python -m scoutlab ingest",
+            "uv run python -m scoutlab build-features",
+            "uv run python -m scoutlab train",
+            "uv run python -m scoutlab validate",
+            "uv run python -m scoutlab serve",
+            "uv run streamlit run src/scoutlab/app/streamlit_app.py",
         ),
     )
