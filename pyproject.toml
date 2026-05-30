@@ -4,19 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scoutlab"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local-first football data research platform with compliant data sourcing."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "duckdb>=1.4,<2.0",
+  "fastapi>=0.115,<1.0",
   "lxml>=5.3,<6.0",
   "pandas>=2.3,<3.0",
   "plotly>=6.0,<7.0",
   "pydantic>=2.11,<3.0",
   "scikit-learn>=1.6,<2.0",
   "streamlit>=1.45,<2.0",
+  "uvicorn>=0.34,<1.0",
 ]
+
+[project.scripts]
+scoutlab = "scoutlab.__main__:main"
 
 [dependency-groups]
 dev = [

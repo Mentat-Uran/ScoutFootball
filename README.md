@@ -102,7 +102,12 @@ tests/
 uv sync
 uv run pytest
 uv run ruff check .
-uv run python -m scoutlab
+PYTHONPATH=src uv run python -m scoutlab info
+PYTHONPATH=src uv run python -m scoutlab ingest
+PYTHONPATH=src uv run python -m scoutlab build-features
+PYTHONPATH=src uv run python -m scoutlab train
+PYTHONPATH=src uv run python -m scoutlab validate
+PYTHONPATH=src uv run python -m scoutlab serve
 uv run streamlit run src/scoutlab/app/streamlit_app.py
 ```
 

@@ -2,7 +2,7 @@
 
 本文件是后续开发的 roadmap 真源。所有实现都应按小而稳定的切片推进，每个切片完成后再进入下一项。
 
-当前状态：已完成 Phase 1–9 的首批实现。仓库已有 `pyproject.toml`、`src/scoutlab/`、`tests/`、`data/` 目录占位，以及 DuckDB 查询入口、Parquet 幂等写入、ingest metadata sidecar、`source_request_log` 结构、核心表定义草案、共享抓取缓存/限速/重试层、`StatsBomb Open Data`、`Football-Data.co.uk`、`Club Elo`、`Understat`、受限 `FBref`、`Transfermarkt manual importer`、名称标准化与球队/球员 bridge builder、`team_match`、`player_match`、`team_rolling`、`player_rolling` 特征第一刀、带时间序列切分与 OOF 预测的身价合理性 baseline，以及独立 Poisson 比分 baseline、比分概率矩阵和最小回测，以及 Streamlit + Plotly 交互式可视化 MVP（双球员雷达图、位置百分位条形图、趋势图、身价散点图、比分概率矩阵热图）；但尚未接入调度管线和扩展阶段。
+当前状态：已完成 Phase 1–10 的首批实现。仓库已有 `pyproject.toml`、`src/scoutlab/`、`tests/`、`data/` 目录占位，以及 DuckDB 查询入口、Parquet 幂等写入、ingest metadata sidecar、`source_request_log` 结构、核心表定义草案、共享抓取缓存/限速/重试层、`StatsBomb Open Data`、`Football-Data.co.uk`、`Club Elo`、`Understat`、受限 `FBref`、`Transfermarkt manual importer`、名称标准化与球队/球员 bridge builder、`team_match`、`player_match`、`team_rolling`、`player_rolling` 特征第一刀、带时间序列切分与 OOF 预测的身价合理性 baseline，以及独立 Poisson 比分 baseline、比分概率矩阵和最小回测，以及 Streamlit + Plotly 交互式可视化 MVP（双球员雷达图、位置百分位条形图、趋势图、身价散点图、比分概率矩阵热图），以及 CLI 管线入口（`scoutlab info/ingest/build-features/train/validate/serve`）、数据校验层（Parquet 存在性/行数/日期范围/null key 检查）、概率校准（isotonic regression + Brier score）、日更/周度管线入口、FastAPI 服务层草案；但尚未接入真实数据端到端验证和扩展阶段。
 
 ## 全局验收原则
 
