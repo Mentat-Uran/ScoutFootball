@@ -8,12 +8,42 @@ import pandas as pd
 
 BIG5_COMBINED = "Big 5 European Leagues Combined"
 BUNDESLIGA = "GER-Bundesliga"
+
+# Extended league constants (not part of Big 5 Combined view)
+PRIMEIRA_LIGA = "POR-Primeira Liga"
+EREDIVISIE = "NED-Eredivisie"
+SUPER_LIG = "TUR-Süper Lig"
+SCOTTISH_PREMIERSHIP = "SCO-Scottish Premiership"
+FIRST_DIVISION_A = "BEL-First Division A"
+
+SUPPORTED_LEAGUES = {
+    "ENG-Premier League",
+    "ESP-La Liga",
+    "FRA-Ligue 1",
+    "GER-Bundesliga",
+    "ITA-Serie A",
+    PRIMEIRA_LIGA,
+    EREDIVISIE,
+    SUPER_LIG,
+    SCOTTISH_PREMIERSHIP,
+    FIRST_DIVISION_A,
+}
+
+# Backward-compatible alias
 EXPECTED_BIG5_LEAGUES = {
     "ENG-Premier League",
     "ESP-La Liga",
     "FRA-Ligue 1",
     "GER-Bundesliga",
     "ITA-Serie A",
+}
+
+EXTENDED_LEAGUES = {
+    PRIMEIRA_LIGA,
+    EREDIVISIE,
+    SUPER_LIG,
+    SCOTTISH_PREMIERSHIP,
+    FIRST_DIVISION_A,
 }
 
 
@@ -100,3 +130,47 @@ def _values_equal(left: object, right: object) -> bool:
     if pd.isna(left) and pd.isna(right):
         return True
     return bool(left == right)
+
+
+def read_player_season_stats_extended(
+    season: str,
+    *,
+    stat_type: str,
+    leagues: Iterable[str] | None = None,
+) -> pd.DataFrame:
+    """Fetch player season stats for non-Big5 leagues individually.
+
+    These leagues are not included in the Big 5 Combined view on FBref,
+    so each must be fetched separately via soccerdata.
+
+    Args:
+        season: Season string like "2024-2025".
+        stat_type: FBref stat type (standard, shooting, passing, etc.).
+        leagues: Iterable of league names to fetch. Defaults to EXTENDED_LEAGUES.
+
+    Returns:
+        Combined DataFrame with all requested league data.
+    """
+    import soccerdata as sd
+
+    if leagues is None:
+        leagues = EXTENDED_LEAGUES
+
+    frames: list[pd.DataFrame] = []
+    for league in leagues:
+        try:
+            fbref = sd.FBref(leagues=[league], seasons=[season])
+            frame = fbref.read_player_season_stats(stat_type=stat_type)
+            if not frame.empty:
+                frames.append(frame)
+        except Exception:
+            # Some leagues may not have all stat_types available; skip gracefully
+            continue
+
+    if not frames:
+        return pd.DataFrame()
+
+    combined = pd.concat(frames, axis=0)
+    if combined.index.has_duplicates:
+        combined = combined[~combined.index.duplicated(keep="first")]
+    return combined.sort_index()

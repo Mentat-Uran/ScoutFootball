@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scoutlab.config import PlatformSettings
+from scoutlab.config import DEFAULT_INGEST_CONFIG, IngestConfig, PlatformSettings
 from scoutlab.entities.normalize import normalize_country_name, normalize_person_name
 from scoutlab.evaluation.validation import run_pre_training_validation
 from scoutlab.features.player_match import build_player_match_features
@@ -31,24 +31,34 @@ def _log_path() -> Path:
 
 
 def run_daily_ingest(
-    sources: tuple[str, ...] = ("statsbomb_open", "football_data", "clubelo"),
+    sources: tuple[str, ...] = ("statsbomb_open", "football_data", "clubelo", "understat"),
     *,
     settings: PlatformSettings | None = None,
+    ingest_config: IngestConfig | None = None,
 ) -> dict[str, str]:
     resolved = settings or _settings()
+    config = ingest_config or DEFAULT_INGEST_CONFIG
     results: dict[str, str] = {}
     timestamp = datetime.now(tz=UTC).isoformat()
 
     for source in sources:
         try:
             if source == "statsbomb_open":
-                results[source] = _ingest_statsbomb(resolved)
+                results[source] = _ingest_statsbomb(resolved, ingest_config=config)
             elif source == "football_data":
-                results[source] = _ingest_football_data(resolved)
+                results[source] = _ingest_football_data(resolved, ingest_config=config)
             elif source == "clubelo":
                 results[source] = _ingest_clubelo(resolved)
             elif source == "understat":
-                results[source] = _ingest_understat(resolved)
+                results[source] = _ingest_understat(resolved, ingest_config=config)
+            elif source == "sofascore":
+                results[source] = _ingest_sofascore(resolved, ingest_config=config)
+            elif source == "sofifa":
+                results[source] = _ingest_sofifa(resolved, ingest_config=config)
+            elif source == "api_football":
+                results[source] = _ingest_api_football(resolved, ingest_config=config)
+            elif source == "transfermarkt_datasets":
+                results[source] = _ingest_transfermarkt_datasets(resolved, ingest_config=config)
             else:
                 results[source] = f"skipped: unknown source '{source}'"
         except Exception as exc:
@@ -157,9 +167,15 @@ def run_weekly_train(
     return results
 
 
-def _ingest_statsbomb(settings: PlatformSettings) -> str:
+def _ingest_statsbomb(
+    settings: PlatformSettings,
+    *,
+    ingest_config: IngestConfig | None = None,
+) -> str:
     """Read cached StatsBomb open-data JSONs and consolidate into parquet."""
     from scoutlab.adapters.statsbomb_open import load_matches
+
+    config = ingest_config or DEFAULT_INGEST_CONFIG
 
     match_dir = settings.raw_root / "statsbomb_open" / "matches"
     if not match_dir.exists():
@@ -173,6 +189,13 @@ def _ingest_statsbomb(settings: PlatformSettings) -> str:
 
     if not combos:
         return "skipped: no cached StatsBomb match JSONs found"
+
+    # Filter by configured season range
+    valid_seasons = set(config.seasons)
+    combos = [(cid, sid) for cid, sid in combos if sid in valid_seasons]
+
+    if not combos:
+        return "skipped: no StatsBomb seasons within configured range"
 
     frames: list[pd.DataFrame] = []
     for competition_id, season_id in sorted(combos):
@@ -200,31 +223,31 @@ def _ingest_statsbomb(settings: PlatformSettings) -> str:
     return f"ok ({len(combined)} matches from {len(combos)} season(s) -> {output_path.name})"
 
 
-def _ingest_football_data(settings: PlatformSettings) -> str:
+def _ingest_football_data(
+    settings: PlatformSettings,
+    *,
+    ingest_config: IngestConfig | None = None,
+) -> str:
     """Read cached Football-Data CSVs and consolidate into combined_results.parquet."""
     from scoutlab.adapters.football_data import download_csv
+
+    config = ingest_config or DEFAULT_INGEST_CONFIG
 
     fd_dir = settings.raw_root / "football_data"
     if not fd_dir.exists():
         return "skipped: no Football-Data cache directory"
 
-    league_codes = ("E0", "SP1", "F1", "I1", "D1")
-    league_name_map = {
-        "E0": "Premier League",
-        "SP1": "La Liga",
-        "F1": "Ligue 1",
-        "I1": "Serie A",
-        "D1": "Bundesliga",
-    }
+    fd_leagues = config.football_data_leagues
+    league_codes = [lg.football_data_code for lg in fd_leagues]
+    league_name_map = {lg.football_data_code: lg.name for lg in fd_leagues}
+    season_codes = config.football_data_season_codes
+
     frames: list[pd.DataFrame] = []
     loaded = 0
 
-    for season_dir in sorted(fd_dir.iterdir()):
-        if not season_dir.is_dir():
-            continue
-        season = season_dir.name
+    for season in season_codes:
         for league_code in league_codes:
-            csv_path = season_dir / f"{league_code}.csv"
+            csv_path = fd_dir / season / f"{league_code}.csv"
             if not csv_path.exists():
                 continue
             try:
@@ -269,11 +292,18 @@ def _ingest_clubelo(settings: PlatformSettings) -> str:
         return f"degraded: Club Elo API unavailable ({type(exc).__name__})"
 
 
-def _ingest_understat(settings: PlatformSettings) -> str:
+def _ingest_understat(
+    settings: PlatformSettings,
+    *,
+    ingest_config: IngestConfig | None = None,
+) -> str:
     """Try to fetch Understat league player stats. Degrades gracefully on failure."""
     from scoutlab.adapters.understat import fetch_league_players
 
-    leagues = [("EPL", 2024), ("La_Liga", 2024), ("Serie_A", 2024)]
+    config = ingest_config or DEFAULT_INGEST_CONFIG
+    understat_leagues = config.understat_leagues
+    leagues = [(lg.understat_name, season) for lg in understat_leagues for season in config.seasons]
+
     total = 0
     errors: list[str] = []
 
@@ -288,6 +318,123 @@ def _ingest_understat(settings: PlatformSettings) -> str:
     if total > 0:
         return f"ok ({total} player records)"
     return f"degraded: all Understat fetches failed ({'; '.join(errors)})"
+
+
+def _ingest_sofascore(
+    settings: PlatformSettings,
+    *,
+    ingest_config: IngestConfig | None = None,
+) -> str:
+    """Fetch SofaScore player match stats for configured leagues and seasons."""
+    from scoutlab.adapters.sofascore import fetch_player_match_stats
+
+    config = ingest_config or DEFAULT_INGEST_CONFIG
+    total = 0
+    errors: list[str] = []
+
+    for lg in config.leagues:
+        if lg.sofascore_id is None:
+            continue
+        for season_year in config.seasons:
+            season_str = f"{season_year}-{season_year + 1}"
+            try:
+                result = fetch_player_match_stats(lg.name, season_str, settings=settings)
+                total += result.metadata.record_count
+            except Exception as exc:
+                errors.append(f"{lg.name}/{season_str}: {type(exc).__name__}")
+                logger.warning("SofaScore fetch failed for %s %s: %s", lg.name, season_str, exc)
+
+    if total > 0:
+        return f"ok ({total} records)"
+    if errors:
+        return f"degraded: all SofaScore fetches failed ({'; '.join(errors)})"
+    return "skipped: no leagues with sofascore_id configured"
+
+
+def _ingest_sofifa(
+    settings: PlatformSettings,
+    *,
+    ingest_config: IngestConfig | None = None,
+) -> str:
+    """Fetch SoFIFA player ratings for configured leagues and seasons."""
+    config = ingest_config or DEFAULT_INGEST_CONFIG
+
+    sofifa_leagues = [lg for lg in config.leagues if lg.sofifa_id is not None]
+    if not sofifa_leagues:
+        return "skipped: no leagues with sofifa_id configured"
+
+    # SoFIFA adapter not yet implemented — placeholder
+    logger.warning("SoFIFA adapter not yet implemented; skipping ingest")
+    return "skipped: SoFIFA adapter not yet implemented"
+
+
+def _ingest_api_football(
+    settings: PlatformSettings,
+    *,
+    ingest_config: IngestConfig | None = None,
+) -> str:
+    """Fetch API-Football data (injuries, transfers, coaches) for configured leagues."""
+    from scoutlab.adapters.api_football import ApiKeyMissingError, fetch_injuries
+
+    config = ingest_config or DEFAULT_INGEST_CONFIG
+
+    api_leagues = [lg for lg in config.leagues if lg.api_football_id is not None]
+    if not api_leagues:
+        return "skipped: no leagues with api_football_id configured"
+
+    total = 0
+    errors: list[str] = []
+
+    for lg in api_leagues:
+        for season_year in config.seasons:
+            try:
+                result = fetch_injuries(lg.api_football_id, season_year, settings=settings)
+                total += result.metadata.record_count
+            except ApiKeyMissingError:
+                return "skipped: API_FOOTBALL_KEY not configured"
+            except Exception as exc:
+                errors.append(f"{lg.name}/{season_year}: {type(exc).__name__}")
+                logger.warning("API-Football fetch failed for %s %d: %s", lg.name, season_year, exc)
+
+    if total > 0:
+        return f"ok ({total} injury records)"
+    if errors:
+        return f"degraded: all API-Football fetches failed ({'; '.join(errors)})"
+    return "skipped: no data fetched from API-Football"
+
+
+def _ingest_transfermarkt_datasets(
+    settings: PlatformSettings,
+    *,
+    ingest_config: IngestConfig | None = None,
+) -> str:
+    """Import Transfermarkt dataset files from the manual import directory."""
+    tm_dir = settings.raw_root / "transfermarkt_manual"
+    if not tm_dir.exists():
+        return "skipped: no transfermarkt_manual directory"
+
+    from scoutlab.adapters.transfermarkt_manual import load_snapshot
+
+    csv_files = sorted(f for f in tm_dir.glob("*.csv") if not f.name.startswith("."))
+    if not csv_files:
+        return "skipped: no CSV files in transfermarkt_manual"
+
+    total = 0
+    errors: list[str] = []
+
+    for csv_file in csv_files:
+        try:
+            result = load_snapshot(csv_file)
+            total += result.metadata.record_count
+        except Exception as exc:
+            errors.append(f"{csv_file.name}: {type(exc).__name__}")
+            logger.warning("Transfermarkt import failed for %s: %s", csv_file.name, exc)
+
+    if total > 0:
+        return f"ok ({total} player records from {len(csv_files)} file(s))"
+    if errors:
+        return f"degraded: all Transfermarkt imports failed ({'; '.join(errors)})"
+    return "skipped: no valid Transfermarkt data found"
 
 
 def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataFrame:
@@ -319,7 +466,9 @@ def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataF
 
 def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFrame:
     """Aggregate StatsBomb events into per-player-per-match appearances."""
-    events_path = settings.raw_root / "statsbomb_open" / "events_sample.parquet"
+    events_path = settings.raw_root / "statsbomb_open" / "events_all.parquet"
+    if not events_path.exists():
+        events_path = settings.raw_root / "statsbomb_open" / "events_sample.parquet"
     matches_path = settings.raw_root / "statsbomb_open" / "big5_matches.parquet"
 
     if not events_path.exists() or not matches_path.exists():

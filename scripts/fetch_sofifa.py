@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-抓取 Understat 10 赛季五大联赛球员数据
-包含 xG, xA, npxG, xGChain, xGBuildup
+抓取 SoFIFA 球员属性数据 (FIFA 20-25)
+覆盖 Big 5 + 扩展联赛
 """
 
 import sys
@@ -10,23 +10,33 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
-from scoutlab.adapters.common import CachedHttpClient
-from scoutlab.adapters.understat import fetch_league_players
+
+from scoutlab.adapters.sofifa import fetch_player_attributes
 from scoutlab.config import PlatformSettings
 
 
 def main():
     settings = PlatformSettings.from_root()
-    client = CachedHttpClient(settings=settings)
 
-    # Understat 联赛名 (含 RFPL: Russian Premier League)
-    leagues = ["EPL", "La_Liga", "Bundesliga", "Serie_A", "Ligue_1", "RFPL"]
-    
-    # 10 赛季: 2016/17 to 2025/26
-    seasons = [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+    # Big 5 + 扩展联赛 (SoFIFA league identifiers)
+    leagues = [
+        "ENG-Premier League",
+        "ESP-La Liga",
+        "GER-Bundesliga",
+        "ITA-Serie A",
+        "FRA-Ligue 1",
+        "POR-Primeira Liga",
+        "NED-Eredivisie",
+        "TUR-Süper Lig",
+        "SCO-Scottish Premiership",
+        "BEL-First Division A",
+    ]
+
+    # FIFA 20-25 (season 20, 21, 22, 23, 24, 25)
+    seasons = [20, 21, 22, 23, 24, 25]
 
     print("=" * 60)
-    print("Understat - 10 赛季五大联赛球员数据")
+    print("SoFIFA - FIFA 20-25 球员属性数据")
     print("=" * 60)
 
     all_frames = []
@@ -36,26 +46,23 @@ def main():
     for league in leagues:
         for season in seasons:
             try:
-                result = fetch_league_players(
+                result = fetch_player_attributes(
                     league,
                     season,
-                    client=client,
                     settings=settings,
                     force_refresh=False,
                 )
                 df = result.dataframe
-                df["league"] = league
-                df["season"] = f"{season}{season+1-2000:02d}"  # e.g. 2016 -> "1617"
                 all_frames.append(df)
                 success_count += 1
-                print(f"  ✓ {league} {season}: {len(df)} 球员")
+                print(f"  ✓ {league} FIFA {season}: {len(df)} 球员")
             except Exception as e:
                 fail_count += 1
-                print(f"  ✗ {league} {season}: {e}")
+                print(f"  ✗ {league} FIFA {season}: {e}")
 
     if all_frames:
         combined = pd.concat(all_frames, ignore_index=True)
-        output_path = settings.raw_root / "understat" / "players_10seasons.parquet"
+        output_path = settings.raw_root / "sofifa" / "player_attributes.parquet"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         combined.to_parquet(output_path, index=False)
 
@@ -64,17 +71,24 @@ def main():
         print(f"成功获取: {success_count}/{len(leagues) * len(seasons)} 个数据集")
         print(f"失败: {fail_count}")
 
-        # Show season distribution
-        print("\n赛季分布:")
+        # Season distribution
+        print("\nFIFA 版本分布:")
         for season in sorted(combined["season"].unique()):
             count = len(combined[combined["season"] == season])
-            print(f"  {season}: {count} 条")
+            print(f"  FIFA {season}: {count} 条")
 
-        # Show league distribution
+        # League distribution
         print("\n联赛分布:")
         for league in sorted(combined["league"].unique()):
             count = len(combined[combined["league"] == league])
             print(f"  {league}: {count} 条")
+
+        # Position distribution
+        if "position" in combined.columns:
+            print("\n位置分布:")
+            for pos in combined["position"].dropna().value_counts().head(15).index:
+                count = len(combined[combined["position"] == pos])
+                print(f"  {pos}: {count} 条")
 
     return success_count > 0
 

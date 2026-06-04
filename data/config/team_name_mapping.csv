@@ -1,0 +1,402 @@
+source_name,canonical_name,source
+Manchester City,Manchester City,fbref
+Man City,Manchester City,understat
+Manchester City,Manchester City,understat
+Man City,Manchester City,football-data
+Man City,Manchester City,sofascore
+Manchester United,Manchester United,fbref
+Man Utd,Manchester United,understat
+Man United,Manchester United,understat
+Manchester United,Manchester United,understat
+Man United,Manchester United,football-data
+Man Utd,Manchester United,football-data
+Manchester United,Manchester United,sofascore
+Liverpool,Liverpool,fbref
+Liverpool,Liverpool,understat
+Liverpool,Liverpool,football-data
+Liverpool,Liverpool,sofascore
+Arsenal,Arsenal,fbref
+Arsenal,Arsenal,understat
+Arsenal,Arsenal,football-data
+Arsenal,Arsenal,sofascore
+Chelsea,Chelsea,fbref
+Chelsea,Chelsea,understat
+Chelsea,Chelsea,football-data
+Chelsea,Chelsea,sofascore
+Tottenham Hotspur,Tottenham Hotspur,fbref
+Tottenham,Tottenham Hotspur,understat
+Spurs,Tottenham Hotspur,understat
+Tottenham,Tottenham Hotspur,football-data
+Tottenham Hotspur,Tottenham Hotspur,sofascore
+Tottenham,Tottenham Hotspur,sofascore
+Wolverhampton Wanderers,Wolverhampton Wanderers,fbref
+Wolves,Wolverhampton Wanderers,understat
+Wolves,Wolverhampton Wanderers,football-data
+Wolverhampton Wanderers,Wolverhampton Wanderers,sofascore
+Wolves,Wolverhampton Wanderers,sofascore
+Newcastle United,Newcastle United,fbref
+Newcastle,Newcastle United,understat
+Newcastle Utd,Newcastle United,football-data
+Newcastle United,Newcastle United,sofascore
+Newcastle,Newcastle United,sofascore
+Aston Villa,Aston Villa,fbref
+Aston Villa,Aston Villa,understat
+Aston Villa,Aston Villa,football-data
+Aston Villa,Aston Villa,sofascore
+Brighton and Hove Albion,Brighton and Hove Albion,fbref
+Brighton,Brighton and Hove Albion,understat
+Brighton,Brighton and Hove Albion,football-data
+Brighton and Hove Albion,Brighton and Hove Albion,sofascore
+Brighton,Brighton and Hove Albion,sofascore
+West Ham United,West Ham United,fbref
+West Ham,West Ham United,understat
+West Ham Utd,West Ham United,football-data
+West Ham United,West Ham United,sofascore
+West Ham,West Ham United,sofascore
+Crystal Palace,Crystal Palace,fbref
+Crystal Palace,Crystal Palace,understat
+Crystal Palace,Crystal Palace,football-data
+Crystal Palace,Crystal Palace,sofascore
+Everton,Everton,fbref
+Everton,Everton,understat
+Everton,Everton,football-data
+Everton,Everton,sofascore
+Leicester City,Leicester City,fbref
+Leicester,Leicester City,understat
+Leicester City,Leicester City,football-data
+Leicester City,Leicester City,sofascore
+Leicester,Leicester City,sofascore
+Leeds United,Leeds United,fbref
+Leeds,Leeds United,understat
+Leeds United,Leeds United,football-data
+Leeds United,Leeds United,sofascore
+Leeds,Leeds United,sofascore
+Southampton,Southampton,fbref
+Southampton,Southampton,understat
+Southampton,Southampton,football-data
+Southampton,Southampton,sofascore
+Nottingham Forest,Nottingham Forest,fbref
+Nottm Forest,Nottingham Forest,understat
+Nottingham Forest,Nottingham Forest,football-data
+Nottingham Forest,Nottingham Forest,sofascore
+Fulham,Fulham,fbref
+Fulham,Fulham,understat
+Fulham,Fulham,football-data
+Fulham,Fulham,sofascore
+Bournemouth,Bournemouth,fbref
+Bournemouth,Bournemouth,understat
+Bournemouth,Bournemouth,football-data
+Bournemouth,Bournemouth,sofascore
+Brentford,Brentford,fbref
+Brentford,Brentford,understat
+Brentford,Brentford,football-data
+Brentford,Brentford,sofascore
+Ipswich Town,Ipswich Town,fbref
+Ipswich,Ipswich Town,understat
+Ipswich Town,Ipswich Town,football-data
+Ipswich Town,Ipswich Town,sofascore
+Burnley,Burnley,fbref
+Burnley,Burnley,understat
+Burnley,Burnley,football-data
+Burnley,Burnley,sofascore
+Sheffield United,Sheffield United,fbref
+Sheffield Utd,Sheffield United,understat
+Sheffield United,Sheffield United,football-data
+Sheffield United,Sheffield United,sofascore
+FC Barcelona,FC Barcelona,fbref
+Barcelona,FC Barcelona,understat
+Barca,FC Barcelona,understat
+Barcelona,FC Barcelona,football-data
+FC Barcelona,FC Barcelona,sofascore
+Barcelona,FC Barcelona,sofascore
+Real Madrid,Real Madrid,fbref
+Real Madrid,Real Madrid,understat
+Real Madrid,Real Madrid,football-data
+Real Madrid,Real Madrid,sofascore
+Atletico Madrid,Atlético Madrid,fbref
+Atletico Madrid,Atlético Madrid,understat
+Atletico,Atlético Madrid,understat
+Atletico Madrid,Atlético Madrid,football-data
+Atletico Madrid,Atlético Madrid,sofascore
+Atletico,Atlético Madrid,sofascore
+Athletic Club,Athletic Club,fbref
+Athletic Bilbao,Athletic Club,understat
+Athletic Bilbao,Athletic Club,football-data
+Athletic Club,Athletic Club,sofascore
+Athletic Bilbao,Athletic Club,sofascore
+Real Sociedad,Real Sociedad,fbref
+Real Sociedad,Real Sociedad,understat
+Real Sociedad,Real Sociedad,football-data
+Real Sociedad,Real Sociedad,sofascore
+Sevilla,Sevilla,fbref
+Sevilla FC,Sevilla,understat
+Sevilla,Sevilla,football-data
+Sevilla,Sevilla,sofascore
+Villarreal,Villarreal,fbref
+Villarreal,Villarreal,understat
+Villarreal,Villarreal,football-data
+Villarreal,Villarreal,sofascore
+Real Betis,Real Betis,fbref
+Betis,Real Betis,understat
+Real Betis,Real Betis,football-data
+Real Betis,Real Betis,sofascore
+Betis,Real Betis,sofascore
+Valencia,Valencia,fbref
+Valencia CF,Valencia,understat
+Valencia,Valencia,football-data
+Valencia,Valencia,sofascore
+Celta Vigo,Celta Vigo,fbref
+Celta de Vigo,Celta Vigo,understat
+Celta Vigo,Celta Vigo,football-data
+Celta Vigo,Celta Vigo,sofascore
+Girona,Girona,fbref
+Girona FC,Girona,understat
+Girona,Girona,football-data
+Girona,Girona,sofascore
+FC Bayern Munich,FC Bayern Munich,fbref
+Bayern Munich,FC Bayern Munich,understat
+Bayern,FC Bayern Munich,understat
+Bayern Munich,FC Bayern Munich,football-data
+FC Bayern Munich,FC Bayern Munich,sofascore
+Bayern Munich,FC Bayern Munich,sofascore
+Bayern,FC Bayern Munich,sofascore
+Borussia Dortmund,Borussia Dortmund,fbref
+Dortmund,Borussia Dortmund,understat
+Borussia Dortmund,Borussia Dortmund,football-data
+Borussia Dortmund,Borussia Dortmund,sofascore
+Dortmund,Borussia Dortmund,sofascore
+Bayer Leverkusen,Bayer Leverkusen,fbref
+Leverkusen,Bayer Leverkusen,understat
+Bayer Leverkusen,Bayer Leverkusen,football-data
+Bayer Leverkusen,Bayer Leverkusen,sofascore
+Leverkusen,Bayer Leverkusen,sofascore
+RB Leipzig,RB Leipzig,fbref
+RB Leipzig,RB Leipzig,understat
+RB Leipzig,RB Leipzig,football-data
+RB Leipzig,RB Leipzig,sofascore
+Eintracht Frankfurt,Eintracht Frankfurt,fbref
+Frankfurt,Eintracht Frankfurt,understat
+Eintracht Frankfurt,Eintracht Frankfurt,football-data
+Eintracht Frankfurt,Eintracht Frankfurt,sofascore
+Frankfurt,Eintracht Frankfurt,sofascore
+SC Freiburg,SC Freiburg,fbref
+Freiburg,SC Freiburg,understat
+Freiburg,SC Freiburg,football-data
+SC Freiburg,SC Freiburg,sofascore
+Freiburg,SC Freiburg,sofascore
+VfB Stuttgart,VfB Stuttgart,fbref
+Stuttgart,VfB Stuttgart,understat
+Stuttgart,VfB Stuttgart,football-data
+VfB Stuttgart,VfB Stuttgart,sofascore
+Stuttgart,VfB Stuttgart,sofascore
+VfL Wolfsburg,VfL Wolfsburg,fbref
+Wolfsburg,VfL Wolfsburg,understat
+Wolfsburg,VfL Wolfsburg,football-data
+VfL Wolfsburg,VfL Wolfsburg,sofascore
+Wolfsburg,VfL Wolfsburg,sofascore
+Borussia Monchengladbach,Borussia Monchengladbach,fbref
+Monchengladbach,Borussia Monchengladbach,understat
+M'gladbach,Borussia Monchengladbach,football-data
+Borussia Monchengladbach,Borussia Monchengladbach,sofascore
+Monchengladbach,Borussia Monchengladbach,sofascore
+TSG Hoffenheim,TSG Hoffenheim,fbref
+Hoffenheim,TSG Hoffenheim,understat
+Hoffenheim,TSG Hoffenheim,football-data
+TSG Hoffenheim,TSG Hoffenheim,sofascore
+Hoffenheim,TSG Hoffenheim,sofascore
+FC Union Berlin,FC Union Berlin,fbref
+Union Berlin,FC Union Berlin,understat
+Union Berlin,FC Union Berlin,football-data
+FC Union Berlin,FC Union Berlin,sofascore
+Union Berlin,FC Union Berlin,sofascore
+FC Koln,FC Koln,fbref
+Koln,FC Koln,understat
+FC Koln,FC Koln,football-data
+FC Koln,FC Koln,sofascore
+Koln,FC Koln,sofascore
+FC Augsburg,FC Augsburg,fbref
+Augsburg,FC Augsburg,understat
+Augsburg,FC Augsburg,football-data
+FC Augsburg,FC Augsburg,sofascore
+Augsburg,FC Augsburg,sofascore
+Mainz 05,Mainz 05,fbref
+Mainz,Mainz 05,understat
+Mainz 05,Mainz 05,football-data
+Mainz 05,Mainz 05,sofascore
+Mainz,Mainz 05,sofascore
+Werder Bremen,Werder Bremen,fbref
+Bremen,Werder Bremen,understat
+Werder Bremen,Werder Bremen,football-data
+Werder Bremen,Werder Bremen,sofascore
+Bremen,Werder Bremen,sofascore
+SV Darmstadt 98,SV Darmstadt 98,fbref
+Darmstadt,SV Darmstadt 98,understat
+Darmstadt 98,SV Darmstadt 98,football-data
+SV Darmstadt 98,SV Darmstadt 98,sofascore
+Darmstadt,SV Darmstadt 98,sofascore
+FC Heidenheim,FC Heidenheim,fbref
+Heidenheim,FC Heidenheim,understat
+Heidenheim,FC Heidenheim,football-data
+FC Heidenheim,FC Heidenheim,sofascore
+Heidenheim,FC Heidenheim,sofascore
+Paris Saint-Germain,Paris Saint-Germain,fbref
+PSG,Paris Saint-Germain,understat
+Paris SG,Paris Saint-Germain,understat
+Paris Saint-Germain,Paris Saint-Germain,football-data
+PSG,Paris Saint-Germain,football-data
+Paris Saint-Germain,Paris Saint-Germain,sofascore
+PSG,Paris Saint-Germain,sofascore
+Olympique Marseille,Olympique Marseille,fbref
+Marseille,Olympique Marseille,understat
+Marseille,Olympique Marseille,football-data
+Olympique Marseille,Olympique Marseille,sofascore
+Marseille,Olympique Marseille,sofascore
+AS Monaco,AS Monaco,fbref
+Monaco,AS Monaco,understat
+Monaco,AS Monaco,football-data
+AS Monaco,AS Monaco,sofascore
+Monaco,AS Monaco,sofascore
+Olympique Lyonnais,Olympique Lyonnais,fbref
+Lyon,Olympique Lyonnais,understat
+Lyon,Olympique Lyonnais,football-data
+Olympique Lyonnais,Olympique Lyonnais,sofascore
+Lyon,Olympique Lyonnais,sofascore
+LOSC Lille,LOSC Lille,fbref
+Lille,LOSC Lille,understat
+Lille,LOSC Lille,football-data
+LOSC Lille,LOSC Lille,sofascore
+Lille,LOSC Lille,sofascore
+OGC Nice,OGC Nice,fbref
+Nice,OGC Nice,understat
+Nice,OGC Nice,football-data
+OGC Nice,OGC Nice,sofascore
+Nice,OGC Nice,sofascore
+Stade Rennais,Stade Rennais,fbref
+Rennes,Stade Rennais,understat
+Rennes,Stade Rennais,football-data
+Stade Rennais,Stade Rennais,sofascore
+Rennes,Stade Rennais,sofascore
+RC Lens,RC Lens,fbref
+Lens,RC Lens,understat
+Lens,RC Lens,football-data
+RC Lens,RC Lens,sofascore
+Lens,RC Lens,sofascore
+Stade Brestois,Stade Brestois,fbref
+Brest,Stade Brestois,understat
+Brest,Stade Brestois,football-data
+Stade Brestois,Stade Brestois,sofascore
+Brest,Stade Brestois,sofascore
+Inter Milan,Inter Milan,fbref
+Inter,Inter Milan,understat
+Inter Milano,Inter Milan,understat
+Inter,Inter Milan,football-data
+Inter Milan,Inter Milan,sofascore
+Inter,Inter Milan,sofascore
+AC Milan,AC Milan,fbref
+Milan,AC Milan,understat
+AC Milan,AC Milan,football-data
+AC Milan,AC Milan,sofascore
+Milan,AC Milan,sofascore
+Juventus,Juventus,fbref
+Juve,Juventus,understat
+Juventus,Juventus,football-data
+Juventus,Juventus,sofascore
+Juve,Juventus,sofascore
+SSC Napoli,SSC Napoli,fbref
+Napoli,SSC Napoli,understat
+Napoli,SSC Napoli,football-data
+SSC Napoli,SSC Napoli,sofascore
+Napoli,SSC Napoli,sofascore
+AS Roma,AS Roma,fbref
+Roma,AS Roma,understat
+Roma,AS Roma,football-data
+AS Roma,AS Roma,sofascore
+Roma,AS Roma,sofascore
+SS Lazio,SS Lazio,fbref
+Lazio,SS Lazio,understat
+Lazio,SS Lazio,football-data
+SS Lazio,SS Lazio,sofascore
+Lazio,SS Lazio,sofascore
+Atalanta,Atalanta,fbref
+Atalanta,Atalanta,understat
+Atalanta,Atalanta,football-data
+Atalanta,Atalanta,sofascore
+ACF Fiorentina,ACF Fiorentina,fbref
+Fiorentina,ACF Fiorentina,understat
+Fiorentina,ACF Fiorentina,football-data
+ACF Fiorentina,ACF Fiorentina,sofascore
+Fiorentina,ACF Fiorentina,sofascore
+Bologna,Bologna,fbref
+Bologna FC,Bologna,understat
+Bologna,Bologna,football-data
+Bologna,Bologna,sofascore
+Torino,Torino,fbref
+Torino FC,Torino,understat
+Torino,Torino,football-data
+Torino,Torino,sofascore
+US Sassuolo,US Sassuolo,fbref
+Sassuolo,US Sassuolo,understat
+Sassuolo,US Sassuolo,football-data
+US Sassuolo,US Sassuolo,sofascore
+Sassuolo,US Sassuolo,sofascore
+Udinese,Udinese,fbref
+Udinese Calcio,Udinese,understat
+Udinese,Udinese,football-data
+Udinese,Udinese,sofascore
+Empoli,Empoli,fbref
+Empoli FC,Empoli,understat
+Empoli,Empoli,football-data
+Empoli,Empoli,sofascore
+Cagliari,Cagliari,fbref
+Cagliari Calcio,Cagliari,understat
+Cagliari,Cagliari,football-data
+Cagliari,Cagliari,sofascore
+Genoa,Genoa,fbref
+Genoa CFC,Genoa,understat
+Genoa,Genoa,football-data
+Genoa,Genoa,sofascore
+Hellas Verona,Hellas Verona,fbref
+Verona,Hellas Verona,understat
+Hellas Verona,Hellas Verona,football-data
+Hellas Verona,Hellas Verona,sofascore
+Verona,Hellas Verona,sofascore
+Parma,Parma,fbref
+Parma Calcio 1913,Parma,understat
+Parma,Parma,football-data
+Parma,Parma,sofascore
+Como,Como,fbref
+Como 1907,Como,understat
+Como,Como,football-data
+Como,Como,sofascore
+Venezia,Venezia,fbref
+Venezia FC,Venezia,understat
+Venezia,Venezia,football-data
+Venezia,Venezia,sofascore
+Monza,Monza,fbref
+AC Monza,Monza,understat
+Monza,Monza,football-data
+Monza,Monza,sofascore
+Lecce,Lecce,fbref
+US Lecce,Lecce,understat
+Lecce,Lecce,football-data
+Lecce,Lecce,sofascore
+Frosinone,Frosinone,fbref
+Frosinone Calcio,Frosinone,understat
+Frosinone,Frosinone,football-data
+Frosinone,Frosinone,sofascore
+Salernitana,Salernitana,fbref
+US Salernitana,Salernitana,understat
+Salernitana,Salernitana,football-data
+Salernitana,Salernitana,sofascore
+Spezia,Spezia,fbref
+Spezia Calcio,Spezia,understat
+Spezia,Spezia,football-data
+Spezia,Spezia,sofascore
+Cremonese,Cremonese,fbref
+US Cremonese,Cremonese,understat
+Cremonese,Cremonese,football-data
+Cremonese,Cremonese,sofascore
+Sampdoria,Sampdoria,fbref
+UC Sampdoria,Sampdoria,understat
+Sampdoria,Sampdoria,football-data
+Sampdoria,Sampdoria,sofascore
