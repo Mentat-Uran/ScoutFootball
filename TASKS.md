@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新口径重新跑完整优化并做 2526 holdout 误差复盘。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutLab 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -62,6 +62,13 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - [x] `value_fairness` OOF 训练产物。
 - [x] PyTorch GPU 评分优化器和远程 GPU 计算脚本。
 - [x] 粗位置角色重判、CM/后场/GK 权重上限、较强联赛强度曲线。
+- [x] 评分优化器 holdout 化：优化只用训练赛季，评估输出 holdout Spearman/Pearson、rank loss、校准分箱、联赛分层和 overfit gap。
+- [x] 修复 Pearson 指标误算，避免把 `spearmanr()` 的 p-value 当 Pearson。
+- [x] 修复 ST/W quality 绕路：ST/W quality cap 生效，ST attack 不再被额外压死。
+- [x] 降低 availability cap：所有位置 availability 上限收敛到 0.18-0.20，CM/DM/FB/CB/GK 不再允许用 0.30-0.36 的出勤权重主导评分。
+- [x] 球队赛季聚合从纯分钟加权改为 capped minutes + core rotation 的稳健聚合，避免评分层和球队层重复奖励原始出勤。
+- [x] CLI 和远程 GPU API 均按 capped position weights 报告权重，并输出 team aggregation 配置元数据。
+- [x] 评估报告新增 team coverage：按 league-season 输出目标球队数、评分侧球队数、匹配球队数和覆盖率，避免把 2526 数据缺口误判成模型错误。
 - [x] 重新生成 `player_ratings_optimized.parquet`。
 - [x] 将 `advise.md` 融入未来架构和实施策略文档。
 
@@ -69,10 +76,17 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 
 目标：先修训练目标，再扩展评分模型。当前球队积分相关性会偏向出勤、CM 和 GK，不能单独作为球员影响力标签。
 
+- [x] 完成第一轮反出勤捷径 guardrail：availability cap 下调、ST/W quality cap、holdout 评估、稳健球队聚合、team coverage 报告。
+- [ ] 用新 aggregation/cap 口径重新跑 GPU 优化，生成新的 `optimized_params.npy`、`optimized_params_meta.json`、holdout predictions、league metrics、calibration 和 feature importance。
+- [ ] 复盘 `PROBLEMS.md` 中的误差案例：Everton、Stuttgart、Hoffenheim、Rennes、Napoli、Real Madrid、Arsenal、PSG，记录新旧排名变化和仍未解决原因。
+- [ ] 增加出勤捷径诊断报告：minutes/starts/matches/availability 置换重要性、按位置 availability 权重、球队聚合权重分布。
+- [x] 直接修补 2526 五大联赛测试集队名，使 Premier League、La Liga、Bundesliga、Serie A、Ligue 1 的 holdout coverage 均达到 1.00。
+- [ ] 对 coverage 低于 0.90 的 league-season 禁止输出强排序结论，只允许作为低置信度诊断样本；该规则仍适用于五大联赛以外的 2526 division 和后续新增数据。
 - [ ] 定义真实标签层级：Transfermarkt 手动导入、权威奖项、国际/俱乐部出场级别、专家分档、位置内人工校准集。
 - [ ] 新增标签数据契约和校验脚本，输出 `data/gold/feature_store/player_truth_labels.parquet`。
 - [ ] 重写优化目标：组合 Spearman/NDCG、位置内排序、跨联赛校准、年龄/趋势合理性、极端样本惩罚。
 - [ ] 保留球队结果相关性作为辅助校验，不再作为主目标。
+- [ ] 补全 2526 Football-Data 覆盖或在报告中剔除积分 N/A 球队，避免把数据缺口误判为模型错误。
 - [ ] 将位置内榜单和跨位置总榜拆成两个视图。
 - [ ] 给 GK、CB、FB、DM、CM、AM、W、ST 建立位置内指标和解释模板。
 - [ ] 对 finishing 使用 shrinkage，避免小样本 `goals - xG` 过度放大。

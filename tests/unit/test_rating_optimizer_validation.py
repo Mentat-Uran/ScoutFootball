@@ -89,6 +89,82 @@ def test_build_feature_tensors_uses_train_reference_for_test_slice() -> None:
     assert set(actual.tolist()) == {float(expected_median)}
 
 
+def test_team_aggregation_weights_reduce_raw_minutes_dominance() -> None:
+    opt = _load_optimizer_module()
+    frame = pd.DataFrame(
+        [
+            {
+                "player": "High Minute Average",
+                "team": "Example FC",
+                "league": "Premier League",
+                "season": "2024-2025",
+                "sub_position": "CM",
+                "pos_idx": opt.POS_TO_IDX["CM"],
+                "matches": 38,
+                "starts": 38,
+                "minutes": 3000,
+                "npg_p90": 0.05,
+                "assists_p90": 0.05,
+                "g_a_volume": 2.0,
+                "defense_composite": 1.0,
+                "possession_composite": 1.0,
+                "npg_trend": 0.0,
+                "experience_factor": 1.0,
+            },
+            {
+                "player": "Rotated Core",
+                "team": "Example FC",
+                "league": "Premier League",
+                "season": "2024-2025",
+                "sub_position": "CM",
+                "pos_idx": opt.POS_TO_IDX["CM"],
+                "matches": 24,
+                "starts": 14,
+                "minutes": 1200,
+                "npg_p90": 0.20,
+                "assists_p90": 0.20,
+                "g_a_volume": 8.0,
+                "defense_composite": 1.2,
+                "possession_composite": 1.4,
+                "npg_trend": 0.0,
+                "experience_factor": 1.0,
+            },
+            {
+                "player": "Low Minute Reserve",
+                "team": "Example FC",
+                "league": "Premier League",
+                "season": "2024-2025",
+                "sub_position": "CM",
+                "pos_idx": opt.POS_TO_IDX["CM"],
+                "matches": 8,
+                "starts": 2,
+                "minutes": 300,
+                "npg_p90": 0.10,
+                "assists_p90": 0.08,
+                "g_a_volume": 1.0,
+                "defense_composite": 0.8,
+                "possession_composite": 0.9,
+                "npg_trend": 0.0,
+                "experience_factor": 0.5,
+            },
+        ],
+    )
+
+    feat = opt.build_feature_tensors(frame)
+    weights = feat["team_agg_weight"].numpy()
+    raw_minutes = frame["minutes"].to_numpy(dtype=float)
+    raw_share = raw_minutes / raw_minutes.sum()
+
+    assert abs(float(weights.sum()) - 1.0) < 1e-6
+    assert weights[0] < raw_share[0]
+    assert weights[1] > raw_share[1]
+
+    ratings = torch.tensor([50.0, 70.0, 55.0])
+    robust_avg = opt.compute_team_avg_ratings(feat, ratings, torch.device("cpu"))[0]
+    raw_avg = float((ratings.numpy() * raw_share).sum())
+    assert robust_avg > raw_avg
+
+
 def test_refine_role_positions_uses_history_and_profile_signals() -> None:
     opt = _load_optimizer_module()
     frame = pd.DataFrame(
@@ -196,9 +272,17 @@ def test_position_weight_caps_limit_cm_shortcuts() -> None:
     capped = opt.apply_position_weight_caps(weights)
 
     assert torch.allclose(capped.sum(dim=1), torch.ones(opt.N_POS))
-    assert capped[cm_idx, opt.DIMENSIONS.index("availability")] <= 0.30
-    assert capped[cm_idx, opt.DIMENSIONS.index("attack")] <= 0.22
-    assert capped[cm_idx, opt.DIMENSIONS.index("quality")] <= 0.24
+    assert capped[cm_idx, opt.DIMENSIONS.index("availability")] <= 0.18 + 1e-6
+    assert capped[cm_idx, opt.DIMENSIONS.index("attack")] <= 0.22 + 1e-6
+    assert capped[cm_idx, opt.DIMENSIONS.index("quality")] <= 0.24 + 1e-6
+
+    availability_idx = opt.DIMENSIONS.index("availability")
+    shortcut_weights = torch.zeros((opt.N_POS, opt.N_DIM))
+    shortcut_weights[:, availability_idx] = 0.90
+    shortcut_weights[:, opt.DIMENSIONS.index("attack")] = 0.10
+    shortcut_capped = opt.apply_position_weight_caps(shortcut_weights)
+    expected_caps = torch.tensor([row[availability_idx] for row in opt.POSITION_DIMENSION_CAPS])
+    assert torch.all(shortcut_capped[:, availability_idx] <= expected_caps + 1e-6)
 
 
 def test_holdout_evaluation_reports_metrics_calibration_and_league_layers() -> None:
@@ -221,6 +305,11 @@ def test_holdout_evaluation_reports_metrics_calibration_and_league_layers() -> N
     by_league = opt.league_metrics(evaluation["matched"], min_n=2, calibration_bins=3)
 
     assert evaluation["metrics"]["n_team_seasons"] == len(test_standings)
+    assert evaluation["metrics"]["target_team_seasons"] == len(test_standings)
+    assert evaluation["metrics"]["team_coverage"] == 1.0
     assert "rank_loss" in evaluation["metrics"]
     assert {"bin", "calibration_gap"}.issubset(evaluation["calibration"].columns)
+    assert {"target_teams", "rated_teams", "matched_teams", "coverage"}.issubset(
+        evaluation["coverage"].columns,
+    )
     assert set(by_league["league"]) == {"La Liga", "Premier League"}
