@@ -52,7 +52,10 @@ def list_teams() -> list[str]:
 
 
 def get_match_prediction(home_team: str, away_team: str) -> dict:
-    prediction = load_score_prediction()
+    try:
+        prediction = load_score_prediction(home_team, away_team)
+    except ValueError as exc:
+        return {"error": str(exc)}
     return {
         "home_team": home_team,
         "away_team": away_team,

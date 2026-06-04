@@ -21,9 +21,7 @@ def plot_score_matrix(
             colorscale="Blues",
             text=[[f"{v:.3f}" for v in row] for row in score_matrix.values],
             texttemplate="%{text}",
-            hovertemplate=(
-                "Home %{y} - Away %{x}: %{z:.4f}<extra></extra>"
-            ),
+            hovertemplate=("Home %{y} - Away %{x}: %{z:.4f}<extra></extra>"),
         )
     )
 

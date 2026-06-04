@@ -244,9 +244,8 @@ def _select_feature_columns(frame: pd.DataFrame) -> list[str]:
         if column == "age_band":
             selected.append(column)
             continue
-        if (
-            pd.api.types.is_bool_dtype(frame[column])
-            or pd.api.types.is_numeric_dtype(frame[column])
+        if pd.api.types.is_bool_dtype(frame[column]) or pd.api.types.is_numeric_dtype(
+            frame[column]
         ):
             selected.append(column)
             continue

@@ -17,3 +17,21 @@ data/reports/**
 data/logs/**
 !data/**/.gitkeep
 !data/README.md
+
+# macOS
+.DS_Store
+
+# Hermes
+.hermes/
+
+# Build artifacts
+scoutlab-gpu-server.zip
+*.zip
+
+# Data files (already excluded above but just in case)
+data/raw/**/*.parquet
+data/raw/**/*.json
+data/gold/**/*.parquet
+data/gold/**/*.npy
+data/models/**/*
+data/logs/**/*

@@ -39,8 +39,12 @@ def load_matches(
     resolved_settings = settings or PlatformSettings.from_root()
     resolved_client = client or CachedHttpClient(settings=resolved_settings)
     source_uri = f"{RAW_BASE_URL}/matches/{competition_id}/{season_id}.json"
-    cache_path = resolved_settings.raw_root / SOURCE_NAME / "matches" / str(competition_id) / (
-        f"{season_id}.json"
+    cache_path = (
+        resolved_settings.raw_root
+        / SOURCE_NAME
+        / "matches"
+        / str(competition_id)
+        / (f"{season_id}.json")
     )
     artifact = resolved_client.fetch(
         source_name=SOURCE_NAME,

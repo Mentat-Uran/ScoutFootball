@@ -19,85 +19,92 @@
 
 ## 当前项目状态
 
-当前仓库已完成 Phase 1 的基础骨架。可以假设已存在最小可运行的 Python 工程、测试目录和数据层目录占位，但不要假设已有真实数据源接入、DuckDB/Parquet 读写、业务特征或模型实现。
+Pipeline 端到端可运行：`scoutlab ingest` → `scoutlab build-features` → `scoutlab train`。
+
+**数据源 (5 个，覆盖 10 赛季):**
+- FBref: 14,356 条, 5联赛, 5赛季 (2021-2026)
+- Football-Data.co.uk: 17,936 场, 5联赛, 10赛季 (2016-2026)
+- Understat: 27,254 条, 5联赛, 10赛季 (2016-2026), 含 xG/xA/npxG
+- StatsBomb Open Data: 126 场比赛, 11,871 事件
+- Club Elo: 630 支球队 Elo 评级
+
+**评分系统:**
+- PyTorch GPU 优化器, 77 参数, Holdout Spearman=0.8382
+- 联赛系数: 基于 UEFA 官方国家系数 (football-coefficient.eu)
+- 出场时间惩罚: 硬阈值 + 线性衰减 (400分钟底分, 1200分钟满分)
+- 位置缩放: 前锋 attack 权重降低 (ST ×0.85, W ×0.90)
+- 待优化: 联赛系数和位置惩罚的平衡 (见 scripts/RATING_IMPROVEMENT_PROMPT.md)
+
+**GPU 远程计算:**
+- 服务器: Windows RTX 5070 Ti (192.168.0.189:8420)
+- 客户端: Mac 通过 REST API 发送优化任务
+- 脚本: `scripts/gpu_server.py`, `scripts/gpu_client.py`
+
+**其他已完成:**
+- Pipeline 全接通 (ingest/build-features/train)
+- value_fairness OOF 训练 (合成 market_value 占位)
+- Poisson 比分预测 (按球队名模糊匹配)
+- StatsBomb 逐场球员数据聚合 (94 场)
+- demo fallback 收紧 (log.warning + 三级状态标记)
+
+**待完成:**
+- 评分系统平衡优化 (联赛系数、位置权重)
+- Transfermarkt 真实数据导入
+- Streamlit MVP 集成优化后评分
+- Dixon-Coles 模型扩展
+- FBref 更多赛季 (2016-2021 被 CAPTCHA 封禁)
 
 除非用户明确要求进入实现阶段，否则不要补完整业务代码，也不要越过 `TASKS.md` 当前阶段批量补齐后续业务模块。
 
 ## 技术默认值
 
-- 语言：Python。
-- 包管理器：`uv`。
-- 本地数据层：DuckDB + Parquet。
-- schema 与参数校验：Pydantic。
-- 测试：pytest。
-- 代码质量：Ruff。
-- MVP 可视化：Streamlit + Plotly。
-- 后续服务层：FastAPI。
-- 后续生产存储：PostgreSQL。
+- 语言：Python
+- 包管理器：`uv`
+- 本地数据层：DuckDB + Parquet
+- schema 与参数校验：Pydantic
+- 测试：pytest
+- 代码质量：Ruff
+- MVP 可视化：Streamlit + Plotly
+- 后续服务层：FastAPI
+- 后续生产存储：PostgreSQL
 
-FastAPI、PostgreSQL、权限控制、复杂调度、视频/跟踪数据属于扩展阶段，不要在 MVP 早期强行引入。
+## GPU 优化
+
+评分权重优化使用 PyTorch，支持 Mac MPS 和 Windows CUDA。重型计算优先在 Windows 5070 Ti 上运行。
+
+GPU 远程计算服务器:
+- 服务器: Windows RTX 5070 Ti (192.168.0.189:8420)
+- 客户端: Mac 通过 REST API 发送优化任务
+- 优化结果: Holdout Spearman 0.8382, 过拟合 gap 0.03
 
 ## 开发原则
 
-- 按 `TASKS.md` 从前到后推进，不跳阶段。
-- 每次实现一个小而稳定的切片。
-- 优先实现可测试的纯函数和清晰 I/O，再接外部数据源。
-- 外部依赖必须可 mock。
-- 数据处理必须可复现、可缓存、可校验、可回溯。
-- ETL 必须幂等，重复运行不能重复写入或污染结果。
-- 所有模型训练必须记录数据版本、feature 版本、参数、指标和产物路径。
-- 不把任何外部源 ID 直接当内部主键；使用 canonical ID + bridge table。
-- 不把“球员水平”直接做成不可解释的单一神秘分数；保留表现分、市场分、匹配分和风格向量等分项。
+- 按 `TASKS.md` 从前到后推进，不跳阶段
+- 每次实现一个小而稳定的切片
+- 优先实现可测试的纯函数和清晰 I/O
+- 数据处理必须可复现、可缓存、可校验、可回溯
+- ETL 必须幂等
+- 不把任何外部源 ID 直接当内部主键
+- 不把"球员水平"做成不可解释的单一分数
 
 ## 数据源与合规边界
 
-允许优先实现：
+**允许:**
+- StatsBomb Open Data (官方公开 JSON)
+- Football-Data.co.uk (官方 CSV)
+- Club Elo (官方 API/CSV)
 
-- StatsBomb Open Data：官方公开 JSON，作为事件流主源。
-- Football-Data.co.uk：官方 CSV，作为结果和赔率基线。
-- Club Elo：官方 API/CSV，作为球队强度时间序列。
+**谨慎:**
+- Understat: 赛季格式标准化 ("201617" → "1617"), 缺失指标填 0 后重算
+- FBref: 限速缓存, 德甲回退, 2020 前被 CAPTCHA 封禁
 
-谨慎实现：
-
-- Understat：可作为 xG、xA、xGChain、xGBuildup 补充源，必须缓存、限速、校验字段。
-- FBref：只作为低频标准表或赛程补充源，必须限速和缓存；不要把它作为 advanced 主源。
-
-禁止实现：
-
-- Transfermarkt 自动抓取。
-- 绕过登录、验证码、Cloudflare、反爬或网站条款的采集逻辑。
-- 高频请求受限网站。
-- 公开分发受限制的原始缓存。
-- 用项目支持赌博营销、规避服务条款或操纵性决策。
-
-Transfermarkt 只能实现本地 CSV/Parquet 手动导入或明确授权数据导入。对应模块不得包含网络请求能力。
-
-## 建议模块边界
-
-后续实现时按以下接口边界组织，不要一次性补完整代码：
-
-- `adapters/*`：数据源采集与手动导入。
-- `entities/*`：名称标准化、球队/球员实体对齐、bridge table。
-- `storage/*`：DuckDB/Parquet 读写。
-- `features/*`：比赛、球员、球队、市场标签特征。
-- `models/*`：身价合理性、转会匹配、Poisson/Dixon-Coles、风格 embedding。
-- `evaluation/*`：时间序列回测、校准、模型报告。
-- `viz/*`：Plotly 图表。
-- `app/*`：Streamlit 页面。
+**禁止:**
+- Transfermarkt 自动抓取
+- 绕过验证码/反爬
+- 高频请求受限网站
 
 ## 测试要求
 
-- 单元测试不能访问真实网络。
-- adapter 测试使用 fixture 或 mock 响应。
-- storage 测试验证幂等写入、主键去重、schema 校验和 metadata 记录。
-- entity matching 测试必须覆盖重音、标点、同名球员、生日冲突、国家冲突。
-- rolling feature 测试必须证明没有未来信息泄露。
-- 模型测试必须包含简单基线，不能只报告复杂模型指标。
-- 概率模型必须验证概率和、Brier/log loss/RPS 等指标中的至少一种。
-
-## 文档要求
-
-- 不把计划中的功能写成已经可运行。
-- 新增命令前必须确保命令真实存在。
-- README 面向使用者，TASKS 面向开发计划，AGENTS 面向后续 agent。
-- 数据源风险、限制和合规策略必须在文档里保持一致。
+- 单元测试不能访问真实网络
+- 模型测试必须包含简单基线
+- 概率模型必须验证概率和/Brier/log loss/RPS

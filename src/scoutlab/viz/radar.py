@@ -47,12 +47,8 @@ def plot_player_radar(
     name_b = str(player_b.get("player_name", "Player B"))
 
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatterpolar(r=a_pct, theta=labels, fill="toself", name=name_a)
-    )
-    fig.add_trace(
-        go.Scatterpolar(r=b_pct, theta=labels, fill="toself", name=name_b)
-    )
+    fig.add_trace(go.Scatterpolar(r=a_pct, theta=labels, fill="toself", name=name_a))
+    fig.add_trace(go.Scatterpolar(r=b_pct, theta=labels, fill="toself", name=name_b))
     fig.update_layout(
         polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
         showlegend=True,

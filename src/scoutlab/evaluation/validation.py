@@ -84,9 +84,7 @@ def validate_date_range(
         return ValidationCheckResult(name, False, "No valid dates found")
     max_date = dates.max().date()
     if min_date is not None and max_date < min_date:
-        return ValidationCheckResult(
-            name, False, f"Latest date {max_date} < required {min_date}"
-        )
+        return ValidationCheckResult(name, False, f"Latest date {max_date} < required {min_date}")
     return ValidationCheckResult(name, True, f"Date range OK, latest={max_date}")
 
 
@@ -117,9 +115,7 @@ def run_pre_training_validation(
     report.checks.append(
         validate_parquet_exists("gold/feature_store/player_match.parquet", settings)
     )
-    report.checks.append(
-        validate_parquet_exists("gold/feature_store/team_match.parquet", settings)
-    )
+    report.checks.append(validate_parquet_exists("gold/feature_store/team_match.parquet", settings))
     report.checks.append(
         validate_row_count(
             "gold/feature_store/player_match.parquet",

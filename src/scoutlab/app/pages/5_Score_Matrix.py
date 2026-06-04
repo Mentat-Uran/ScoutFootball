@@ -11,9 +11,7 @@ st.header("Score Probability Matrix")
 
 team_df = load_team_match()
 team_names = (
-    sorted(team_df["team_name"].dropna().unique())
-    if "team_name" in team_df.columns
-    else []
+    sorted(team_df["team_name"].dropna().unique()) if "team_name" in team_df.columns else []
 )
 
 if len(team_names) < 2:

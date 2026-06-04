@@ -81,7 +81,12 @@ def _build_side_rows(
             "competition_id": matches.get("competition_id"),
             "season_id": matches.get("season_id"),
             "team_id": matches[f"{side}_team_id"],
+            "team_name": matches.get(f"{side}_team_name", matches[f"{side}_team_id"]),
             "opponent_team_id": matches[f"{opponent_side}_team_id"],
+            "opponent_team_name": matches.get(
+                f"{opponent_side}_team_name",
+                matches[f"{opponent_side}_team_id"],
+            ),
             "is_home": side == "home",
             "goals_for": matches[f"{side}_goals"],
             "goals_against": matches[f"{opponent_side}_goals"],
@@ -161,12 +166,14 @@ def _merge_pre_match_elo(team_match: pd.DataFrame, elo_df: pd.DataFrame) -> pd.D
         entity_column="opponent_team_id",
         output_column="opponent_elo_pre",
     )
-    opponent_merged["elo_diff"] = (
-        opponent_merged["elo_pre"] - opponent_merged["opponent_elo_pre"]
+    opponent_merged["elo_diff"] = opponent_merged["elo_pre"] - opponent_merged["opponent_elo_pre"]
+    return (
+        opponent_merged.drop(columns="_row_order")
+        .sort_values(
+            ["team_id", "match_date", "match_id"],
+        )
+        .reset_index(drop=True)
     )
-    return opponent_merged.drop(columns="_row_order").sort_values(
-        ["team_id", "match_date", "match_id"],
-    ).reset_index(drop=True)
 
 
 def _merge_entity_elo(

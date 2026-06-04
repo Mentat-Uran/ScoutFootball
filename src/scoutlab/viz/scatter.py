@@ -48,7 +48,11 @@ def plot_value_scatter(
     lo = min(plot_df[performance_col].min(), plot_df[value_col].min())
     hi = max(plot_df[performance_col].max(), plot_df[value_col].max())
     fig.add_shape(
-        type="line", x0=lo, y0=lo, x1=hi, y1=hi,
+        type="line",
+        x0=lo,
+        y0=lo,
+        x1=hi,
+        y1=hi,
         line=dict(dash="dash", color="gray"),
     )
 

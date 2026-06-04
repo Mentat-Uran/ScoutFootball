@@ -143,10 +143,14 @@ def _build_fixture_frame(team_match_df: pd.DataFrame) -> pd.DataFrame:
             "goals_for_away": "away_goals",
         },
     )
-    return fixtures.loc[
-        :,
-        ["match_id", "match_date", "home_team_id", "away_team_id", "home_goals", "away_goals"],
-    ].sort_values(["match_date", "match_id"]).reset_index(drop=True)
+    return (
+        fixtures.loc[
+            :,
+            ["match_id", "match_date", "home_team_id", "away_team_id", "home_goals", "away_goals"],
+        ]
+        .sort_values(["match_date", "match_id"])
+        .reset_index(drop=True)
+    )
 
 
 def _time_series_split(

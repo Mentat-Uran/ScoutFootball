@@ -18,9 +18,7 @@ else:
     df = load_team_rolling()
     name_col = "team_name"
 
-entity_names = (
-    sorted(df[name_col].dropna().unique()) if name_col in df.columns else []
-)
+entity_names = sorted(df[name_col].dropna().unique()) if name_col in df.columns else []
 if not entity_names:
     st.warning("No data available.")
     st.stop()

@@ -30,9 +30,13 @@ def build_player_rolling_features(
         missing_text = ", ".join(missing)
         raise ValueError(f"player_match_df is missing required columns: {missing_text}")
 
-    features = player_match_df.copy().sort_values(
-        ["player_id", "match_date", "match_id"],
-    ).reset_index(drop=True)
+    features = (
+        player_match_df.copy()
+        .sort_values(
+            ["player_id", "match_date", "match_id"],
+        )
+        .reset_index(drop=True)
+    )
     features["match_date"] = pd.to_datetime(features["match_date"], errors="raise")
     group_labels = features["player_id"]
 
