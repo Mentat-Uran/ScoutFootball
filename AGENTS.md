@@ -4,40 +4,93 @@
 
 ## 当前项目状态
 
-Pipeline 端到端可运行：`scoutlab ingest` → `scoutlab build-features` → `scoutlab train`。
+Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> `scoutlab train`。当前文档真源是 `TASKS.md`，用户说明是 `README.md`，算法解释以 `ALGORITHM.md` 和后续 `MODEL_CARD.md` 为准。
 
-**数据源 (5 个，覆盖 10 赛季):**
-- FBref: 14,356 条, 5联赛, 5赛季 (2021-2026)
-- Football-Data.co.uk: 17,936 场, 10赛季 (2016-2026)
-- Understat: 27,254 条, 10赛季 (2016-2026), 含 xG/xA/npxG
-- StatsBomb: 126 场, Club Elo: 630 队
+本地缓存当前可验证状态：
 
-**评分系统 (当前迭代中):**
-- PyTorch GPU 优化器, 77 参数
-- 最新优化结果: Holdout Spearman=0.7952, 过拟合 gap=0.037
-- 联赛分布: EPL 11, Bundesliga 8, La Liga 5, Serie A 3, Ligue 1 3 (平衡)
-- 位置分布: CM 28, ST 2 (CM 过度集中，需修复)
-- GPU 远程计算: Windows RTX 5070 Ti (192.168.0.189:8420)
+- FBref：5 赛季标准、射门、misc 表均为 14,356 行。
+- Football-Data：10 赛季、20 个 league/division，`combined_results.parquet` 当前为 68,953 个 match-key 行。
+- Understat：10 赛季、6 个联赛，`players_10seasons.parquet` 当前为 31,902 个球员赛季行。
+- StatsBomb Open Data：126 场比赛，`events_all.parquet` 当前为 11,871 条事件。
+- 评分产物：`player_ratings_optimized.parquet` 当前为 27,254 行。
 
-**当前问题:**
-- CM 的 quality 权重过高 (0.54)，导致 CM 球员霸榜
-- ST 的 attack 权重过低 (0.086)，前锋被过度压低
-- 优化器在新约束下过拟合
+新增适配器（已实现，部分需特定环境运行）：
+- SofaScore、SoFIFA、WhoScored、Capology：需要 Chrome + Selenium，建议在 Windows GPU 服务器运行。
+- API-Football：需要 `API_FOOTBALL_KEY` 环境变量，无 Key 时优雅降级。
+- Transfermarkt-datasets：需手动下载 DuckDB 文件放到 `data/raw/transfermarkt_datasets/`。
+- FBref 扩展联赛 + 7 种新 stat_type：需要 Chrome + Selenium，建议在 Windows GPU 服务器运行。
+- StatsBomb 批量下载：无特殊要求，但下载量大，需稳定网络环境。
+- 运行 soccerdata 脚本需设置 `SOCCERDATA_DIR=./data/soccerdata`。
 
-**待完成:**
-- 评分系统位置权重平衡
-- Transfermarkt 真实数据导入
-- Streamlit MVP
-- Dixon-Coles 模型
+评分系统仍处于校准阶段：
 
-## 技术默认值
+- PyTorch GPU 优化器和远程 GPU 计算脚本已存在。
+- 当前评分层优先做角色、联赛、真实影响力校准，不再把 Top N 配额作为主目标。
+- 已加入粗位置角色重判、CM/后场/GK 权重上限、较强联赛强度曲线。
+- 球队积分相关性会偏向出勤、CM 和 GK，不能单独作为球员影响力标签。
+- 弱联赛顶端样本已被压低，但仍需真实身价、奖项、专家标签或人工分档校准跨联赛等级。
+- FBref 粗位置只能保守重判，仍需要 StatsBomb、阵型或人工位置增强。
 
-Python, uv, DuckDB+Parquet, PyTorch, Streamlit, pytest, Ruff
+## 后续架构方向
+
+未来更新按七层推进：
+
+1. 数据与合规层：本地缓存、DuckDB、Parquet、手动导入和数据质量日志。
+2. 标准事实层：比赛、球队、球员、阵容、事件、赛季统计、身价、联赛强度。
+3. 事件动作价值层：StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP。
+4. 球员评分层：赛季统计 + xG/xA + xT/VAEP + 出勤可靠性 + 联赛强度 + 年龄/趋势 + 置信度。
+5. 评估与模型卡层：`EVALUATION.md`、`MODEL_CARD.md`、position-wise metrics、误差分析。
+6. 产品可视化层：Streamlit + Plotly；后续引入 mplsoccer 做球场图和足球专用图表。
+7. 比分预测层：league average -> Independent Poisson -> Dixon-Coles + time decay。
+
+## 当前优先级
+
+1. P0：评分系统真实影响力标签和训练目标重构。
+2. P1：展示增强和可解释产品层，优先接入 mplsoccer。
+3. P2：StatsBomb 事件动作价值层，先 xT，后 VAEP。
+4. P3：评分模型重构，把 action value 作为增强维度接入。
+5. P4：模型评估文档和模型卡。
+6. P5：Dixon-Coles 比分预测升级。
+7. P6：kloppy、floodlight、xG+、tracking data 只作为远期方向。
 
 ## 开发原则
 
-- 数据处理可复现、可缓存、可校验
-- ETL 幂等
-- 模型必须有基线对照
-- Transfermarkt 只允许手动导入
-- FBref 只作为受限补充源
+- 数据处理必须可复现、可缓存、可校验。
+- ETL 必须幂等，不能依赖不可控的实时网页状态。
+- 模型必须有 baseline、时间切分、指标和误差分析。
+- 新增模型前先写评估指标，新增长期数据源前先写合规边界。
+- 不把计划中的模块写成已实现能力。
+- 不把 StatsBomb 小样本事件能力写成全量联赛能力。
+- Transfermarkt 只允许手动或授权导入。
+- FBref 只作为受限低频补充源，不绕过验证码或反爬。
+- 公开展示 StatsBomb 数据产物时必须注明数据源。
+- `goals - xG` 不能直接当射术；必须用样本量 shrinkage 或低置信度标记。
+- Top N 位置配额不能替代真实影响力校准。
+- Dixon-Coles 是比分预测第二主线，不能抢在评分系统 P0/P1/P2 前面。
+
+## 模块约定
+
+- 现有包根目录是 `src/scoutlab/`。
+- 现有命令入口是 `src/scoutlab/__main__.py`。
+- 现有 pipeline 入口是 `src/scoutlab/pipeline.py`。
+- 新增事件动作价值模块时使用 `src/scoutlab/action_value/`。
+- 新增足球专用图表时优先扩展 `src/scoutlab/viz/`，不要把绘图逻辑堆进 Streamlit 页面。
+- Streamlit 页面只读本地产物，不直接执行重型训练。
+- 训练产物写入 `data/models/` 或 `data/gold/feature_store/`，并保存 feature manifest、参数、随机种子和输入 hash。
+
+## 技术默认值
+
+Python, uv, DuckDB + Parquet, pandas, scikit-learn, PyTorch, Streamlit, Plotly, pytest, Ruff。socceraction 和 mplsoccer 是后续计划依赖，只有进入对应 phase 时再加入 `pyproject.toml`。
+
+## 验证命令
+
+```bash
+uv run ruff check .
+uv run pytest
+PYTHONPATH=src uv run python -m scoutlab info
+PYTHONPATH=src uv run python -m scoutlab validate
+PYTHONPATH=src uv run python -m scoutlab ingest
+PYTHONPATH=src uv run python -m scoutlab build-features
+PYTHONPATH=src uv run python -m scoutlab train
+uv run streamlit run src/scoutlab/app/streamlit_app.py
+```
