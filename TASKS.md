@@ -88,18 +88,26 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 
 目标：先让当前评分、xG/xA、趋势和比赛事件变得可读，提升项目展示价值。
 
+### 核心交付（3 个可截图页面）
+
+- [ ] **球员雷达/排名页**：球员雷达图（pizza chart），位置内 percentile，位置内 Top 20 榜单，球员详情卡（评分趋势、xG/xA、出勤、联赛强度调整）。
+- [ ] **身价偏离榜**：实际身价 vs 模型预测身价散点图，高估/低估 Top 20 列表，联赛和年龄段筛选。
+- [ ] **比赛预测页**：即将进行的比赛列表，主/客/平概率，比分分布图，模型置信度提示。
+
+### 其他增强
+
 - [ ] 引入 mplsoccer 依赖并保持 Plotly 现有交互图不回退。
 - [ ] 新增 `src/scoutlab/viz/pitch.py`，封装球场、坐标、shot map、pass map、heatmap 基础图。
-- [ ] 做球员雷达图和 pizza chart，优先展示位置内 percentile。
-- [ ] 做 Top 100 球员榜、球员详情页、评分趋势、身价散点的 README 截图素材。
-- [ ] 在 Streamlit 增加“位置内榜单”和“跨位置总榜”切换。
+- [ ] 在 Streamlit 增加"位置内榜单"和"跨位置总榜"切换。
 - [ ] 增加低置信度提示：分钟不足、数据源缺失、位置重判不确定、事件样本不足。
+- [ ] 给 README 加 3–5 张截图（球员雷达、身价偏离、比赛预测、Top 100 榜单、详情页），并写一段"如何复现 demo 数据"的说明。
 
 验收：
 
 - `uv run ruff check .`
 - `uv run pytest`
 - `uv run streamlit run src/scoutlab/app/streamlit_app.py`
+- 三个核心页面可截图，README 截图和 demo 复现说明完整。
 
 ## P2：StatsBomb 事件动作价值层
 
@@ -151,19 +159,31 @@ player_rating =
 
 ## P4：模型评估文档和报告层
 
-目标：把“能跑”升级为“可评估、可复现、可解释”。
+目标：把"能跑"升级为"可评估、可复现、可解释"。
 
-- [ ] 新建 `EVALUATION.md`：数据切分、基线、指标、误差分析、置信度分层。
-- [ ] 新建 `MODEL_CARD.md`：评分模型、身价模型、比分预测模型分别说明。
-- [ ] 对评分系统增加 position-wise metrics。
+### EVALUATION.md
+
+- [ ] 说明数据切分方式：按赛季时间切分（train/test split），明确 holdout 赛季范围。
+- [ ] 记录 baselines：league average、Independent Poisson、简单 percentile 聚合。
+- [ ] 记录核心指标：Spearman rank correlation（位置内 + 跨位置）、NDCG、MAE、RMSE。
+- [ ] 记录误差案例：Top 100 中出勤捷径球员、弱联赛高估样本、低分钟高方差球员、位置误判案例。
+- [ ] 按位置输出 metrics：GK、CB、FB、DM、CM、AM、W、ST 分别报告。
 - [ ] 对 value_fairness 增加 OOF 残差、联赛偏差、年龄段偏差分析。
-- [ ] 对比分预测增加 log loss、Brier score、RPS。
+- [ ] 对比分预测增加 log loss、Brier score、RPS，低比分场景（0-0、1-0、0-1、1-1）单独报告。
+
+### MODEL_CARD.md
+
+- [ ] 说明数据源：FBref、Understat、Football-Data、StatsBomb Open Data、Club Elo、Transfermarkt（手动导入）、Capology（手动导入）。
+- [ ] 说明标签定义：当前评分目标是什么、真实标签来源（手动导入、奖项、专家分档）、标签覆盖范围。
+- [ ] 说明适用边界：当前模型覆盖哪些联赛/位置/赛季、哪些场景可以信任、哪些场景结果不可靠。
+- [ ] 说明已知偏差：出勤偏差（CM/GK 偏高）、联赛强度偏差（弱联赛顶端样本）、位置偏差、年龄偏差、数据缺失偏差。
+- [ ] 说明不可用场景：单场评分、实时交易建议、青训选材、伤病预测、合同谈判。
 - [ ] 每次训练保存 feature manifest、参数、随机种子、输入文件 hash。
 
 验收：
 
 - `scoutlab train` 产出模型报告或报告输入数据。
-- 文档能解释当前模型不能做什么。
+- `EVALUATION.md` 和 `MODEL_CARD.md` 能解释当前模型能做什么、不能做什么、误差在哪。
 
 ## P5：比分预测升级
 

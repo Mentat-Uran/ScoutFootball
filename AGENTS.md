@@ -46,10 +46,10 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 ## 当前优先级
 
 1. P0：评分系统真实影响力标签和训练目标重构。
-2. P1：展示增强和可解释产品层，优先接入 mplsoccer。
+2. P1：展示增强和可解释产品层，优先接入 mplsoccer。核心交付：球员雷达/排名页、身价偏离榜、比赛预测页 3 个可截图 Streamlit 页面，README 加 3–5 张截图和 demo 复现说明。
 3. P2：StatsBomb 事件动作价值层，先 xT，后 VAEP。
 4. P3：评分模型重构，把 action value 作为增强维度接入。
-5. P4：模型评估文档和模型卡。
+5. P4：模型评估文档和模型卡。补 `EVALUATION.md`（Spearman、时间切分、baseline、误差案例）和 `MODEL_CARD.md`（数据源、标签定义、适用边界、偏差、不可用场景）。
 6. P5：Dixon-Coles 比分预测升级。
 7. P6：kloppy、floodlight、xG+、tracking data 只作为远期方向。
 
