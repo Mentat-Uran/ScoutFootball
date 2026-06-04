@@ -36,6 +36,38 @@ N_PARAMS = (
     N_POS * N_DIM + N_POS * N_ATK + 4 + 4 + 3 + 2
 )  # = 77 (added trend_weight, experience_weight)
 
+POSITION_DIMENSION_PRIOR = [
+    [0.15, 0.38, 0.08, 0.14, 0.25],  # ST
+    [0.12, 0.30, 0.10, 0.25, 0.23],  # W
+    [0.12, 0.28, 0.10, 0.28, 0.22],  # AM
+    [0.14, 0.16, 0.18, 0.32, 0.20],  # CM
+    [0.14, 0.08, 0.30, 0.28, 0.20],  # DM
+    [0.15, 0.10, 0.28, 0.27, 0.20],  # FB
+    [0.16, 0.05, 0.42, 0.20, 0.17],  # CB
+    [0.20, 0.05, 0.35, 0.20, 0.20],  # GK
+]
+ATTACK_WEIGHT_PRIOR = [
+    [0.45, 0.15, 0.40],  # ST
+    [0.30, 0.30, 0.40],  # W
+    [0.20, 0.40, 0.40],  # AM
+    [0.15, 0.35, 0.50],  # CM
+    [0.10, 0.25, 0.65],  # DM
+    [0.10, 0.45, 0.45],  # FB
+    [0.20, 0.20, 0.60],  # CB
+    [0.05, 0.05, 0.90],  # GK
+]
+QUALITY_SUBWEIGHT_PRIOR = [0.35, 0.25, 0.25, 0.15]
+POSITION_DIMENSION_CAPS = [
+    [1.00, 1.00, 1.00, 1.00, 0.30],  # ST: 进攻主导，quality 不能绕过 attack 霸榜
+    [1.00, 1.00, 1.00, 1.00, 0.28],  # W
+    [0.35, 0.35, 1.00, 1.00, 0.30],  # AM
+    [0.30, 0.22, 1.00, 1.00, 0.24],  # CM: 防止出勤/进攻/quality 泛化霸榜
+    [0.30, 0.12, 1.00, 1.00, 0.24],  # DM
+    [0.35, 0.16, 1.00, 1.00, 0.28],  # FB
+    [0.36, 0.10, 1.00, 1.00, 0.25],  # CB
+    [0.32, 0.06, 1.00, 1.00, 0.28],  # GK
+]
+
 
 @dataclass(frozen=True)
 class SeasonSplit:
@@ -67,6 +99,80 @@ def map_position(pos_str):
     if "MF" in s:
         return "CM"
     return "CM"
+
+
+def refine_role_positions(df: pd.DataFrame) -> pd.DataFrame:
+    """用历史粗位置和当前输出特征修正明显的角色误分。
+
+    FBref 的 `pos` 在部分赛季会把边锋、前腰和翼卫统一写成 `MF`，
+    直接映射会把 Salah、Olise、Dimarco 这类球员挤进 CM 池。这里不做
+    球员名单特判，只在有历史 FW/DF 线索且当前输出特征支持时改写角色。
+    """
+    if "source_position" not in df.columns:
+        return df
+
+    refined = df.copy()
+    source = refined["source_position"].fillna("").astype(str).str.upper()
+    history_by_player = refined.groupby("player")["source_position"].agg(
+        lambda values: " ".join(
+            sorted({str(value).upper() for value in values if pd.notna(value)})
+        ),
+    )
+    history = refined["player"].map(history_by_player).fillna("")
+
+    has_fw_history = history.str.contains("FW", regex=False)
+    has_df_history = history.str.contains("DF", regex=False)
+    has_wingback_history = history.str.contains("DF,MF", regex=False) | history.str.contains(
+        "MF,DF",
+        regex=False,
+    )
+
+    npg = pd.to_numeric(refined.get("npg_p90", 0.0), errors="coerce").fillna(0.0)
+    assists = pd.to_numeric(refined.get("assists_p90", 0.0), errors="coerce").fillna(0.0)
+    volume = pd.to_numeric(refined.get("g_a_volume", 0.0), errors="coerce").fillna(0.0)
+    crosses = pd.to_numeric(refined.get("crosses_p90", 0.0), errors="coerce").fillna(0.0)
+    defense = pd.to_numeric(refined.get("defense_composite", 0.0), errors="coerce").fillna(0.0)
+
+    current_cm = refined["sub_position"].eq("CM")
+    raw_mf = source.eq("MF")
+    raw_df = source.eq("DF")
+
+    # 进攻型 MF 只有在历史上出现过 FW 或当前产量非常前场化时才改为 W/AM。
+    # 这避免把普通推进型中场仅因助攻波动改成前场。
+    forward_like = (
+        (has_fw_history & ((npg >= 0.20) | (assists >= 0.20) | (volume >= 8.0)))
+        | ((npg >= 0.32) & (volume >= 10.0))
+    )
+    pure_attacking_mid = (~has_fw_history) & (npg >= 0.24) & (assists >= 0.16)
+
+    # 翼卫/边后卫在 FBref 中经常从 DF,MF 降级成 MF 或 DF。用历史 DF/MF 线索、
+    # 传中和防守动作量判断，不把纯进攻边锋误放到后场。
+    wingback_like = has_df_history & (
+        (raw_df & has_wingback_history)
+        | (crosses >= 1.8)
+        | ((crosses >= 1.2) & (defense >= 0.8))
+    )
+
+    refined.loc[current_cm & raw_mf & wingback_like, "sub_position"] = "FB"
+    refined.loc[current_cm & raw_mf & forward_like & ~wingback_like, "sub_position"] = "W"
+    refined.loc[current_cm & raw_mf & pure_attacking_mid & ~wingback_like, "sub_position"] = "AM"
+    refined.loc[raw_df & wingback_like, "sub_position"] = "FB"
+    refined["pos_idx"] = (
+        refined["sub_position"].map(POS_TO_IDX).fillna(POS_TO_IDX["CM"]).astype(int)
+    )
+
+    return refined
+
+
+def apply_position_weight_caps(weights: torch.Tensor) -> torch.Tensor:
+    """限制明显不符合角色职责的维度权重，并保持每行归一化。"""
+    caps = torch.tensor(POSITION_DIMENSION_CAPS, dtype=weights.dtype, device=weights.device)
+    capped = torch.minimum(weights, caps)
+    missing = torch.clamp(1.0 - capped.sum(dim=1, keepdim=True), min=0.0)
+    room = torch.clamp(caps - capped, min=0.0)
+    room_sum = room.sum(dim=1, keepdim=True).clamp_min(1e-8)
+    adjusted = capped + missing * room / room_sum
+    return adjusted / adjusted.sum(dim=1, keepdim=True).clamp_min(1e-8)
 
 
 # ── 数据加载 ──────────────────────────────────────────────────────────────
@@ -109,6 +215,7 @@ def load_data(data_dir: Path):
     # Build base DataFrame
     df = pd.DataFrame({
         "player": players, "team": teams, "league": leagues, "season": seasons,
+        "source_position": positions,
         "sub_position": sub_pos, "pos_idx": pos_idx,
         "matches": matches, "starts": starts, "minutes": minutes,
         "npg_p90": npg_p90, "assists_p90": assists_p90, "g_a_volume": g_a_volume,
@@ -246,7 +353,9 @@ def load_data(data_dir: Path):
             "Serie_A": "Serie A",
             "Ligue_1": "Ligue 1",
         }
-        understat["league"] = understat["league"].map(understat_league_map).fillna(understat["league"])
+        understat["league"] = (
+            understat["league"].map(understat_league_map).fillna(understat["league"])
+        )
         
         # Convert numeric columns
         for col in ["games", "time", "goals", "xG", "assists", "xA", "npxG", "shots", "key_passes"]:
@@ -272,23 +381,48 @@ def load_data(data_dir: Path):
         understat["pos_idx"] = understat["sub_position"].map(POS_TO_IDX).fillna(4).astype(int)
         
         # Per-90 metrics
-        understat["npg_p90"] = (understat["goals"].values - understat["goals"].values * 0.1) / safe_min_us * 90
+        understat["npg_p90"] = (
+            (understat["goals"].values - understat["goals"].values * 0.1)
+            / safe_min_us
+            * 90
+        )
         understat["assists_p90"] = understat["assists"].values / safe_min_us * 90
         understat["g_a_volume"] = understat["goals"].values + understat["assists"].values
         
         # Select and rename columns
         understat_df = understat[[
-            "player_name", "team_title", "league", "season",
+            "player_name", "team_title", "league", "season", "position",
             "sub_position", "pos_idx", "matches", "starts", "minutes",
             "npg_p90", "assists_p90", "g_a_volume",
         ]].copy()
-        understat_df = understat_df.rename(columns={"player_name": "player", "team_title": "team"})
+        understat_df = understat_df.rename(
+            columns={
+                "player_name": "player",
+                "team_title": "team",
+                "position": "source_position",
+            },
+        )
         
         # Add missing columns with neutral defaults (50th percentile = 0 after centering)
-        for col in ["tackles_won", "interceptions", "fouls", "fouls_drawn", "crosses", "yellow_cards",
-                     "shots", "shots_on_target", "shot_accuracy",
-                     "tackles_p90", "interceptions_p90", "crosses_p90", "fouls_drawn_p90",
-                     "shots_p90", "sot_p90", "defense_composite", "possession_composite"]:
+        for col in [
+            "tackles_won",
+            "interceptions",
+            "fouls",
+            "fouls_drawn",
+            "crosses",
+            "yellow_cards",
+            "shots",
+            "shots_on_target",
+            "shot_accuracy",
+            "tackles_p90",
+            "interceptions_p90",
+            "crosses_p90",
+            "fouls_drawn_p90",
+            "shots_p90",
+            "sot_p90",
+            "defense_composite",
+            "possession_composite",
+        ]:
             understat_df[col] = 0.0  # Will be percentile-ranked as 0, but position-relative
         
         # Find seasons in Understat but not in FBref
@@ -325,7 +459,11 @@ def load_data(data_dir: Path):
         )
         df["npg_trend"] = (df["npg_p90"] - past_avg["npg_p90"]).fillna(0.0)
         df["def_trend"] = (df["defense_composite"] - past_avg["defense_composite"]).fillna(0.0)
-        df["pos_trend"] = (df["possession_composite"] - past_avg["possession_composite"]).fillna(0.0)
+        df["pos_trend"] = (
+            df["possession_composite"] - past_avg["possession_composite"]
+        ).fillna(0.0)
+
+    df = refine_role_positions(df)
 
     # Team standings
     fd = pd.read_parquet(data_dir / "raw" / "football_data" / "combined_results.parquet")
@@ -844,6 +982,10 @@ def compute_ratings_torch(feat, params, device):
     # Position weights: 8×5
     pw_raw = params[idx:idx + N_POS * N_DIM].reshape(N_POS, N_DIM)
     pw = torch.softmax(pw_raw, dim=1)  # [8, 5]
+    # 77 个参数仍然参与训练，但位置维度不能完全自由漂移。只用球队积分做监督时，
+    # 优化器很容易把 CM/GK 的出勤或 quality 当成通用捷径；这里只封顶明显
+    # 不符合角色职责的维度，超出部分回流到该位置仍可使用的其他维度。
+    pw = apply_position_weight_caps(pw)
     idx += N_POS * N_DIM
 
     # Attack weights: 8×3
@@ -860,7 +1002,7 @@ def compute_ratings_torch(feat, params, device):
     idx += 4
 
     # Scalar params
-    league_log_scale = params[idx]  # raw, kept as a narrow league-curve shape control
+    league_log_scale = params[idx]  # raw, retained as the league-curve shape control
     idx += 1
     _rel_min_scale = torch.sigmoid(params[idx])  # retained for 77-param compatibility
     rel_starts_scale = torch.sigmoid(params[idx + 1])  # [0, 1] -> maps to [0.3, 0.7]
@@ -903,9 +1045,15 @@ def compute_ratings_torch(feat, params, device):
     st_idx = POS_TO_IDX.get("ST", 0)
     w_idx = POS_TO_IDX.get("W", 1)
     am_idx = POS_TO_IDX.get("AM", 2)
-    attack_scale[st_idx] = 0.94
-    attack_scale[w_idx] = 0.93
+    # ST 不压缩 attack：前锋本应由进攻主导，quality cap 已防止 quality 绕路霸榜
+    attack_scale[w_idx] = 0.96
     attack_scale[am_idx] = 0.97
+    cm_idx = POS_TO_IDX.get("CM", 3)
+    dm_idx = POS_TO_IDX.get("DM", 4)
+    # FBref 粗位置会把部分边锋/前腰写成 MF。位置重判已处理明显样本；
+    # 剩余 CM 的进攻输出仍应作为中场附加价值，而不是等同前场核心产量。
+    attack_scale[cm_idx] = 0.92
+    attack_scale[dm_idx] = 0.82
 
     attack = (
         npg_pct * player_aw[:, 0]
@@ -924,6 +1072,13 @@ def compute_ratings_torch(feat, params, device):
     # ── Quality ──
     quality = (npg_pct * qual_sw[0] + ast_pct * qual_sw[1]
                + def_pct * qual_sw[2] + pos_pct * qual_sw[3])
+    # quality 是跨维度效率项，不应让中场通过"进攻百分位 + 出勤"获得前锋级
+    # 影响力。ST 的 quality 已被 cap 限制在 0.30，不需要额外下调；
+    # CM/DM 下调，避免优化器把中场 quality 当作低风险的统一捷径。
+    quality_scale = torch.ones(N_POS, dtype=quality.dtype, device=device)
+    quality_scale[cm_idx] = 0.88
+    quality_scale[dm_idx] = 0.94
+    quality = quality * quality_scale[pos_idx]
 
     # ── Base score ──
     base = (availability * player_pw[:, 0] + attack * player_pw[:, 1]
@@ -955,8 +1110,9 @@ def compute_ratings_torch(feat, params, device):
     # 原始表现百分位，英超球员本身会因数据分布拿到较高基础分。如果再用线性
     # UEFA 比值，会把 Top 30 推成英超名单；如果完全不用强度先验，又会低估
     # 联赛竞争环境。这里保留 Big 5 强度先验，但用 0.14-0.20 的窄幂曲线压缩
-    # 差距，当前优化参数对应约 0.17，得到大约 EPL=1.00、La Liga/Bundesliga
-    # =0.96、Ligue 1/Serie A=0.94 的温和校准。
+    # 差距。上一版 0.14-0.20 的指数过窄，Ligue 1/Serie A 的高百分位球员
+    # 容易被推到接近英超同档。这里改成 0.28-0.42 的中等幂曲线：弱一档
+    # 联赛会被明确折扣，但不会把 La Liga/Bundesliga 顶级球员整体压扁。
     league_name_to_coeff = {
         "Premier League": 119.52,
         "La Liga": 93.00,
@@ -968,7 +1124,7 @@ def compute_ratings_torch(feat, params, device):
     coeff_values = [league_name_to_coeff.get(league, 80.0) for league in league_names_sorted]
     league_coeffs = torch.tensor(coeff_values, dtype=torch.float32, device=device)
     league_ratio = league_coeffs / torch.max(league_coeffs)
-    league_curve_exponent = 0.14 + 0.06 * torch.sigmoid(league_log_scale)
+    league_curve_exponent = 0.28 + 0.14 * torch.sigmoid(league_log_scale)
     league_strength = torch.pow(league_ratio, league_curve_exponent)
 
     league_idx = feat["league_idx"].to(device)
@@ -1200,33 +1356,13 @@ def _inv_softmax(probs):
 
 def _get_default_params_tensor(device):
     """Default v3 weights converted to parameter tensor."""
-    default_pw = [
-        [0.15, 0.38, 0.08, 0.14, 0.25],  # ST
-        [0.12, 0.30, 0.10, 0.25, 0.23],  # W
-        [0.12, 0.28, 0.10, 0.28, 0.22],  # AM
-        [0.14, 0.16, 0.18, 0.32, 0.20],  # CM
-        [0.14, 0.08, 0.30, 0.28, 0.20],  # DM
-        [0.15, 0.10, 0.28, 0.27, 0.20],  # FB
-        [0.16, 0.05, 0.42, 0.20, 0.17],  # CB
-        [0.20, 0.05, 0.35, 0.20, 0.20],  # GK
-    ]
-    default_aw = [
-        [0.45, 0.15, 0.40],  # ST
-        [0.30, 0.30, 0.40],  # W
-        [0.20, 0.40, 0.40],  # AM
-        [0.15, 0.35, 0.50],  # CM
-        [0.10, 0.25, 0.65],  # DM
-        [0.10, 0.45, 0.45],  # FB
-        [0.20, 0.20, 0.60],  # CB
-        [0.05, 0.05, 0.90],  # GK
-    ]
     params = []
-    for row in default_pw:
+    for row in POSITION_DIMENSION_PRIOR:
         params.extend(_inv_softmax(row))
-    for row in default_aw:
+    for row in ATTACK_WEIGHT_PRIOR:
         params.extend(_inv_softmax(row))
     params.extend(_inv_softmax([0.45, 0.25, 0.20, 0.10]))
-    params.extend(_inv_softmax([0.35, 0.25, 0.25, 0.15]))
+    params.extend(_inv_softmax(QUALITY_SUBWEIGHT_PRIOR))
     params.extend([1.0, 0.0, 0.0])  # league_log_scale, rel_min, rel_starts
     # trend_weight (sigmoid=0.5 -> 5), experience_weight (sigmoid=0.5 -> 2.5)
     params.extend([0.0, 0.0])
@@ -1449,9 +1585,19 @@ def main():
     parser.add_argument("--patience", type=int, default=80, help="单个起点的 early-stop 耐心步数")
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--test-seasons", type=int, default=1, help="最终 holdout 使用最近几个赛季")
-    parser.add_argument("--min-train-seasons", type=int, default=2, help="每个时间切分最少训练赛季数")
+    parser.add_argument(
+        "--min-train-seasons",
+        type=int,
+        default=2,
+        help="每个时间切分最少训练赛季数",
+    )
     parser.add_argument("--gap-seasons", type=int, default=0, help="训练和测试之间跳过的赛季数")
-    parser.add_argument("--cv-folds", type=int, default=3, help="时间序列交叉验证 fold 数；0 表示跳过")
+    parser.add_argument(
+        "--cv-folds",
+        type=int,
+        default=3,
+        help="时间序列交叉验证 fold 数；0 表示跳过",
+    )
     parser.add_argument("--cv-steps", type=int, default=None, help="CV 每 fold 优化步数")
     parser.add_argument("--cv-pop", type=int, default=None, help="CV 每 fold 起点数")
     parser.add_argument("--stability-runs", type=int, default=3, help="不同 seed 稳定性运行次数")

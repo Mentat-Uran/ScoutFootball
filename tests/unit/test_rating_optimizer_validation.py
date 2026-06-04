@@ -89,6 +89,118 @@ def test_build_feature_tensors_uses_train_reference_for_test_slice() -> None:
     assert set(actual.tolist()) == {float(expected_median)}
 
 
+def test_refine_role_positions_uses_history_and_profile_signals() -> None:
+    opt = _load_optimizer_module()
+    frame = pd.DataFrame(
+        [
+            {
+                "player": "Wide Creator",
+                "source_position": "FW,MF",
+                "sub_position": "W",
+                "pos_idx": opt.POS_TO_IDX["W"],
+                "npg_p90": 0.10,
+                "assists_p90": 0.10,
+                "g_a_volume": 3.0,
+                "crosses_p90": 0.5,
+                "defense_composite": 0.2,
+            },
+            {
+                "player": "Wide Creator",
+                "source_position": "MF",
+                "sub_position": "CM",
+                "pos_idx": opt.POS_TO_IDX["CM"],
+                "npg_p90": 0.24,
+                "assists_p90": 0.23,
+                "g_a_volume": 9.0,
+                "crosses_p90": 0.6,
+                "defense_composite": 0.2,
+            },
+            {
+                "player": "Wing Back",
+                "source_position": "DF,MF",
+                "sub_position": "FB",
+                "pos_idx": opt.POS_TO_IDX["FB"],
+                "npg_p90": 0.02,
+                "assists_p90": 0.05,
+                "g_a_volume": 1.0,
+                "crosses_p90": 1.2,
+                "defense_composite": 1.0,
+            },
+            {
+                "player": "Wing Back",
+                "source_position": "MF",
+                "sub_position": "CM",
+                "pos_idx": opt.POS_TO_IDX["CM"],
+                "npg_p90": 0.08,
+                "assists_p90": 0.17,
+                "g_a_volume": 4.0,
+                "crosses_p90": 2.0,
+                "defense_composite": 1.1,
+            },
+            {
+                "player": "Central Mid",
+                "source_position": "MF",
+                "sub_position": "CM",
+                "pos_idx": opt.POS_TO_IDX["CM"],
+                "npg_p90": 0.10,
+                "assists_p90": 0.24,
+                "g_a_volume": 5.0,
+                "crosses_p90": 0.4,
+                "defense_composite": 0.6,
+            },
+        ],
+    )
+
+    refined = opt.refine_role_positions(frame)
+
+    latest = refined.drop_duplicates("player", keep="last").set_index("player")
+    assert latest.loc["Wide Creator", "sub_position"] == "W"
+    assert latest.loc["Wing Back", "sub_position"] == "FB"
+    assert latest.loc["Central Mid", "sub_position"] == "CM"
+    assert latest.loc["Wide Creator", "pos_idx"] == opt.POS_TO_IDX["W"]
+    assert latest.loc["Wing Back", "pos_idx"] == opt.POS_TO_IDX["FB"]
+
+
+def test_league_strength_curve_separates_identical_big5_profiles() -> None:
+    opt = _load_optimizer_module()
+    params = opt._get_default_params_tensor(torch.device("cpu"))
+    feat = {
+        "pos_idx": torch.tensor([opt.POS_TO_IDX["ST"], opt.POS_TO_IDX["ST"]], dtype=torch.long),
+        "npg_pct": torch.tensor([80.0, 80.0]),
+        "ast_pct": torch.tensor([70.0, 70.0]),
+        "vol_pct": torch.tensor([85.0, 85.0]),
+        "def_pct": torch.tensor([50.0, 50.0]),
+        "pos_pct": torch.tensor([55.0, 55.0]),
+        "trend_pct": torch.tensor([50.0, 50.0]),
+        "experience": torch.tensor([1.0, 1.0]),
+        "minutes": torch.tensor([2400.0, 2400.0]),
+        "starts": torch.tensor([28.0, 28.0]),
+        "matches": torch.tensor([32.0, 32.0]),
+        "league_med": torch.tensor([1800.0, 1800.0]),
+        "league_idx": torch.tensor([0, 1], dtype=torch.long),
+        "league_names": ["Ligue 1", "Premier League"],
+    }
+
+    ratings = opt.compute_ratings_torch(feat, params, torch.device("cpu"))
+
+    assert ratings[1] > ratings[0]
+    assert float(ratings[1] - ratings[0]) > 5.0
+
+
+def test_position_weight_caps_limit_cm_shortcuts() -> None:
+    opt = _load_optimizer_module()
+    weights = torch.full((opt.N_POS, opt.N_DIM), 1.0 / opt.N_DIM)
+    cm_idx = opt.POS_TO_IDX["CM"]
+    weights[cm_idx] = torch.tensor([0.40, 0.35, 0.05, 0.05, 0.15])
+
+    capped = opt.apply_position_weight_caps(weights)
+
+    assert torch.allclose(capped.sum(dim=1), torch.ones(opt.N_POS))
+    assert capped[cm_idx, opt.DIMENSIONS.index("availability")] <= 0.30
+    assert capped[cm_idx, opt.DIMENSIONS.index("attack")] <= 0.22
+    assert capped[cm_idx, opt.DIMENSIONS.index("quality")] <= 0.24
+
+
 def test_holdout_evaluation_reports_metrics_calibration_and_league_layers() -> None:
     opt = _load_optimizer_module()
     players, standings = _sample_frames()

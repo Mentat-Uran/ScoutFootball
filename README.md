@@ -98,6 +98,51 @@ uv run python scripts/gpu_client.py --server http://192.168.0.189:8420 optimize 
 uv run streamlit run src/scoutlab/app/streamlit_app.py
 ```
 
+## 截图
+
+> 以下截图来自 Streamlit 本地运行，数据为当前本地缓存。
+
+| 球员雷达/排名 | 身价偏离榜 | 比赛预测 |
+| --- | --- | --- |
+| ![球员雷达](screenshots/player_radar.png) | ![身价偏离](screenshots/value_deviation.png) | ![比赛预测](screenshots/match_prediction.png) |
+
+| Top 100 榜单 | 球员详情页 |
+| --- | --- |
+| ![Top 100](screenshots/top100.png) | ![球员详情](screenshots/player_detail.png) |
+
+## 如何复现 demo 数据
+
+以下步骤在 macOS/Linux 环境下，从零构建与当前本地缓存一致的数据集：
+
+```bash
+# 1. 克隆仓库并安装依赖
+git clone <repo-url> && cd scoutlab
+uv sync
+
+# 2. 确认环境变量（可选，无 Key 时对应源会跳过）
+export API_FOOTBALL_KEY=your_key_here
+export SOCCERDATA_DIR=./data/soccerdata
+
+# 3. 运行完整 Pipeline
+PYTHONPATH=src uv run python -m scoutlab ingest
+PYTHONPATH=src uv run python -m scoutlab build-features
+PYTHONPATH=src uv run python -m scoutlab train
+
+# 4. 验证数据产物
+PYTHONPATH=src uv run python -m scoutlab validate
+
+# 5. 启动 Streamlit 查看结果
+uv run streamlit run src/scoutlab/app/streamlit_app.py
+```
+
+注意事项：
+
+- 首次 `ingest` 会下载大量数据（FBref、Understat、Football-Data、StatsBomb），预计 10–30 分钟，取决于网络。
+- 需要 Chrome + Selenium 的数据源（FBref soccerdata、WhoScored、SofaScore、SoFIFA、Capology）在无头 macOS 下可能失败，建议在 Windows GPU 服务器运行。
+- Transfermarkt 需要手动下载 DuckDB 文件放到 `data/raw/transfermarkt_datasets/`。
+- 如果某数据源不可用，Pipeline 会跳过并记录日志，不影响其他源。
+- 最终产物写 `data/gold/feature_store/` 和 `data/models/`。
+
 ## 技术栈
 
 Python, uv, DuckDB + Parquet, pandas, scikit-learn, PyTorch, Streamlit, Plotly, FastAPI, pytest, Ruff。后续计划在对应 phase 接入 socceraction 和 mplsoccer。

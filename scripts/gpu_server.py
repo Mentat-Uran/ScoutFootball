@@ -46,6 +46,9 @@ from optimize_ratings_gpu import (
     load_data,
     optimize,
     _get_default_params_tensor,
+    make_holdout_split,
+    _filter_by_seasons,
+    evaluate_params,
 )
 
 from scipy.stats import pearsonr, spearmanr
@@ -61,6 +64,7 @@ app = FastAPI(
 # 全局状态
 DATA_DIR: Path = Path("./data")
 DEVICE: Optional[torch.device] = None
+_cached_df = None
 _cached_feat = None
 _cached_team_pts = None
 _jobs: OrderedDict[str, dict] = OrderedDict()
@@ -79,18 +83,20 @@ def _get_device():
 
 
 def _get_data():
-    global _cached_feat, _cached_team_pts
+    global _cached_df, _cached_feat, _cached_team_pts
     if _cached_feat is None:
         print("  [cache miss] 加载数据...")
         df, team_pts = load_data(DATA_DIR)
         print(f"  球员: {len(df)}, 球队赛季: {len(team_pts)}")
+        _cached_df = df
         _cached_feat = build_feature_tensors(df)
         _cached_team_pts = team_pts
-    return _cached_feat, _cached_team_pts
+    return _cached_df, _cached_feat, _cached_team_pts
 
 
 def _invalidate_cache():
-    global _cached_feat, _cached_team_pts
+    global _cached_df, _cached_feat, _cached_team_pts
+    _cached_df = None
     _cached_feat = None
     _cached_team_pts = None
 
@@ -113,6 +119,8 @@ class OptimizeRequest(BaseModel):
     lr: float = Field(default=0.05, gt=0, le=1.0)
     pop: int = Field(default=32, ge=1, le=256)
     seed: int = Field(default=42)
+    test_seasons: int = Field(default=1, ge=1, le=5, description="holdout 使用最近几个赛季")
+    min_train_seasons: int = Field(default=2, ge=1, le=10)
 
 
 class ScoreRequest(BaseModel):
@@ -171,31 +179,37 @@ async def run_optimize(req: OptimizeRequest):
     def _run():
         try:
             dev = _get_device()
-            feat, team_pts = _get_data()
+            df, feat, team_pts = _get_data()
 
-            # Baseline
+            # Holdout split
+            holdout = make_holdout_split(
+                df,
+                test_seasons=req.test_seasons,
+                min_train_seasons=req.min_train_seasons,
+            )
+            train_df = _filter_by_seasons(df, holdout.train_seasons)
+            test_df = _filter_by_seasons(df, holdout.test_seasons)
+            train_team_pts = _filter_by_seasons(team_pts, holdout.train_seasons)
+            test_team_pts = _filter_by_seasons(team_pts, holdout.test_seasons)
+            print(f"  train seasons: {list(holdout.train_seasons)}")
+            print(f"  test seasons:  {list(holdout.test_seasons)}")
+            print(f"  train players={len(train_df)}, test players={len(test_df)}")
+
+            # Baseline on holdout test set
             default_params = _get_default_params_tensor(dev)
-            baseline_ratings = compute_ratings_torch(feat, default_params, dev)
-            baseline_team_avgs = compute_team_avg_ratings(feat, baseline_ratings, dev)
+            baseline_test = evaluate_params(
+                default_params, test_df, test_team_pts, train_df, dev,
+                split_name="test",
+            )
+            sp_b = baseline_test["metrics"]["spearman"]
+            pr_b = baseline_test["metrics"]["pearson"]
 
-            pred_b, actual_b = [], []
-            for i in range(len(feat["ts_team_names"])):
-                mask = (
-                    (team_pts["team"] == feat["ts_team_names"][i])
-                    & (team_pts["league"] == feat["ts_leagues"][i])
-                    & (team_pts["season"] == feat["ts_seasons"][i])
-                )
-                matched = team_pts.loc[mask, "total_points"]
-                if len(matched) > 0:
-                    pred_b.append(baseline_team_avgs[i])
-                    actual_b.append(matched.values[0])
-            sp_b, pr_b = spearmanr(pred_b, actual_b)
-
-            # Optimize
+            # Optimize on train set only
+            train_feat = build_feature_tensors(train_df)
             t0 = time.time()
             best_params = optimize(
-                feat,
-                team_pts,
+                train_feat,
+                train_team_pts,
                 dev,
                 n_steps=req.steps,
                 lr=req.lr,
@@ -204,40 +218,26 @@ async def run_optimize(req: OptimizeRequest):
             )
             elapsed = time.time() - t0
 
-            # Results
-            opt_ratings = compute_ratings_torch(feat, best_params, dev)
-            opt_team_avgs = compute_team_avg_ratings(feat, opt_ratings, dev)
-
-            matched_records = []
-            for i in range(len(feat["ts_team_names"])):
-                mask = (
-                    (team_pts["team"] == feat["ts_team_names"][i])
-                    & (team_pts["league"] == feat["ts_leagues"][i])
-                    & (team_pts["season"] == feat["ts_seasons"][i])
-                )
-                matched = team_pts.loc[mask, "total_points"]
-                if len(matched) > 0:
-                    matched_records.append(
-                        {
-                            "team": str(feat["ts_team_names"][i]),
-                            "league": str(feat["ts_leagues"][i]),
-                            "season": str(feat["ts_seasons"][i]),
-                            "pred_rating": float(opt_team_avgs[i]),
-                            "actual_points": float(matched.values[0]),
-                        }
-                    )
-
-            import pandas as pd
-
-            matched_df = pd.DataFrame(matched_records)
-            sp_opt, pr_opt = spearmanr(
-                matched_df["pred_rating"], matched_df["actual_points"]
+            # Evaluate optimized params on both train and test
+            opt_train = evaluate_params(
+                best_params, train_df, train_team_pts, train_df, dev,
+                split_name="train",
+            )
+            opt_test = evaluate_params(
+                best_params, test_df, test_team_pts, train_df, dev,
+                split_name="test",
+            )
+            sp_opt = opt_test["metrics"]["spearman"]
+            pr_opt = opt_test["metrics"]["pearson"]
+            overfit_gap = (
+                opt_test["metrics"]["rank_loss"] - opt_train["metrics"]["rank_loss"]
             )
 
-            # Per-league
+            # Per-league on test set
+            test_matched = opt_test["matched"]
             per_league = {}
-            for league in sorted(matched_df["league"].unique()):
-                lm = matched_df[matched_df["league"] == league]
+            for league in sorted(test_matched["league"].unique()):
+                lm = test_matched[test_matched["league"] == league]
                 if len(lm) >= 5:
                     s, _ = spearmanr(lm["pred_rating"], lm["actual_points"])
                     p, _ = pearsonr(lm["pred_rating"], lm["actual_points"])
@@ -247,13 +247,10 @@ async def run_optimize(req: OptimizeRequest):
                         "n": int(len(lm)),
                     }
 
-            # Position weights
-            N_POS = len(POSITIONS)
-            N_DIM = len(DIMENSIONS)
-            N_ATK = len(ATTACK_METRICS)
-
-            pw_raw = best_params[: N_POS * N_DIM].reshape(N_POS, N_DIM)
-            pw = torch.softmax(pw_raw, dim=1).cpu().numpy()
+            # Position weights (with caps applied)
+            from optimize_ratings_gpu import apply_position_weight_caps, N_POS as _N_POS, N_DIM as _N_DIM, N_ATK as _N_ATK
+            pw_raw = best_params[: _N_POS * _N_DIM].reshape(_N_POS, _N_DIM)
+            pw = apply_position_weight_caps(torch.softmax(pw_raw, dim=1)).cpu().numpy()
             position_weights = {}
             for i, pos in enumerate(POSITIONS):
                 position_weights[pos] = {
@@ -261,8 +258,8 @@ async def run_optimize(req: OptimizeRequest):
                     for j, dim in enumerate(DIMENSIONS)
                 }
 
-            aw_raw = best_params[N_POS * N_DIM : N_POS * N_DIM + N_ATK * N_POS].reshape(
-                N_POS, N_ATK
+            aw_raw = best_params[_N_POS * _N_DIM : _N_POS * _N_DIM + _N_ATK * _N_POS].reshape(
+                _N_POS, _N_ATK
             )
             aw = torch.softmax(aw_raw, dim=1).cpu().numpy()
             attack_weights = {}
@@ -278,14 +275,24 @@ async def run_optimize(req: OptimizeRequest):
 
             result = {
                 "status": "ok",
+                # Holdout test metrics (the real numbers)
                 "spearman": round(float(sp_opt), 4),
                 "pearson": round(float(pr_opt), 4),
                 "baseline_spearman": round(float(sp_b), 4),
                 "baseline_pearson": round(float(pr_b), 4),
                 "spearman_improvement": round(float(sp_opt - sp_b), 4),
                 "pearson_improvement": round(float(pr_opt - pr_b), 4),
-                "n_players": int(feat["N"]),
-                "n_team_seasons": int(len(matched_records)),
+                # Train metrics (for overfitting check)
+                "train_spearman": round(float(opt_train["metrics"]["spearman"]), 4),
+                "train_pearson": round(float(opt_train["metrics"]["pearson"]), 4),
+                "overfit_rank_loss_gap": round(float(overfit_gap), 4),
+                # Split info
+                "train_seasons": list(holdout.train_seasons),
+                "test_seasons": list(holdout.test_seasons),
+                "n_players": int(len(df)),
+                "n_train_players": int(len(train_df)),
+                "n_test_players": int(len(test_df)),
+                "n_team_seasons": int(opt_test["metrics"]["n_team_seasons"]),
                 "device": str(dev),
                 "elapsed_seconds": round(elapsed, 1),
                 "params_base64": params_b64,
@@ -294,7 +301,7 @@ async def run_optimize(req: OptimizeRequest):
                 "per_league": per_league,
             }
             _jobs[job_id] = {"status": "done", "result": result}
-            print(f"  Job {job_id} done: Spearman={sp_opt:.4f}")
+            print(f"  Job {job_id} done: test Spearman={sp_opt:.4f} train Spearman={opt_train['metrics']['spearman']:.4f}")
         except Exception as e:
             import traceback
 
@@ -317,7 +324,7 @@ async def get_job(job_id: str):
 @app.post("/score", response_model=ScoreResponse)
 async def score_player(req: ScoreRequest):
     dev = _get_device()
-    feat, _ = _get_data()
+    _, feat, _ = _get_data()
     df = feat["df"]
 
     mask = df["player"].str.contains(req.player_name, case=False, na=False)
@@ -358,7 +365,7 @@ async def score_player(req: ScoreRequest):
 @app.post("/scores/bulk", response_model=BulkScoreResponse)
 async def bulk_scores(req: BulkScoreRequest):
     dev = _get_device()
-    feat, _ = _get_data()
+    _, feat, _ = _get_data()
     df = feat["df"]
 
     mask = np.ones(len(df), dtype=bool)
