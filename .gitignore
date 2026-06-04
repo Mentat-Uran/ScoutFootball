@@ -15,8 +15,10 @@ data/gold/**
 data/models/**
 data/reports/**
 data/logs/**
+data/soccerdata/**
 !data/**/.gitkeep
 !data/README.md
+!data/config/**
 
 # macOS
 .DS_Store

@@ -14,13 +14,35 @@ from scoutlab.adapters.common import CachedHttpClient
 from scoutlab.adapters.football_data import download_csv
 from scoutlab.config import PlatformSettings
 
-# Big 5 leagues
+# Football-Data.co.uk 联赛代码
+# 注意：部分联赛赛季覆盖有限，例如 SC2/SC3 可能只有近几个赛季的数据。
+# adapter 已能优雅处理缺失 CSV（不会报错，只是缓存目录中找不到）。
 LEAGUES = {
+    # Big 5
     "E0": "Premier League",
     "SP1": "La Liga",
     "D1": "Bundesliga",
     "F1": "Ligue 1",
     "I1": "Serie A",
+    # English lower leagues
+    "E1": "Championship",
+    "E2": "League One",
+    "E3": "League Two",
+    # Spanish/German/French/Italian lower leagues
+    "SP2": "Segunda División",
+    "D2": "2. Bundesliga",
+    "F2": "Ligue 2",
+    "I2": "Serie B",
+    # Other European leagues
+    "N1": "Eredivisie",
+    "P1": "Primeira Liga",
+    "T1": "Süper Lig",
+    "B1": "First Division A",
+    # Scottish leagues
+    "SC0": "Scottish Premiership",
+    "SC1": "Scottish Championship",
+    "SC2": "Scottish League One",
+    "SC3": "Scottish League Two",
 }
 
 # 10 seasons: 2016/17 to 2025/26
@@ -64,6 +86,10 @@ def main():
 
     if all_data:
         combined = pd.concat(all_data, ignore_index=True)
+        # 修复混合类型列（赔率列可能混合 str/float）
+        for col in combined.columns:
+            if combined[col].dtype == object:
+                combined[col] = combined[col].astype(str)
         output_path = settings.raw_root / "football_data" / "combined_results.parquet"
         combined.to_parquet(output_path, index=False)
 

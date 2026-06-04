@@ -40,6 +40,16 @@ LEAGUE_MAPPINGS = {
     "Serie A": {"comp_id": 11, "slug": "Serie-A"},
     "FRA-Ligue 1": {"comp_id": 13, "slug": "Ligue-1"},
     "Ligue 1": {"comp_id": 13, "slug": "Ligue-1"},
+    "POR-Primeira Liga": {"comp_id": 32, "slug": "Primeira-Liga"},
+    "Primeira Liga": {"comp_id": 32, "slug": "Primeira-Liga"},
+    "NED-Eredivisie": {"comp_id": 23, "slug": "Eredivisie"},
+    "Eredivisie": {"comp_id": 23, "slug": "Eredivisie"},
+    "TUR-Süper Lig": {"comp_id": 26, "slug": "Super-Lig"},
+    "Süper Lig": {"comp_id": 26, "slug": "Super-Lig"},
+    "SCO-Scottish Premiership": {"comp_id": 24, "slug": "Scottish-Premiership"},
+    "Scottish Premiership": {"comp_id": 24, "slug": "Scottish-Premiership"},
+    "BEL-First Division A": {"comp_id": 22, "slug": "First-Division-A"},
+    "First Division A": {"comp_id": 22, "slug": "First-Division-A"},
 }
 
 

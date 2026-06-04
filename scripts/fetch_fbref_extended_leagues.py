@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-扩展 FBref 数据到 10 赛季 (2016-2026)
-支持 10 类统计: standard, misc, shooting, passing, defense, possession,
-gca, playing_time, keeper, keeper_adv
+抓取 5 个非 Big5 联赛的 FBref 数据 (10 赛季, 10 stat types)
+这些联赛不在 Big 5 Combined 视图中，需要单独抓取
+
+联赛: POR-Primeira Liga, NED-Eredivisie, TUR-Süper Lig,
+      SCO-Scottish Premiership, BEL-First Division A
 """
 
 import sys
@@ -13,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import pandas as pd
 
 from scoutlab.adapters.fbref_soccerdata import (
-    read_player_season_stats_with_bundesliga_fallback,
+    EXTENDED_LEAGUES,
+    read_player_season_stats_extended,
 )
 from scoutlab.config import PlatformSettings
 
@@ -30,28 +33,32 @@ STAT_TYPES = [
     "keeper_adv",
 ]
 
+SEASONS = [
+    "2025-2026", "2024-2025", "2023-2024", "2022-2023", "2021-2022",
+    "2020-2021", "2019-2020", "2018-2019", "2017-2018", "2016-2017",
+]
+
 
 def main():
     settings = PlatformSettings.from_root()
-
-    # 10 seasons: 2016/17 to 2025/26
-    seasons = [
-        "2025-2026", "2024-2025", "2023-2024", "2022-2023", "2021-2022",
-        "2020-2021", "2019-2020", "2018-2019", "2017-2018", "2016-2017",
-    ]
+    output_dir = settings.raw_root / "fbref" / "extended_leagues"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 70)
-    print(f"FBref - 扩展到 10 赛季 ({len(STAT_TYPES)} stat types)")
+    print(f"FBref Extended Leagues - {len(EXTENDED_LEAGUES)} leagues, "
+          f"{len(STAT_TYPES)} stat types, {len(SEASONS)} seasons")
     print("=" * 70)
 
     for stat_type in STAT_TYPES:
         print(f"\n=== {stat_type} ===")
         all_frames = []
-        for season in seasons:
+
+        for season in SEASONS:
             print(f"  {season}...", end=" ", flush=True)
             try:
-                df = read_player_season_stats_with_bundesliga_fallback(
-                    season, stat_type=stat_type,
+                df = read_player_season_stats_extended(
+                    season,
+                    stat_type=stat_type,
                 )
                 if not df.empty:
                     df["season"] = season
@@ -65,36 +72,13 @@ def main():
 
         if all_frames:
             combined = pd.concat(all_frames, axis=0)
-            # Deduplicate
             if combined.index.has_duplicates:
                 combined = combined[~combined.index.duplicated(keep="first")]
 
-            # Save with appropriate filename
-            if stat_type == "standard":
-                output = settings.raw_root / "fbref" / "player_stats_big5_10seasons.parquet"
-            else:
-                output = settings.raw_root / "fbref" / f"player_{stat_type}_10seasons.parquet"
-
+            output = output_dir / f"player_{stat_type}_extended_10seasons.parquet"
             combined.to_parquet(output, index=True)
             print(f"\n  已保存: {output.name} ({len(combined)} rows)")
 
-            # Also save as _5seasons for backward compatibility
-            if stat_type == "standard":
-                output_5s = settings.raw_root / "fbref" / "player_stats_big5_5seasons.parquet"
-            else:
-                output_5s = settings.raw_root / "fbref" / f"player_{stat_type}_5seasons.parquet"
-            combined.to_parquet(output_5s, index=True)
-            print(f"  已保存: {output_5s.name} (backward compat)")
-
-            # Also save as _3seasons for pipeline compatibility
-            if stat_type == "standard":
-                output_3s = settings.raw_root / "fbref" / "player_stats_big5_3seasons.parquet"
-            else:
-                output_3s = settings.raw_root / "fbref" / f"player_{stat_type}_3seasons.parquet"
-            combined.to_parquet(output_3s, index=True)
-            print(f"  已保存: {output_3s.name} (pipeline compat)")
-
-            # Summary
             leagues = sorted(
                 str(lg) for lg in combined.index.get_level_values("league").dropna().unique()
             )
@@ -103,6 +87,8 @@ def main():
             )
             print(f"  Leagues: {leagues}")
             print(f"  Seasons: {seasons_found}")
+        else:
+            print(f"  {stat_type}: 无数据，跳过")
 
     print("\n完成!")
 
