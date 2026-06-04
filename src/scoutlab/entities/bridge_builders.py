@@ -209,9 +209,7 @@ def match_players(
         if (
             source_row["normalized_dob"]
             and not same_name_candidates.empty
-            and not (
-                same_name_candidates["normalized_dob"] == source_row["normalized_dob"]
-            ).any()
+            and not (same_name_candidates["normalized_dob"] == source_row["normalized_dob"]).any()
         ):
             rejected.append(
                 _build_player_decision_row(

@@ -156,9 +156,7 @@ def _flatten_columns(columns: pd.Index) -> list[str]:
     for column in columns.tolist():
         if isinstance(column, tuple):
             parts = [
-                str(part)
-                for part in column
-                if str(part) and not str(part).startswith("Unnamed")
+                str(part) for part in column if str(part) and not str(part).startswith("Unnamed")
             ]
             flattened.append("_".join(parts) if parts else str(column[-1]))
         else:

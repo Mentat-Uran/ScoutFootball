@@ -11,11 +11,7 @@ st.header("Position Percentiles")
 
 df = load_player_rolling()
 
-positions = (
-    sorted(df["position_group"].dropna().unique())
-    if "position_group" in df.columns
-    else []
-)
+positions = sorted(df["position_group"].dropna().unique()) if "position_group" in df.columns else []
 if not positions:
     st.warning("No position data available.")
     st.stop()
@@ -24,9 +20,7 @@ pos = st.selectbox("Position", positions)
 pool = df.loc[df["position_group"] == pos]
 
 player_names = (
-    sorted(pool["player_name"].dropna().unique())
-    if "player_name" in pool.columns
-    else []
+    sorted(pool["player_name"].dropna().unique()) if "player_name" in pool.columns else []
 )
 if not player_names:
     st.warning("No players found for this position.")

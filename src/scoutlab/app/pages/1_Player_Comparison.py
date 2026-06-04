@@ -11,11 +11,7 @@ st.header("Player Comparison")
 
 df = load_player_rolling()
 
-player_names = (
-    sorted(df["player_name"].dropna().unique())
-    if "player_name" in df.columns
-    else []
-)
+player_names = sorted(df["player_name"].dropna().unique()) if "player_name" in df.columns else []
 if not player_names:
     st.warning("No player data available.")
     st.stop()

@@ -16,8 +16,7 @@ def _cmd_info(_args: argparse.Namespace) -> None:
         "modules:",
     ]
     lines.extend(
-        f"  - {module.name}: {module.purpose}"
-        for module in architecture.module_boundaries
+        f"  - {module.name}: {module.purpose}" for module in architecture.module_boundaries
     )
     lines.append("commands:")
     lines.extend(f"  - {command}" for command in architecture.supported_commands)
@@ -43,7 +42,7 @@ def _cmd_build_features(_args: argparse.Namespace) -> None:
 def _cmd_train(_args: argparse.Namespace) -> None:
     from scoutlab.pipeline import run_weekly_train
 
-    results = run_weekly_train()
+    results = run_weekly_train(skip_if_validation_fails=False)
     for model, status in results.items():
         print(f"  {model}: {status}")
 

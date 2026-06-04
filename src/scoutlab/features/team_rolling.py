@@ -31,9 +31,13 @@ def build_team_rolling_features(
         missing_text = ", ".join(missing)
         raise ValueError(f"team_match_df is missing required columns: {missing_text}")
 
-    features = team_match_df.copy().sort_values(
-        ["team_id", "match_date", "match_id"],
-    ).reset_index(drop=True)
+    features = (
+        team_match_df.copy()
+        .sort_values(
+            ["team_id", "match_date", "match_id"],
+        )
+        .reset_index(drop=True)
+    )
     features["match_date"] = pd.to_datetime(features["match_date"], errors="raise")
     group_labels = features["team_id"]
 
@@ -50,12 +54,12 @@ def build_team_rolling_features(
             stat_sum = _grouped_rolling_sum(features[stat_name], group_labels, window)
             features[f"{stat_name}_{window}"] = stat_sum
 
-        features[f"points_per_match_{window}"] = (
-            features[f"result_points_{window}"] / prior_matches.where(prior_matches > 0)
-        )
-        features[f"goal_diff_per_match_{window}"] = (
-            features[f"goal_diff_{window}"] / prior_matches.where(prior_matches > 0)
-        )
+        features[f"points_per_match_{window}"] = features[
+            f"result_points_{window}"
+        ] / prior_matches.where(prior_matches > 0)
+        features[f"goal_diff_per_match_{window}"] = features[
+            f"goal_diff_{window}"
+        ] / prior_matches.where(prior_matches > 0)
         if "elo_pre" in features.columns:
             features[f"elo_pre_mean_{window}"] = _grouped_rolling_mean(
                 features["elo_pre"],

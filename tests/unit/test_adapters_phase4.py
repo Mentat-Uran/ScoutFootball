@@ -6,6 +6,11 @@ import pytest
 
 from scoutlab.adapters.common import CachedHttpClient, HttpResponse, SourceSchemaError
 from scoutlab.adapters.fbref import FBREF_RATE_LIMIT_SECONDS, fetch_player_standard
+from scoutlab.adapters.fbref_soccerdata import (
+    bundesliga_is_missing,
+    merge_stat_frames,
+    normalize_big5_combined_frame,
+)
 from scoutlab.adapters.transfermarkt_manual import load_snapshot
 from scoutlab.adapters.understat import fetch_league_players
 from scoutlab.config import PlatformSettings
@@ -143,6 +148,59 @@ def test_fbref_missing_table_raises_structured_error(tmp_path: Path) -> None:
 
     with pytest.raises(SourceSchemaError, match="standard stats table"):
         fetch_player_standard(["ENG-Premier League"], [2025], client=client, settings=settings)
+
+
+def test_bundesliga_is_missing_detects_big5_gap() -> None:
+    frame = pd.DataFrame({"minutes": [900, 850]})
+    frame.index = pd.MultiIndex.from_tuples(
+        [
+            ("ENG-Premier League", "2223", "Alpha FC", "A. Forward"),
+            ("ESP-La Liga", "2223", "Beta FC", "B. Midfielder"),
+        ],
+        names=["league", "season", "team", "player"],
+    )
+
+    assert bundesliga_is_missing(frame) is True
+
+
+def test_normalize_big5_combined_frame_maps_nan_league_to_bundesliga() -> None:
+    frame = pd.DataFrame({"minutes": [720]})
+    frame.index = pd.MultiIndex.from_tuples(
+        [
+            (float("nan"), "2223", "Bayern Munich", "J. Musiala"),
+        ],
+        names=["league", "season", "team", "player"],
+    )
+
+    normalized = normalize_big5_combined_frame(frame)
+
+    assert ("GER-Bundesliga", "2223", "Bayern Munich", "J. Musiala") in normalized.index
+    assert bundesliga_is_missing(normalized) is False
+
+
+def test_merge_stat_frames_appends_bundesliga_and_deduplicates_index() -> None:
+    big5 = pd.DataFrame({"minutes": [900, 850]})
+    big5.index = pd.MultiIndex.from_tuples(
+        [
+            ("ENG-Premier League", "2223", "Alpha FC", "A. Forward"),
+            (float("nan"), "2223", "Gamma FC", "C. Defender"),
+        ],
+        names=["league", "season", "team", "player"],
+    )
+    bundesliga = pd.DataFrame({"minutes": [780, 780]})
+    bundesliga.index = pd.MultiIndex.from_tuples(
+        [
+            ("GER-Bundesliga", "2223", "Gamma FC", "C. Defender"),
+            ("ESP-La Liga", "2223", "Beta FC", "B. Midfielder"),
+        ],
+        names=["league", "season", "team", "player"],
+    )
+
+    combined = merge_stat_frames(big5, bundesliga)
+
+    assert ("GER-Bundesliga", "2223", "Gamma FC", "C. Defender") in combined.index
+    assert len(combined) == 3
+    assert combined.loc[("ESP-La Liga", "2223", "Beta FC", "B. Midfielder"), "minutes"] == 780
 
 
 def test_transfermarkt_manual_load_snapshot_from_csv_and_parquet(tmp_path: Path) -> None:
