@@ -9,7 +9,7 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
 - Pipeline: `ingest` -> `build-features` -> `train`。
 - 数据验证: `scoutlab validate`。
 - 本地数据层: DuckDB + Parquet，按 raw/silver/gold/models/reports/logs 分层。
-- 球员评分: PyTorch GPU 优化器，当前重点是角色、联赛、出勤和位置偏差校准。
+- 球员评分: PyTorch 优化器，已加入 holdout 评估、Pearson 修复、availability cap、ST/W quality cap、稳健球队聚合和 team coverage 报告；当前重点转向真实影响力标签和训练目标重构。
 - 比分预测: Independent Poisson baseline。
 - 身价合理性: `value_fairness` OOF 训练产物。
 - 产品层: Streamlit 多页 MVP，FastAPI draft 入口。
@@ -58,9 +58,19 @@ SOCCERDATA_DIR=./data/soccerdata uv run python scripts/fetch_fbref_10seasons.py
 | 产品可视化层 | Streamlit、Plotly、mplsoccer 足球图表 | Streamlit 已有，mplsoccer 待接入 |
 | 比分预测层 | league average -> Independent Poisson -> Dixon-Coles | Poisson 已有，Dixon-Coles 待做 |
 
+## 评分系统状态
+
+`PROBLEMS.md` 记录的问题已完成第一轮代码级修复：优化器现在只在训练赛季拟合并在 holdout 赛季评估，Pearson 指标不再误用 Spearman p-value，ST/W quality cap 防止前场 quality 绕过 attack，所有位置 availability cap 收敛到 0.18-0.20。
+
+球队赛季评分也不再使用纯分钟加权均值，而是使用 capped minutes + core rotation 的稳健聚合。这样可以减少 Everton、Stuttgart、Hoffenheim、Rennes 这类高分钟中后场球员把球队评分拉高的捷径。
+
+评估报告新增 team coverage。2026-06-05 已用 Football-Data 2025/2026 CSV 直接修补 2526 五大联赛测试集队名，Premier League、La Liga、Bundesliga、Serie A、Ligue 1 的 holdout coverage 均已到 1.00；覆盖低于 0.90 的 league-season 仍只能作为低置信度诊断，不能写成完整前四预测结论。
+
+这些修复只是 guardrail，不等于评分系统已经完成。下一步必须继续在当前电脑先做小规模测试，再视情况重跑完整优化，复盘 2526 holdout 中 Arsenal、Real Madrid、Napoli、PSG 等误差案例，并引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为真实球员影响力标签。未经明确允许，不使用远程 5070 Ti 服务器。
+
 ## 未来更新策略
 
-P0：评分系统真实影响力校准。重写训练目标，引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集；球队积分相关性只能做辅助校验，不能当主标签。
+P0：评分系统真实影响力校准。先用新 availability cap 和稳健球队聚合重新评估 holdout，再重写训练目标，引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集；球队积分相关性只能做辅助校验，不能当主标签。
 
 P1：展示增强。引入 mplsoccer，补齐雷达图、pizza chart、shot map、pass map、xT heatmap、位置内榜单和低置信度提示。
 
@@ -90,6 +100,9 @@ PYTHONPATH=src uv run python -m scoutlab validate
 
 # 本地评分优化
 PYTHONPATH=src uv run python scripts/optimize_ratings_gpu.py --data_dir ./data --pop 10 --steps 300
+
+# 当前电脑小规模 smoke test（不使用远程 5070 Ti 服务器）
+PYTHONPATH=src uv run python scripts/optimize_ratings_gpu.py --data_dir ./data --pop 2 --steps 20 --cv-folds 0 --stability-runs 0 --importance-repeats 0
 
 # GPU 远程优化
 uv run python scripts/gpu_client.py --server http://192.168.0.189:8420 optimize --pop 32 --steps 500

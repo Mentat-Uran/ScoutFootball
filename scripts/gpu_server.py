@@ -17,41 +17,41 @@ import asyncio
 import base64
 import io
 import socket
+import sys
 import time
 import uuid
 import zipfile
 from collections import OrderedDict
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from scipy.stats import pearsonr, spearmanr
 
 # ── 导入优化器 ─────────────────────────────────────────────────────────
 
-import sys
-
 sys.path.insert(0, str(Path(__file__).parent))
 from optimize_ratings_gpu import (
-    N_PARAMS,
-    POSITIONS,
-    DIMENSIONS,
     ATTACK_METRICS,
+    DIMENSIONS,
+    N_ATK,
+    N_DIM,
+    N_POS,
+    POSITIONS,
+    _filter_by_seasons,
+    _get_default_params_tensor,
+    apply_position_weight_caps,
     build_feature_tensors,
     compute_ratings_torch,
-    compute_team_avg_ratings,
-    load_data,
-    optimize,
-    _get_default_params_tensor,
-    make_holdout_split,
-    _filter_by_seasons,
     evaluate_params,
+    load_data,
+    make_holdout_split,
+    optimize,
+    team_aggregation_config,
 )
-
-from scipy.stats import pearsonr, spearmanr
 
 # ── FastAPI App ──────────────────────────────────────────────────────
 
@@ -63,11 +63,12 @@ app = FastAPI(
 
 # 全局状态
 DATA_DIR: Path = Path("./data")
-DEVICE: Optional[torch.device] = None
+DEVICE: torch.device | None = None
 _cached_df = None
 _cached_feat = None
 _cached_team_pts = None
 _jobs: OrderedDict[str, dict] = OrderedDict()
+UPLOAD_DATA_FILE = File(...)
 
 
 def _get_device():
@@ -107,7 +108,7 @@ def _invalidate_cache():
 class HealthResponse(BaseModel):
     status: str = "ok"
     device: str
-    gpu_name: Optional[str] = None
+    gpu_name: str | None = None
     cuda_available: bool
     mps_available: bool
     data_dir: str
@@ -125,9 +126,9 @@ class OptimizeRequest(BaseModel):
 
 class ScoreRequest(BaseModel):
     player_name: str
-    team: Optional[str] = None
-    league: Optional[str] = None
-    season: Optional[str] = None
+    team: str | None = None
+    league: str | None = None
+    season: str | None = None
 
 
 class ScoreResponse(BaseModel):
@@ -141,9 +142,9 @@ class ScoreResponse(BaseModel):
 
 class BulkScoreRequest(BaseModel):
     top_n: int = Field(default=50, ge=1, le=500)
-    position: Optional[str] = None
-    league: Optional[str] = None
-    season: Optional[str] = None
+    position: str | None = None
+    league: str | None = None
+    season: str | None = None
 
 
 class BulkScoreResponse(BaseModel):
@@ -235,6 +236,7 @@ async def run_optimize(req: OptimizeRequest):
 
             # Per-league on test set
             test_matched = opt_test["matched"]
+            test_coverage = opt_test["coverage"]
             per_league = {}
             for league in sorted(test_matched["league"].unique()):
                 lm = test_matched[test_matched["league"] == league]
@@ -247,9 +249,7 @@ async def run_optimize(req: OptimizeRequest):
                         "n": int(len(lm)),
                     }
 
-            # Position weights (with caps applied)
-            from optimize_ratings_gpu import apply_position_weight_caps, N_POS as _N_POS, N_DIM as _N_DIM, N_ATK as _N_ATK
-            pw_raw = best_params[: _N_POS * _N_DIM].reshape(_N_POS, _N_DIM)
+            pw_raw = best_params[: N_POS * N_DIM].reshape(N_POS, N_DIM)
             pw = apply_position_weight_caps(torch.softmax(pw_raw, dim=1)).cpu().numpy()
             position_weights = {}
             for i, pos in enumerate(POSITIONS):
@@ -258,8 +258,9 @@ async def run_optimize(req: OptimizeRequest):
                     for j, dim in enumerate(DIMENSIONS)
                 }
 
-            aw_raw = best_params[_N_POS * _N_DIM : _N_POS * _N_DIM + _N_ATK * _N_POS].reshape(
-                _N_POS, _N_ATK
+            aw_raw = best_params[N_POS * N_DIM : N_POS * N_DIM + N_ATK * N_POS].reshape(
+                N_POS,
+                N_ATK,
             )
             aw = torch.softmax(aw_raw, dim=1).cpu().numpy()
             attack_weights = {}
@@ -298,10 +299,15 @@ async def run_optimize(req: OptimizeRequest):
                 "params_base64": params_b64,
                 "position_weights": position_weights,
                 "attack_weights": attack_weights,
+                "team_aggregation": team_aggregation_config(),
+                "team_coverage": test_coverage.to_dict(orient="records"),
                 "per_league": per_league,
             }
             _jobs[job_id] = {"status": "done", "result": result}
-            print(f"  Job {job_id} done: test Spearman={sp_opt:.4f} train Spearman={opt_train['metrics']['spearman']:.4f}")
+            print(
+                f"  Job {job_id} done: test Spearman={sp_opt:.4f} "
+                f"train Spearman={opt_train['metrics']['spearman']:.4f}",
+            )
         except Exception as e:
             import traceback
 
@@ -409,7 +415,7 @@ async def bulk_scores(req: BulkScoreRequest):
 
 
 @app.post("/upload-data")
-async def upload_data(file: UploadFile = File(...)):
+async def upload_data(file: UploadFile = UPLOAD_DATA_FILE):
     content = await file.read()
     if file.filename.endswith(".zip"):
         with zipfile.ZipFile(io.BytesIO(content)) as zf:

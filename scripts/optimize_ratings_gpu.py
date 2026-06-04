@@ -58,15 +58,19 @@ ATTACK_WEIGHT_PRIOR = [
 ]
 QUALITY_SUBWEIGHT_PRIOR = [0.35, 0.25, 0.25, 0.15]
 POSITION_DIMENSION_CAPS = [
-    [1.00, 1.00, 1.00, 1.00, 0.30],  # ST: 进攻主导，quality 不能绕过 attack 霸榜
-    [1.00, 1.00, 1.00, 1.00, 0.28],  # W
-    [0.35, 0.35, 1.00, 1.00, 0.30],  # AM
-    [0.30, 0.22, 1.00, 1.00, 0.24],  # CM: 防止出勤/进攻/quality 泛化霸榜
-    [0.30, 0.12, 1.00, 1.00, 0.24],  # DM
-    [0.35, 0.16, 1.00, 1.00, 0.28],  # FB
-    [0.36, 0.10, 1.00, 1.00, 0.25],  # CB
-    [0.32, 0.06, 1.00, 1.00, 0.28],  # GK
+    [0.20, 1.00, 1.00, 1.00, 0.30],  # ST: 出勤是可靠性信号，不能替代进攻输出
+    [0.20, 1.00, 1.00, 1.00, 0.28],  # W
+    [0.20, 0.35, 1.00, 1.00, 0.30],  # AM
+    [0.18, 0.22, 1.00, 1.00, 0.24],  # CM: 防止出勤/进攻/quality 泛化霸榜
+    [0.20, 0.12, 1.00, 1.00, 0.24],  # DM
+    [0.20, 0.16, 1.00, 1.00, 0.28],  # FB
+    [0.18, 0.10, 1.00, 1.00, 0.25],  # CB
+    [0.18, 0.06, 1.00, 1.00, 0.28],  # GK
 ]
+TEAM_AGG_MINUTES_CAP = 1500.0
+TEAM_AGG_CORE_MINUTES = 450.0
+TEAM_AGG_CORE_SCALE = 180.0
+TEAM_AGG_CAPPED_MINUTES_BLEND = 0.55
 
 
 @dataclass(frozen=True)
@@ -173,6 +177,17 @@ def apply_position_weight_caps(weights: torch.Tensor) -> torch.Tensor:
     room_sum = room.sum(dim=1, keepdim=True).clamp_min(1e-8)
     adjusted = capped + missing * room / room_sum
     return adjusted / adjusted.sum(dim=1, keepdim=True).clamp_min(1e-8)
+
+
+def team_aggregation_config() -> dict[str, float]:
+    """Return the robust team-season aggregation settings for reports."""
+    return {
+        "minutes_cap": TEAM_AGG_MINUTES_CAP,
+        "core_minutes": TEAM_AGG_CORE_MINUTES,
+        "core_scale": TEAM_AGG_CORE_SCALE,
+        "capped_minutes_blend": TEAM_AGG_CAPPED_MINUTES_BLEND,
+        "core_rotation_blend": 1.0 - TEAM_AGG_CAPPED_MINUTES_BLEND,
+    }
 
 
 # ── 数据加载 ──────────────────────────────────────────────────────────────
@@ -661,6 +676,49 @@ def build_matched_results(feat, team_pts_df, team_avgs):
     return pd.DataFrame(rows)
 
 
+def team_coverage_table(feat, team_pts_df):
+    """Report team-season coverage before interpreting holdout metrics."""
+    actual = team_pts_df.loc[:, ["team", "league", "season"]].copy()
+    if actual.empty:
+        return pd.DataFrame(
+            columns=[
+                "league",
+                "season",
+                "target_teams",
+                "rated_teams",
+                "matched_teams",
+                "coverage",
+            ],
+        )
+
+    actual = actual.astype(str).drop_duplicates()
+    rated = pd.DataFrame(
+        {
+            "team": [str(team) for team in feat["ts_team_names"]],
+            "league": [str(league) for league in feat["ts_leagues"]],
+            "season": [str(season) for season in feat["ts_seasons"]],
+        },
+    ).drop_duplicates()
+    matched = actual.merge(rated, on=["team", "league", "season"], how="inner")
+
+    group_cols = ["league", "season"]
+    target_counts = actual.groupby(group_cols, observed=True).size().rename("target_teams")
+    rated_counts = rated.groupby(group_cols, observed=True).size().rename("rated_teams")
+    matched_counts = matched.groupby(group_cols, observed=True).size().rename("matched_teams")
+    coverage = (
+        pd.concat([target_counts, rated_counts, matched_counts], axis=1)
+        .fillna(0)
+        .reset_index()
+    )
+    for column in ["target_teams", "rated_teams", "matched_teams"]:
+        coverage[column] = coverage[column].astype(int)
+    coverage["coverage"] = coverage["matched_teams"] / coverage["target_teams"].where(
+        coverage["target_teams"] > 0,
+    )
+    coverage = coverage.sort_values(["season", "league"]).reset_index(drop=True)
+    return coverage
+
+
 def rating_calibration_table(matched_df, n_bins=5):
     """Compare predicted rating percentiles with actual point percentiles."""
     if matched_df.empty:
@@ -743,14 +801,25 @@ def evaluate_params(
     ratings = compute_ratings_torch(feat_eval, params.to(device), device)
     team_avgs = compute_team_avg_ratings(feat_eval, ratings, device)
     matched_df = build_matched_results(feat_eval, team_pts_df, team_avgs)
+    coverage = team_coverage_table(feat_eval, team_pts_df)
     metrics = rating_metrics(matched_df, n_bins=calibration_bins)
     metrics["split"] = split_name
     metrics["n_players"] = int(len(eval_df))
+    metrics["target_team_seasons"] = (
+        int(coverage["target_teams"].sum()) if not coverage.empty else 0
+    )
+    metrics["rated_team_seasons"] = int(coverage["rated_teams"].sum()) if not coverage.empty else 0
+    metrics["team_coverage"] = (
+        float(coverage["matched_teams"].sum() / coverage["target_teams"].sum())
+        if not coverage.empty and coverage["target_teams"].sum() > 0
+        else float("nan")
+    )
     return {
         "features": feat_eval,
         "matched": matched_df,
         "metrics": metrics,
         "calibration": rating_calibration_table(matched_df, n_bins=calibration_bins),
+        "coverage": coverage,
     }
 
 
@@ -921,6 +990,7 @@ def build_feature_tensors(df, rank_reference_df=None):
 
     # Team-season grouping (use reset index positions)
     df_reset = df.reset_index(drop=True)
+    team_agg_weight = _build_team_aggregation_weights(df_reset)
     team_season_groups = df_reset.groupby(["team", "league", "season"]).groups
     ts_indices = []
     ts_team_names = []
@@ -943,6 +1013,7 @@ def build_feature_tensors(df, rank_reference_df=None):
         "N": n_rows,
         "n_team_groups": len(ts_indices),
         "team_group_idx": torch.tensor(team_group_idx, dtype=torch.long),
+        "team_agg_weight": torch.tensor(team_agg_weight, dtype=torch.float32),
         "pos_idx": torch.tensor(df["pos_idx"].values, dtype=torch.long),
         "npg_pct": torch.tensor(npg_pct, dtype=torch.float32),
         "ast_pct": torch.tensor(ast_pct, dtype=torch.float32),
@@ -973,6 +1044,65 @@ def build_feature_tensors(df, rank_reference_df=None):
         "ts_seasons": ts_seasons,
         "df": df,
     }
+
+
+def _build_team_aggregation_weights(df_reset: pd.DataFrame) -> np.ndarray:
+    """Build robust team-season weights that do not reward raw minutes twice.
+
+    Player ratings already include availability/reliability. For team strength,
+    pure minutes weighting lets high-minute average CM/CB/GK profiles drag a
+    squad above stronger but more rotated sides. This uses a capped-minutes share
+    blended with a core-rotation share, approximating a squad median without
+    dropping the first-team signal.
+    """
+    if df_reset.empty:
+        return np.array([], dtype=np.float32)
+
+    minutes = pd.to_numeric(df_reset["minutes"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    capped = np.sqrt(np.minimum(minutes.to_numpy(dtype=np.float64), TEAM_AGG_MINUTES_CAP))
+    z = np.clip(
+        (minutes.to_numpy(dtype=np.float64) - TEAM_AGG_CORE_MINUTES) / TEAM_AGG_CORE_SCALE,
+        -50.0,
+        50.0,
+    )
+    core = 1.0 / (1.0 + np.exp(-z))
+
+    work = df_reset.loc[:, ["team", "league", "season"]].copy()
+    work["capped"] = capped
+    work["core"] = core
+    group = work.groupby(["team", "league", "season"], sort=False)
+    group_size = group["capped"].transform("size").to_numpy(dtype=np.float64)
+
+    capped_sum = group["capped"].transform("sum").to_numpy(dtype=np.float64)
+    core_sum = group["core"].transform("sum").to_numpy(dtype=np.float64)
+    capped_share = np.divide(
+        capped,
+        capped_sum,
+        out=np.divide(1.0, group_size, out=np.zeros_like(group_size), where=group_size > 0),
+        where=capped_sum > 0,
+    )
+    core_share = np.divide(
+        core,
+        core_sum,
+        out=np.divide(1.0, group_size, out=np.zeros_like(group_size), where=group_size > 0),
+        where=core_sum > 0,
+    )
+
+    weights = (
+        TEAM_AGG_CAPPED_MINUTES_BLEND * capped_share
+        + (1.0 - TEAM_AGG_CAPPED_MINUTES_BLEND) * core_share
+    )
+    work["weight"] = weights
+    weight_sum = work.groupby(["team", "league", "season"], sort=False)["weight"].transform(
+        "sum",
+    ).to_numpy(dtype=np.float64)
+    normalized = np.divide(
+        weights,
+        weight_sum,
+        out=np.divide(1.0, group_size, out=np.zeros_like(group_size), where=group_size > 0),
+        where=weight_sum > 0,
+    )
+    return normalized.astype(np.float32)
 
 
 def compute_ratings_torch(feat, params, device):
@@ -1042,7 +1172,6 @@ def compute_ratings_torch(feat, params, device):
     # 这里只压缩进攻维度本身，让高产前锋仍然靠真实进攻输出拿分，但避免进球/助攻
     # 单一维度把 Top 排名挤满。AM 只做轻微压缩，供未来位置映射修正后使用。
     attack_scale = torch.ones(N_POS, device=device)
-    st_idx = POS_TO_IDX.get("ST", 0)
     w_idx = POS_TO_IDX.get("W", 1)
     am_idx = POS_TO_IDX.get("AM", 2)
     # ST 不压缩 attack：前锋本应由进攻主导，quality cap 已防止 quality 绕路霸榜
@@ -1145,21 +1274,24 @@ def compute_ratings_torch(feat, params, device):
 
 
 def compute_team_avg_ratings_torch(feat, ratings, device):
-    """计算每队每赛季平均评分，保持 Torch 计算图用于反向传播。"""
+    """计算每队每赛季稳健平均评分，保持 Torch 计算图用于反向传播。"""
     group_idx = feat["team_group_idx"].to(device)
-    minutes = feat["minutes"].to(device)
-    weights = torch.clamp(minutes, min=1)
+    if "team_agg_weight" in feat:
+        weights = feat["team_agg_weight"].to(device)
+    else:
+        minutes = feat["minutes"].to(device)
+        weights = torch.clamp(minutes, min=1)
     n_groups = int(feat["n_team_groups"])
 
     weighted_sum = torch.zeros(n_groups, dtype=ratings.dtype, device=device)
-    minute_sum = torch.zeros(n_groups, dtype=ratings.dtype, device=device)
+    weight_sum = torch.zeros(n_groups, dtype=ratings.dtype, device=device)
     weighted_sum = weighted_sum.index_add(0, group_idx, ratings * weights)
-    minute_sum = minute_sum.index_add(0, group_idx, weights)
-    return weighted_sum / torch.clamp(minute_sum, min=1e-8)
+    weight_sum = weight_sum.index_add(0, group_idx, weights)
+    return weighted_sum / torch.clamp(weight_sum, min=1e-8)
 
 
 def compute_team_avg_ratings(feat, ratings, device):
-    """计算每队每赛季平均评分 (按出场分钟加权)，返回 NumPy 供报告使用。"""
+    """计算每队每赛季稳健平均评分，返回 NumPy 供报告使用。"""
     return compute_team_avg_ratings_torch(feat, ratings, device).detach().cpu().numpy()
 
 
@@ -1720,7 +1852,7 @@ def main():
     print("-" * 80)
     best_params_cpu = best_params.detach().cpu()
     pw_raw = best_params_cpu[:N_POS * N_DIM].reshape(N_POS, N_DIM)
-    pw = torch.softmax(pw_raw, dim=1).cpu().numpy()
+    pw = apply_position_weight_caps(torch.softmax(pw_raw, dim=1)).cpu().numpy()
     print(f"{'位置':<5} {'出勤':>7} {'进攻':>7} {'防守':>7} {'控球':>7} {'质量':>7}")
     print("-" * 80)
     for i, pos in enumerate(POSITIONS):
@@ -1740,7 +1872,21 @@ def main():
     for i, pos in enumerate(POSITIONS):
         print(f"{pos:<5} {aw[i,0]:>9.4f} {aw[i,1]:>9.4f} {aw[i,2]:>9.4f}")
 
-    print("\n[7] Holdout 联赛分层评估:")
+    print("\n[7] Holdout 球队覆盖率:")
+    holdout_coverage = optimized_test_eval["coverage"]
+    if holdout_coverage.empty:
+        print("  没有可报告的球队覆盖率")
+    else:
+        for _, row in holdout_coverage.iterrows():
+            print(
+                f"  {row['league']:<22} {row['season']:<8} "
+                f"matched={int(row['matched_teams']):>2}/"
+                f"{int(row['target_teams']):<2} "
+                f"rated={int(row['rated_teams']):>2} "
+                f"coverage={row['coverage']:.2f}"
+            )
+
+    print("\n[8] Holdout 联赛分层评估:")
     holdout_league_metrics = league_metrics(
         optimized_test_eval["matched"],
         min_n=5,
@@ -1756,7 +1902,7 @@ def main():
                 f"N={int(row['n_team_seasons'])}"
             )
 
-    print("\n[8] Holdout 校准检查:")
+    print("\n[9] Holdout 校准检查:")
     calibration_test = optimized_test_eval["calibration"]
     for _, row in calibration_test.iterrows():
         print(
@@ -1770,7 +1916,7 @@ def main():
     cv_metrics = pd.DataFrame()
     cv_error = None
     if args.cv_folds > 0:
-        print("\n[9] 时间序列交叉验证:")
+        print("\n[10] 时间序列交叉验证:")
         try:
             cv_metrics = run_cross_validation(
                 df,
@@ -1814,7 +1960,7 @@ def main():
     stability_df = pd.DataFrame()
     stability_summary = {}
     if args.stability_runs > 1:
-        print("\n[10] 参数稳定性:")
+        print("\n[11] 参数稳定性:")
         stability_df, stability_summary = run_parameter_stability(
             train_df,
             test_df,
@@ -1848,7 +1994,7 @@ def main():
 
     feature_importance = pd.DataFrame()
     if args.importance_repeats > 0:
-        print("\n[11] 特征置换重要性 (Holdout):")
+        print("\n[12] 特征置换重要性 (Holdout):")
         feature_importance = permutation_feature_importance(
             best_params,
             test_df,
@@ -1872,7 +2018,7 @@ def main():
     output = data_dir / "gold" / "feature_store"
     output.mkdir(parents=True, exist_ok=True)
     np.save(output / "optimized_params.npy", best_params.detach().cpu().numpy())
-    print(f"\n[12] 参数已保存: {output / 'optimized_params.npy'}")
+    print(f"\n[13] 参数已保存: {output / 'optimized_params.npy'}")
 
     holdout_predictions = optimized_test_eval["matched"].rename(
         columns={"pred_rating": "optimized_rating"},
@@ -1895,6 +2041,8 @@ def main():
         feature_importance.to_parquet(output / "rating_feature_importance.parquet", index=False)
     if not holdout_league_metrics.empty:
         holdout_league_metrics.to_parquet(output / "rating_league_metrics.parquet", index=False)
+    if not holdout_coverage.empty:
+        holdout_coverage.to_parquet(output / "rating_team_coverage.parquet", index=False)
     calibration_test.to_parquet(output / "rating_calibration_test.parquet", index=False)
 
     meta = {
@@ -1920,6 +2068,7 @@ def main():
             "optimized_test": optimized_test_eval["metrics"],
             "overfit_rank_loss_gap": overfit_gap,
         },
+        "team_aggregation": team_aggregation_config(),
         "baseline_spearman": baseline_test_eval["metrics"]["spearman"],
         "baseline_pearson": baseline_test_eval["metrics"]["pearson"],
         "optimized_spearman": optimized_test_eval["metrics"]["spearman"],
@@ -1936,6 +2085,7 @@ def main():
         },
         "feature_importance": feature_importance,
         "league_metrics": holdout_league_metrics,
+        "team_coverage": holdout_coverage,
         "calibration_test": calibration_test,
         "n_players": int(len(df)),
         "n_train_players": int(len(train_df)),
