@@ -1,63 +1,36 @@
 # 任务路线图
 
-当前状态：**Phase 1-8 已完成，评分系统优化中。**
+当前状态：**评分系统优化迭代中。**
 
 ## ✅ 已完成
 
-**数据源 (5 个，覆盖 10 赛季):**
-- FBref: 14,356 条, 5联赛, 5赛季 (2021-2026), 含 misc + shooting
-- Football-Data.co.uk: 17,936 场, 5联赛, 10赛季 (2016-2026)
-- Understat: 27,254 条, 5联赛, 10赛季 (2016-2026), 含 xG/xA/npxG
-- StatsBomb Open Data: 126 场比赛, 11,871 事件, 94 场逐场球员数据
-- Club Elo: 630 支球队 Elo 评级
-
-**特征工程:**
-- 团队级: team_match (17,814行), team_rolling
-- 球员级: player_match (14,450行), player_rolling
-- 特征族: 出勤、进攻、防守、控球、质量、趋势、经验
-
-**模型:**
-- 独立 Poisson 比分预测 (按球队名模糊匹配)
-- value_fairness OOF (6,513行, MAE €4.28M vs baseline €4.45M)
-- 评分优化器: PyTorch GPU, 77 参数, Holdout Spearman=0.8382
-
-**工程:**
+- 5 数据源接入 (FBref, Football-Data, Understat, StatsBomb, Club Elo)
+- 10 赛季数据覆盖 (2016-2026), 27,254 球员
 - Pipeline 端到端: ingest → build-features → train
-- API match prediction 按球队名预测
-- demo fallback 收紧 (log.warning + 三级状态标记)
-- 测试套件: 71 个测试通过
+- PyTorch GPU 评分优化器 (77 参数)
+- GPU 远程计算服务器 (Windows RTX 5070 Ti REST API)
+- Poisson 比分预测, value_fairness OOF
+- 联赛系数窄幂曲线校准 (UEFA 系数)
+- 出场时间惩罚 (400分钟底分0.42, 1200分钟满分)
+- attack 维度位置缩放 (ST×0.94, W×0.93, AM×0.97)
 
-**GPU 远程计算:**
-- Windows RTX 5070 Ti REST 服务器 (192.168.0.189:8420)
-- Mac 客户端通过 REST API 发送优化任务
-- 异步任务模式，支持 holdout split 评估
+## ⏳ 当前问题 (优先修复)
 
-## ⏳ 待完成
+**评分系统位置权重失衡:**
+- [ ] CM 的 quality 权重过高 (0.54)，导致 Top 30 中 CM 占 28 人
+- [ ] ST 的 attack 权重过低 (0.086)，前锋被过度压低
+- [ ] 优化器在新约束下过拟合
+- [ ] 目标: Top 30 中 ST 6-10人, W 4-6人, CM 8-12人
 
-**评分系统平衡 (优先):**
-- [ ] 联赛系数优化: 当前 EPL 占比过高，需平衡各联赛权重
-- [ ] 位置权重调整: 前锋 attack 权重过高，需降低 ST/W 的攻击权重
-- [ ] 出场时间惩罚微调: 400分钟底分0.4，1200分钟满分
-- [ ] 参考: scripts/RATING_IMPROVEMENT_PROMPT.md
+**可能的解决方案:**
+1. 给 quality 维度加位置缩放 (CM quality ×0.9)
+2. 限制 ST 的 attack 最低权重 (下限 0.15)
+3. 在优化 loss 中加位置多样性惩罚
+4. 分开训练: 先固定联赛系数，再优化位置权重
 
-**数据扩展:**
-- [ ] FBref 更多赛季 (2016-2021 被 CAPTCHA 封禁，需手动导入)
-- [ ] StatsBomb 逐场数据扩展 (当前仅 126 场)
-- [ ] Transfermarkt 手动导入 (当前用合成 market_value 占位)
+## 后续待完成
 
-**模型扩展:**
-- [ ] Dixon-Coles 模型
-- [ ] 更多特征: 传球、控球详细统计
-
-**应用:**
-- [ ] Streamlit MVP 集成优化后评分
-- [ ] FastAPI 服务层
-
-## 全局验收原则
-
-- 数据处理必须可复现、可缓存、可校验、可回溯
-- ETL 必须幂等
-- 时间序列任务不能泄露未来信息
-- 模型必须有简单合理的基线对照
-- Transfermarkt 只允许手动导入
-- FBref 只作为受限补充源
+- FBref 更多赛季 (2016-2021 被 CAPTCHA 封禁)
+- Transfermarkt 手动导入
+- Streamlit MVP
+- Dixon-Coles 模型
