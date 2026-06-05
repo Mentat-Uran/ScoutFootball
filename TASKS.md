@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新口径重新跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新口径重新跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。本轮新增：Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutLab 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -94,25 +94,25 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 目标：先修训练目标，再扩展评分模型。当前球队积分相关性会偏向出勤、CM 和 GK，不能单独作为球员影响力标签。
 
 - [x] 完成第一轮反出勤捷径 guardrail：availability cap 下调、ST/W quality cap、holdout 评估、稳健球队聚合、team coverage 报告。
-- [ ] 重建 Football-Data 10 赛季 `combined_results.parquet`，保留 2526 alias patch，并输出 raw CSV 总行数、active Parquet 行数、league-season 覆盖和输入 hash。
+- [x] 重建 Football-Data 10 赛季 `combined_results.parquet`，保留 2526 alias patch，并输出 raw CSV 总行数、active Parquet 行数、league-season 覆盖和输入 hash。
 - [ ] 用新 aggregation/cap 口径重新跑 GPU 优化，生成新的 `optimized_params.npy`、`optimized_params_meta.json`、holdout predictions、league metrics、calibration 和 feature importance。
 - [ ] 复盘 `PROBLEMS.md` 中的误差案例：Everton、Stuttgart、Hoffenheim、Rennes、Napoli、Real Madrid、Arsenal、PSG，记录新旧排名变化和仍未解决原因。
 - [x] 增加出勤捷径诊断报告：minutes/starts/matches/availability 置换重要性、按位置 availability 权重、球队聚合权重分布。
 - [x] 直接修补 2526 五大联赛测试集队名，使 Premier League、La Liga、Bundesliga、Serie A、Ligue 1 的 holdout coverage 均达到 1.00。
 - [x] 对 coverage 低于 0.90 的 league-season 禁止输出强排序结论，只允许作为低置信度诊断样本；该规则仍适用于五大联赛以外的 2526 division 和后续新增数据。
-- [ ] 定义真实标签层级：Transfermarkt 手动导入、权威奖项、国际/俱乐部出场级别、专家分档、位置内人工校准集。
-- [ ] 新增标签数据契约和校验脚本，输出 `data/gold/feature_store/player_truth_labels.parquet`。
-- [ ] 标签契约必须包含 `label_source`、`label_confidence`、`as_of_date`、`position_scope`、`manual_review_flag`，并区分身价代理、奖项荣誉、专家分档和人工校准。
+- [x] 定义真实标签层级：Transfermarkt 手动导入、权威奖项、国际/俱乐部出场级别、专家分档、位置内人工校准集。
+- [x] 新增标签数据契约和校验脚本，输出 `data/gold/feature_store/player_truth_labels.parquet`。
+- [x] 标签契约必须包含 `label_source`、`label_confidence`、`as_of_date`、`position_scope`、`manual_review_flag`，并区分身价代理、奖项荣誉、专家分档和人工校准。
 - [x] 新增评分特征矩阵契约，输出可复用的 `rating_feature_matrix.parquet` 或等价产物，包含数值特征、位置/联赛类别、数据源覆盖、缺失字段标记、输入文件 hash 和 feature manifest。
 - [x] 修正缺失高阶字段处理：防守、控球、xT/VAEP、门将字段缺失时必须有 missing flag 和中性/低置信度 fallback，不能把缺失值 0 当成真实低能力。
 - [ ] 重写优化目标：组合 Spearman/NDCG、位置内排序、跨联赛校准、年龄/趋势合理性、极端样本惩罚。
 - [ ] 保留球队结果相关性作为辅助校验，不再作为主目标。
 - [ ] 定义神经网络准入门槛：必须先有球员真实标签、时间切分、当前优化器 baseline、位置内/跨位置指标、误差案例复盘和低置信度规则；不允许只用球队积分监督训练默认模型。
-- [ ] 补全 2526 Football-Data 覆盖或在报告中剔除积分 N/A 球队，避免把数据缺口误判为模型错误。
+- [x] 补全 2526 Football-Data 覆盖或在报告中剔除积分 N/A 球队，避免把数据缺口误判为模型错误。
 - [x] 将位置内榜单和跨位置总榜拆成两个视图。
 - [x] 给 GK、CB、FB、DM、CM、AM、W、ST 建立位置内指标和解释模板。
 - [x] 对 finishing 使用 shrinkage，避免小样本 `goals - xG` 过度放大。
-- [ ] 输出评分模型卡，说明数据覆盖、权重、偏差、不可解释区域和低置信度球员。
+- [x] 输出评分模型卡，说明数据覆盖、权重、偏差、不可解释区域和低置信度球员。
 
 验收：
 
@@ -216,11 +216,11 @@ player_rating =
 
 ### MODEL_CARD.md
 
-- [ ] 说明数据源：FBref、Understat、Football-Data、StatsBomb Open Data、Club Elo、Transfermarkt（手动导入）、Capology（手动导入）。
-- [ ] 说明标签定义：当前评分目标是什么、真实标签来源（手动导入、奖项、专家分档）、标签覆盖范围。
-- [ ] 说明适用边界：当前模型覆盖哪些联赛/位置/赛季、哪些场景可以信任、哪些场景结果不可靠。
-- [ ] 说明已知偏差：出勤偏差（CM/GK 偏高）、联赛强度偏差（弱联赛顶端样本）、位置偏差、年龄偏差、数据缺失偏差。
-- [ ] 说明不可用场景：单场评分、实时交易建议、青训选材、伤病预测、合同谈判。
+- [x] 说明数据源：FBref、Understat、Football-Data、StatsBomb Open Data、Club Elo、Transfermarkt（手动导入）、Capology（手动导入）。
+- [x] 说明标签定义：当前评分目标是什么、真实标签来源（手动导入、奖项、专家分档）、标签覆盖范围。
+- [x] 说明适用边界：当前模型覆盖哪些联赛/位置/赛季、哪些场景可以信任、哪些场景结果不可靠。
+- [x] 说明已知偏差：出勤偏差（CM/GK 偏高）、联赛强度偏差（弱联赛顶端样本）、位置偏差、年龄偏差、数据缺失偏差。
+- [x] 说明不可用场景：单场评分、实时交易建议、青训选材、伤病预测、合同谈判。
 - [ ] 每次训练保存 feature manifest、参数、随机种子、输入文件 hash。
 - [ ] 每次公开图表或报告保存 data source attribution，尤其是 StatsBomb Open Data 衍生产物。
 

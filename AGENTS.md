@@ -4,12 +4,12 @@
 
 ## 当前项目状态
 
-Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> `scoutlab train`。当前文档真源是 `TASKS.md`，用户说明是 `README.md`，算法解释以 `ALGORITHM.md` 和后续 `MODEL_CARD.md` 为准。
+Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> `scoutlab train`。当前文档真源是 `TASKS.md`，用户说明是 `README.md`，算法解释以 `ALGORITHM.md` 和 `MODEL_CARD.md` 为准。
 
 本地缓存当前可验证状态：
 
 - FBref：5 赛季标准、射门、misc 表均为 14,356 行。
-- Football-Data：10 赛季、20 个 league/division，原始 CSV 合计 68,953 行；当前活动 `combined_results.parquet` 为 5,330 行（5 大联赛 2022/23–2024/25），需重建 10 赛季合并 Parquet 后才能写成完整合并缓存。
+- Football-Data：10 赛季、20 个 league/division，原始 CSV 合计 68,953 行；重建脚本 `scripts/rebuild_football_data.py` 可生成完整 10 赛季 `combined_results.parquet`，`rebuild_combined_results()` 函数封装在 `football_data.py` 中。
 - Understat：10 赛季、6 个联赛，`players_10seasons.parquet` 当前为 31,902 个球员赛季行。
 - StatsBomb Open Data：`big5_matches.parquet` 当前为 126 场比赛，`events_all.parquet` 当前为 11,871 条事件；`matches_all.parquet` 当前为空表，不要把它当 matches 真源。
 - 评分产物：`player_ratings_optimized.parquet` 当前为 27,254 行。
@@ -42,7 +42,9 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - 球队积分相关性会偏向出勤、CM 和 GK，不能单独作为球员影响力标签。
 - 弱联赛顶端样本已被压低，但仍需真实身价、奖项、专家标签或人工分档校准跨联赛等级。
 - FBref 粗位置只能保守重判，仍需要 StatsBomb、阵型或人工位置增强。
-- `player_value_metrics.parquet` 只有 StatsBomb 事件价值样本，不能当作全量联赛动作价值；`player_truth_labels.parquet` 尚未生成。
+- `player_value_metrics.parquet` 只有 StatsBomb 事件价值样本，不能当作全量联赛动作价值；`player_truth_labels.parquet` 已有空表模板和 schema 契约（`truth_labels.py`），待手动填充真实标签数据。
+- 评估流程已增加 N/A 球队过滤：`build_matched_results()` 和 `build_team_target_tensors()` 自动剔除积分 NaN/inf 球队，`evaluate_params()` 报告剔除数量。
+- 评分模型卡 `MODEL_CARD.md` 已输出，记录数据源、标签定义、适用边界、已知偏差和不可用场景。
 - 神经网络评分器只能作为真实标签层完成后的候选实验；没有球员级标签、特征缺失标记、时间切分和 baseline 对比前，不要把 MLP/深度模型写成默认评分能力。
 - `PROBLEMS.md` 中记录的问题只能算完成第一轮代码级防护；完整结论必须重新跑 GPU 优化和 2526 holdout 误差复盘后再写。
 
@@ -125,6 +127,7 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - 新增出勤诊断模块使用 `src/scoutlab/evaluation/availability_diagnostic.py`。
 - 新增位置内指标模块使用 `src/scoutlab/evaluation/position_metrics.py`。
 - 新增统一置信度模块使用 `src/scoutlab/evaluation/confidence.py`。
+- 新增真实标签契约模块使用 `src/scoutlab/evaluation/truth_labels.py`。
 - 新增足球专用图表扩展 `src/scoutlab/viz/pitch.py`，使用 mplsoccer。
 - Streamlit 页面只读本地产物，不直接执行重型训练。
 - 训练产物写入 `data/models/` 或 `data/gold/feature_store/`，并保存 feature manifest、参数、随机种子和输入 hash。
