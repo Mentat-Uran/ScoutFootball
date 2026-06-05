@@ -60,6 +60,25 @@ POSITION_ALIASES = {
     "forward": "fwd",
     "striker": "fwd",
     "winger": "wing",
+    # Understat-style single letters and combos
+    "d": "cb",
+    "m": "cm",
+    "f": "st",
+    "s": "st",
+    "d m": "fb",
+    "d s": "cb",
+    "d m s": "fb",
+    "d f": "cb",
+    "f m": "am",
+    "f m s": "w",
+    "f s": "st",
+    # FBref-style abbreviations and combos
+    "df": "cb",
+    "mf": "cm",
+    "fw": "st",
+    "df mf": "fb",
+    "mf fw": "am",
+    "fw mf": "w",
 }
 NON_ALNUM_PATTERN = re.compile(r"[^a-z0-9\s]+")
 MULTISPACE_PATTERN = re.compile(r"\s+")

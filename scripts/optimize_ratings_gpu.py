@@ -8,7 +8,14 @@
   2. 把 data/ 目录复制到 Windows 机器上
   3. python optimize_ratings_gpu.py --data_dir ./data
 
-或在 Mac 上用 CPU 也能跑 (会慢一些但比 scipy 快很多)。
+Mac 快速模式 (几分钟完成):
+  python optimize_ratings_gpu.py --data_dir ./data --quick
+
+  --quick 自动降低: steps=80, pop=6, patience=15, 跳过 CV/稳定性/重要性。
+  如需进一步加速: --quick --steps 40 --pop 3
+
+Mac 完整模式 (较慢但更准):
+  python optimize_ratings_gpu.py --data_dir ./data --steps 150 --pop 8 --patience 25
 """
 
 import argparse
@@ -384,12 +391,97 @@ def map_position(pos_str):
     return "CM"
 
 
+def map_position_detailed(pos_str):
+    """Parse position string from FBref or Understat into (sub_position, position_source, position_confidence).
+
+    Understat uses single letters: D, M, F, S, and combinations: D S, D M, D M S, F M, F M S
+    FBref uses abbreviations: GK, DF, MF, FW, and combinations: DF,MF / MF,FW / FW,MF
+
+    Confidence levels:
+    - high: FBref multi-position combo (e.g., "DF,MF") - most informative
+    - medium: Understat multi-position combo (e.g., "D M S") or FBref single position
+    - low: Understat single letter (e.g., "D") - least informative
+    """
+    if not isinstance(pos_str, str) or not pos_str.strip():
+        return ("CM", str(pos_str), "low")
+
+    s = pos_str.strip().upper()
+    source = pos_str.strip()
+
+    # GK is unambiguous
+    if "GK" in s:
+        return ("GK", source, "high")
+
+    # Detect source format: FBref uses DF/MF/FW with possible commas, Understat uses D/M/F/S with spaces
+    # FBref format: contains "DF" or "MF" or "FW" (2-letter codes)
+    is_fbref = any(code in s for code in ["DF", "MF", "FW"])
+    is_understat = not is_fbref and any(code in s.split() for code in ["D", "M", "F", "S"])
+
+    if is_fbref:
+        # FBref format parsing
+        has_df = "DF" in s
+        has_mf = "MF" in s
+        has_fw = "FW" in s
+
+        if has_df and has_mf:
+            return ("FB", source, "high")
+        if has_mf and has_fw:
+            # MF,FW could be W or AM - use order as hint
+            # "FW,MF" tends to be more attacking (W), "MF,FW" tends to be AM
+            if s.index("FW") < s.index("MF"):
+                return ("W", source, "high")
+            return ("AM", source, "high")
+        if has_df and has_fw:
+            return ("W", source, "medium")  # rare combo
+        if has_fw:
+            return ("ST", source, "medium")
+        if has_df:
+            return ("CB", source, "medium")  # DF alone could be CB or FB - medium confidence
+        if has_mf:
+            return ("CM", source, "medium")
+        return ("CM", source, "low")
+
+    if is_understat:
+        # Understat format: space-separated single letters D/M/F/S
+        tokens = set(s.split())
+        has_d = "D" in tokens
+        has_m = "M" in tokens
+        has_f = "F" in tokens
+        has_s = "S" in tokens
+
+        if has_d and has_m and (has_f or has_s):
+            return ("FB", source, "medium")  # D M S / D M F -> wingback
+        if has_d and has_m:
+            return ("FB", source, "medium")  # D M -> wingback/fullback
+        if has_d and (has_f or has_s):
+            return ("CB", source, "low")  # D S / D F -> CB with low confidence
+        if has_f and has_m and has_s:
+            return ("W", source, "medium")  # F M S -> winger
+        if has_f and has_m:
+            return ("AM", source, "medium")  # F M -> attacking mid
+        if has_d:
+            return ("CB", source, "low")  # D alone -> default CB, low confidence
+        if has_f or has_s:
+            return ("ST", source, "low")  # F or S alone -> striker, low confidence
+        if has_m:
+            return ("CM", source, "low")  # M alone -> CM, low confidence
+        return ("CM", source, "low")
+
+    # Fallback: try the old logic for any other format
+    return (map_position(pos_str), source, "low")
+
+
 def refine_role_positions(df: pd.DataFrame) -> pd.DataFrame:
     """用历史粗位置和当前输出特征修正明显的角色误分。
 
     FBref 的 `pos` 在部分赛季会把边锋、前腰和翼卫统一写成 `MF`，
-    直接映射会把 Salah、Olise、Dimarco 这类球员挤进 CM 池。这里不做
-    球员名单特判，只在有历史 FW/DF 线索且当前输出特征支持时改写角色。
+    直接映射会把 Salah、Olise、Dimarco 这类球员挤进 CM 池。同时，
+    纯 `DF` 不区分 CB/FB，导致边后卫全被塞进 CB 池而评分虚高。
+
+    修正逻辑：
+    1. DF → FB：助攻/传中/进攻贡献显著高于 CB 典型值的边后卫
+    2. MF → FB：历史有 DF,MF 线索且传中/防守量达标的翼卫
+    3. MF → W/AM：进攻产量达标的边锋/前腰
     """
     if "source_position" not in df.columns:
         return df
@@ -415,31 +507,45 @@ def refine_role_positions(df: pd.DataFrame) -> pd.DataFrame:
     volume = pd.to_numeric(refined.get("g_a_volume", 0.0), errors="coerce").fillna(0.0)
     crosses = pd.to_numeric(refined.get("crosses_p90", 0.0), errors="coerce").fillna(0.0)
     defense = pd.to_numeric(refined.get("defense_composite", 0.0), errors="coerce").fillna(0.0)
+    minutes = pd.to_numeric(refined.get("minutes", 0.0), errors="coerce").fillna(0.0)
 
+    current_cb = refined["sub_position"].eq("CB")
     current_cm = refined["sub_position"].eq("CM")
     raw_mf = source.eq("MF")
     raw_df = source.eq("DF")
 
-    # 进攻型 MF 只有在历史上出现过 FW 或当前产量非常前场化时才改为 W/AM。
-    # 这避免把普通推进型中场仅因助攻波动改成前场。
-    forward_like = (
-        (has_fw_history & ((npg >= 0.20) | (assists >= 0.20) | (volume >= 8.0)))
-        | ((npg >= 0.32) & (volume >= 10.0))
+    # --- DF → FB 重判 ---
+    # 边后卫特征：助攻/传中显著高于 CB 均值，且有足够出场时间。
+    # 纯 CB 的 assists_p90 通常 < 0.10，crosses_p90 通常 < 1.0。
+    # FB 典型值：assists_p90 >= 0.10 或 crosses_p90 >= 1.0。
+    sufficient_minutes = minutes >= 450
+    fb_attack_profile = (
+        (assists >= 0.10)
+        | (crosses >= 1.0)
+        | ((assists >= 0.06) & (crosses >= 0.6))
     )
-    pure_attacking_mid = (~has_fw_history) & (npg >= 0.24) & (assists >= 0.16)
+    # 历史有 DF,MF 线索的翼卫也重判
+    fb_by_history = has_wingback_history & has_df_history
 
-    # 翼卫/边后卫在 FBref 中经常从 DF,MF 降级成 MF 或 DF。用历史 DF/MF 线索、
-    # 传中和防守动作量判断，不把纯进攻边锋误放到后场。
+    refined.loc[current_cb & raw_df & sufficient_minutes & (fb_attack_profile | fb_by_history), "sub_position"] = "FB"
+
+    # --- MF → FB 重判 ---
     wingback_like = has_df_history & (
         (raw_df & has_wingback_history)
         | (crosses >= 1.8)
         | ((crosses >= 1.2) & (defense >= 0.8))
     )
 
+    # --- MF → W/AM 重判 ---
+    forward_like = (
+        (has_fw_history & ((npg >= 0.20) | (assists >= 0.20) | (volume >= 8.0)))
+        | ((npg >= 0.32) & (volume >= 10.0))
+    )
+    pure_attacking_mid = (~has_fw_history) & (npg >= 0.24) & (assists >= 0.16)
+
     refined.loc[current_cm & raw_mf & wingback_like, "sub_position"] = "FB"
     refined.loc[current_cm & raw_mf & forward_like & ~wingback_like, "sub_position"] = "W"
     refined.loc[current_cm & raw_mf & pure_attacking_mid & ~wingback_like, "sub_position"] = "AM"
-    refined.loc[raw_df & wingback_like, "sub_position"] = "FB"
     refined["pos_idx"] = (
         refined["sub_position"].map(POS_TO_IDX).fillna(POS_TO_IDX["CM"]).astype(int)
     )
@@ -503,14 +609,18 @@ def load_data(data_dir: Path):
     assists_p90 = assists_col / safe_min * 90
     g_a_volume = npg + assists_col
 
-    sub_pos = np.array([map_position(p) for p in positions])
+    pos_details = [map_position_detailed(p) for p in positions]
+    sub_pos = np.array([d[0] for d in pos_details])
     pos_idx = np.array([POS_TO_IDX.get(p, 4) for p in sub_pos])
+    position_source = [d[1] for d in pos_details]
+    position_confidence = [d[2] for d in pos_details]
 
     # Build base DataFrame
     df = pd.DataFrame({
         "player": players, "team": teams, "league": leagues, "season": seasons,
         "source_position": positions,
         "sub_position": sub_pos, "pos_idx": pos_idx,
+        "position_source": position_source, "position_confidence": position_confidence,
         "matches": matches, "starts": starts, "minutes": minutes,
         "npg_p90": npg_p90, "assists_p90": assists_p90, "g_a_volume": g_a_volume,
     })
@@ -519,7 +629,9 @@ def load_data(data_dir: Path):
     df["team"] = df["team"].apply(normalize_team_name)
 
     # Load and merge misc stats (tackles, interceptions, fouls, crosses)
-    misc_path = data_dir / "raw" / "fbref" / "player_misc_3seasons.parquet"
+    misc_path = data_dir / "raw" / "fbref" / "player_misc_5seasons.parquet"
+    if not misc_path.exists():
+        misc_path = data_dir / "raw" / "fbref" / "player_misc_3seasons.parquet"
     if misc_path.exists():
         misc = pd.read_parquet(misc_path)
         misc_idx = misc.index.to_frame(index=False)
@@ -562,7 +674,9 @@ def load_data(data_dir: Path):
         df["yellow_cards"] = np.nan
 
     # Load and merge shooting stats
-    shoot_path = data_dir / "raw" / "fbref" / "player_shooting_3seasons.parquet"
+    shoot_path = data_dir / "raw" / "fbref" / "player_shooting_5seasons.parquet"
+    if not shoot_path.exists():
+        shoot_path = data_dir / "raw" / "fbref" / "player_shooting_3seasons.parquet"
     if shoot_path.exists():
         shooting = pd.read_parquet(shoot_path)
         shoot_idx = shooting.index.to_frame(index=False)
@@ -604,13 +718,35 @@ def load_data(data_dir: Path):
     df["interceptions_p90"] = df["interceptions"].fillna(0) / safe_min_df * 90
     df["crosses_p90"] = df["crosses"].fillna(0) / safe_min_df * 90
     df["fouls_drawn_p90"] = df["fouls_drawn"].fillna(0) / safe_min_df * 90
+    df["fouls_p90"] = df["fouls"].fillna(0) / safe_min_df * 90
     df["shots_p90"] = df["shots"].fillna(0) / safe_min_df * 90
     df["sot_p90"] = df["shots_on_target"].fillna(0) / safe_min_df * 90
 
-    # Defense composite: tackles + interceptions (normalized)
-    df["defense_composite"] = df["tackles_p90"] * 0.6 + df["interceptions_p90"] * 0.4
+    # Defense composite (enhanced):
+    #   tackles_won_p90 * 0.35  — primary defensive action
+    #   interceptions_p90 * 0.30 — reading the game
+    #   fouls_p90 * -0.10        — discipline penalty (fewer fouls = better)
+    #   fouls_drawn_p90 * 0.10   — physical engagement proxy
+    #   crosses_p90 * 0.15       — for FB/FB, defensive work rate includes crossing
+    # Only use real data where available; missing tackles/interceptions → NaN
+    has_defense_data = df["tackles_won"].notna() & df["interceptions"].notna()
+    df["defense_composite"] = np.where(
+        has_defense_data,
+        (
+            df["tackles_p90"] * 0.35
+            + df["interceptions_p90"] * 0.30
+            - df["fouls_p90"] * 0.10
+            + df["fouls_drawn_p90"] * 0.10
+            + df["crosses_p90"] * 0.15
+        ),
+        np.nan,
+    )
     # Possession composite: crosses + fouls drawn (proxy for ball involvement)
-    df["possession_composite"] = df["crosses_p90"] * 0.5 + df["fouls_drawn_p90"] * 0.5
+    df["possession_composite"] = np.where(
+        has_defense_data,
+        df["crosses_p90"] * 0.5 + df["fouls_drawn_p90"] * 0.5,
+        np.nan,
+    )
 
     # Cross-season trend: compute per-player improvement across seasons.
     # The trend feature must be causal for historical rows; using a player's
@@ -674,8 +810,11 @@ def load_data(data_dir: Path):
         understat["starts"] = understat["games"].values.astype(np.float32)  # Approximate
         
         # Position mapping
-        understat["sub_position"] = understat["position"].apply(map_position)
+        understat_pos_details = understat["position"].apply(map_position_detailed)
+        understat["sub_position"] = understat_pos_details.apply(lambda x: x[0])
         understat["pos_idx"] = understat["sub_position"].map(POS_TO_IDX).fillna(4).astype(int)
+        understat["position_source"] = understat_pos_details.apply(lambda x: x[1])
+        understat["position_confidence"] = understat_pos_details.apply(lambda x: x[2])
         
         # Per-90 metrics
         understat["npg_p90"] = (
@@ -720,6 +859,7 @@ def load_data(data_dir: Path):
             "interceptions_p90",
             "crosses_p90",
             "fouls_drawn_p90",
+            "fouls_p90",
             "shots_p90",
             "sot_p90",
             "defense_composite",
@@ -744,11 +884,18 @@ def load_data(data_dir: Path):
         df["interceptions_p90"] = df["interceptions"].fillna(0) / safe_min_all * 90
         df["crosses_p90"] = df["crosses"].fillna(0) / safe_min_all * 90
         df["fouls_drawn_p90"] = df["fouls_drawn"].fillna(0) / safe_min_all * 90
+        df["fouls_p90"] = df["fouls"].fillna(0) / safe_min_all * 90
         # defense/possession composite: NaN where underlying stats are NaN
         has_defense = df["tackles_won"].notna() & df["interceptions"].notna()
         df["defense_composite"] = np.where(
             has_defense,
-            df["tackles_p90"] * 0.6 + df["interceptions_p90"] * 0.4,
+            (
+                df["tackles_p90"] * 0.35
+                + df["interceptions_p90"] * 0.30
+                - df["fouls_p90"] * 0.10
+                + df["fouls_drawn_p90"] * 0.10
+                + df["crosses_p90"] * 0.15
+            ),
             np.nan,
         )
         has_possession = df["crosses"].notna() & df["fouls_drawn"].notna()
@@ -2386,7 +2533,27 @@ def main():
     parser.add_argument("--stability-pop", type=int, default=None, help="稳定性运行每次起点数")
     parser.add_argument("--importance-repeats", type=int, default=1, help="特征置换重要性重复次数")
     parser.add_argument("--calibration-bins", type=int, default=5, help="校准检查分箱数")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="快速模式：大幅降低种群/步数/耐心，适合 Mac CPU/MPS 本地快速迭代",
+    )
     args = parser.parse_args()
+
+    # Quick mode: Mac-friendly defaults
+    if args.quick:
+        if args.steps == 500:
+            args.steps = 80
+        if args.pop == 32:
+            args.pop = 6
+        if args.patience == 80:
+            args.patience = 15
+        if args.cv_folds == 3:
+            args.cv_folds = 0
+        if args.stability_runs == 3:
+            args.stability_runs = 0
+        if args.importance_repeats == 1:
+            args.importance_repeats = 0
 
     # Backward compatibility: --prior-strength overrides --prior-weight if set
     if args.prior_strength is not None:
