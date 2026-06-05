@@ -930,6 +930,80 @@ def permutation_feature_importance(
     return result
 
 
+def compute_input_hash(data_dir: Path) -> str:
+    """Compute SHA256 hash of key input files for reproducibility."""
+    import hashlib
+
+    hasher = hashlib.sha256()
+    key_files = [
+        "gold/feature_store/rating_feature_matrix.parquet",
+        "raw/football_data/combined_results.parquet",
+        "gold/feature_store/player_ratings_optimized.parquet",
+    ]
+    for rel_path in key_files:
+        fpath = data_dir / rel_path
+        if fpath.exists():
+            hasher.update(fpath.read_bytes())
+    return hasher.hexdigest()[:16]
+
+
+def save_model_run(
+    params: np.ndarray,
+    metrics: dict,
+    args: argparse.Namespace | None = None,
+    output_dir: Path | None = None,
+    feat_hash: str | None = None,
+):
+    """Save model run with full provenance to data/models/runs/<timestamp>/.
+
+    Saves:
+    - optimized_params.npy
+    - meta.json with: params summary, seed, input hash, metrics, position metrics,
+      error case summary, composite objective weights
+    """
+    from datetime import UTC, datetime
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    run_dir = (output_dir or Path("data/models/runs")) / timestamp
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save params
+    np.save(run_dir / "optimized_params.npy", params)
+
+    # Build meta
+    meta = {
+        "timestamp": timestamp,
+        "params_shape": list(params.shape),
+        "params_mean": float(params.mean()),
+        "params_std": float(params.std()),
+        "input_hash": feat_hash,
+        "metrics": {
+            k: float(v) if isinstance(v, (int, float, np.floating)) else str(v)
+            for k, v in metrics.items()
+        },
+    }
+
+    if args is not None:
+        meta["args"] = {
+            "pop_size": getattr(args, "pop", None),
+            "n_steps": getattr(args, "steps", None),
+            "lr": getattr(args, "lr", None),
+            "patience": getattr(args, "patience", None),
+            "seed": getattr(args, "seed", None),
+            "spearman_weight": getattr(args, "spearman_weight", None),
+            "ndcg_weight": getattr(args, "ndcg_weight", None),
+            "position_consistency_weight": getattr(args, "position_consistency_weight", None),
+            "extreme_penalty_weight": getattr(args, "extreme_penalty_weight", None),
+            "prior_weight": getattr(args, "prior_weight", None),
+        }
+
+    with open(run_dir / "meta.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+
+    print(f"  模型运行登记已保存: {run_dir}")
+    return run_dir
+
+
 def _json_ready(value):
     """Convert numpy/pandas scalars and NaN values to JSON-safe objects."""
     if isinstance(value, dict):
@@ -1789,6 +1863,10 @@ def main():
     print(f"  球员: {len(df)}, 球队赛季: {len(team_pts)}")
     print(f"  耗时: {time.time()-t0:.1f}s")
 
+    # Compute input hash for reproducibility
+    feat_hash = compute_input_hash(data_dir)
+    print(f"  输入哈希: {feat_hash}")
+
     print("\n[2] 时间切分...")
     holdout = make_holdout_split(
         df,
@@ -2046,6 +2124,18 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     np.save(output / "optimized_params.npy", best_params.detach().cpu().numpy())
     print(f"\n[13] 参数已保存: {output / 'optimized_params.npy'}")
+
+    # Save model run registry
+    try:
+        save_model_run(
+            params=best_params.cpu().numpy(),
+            metrics=optimized_test_eval["metrics"],
+            args=args,
+            output_dir=data_dir / "models" / "runs",
+            feat_hash=feat_hash,
+        )
+    except Exception as exc:
+        print(f"  模型运行登记保存失败: {exc}")
 
     holdout_predictions = optimized_test_eval["matched"].rename(
         columns={"pred_rating": "optimized_rating"},
