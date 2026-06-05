@@ -1,0 +1,16 @@
+- [x] Football-Data 10 赛季 combined_results.parquet 重建完成，行数接近 68,953，覆盖 20 个 league/division × 10 赛季
+- [x] 重建元数据输出正确：raw CSV 总行数、active Parquet 行数、league-season 覆盖、输入 hash
+- [x] 2526 五大联赛 alias patch 在重建后仍生效，holdout coverage 维持 1.00
+- [x] 评估流程自动剔除积分 N/A 球队，team coverage 报告标注剔除数量
+- [x] player_truth_labels schema 定义完整，包含 player_id/season/label_source/label_confidence/label_value/as_of_date/position_scope/manual_review_flag
+- [x] label_source 枚举包含 transfermarkt_value/award/expert_tier/manual_calibration
+- [x] label_confidence 枚举包含 high/medium/low
+- [x] validate_truth_labels() 校验函数正确检查 schema、枚举值和重复记录
+- [x] create_empty_truth_labels() 生成 0 行空表，schema 正确
+- [x] pipeline run_build_features 输出 player_truth_labels.parquet 空表模板
+- [x] MODEL_CARD.md 包含数据源、标签定义、适用边界、已知偏差、不可用场景、低置信度规则、特征维度、切分方式
+- [x] README.md 更新 Football-Data 行数和真实标签契约说明
+- [x] TASKS.md 标记已完成的 P0 任务项
+- [x] AGENTS.md 新增真实标签模块路径和更新本地缓存状态
+- [x] `uv run ruff check src/` 零错误
+- [x] `uv run pytest` 全部通过（279 passed，2 个预存问题不影响本轮）

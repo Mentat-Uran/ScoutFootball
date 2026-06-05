@@ -41,6 +41,14 @@ from .position_metrics import (
     compute_position_rankings,
     generate_explanation,
 )
+from .truth_labels import (
+    TRUTH_LABELS_COLUMNS,
+    TRUTH_LABELS_SCHEMA,
+    LabelConfidence,
+    LabelSource,
+    create_empty_truth_labels,
+    validate_truth_labels,
+)
 from .validation import (
     ValidationReport,
     run_pre_training_validation,
@@ -57,12 +65,16 @@ __all__ = [
     "ConfidenceAssessment",
     "ConfidenceLevel",
     "CoverageAssessment",
+    "LabelConfidence",
+    "LabelSource",
     "MIN_MINUTES_THRESHOLD",
     "PlayerPositionMetrics",
     "PoissonBacktestResult",
     "PositionDimensionScore",
     "POSITION_DIMENSIONS",
     "POSITION_GROUP_MAP",
+    "TRUTH_LABELS_COLUMNS",
+    "TRUTH_LABELS_SCHEMA",
     "ValidationReport",
     "add_confidence_to_ratings",
     "assess_batch_confidence",
@@ -79,6 +91,7 @@ __all__ = [
     "compute_position_availability_weights",
     "compute_position_rankings",
     "compute_team_aggregation_weights",
+    "create_empty_truth_labels",
     "display_confidence_badge",
     "display_confidence_warnings",
     "generate_availability_diagnostic",
@@ -91,4 +104,5 @@ __all__ = [
     "validate_no_null_keys",
     "validate_parquet_exists",
     "validate_row_count",
+    "validate_truth_labels",
 ]

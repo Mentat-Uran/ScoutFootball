@@ -652,10 +652,22 @@ def _standardized_mse(pred, actual):
 
 
 def build_matched_results(feat, team_pts_df, team_avgs):
-    """Match predicted team-season ratings with actual points."""
+    """Match predicted team-season ratings with actual points.
+
+    Teams with NaN or non-finite total_points are excluded from matching.
+    """
+    # Filter out teams with NaN or non-finite total_points
+    valid_pts = team_pts_df.copy()
+    valid_pts["total_points"] = pd.to_numeric(valid_pts["total_points"], errors="coerce")
+    n_before = len(valid_pts)
+    valid_pts = valid_pts[
+        valid_pts["total_points"].notna() & np.isfinite(valid_pts["total_points"])
+    ]
+    n_excluded = n_before - len(valid_pts)
+
     points_lookup = {
         (str(row["team"]), str(row["league"]), str(row["season"])): float(row["total_points"])
-        for _, row in team_pts_df.iterrows()
+        for _, row in valid_pts.iterrows()
     }
     rows = []
     for i, (team, league, season) in enumerate(
@@ -673,7 +685,9 @@ def build_matched_results(feat, team_pts_df, team_avgs):
                 "actual_points": points_lookup[key],
             },
         )
-    return pd.DataFrame(rows)
+    result = pd.DataFrame(rows)
+    result.attrs["n_excluded_na"] = n_excluded
+    return result
 
 
 def team_coverage_table(feat, team_pts_df):
@@ -814,6 +828,9 @@ def evaluate_params(
         if not coverage.empty and coverage["target_teams"].sum() > 0
         else float("nan")
     )
+    # Report N/A teams excluded from evaluation
+    excluded_na = matched_df.attrs.get("n_excluded_na", 0)
+    metrics["n_excluded_na_teams"] = excluded_na
     return {
         "features": feat_eval,
         "matched": matched_df,
@@ -1296,10 +1313,20 @@ def compute_team_avg_ratings(feat, ratings, device):
 
 
 def build_team_target_tensors(feat, team_pts_df, device):
-    """把可匹配的球队赛季积分预编译成张量索引，避免训练步内 pandas 查询。"""
+    """把可匹配的球队赛季积分预编译成张量索引，避免训练步内 pandas 查询。
+
+    Teams with NaN or non-finite total_points are excluded.
+    """
+    # Filter out teams with NaN or non-finite total_points
+    valid_pts = team_pts_df.copy()
+    valid_pts["total_points"] = pd.to_numeric(valid_pts["total_points"], errors="coerce")
+    valid_pts = valid_pts[
+        valid_pts["total_points"].notna() & np.isfinite(valid_pts["total_points"])
+    ]
+
     points_lookup = {
         (str(row["team"]), str(row["league"]), str(row["season"])): float(row["total_points"])
-        for _, row in team_pts_df.iterrows()
+        for _, row in valid_pts.iterrows()
     }
     matched_group_idx = []
     actual_points = []

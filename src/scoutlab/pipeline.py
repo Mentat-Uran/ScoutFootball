@@ -131,6 +131,22 @@ def run_build_features(
         except Exception as exc:
             results["rating_feature_matrix"] = f"failed: {exc}"
             logger.error("Rating feature matrix build failed: %s", exc)
+
+        # --- Truth labels empty template ---
+        try:
+            from scoutlab.evaluation.truth_labels import create_empty_truth_labels
+
+            truth_labels = create_empty_truth_labels()
+            truth_labels_path = (
+                resolved.gold_root / "feature_store" / "player_truth_labels.parquet"
+            )
+            truth_labels.to_parquet(truth_labels_path, index=False)
+            results["player_truth_labels"] = (
+                f"ok (empty template -> {truth_labels_path.name})"
+            )
+        except Exception as exc:
+            results["player_truth_labels"] = f"failed: {exc}"
+            logger.error("Truth labels template creation failed: %s", exc)
     except Exception as exc:
         results["features"] = f"failed: {exc}"
         logger.error("Feature build failed: %s", exc)

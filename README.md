@@ -9,7 +9,9 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
 - Pipeline: `ingest` -> `build-features` -> `train`。
 - 数据验证: `scoutlab validate`。
 - 本地数据层: DuckDB + Parquet，按 raw/silver/gold/models/reports/logs 分层。
-- 球员评分: PyTorch 权重优化器，已加入 holdout 评估、Pearson 修复、availability cap、ST/W quality cap、稳健球队聚合和 team coverage 报告；当前重点转向真实影响力标签、训练目标和特征缺失标记重构。
+- 球员评分: PyTorch 权重优化器，已加入 holdout 评估、Pearson 修复、availability cap、ST/W quality cap、稳健球队聚合、team coverage 报告和 2526 N/A 球队过滤；当前重点转向真实影响力标签、训练目标和特征缺失标记重构。
+- 真实标签契约: `player_truth_labels.parquet` schema 和校验（`truth_labels.py`），支持 transfermarkt_value/award/expert_tier/manual_calibration 四种标签源。
+- 评分模型卡: `MODEL_CARD.md` 记录数据源、标签定义、适用边界、已知偏差和不可用场景。
 - 比分预测: Independent Poisson baseline。
 - 身价合理性: `value_fairness` OOF 训练产物。
 - 产品层: Streamlit 多页 MVP，FastAPI draft 入口。页面包括：
@@ -33,13 +35,13 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
 | --- | ---: | --- |
 | FBref standard/shooting/misc | 每表 14,356 行 | 5 赛季 |
 | Football-Data raw CSV | 68,953 行 | 10 赛季，20 个 league/division |
-| Football-Data `combined_results.parquet` | 5,330 行 | 当前活动合并缓存为 5 大联赛 2022/23–2024/25；需重建 10 赛季 Parquet |
+| Football-Data `combined_results.parquet` | 待重建 | 需运行 `scripts/rebuild_football_data.py` 重建 10 赛季完整合并缓存 |
 | Understat | 31,902 个球员赛季行 | 10 赛季，6 个联赛 |
 | StatsBomb Open Data `big5_matches` | 126 场 | 公开比赛样本 |
 | StatsBomb Open Data events | 11,871 条事件 | 公开事件样本 |
 | player_value_metrics | 10 名样本球员 | StatsBomb 事件价值原型，不代表全量联赛能力 |
 | player_ratings_optimized | 27,254 行 | 当前评分产物 |
-| player_truth_labels | 未生成 | P0 待建真实影响力标签 |
+| player_truth_labels | 空表模板 | 真实影响力标签契约（`truth_labels.py`），待手动填充 |
 | rating_feature_matrix | 8,141 行 | 评分特征矩阵，含缺失标记和 fallback |
 | rating_feature_matrix_manifest | 1 个 JSON | 特征列元数据、输入 hash 和生成时间 |
 
@@ -103,7 +105,7 @@ ScoutLab 的长期路线扩展为 10 层。前 7 层是当前主干，第 8-10 �
 
 ## 未来更新策略
 
-P0：评分系统真实影响力校准。先用新 availability cap 和稳健球队聚合重新评估 holdout，重建 Football-Data 10 赛季合并缓存，再重写训练目标，引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集；同时补齐特征矩阵、缺失字段标记和神经网络准入门槛。球队积分相关性只能做辅助校验，不能当主标签。
+P0：评分系统真实影响力校准。先用新 availability cap 和稳健球队聚合重新评估 holdout，重建 Football-Data 10 赛季合并缓存（`scripts/rebuild_football_data.py`），定义真实标签契约（`player_truth_labels.parquet`），输出评分模型卡（`MODEL_CARD.md`），再重写训练目标，引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集；同时补齐特征矩阵、缺失字段标记和神经网络准入门槛。球队积分相关性只能做辅助校验，不能当主标签。
 
 P1：展示增强。引入 mplsoccer，补齐雷达图、pizza chart、shot map、pass map、xT heatmap、位置内榜单和低置信度提示。
 
@@ -111,7 +113,7 @@ P2：事件动作价值。新增 `src/scoutlab/action_value/`，先基于 StatsB
 
 P3：评分模型重构。把赛季统计、xG/xA、xT/VAEP、出勤可靠性、联赛强度、年龄趋势和置信度合成可解释评分，并输出模型卡；在真实标签层稳定后，增加浅层神经网络候选模型，与当前权重优化器同口径对比。
 
-P4：评估文档。新增 `EVALUATION.md` 和 `MODEL_CARD.md`，记录 baseline、指标、切分、误差分析、数据覆盖和已知偏差。
+P4：评估文档。`MODEL_CARD.md` 已输出；补 `EVALUATION.md`，记录 baseline、指标、切分、误差分析、数据覆盖和已知偏差。
 
 P5：比分预测升级。保留 Independent Poisson baseline，再做 Dixon-Coles + time decay，并用 log loss、Brier score、RPS 对比。
 

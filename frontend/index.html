@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scoutlab - Liquid Glass UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
+</head>
+<body class="overflow-hidden font-['Inter']">
+    <!-- 动态极光网格渐变背景 -->
+    <div class="mesh-bg absolute inset-0 -z-10"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+
+    <div class="flex h-screen w-screen p-6 gap-6 z-10 relative">
+        <!-- 导航侧边栏 -->
+        <nav class="liquid-panel w-24 rounded-[40px] flex flex-col items-center py-10 gap-8 h-full shadow-2xl transition-all duration-500 hover:w-64 group cursor-pointer overflow-hidden shrink-0">
+            <div class="flex items-center gap-4 w-full px-8">
+                <div class="text-3xl drop-shadow-md">🧭</div>
+                <span class="i18n text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" data-zh="概览" data-en="Dashboard">Dashboard</span>
+            </div>
+            <div class="flex items-center gap-4 w-full px-8">
+                <div class="text-3xl drop-shadow-md">🏃</div>
+                <span class="i18n text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" data-zh="球员选材" data-en="Scout Hub">Scout Hub</span>
+            </div>
+            <div class="flex items-center gap-4 w-full px-8">
+                <div class="text-3xl drop-shadow-md">⚔️</div>
+                <span class="i18n text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" data-zh="比赛预测" data-en="Match Center">Match Center</span>
+            </div>
+            
+            <div class="mt-auto flex flex-col gap-8 w-full">
+                <!-- Theme Toggle -->
+                <div class="flex items-center gap-4 w-full px-8 opacity-60 hover:opacity-100 transition-opacity" onclick="toggleTheme()">
+                    <div class="text-3xl drop-shadow-md" id="theme-icon">🌙</div>
+                    <span class="i18n text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" data-zh="外观切换" data-en="Theme">Theme</span>
+                </div>
+                <!-- Lang Toggle -->
+                <div class="flex items-center gap-4 w-full px-8 opacity-60 hover:opacity-100 transition-opacity" onclick="toggleLanguage()">
+                    <div class="text-3xl drop-shadow-md">🌐</div>
+                    <span class="text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">EN / 中文</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="flex-1 flex flex-col gap-6 overflow-hidden">
+            <!-- 头部 -->
+            <header class="liquid-panel h-20 rounded-[30px] flex items-center px-8 justify-between shrink-0">
+                <h1 class="i18n text-2xl font-bold tracking-wider opacity-90" data-zh="Scoutlab 数据终端" data-en="Scoutlab Data Terminal">Scoutlab Data Terminal</h1>
+                <input type="text" id="search-input" class="glass-input px-6 py-2 rounded-full outline-none w-80 transition-all font-light text-sm" placeholder="Search missing pieces...">
+            </header>
+
+            <!-- 核心数据展示与可视化区 -->
+            <section class="flex-1 overflow-y-auto pr-2 pb-6 grid gap-6 grid-cols-1 xl:grid-cols-3">
+                
+                <!-- 可视化雷达图区 -->
+                <div class="liquid-panel rounded-[40px] p-8 col-span-1 flex flex-col relative min-h-[350px]">
+                    <h2 class="i18n text-lg font-semibold mb-2 opacity-80" data-zh="球员多维画像" data-en="Player Radar Profile">Player Radar Profile</h2>
+                    <!-- 雷达图容器 -->
+                    <div id="radar-chart" class="w-full flex-1"></div>
+                    <div class="absolute top-8 right-8 px-4 py-1.5 text-xs rounded-full glass-input font-medium">
+                        J. Bellingham
+                    </div>
+                </div>
+
+                <!-- 数据库表展现区 -->
+                <div class="liquid-panel rounded-[40px] p-8 col-span-1 xl:col-span-2 flex flex-col">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="i18n text-lg font-semibold opacity-80" data-zh="核心球员评分池 ( Parquet )" data-en="Core Player Ratings (Parquet)">Core Player Ratings (Parquet)</h2>
+                        <button class="i18n px-4 py-1.5 rounded-full glass-input text-sm hover:scale-105 transition" data-zh="刷新数据库" data-en="Sync Database" onclick="mockFetchData()">Sync Database</button>
+                    </div>
+                    
+                    <div class="w-full overflow-x-auto rounded-2xl glass-input border-0">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="glass-table-head">
+                                <tr>
+                                    <th class="i18n px-6 py-4 font-semibold" data-zh="球员" data-en="Player">Player</th>
+                                    <th class="i18n px-6 py-4 font-semibold" data-zh="位置" data-en="Pos">Pos</th>
+                                    <th class="i18n px-6 py-4 font-semibold" data-zh="球队" data-en="Team">Team</th>
+                                    <th class="i18n px-6 py-4 font-semibold" data-zh="评分" data-en="Rating">Rating</th>
+                                    <th class="i18n px-6 py-4 font-semibold" data-zh="状态" data-en="Status">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-tbody">
+                                <!-- JS 渲染占位 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 低置信度UI提醒 / 容错展示 -->
+                <div class="liquid-panel rounded-[40px] p-6 col-span-1 xl:col-span-3 flex items-center justify-between transition-colors" style="border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <div>
+                        <h3 class="i18n text-lg font-semibold text-red-500" data-zh="低置信度数据警告" data-en="Low Confidence Warning">Low Confidence Warning</h3>
+                        <p class="i18n text-sm opacity-60 mt-1 font-light" data-zh="当前包含分钟数不足或缺少进阶数据的样本，强排序被临时禁用。" data-en="Includes samples with missing advanced stats or low minutes. Strict ranking disabled.">Includes samples with missing advanced stats or low minutes. Strict ranking disabled.</p>
+                    </div>
+                    <div class="text-3xl opacity-50 drop-shadow-md">❄️</div>
+                </div>
+
+            </section>
+        </main>
+    </div>
+
+    <!-- 逻辑脚本 -->
+    <script>
+        // 1. i18n & Theme
+        let currentLang = 'en';
+        let isLightMode = false;
+        
+        function updateLocales() {
+            document.querySelectorAll('.i18n').forEach(el => {
+                if(el.dataset[currentLang]) el.textContent = el.dataset[currentLang];
+            });
+            document.getElementById('search-input').placeholder = currentLang === 'zh' ? '搜索库内球员/数据...' : 'Search database pieces...';
+        }
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'en' ? 'zh' : 'en';
+            updateLocales();
+            renderChart(); 
+        }
+
+        function toggleTheme() {
+            isLightMode = !isLightMode;
+            document.body.classList.toggle('light-mode', isLightMode);
+            document.getElementById('theme-icon').textContent = isLightMode ? '☀️' : '🌙';
+            renderChart(); // 更新 Echarts 颜色
+        }
+
+        // 2. 模拟数据库/Parquet 调用
+        const dbMock = [
+            { player: 'J. Bellingham', pos: 'AM', team: 'Real Madrid', rating: 94.8, status: 'High Confidence', verified: true },
+            { player: 'Rodri', pos: 'DM', team: 'Man City', rating: 93.2, status: 'High Confidence', verified: true },
+            { player: 'A. Bastoni', pos: 'CB', team: 'Inter', rating: 91.5, status: 'Verified', verified: false },
+            { player: 'S. Unknown', pos: 'ST', team: 'Lille', rating: 61.2, status: 'Missing Data', frosted: true }
+        ];
+
+        function mockFetchData() {
+            const tbody = document.getElementById('data-tbody');
+            tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center opacity-50 animate-pulse font-medium">Fetching Parquet records...</td></tr>';
+            
+            setTimeout(() => {
+                tbody.innerHTML = '';
+                dbMock.forEach(row => {
+                    const rowClass = row.frosted ? 'glass-table-row frosted-row' : 'glass-table-row transition-colors';
+                    const ratingColor = row.rating > 90 ? 'text-green-500 font-bold' : 'font-bold opacity-80';
+                    const statusColor = row.frosted ? 'text-red-500/80 bg-red-500/10' : 'opacity-80 glass-input';
+                    
+                    tbody.innerHTML += `
+                        <tr class="${rowClass}">
+                            <td class="px-6 py-4 font-semibold">${row.player} ${row.verified ? '<span class="text-yellow-500 drop-shadow-sm">★</span>' : ''}</td>
+                            <td class="px-6 py-4 opacity-70">${row.pos}</td>
+                            <td class="px-6 py-4 opacity-70">${row.team}</td>
+                            <td class="px-6 py-4 ${ratingColor}">${row.rating}</td>
+                            <td class="px-6 py-4 text-xs"><span class="px-3 py-1 rounded inline-block ${statusColor}">${row.status}</span></td>
+                        </tr>
+                    `;
+                });
+            }, 600);
+        }
+
+        // 3. 可视化 (ECharts)
+        let myChart = null;
+        function renderChart() {
+            const chartDom = document.getElementById('radar-chart');
+            if(!myChart) myChart = echarts.init(chartDom, null, { renderer: 'canvas' });
+            
+            const isZh = currentLang === 'zh';
+            
+            // 根据主题动态提取颜色
+            const textColor = isLightMode ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.6)';
+            const splitColor = isLightMode ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+            const areaColor = isLightMode ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.08)';
+            const lineColor = isLightMode ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.3)';
+            const itemColor = isLightMode ? '#333' : '#fff';
+
+            const option = {
+                radar: {
+                    indicator: [
+                        { name: isZh ? '进攻维度' : 'Attacking', max: 100 },
+                        { name: isZh ? '传球组织' : 'Possession', max: 100 },
+                        { name: isZh ? '防守贡献' : 'Defending', max: 100 },
+                        { name: isZh ? '出勤可靠' : 'Availability', max: 100 },
+                        { name: isZh ? '比赛影响' : 'Impact', max: 100 }
+                    ],
+                    shape: 'circle',
+                    splitNumber: 4,
+                    axisName: { color: textColor, fontSize: 11, fontWeight: 600 },
+                    splitLine: { lineStyle: { color: splitColor } },
+                    splitArea: { show: false },
+                    axisLine: { lineStyle: { color: splitColor } }
+                },
+                series: [{
+                    type: 'radar',
+                    data: [{
+                        value: [88, 92, 75, 95, 98],
+                        name: 'J. Bellingham',
+                        areaStyle: { color: areaColor },
+                        lineStyle: { color: lineColor, width: 2 },
+                        itemStyle: { color: itemColor }
+                    }]
+                }]
+            };
+            myChart.setOption(option);
+        }
+
+        window.addEventListener('resize', () => myChart?.resize());
+        
+        // 初始化跑一次
+        updateLocales();
+        mockFetchData();
+        setTimeout(renderChart, 100);
+    </script>
+</body>
+</html>
