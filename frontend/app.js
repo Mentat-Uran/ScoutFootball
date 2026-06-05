@@ -36,6 +36,7 @@ const i18n = {
         th_team: "球队",
         th_rating: "评分",
         th_conf: "置信度",
+        th_season: "赛季",
         value_kicker: "OOF residual",
         value_title: "实际身价 vs 预测身价",
         value_rank: "偏离榜",
@@ -99,6 +100,7 @@ const i18n = {
         th_team: "Team",
         th_rating: "Rating",
         th_conf: "Confidence",
+        th_season: "Season",
         value_kicker: "OOF residual",
         value_title: "Actual value vs predicted value",
         value_rank: "Deviation board",
@@ -127,102 +129,103 @@ const i18n = {
     },
 };
 
-const players = [
-    {
-        name: "Jude Bellingham",
-        position: "AM",
-        team: "Real Madrid",
-        rating: 94.8,
-        confidence: "HIGH",
-        minutes: 2840,
-        percentile: 99,
-        value: 182,
-        residual: 0.16,
-        radar: [92, 87, 71, 94, 96],
-    },
-    {
-        name: "Rodri",
-        position: "DM",
-        team: "Man City",
-        rating: 93.2,
-        confidence: "HIGH",
-        minutes: 3120,
-        percentile: 98,
-        value: 128,
-        residual: 0.08,
-        radar: [78, 96, 90, 91, 94],
-    },
-    {
-        name: "Florian Wirtz",
-        position: "AM",
-        team: "Leverkusen",
-        rating: 91.7,
-        confidence: "HIGH",
-        minutes: 2702,
-        percentile: 97,
-        value: 145,
-        residual: 0.22,
-        radar: [90, 93, 58, 89, 92],
-    },
-    {
-        name: "Alessandro Bastoni",
-        position: "CB",
-        team: "Inter",
-        rating: 89.4,
-        confidence: "MEDIUM",
-        minutes: 2520,
-        percentile: 94,
-        value: 76,
-        residual: -0.11,
-        radar: [42, 84, 94, 86, 88],
-    },
-    {
-        name: "Bukayo Saka",
-        position: "W",
-        team: "Arsenal",
-        rating: 88.9,
-        confidence: "MEDIUM",
-        minutes: 2911,
-        percentile: 93,
-        value: 132,
-        residual: -0.2,
-        radar: [89, 82, 60, 88, 90],
-    },
-    {
-        name: "Jonathan David",
-        position: "ST",
-        team: "Lille",
-        rating: 84.1,
-        confidence: "LOW",
-        minutes: 2460,
-        percentile: 88,
-        value: 58,
-        residual: 0.35,
-        radar: [84, 65, 43, 85, 80],
-    },
-];
+const API_BASE = window.__SCOUTLAB_API__ || "";
 
-const reviews = [
-    ["Jonathan David", "LOW", "weak_league_top_sample"],
-    ["Aaron Ciammaglichella", "LOW", "minutes_below_threshold"],
-    ["Lionel Messi", "MEDIUM", "position_group_unknown"],
-    ["A. Bastoni", "MEDIUM", "defense_metric_missing"],
-];
+let players = [];
+let reviews = [];
+let matches = [];
 
-const matches = [
-    { home: "Arsenal", away: "Barcelona", hw: 0.37, draw: 0.27, aw: 0.36, xh: 1.56, xa: 1.48 },
-    { home: "Real Madrid", away: "Inter", hw: 0.44, draw: 0.25, aw: 0.31, xh: 1.82, xa: 1.27 },
-    { home: "Leverkusen", away: "Man City", hw: 0.28, draw: 0.26, aw: 0.46, xh: 1.22, xa: 1.78 },
-    { home: "Lille", away: "Aston Villa", hw: 0.32, draw: 0.29, aw: 0.39, xh: 1.18, xa: 1.34 },
-];
+async function fetchRatings(position, league) {
+    const params = new URLSearchParams();
+    if (position && position !== "ALL") params.set("position", position);
+    if (league) params.set("league", league);
+    params.set("limit", "20000");
+    try {
+        const resp = await fetch(`${API_BASE}/ratings?${params}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        return (data.players || []).map((p) => ({
+            name: p.player || "",
+            position: p.position_group || "",
+            team: p.team || "",
+            league: p.league || "",
+            season: p.season || "",
+            key: `${p.player || ""}|${p.season || ""}|${p.team || ""}`,
+            rating: +(p.optimized_score || 0).toFixed(1),
+            confidence: (p.confidence_level || "LOW").toUpperCase(),
+            minutes: Math.round(p.minutes || 0),
+            npg_p90: +(p.npg_p90 || 0).toFixed(3),
+            assists_p90: +(p.assists_p90 || 0).toFixed(3),
+            defense_composite: p.defense_composite,
+            possession_composite: p.possession_composite,
+            percentile: 50,
+            value: 0,
+            residual: 0,
+            radar: [50, 50, 50, 50, 50],
+        }));
+    } catch (err) {
+        console.warn("Failed to fetch ratings:", err);
+        return [];
+    }
+}
 
-const teams = Array.from(new Set(matches.flatMap((match) => [match.home, match.away]))).sort();
+async function fetchRatingsMeta() {
+    try {
+        const resp = await fetch(`${API_BASE}/ratings/meta`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (err) {
+        console.warn("Failed to fetch ratings meta:", err);
+        return { model_meta: {}, league_metrics: [] };
+    }
+}
+
+async function fetchArtifacts() {
+    try {
+        const resp = await fetch(`${API_BASE}/artifacts`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (err) {
+        console.warn("Failed to fetch artifacts:", err);
+        return { player_match_rows: 0, team_match_rows: 0, rating_rows: 0, event_samples: 0, data_health: {} };
+    }
+}
+
+async function fetchTeams() {
+    try {
+        const resp = await fetch(`${API_BASE}/teams`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        return data.teams || [];
+    } catch (err) {
+        console.warn("Failed to fetch teams:", err);
+        return [];
+    }
+}
+
+async function fetchPrediction(homeTeam, awayTeam) {
+    try {
+        const resp = await fetch(`${API_BASE}/prediction/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (err) {
+        console.warn("Failed to fetch prediction:", err);
+        return null;
+    }
+}
+
+let teamList = [];
+
+function getTeams() {
+    return teamList.length > 0 ? teamList : Array.from(new Set(matches.flatMap((match) => [match.home, match.away]))).sort();
+}
 
 const appState = {
     lang: "zh",
     view: "overview",
-    selectedPlayer: players[0].name,
+    selectedPlayerKey: "",
     position: "ALL",
+    season: "ALL",
     valueMode: "under",
     home: "Arsenal",
     away: "Barcelona",
@@ -250,7 +253,7 @@ function applyLocale() {
     document.getElementById("lang-toggle").textContent = appState.lang === "zh" ? "EN" : "中";
 }
 
-function setView(view) {
+async function setView(view) {
     appState.view = view;
     document.querySelectorAll(".view").forEach((element) => {
         element.classList.toggle("active", element.id === `view-${view}`);
@@ -265,52 +268,73 @@ function filteredPlayers() {
     const query = document.getElementById("global-search").value.trim().toLowerCase();
     return players.filter((player) => {
         const matchesPosition = appState.position === "ALL" || player.position === appState.position;
+        const matchesSeason = appState.season === "ALL" || player.season === appState.season;
         const matchesQuery = !query || [player.name, player.team, player.position].join(" ").toLowerCase().includes(query);
-        return matchesPosition && matchesQuery;
+        return matchesPosition && matchesSeason && matchesQuery;
     });
 }
 
 function renderPlayers() {
     const rows = filteredPlayers().sort((a, b) => b.rating - a.rating);
     const tbody = document.getElementById("player-table");
+    if (players.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Loading...</td></tr>';
+        return;
+    }
     tbody.innerHTML = rows.map((player, index) => `
-        <tr class="${player.name === appState.selectedPlayer ? "selected" : ""}">
+        <tr class="${player.key === appState.selectedPlayerKey ? "selected" : ""}" data-player="${player.key}" style="cursor:pointer">
             <td>${index + 1}</td>
-            <td><button type="button" data-player="${player.name}">${player.name}</button></td>
+            <td>${player.name}</td>
             <td>${player.position}</td>
             <td>${player.team}</td>
+            <td>${player.season}</td>
             <td>${player.rating.toFixed(1)}</td>
             <td><span class="status-pill ${confidenceClass(player.confidence)}">${player.confidence}</span></td>
         </tr>
     `).join("");
 
-    tbody.querySelectorAll("button[data-player]").forEach((button) => {
-        button.addEventListener("click", () => {
-            appState.selectedPlayer = button.dataset.player;
+    tbody.querySelectorAll("tr[data-player]").forEach((row) => {
+        row.addEventListener("click", () => {
+            appState.selectedPlayerKey = row.dataset.player;
             renderPlayers();
             renderPlayerProfile();
         });
     });
 
-    if (!rows.some((player) => player.name === appState.selectedPlayer) && rows[0]) {
-        appState.selectedPlayer = rows[0].name;
+    if (!rows.some((player) => player.key === appState.selectedPlayerKey) && rows[0]) {
+        appState.selectedPlayerKey = rows[0].key;
     }
     renderPlayerProfile();
 }
 
-function renderPlayerProfile() {
-    const player = players.find((item) => item.name === appState.selectedPlayer) || players[0];
+async function renderPlayerProfile() {
+    const player = players.find((item) => item.key === appState.selectedPlayerKey) || players[0];
+    if (!player) return;
     document.getElementById("selected-player-name").textContent = player.name;
     const badge = document.getElementById("player-confidence");
     badge.textContent = player.confidence;
     badge.className = `status-pill ${confidenceClass(player.confidence)}`;
+
+    // Fetch real profile data for radar
+    let profile = null;
+    try {
+        const resp = await fetch(`${API_BASE}/player/${encodeURIComponent(player.name)}/profile?season=${player.season}`);
+        if (resp.ok) profile = await resp.json();
+    } catch (err) { /* fallback to list data */ }
+
+    const detailMinutes = profile ? profile.minutes : player.minutes;
+    const detailScore = profile ? profile.optimized_score : player.rating;
+    const detailPosition = profile ? profile.position_group : player.position;
     document.getElementById("player-detail").innerHTML = `
         <div><span>${t("th_team")}</span><strong>${player.team}</strong></div>
-        <div><span>${t("minutes")}</span><strong>${player.minutes}</strong></div>
-        <div><span>${t("percentile")}</span><strong>${player.percentile}%</strong></div>
-        <div><span>${t("value")}</span><strong>€${player.value}M</strong></div>
+        <div><span>${t("minutes")}</span><strong>${detailMinutes}</strong></div>
+        <div><span>${t("th_pos")}</span><strong>${detailPosition}</strong></div>
+        <div><span>${t("th_rating")}</span><strong>${detailScore}</strong></div>
     `;
-    renderRadar(player);
+
+    // Use real radar data from profile API, or fallback to defaults
+    const radar = (profile && profile.radar) ? profile.radar : player.radar;
+    renderRadar({ ...player, radar });
 }
 
 function getChart(id) {
@@ -365,19 +389,48 @@ function renderRadar(player) {
     chart.resize();
 }
 
+let valuePlayers = [];
+
+async function fetchValueReport() {
+    try {
+        const resp = await fetch(`${API_BASE}/value-summary`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (data.players && data.players.length > 0) {
+            return data.players.map((p) => ({
+                name: p.player || "",
+                team: p.team || "",
+                actualValue: p.actual_value || 0,
+                predictedValue: p.predicted_value || 0,
+                residual: p.residual_log || 0,
+                fairness: p.fairness_label || "",
+            }));
+        }
+        return [];
+    } catch (err) {
+        console.warn("Failed to fetch value report:", err);
+        return [];
+    }
+}
+
 function renderValue() {
-    const sorted = [...players].sort((a, b) => (
+    const data = valuePlayers.length > 0 ? valuePlayers : players.map((p) => ({
+        name: p.name, team: p.team, actualValue: p.value, predictedValue: Math.round(p.value * Math.exp(p.residual)), residual: p.residual, fairness: "",
+    }));
+    const sorted = [...data].sort((a, b) => (
         appState.valueMode === "under" ? b.residual - a.residual : a.residual - b.residual
     ));
-    document.getElementById("value-list").innerHTML = sorted.map((player) => `
+    document.getElementById("value-list").innerHTML = sorted.slice(0, 50).map((player) => {
+        const valM = (player.actualValue / 1e6).toFixed(1);
+        return `
         <div class="rank-item">
             <div>
                 <strong>${player.name}</strong>
-                <span class="rank-meta">${player.team} · ${player.position} · €${player.value}M</span>
+                <span class="rank-meta">${player.team} · €${valM}M</span>
             </div>
             <span class="status-pill ${player.residual >= 0 ? "status-high" : "status-medium"}">${player.residual > 0 ? "+" : ""}${player.residual.toFixed(2)}</span>
         </div>
-    `).join("");
+    `}).join("");
 
     const chart = getChart("value-chart");
     if (!chart) return;
@@ -399,16 +452,16 @@ function renderValue() {
         series: [{
             type: "scatter",
             symbolSize: 14,
-            data: players.map((player) => [
-                player.value,
-                Math.round(player.value * Math.exp(player.residual)),
+            data: data.map((player) => [
+                +(player.actualValue / 1e6).toFixed(1),
+                +(player.predictedValue / 1e6).toFixed(1),
                 player.name,
             ]),
             itemStyle: { color: "rgba(216,221,231,.86)" },
             label: { show: false },
         }, {
             type: "line",
-            data: [[40, 40], [200, 200]],
+            data: [[0, 0], [200, 200]],
             symbol: "none",
             lineStyle: { color: chartGridColor(), type: "dashed" },
         }],
@@ -416,12 +469,25 @@ function renderValue() {
     chart.resize();
 }
 
+let currentPrediction = null;
+
 function selectedMatch() {
-    return matches.find((match) => match.home === appState.home && match.away === appState.away)
-        || { home: appState.home, away: appState.away, hw: 0.34, draw: 0.28, aw: 0.38, xh: 1.32, xa: 1.42 };
+    if (currentPrediction && !currentPrediction.error) {
+        return {
+            home: currentPrediction.home_team || appState.home,
+            away: currentPrediction.away_team || appState.away,
+            hw: currentPrediction.home_win || 0.34,
+            draw: currentPrediction.draw || 0.28,
+            aw: currentPrediction.away_win || 0.38,
+            xh: currentPrediction.home_lambda || 1.32,
+            xa: currentPrediction.away_lambda || 1.42,
+        };
+    }
+    return { home: appState.home, away: appState.away, hw: 0.34, draw: 0.28, aw: 0.38, xh: 1.32, xa: 1.42 };
 }
 
 function renderMatchSelectors() {
+    const teams = getTeams();
     const home = document.getElementById("home-team");
     const away = document.getElementById("away-team");
     home.innerHTML = teams.map((team) => `<option value="${team}">${team}</option>`).join("");
@@ -430,7 +496,9 @@ function renderMatchSelectors() {
     away.value = appState.away;
 }
 
-function renderMatches() {
+async function renderMatches() {
+    // Fetch prediction from API
+    currentPrediction = await fetchPrediction(appState.home, appState.away);
     const match = selectedMatch();
     document.getElementById("match-title").textContent = `${match.home} vs ${match.away}`;
     const probabilityRows = [
@@ -501,16 +569,40 @@ function renderScoreMatrix(match) {
     chart.resize();
 }
 
+let reviewQueue = [];
+
+async function fetchReviewQueue() {
+    try {
+        const resp = await fetch(`${API_BASE}/review-queue?limit=50`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        return (data.players || []).map((p) => ({
+            name: p.player || "",
+            team: p.team || "",
+            position: p.position_group || "",
+            confidence: (p.confidence_level || "LOW").toUpperCase(),
+            score: +(p.optimized_score || 0).toFixed(1),
+            minutes: Math.round(p.minutes || 0),
+        }));
+    } catch (err) {
+        console.warn("Failed to fetch review queue:", err);
+        return [];
+    }
+}
+
 function renderScouting() {
-    document.getElementById("review-list").innerHTML = reviews.map(([name, confidence, reason]) => `
-        <div class="rank-item">
-            <div>
-                <strong>${name}</strong>
-                <span class="rank-meta">${reason}</span>
+    const queue = reviewQueue.length > 0 ? reviewQueue : [];
+    document.getElementById("review-list").innerHTML = queue.length > 0
+        ? queue.map((p) => `
+            <div class="rank-item">
+                <div>
+                    <strong>${p.name}</strong>
+                    <span class="rank-meta">${p.team} · ${p.position} · ${p.minutes}min</span>
+                </div>
+                <span class="status-pill ${confidenceClass(p.confidence)}">${p.confidence}</span>
             </div>
-            <span class="status-pill ${confidenceClass(confidence)}">${confidence}</span>
-        </div>
-    `).join("");
+        `).join("")
+        : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No low-confidence players in queue</div>';
     document.getElementById("watchlist").innerHTML = players.slice(0, 4).map((player) => `
         <div class="watch-card">
             <div>
@@ -534,7 +626,12 @@ function renderActions() {
         }
     }
     chart.setOption({
-        grid: { left: 36, right: 20, top: 20, bottom: 28 },
+        title: {
+            text: appState.lang === "zh" ? "样例数据 · 非真实 xT/VAEP 产物" : "Sample data · Not real xT/VAEP output",
+            left: "center", top: 0,
+            textStyle: { color: "rgba(255,180,60,.85)", fontSize: 12, fontWeight: 400 },
+        },
+        grid: { left: 36, right: 20, top: 30, bottom: 28 },
         xAxis: { type: "category", data: ["1", "2", "3", "4", "5", "6", "7", "8"], axisLabel: { color: chartTextColor() } },
         yAxis: { type: "category", data: ["L", "HL", "C", "HR", "R"], axisLabel: { color: chartTextColor() } },
         visualMap: {
@@ -548,10 +645,10 @@ function renderActions() {
     chart.resize();
 }
 
-function renderActiveView() {
+async function renderActiveView() {
     if (appState.view === "players") renderPlayers();
     if (appState.view === "value") renderValue();
-    if (appState.view === "matches") renderMatches();
+    if (appState.view === "matches") await renderMatches();
     if (appState.view === "scouting") renderScouting();
     if (appState.view === "actions") renderActions();
     Object.values(appState.charts).forEach((chart) => chart.resize());
@@ -598,8 +695,13 @@ function bindEvents() {
         appState.position = event.target.value;
         renderPlayers();
     });
+    document.getElementById("season-filter").addEventListener("change", (event) => {
+        appState.season = event.target.value;
+        renderPlayers();
+    });
     document.getElementById("global-search").addEventListener("input", () => {
-        if (appState.view === "players") renderPlayers();
+        if (appState.view !== "players") setView("players");
+        else renderPlayers();
     });
     document.querySelectorAll("[data-value-mode]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -611,7 +713,7 @@ function bindEvents() {
     document.getElementById("home-team").addEventListener("change", (event) => {
         appState.home = event.target.value;
         if (appState.home === appState.away) {
-            appState.away = teams.find((team) => team !== appState.home) || appState.away;
+            appState.away = getTeams().find((team) => team !== appState.home) || appState.away;
             document.getElementById("away-team").value = appState.away;
         }
         renderMatches();
@@ -619,7 +721,7 @@ function bindEvents() {
     document.getElementById("away-team").addEventListener("change", (event) => {
         appState.away = event.target.value;
         if (appState.home === appState.away) {
-            appState.home = teams.find((team) => team !== appState.away) || appState.home;
+            appState.home = getTeams().find((team) => team !== appState.away) || appState.home;
             document.getElementById("home-team").value = appState.home;
         }
         renderMatches();
@@ -630,9 +732,60 @@ function bindEvents() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     applyLocale();
     renderMatchSelectors();
     bindEvents();
     setView("overview");
+
+    // Load real data from API in parallel
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData] = await Promise.all([
+        fetchRatings(),
+        fetchRatingsMeta(),
+        fetchArtifacts(),
+        fetchTeams(),
+        fetchValueReport(),
+        fetchReviewQueue(),
+    ]);
+
+    players = ratingsData;
+    valuePlayers = valueData;
+    reviewQueue = reviewData;
+    if (players.length > 0) {
+        appState.selectedPlayerKey = players[0].key;
+    }
+
+    // Populate season filter dropdown
+    const seasons = [...new Set(players.map((p) => p.season).filter(Boolean))].sort();
+    const seasonSelect = document.getElementById("season-filter");
+    seasonSelect.innerHTML = '<option value="ALL">ALL</option>' + seasons.map((s) => `<option value="${s}">${s}</option>`).join("");
+    seasonSelect.value = appState.season;
+
+    // Update team list for match prediction
+    teamList = teams;
+    if (teamList.length > 0) {
+        appState.home = teamList[0];
+        appState.away = teamList.length > 1 ? teamList[1] : teamList[0];
+    }
+    renderMatchSelectors();
+
+    // Update overview metrics from artifacts API
+    const metricValues = document.querySelectorAll(".coverage-strip .metric-value");
+    if (metricValues[0]) metricValues[0].textContent = (artifacts.player_match_rows || 0).toLocaleString();
+    if (metricValues[1]) metricValues[1].textContent = (artifacts.team_match_rows || 0).toLocaleString();
+    if (metricValues[2]) metricValues[2].textContent = (artifacts.rating_rows || 0).toLocaleString();
+    if (metricValues[3]) metricValues[3].textContent = (artifacts.event_samples || 0).toLocaleString();
+
+    // Update data health
+    const health = artifacts.data_health || {};
+    const healthItems = document.querySelectorAll("#data-health-list .health-item");
+    if (healthItems.length >= 3) {
+        healthItems[0].querySelector(".status-pill").className = `status-pill ${health.oof_available ? "status-high" : "status-low"}`;
+        healthItems[0].querySelector(".status-pill").textContent = health.oof_available ? "HIGH" : "LOW";
+        healthItems[1].querySelector(".status-pill").className = "status-pill status-low";
+        healthItems[2].querySelector(".status-pill").className = `status-pill ${health.truth_labels_available ? "status-high" : "status-low"}`;
+        healthItems[2].querySelector(".status-pill").textContent = health.truth_labels_available ? "HIGH" : "LOW";
+    }
+
+    renderActiveView();
 });
