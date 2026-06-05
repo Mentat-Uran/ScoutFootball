@@ -29,7 +29,7 @@ The current focus is not on accumulating more web scrapers, but on upgrading the
 * **Pipeline:** End-to-end `ingest` -> `build-features` -> `train`.
 * **Data Validation:** Run `scoutlab validate` to ensure data integrity.
 * **Local Data Layer:** Powered by DuckDB + Parquet, structured into raw/silver/gold/models/reports/logs layers.
-* **Player Ratings:** PyTorch-based weight optimizer with holdout evaluation, Pearson fixes, availability caps, quality caps, robust team pooling, and coverage reports.
+* **Player Ratings:** PyTorch-based weight optimizer with composite objective (Spearman + NDCG@20 + position consistency + extreme penalty + prior regularization), holdout evaluation, Pearson fixes, availability caps, quality caps, robust team pooling, coverage reports, and model run registry.
 * **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet`, supporting transfermarkt value, awards, expert tiers, and manual calibration.
 * **Model Evaluation & Cards:** Maintain data sources, label definitions, bounds, and known biases in `MODEL_CARD.md`.
 * **Product & Visuals:** 8-page Streamlit analysis console, a new `frontend/` Liquid Glass static analyst console, and a FastAPI draft backend featuring Player Rankings, Value Deviation, and Match Prediction (Independent Poisson baseline).
@@ -98,7 +98,7 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
 - **研发流水线 (Pipeline):** `ingest` -> `build-features` -> `train`。
 - **数据验证:** 执行 `scoutlab validate` 确保数据一致性。
 - **本地数据层:** 采用 DuckDB + Parquet，按 raw/silver/gold/models/reports/logs 分层。
-- **球员评分:** PyTorch 权重优化器，已加入 holdout 评估、Pearson 修复、availability cap、ST/W quality cap、稳健球队聚合与覆盖率过滤。
+- **球员评分:** PyTorch 权重优化器，组合优化目标（Spearman + NDCG@20 + 位置内一致性 + 极端惩罚 + 先验正则），holdout 评估、availability cap、ST/W quality cap、稳健球队聚合、覆盖率过滤和模型运行登记。
 - **真实标签契约:** `player_truth_labels.parquet` schema 与校验（`truth_labels.py`），支持四种标签源：历史身价、奖项、专家分档、人工校准。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界、已知偏差和不可用场景。
 - **比分预测与身价:** 包含 Independent Poisson baseline 预测，以及 OOF 的实际预测身价偏离榜。

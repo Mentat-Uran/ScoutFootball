@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新口径重新跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：`frontend/` 已有静态 Liquid Glass 分析工作台，保留原 HTML/CSS 风格，覆盖总览、球员、身价、比赛预测、球探、动作价值和报告视图；后端仍需把 mock 数据替换为 typed read-only API 与本地 Parquet 产物。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新组合目标在 GPU 服务器重跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标、组合优化目标、模型运行登记、神经网络准入门槛）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：`frontend/` 已有静态 Liquid Glass 分析工作台。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutLab 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -106,9 +106,11 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - [x] 标签契约必须包含 `label_source`、`label_confidence`、`as_of_date`、`position_scope`、`manual_review_flag`，并区分身价代理、奖项荣誉、专家分档和人工校准。
 - [x] 新增评分特征矩阵契约，输出可复用的 `rating_feature_matrix.parquet` 或等价产物，包含数值特征、位置/联赛类别、数据源覆盖、缺失字段标记、输入文件 hash 和 feature manifest。
 - [x] 修正缺失高阶字段处理：防守、控球、xT/VAEP、门将字段缺失时必须有 missing flag 和中性/低置信度 fallback，不能把缺失值 0 当成真实低能力。
-- [ ] 重写优化目标：组合 Spearman/NDCG、位置内排序、跨联赛校准、年龄/趋势合理性、极端样本惩罚。
-- [ ] 保留球队结果相关性作为辅助校验，不再作为主目标。
-- [ ] 定义神经网络准入门槛：必须先有球员真实标签、时间切分、当前优化器 baseline、位置内/跨位置指标、误差案例复盘和低置信度规则；不允许只用球队积分监督训练默认模型。
+- [x] 重写优化目标：组合 Spearman/NDCG、位置内排序、跨联赛校准、年龄/趋势合理性、极端样本惩罚。
+- [ ] 用新组合目标在 GPU 服务器重跑完整优化，生成新的 `optimized_params.npy`、holdout predictions、league metrics、calibration 和 feature importance。
+- [ ] 复盘 `PROBLEMS.md` 中的误差案例：Everton、Stuttgart、Hoffenheim、Rennes、Napoli、Real Madrid、Arsenal、PSG，记录新旧排名变化和仍未解决原因。
+- [x] 保留球队结果相关性作为辅助校验，不再作为主目标。
+- [x] 定义神经网络准入门槛：必须先有球员真实标签、时间切分、当前优化器 baseline、位置内/跨位置指标、误差案例复盘和低置信度规则；不允许只用球队积分监督训练默认模型。
 - [x] 补全 2526 Football-Data 覆盖或在报告中剔除积分 N/A 球队，避免把数据缺口误判为模型错误。
 - [x] 将位置内榜单和跨位置总榜拆成两个视图。
 - [x] 给 GK、CB、FB、DM、CM、AM、W、ST 建立位置内指标和解释模板。

@@ -34,6 +34,9 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 评分系统仍处于校准阶段：
 
 - PyTorch GPU 优化器和远程 GPU 计算脚本已存在。
+- 优化目标已从纯 Spearman/Pearson 改为组合目标：Spearman(0.50) + NDCG@20(0.20) + 位置内排序一致性(0.15) + 极端样本惩罚(0.10) + 先验正则(0.05)；各权重可通过命令行参数覆盖。
+- 模型运行登记已实现：每次优化后保存到 `data/models/runs/<timestamp>/`，含 optimized_params.npy + meta.json（参数、种子、输入 hash、指标、位置内指标、误差案例摘要）。
+- 神经网络准入门槛已写入 MODEL_CARD.md：必须先有球员真实标签、时间切分、baseline 对比、位置内指标、误差案例复盘；禁止纯球队积分监督训练。
 - 当前评分层优先做角色、联赛、真实影响力校准，不再把 Top N 配额作为主目标。
 - 已加入粗位置角色重判、较强联赛强度曲线、holdout 评估、Pearson 指标修复、ST/W quality cap。
 - 已把所有位置 availability cap 降到 0.18-0.20，CM/DM/FB/CB/GK 不能再用 0.30-0.36 的出勤权重主导评分。
