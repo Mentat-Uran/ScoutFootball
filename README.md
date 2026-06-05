@@ -16,7 +16,7 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
   - Player Rankings: pizza chart、位置内 Top 20、球员详情卡
   - Value Deviation: 实际 vs 预测身价散点图、高估/低估 Top 20
   - Match Prediction: 胜平负概率、比分分布热力图
-- 评分特征矩阵: `rating_feature_matrix.parquet` + `rating_feature_manifest.json`，含缺失字段标记和数据源覆盖。
+- 评分特征矩阵: `rating_feature_matrix.parquet` + `rating_feature_matrix_manifest.json`，含缺失字段标记和数据源覆盖。
 - Coverage 置信度: HIGH/MEDIUM/LOW 三级，coverage < 0.90 禁止强排序结论。
 - 出勤捷径诊断: 置换重要性、位置 availability 权重、出勤驱动球员识别。
 - 位置内指标: GK/CB/FB/DM/CM/AM/W/ST 各位置核心维度和 percentile rank。
@@ -27,20 +27,21 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
 
 ## 本地数据概览
 
-以下行数来自当前本地 Parquet 快速核对，后续以数据文件为准。
+以下行数来自当前本地文件快速核对，后续以数据文件为准。
 
 | 数据源 | 当前缓存 | 覆盖 |
 | --- | ---: | --- |
 | FBref standard/shooting/misc | 每表 14,356 行 | 5 赛季 |
-| Football-Data | 68,953 个 match-key 行 | 10 赛季，20 个 league/division |
+| Football-Data raw CSV | 68,953 行 | 10 赛季，20 个 league/division |
+| Football-Data `combined_results.parquet` | 5,330 行 | 当前活动合并缓存为 5 大联赛 2022/23–2024/25；需重建 10 赛季 Parquet |
 | Understat | 31,902 个球员赛季行 | 10 赛季，6 个联赛 |
-| StatsBomb Open Data matches | 126 场 | 公开比赛样本 |
+| StatsBomb Open Data `big5_matches` | 126 场 | 公开比赛样本 |
 | StatsBomb Open Data events | 11,871 条事件 | 公开事件样本 |
 | player_value_metrics | 10 名样本球员 | StatsBomb 事件价值原型，不代表全量联赛能力 |
 | player_ratings_optimized | 27,254 行 | 当前评分产物 |
 | player_truth_labels | 未生成 | P0 待建真实影响力标签 |
-| rating_feature_matrix | 新增 | 评分特征矩阵，含缺失标记和 fallback |
-| rating_feature_manifest | 新增 | 特征列元数据 |
+| rating_feature_matrix | 8,141 行 | 评分特征矩阵，含缺失标记和 fallback |
+| rating_feature_matrix_manifest | 1 个 JSON | 特征列元数据、输入 hash 和生成时间 |
 
 ### 爬虫运行环境
 
@@ -62,15 +63,29 @@ SOCCERDATA_DIR=./data/soccerdata uv run python scripts/fetch_fbref_10seasons.py
 
 ## 顶层架构
 
+ScoutLab 的长期路线扩展为 10 层。前 7 层是当前主干，第 8-10 层是球探工作流、预测校准和空间研究扩展，只有在 P0-P4 稳定后逐步推进。
+
 | 层级 | 作用 | 当前状态 |
 | --- | --- | --- |
 | 数据与合规层 | 本地缓存、手动导入、请求日志、数据质量边界 | 已有基础 |
 | 标准事实层 | 统一比赛、球队、球员、阵容、事件、身价、联赛强度 | 已有基础，仍需增强 |
-| 事件动作价值层 | StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP | 计划新增 |
-| 球员评分层 | 赛季统计 + xG/xA + action value + 出勤 + 联赛强度 + 趋势 | 当前迭代中 |
+| 跨供应商标准化层 | 内部 event/tracking schema，对齐 SPADL、atomic-SPADL、CDF、kloppy/floodlight 思路 | 远期设计，不急加依赖 |
+| 事件动作价值层 | StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP/Atomic-VAEP | 计划新增 |
+| 球员真值与评分层 | 真实标签 + 赛季统计 + xG/xA + action value + 出勤可靠性 + 联赛强度 + 年龄趋势 | 当前迭代中 |
 | 评估与模型卡层 | baseline、时间切分、position-wise metrics、误差分析 | 计划补齐 |
-| 产品可视化层 | Streamlit、Plotly、mplsoccer 足球图表 | Streamlit 8 页，mplsoccer 已接入 |
-| 比分预测层 | league average -> Independent Poisson -> Dixon-Coles | Poisson 已有，Dixon-Coles 待做 |
+| 产品可视化与 API 层 | Streamlit、Plotly、mplsoccer、FastAPI 只读服务 | Streamlit 8 页，mplsoccer 已接入 |
+| 球探决策层 | watchlist、shortlist、人工标签审阅、低置信度复核队列 | 计划新增 |
+| 比分预测与概率校准层 | league average -> Independent Poisson -> Dixon-Coles + time decay -> calibration | Poisson 已有，Dixon-Coles 待做 |
+| 空间/视频/离球研究层 | StatsBomb 360、Metrica/open tracking、space control、xG+、off-ball value | 远期研究，依赖合规数据 |
+
+## 调研依据
+
+- [socceraction](https://socceraction.readthedocs.io/en/stable/index.html) 已实现 StatsBomb/Wyscout/Opta 到 SPADL/atomic-SPADL 的转换，并包含 xT、VAEP、Atomic-VAEP；ScoutLab 先复用它的建模语言和评估口径。
+- [StatsBomb Open Data](https://github.com/statsbomb/open-data) 继续作为事件层第一数据源；公开展示衍生图表或分析时必须注明数据来源。
+- [mplsoccer](https://mplsoccer.readthedocs.io/) 适合球场图、radar/pizza chart、heatmap、StatsBomb 坐标可视化，当前已接入。
+- [kloppy](https://kloppy.pysport.org/)、[floodlight](https://floodlight.readthedocs.io/en/latest/) 和 [Common Data Format](https://www.cdf.football/) 只作为跨供应商 event/tracking schema 的远期参考，短期不替代当前 Parquet/DuckDB 主干。
+- [VAEP 论文](https://arxiv.org/abs/1802.07127)、[xT vs VAEP 对比](https://tomdecroos.github.io/reports/xt_vs_vaep.pdf)、[PlayeRank](https://arxiv.org/abs/1802.04987) 和 2026 年 [combined rating 论文](https://link.springer.com/article/10.1186/s40537-026-01369-w) 支持把评分系统拆成动作价值、角色内排名、真实标签和可解释评估四条线。
+- [xG finishing bias 论文](https://arxiv.org/abs/2401.09940) 支持继续使用 shrinkage 和低置信度提示；[Dixon-Coles](https://research-information.bris.ac.uk/en/publications/modelling-association-football-scores-and-inefficiencies-in-the-f/) 只作为比分预测主线的下一档 baseline。
 
 ## 评分系统状态
 
@@ -82,13 +97,13 @@ SOCCERDATA_DIR=./data/soccerdata uv run python scripts/fetch_fbref_10seasons.py
 
 这些修复只是 guardrail，不等于评分系统已经完成。下一步必须继续在当前电脑先做小规模测试，再视情况重跑完整优化，复盘 2526 holdout 中 Arsenal、Real Madrid、Napoli、PSG 等误差案例，并引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为真实球员影响力标签。未经明确允许，不使用远程 5070 Ti 服务器。
 
-新增评分特征矩阵契约：`train` 阶段输出 `rating_feature_matrix.parquet` 和 `rating_feature_manifest.json`，记录每个特征的数据源、缺失率和填充策略。缺失高阶字段使用位置内中位数填充，不再把缺失值 0 当成真实低能力。Finishing 信号使用经验贝叶斯 shrinkage，小样本射门不过度放大。Coverage 置信度规则：coverage ≥ 0.90 为高置信度，0.70–0.90 为中置信度，< 0.70 为低置信度；中低置信度 league-season 禁止强排序结论。出勤捷径诊断报告可量化 availability 对评分的贡献，识别出勤驱动球员。8 个位置（GK/CB/FB/DM/CM/AM/W/ST）各有核心维度定义和位置内 percentile rank。
+新增评分特征矩阵契约：`train` 阶段输出 `rating_feature_matrix.parquet` 和 `rating_feature_matrix_manifest.json`，记录每个特征的数据源、缺失率和填充策略。缺失高阶字段使用位置内中位数填充，不再把缺失值 0 当成真实低能力。Finishing 信号使用经验贝叶斯 shrinkage，小样本射门不过度放大。Coverage 置信度规则：coverage ≥ 0.90 为高置信度，0.70–0.90 为中置信度，< 0.70 为低置信度；中低置信度 league-season 禁止强排序结论。出勤捷径诊断报告可量化 availability 对评分的贡献，识别出勤驱动球员。8 个位置（GK/CB/FB/DM/CM/AM/W/ST）各有核心维度定义和位置内 percentile rank。
 
 神经网络可以作为后续候选评分器，但不能只是把当前球队积分监督目标换成更复杂的 MLP。没有 `player_truth_labels.parquet`、特征缺失标记、时间切分评估和现有优化器 baseline 对比前，神经网络只能作为离线实验，不进入默认评分产物。第一版应优先做浅层模型和多任务目标：球员真实标签排序为主，球队赛季积分相关性只做辅助校验。
 
 ## 未来更新策略
 
-P0：评分系统真实影响力校准。先用新 availability cap 和稳健球队聚合重新评估 holdout，再重写训练目标，引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集；同时补齐特征矩阵、缺失字段标记和神经网络准入门槛。球队积分相关性只能做辅助校验，不能当主标签。
+P0：评分系统真实影响力校准。先用新 availability cap 和稳健球队聚合重新评估 holdout，重建 Football-Data 10 赛季合并缓存，再重写训练目标，引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集；同时补齐特征矩阵、缺失字段标记和神经网络准入门槛。球队积分相关性只能做辅助校验，不能当主标签。
 
 P1：展示增强。引入 mplsoccer，补齐雷达图、pizza chart、shot map、pass map、xT heatmap、位置内榜单和低置信度提示。
 
@@ -100,7 +115,11 @@ P4：评估文档。新增 `EVALUATION.md` 和 `MODEL_CARD.md`，记录 baseline
 
 P5：比分预测升级。保留 Independent Poisson baseline，再做 Dixon-Coles + time decay，并用 log loss、Brier score、RPS 对比。
 
-P6：远期研究。kloppy、floodlight、xG+、tracking data 只在事件价值层和评估层稳定后再考虑。
+P6：跨供应商标准化。先设计内部 event/tracking schema 和数据源 license manifest，再评估 kloppy、floodlight、CDF 是否作为转换工具或 schema 对照。
+
+P7：球探决策层。围绕真实标签、误差案例和低置信度球员建立人工审阅队列、watchlist、shortlist 和可复现报告。
+
+P8：空间/视频/离球研究。StatsBomb 360、Metrica/open tracking、space control、xG+、off-ball value 只在事件价值层和评估层稳定且数据合规后再进入。
 
 ## 快速开始
 
