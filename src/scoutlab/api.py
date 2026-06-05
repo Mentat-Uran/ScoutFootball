@@ -82,6 +82,11 @@ def get_value_summary() -> dict:
     if oof.empty:
         return {"status": "no_data", "players": []}
 
+    # Filter out records with suspiciously low market values (Transfermarkt placeholder)
+    # Values <= 200k are almost certainly data errors, not real valuations
+    if "actual_market_value" in oof.columns:
+        oof = oof[oof["actual_market_value"] > 200000].copy()
+
     # Build player-level value data
     import math
     player_data = []
@@ -127,6 +132,10 @@ def get_player_ratings(
     # Normalize confidence_level to uppercase for frontend
     if "confidence_level" in df.columns:
         df["confidence_level"] = df["confidence_level"].str.upper()
+
+    # Alias sub_position → position_group for frontend compatibility
+    if "sub_position" in df.columns and "position_group" not in df.columns:
+        df["position_group"] = df["sub_position"]
 
     # Limit results
     df = df.head(limit)
@@ -276,6 +285,11 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
     import pandas as pd
 
     df = load_player_ratings()
+
+    # Alias sub_position → position_group for frontend compatibility
+    if "sub_position" in df.columns and "position_group" not in df.columns:
+        df["position_group"] = df["sub_position"]
+
     mask = df["player"] == player_name
     if season:
         mask = mask & (df["season"] == season)
@@ -330,6 +344,9 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
             "minutes": round(float(r.get("minutes", 0) or 0)),
         })
 
+    low_appearance = bool(row.get("low_appearance", False))
+    matches_count = int(row.get("matches", 0) or 0)
+
     return {
         "player": player_name,
         "found": True,
@@ -339,6 +356,8 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
         "position_group": position,
         "optimized_score": round(score, 1),
         "minutes": round(minutes),
+        "matches": matches_count,
+        "low_appearance": low_appearance,
         "confidence_level": str(row.get("confidence_level", "LOW")).upper(),
         "npg_p90": round(npg, 3),
         "assists_p90": round(assists, 3),
