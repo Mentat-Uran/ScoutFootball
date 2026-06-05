@@ -1,0 +1,4 @@
+- [x] pipeline.py 4 个 E501 长行已修复，`uv run ruff check src/` 零错误
+- [x] README.md 反映新增能力（特征矩阵、coverage、诊断、位置指标、mplsoccer、3 新页面）
+- [x] TASKS.md P0/P1 已完成项已标记，当前状态已更新
+- [x] AGENTS.md 项目状态、模块约定、验证命令已更新

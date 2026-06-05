@@ -6,15 +6,18 @@
 
 ## 顶层架构
 
-ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是数据抓取集合。后续架构按七层推进：
+ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是数据抓取集合。后续架构扩展为十层：前七层解决当前可落地的评分、事件价值、评估和展示，第八到第十层扩展到球探工作流、预测校准和空间/视频研究。
 
 1. 数据与合规层：继续使用本地缓存、DuckDB 和 Parquet；Transfermarkt 只允许手动或授权导入；FBref 只作为受限低频补充源。
 2. 标准事实层：把比赛、球队、球员、阵容、事件、赛季统计、身价和联赛强度统一到 raw/silver/gold/models/reports/logs 分层。
-3. 事件动作价值层：以 StatsBomb Open Data 为第一主源，新增 `src/scoutlab/action_value/`，形成 StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP 的演进路线。
-4. 球员评分层：综合赛季统计、xG/xA、xT/VAEP、出勤可靠性、联赛强度、年龄和趋势；训练目标必须引入真实球员标签，不能只优化球队积分相关性。
-5. 评估与模型卡层：建立 `EVALUATION.md`、`MODEL_CARD.md`、位置内指标、跨位置总榜指标、误差分析和数据覆盖说明。
-6. 产品可视化层：Streamlit 保持本地只读；Plotly 继续用于交互图；后续引入 mplsoccer 做球场图、雷达图、pizza chart、shot map、pass map 和 xT heatmap。
-7. 比分预测层：保持 Independent Poisson 作为基线，后续升级 Dixon-Coles + time decay，并用 log loss、Brier score、RPS 做对照。
+3. 跨供应商标准化层：先定义 ScoutLab 内部 event/tracking schema，再对齐 SPADL、atomic-SPADL、Common Data Format、kloppy/floodlight 抽象；短期不急加依赖。
+4. 事件动作价值层：以 StatsBomb Open Data 为第一主源，新增 `src/scoutlab/action_value/`，形成 StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP/Atomic-VAEP 的演进路线。
+5. 球员真值与评分层：综合真实标签、赛季统计、xG/xA、xT/VAEP、出勤可靠性、联赛强度、年龄和趋势；训练目标必须引入真实球员标签，不能只优化球队积分相关性。
+6. 评估与模型卡层：建立 `EVALUATION.md`、`MODEL_CARD.md`、位置内指标、跨位置总榜指标、误差分析、数据覆盖说明和模型运行登记。
+7. 产品可视化与 API 层：Streamlit 保持本地只读；Plotly/mplsoccer 继续用于交互图和足球专用图；FastAPI 只暴露本地只读产物。
+8. 球探决策层：围绕真实标签、低置信度球员和误差案例建立 watchlist、shortlist、人工审阅队列和可复现报告。
+9. 比分预测与概率校准层：保持 Independent Poisson 作为基线，后续升级 Dixon-Coles + time decay，并用 log loss、Brier score、RPS 做对照。
+10. 空间/视频/离球研究层：只在有合规样例数据后研究 StatsBomb 360、Metrica/open tracking、space control、xG+、off-ball value 或强化学习。
 
 ## 采纳边界
 
@@ -24,14 +27,19 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - socceraction 思路作为事件动作价值层的主要参考。
 - xT 作为 VAEP 前的第一版可落地动作价值模型。
 - VAEP 论文作为评分解释和动作价值建模的理论核心。
+- PlayeRank 的角色内、多维度评分思路，作为位置内指标和球探解释模板参考。
+- 2026 combined rating 论文的 top-down + bottom-up 评分框架，作为真实标签层和评分目标重构参考。
 - Dixon-Coles 作为比分预测第二主线，但优先级低于球员评分。
 - xG finishing signal 使用样本量 shrinkage，禁止简单用 `goals - xG` 判定射术。
+- StatsBomb Open Data 的引用要求进入数据源 license manifest。
 
 暂缓采纳：
 
-- kloppy 作为 v1.0 之后的跨供应商数据标准化方案。
-- floodlight 只参考数据抽象，不直接引入。
+- kloppy 作为 v1.0 之后的跨供应商 event/tracking 数据标准化方案。
+- floodlight 只参考 Game/Team/Player/Event/Frame/Segment 抽象，不直接引入。
+- Common Data Format 作为 schema 对照和验证参考，短期不改变当前 Parquet 主干。
 - xG+ / possession-level shot probability 作为远期研究方向。
+- StatsBomb 360、Metrica/open tracking、SoccerNet/video 作为远期空间/视频研究方向。
 - 神经网络评分器只作为真实标签层完成后的候选模型；没有球员级标签、缺失字段标记和 baseline 对比前，不进入默认评分产物。
 - Opta、Wyscout、SkillCorner、TRACAB 等商业或 tracking 数据源不进入近期计划。
 
@@ -41,11 +49,18 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - 把 StatsBomb 小样本事件能力写成全量球员评分能力。
 - 用 Top N 位置配额替代真实影响力校准。
 - 只用球队积分相关性训练神经网络，并把它写成球员真实能力模型。
+- 在没有 tracking 样例、标签和评估 baseline 前，直接把强化学习、GCN、Transformer 写成默认评分架构。
+
+## 调研参考
+
+- 开源项目：[`socceraction`](https://socceraction.readthedocs.io/en/stable/index.html)、[`StatsBomb Open Data`](https://github.com/statsbomb/open-data)、[`mplsoccer`](https://mplsoccer.readthedocs.io/)、[`kloppy`](https://kloppy.pysport.org/)、[`floodlight`](https://floodlight.readthedocs.io/en/latest/)、[`Common Data Format`](https://www.cdf.football/)。
+- 学术主线：[`VAEP`](https://arxiv.org/abs/1802.07127)、[`xT vs VAEP`](https://tomdecroos.github.io/reports/xt_vs_vaep.pdf)、[`PlayeRank`](https://arxiv.org/abs/1802.04987)、[`combined player rating`](https://link.springer.com/article/10.1186/s40537-026-01369-w)、[`xG finishing bias`](https://arxiv.org/abs/2401.09940)、[`Dixon-Coles`](https://research-information.bris.ac.uk/en/publications/modelling-association-football-scores-and-inefficiencies-in-the-f/)。
+- 架构结论：近中期以 StatsBomb -> internal actions -> xT -> VAEP 和真实球员标签为主线；跨供应商 schema、tracking/video、xG+、off-ball value 和强化学习只作为 P6 之后的扩展，不抢 P0-P4。
 
 ## 已完成
 
 - [x] 五类核心数据源接入：FBref、Football-Data、Understat、StatsBomb Open Data、Club Elo。
-- [x] 本地缓存扩展到 10 赛季级别：Football-Data 当前 Parquet 为 68,953 个 match-key 行，Understat 为 31,902 个球员赛季行。
+- [x] 本地缓存扩展到 10 赛季级别：Football-Data 原始 CSV 合计 68,953 行，Understat 为 31,902 个球员赛季行；当前活动 `combined_results.parquet` 为 5,330 行，需重建 10 赛季合并 Parquet。
 - [x] FBref 5 赛季标准、射门、misc 表均为 14,356 行。
 - [x] StatsBomb Open Data 当前缓存 126 场比赛、11,871 条事件。
 - [x] 六个新适配器：SofaScore、SoFIFA、WhoScored、Capology、API-Football、Transfermarkt-datasets。
@@ -79,6 +94,7 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 目标：先修训练目标，再扩展评分模型。当前球队积分相关性会偏向出勤、CM 和 GK，不能单独作为球员影响力标签。
 
 - [x] 完成第一轮反出勤捷径 guardrail：availability cap 下调、ST/W quality cap、holdout 评估、稳健球队聚合、team coverage 报告。
+- [ ] 重建 Football-Data 10 赛季 `combined_results.parquet`，保留 2526 alias patch，并输出 raw CSV 总行数、active Parquet 行数、league-season 覆盖和输入 hash。
 - [ ] 用新 aggregation/cap 口径重新跑 GPU 优化，生成新的 `optimized_params.npy`、`optimized_params_meta.json`、holdout predictions、league metrics、calibration 和 feature importance。
 - [ ] 复盘 `PROBLEMS.md` 中的误差案例：Everton、Stuttgart、Hoffenheim、Rennes、Napoli、Real Madrid、Arsenal、PSG，记录新旧排名变化和仍未解决原因。
 - [x] 增加出勤捷径诊断报告：minutes/starts/matches/availability 置换重要性、按位置 availability 权重、球队聚合权重分布。
@@ -135,7 +151,8 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 
 - [ ] 盘点 `events_all.parquet` 字段和坐标覆盖，写入事件数据覆盖说明。
 - [ ] 新增 `src/scoutlab/action_value/` 模块：`spadl_adapter.py`、`xt.py`、`vaep.py`、`aggregate.py`。
-- [ ] 第一版只做 StatsBomb events -> internal actions -> xT。
+- [ ] 第一版只做 StatsBomb events -> internal actions -> xT；internal actions 需记录 provider action id、坐标系、方向、动作结果、前后状态和 source coverage。
+- [ ] 输出 internal actions schema 文档，并说明它和 SPADL/atomic-SPADL、Common Data Format 的字段映射关系。
 - [ ] 输出 `data/gold/feature_store/player_action_value.parquet`。
 - [ ] 生成球员 xT 排行榜、球队 xT 热区图、球员传球/带球推进价值图。
 - [ ] 评估 socceraction 作为依赖的可维护性，优先复用其 SPADL/xT/VAEP 能力。
@@ -195,6 +212,7 @@ player_rating =
 - [ ] 若存在神经网络候选模型，必须与当前 PyTorch 权重优化器、v3 默认权重和简单 percentile baseline 同一时间切分对比。
 - [ ] 对 value_fairness 增加 OOF 残差、联赛偏差、年龄段偏差分析。
 - [ ] 对比分预测增加 log loss、Brier score、RPS，低比分场景（0-0、1-0、0-1、1-1）单独报告。
+- [ ] 建立 `data/reports/model_runs/` 或等价模型运行登记：保存 dataset snapshot、输入 hash、参数、随机种子、依赖版本、指标和误差案例摘要。
 
 ### MODEL_CARD.md
 
@@ -204,6 +222,7 @@ player_rating =
 - [ ] 说明已知偏差：出勤偏差（CM/GK 偏高）、联赛强度偏差（弱联赛顶端样本）、位置偏差、年龄偏差、数据缺失偏差。
 - [ ] 说明不可用场景：单场评分、实时交易建议、青训选材、伤病预测、合同谈判。
 - [ ] 每次训练保存 feature manifest、参数、随机种子、输入文件 hash。
+- [ ] 每次公开图表或报告保存 data source attribution，尤其是 StatsBomb Open Data 衍生产物。
 
 验收：
 
@@ -225,19 +244,52 @@ player_rating =
 - 三档模型同一时间切分、同一指标对比。
 - Dixon-Coles 只有在优于 baseline 且校准合理时才进入默认展示。
 
-## P6：远期研究方向
+## P6：跨供应商标准化与开放格式层
 
-这些方向只记录，不进入近期实施：
+目标：让 ScoutLab 未来可以接入更多 event/tracking 数据，但当前不新增商业数据源，不改变 DuckDB + Parquet 主干。
 
-- kloppy：多 provider 事件/tracking 标准化。
-- floodlight：参考 Game/Team/Player/Event/Frame/Segment 抽象。
-- xG+：possession-level shot probability 和 possession threat。
-- tracking data：Metrica、SkillCorner、TRACAB 等。
+- [ ] 设计 ScoutLab internal match/event/tracking schema，字段至少覆盖 match metadata、team/player identity、period/time、coordinates、action type、outcome、freeze frame 可选字段和 source attribution。
+- [ ] 写 `docs/DATA_CONTRACTS.md` 或等价文档，说明 StatsBomb events、internal actions、SPADL/atomic-SPADL、Common Data Format 之间的映射。
+- [ ] 评估 kloppy：作为直接依赖、离线转换工具或暂不接入三种方案都要给出依赖风险、坐标转换风险和测试成本。
+- [ ] 参考 floodlight 的 Game/Team/Player/Event/Frame/Segment 抽象，但只有在 tracking 样例数据进入仓库后才考虑代码接入。
+- [ ] 新增 data source license manifest，记录每个本地数据产物的来源、许可/引用要求、可公开展示边界和更新时间。
+- [ ] 所有 event/tracking schema 变更必须有 fixture、schema validation 和空数据行为测试。
+
+验收：
+
+- 文档能解释未来如何接入 StatsBomb 360、Metrica/open tracking 或授权 provider，而不影响当前 pipeline。
+- 没有合规数据源时，该层只保留 schema 和转换实验，不进入默认训练。
+
+## P7：球探决策与人工校准层
+
+目标：把评分系统从“给分”推进到“可审阅的球探工作流”，同时为真实标签层提供人工闭环。
+
+- [ ] 新增人工审阅队列：低置信度球员、弱联赛顶端样本、位置重判不确定样本、误差案例球员自动进入 review queue。
+- [ ] 设计 watchlist/shortlist 数据契约，字段包括 `player_id`、`reason_code`、`rating_snapshot_id`、`confidence_level`、`review_status`、`reviewer_note`、`as_of_date`。
+- [ ] 将 Transfermarkt 手动导入、奖项、专家分档、人工校准集统一进入 `player_truth_labels.parquet`，并保留标签来源和置信度。
+- [ ] Streamlit 后续只读展示 review queue；写入型人工标注先用本地 CSV/Parquet 管理，不直接放进生产页面。
+- [ ] 每轮评分优化后输出 watchlist diff：新增、移除、置信度变化、排名变化和触发原因。
+
+验收：
+
+- 评分变化能被人工复核追踪，真实标签可以回灌 P0/P3。
+- 不把人工标签和模型预测混在同一字段里。
+
+## P8：空间/视频/离球远期研究层
+
+目标：记录更深研究方向，但只在 P2/P4/P6 稳定且数据合规后启动。
+
+- [ ] StatsBomb 360 freeze-frame：先做 shot/pass context 可视化，再考虑空间占优或接球可达性特征。
+- [ ] Metrica/open tracking：只用公开样例验证 schema、坐标和帧级数据管线，不写成全量 tracking 能力。
+- [ ] xG+ / possession-level shot probability：作为控球过程威胁模型，必须先有 possession segmentation 和 baseline。
+- [ ] off-ball value / space control：需要 tracking 或 freeze-frame 支撑，不能用普通事件数据硬推。
+- [ ] 强化学习、GCN、Transformer 只作为研究实验；必须先有标签、baseline、离线评估、可解释报告和模型卡。
 
 启动条件：
 
 - P2 事件动作价值层稳定。
 - P4 评估文档稳定。
+- P6 schema 和 license manifest 稳定。
 - 有合规数据源或明确的本地样例数据。
 
 ## 通用实施策略

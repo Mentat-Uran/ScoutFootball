@@ -1,0 +1,25 @@
+- [x] FBref LEAGUE_MAPPINGS 包含葡超、荷甲、土超、苏超、比甲的映射
+- [x] FBref soccerdata 脚本支持 7 种新 stat_type（passing/defense/possession/gca/playing_time/keeper/keeper_adv）
+- [x] FBref 扩展联赛脚本能抓取非 Big5 联赛 10 赛季数据
+- [x] Football-Data 脚本包含 13 个新联赛代码
+- [x] Football-Data 新联赛代码可用性注释已添加
+- [x] Understat 脚本包含 RFPL 联赛
+- [x] StatsBomb 脚本能自动发现并批量下载所有可用赛季的 events 和 lineups
+- [x] StatsBomb 事件数据保存为 events_all.parquet，阵容数据保存为 lineups_all.parquet
+- [x] SofaScore 适配器能通过 soccerdata 获取球员单场评分
+- [x] SofaScore 适配器支持非五大联赛
+- [x] SoFIFA 适配器能通过 soccerdata 获取球员 FIFA 属性数据
+- [x] API-Football 适配器能获取 injuries/transfers/coaches 数据
+- [x] API-Football 无 API Key 时优雅降级（跳过 + warning 日志）
+- [x] transfermarkt-datasets 导入器能下载 DuckDB 并导出 6 张优先表为 parquet
+- [x] WhoScored 适配器能获取球员评分和比赛事件流
+- [x] Capology 适配器能通过 ScraperFC 获取薪资数据
+- [x] IngestConfig 集中定义联赛列表和赛季范围，支持 YAML/JSON 覆盖
+- [x] pipeline.py 的 _ingest_* 方法从 IngestConfig 读取参数，不再硬编码
+- [x] run_daily_ingest 支持 sofascore/sofifa/api_football/transfermarkt_datasets 数据源
+- [x] build_player_composite_key 函数能跨源匹配球员
+- [x] fuzzy_match_player_key 支持模糊匹配
+- [x] normalize_team_name 函数覆盖 Big 5 联赛常见变体
+- [x] 球队名映射表 data/config/team_name_mapping.csv 已创建
+- [x] 所有适配器注册到 __init__.py，导入验证通过
+- [x] Ruff lint 通过（仅剩 pipeline.py 预存的长行问题）
