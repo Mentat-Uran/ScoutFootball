@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新口径重新跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。本轮新增：Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新口径重新跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：`frontend/` 已有静态 Liquid Glass 分析工作台，保留原 HTML/CSS 风格，覆盖总览、球员、身价、比赛预测、球探、动作价值和报告视图；后端仍需把 mock 数据替换为 typed read-only API 与本地 Parquet 产物。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutLab 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -14,7 +14,7 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 4. 事件动作价值层：以 StatsBomb Open Data 为第一主源，新增 `src/scoutlab/action_value/`，形成 StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP/Atomic-VAEP 的演进路线。
 5. 球员真值与评分层：综合真实标签、赛季统计、xG/xA、xT/VAEP、出勤可靠性、联赛强度、年龄和趋势；训练目标必须引入真实球员标签，不能只优化球队积分相关性。
 6. 评估与模型卡层：建立 `EVALUATION.md`、`MODEL_CARD.md`、位置内指标、跨位置总榜指标、误差分析、数据覆盖说明和模型运行登记。
-7. 产品可视化与 API 层：Streamlit 保持本地只读；Plotly/mplsoccer 继续用于交互图和足球专用图；FastAPI 只暴露本地只读产物。
+7. 产品可视化与 API 层：Streamlit 保持本地只读；`frontend/` 静态工作台保留 Liquid Glass 风格并作为长期产品壳；Plotly/mplsoccer/ECharts 继续用于交互图和足球专用图；FastAPI 只暴露本地只读产物。
 8. 球探决策层：围绕真实标签、低置信度球员和误差案例建立 watchlist、shortlist、人工审阅队列和可复现报告。
 9. 比分预测与概率校准层：保持 Independent Poisson 作为基线，后续升级 Dixon-Coles + time decay，并用 log loss、Brier score、RPS 做对照。
 10. 空间/视频/离球研究层：只在有合规样例数据后研究 StatsBomb 360、Metrica/open tracking、space control、xG+、off-ball value 或强化学习。
@@ -75,6 +75,7 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - [x] 数据验证入口：`scoutlab validate`。
 - [x] FastAPI draft 入口：`scoutlab serve`。
 - [x] Streamlit MVP 入口和多页可视化骨架。
+- [x] `frontend/` 静态 Liquid Glass 前端原型：总览、球员、身价、比赛预测、球探、动作价值、报告 7 个视图。
 - [x] Poisson 比分预测 baseline。
 - [x] `value_fairness` OOF 训练产物。
 - [x] PyTorch GPU 评分优化器和远程 GPU 计算脚本。
@@ -134,16 +135,31 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 
 - [x] 引入 mplsoccer 依赖并保持 Plotly 现有交互图不回退。
 - [x] 新增 `src/scoutlab/viz/pitch.py`，封装球场、坐标、shot map、pass map、heatmap 基础图。
-- [ ] 在 Streamlit 增加"位置内榜单"和"跨位置总榜"切换。
+- [x] 在 Streamlit 增加"位置内榜单"和"跨位置总榜"切换。
+- [x] 修复 Streamlit `st.Page` 入口路径，支持从仓库根目录执行 `uv run streamlit run src/scoutlab/app/streamlit_app.py`。
+- [x] 用 `frontend/index.html`、`frontend/style.css`、`frontend/app.js` 重构静态前端，保留 Liquid Glass 风格并补齐主要产品视图。
 - [x] 增加低置信度提示：分钟不足、数据源缺失、位置重判不确定、事件样本不足。
 - [ ] 给 README 加 3–5 张截图（球员雷达、身价偏离、比赛预测、Top 100 榜单、详情页），并写一段"如何复现 demo 数据"的说明。
+
+### 前端长期功能和后端配套
+
+- [ ] 全局数据状态页读取 artifact registry，显示产物更新时间、行数、真实/代理/合成数据标记、license attribution 和 confidence gate。
+- [ ] 球员画像页接入 player profile API：搜索、分页、位置过滤、评分快照、位置内指标、低置信度原因和 CSV/报告导出。
+- [ ] 身价偏离页接入 value-fairness report API：OOF 残差、联赛/年龄/位置偏差、手动身价导入边界和误差案例。
+- [ ] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：选择球队必须传入预测服务，输出模型版本、覆盖率、log loss/Brier/RPS 和比分矩阵。
+- [ ] 球探页接入 review queue/watchlist/shortlist Parquet 契约，先只读展示，写入型人工标注暂用本地 CSV/Parquet。
+- [ ] 动作价值页等待 P2 `player_action_value.parquet` 和 action zone artifacts 后再替换 mock heatmap，不把 StatsBomb 样本写成全量能力。
+- [ ] 报告页接入 `data/reports/model_runs/` 或等价 model-run registry，展示输入 hash、随机种子、参数、指标和误差案例。
+- [ ] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{id}`、`/ratings/snapshots`、`/value-report`、`/predictions/{home}/{away}`、`/review-queue`、`/reports/model-runs`。
 
 验收：
 
 - `uv run ruff check .`
 - `uv run pytest`
 - `uv run streamlit run src/scoutlab/app/streamlit_app.py`
-- 三个核心页面已完成，截图和 demo 复现说明待补充。
+- `node --check frontend/app.js`
+- `python3 -m http.server 8600 --directory frontend`
+- 三个 Streamlit 核心页面和静态 Liquid Glass 工作台已完成，截图和后端 API 联调待补充。
 
 ## P2：StatsBomb 事件动作价值层
 

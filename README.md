@@ -4,7 +4,7 @@
 > 
 > **本地优先的足球数据研究平台。**
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/uv-Fast-magenta)](https://github.com/astral-sh/uv)
 [![DuckDB](https://img.shields.io/badge/DuckDB-Fast%20Analytics-yellow)](https://duckdb.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-Optimized-ee4c2c)](https://pytorch.org/)
@@ -32,14 +32,28 @@ The current focus is not on accumulating more web scrapers, but on upgrading the
 * **Player Ratings:** PyTorch-based weight optimizer with holdout evaluation, Pearson fixes, availability caps, quality caps, robust team pooling, and coverage reports.
 * **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet`, supporting transfermarkt value, awards, expert tiers, and manual calibration.
 * **Model Evaluation & Cards:** Maintain data sources, label definitions, bounds, and known biases in `MODEL_CARD.md`.
-* **Product & Visuals:** 8-page Streamlit MVP and FastAPI draft backend featuring Player Rankings, Value Deviation, and Match Prediction (Independent Poisson baseline).
+* **Product & Visuals:** 8-page Streamlit analysis console, a new `frontend/` Liquid Glass static analyst console, and a FastAPI draft backend featuring Player Rankings, Value Deviation, and Match Prediction (Independent Poisson baseline).
 * **Advanced Metrics:** Support for Position Metrics, Finishing Shrinkage (Empirical Bayes), and Action Value prototypes. Visualization powered by `mplsoccer`.
+
+### Frontend Product Direction
+
+The current UI should stay a quiet analyst workstation rather than becoming a marketing page. A static Liquid Glass prototype now lives in `frontend/index.html`; long term, the same visual style needs to support:
+
+* Global data/source status, artifact freshness, and confidence badges.
+* Player search, ranking, comparison, position-relative profiles, and exportable tables.
+* Value deviation analysis with OOF residuals, league/age/position bias checks, and manual market-value import boundaries.
+* Match prediction with model comparison, calibration diagnostics, and score probability drill-down.
+* Scouting workflow views: review queue, watchlist, shortlist, rating diffs, and low-confidence follow-up.
+* Event/action-value visualizations once xT/VAEP artifacts exist.
+
+Backend work should therefore focus on typed read-only service contracts: artifact registry, player profile API, rating snapshot API, value model reports, prediction service/model registry, review queue Parquet contracts, source attribution manifest, and lightweight export/report endpoints. Streamlit should keep reading local artifacts and must not run heavy ingest/training jobs inside page code.
 
 ### 📂 Local Data Overview
 * **FBref:** 14,356 rows per table across 5 seasons.
-* **Football-Data:** 68,953 matches across 10 seasons / 20 divisions. 
+* **Football-Data:** 68,953 raw CSV rows across 10 seasons / 20 divisions; the currently active `combined_results.parquet` checked on 2026-06-05 has 5,330 rows and should be rebuilt before claiming full 10-season active coverage.
 * **Understat:** 31,902 player-season records.
 * **StatsBomb Open Data:** 126 big-5 matches, 11,871 events cached locally.
+* **Frontend Artifacts:** `player_match.parquet` 8,689 rows (94 real match rows + 8,595 season proxy rows), `team_match.parquet` 10,660 rows, value-fairness OOF 6,513 rows, and optimized ratings 27,254 rows.
 
 ### 🏗 Architecture
 The long-term roadmap spans 10 layers, starting with Data & Compliance, Standard Facts, and Action Value, all the way to Scout Decision workflows and Spatial/Video Research.
@@ -59,6 +73,9 @@ PYTHONPATH=src uv run python -m scoutlab train
 
 # Local UI
 uv run streamlit run src/scoutlab/app/streamlit_app.py
+
+# Static Liquid Glass UI
+python3 -m http.server 8600 --directory frontend
 ```
 
 <br>
@@ -85,17 +102,32 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
 - **真实标签契约:** `player_truth_labels.parquet` schema 与校验（`truth_labels.py`），支持四种标签源：历史身价、奖项、专家分档、人工校准。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界、已知偏差和不可用场景。
 - **比分预测与身价:** 包含 Independent Poisson baseline 预测，以及 OOF 的实际预测身价偏离榜。
-- **产品与可视化:** Streamlit 多页 MVP 与 FastAPI 入口。集成 mplsoccer 绘制球员雷达 (Pizza chart)、热力图等，同时针对低覆盖与样本不足包含醒目提示。
+- **产品与可视化:** 8 页 Streamlit 分析工作台、`frontend/` 静态 Liquid Glass 工作台与 FastAPI 草案入口。集成 mplsoccer/ECharts 绘制球员雷达、身价散点、比分矩阵、动作价值热区等，同时针对低覆盖、season proxy 和样本不足包含醒目提示。
+
+### 前端长期方向
+
+当前前端的风格应保持安静、密集、分析工具化，不做营销落地页。新的静态原型位于 `frontend/index.html`，保留原 `frontend/` 液态玻璃风格，已覆盖总览、球员、身价、比赛预测、球探、动作价值和报告视图。长远需要在同一套 UI 风格下支撑这些能力：
+
+- 全局数据状态、产物更新时间、真实/代理/合成数据标记和低置信度提示。
+- 球员检索、排名、对比、位置内画像、跨位置总榜、详情钻取和表格导出。
+- 身价偏离分析：OOF 残差、联赛/年龄/位置偏差、手动导入身价边界和误差案例。
+- 比赛预测：模型族对比、概率校准、比分矩阵、Top score drill-down、低覆盖 league-season 提示。
+- 球探工作流：review queue、watchlist、shortlist、评分版本 diff、人工校准闭环。
+- 事件动作价值：在 xT/VAEP 产物稳定后展示传球、带球、射门和区域价值图。
+- 报告和导出：按模型运行、球员、球队、联赛生成只读报告快照。
+
+对应后端优先补齐：本地产物 registry、球员画像 API、评分快照 API、预测服务/model registry、value-fairness 报告、review queue/watchlist Parquet 契约、data source attribution manifest、轻量导出端点。Streamlit 页面继续只读本地产物，不在页面里执行重型 ingest、训练或爬取。
 
 ### 📂 本地数据概览
 
 | 数据源 | 当前缓存 | 覆盖 |
 | --- | --- | --- |
 | **FBref** | 每表 14,356 行 | 5 赛季标准、射门与 Misc 数据 |
-| **Football-Data** | 68,953 行 | 10 赛季，20 个联赛/级别 |
+| **Football-Data** | 原始 CSV 68,953 行；当前活动 `combined_results.parquet` 5,330 行 | 10 赛季原始缓存，活动 Parquet 待重建完整覆盖 |
 | **Understat** | 31,902 行 | 10 赛季球员统计 |
 | **StatsBomb Open Data** | 126 场 / 11,871 事件 | 公开比赛与事件样本库 |
 | **内部特征层** | 27,254 评分 / 8,141 特征 | 落表为优化后评分与特征缺失兜底矩阵 |
+| **前端当前读取** | player_match 8,689 行；team_match 10,660 行；OOF 6,513 行 | `player_match` 当前只有 94 条真实 match-level 行，其余 8,595 行为 season proxy |
 
 > **提示：** `FBref`, `WhoScored`, `SofaScore`, `Capology` 的抓取脚本需在带 Chrome + Selenium 的环境中运行。`API-Football` 需配置环境变量 `API_FOOTBALL_KEY`。
 
@@ -113,15 +145,9 @@ ScoutLab 的长期路线扩展为 **10 层**。前 7 层是当前主干，第 8-
 9. **比分预测与概率校准层:** Dixon-Coles + Time decay。
 10. **空间/视频/离球研究层:** StatsBomb 360 与 Tracking 解析。
 
-### 📸 截图展示
+### 📸 截图计划
 
-| 球员雷达/排名 | 身价偏离榜 | 比赛预测 |
-| :---: | :---: | :---: |
-| ![球员雷达](screenshots/player_radar.png) | ![身价偏离](screenshots/value_deviation.png) | ![比赛预测](screenshots/match_prediction.png) |
-
-| Top 100 榜单 | 球员详情页 |
-| :---: | :---: |
-| ![Top 100](screenshots/top100.png) | ![球员详情](screenshots/player_detail.png) |
+截图目录当前尚未落盘。P1 后续需要补 3-5 张可复现截图：球员雷达/排名、身价偏离榜、比赛预测、Top 榜单和球员详情页。截图前必须确认页面顶部数据状态，不把 season proxy 或 demo fallback 误写成完整真实数据。
 
 ### 🛠 如何复现 Demo 
 
@@ -144,6 +170,9 @@ PYTHONPATH=src uv run python -m scoutlab train
 # 4. 数据检查与看板启动
 PYTHONPATH=src uv run python -m scoutlab validate
 uv run streamlit run src/scoutlab/app/streamlit_app.py
+
+# 5. 静态 Liquid Glass 前端
+python3 -m http.server 8600 --directory frontend
 ```
 
 ### 🔰 技术栈与合规边界

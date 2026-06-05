@@ -21,6 +21,7 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - mplsoccer 集成：`src/scoutlab/viz/pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
 - 低置信度提示：分钟不足、数据缺失、位置重判不确定、联赛 coverage 低。
 - Streamlit 从 5 页扩展到 8 页（+Player Rankings、Value Deviation、Match Prediction）。
+- `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。当前使用前端 mock 数据演示产品形态，不能写成已接入真实后端。
 
 新增适配器（已实现，部分需特定环境运行）：
 - SofaScore、SoFIFA、WhoScored、Capology：需要 Chrome + Selenium，建议在 Windows GPU 服务器运行。
@@ -77,6 +78,7 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
    - 近期先重建 Football-Data 10 赛季合并 Parquet，再用新 availability cap 和稳健球队聚合重跑 GPU optimizer，并复盘 Everton/Stuttgart/Rennes/Napoli/Real Madrid/Arsenal/PSG 等误差案例。
    - 随后引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为球员真实影响力标签，并补齐特征矩阵、缺失字段标记和神经网络准入门槛。
 2. P1：展示增强和可解释产品层，优先接入 mplsoccer。核心交付：球员雷达/排名页、身价偏离榜、比赛预测页 3 个可截图 Streamlit 页面，README 加 3–5 张截图和 demo 复现说明。
+   - 同步维护 `frontend/` Liquid Glass 静态工作台；保持其 UI 风格，但后续必须用 FastAPI/Parquet 契约替换 mock 数据。
 3. P2：StatsBomb 事件动作价值层，先 xT，后 VAEP。
 4. P3：评分模型重构，把 action value 作为增强维度接入；真实标签层稳定后，神经网络只能先作为候选模型与当前优化器同口径对比。
 5. P4：模型评估文档和模型卡。补 `EVALUATION.md`（Spearman、时间切分、baseline、误差案例）和 `MODEL_CARD.md`（数据源、标签定义、适用边界、偏差、不可用场景）。
@@ -122,6 +124,16 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - 新增模型运行登记优先写入 `data/reports/model_runs/` 或 `data/models/runs/`，必须保存 dataset snapshot、输入 hash、参数、随机种子、依赖版本和指标。
 - 新增球探人工校准数据优先写入 `data/gold/feature_store/player_truth_labels.parquet`、`data/reports/review_queue/` 或等价本地产物；不要把人工标签和模型预测写进同一字段。
 - 新增足球专用图表时优先扩展 `src/scoutlab/viz/`，不要把绘图逻辑堆进 Streamlit 页面。
+- `frontend/` 是静态产品壳：保留 `frontend/index.html`、`frontend/style.css`、`frontend/app.js` 的 Liquid Glass 风格，页面只做本地展示和轻量交互，不在浏览器中执行训练、爬取或重型数据处理。
+- `frontend/` 当前 mock 数据只能用于产品形态验证；接真实数据时先补 FastAPI read-only endpoint 和本地 Parquet 契约，再改前端 fetch。
+- 前端长期视图和后端契约对应关系：
+  - 总览：artifact registry、行数、产物更新时间、真实/代理/合成数据标记、license attribution。
+  - 球员：player profile API、评分快照、位置内指标、低置信度原因、导出。
+  - 身价：value-fairness OOF report、残差分层、手动身价导入边界。
+  - 比赛预测：统一 prediction service、模型版本、coverage、log loss/Brier/RPS、比分矩阵。
+  - 球探：review queue/watchlist/shortlist Parquet 契约，只读展示优先。
+  - 动作价值：P2 action_value 产物稳定前只展示样例，不声称全量能力。
+  - 报告：model-run registry、输入 hash、随机种子、参数、指标、误差案例。
 - 新增评分特征矩阵模块使用 `src/scoutlab/features/rating_matrix.py`。
 - 新增 coverage 置信度模块使用 `src/scoutlab/evaluation/coverage_confidence.py`。
 - 新增出勤诊断模块使用 `src/scoutlab/evaluation/availability_diagnostic.py`。
