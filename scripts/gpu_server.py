@@ -26,8 +26,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from scipy.stats import pearsonr, spearmanr
 
@@ -225,7 +225,7 @@ async def run_optimize(req: OptimizeRequest):
                 ndcg_weight=req.ndcg_weight,
                 position_consistency_weight=req.position_consistency_weight,
                 extreme_penalty_weight=req.extreme_penalty_weight,
-                prior_weight=req.prior_weight,
+                prior_strength=req.prior_weight,
             )
             elapsed = time.time() - t0
 
@@ -452,6 +452,35 @@ async def reload_data():
     _invalidate_cache()
     _get_data()
     return {"status": "ok", "message": "数据已重新加载"}
+
+
+@app.get("/download/{file_path:path}")
+async def download_file(file_path: str):
+    """Download a file from the data directory.
+
+    Only allow files under gold/feature_store/ and models/runs/.
+    """
+    # Security: only allow specific prefixes
+    allowed_prefixes = ["gold/feature_store/", "models/runs/"]
+    if not any(file_path.startswith(prefix) for prefix in allowed_prefixes):
+        raise HTTPException(
+            status_code=403, detail="Access denied: path not in allowed directories"
+        )
+
+    full_path = DATA_DIR / file_path
+    if not full_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Security: ensure resolved path is still under DATA_DIR
+    try:
+        full_path.resolve().relative_to(DATA_DIR.resolve())
+    except ValueError:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: path traversal detected",
+        ) from None
+
+    return FileResponse(str(full_path), filename=full_path.name)
 
 
 # ── 启动 ─────────────────────────────────────────────────────────────

@@ -107,8 +107,8 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - [x] 新增评分特征矩阵契约，输出可复用的 `rating_feature_matrix.parquet` 或等价产物，包含数值特征、位置/联赛类别、数据源覆盖、缺失字段标记、输入文件 hash 和 feature manifest。
 - [x] 修正缺失高阶字段处理：防守、控球、xT/VAEP、门将字段缺失时必须有 missing flag 和中性/低置信度 fallback，不能把缺失值 0 当成真实低能力。
 - [x] 重写优化目标：组合 Spearman/NDCG、位置内排序、跨联赛校准、年龄/趋势合理性、极端样本惩罚。
-- [ ] 用新组合目标在 GPU 服务器重跑完整优化，生成新的 `optimized_params.npy`、holdout predictions、league metrics、calibration 和 feature importance。
-- [ ] 复盘 `PROBLEMS.md` 中的误差案例：Everton、Stuttgart、Hoffenheim、Rennes、Napoli、Real Madrid、Arsenal、PSG，记录新旧排名变化和仍未解决原因。
+- [x] 用新组合目标在 GPU 服务器重跑完整优化，生成新的 `optimized_params.npy`、holdout predictions、league metrics、calibration 和 feature importance。
+- [x] 复盘 `PROBLEMS.md` 中的误差案例：Everton、Stuttgart、Hoffenheim、Rennes、Napoli、Real Madrid、Arsenal、PSG，记录新旧排名变化和仍未解决原因。
 - [x] 保留球队结果相关性作为辅助校验，不再作为主目标。
 - [x] 定义神经网络准入门槛：必须先有球员真实标签、时间切分、当前优化器 baseline、位置内/跨位置指标、误差案例复盘和低置信度规则；不允许只用球队积分监督训练默认模型。
 - [x] 补全 2526 Football-Data 覆盖或在报告中剔除积分 N/A 球队，避免把数据缺口误判为模型错误。

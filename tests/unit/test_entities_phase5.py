@@ -14,7 +14,10 @@ from scoutlab.entities import (
 
 def test_normalization_helpers_strip_accents_punctuation_and_suffixes() -> None:
     assert normalize_person_name("João Félix") == "joao felix"
-    assert normalize_team_name("Paris Saint-Germain FC") == "paris saint germain"
+    # normalize_team_name now uses TEAM_NAME_ALIASES first; "paris saint-germain"
+    # maps to "Paris SG". For non-aliased names, it returns the stripped original.
+    assert normalize_team_name("Paris Saint-Germain") == "Paris SG"
+    assert normalize_team_name("Some Unknown FC") == "Some Unknown FC"
     assert normalize_country_name("ENG") == "england"
     assert normalize_position_group("Attacking Midfielder") == "am"
 
@@ -37,11 +40,12 @@ def test_match_teams_builds_bridge_with_required_metadata() -> None:
 
 
 def test_match_teams_does_not_auto_merge_similar_names_with_country_conflict() -> None:
+    # Use names that both normalize to the same canonical form via alias
     source = pd.DataFrame(
-        [{"id": "src-1", "team_name": "United FC", "country_name": "England"}],
+        [{"id": "src-1", "team_name": "AC Milan", "country_name": "Italy"}],
     )
     canonical = pd.DataFrame(
-        [{"team_id": "team-1", "team_name": "United", "country_name": "Spain"}],
+        [{"team_id": "team-1", "team_name": "Milan", "country_name": "Spain"}],
     )
 
     result = match_teams(source, canonical, source_name="fbref")
@@ -114,7 +118,7 @@ def test_match_players_falls_back_to_team_season_position_when_dob_missing() -> 
                 "id": "src-1",
                 "player_name": "A. Midfielder",
                 "nationality": "Spain",
-                "team_name": "Alpha FC",
+                "team_name": "Bayern Munich",
                 "season": "2025",
                 "position_group": "Attacking Midfielder",
             }
@@ -126,7 +130,7 @@ def test_match_players_falls_back_to_team_season_position_when_dob_missing() -> 
                 "player_id": "player-1",
                 "player_name": "A Midfielder",
                 "nationality": "Spain",
-                "team_name": "Alpha",
+                "team_name": "Bayern",
                 "season": "2025",
                 "primary_position_group": "am",
             }

@@ -72,6 +72,285 @@ TEAM_AGG_CORE_MINUTES = 450.0
 TEAM_AGG_CORE_SCALE = 180.0
 TEAM_AGG_CAPPED_MINUTES_BLEND = 0.55
 
+# ── 队名归一化 ──────────────────────────────────────────────────────────
+# FBref、Understat 和 Football-Data 使用不同的队名格式。
+# 这个映射把所有变体统一到 Football-Data 的写法，因为积分数据来自 Football-Data。
+TEAM_NAME_ALIASES: dict[str, str] = {
+    # Premier League
+    "arsenal": "Arsenal",
+    "aston villa": "Aston Villa",
+    "bournemouth": "Bournemouth",
+    "brentford": "Brentford",
+    "brighton": "Brighton",
+    "brighton and hove albion": "Brighton",
+    "burnley": "Burnley",
+    "chelsea": "Chelsea",
+    "crystal palace": "Crystal Palace",
+    "everton": "Everton",
+    "fulham": "Fulham",
+    "ipswich town": "Ipswich",
+    "ipswich": "Ipswich",
+    "leeds united": "Leeds",
+    "leeds": "Leeds",
+    "leicester city": "Leicester",
+    "leicester": "Leicester",
+    "liverpool": "Liverpool",
+    "luton town": "Luton",
+    "luton": "Luton",
+    "manchester city": "Man City",
+    "man city": "Man City",
+    "manchester united": "Man United",
+    "man united": "Man United",
+    "man utd": "Man United",
+    "newcastle united": "Newcastle",
+    "newcastle": "Newcastle",
+    "norwich city": "Norwich",
+    "norwich": "Norwich",
+    "nottingham forest": "Nott'm Forest",
+    "nottm forest": "Nott'm Forest",
+    "sheffield united": "Sheffield United",
+    "sheffield utd": "Sheffield United",
+    "southampton": "Southampton",
+    "tottenham hotspur": "Tottenham",
+    "tottenham": "Tottenham",
+    "spurs": "Tottenham",
+    "watford": "Watford",
+    "west bromwich albion": "West Brom",
+    "west brom": "West Brom",
+    "west ham united": "West Ham",
+    "west ham": "West Ham",
+    "wolverhampton wanderers": "Wolves",
+    "wolverhampton": "Wolves",
+    "wolves": "Wolves",
+    # La Liga
+    "alaves": "Alaves",
+    "deportivo alaves": "Alaves",
+    "athletic bilbao": "Ath Bilbao",
+    "athletic club": "Ath Bilbao",
+    "atletico madrid": "Ath Madrid",
+    "atletico": "Ath Madrid",
+    "barcelona": "Barcelona",
+    "fc barcelona": "Barcelona",
+    "barca": "Barcelona",
+    "betis": "Betis",
+    "real betis": "Betis",
+    "cadiz": "Cadiz",
+    "cadiz cf": "Cadiz",
+    "celta vigo": "Celta",
+    "celta": "Celta",
+    "deportivo la coruna": "La Coruna",
+    "deportivo": "La Coruna",
+    "eibar": "Eibar",
+    "elche": "Elche",
+    "espanyol": "Espanol",
+    "rcd espanyol": "Espanol",
+    "getafe": "Getafe",
+    "girona": "Girona",
+    "granada": "Granada",
+    "granada cf": "Granada",
+    "huesca": "Huesca",
+    "sd huesca": "Huesca",
+    "leganes": "Leganes",
+    "cd leganes": "Leganes",
+    "levante": "Levante",
+    "mallorca": "Mallorca",
+    "rcd mallorca": "Mallorca",
+    "osasuna": "Osasuna",
+    "rayo vallecano": "Rayo Vallecano",
+    "rayo": "Rayo Vallecano",
+    "real madrid": "Real Madrid",
+    "real sociedad": "Real Sociedad",
+    "sevilla": "Sevilla",
+    "sevilla fc": "Sevilla",
+    "valencia": "Valencia",
+    "valencia cf": "Valencia",
+    "valladolid": "Valladolid",
+    "real valladolid": "Valladolid",
+    "villarreal": "Villarreal",
+    "villarreal cf": "Villarreal",
+    "las palmas": "Las Palmas",
+    "ud las palmas": "Las Palmas",
+    "almeria": "Almeria",
+    "ud almeria": "Almeria",
+    "girona fc": "Girona",
+    # Bundesliga
+    "augsburg": "Augsburg",
+    "fc augsburg": "Augsburg",
+    "bayer leverkusen": "Leverkusen",
+    "leverkusen": "Leverkusen",
+    "bayern munich": "Bayern Munich",
+    "bayern": "Bayern Munich",
+    "fc bayern munich": "Bayern Munich",
+    "bayern munchen": "Bayern Munich",
+    "borussia dortmund": "Dortmund",
+    "dortmund": "Dortmund",
+    "borussia monchengladbach": "M'gladbach",
+    "monchengladbach": "M'gladbach",
+    "borussia mgladbach": "M'gladbach",
+    "darmstadt": "Darmstadt",
+    "sv darmstadt": "Darmstadt",
+    "eintracht frankfurt": "Ein Frankfurt",
+    "eintracht": "Ein Frankfurt",
+    "freiburg": "Freiburg",
+    "sc freiburg": "Freiburg",
+    "hamburger sv": "Hamburg",
+    "hamburg": "Hamburg",
+    "hannover 96": "Hannover",
+    "hannover": "Hannover",
+    "hertha berlin": "Hertha",
+    "hertha bsc": "Hertha",
+    "hoffenheim": "Hoffenheim",
+    "tsg hoffenheim": "Hoffenheim",
+    "koln": "Koln",
+    "fc koln": "Koln",
+    "cologne": "Koln",
+    "leipzig": "RB Leipzig",
+    "rb leipzig": "RB Leipzig",
+    "mainz": "Mainz",
+    "mainz 05": "Mainz",
+    "paderborn": "Paderborn",
+    "sc paderborn": "Paderborn",
+    "schalke 04": "Schalke 04",
+    "schalke": "Schalke 04",
+    "stuttgart": "Stuttgart",
+    "vfb stuttgart": "Stuttgart",
+    "union berlin": "Union Berlin",
+    "werder bremen": "Werder Bremen",
+    "wolfsburg": "Wolfsburg",
+    "vfl wolfsburg": "Wolfsburg",
+    "bochum": "Bochum",
+    "vfl bochum": "Bochum",
+    "heidenheim": "Heidenheim",
+    "fc heidenheim": "Heidenheim",
+    "st pauli": "St Pauli",
+    "fc st pauli": "St Pauli",
+    "holstein kiel": "Holstein Kiel",
+    # Serie A
+    "atalanta": "Atalanta",
+    "bologna": "Bologna",
+    "bologna fc": "Bologna",
+    "cagliari": "Cagliari",
+    "cagliari calcio": "Cagliari",
+    "catania": "Catania",
+    "chievo": "Chievo",
+    "ac chievo": "Chievo",
+    "empoli": "Empoli",
+    "empoli fc": "Empoli",
+    "fiorentina": "Fiorentina",
+    "acf fiorentina": "Fiorentina",
+    "frosinone": "Frosinone",
+    "genoa": "Genoa",
+    "genoa cfc": "Genoa",
+    "hellas verona": "Verona",
+    "verona": "Verona",
+    "inter milan": "Inter",
+    "inter": "Inter",
+    "internazionale": "Inter",
+    "fc internazionale": "Inter",
+    "juventus": "Juventus",
+    "lazio": "Lazio",
+    "ss lazio": "Lazio",
+    "lecce": "Lecce",
+    "us lecce": "Lecce",
+    "ac milan": "Milan",
+    "milan": "Milan",
+    "napoli": "Napoli",
+    "ssc napoli": "Napoli",
+    "parma": "Parma",
+    "parma calcio": "Parma",
+    "pescara": "Pescara",
+    "roma": "Roma",
+    "as roma": "Roma",
+    "salernitana": "Salernitana",
+    "sassuolo": "Sassuolo",
+    "spezia": "Spezia",
+    "torino": "Torino",
+    "torino fc": "Torino",
+    "udinese": "Udinese",
+    "udinese calcio": "Udinese",
+    "venezia": "Venezia",
+    "venezia fc": "Venezia",
+    "cittadella": "Cittadella",
+    "benevento": "Benevento",
+    "brescia": "Brescia",
+    "monza": "Monza",
+    "ac monza": "Monza",
+    "como": "Como",
+    "como 1907": "Como",
+    "cremonese": "Cremonese",
+    "us cremonese": "Cremonese",
+    # Ligue 1
+    "lens": "Lens",
+    "rc lens": "Lens",
+    "lille": "Lille",
+    "lille osc": "Lille",
+    "lyon": "Lyon",
+    "olympique lyonnais": "Lyon",
+    "marseille": "Marseille",
+    "olympique marseille": "Marseille",
+    "om": "Marseille",
+    "monaco": "Monaco",
+    "as monaco": "Monaco",
+    "montpellier": "Montpellier",
+    "montpellier hsc": "Montpellier",
+    "nantes": "Nantes",
+    "fc nantes": "Nantes",
+    "nice": "Nice",
+    "ogc nice": "Nice",
+    "psg": "Paris SG",
+    "paris saint-germain": "Paris SG",
+    "paris saint-germain fc": "Paris SG",
+    "paris sg": "Paris SG",
+    "paris saint germain": "Paris SG",
+    "reims": "Reims",
+    "stade de reims": "Reims",
+    "rennes": "Rennes",
+    "stade rennais": "Rennes",
+    "saint-etienne": "St Etienne",
+    "saint etienne": "St Etienne",
+    "as saint-etienne": "St Etienne",
+    "strasbourg": "Strasbourg",
+    "rc strasbourg": "Strasbourg",
+    "toulouse": "Toulouse",
+    "toulouse fc": "Toulouse",
+    "bordeaux": "Bordeaux",
+    "girondins bordeaux": "Bordeaux",
+    "metz": "Metz",
+    "fc metz": "Metz",
+    "amiens": "Amiens",
+    "sc amiens": "Amiens",
+    "angers": "Angers",
+    "angers sco": "Angers",
+    "brest": "Brest",
+    "stade brestois": "Brest",
+    "clermont": "Clermont",
+    "clermont foot": "Clermont",
+    "le havre": "Le Havre",
+    "fc lorient": "Lorient",
+    "lorient": "Lorient",
+    "ajaccio": "Ajaccio",
+    "ac ajaccio": "Ajaccio",
+    "troyes": "Troyes",
+    "estac troyes": "Troyes",
+    "dijon": "Dijon",
+    "dijon fco": "Dijon",
+    "caen": "Caen",
+    "sm caen": "Caen",
+    "nimes": "Nimes",
+    "nimes olympique": "Nimes",
+    "auxerre": "Auxerre",
+    "aj auxerre": "Auxerre",
+    "lens rc": "Lens",
+}
+
+
+def normalize_team_name(name: str) -> str:
+    """Normalize team name to Football-Data canonical form for cross-source matching."""
+    if not name or not isinstance(name, str):
+        return str(name) if name is not None else ""
+    lower = name.strip().lower()
+    return TEAM_NAME_ALIASES.get(lower, name.strip())
+
 
 @dataclass(frozen=True)
 class SeasonSplit:
@@ -235,6 +514,9 @@ def load_data(data_dir: Path):
         "matches": matches, "starts": starts, "minutes": minutes,
         "npg_p90": npg_p90, "assists_p90": assists_p90, "g_a_volume": g_a_volume,
     })
+
+    # Normalize team names to Football-Data canonical form
+    df["team"] = df["team"].apply(normalize_team_name)
 
     # Load and merge misc stats (tackles, interceptions, fouls, crosses)
     misc_path = data_dir / "raw" / "fbref" / "player_misc_3seasons.parquet"
@@ -417,8 +699,13 @@ def load_data(data_dir: Path):
                 "position": "source_position",
             },
         )
+
+        # Normalize Understat team names to Football-Data canonical form
+        understat_df["team"] = understat_df["team"].apply(normalize_team_name)
         
-        # Add missing columns with neutral defaults (50th percentile = 0 after centering)
+        # Add missing columns with NaN (not 0) for defense/possession stats.
+        # NaN rows are excluded from percentile ranking, so they get the
+        # position median (50th percentile) instead of being forced to 0.
         for col in [
             "tackles_won",
             "interceptions",
@@ -438,7 +725,7 @@ def load_data(data_dir: Path):
             "defense_composite",
             "possession_composite",
         ]:
-            understat_df[col] = 0.0  # Will be percentile-ranked as 0, but position-relative
+            understat_df[col] = np.nan
         
         # Find seasons in Understat but not in FBref
         fbref_seasons = set(df["season"].unique())
@@ -449,14 +736,27 @@ def load_data(data_dir: Path):
         df = pd.concat([df, understat_only], ignore_index=True, sort=False)
         print(f"    合并后: {len(df)} 行")
         
-        # Recompute per-90 and composite metrics for all rows (Understat rows have 0s)
+        # Recompute per-90 and composite metrics for all rows.
+        # Understat rows have NaN defense/possession — keep NaN so percentile
+        # ranking assigns them the position median instead of 0.
         safe_min_all = np.maximum(df["minutes"].values.astype(np.float32), 1.0)
         df["tackles_p90"] = df["tackles_won"].fillna(0) / safe_min_all * 90
         df["interceptions_p90"] = df["interceptions"].fillna(0) / safe_min_all * 90
         df["crosses_p90"] = df["crosses"].fillna(0) / safe_min_all * 90
         df["fouls_drawn_p90"] = df["fouls_drawn"].fillna(0) / safe_min_all * 90
-        df["defense_composite"] = df["tackles_p90"] * 0.6 + df["interceptions_p90"] * 0.4
-        df["possession_composite"] = df["crosses_p90"] * 0.5 + df["fouls_drawn_p90"] * 0.5
+        # defense/possession composite: NaN where underlying stats are NaN
+        has_defense = df["tackles_won"].notna() & df["interceptions"].notna()
+        df["defense_composite"] = np.where(
+            has_defense,
+            df["tackles_p90"] * 0.6 + df["interceptions_p90"] * 0.4,
+            np.nan,
+        )
+        has_possession = df["crosses"].notna() & df["fouls_drawn"].notna()
+        df["possession_composite"] = np.where(
+            has_possession,
+            df["crosses_p90"] * 0.5 + df["fouls_drawn_p90"] * 0.5,
+            np.nan,
+        )
         
         # Recompute trend and experience for all rows
         df = df.sort_values(["player", "season"])
@@ -495,9 +795,31 @@ def load_data(data_dir: Path):
         standings_rows.append({"team": away, "league": league, "season": season,
                                "points": ap, "gf": ag, "ga": hg})
     standings = pd.DataFrame(standings_rows)
+    # Normalize Football-Data team names (some CSVs have inconsistent casing)
+    standings["team"] = standings["team"].apply(normalize_team_name)
     team_pts = standings.groupby(["team", "league", "season"]).agg(
         total_points=("points", "sum"),
     ).reset_index()
+
+    # Diagnostics: report team name matching rate
+    player_teams = set(df["team"].dropna().unique())
+    pts_teams = set(team_pts["team"].dropna().unique())
+    matched_teams = player_teams & pts_teams
+    unmatched_player = player_teams - pts_teams
+    if unmatched_player:
+        print(
+            f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 球员侧球队匹配积分侧, "
+            f"未匹配: {sorted(unmatched_player)[:20]}"
+        )
+    else:
+        print(f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 全部匹配")
+
+    # Report NaN stats coverage
+    for col in ["defense_composite", "possession_composite"]:
+        n_total = len(df)
+        n_nan = int(df[col].isna().sum())
+        if n_nan > 0:
+            print(f"  {col}: {n_nan}/{n_total} 行缺失 ({n_nan/n_total*100:.1f}%)")
 
     return df, team_pts
 
@@ -1565,10 +1887,19 @@ def position_consistency_loss(feat, ratings, device):
         # Get core metric values from the DataFrame
         if core_metric not in df.columns:
             continue
-        metric_values = pd.to_numeric(df[core_metric], errors="coerce").fillna(0.0).values
+        metric_series = pd.to_numeric(df[core_metric], errors="coerce")
+        # Exclude NaN rows from position consistency loss — Understat rows
+        # without defense/possession data should not distort the metric.
+        valid_mask = mask & torch.tensor(
+            metric_series.notna().values, dtype=torch.bool, device=device,
+        )
+        n_valid = int(valid_mask.sum().item())
+        if n_valid < 5:
+            continue
+        metric_values = metric_series.fillna(0.0).values
         metric_t = torch.tensor(metric_values, dtype=torch.float32, device=device)
-        pos_ratings = ratings[mask]
-        pos_metrics = metric_t[mask]
+        pos_ratings = ratings[valid_mask]
+        pos_metrics = metric_t[valid_mask]
 
         # Skip if all values are identical (no ranking signal)
         if pos_metrics.std() < 1e-8 or pos_ratings.std() < 1e-8:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
+from pathlib import Path
 
 import pandas as pd
 
@@ -29,6 +30,133 @@ def _mark_synthetic(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["is_synthetic"] = True
     return df
+
+
+def _duckdb_path() -> Path:
+    return _settings().data_root / "gold" / "scoutlab.duckdb"
+
+
+def _duckdb_exists() -> bool:
+    return _duckdb_path().exists()
+
+
+@lru_cache(maxsize=2)
+def load_player_ratings(
+    position: str | None = None,
+    league: str | None = None,
+    team: str | None = None,
+    season: str | None = None,
+    min_score: float | None = None,
+) -> pd.DataFrame:
+    """Load player ratings from DuckDB or Parquet, with optional filters.
+
+    Falls back to player_ratings_optimized.parquet, then demo data.
+    """
+    # Try DuckDB first
+    if _duckdb_exists():
+        import duckdb
+
+        con = duckdb.connect(str(_duckdb_path()), read_only=True)
+        try:
+            conditions = []
+            params: list[str | float] = []
+            if position:
+                conditions.append("position_group = ?")
+                params.append(position)
+            if league:
+                conditions.append("league = ?")
+                params.append(league)
+            if team:
+                conditions.append("team = ?")
+                params.append(team)
+            if season:
+                conditions.append("season = ?")
+                params.append(season)
+            if min_score is not None:
+                conditions.append("optimized_score >= ?")
+                params.append(min_score)
+
+            where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+            query = f"SELECT * FROM player_ratings{where} ORDER BY optimized_score DESC"
+            return con.execute(query, params).fetchdf()
+        finally:
+            con.close()
+
+    # Fallback to Parquet
+    rel = "gold/feature_store/player_ratings_optimized.parquet"
+    if _parquet_exists(rel):
+        df = pd.read_parquet(_parquet_path(rel))
+        if position:
+            df = df[df["position_group"] == position]
+        if league:
+            df = df[df["league"] == league]
+        if team:
+            df = df[df["team"] == team]
+        if season:
+            df = df[df["season"] == season]
+        if min_score is not None:
+            df = df[df["optimized_score"] >= min_score]
+        return df.sort_values("optimized_score", ascending=False).reset_index(drop=True)
+
+    logger.warning("No ratings data found — falling back to synthetic demo data")
+    from scoutlab.app.demo_data import generate_player_match
+
+    demo = generate_player_match()
+    demo["optimized_score"] = demo.get("rating", 0.5)
+    demo["position_group"] = demo.get("position", "MF")
+    demo["confidence_level"] = "medium"
+    return _mark_synthetic(demo)
+
+
+@lru_cache(maxsize=2)
+def load_model_meta() -> pd.DataFrame:
+    """Load model metadata from DuckDB or JSON."""
+    if _duckdb_exists():
+        import duckdb
+
+        con = duckdb.connect(str(_duckdb_path()), read_only=True)
+        try:
+            return con.execute("SELECT * FROM model_meta").fetchdf()
+        finally:
+            con.close()
+
+    # Fallback to JSON
+    json_path = _parquet_path("gold/feature_store/optimized_params_meta.json")
+    if json_path.exists():
+        import json
+
+        with open(json_path) as f:
+            meta = json.load(f)
+        holdout = meta.get("holdout", {}).get("optimized_test", {})
+        return pd.DataFrame([{
+            "run_id": meta.get("timestamp", "unknown"),
+            "timestamp": meta.get("timestamp", ""),
+            "n_params": meta.get("n_params", 0),
+            "spearman": holdout.get("spearman", 0),
+            "pearson": holdout.get("pearson", 0),
+            "overfit_gap": meta.get("holdout", {}).get("overfit_rank_loss_gap", 0),
+        }])
+
+    return pd.DataFrame()
+
+
+@lru_cache(maxsize=2)
+def load_league_metrics() -> pd.DataFrame:
+    """Load league metrics from DuckDB or Parquet."""
+    if _duckdb_exists():
+        import duckdb
+
+        con = duckdb.connect(str(_duckdb_path()), read_only=True)
+        try:
+            return con.execute("SELECT * FROM league_metrics").fetchdf()
+        finally:
+            con.close()
+
+    rel = "gold/feature_store/rating_league_metrics.parquet"
+    if _parquet_exists(rel):
+        return pd.read_parquet(_parquet_path(rel))
+
+    return pd.DataFrame()
 
 
 def load_player_match() -> pd.DataFrame:

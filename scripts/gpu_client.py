@@ -277,6 +277,36 @@ def cmd_reload(server: str, args):
     print(f"  {data['message']}")
 
 
+def cmd_download(server: str, args):
+    """从 GPU 服务器下载评分产物。"""
+    files_to_download = [
+        "gold/feature_store/optimized_params.npy",
+        "gold/feature_store/optimized_params_meta.json",
+        "gold/feature_store/player_ratings_optimized.parquet",
+        "gold/feature_store/gpu_optimize_result.json",
+    ]
+    local_data = Path("data")
+
+    for rel_path in files_to_download:
+        print(f"  下载 {rel_path}...", end=" ")
+        resp = requests.get(f"{server}/download/{rel_path}", timeout=60)
+        if resp.status_code == 404:
+            print("不存在，跳过")
+            continue
+        if resp.status_code == 403:
+            print(f"拒绝访问: {resp.json().get('detail', resp.status_code)}")
+            continue
+        resp.raise_for_status()
+
+        target = local_data / rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(resp.content)
+        size_kb = len(resp.content) / 1024
+        print(f"完成 ({size_kb:.1f} KB)")
+
+    print("下载完成")
+
+
 # ── 主入口 ───────────────────────────────────────────────────────────────
 
 
@@ -337,6 +367,9 @@ def main():
     # reload
     sub.add_parser("reload", help="强制重载数据")
 
+    # download
+    sub.add_parser("download", help="下载评分产物从 GPU 服务器")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -350,6 +383,7 @@ def main():
         "top": cmd_top,
         "upload": cmd_upload,
         "reload": cmd_reload,
+        "download": cmd_download,
     }
 
     try:
