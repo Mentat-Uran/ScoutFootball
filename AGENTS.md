@@ -51,6 +51,7 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - 评分模型卡 `MODEL_CARD.md` 已输出，记录数据源、标签定义、适用边界、已知偏差和不可用场景。
 - 神经网络评分器只能作为真实标签层完成后的候选实验；没有球员级标签、特征缺失标记、时间切分和 baseline 对比前，不要把 MLP/深度模型写成默认评分能力。
 - `PROBLEMS.md` 中记录的问题只能算完成第一轮代码级防护；完整结论必须重新跑 GPU 优化和 2526 holdout 误差复盘后再写。
+- GPU 重跑已完成（2026-06-05，RTX 5070 Ti）：Holdout Spearman=0.6346，Pearson=0.6251，相比 baseline 提升 +0.2096；overfit gap=0.0537。Serie A/Ligue 1 coverage≥0.94 可信；PL/La Liga coverage 0.65/0.60 不可靠，需补全 alias。
 
 ## 后续架构方向
 

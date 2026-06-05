@@ -179,8 +179,80 @@ PYTHONPATH=src uv run python scripts/optimize_ratings_gpu.py --data_dir /tmp/sco
 
 ### 仍未解决，必须保留
 
-1. **球员真实影响力标签仍缺失**：当前训练目标仍主要来自球队积分，无法可靠区分“强队普通球员”和“弱队好球员”。这不是 cap 或测试集队名能彻底解决的问题。
+1. **球员真实影响力标签仍缺失**：当前训练目标仍主要来自球队积分，无法可靠区分"强队普通球员"和"弱队好球员"。这不是 cap 或测试集队名能彻底解决的问题。
 2. **Top 20 仍偏 CM/后场**：本机小规模测试 Top 20 仍包含较多 CM/CB/FB，例如 Declan Rice、Mathias Jensen、Bruno Guimarães、Luke Ayling、Kiernan Dewsbury-Hall、James Garner 等。说明出勤/中后场代理信号仍会影响榜单。
 3. **强队核心低估仍需复盘**：Arsenal、Real Madrid、Napoli、PSG 等问题不能因为 coverage 修好就视为解决；需要完整优化、误差案例表和球员级真值标签共同判断。
 4. **直接编辑测试集只是临时修补**：本轮修的是 2526 五大联赛 team-name alias，不是长期的数据标准化方案。后续应把这类映射纳入统一 entity normalization，而不是长期手改 raw/test 文件。
 5. **本机 smoke test 不是正式模型结论**：`--pop 2 --steps 20` 只验证代码路径和数据覆盖，不能替代完整优化、CV、稳定性、feature importance 和人工误差审查。
+
+---
+
+## GPU 重跑复盘（2026-06-05）
+
+### 运行配置
+
+- 设备：NVIDIA GeForce RTX 5070 Ti (CUDA)
+- 参数：pop=32, steps=500, lr=0.05, patience=80
+- 组合目标权重：Spearman=0.50, NDCG@20=0.20, 位置内一致性=0.15, 极端惩罚=0.10, 先验=0.05
+- 训练赛季：1617-2425（9赛季），测试赛季：2526
+
+### 指标对比
+
+| 指标 | Baseline | 优化后 | 变化 |
+|------|----------|--------|------|
+| Holdout Spearman | 0.4250 | 0.6346 | +0.2096 |
+| Holdout Pearson | 0.4068 | 0.6251 | +0.2184 |
+| Overfit gap | — | +0.0537 | — |
+
+### 各联赛 2526 Holdout
+
+| 联赛 | Spearman | Pearson | N | Coverage |
+|------|----------|---------|---|----------|
+| Serie A | 0.831 | 0.891 | 19 | 0.95 |
+| Bundesliga | 0.735 | 0.710 | 13 | 0.72 |
+| La Liga | 0.730 | 0.810 | 12 | 0.60 |
+| Ligue 1 | 0.725 | 0.635 | 17 | 0.94 |
+| Premier League | 0.325 | 0.526 | 13 | 0.65 |
+
+### 位置权重（优化后 capped）
+
+| 位置 | availability | attack | defense | possession | quality |
+|------|-------------|--------|---------|------------|---------|
+| ST | 0.0450 | 0.7350 | 0.0277 | 0.0435 | 0.1488 |
+| W | 0.0378 | 0.7508 | 0.0266 | 0.0489 | 0.1360 |
+| AM | 0.0722 | 0.3459 | 0.0536 | 0.2515 | 0.2769 |
+| CM | 0.1800 | 0.2200 | 0.1122 | 0.2478 | 0.2400 |
+| DM | 0.1395 | 0.0794 | 0.2981 | 0.2810 | 0.2020 |
+| FB | 0.2000 | 0.1600 | 0.1173 | 0.2437 | 0.2790 |
+| CB | 0.1800 | 0.1000 | 0.2298 | 0.2402 | 0.2500 |
+| GK | 0.1800 | 0.0598 | 0.2956 | 0.1845 | 0.2800 |
+
+### 误差案例分析
+
+**Premier League（Spearman=0.325，coverage=0.65）**：
+- Coverage 0.65 意味着 20 支球队只匹配了 13 支，统计不稳定。
+- 7 支未匹配球队的评分缺失导致排名偏差。
+- 低 coverage 可能因为 2526 赛季 PL 球队名 alias 不完整或部分球队评分数据缺失。
+- **结论**：PL 的 0.325 Spearman 不能作为模型在 PL 上真实表现的可靠指标，需补全 alias 和 coverage 后重新评估。
+
+**La Liga（Spearman=0.730，coverage=0.60）**：
+- Coverage 0.60 更低，12/20 支球队匹配。
+- 但 Spearman 仍有 0.730，说明匹配的球队排序基本正确。
+- **结论**：coverage 不足是主要问题，不是模型排序能力问题。
+
+**Serie A / Ligue 1（coverage ≥ 0.94）**：
+- 高 coverage 下 Spearman 分别为 0.831 和 0.725，模型排序能力可靠。
+- **结论**：这两个联赛的评分结果可以作为中等置信度参考。
+
+### 出勤捷径改善
+
+- ST/W 的 availability 权重从之前的 0.10+ 降到 0.045/0.038，出勤对前锋/边锋评分的影响大幅削弱。
+- CM/FB/CB/GK 的 availability 仍在 0.18-0.20（cap 生效），但 attack/defense/possession/quality 权重分布更合理。
+- 组合目标中的极端惩罚（0.10 权重）对出勤捷径产生了额外压制。
+
+### 仍需解决的问题
+
+1. **Premier League 和 La Liga coverage 不足**：需补全 2526 赛季队名 alias 或增加评分侧球队覆盖。
+2. **强队核心低估**：Arsenal、Real Madrid、Napoli、PSG 的具体球员排名仍需球员级数据验证。
+3. **球员真实标签**：`player_truth_labels.parquet` 仍为空表，无法做球员级误差分析。
+4. **Overfit gap 0.0537**：train-test 差距存在但不严重，可接受。

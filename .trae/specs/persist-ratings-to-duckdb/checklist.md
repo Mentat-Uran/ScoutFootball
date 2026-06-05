@@ -1,0 +1,12 @@
+- [ ] GPU 服务器 `/download/<path>` 端点可正常下载文件，且只允许下载指定目录
+- [ ] `gpu_client.py download` 能将评分产物下载到本地 `data/gold/feature_store/`
+- [ ] `scoutlab export-ratings` 生成 `data/gold/scoutlab.duckdb`，包含 4 张表
+- [ ] `player_ratings` 表行数与 `player_ratings_optimized.parquet` 一致
+- [ ] `model_meta` 表包含最新的优化指标（spearman, pearson, overfit_gap）
+- [ ] `league_metrics` 表包含 5 大联赛的 holdout 指标
+- [ ] `team_coverage` 表包含各联赛赛季的覆盖率和置信度
+- [ ] `load_player_ratings()` 能按位置/联赛/球队筛选返回数据
+- [ ] DuckDB 不存在时 `load_player_ratings()` 优雅降级
+- [ ] `ruff check` 零错误
+- [ ] `pytest` 全部通过
+- [ ] 重复运行 `export-ratings` 结果幂等
