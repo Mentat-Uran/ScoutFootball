@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from scoutlab.app.data_loader import load_player_rolling, load_team_rolling
+from scoutlab.evaluation.confidence import assess_player_confidence, display_confidence_warnings
 from scoutlab.viz.trends import DEFAULT_TREND_METRICS, TREND_LABELS, plot_trend
 
 st.header("Trends")
@@ -44,3 +45,10 @@ if entity_df.empty:
 
 fig = plot_trend(entity_df, metric_choice, entity_name=entity)
 st.plotly_chart(fig, use_container_width=True)
+
+# Confidence warning for player mode with low minutes
+if mode == "Player" and not entity_df.empty:
+    last_row = entity_df.iloc[-1]
+    assessment = assess_player_confidence(last_row)
+    if assessment.is_low_confidence:
+        display_confidence_warnings(assessment)

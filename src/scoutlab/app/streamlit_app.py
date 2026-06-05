@@ -41,6 +41,21 @@ pg = st.navigation(
             title="Score Matrix",
             icon="🎯",
         ),
+        st.Page(
+            "scoutlab/app/pages/6_Player_Rankings.py",
+            title="Player Rankings",
+            icon="🏆",
+        ),
+        st.Page(
+            "scoutlab/app/pages/7_Value_Deviation.py",
+            title="Value Deviation",
+            icon="💎",
+        ),
+        st.Page(
+            "scoutlab/app/pages/8_Match_Prediction.py",
+            title="Match Prediction",
+            icon="⚽",
+        ),
     ]
 )
 pg.run()
