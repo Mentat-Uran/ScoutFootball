@@ -1,0 +1,137 @@
+{
+  "optimizer": "adamw_composite_objective",
+  "metric_scope": "holdout_test",
+  "n_params": 77,
+  "device": "mps",
+  "seed": 42,
+  "pop": 3,
+  "steps": 40,
+  "lr": 0.05,
+  "spearman_weight": 0.5,
+  "ndcg_weight": 0.2,
+  "position_consistency_weight": 0.15,
+  "extreme_penalty_weight": 0.1,
+  "prior_weight": 0.05,
+  "soft_rank_temperature": 4.0,
+  "init_scale": 0.35,
+  "patience": 15,
+  "holdout": {
+    "train_seasons": [
+      "1617",
+      "1718",
+      "1819",
+      "1920",
+      "2021",
+      "2122",
+      "2223",
+      "2324",
+      "2425"
+    ],
+    "test_seasons": [
+      "2526"
+    ],
+    "baseline_train": {
+      "n_team_seasons": 216,
+      "spearman": 0.41050471324414955,
+      "pearson": 0.3967771307530361,
+      "rank_loss": 0.5894952867558505,
+      "z_mse": 1.206445738493928,
+      "calibration_mae": 14.722650891632373,
+      "split": "train",
+      "n_players": 13782,
+      "target_team_seasons": 290,
+      "rated_team_seasons": 1279,
+      "team_coverage": 0.7448275862068966,
+      "n_excluded_na_teams": 0
+    },
+    "baseline_test": {
+      "n_team_seasons": 0,
+      "spearman": null,
+      "pearson": null,
+      "rank_loss": null,
+      "z_mse": null,
+      "calibration_mae": null,
+      "split": "test",
+      "n_players": 3245,
+      "target_team_seasons": 0,
+      "rated_team_seasons": 0,
+      "team_coverage": null,
+      "n_excluded_na_teams": 0
+    },
+    "optimized_train": {
+      "n_team_seasons": 216,
+      "spearman": 0.6720246843744659,
+      "pearson": 0.6593361013271655,
+      "rank_loss": 0.32797531562553406,
+      "z_mse": 0.6813277973456693,
+      "calibration_mae": 8.301183127572017,
+      "split": "train",
+      "n_players": 13782,
+      "target_team_seasons": 290,
+      "rated_team_seasons": 1279,
+      "team_coverage": 0.7448275862068966,
+      "n_excluded_na_teams": 0
+    },
+    "optimized_test": {
+      "n_team_seasons": 0,
+      "spearman": null,
+      "pearson": null,
+      "rank_loss": null,
+      "z_mse": null,
+      "calibration_mae": null,
+      "split": "test",
+      "n_players": 3245,
+      "target_team_seasons": 0,
+      "rated_team_seasons": 0,
+      "team_coverage": null,
+      "n_excluded_na_teams": 0
+    },
+    "overfit_rank_loss_gap": null
+  },
+  "team_aggregation": {
+    "minutes_cap": 1500.0,
+    "core_minutes": 450.0,
+    "core_scale": 180.0,
+    "capped_minutes_blend": 0.55,
+    "core_rotation_blend": 0.44999999999999996,
+    "position_slot_groups": {
+      "GK": "GK",
+      "CB": "CB",
+      "FB": "FB",
+      "DM": "MF",
+      "CM": "MF",
+      "AM": "ATT",
+      "W": "ATT",
+      "ST": "ATT"
+    },
+    "position_slot_caps": {
+      "GK": 1.0,
+      "CB": 2.5,
+      "FB": 1.5,
+      "MF": 2.5,
+      "ATT": 2.5
+    }
+  },
+  "baseline_spearman": null,
+  "baseline_pearson": null,
+  "optimized_spearman": null,
+  "optimized_pearson": null,
+  "cv": {
+    "folds": 0,
+    "error": null,
+    "metrics": []
+  },
+  "stability": {
+    "runs": 0,
+    "summary": {},
+    "runs_detail": []
+  },
+  "feature_importance": [],
+  "league_metrics": [],
+  "team_coverage": [],
+  "calibration_test": [],
+  "n_players": 30483,
+  "n_train_players": 13782,
+  "n_test_players": 3245,
+  "n_team_seasons": 0
+}
