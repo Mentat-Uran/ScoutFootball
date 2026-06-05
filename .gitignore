@@ -9,9 +9,12 @@ __pycache__/
 *.duckdb
 .streamlit/
 
-data/raw/**
+# Raw data: allow specific sources, exclude others
+data/raw/transfermarkt_datasets/
 data/silver/**
 data/gold/**
+!data/gold/.gitkeep
+!data/sample/**
 data/models/**
 data/reports/**
 data/logs/**
@@ -30,10 +33,7 @@ data/soccerdata/**
 scoutlab-gpu-server.zip
 *.zip
 
-# Data files (already excluded above but just in case)
-data/raw/**/*.parquet
-data/raw/**/*.json
-data/gold/**/*.parquet
+# Large binary artifacts
 data/gold/**/*.npy
 data/models/**/*
 data/logs/**/*
