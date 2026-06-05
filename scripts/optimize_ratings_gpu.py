@@ -78,12 +78,12 @@ class OptimizationVisualizer:
 
         # 创建图形
         self.fig = plt.figure(figsize=(14, 9))
-        self.fig.suptitle("球员评分权重优化", fontsize=14, fontweight="bold")
+        self.fig.suptitle("Player Rating Optimization", fontsize=14, fontweight="bold")
         gs = GridSpec(2, 2, figure=self.fig, height_ratios=[1, 1])
 
         # 子图 1: Loss 曲线
         self.ax_loss = self.fig.add_subplot(gs[0, 0])
-        self.ax_loss.set_title("Loss 曲线")
+        self.ax_loss.set_title("Total Loss")
         self.ax_loss.set_xlabel("Step")
         self.ax_loss.set_ylabel("Loss")
         self.ax_loss.set_xlim(0, n_steps)
@@ -91,7 +91,7 @@ class OptimizationVisualizer:
 
         # 子图 2: Spearman/Pearson 跟踪
         self.ax_corr = self.fig.add_subplot(gs[0, 1])
-        self.ax_corr.set_title("相关性指标")
+        self.ax_corr.set_title("Correlation Metrics")
         self.ax_corr.set_xlabel("Step")
         self.ax_corr.set_ylabel("Correlation")
         self.ax_corr.set_xlim(0, n_steps)
@@ -100,15 +100,18 @@ class OptimizationVisualizer:
 
         # 子图 3: 组件分解
         self.ax_components = self.fig.add_subplot(gs[1, 0])
-        self.ax_components.set_title("Loss 组件分解")
+        self.ax_components.set_title("Loss Components")
         self.ax_components.set_xlabel("Step")
         self.ax_components.set_ylabel("Component Loss")
         self.ax_components.set_xlim(0, n_steps)
         self.ax_components.grid(True, alpha=0.3)
 
-        # 子图 4: 位置权重热力图
+        # 子图 4: 位置权重热力图 — 用 make_axes_locatable 固定 colorbar 空间
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
         self.ax_weights = self.fig.add_subplot(gs[1, 1])
-        self.ax_weights.set_title("位置维度权重")
+        self.ax_weights.set_title("Position-Dimension Weights")
+        self._divider = make_axes_locatable(self.ax_weights)
+        self._cax = self._divider.append_axes("right", size="5%", pad=0.05)
 
         # 数据存储
         self.steps = []
@@ -143,23 +146,9 @@ class OptimizationVisualizer:
             bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
         )
 
-        self._cbar_ax = None
+        self._heatmap_im = None  # 热力图 image 对象，首次更新时创建
 
         plt.tight_layout()
-
-        # 设置中文字体
-        _cjk_fonts = ["PingFang SC", "Heiti SC", "STHeiti", "Arial Unicode MS"]
-        for _font in _cjk_fonts:
-            try:
-                import matplotlib.font_manager as fm
-                if any(_font.lower() in f.name.lower()
-                       for f in fm.fontManager.ttflist):
-                    plt.rcParams["font.sans-serif"] = [_font] + plt.rcParams.get(
-                        "font.sans-serif", []
-                    )
-                    break
-            except Exception:
-                continue
 
         if self.interactive:
             plt.show(block=False)
@@ -241,33 +230,48 @@ class OptimizationVisualizer:
             self.fig.canvas.flush_events()
 
     def _update_weight_heatmap(self, params: torch.Tensor, device: torch.device):
-        """更新位置权重热力图。"""
+        """更新位置权重热力图（不重建 colorbar，只刷新数据）。"""
         params_cpu = params.detach().cpu()
         pw_raw = params_cpu[:N_POS * N_DIM].reshape(N_POS, N_DIM)
         pw = apply_position_weight_caps(torch.softmax(pw_raw, dim=1)).numpy()
 
-        self.ax_weights.clear()
-        self.ax_weights.set_title("Position-Dimension Weights")
+        # 只在首次创建 image 和 colorbar
+        if not hasattr(self, "_heatmap_im") or self._heatmap_im is None:
+            self._heatmap_im = self.ax_weights.imshow(
+                pw, cmap="YlOrRd", aspect="auto", vmin=0, vmax=0.5,
+            )
+            self.ax_weights.set_xticks(range(N_DIM))
+            self.ax_weights.set_xticklabels(DIMENSIONS, fontsize=9)
+            self.ax_weights.set_yticks(range(N_POS))
+            self.ax_weights.set_yticklabels(POSITIONS, fontsize=9)
+            self._cbar_obj = self.fig.colorbar(
+                self._heatmap_im, cax=self._cax,
+            )
 
-        im = self.ax_weights.imshow(pw, cmap="YlOrRd", aspect="auto", vmin=0, vmax=0.5)
-        self.ax_weights.set_xticks(range(N_DIM))
-        self.ax_weights.set_xticklabels(DIMENSIONS, fontsize=9)
-        self.ax_weights.set_yticks(range(N_POS))
-        self.ax_weights.set_yticklabels(POSITIONS, fontsize=9)
+            # 初始化文本标注缓存
+            self._heatmap_texts = []
+            for i in range(N_POS):
+                row_texts = []
+                for j in range(N_DIM):
+                    val = pw[i, j]
+                    color = "white" if val > 0.25 else "black"
+                    t = self.ax_weights.text(
+                        j, i, f"{val:.2f}", ha="center", va="center",
+                        fontsize=8, color=color,
+                    )
+                    row_texts.append(t)
+                self._heatmap_texts.append(row_texts)
 
-        # 添加数值标注
-        for i in range(N_POS):
-            for j in range(N_DIM):
-                val = pw[i, j]
-                color = "white" if val > 0.25 else "black"
-                self.ax_weights.text(j, i, f"{val:.2f}", ha="center", va="center",
-                                     fontsize=8, color=color)
-
-        # 更新 colorbar（不删除旧的，直接在 ax 上新建）
-        if hasattr(self, "_cbar_ax") and self._cbar_ax is not None:
-            self._cbar_ax.remove()
-            self._cbar_ax = None
-        self._cbar_ax = self.fig.colorbar(im, ax=self.ax_weights, shrink=0.8).ax
+        else:
+            # 只更新图像数据
+            self._heatmap_im.set_data(pw)
+            # 更新文本标注
+            for i in range(N_POS):
+                for j in range(N_DIM):
+                    val = pw[i, j]
+                    color = "white" if val > 0.25 else "black"
+                    self._heatmap_texts[i][j].set_text(f"{val:.2f}")
+                    self._heatmap_texts[i][j].set_color(color)
 
     def close(self):
         """关闭可视化窗口。"""
