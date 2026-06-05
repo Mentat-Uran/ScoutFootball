@@ -154,6 +154,8 @@ async function fetchRatings(position, league) {
             rating: +(p.optimized_score || 0).toFixed(1),
             confidence: (p.confidence_level || "LOW").toUpperCase(),
             minutes: Math.round(p.minutes || 0),
+            matches: Math.round(p.matches || 0),
+            low_appearance: !!p.low_appearance,
             npg_p90: +(p.npg_p90 || 0).toFixed(3),
             assists_p90: +(p.assists_p90 || 0).toFixed(3),
             defense_composite: p.defense_composite,
@@ -281,17 +283,21 @@ function renderPlayers() {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Loading...</td></tr>';
         return;
     }
-    tbody.innerHTML = rows.map((player, index) => `
-        <tr class="${player.key === appState.selectedPlayerKey ? "selected" : ""}" data-player="${player.key}" style="cursor:pointer">
+    tbody.innerHTML = rows.map((player, index) => {
+        const lowAppBadge = player.low_appearance
+            ? `<span class="status-pill low-appearance" title="${appState.lang === 'zh' ? '出场不足20场，评分已扣减' : 'Under 20 matches, score penalized'}">${appState.lang === 'zh' ? '低出场' : 'LOW APP'}</span>`
+            : '';
+        return `
+        <tr class="${player.key === appState.selectedPlayerKey ? "selected" : ""}${player.low_appearance ? " low-appearance-row" : ""}" data-player="${player.key}" style="cursor:pointer">
             <td>${index + 1}</td>
-            <td>${player.name}</td>
+            <td>${player.name}${lowAppBadge}</td>
             <td>${player.position}</td>
             <td>${player.team}</td>
             <td>${player.season}</td>
             <td>${player.rating.toFixed(1)}</td>
             <td><span class="status-pill ${confidenceClass(player.confidence)}">${player.confidence}</span></td>
-        </tr>
-    `).join("");
+        </tr>`;
+    }).join("");
 
     tbody.querySelectorAll("tr[data-player]").forEach((row) => {
         row.addEventListener("click", () => {
@@ -325,11 +331,18 @@ async function renderPlayerProfile() {
     const detailMinutes = profile ? profile.minutes : player.minutes;
     const detailScore = profile ? profile.optimized_score : player.rating;
     const detailPosition = profile ? profile.position_group : player.position;
+    const detailMatches = profile ? profile.matches : player.matches;
+    const detailLowApp = profile ? profile.low_appearance : player.low_appearance;
+    const lowAppWarning = detailLowApp
+        ? `<div class="low-appearance-warning">${appState.lang === "zh" ? "⚠ 出场不足20场，评分已扣减最多30%" : "⚠ Under 20 matches, score penalized up to 30%"}</div>`
+        : "";
     document.getElementById("player-detail").innerHTML = `
         <div><span>${t("th_team")}</span><strong>${player.team}</strong></div>
         <div><span>${t("minutes")}</span><strong>${detailMinutes}</strong></div>
+        <div><span>${appState.lang === "zh" ? "出场" : "Matches"}</span><strong>${detailMatches}</strong></div>
         <div><span>${t("th_pos")}</span><strong>${detailPosition}</strong></div>
         <div><span>${t("th_rating")}</span><strong>${detailScore}</strong></div>
+        ${lowAppWarning}
     `;
 
     // Use real radar data from profile API, or fallback to defaults
@@ -386,10 +399,64 @@ function renderRadar(player) {
             }],
         }],
     });
-    chart.resize();
+    requestAnimationFrame(() => {
+        chart.resize();
+        // Second resize after paint to catch any late layout shifts
+        requestAnimationFrame(() => chart.resize());
+    });
 }
 
 let valuePlayers = [];
+
+// Mock value data for demo when API is unavailable
+const MOCK_VALUE_DATA = (() => {
+    const names = [
+        "Mbapp\u00e9","Haaland","Vinicius Jr","Saka","Salah","Kane","Bellingham","Pedri","Rodri","Wirtz",
+        "Musiala","Odegaard","Palmer","Foden","Rice","Gavi","Valverde","Bruno Fernandes","Lewandowski","De Bruyne",
+        "Gundogan","Bernardo Silva","Griezmann","Lamine Yamal","Reus","Maddison","Xavi Simons","Leao","Osimhen","Isak",
+        "Nkunku","Diaz","Barcola","Kvaratskhelia","Sane","Havertz","Martinelli","Gyokeres","Sesko","Dovbyk",
+        "Thuram","Lookman","Lautaro Martinez","Lozano","Adeyemi","Mudryk","Nico Williams","Olmo","Zubimendi","Grimaldo",
+        "Kulusevski","Mac Allister","Onana","Ruben Dias","Saliba","Van Dijk","Araujo","Marquinhos","Alisson","Courtois",
+        "Raphinha","Mikel Merino","Zaire-Emery","Branco","Simakan","Bastoni","Achraf","Theo Hernandez","Robertson","Alexander-Arnold",
+    ];
+    const teams = [
+        "Real Madrid","Man City","Real Madrid","Arsenal","Liverpool","Bayern","Real Madrid","Barcelona","Man City","Leverkusen",
+        "Bayern","Arsenal","Chelsea","Man City","Arsenal","Barcelona","Real Madrid","Man United","Barcelona","Man City",
+        "Barcelona","Man City","Atl\u00e9tico","Barcelona","Dortmund","Tottenham","RB Leipzig","Milan","Napoli","Newcastle",
+        "Chelsea","Liverpool","PSG","Napoli","Bayern","Arsenal","Arsenal","Sporting","RB Leipzig","Roma",
+        "Inter","Atalanta","Inter","PSV","Dortmund","Chelsea","Athletic","Barcelona","Real Sociedad","Leverkusen",
+        "Tottenham","Liverpool","Man United","Man City","Arsenal","Liverpool","Barcelona","PSG","Liverpool","Real Madrid",
+        "Barcelona","Real Sociedad","PSG","Leverkusen","RB Leipzig","Inter","PSG","Milan","Liverpool","Liverpool",
+    ];
+    const residuals = [
+        0.82,0.65,0.71,0.45,0.38,0.22,0.55,0.30,0.12,0.48,
+        0.42,0.18,0.62,0.08,-0.05,0.15,0.10,0.28,-0.35,-0.18,
+        -0.22,-0.10,0.05,0.88,-0.42,0.32,0.35,0.25,0.15,0.40,
+        0.20,-0.08,0.52,0.58,-0.15,-0.12,-0.25,0.72,0.30,0.18,
+        0.10,0.45,-0.08,-0.30,-0.20,-0.55,0.38,0.12,0.05,-0.10,
+        -0.15,-0.08,-0.22,-0.35,-0.18,-0.42,-0.25,-0.15,-0.50,-0.38,
+        0.15,-0.05,0.22,-0.12,-0.18,-0.08,-0.10,-0.20,-0.45,-0.28,
+    ];
+    const actualValues = [
+        180,170,150,120,90,110,120,100,90,130,
+        120,100,90,100,80,80,90,80,50,60,
+        30,60,40,100,25,55,60,70,75,65,
+        55,65,50,70,45,55,50,65,40,35,
+        45,35,50,20,30,28,45,40,30,25,
+        35,50,40,55,60,45,50,45,50,40,
+        45,30,45,30,22,40,50,45,30,55,
+    ];
+    return names.map((name, i) => {
+        const actual = actualValues[i] * 1e6;
+        const predicted = Math.round(actual * Math.exp(-residuals[i]));
+        return {
+            name, team: teams[i], season: "2526",
+            actualValue: actual, predictedValue: predicted,
+            residual: residuals[i],
+            fairness: residuals[i] > 0.3 ? "cheap" : residuals[i] < -0.3 ? "expensive" : "fair",
+        };
+    });
+})();
 
 async function fetchValueReport() {
     try {
@@ -414,9 +481,7 @@ async function fetchValueReport() {
 }
 
 function renderValue() {
-    const data = valuePlayers.length > 0 ? valuePlayers : players.map((p) => ({
-        name: p.name, team: p.team, actualValue: p.value, predictedValue: Math.round(p.value * Math.exp(p.residual)), residual: p.residual, fairness: "",
-    }));
+    const data = valuePlayers.length > 0 ? valuePlayers : MOCK_VALUE_DATA;
     const sorted = [...data].sort((a, b) => (
         appState.valueMode === "under" ? b.residual - a.residual : a.residual - b.residual
     ));
@@ -434,38 +499,91 @@ function renderValue() {
 
     const chart = getChart("value-chart");
     if (!chart) return;
+    const isZh = appState.lang === "zh";
+
+    // Force resize before setOption to avoid stale container dimensions
+    chart.resize();
+
+    // Build scatter data with player key for click-through
+    const scatterData = data.map((player) => ({
+        value: [
+            +(player.actualValue / 1e6).toFixed(1),
+            +(player.predictedValue / 1e6).toFixed(1),
+        ],
+        name: player.name,
+        key: player.name + "|" + (player.season || ""),
+        team: player.team || "",
+        residual: player.residual,
+    }));
+
     chart.setOption({
-        tooltip: { trigger: "item" },
-        grid: { left: 44, right: 20, top: 24, bottom: 42 },
+        animation: false,
+        tooltip: {
+            trigger: "item",
+            formatter(params) {
+                if (params.componentType !== "series" || params.seriesIndex !== 0) return "";
+                const d = params.data;
+                return `<strong>${d.name}</strong><br/>${d.team}<br/>${isZh ? "实际" : "Actual"}: €${d.value[0]}M<br/>${isZh ? "预测" : "Predicted"}: €${d.value[1]}M<br/>${isZh ? "残差" : "Residual"}: ${d.residual > 0 ? "+" : ""}${d.residual.toFixed(2)}`;
+            },
+        },
+        grid: { left: 54, right: 20, top: 24, bottom: 48 },
         xAxis: {
-            name: appState.lang === "zh" ? "实际身价 €M" : "Actual €M",
+            type: "log",
+            name: isZh ? "实际身价 €M" : "Actual €M",
             nameTextStyle: { color: chartTextColor() },
-            axisLabel: { color: chartTextColor() },
+            axisLabel: { color: chartTextColor(), formatter: (v) => v >= 1 ? v.toFixed(0) : v.toFixed(1) },
             splitLine: { lineStyle: { color: chartGridColor() } },
+            min: 0.1,
         },
         yAxis: {
-            name: appState.lang === "zh" ? "预测身价 €M" : "Predicted €M",
+            type: "log",
+            name: isZh ? "预测身价 €M" : "Predicted €M",
             nameTextStyle: { color: chartTextColor() },
-            axisLabel: { color: chartTextColor() },
+            axisLabel: { color: chartTextColor(), formatter: (v) => v >= 1 ? v.toFixed(0) : v.toFixed(1) },
             splitLine: { lineStyle: { color: chartGridColor() } },
+            min: 0.1,
         },
         series: [{
             type: "scatter",
-            symbolSize: 14,
-            data: data.map((player) => [
-                +(player.actualValue / 1e6).toFixed(1),
-                +(player.predictedValue / 1e6).toFixed(1),
-                player.name,
-            ]),
-            itemStyle: { color: "rgba(216,221,231,.86)" },
+            symbolSize: 10,
+            data: scatterData,
+            itemStyle: {
+                color(params) {
+                    const r = params.data.residual;
+                    if (r > 0.5) return "#34d399";
+                    if (r > 0.15) return "#6ee7b7";
+                    if (r < -0.5) return "#f87171";
+                    if (r < -0.15) return "#fca5a5";
+                    return "rgba(216,221,231,.86)";
+                },
+            },
+            emphasis: { itemStyle: { shadowBlur: 12, shadowColor: "rgba(0,0,0,.4)" }, symbolSize: 14 },
             label: { show: false },
         }, {
             type: "line",
-            data: [[0, 0], [200, 200]],
+            data: [[0.1, 0.1], [200, 200]],
             symbol: "none",
             lineStyle: { color: chartGridColor(), type: "dashed" },
         }],
+    }, true);
+
+    // Click scatter point -> navigate to player
+    chart.off("click");
+    chart.on("click", (params) => {
+        if (params.componentType !== "series" || params.seriesIndex !== 0) return;
+        const d = params.data;
+        const match = players.find((p) => p.key === d.key || p.name === d.name);
+        if (match) {
+            appState.selectedPlayerKey = match.key;
+            setView("players");
+        } else {
+            // Player not in ratings list — search and switch view
+            document.getElementById("global-search").value = d.name;
+            if (appState.view !== "players") setView("players");
+            else renderPlayers();
+        }
     });
+
     chart.resize();
 }
 

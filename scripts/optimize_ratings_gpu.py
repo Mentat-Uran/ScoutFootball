@@ -4,7 +4,7 @@
 在 Windows + RTX 5070 Ti 上运行，几秒完成一次优化循环。
 
 使用方法 (Windows):
-  1. pip install torch pandas numpy scipy pyarrow
+  1. pip install torch pandas numpy scipy pyarrow matplotlib
   2. 把 data/ 目录复制到 Windows 机器上
   3. python optimize_ratings_gpu.py --data_dir ./data
 
@@ -16,6 +16,10 @@ Mac 快速模式 (几分钟完成):
 
 Mac 完整模式 (较慢但更准):
   python optimize_ratings_gpu.py --data_dir ./data --steps 150 --pop 8 --patience 25
+
+实时可视化:
+  默认启用 matplotlib 实时图表，显示 Loss 曲线、Spearman/Pearson 跟踪、
+  组件分解和位置权重热力图。远程服务器或无 GUI 环境加 --no-viz 禁用。
 """
 
 import argparse
@@ -29,6 +33,253 @@ import numpy as np
 import pandas as pd
 import torch
 from scipy.stats import pearsonr, spearmanr
+
+# ── 可视化 ────────────────────────────────────────────────────────────────
+try:
+    import matplotlib
+    # 按优先级尝试交互后端，失败则回退 Agg（非交互，仅保存图片）
+    _backend_set = False
+    for _backend in ["macosx", "TkAgg", "Qt5Agg"]:
+        try:
+            matplotlib.use(_backend)
+            _backend_set = True
+            break
+        except Exception:
+            continue
+    if not _backend_set:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    _HAS_MATPLOTLIB = True
+    _VIZ_INTERACTIVE = matplotlib.get_backend() != "agg"
+except ImportError:
+    _HAS_MATPLOTLIB = False
+    _VIZ_INTERACTIVE = False
+
+# ── 实时可视化 ────────────────────────────────────────────────────────────
+
+class OptimizationVisualizer:
+    """实时显示优化过程的可视化器。
+
+    显示三个子图：
+    1. 总 Loss 曲线 + Spearman/Pearson 跟踪
+    2. 各组件 Loss 分解 (rank_loss, ndcg, position, extreme, prior)
+    3. 当前最优参数的位置权重热力图
+    """
+
+    def __init__(self, n_steps: int, pop_size: int, enable: bool = True):
+        self.enable = enable and _HAS_MATPLOTLIB
+        self.n_steps = n_steps
+        self.pop_size = pop_size
+        self.interactive = _VIZ_INTERACTIVE
+
+        if not self.enable:
+            return
+
+        # 创建图形
+        self.fig = plt.figure(figsize=(14, 9))
+        self.fig.suptitle("球员评分权重优化", fontsize=14, fontweight="bold")
+        gs = GridSpec(2, 2, figure=self.fig, height_ratios=[1, 1])
+
+        # 子图 1: Loss 曲线
+        self.ax_loss = self.fig.add_subplot(gs[0, 0])
+        self.ax_loss.set_title("Loss 曲线")
+        self.ax_loss.set_xlabel("Step")
+        self.ax_loss.set_ylabel("Loss")
+        self.ax_loss.set_xlim(0, n_steps)
+        self.ax_loss.grid(True, alpha=0.3)
+
+        # 子图 2: Spearman/Pearson 跟踪
+        self.ax_corr = self.fig.add_subplot(gs[0, 1])
+        self.ax_corr.set_title("相关性指标")
+        self.ax_corr.set_xlabel("Step")
+        self.ax_corr.set_ylabel("Correlation")
+        self.ax_corr.set_xlim(0, n_steps)
+        self.ax_corr.set_ylim(0, 1)
+        self.ax_corr.grid(True, alpha=0.3)
+
+        # 子图 3: 组件分解
+        self.ax_components = self.fig.add_subplot(gs[1, 0])
+        self.ax_components.set_title("Loss 组件分解")
+        self.ax_components.set_xlabel("Step")
+        self.ax_components.set_ylabel("Component Loss")
+        self.ax_components.set_xlim(0, n_steps)
+        self.ax_components.grid(True, alpha=0.3)
+
+        # 子图 4: 位置权重热力图
+        self.ax_weights = self.fig.add_subplot(gs[1, 1])
+        self.ax_weights.set_title("位置维度权重")
+
+        # 数据存储
+        self.steps = []
+        self.losses = []
+        self.spearmans = []
+        self.pearsons = []
+        self.rank_losses = []
+        self.ndcg_losses = []
+        self.pos_losses = []
+        self.extreme_losses = []
+        self.prior_losses = []
+
+        # 绘图对象
+        self.line_loss, = self.ax_loss.plot([], [], "b-", linewidth=2, label="Total Loss")
+        self.ax_loss.legend(loc="upper right")
+
+        self.line_sp, = self.ax_corr.plot([], [], "g-", linewidth=2, label="Spearman")
+        self.line_pr, = self.ax_corr.plot([], [], "r-", linewidth=2, label="Pearson")
+        self.ax_corr.legend(loc="lower right")
+
+        self.line_rank, = self.ax_components.plot([], [], "b-", linewidth=1.5, label="rank")
+        self.line_ndcg, = self.ax_components.plot([], [], "orange", linewidth=1.5, label="ndcg")
+        self.line_pos, = self.ax_components.plot([], [], "purple", linewidth=1.5, label="position")
+        self.line_ext, = self.ax_components.plot([], [], "cyan", linewidth=1.5, label="extreme")
+        self.line_prior, = self.ax_components.plot([], [], "gray", linewidth=1.5, label="prior")
+        self.ax_components.legend(loc="upper right")
+
+        # 状态文本
+        self.status_text = self.ax_loss.text(
+            0.02, 0.95, "", transform=self.ax_loss.transAxes,
+            fontsize=10, verticalalignment="top",
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        )
+
+        self._cbar_ax = None
+
+        plt.tight_layout()
+
+        # 设置中文字体
+        _cjk_fonts = ["PingFang SC", "Heiti SC", "STHeiti", "Arial Unicode MS"]
+        for _font in _cjk_fonts:
+            try:
+                import matplotlib.font_manager as fm
+                if any(_font.lower() in f.name.lower()
+                       for f in fm.fontManager.ttflist):
+                    plt.rcParams["font.sans-serif"] = [_font] + plt.rcParams.get(
+                        "font.sans-serif", []
+                    )
+                    break
+            except Exception:
+                continue
+
+        if self.interactive:
+            plt.show(block=False)
+
+    def update(
+        self,
+        step: int,
+        pop_idx: int,
+        loss: float,
+        spearman: float,
+        pearson: float,
+        components: dict | None = None,
+        params: torch.Tensor | None = None,
+        device: torch.device | None = None,
+    ):
+        """更新可视化。"""
+        if not self.enable:
+            return
+
+        # 存储数据
+        self.steps.append(step)
+        self.losses.append(loss)
+        self.spearmans.append(spearman)
+        self.pearsons.append(pearson)
+
+        if components:
+            self.rank_losses.append(components.get("rank_loss", 0.0))
+            self.ndcg_losses.append(components.get("ndcg", 0.0))
+            self.pos_losses.append(components.get("pos_loss", 0.0))
+            self.extreme_losses.append(components.get("extreme", 0.0))
+            self.prior_losses.append(components.get("prior", 0.0))
+        else:
+            self.rank_losses.append(0.0)
+            self.ndcg_losses.append(0.0)
+            self.pos_losses.append(0.0)
+            self.extreme_losses.append(0.0)
+            self.prior_losses.append(0.0)
+
+        # 更新曲线
+        self.line_loss.set_data(self.steps, self.losses)
+        self.line_sp.set_data(self.steps, self.spearmans)
+        self.line_pr.set_data(self.steps, self.pearsons)
+        self.line_rank.set_data(self.steps, self.rank_losses)
+        self.line_ndcg.set_data(self.steps, self.ndcg_losses)
+        self.line_pos.set_data(self.steps, self.pos_losses)
+        self.line_ext.set_data(self.steps, self.extreme_losses)
+        self.line_prior.set_data(self.steps, self.prior_losses)
+
+        # 动态调整 Y 轴范围
+        if self.losses:
+            min_loss = min(self.losses)
+            max_loss = max(self.losses)
+            margin = (max_loss - min_loss) * 0.1 + 0.01
+            self.ax_loss.set_ylim(min_loss - margin, max_loss + margin)
+
+        if self.rank_losses:
+            max_comp = max(
+                max(self.rank_losses),
+                max(self.ndcg_losses),
+                max(self.pos_losses),
+                max(self.extreme_losses),
+                max(self.prior_losses),
+            )
+            self.ax_components.set_ylim(0, max_comp * 1.1 + 0.01)
+
+        # 更新状态文本
+        self.status_text.set_text(
+            f"Pop {pop_idx + 1}/{self.pop_size} | Step {step}/{self.n_steps}\n"
+            f"Loss: {loss:.4f} | Sp: {spearman:.4f} | Pr: {pearson:.4f}"
+        )
+
+        # 更新位置权重热力图
+        if params is not None and device is not None:
+            self._update_weight_heatmap(params, device)
+
+        # 刷新图形
+        if self.interactive:
+            self.fig.canvas.draw_idle()
+            self.fig.canvas.flush_events()
+
+    def _update_weight_heatmap(self, params: torch.Tensor, device: torch.device):
+        """更新位置权重热力图。"""
+        params_cpu = params.detach().cpu()
+        pw_raw = params_cpu[:N_POS * N_DIM].reshape(N_POS, N_DIM)
+        pw = apply_position_weight_caps(torch.softmax(pw_raw, dim=1)).numpy()
+
+        self.ax_weights.clear()
+        self.ax_weights.set_title("Position-Dimension Weights")
+
+        im = self.ax_weights.imshow(pw, cmap="YlOrRd", aspect="auto", vmin=0, vmax=0.5)
+        self.ax_weights.set_xticks(range(N_DIM))
+        self.ax_weights.set_xticklabels(DIMENSIONS, fontsize=9)
+        self.ax_weights.set_yticks(range(N_POS))
+        self.ax_weights.set_yticklabels(POSITIONS, fontsize=9)
+
+        # 添加数值标注
+        for i in range(N_POS):
+            for j in range(N_DIM):
+                val = pw[i, j]
+                color = "white" if val > 0.25 else "black"
+                self.ax_weights.text(j, i, f"{val:.2f}", ha="center", va="center",
+                                     fontsize=8, color=color)
+
+        # 更新 colorbar（不删除旧的，直接在 ax 上新建）
+        if hasattr(self, "_cbar_ax") and self._cbar_ax is not None:
+            self._cbar_ax.remove()
+            self._cbar_ax = None
+        self._cbar_ax = self.fig.colorbar(im, ax=self.ax_weights, shrink=0.8).ax
+
+    def close(self):
+        """关闭可视化窗口。"""
+        if self.enable and hasattr(self, "fig"):
+            plt.close(self.fig)
+
+    def save(self, path: Path):
+        """保存最终图表。"""
+        if self.enable and hasattr(self, "fig"):
+            self.fig.savefig(path, dpi=150, bbox_inches="tight")
+            print(f"  可视化图表已保存: {path}")
+
 
 # ── 位置映射 ──────────────────────────────────────────────────────────────
 
@@ -78,6 +329,26 @@ TEAM_AGG_MINUTES_CAP = 1500.0
 TEAM_AGG_CORE_MINUTES = 450.0
 TEAM_AGG_CORE_SCALE = 180.0
 TEAM_AGG_CAPPED_MINUTES_BLEND = 0.55
+
+# Position slot caps: limit each position group's contribution to team aggregation.
+# This prevents a position group (e.g., many CBs) from dominating the team rating.
+POSITION_SLOT_GROUPS = {
+    "GK": "GK",
+    "CB": "CB",
+    "FB": "FB",
+    "DM": "MF",
+    "CM": "MF",
+    "AM": "ATT",
+    "W": "ATT",
+    "ST": "ATT",
+}
+POSITION_SLOT_CAPS = {
+    "GK": 1.0,
+    "CB": 2.5,
+    "FB": 1.5,
+    "MF": 2.5,
+    "ATT": 2.5,
+}
 
 # ── 队名归一化 ──────────────────────────────────────────────────────────
 # FBref、Understat 和 Football-Data 使用不同的队名格式。
@@ -392,7 +663,8 @@ def map_position(pos_str):
 
 
 def map_position_detailed(pos_str):
-    """Parse position string from FBref or Understat into (sub_position, position_source, position_confidence).
+    """Parse position string from FBref or Understat into
+    (sub_position, position_source, position_confidence).
 
     Understat uses single letters: D, M, F, S, and combinations: D S, D M, D M S, F M, F M S
     FBref uses abbreviations: GK, DF, MF, FW, and combinations: DF,MF / MF,FW / FW,MF
@@ -412,7 +684,8 @@ def map_position_detailed(pos_str):
     if "GK" in s:
         return ("GK", source, "high")
 
-    # Detect source format: FBref uses DF/MF/FW with possible commas, Understat uses D/M/F/S with spaces
+    # Detect source format: FBref uses DF/MF/FW with possible commas,
+    # Understat uses D/M/F/S with spaces
     # FBref format: contains "DF" or "MF" or "FW" (2-letter codes)
     is_fbref = any(code in s for code in ["DF", "MF", "FW"])
     is_understat = not is_fbref and any(code in s.split() for code in ["D", "M", "F", "S"])
@@ -424,6 +697,7 @@ def map_position_detailed(pos_str):
         has_fw = "FW" in s
 
         if has_df and has_mf:
+            # DF,MF 和 MF,DF 都是翼卫/边后卫特征
             return ("FB", source, "high")
         if has_mf and has_fw:
             # MF,FW could be W or AM - use order as hint
@@ -443,28 +717,33 @@ def map_position_detailed(pos_str):
 
     if is_understat:
         # Understat format: space-separated single letters D/M/F/S
+        # IMPORTANT: S = Substitute, NOT Striker. Must be ignored for position.
         tokens = set(s.split())
         has_d = "D" in tokens
         has_m = "M" in tokens
         has_f = "F" in tokens
-        has_s = "S" in tokens
+        # S = Substitute, not a position indicator — ignore it
+        # has_s is deliberately NOT used in position logic
 
-        if has_d and has_m and (has_f or has_s):
-            return ("FB", source, "medium")  # D M S / D M F -> wingback
+        if has_d and has_m and has_f:
+            return ("FB", source, "medium")  # D M F -> wingback
         if has_d and has_m:
             return ("FB", source, "medium")  # D M -> wingback/fullback
-        if has_d and (has_f or has_s):
-            return ("CB", source, "low")  # D S / D F -> CB with low confidence
-        if has_f and has_m and has_s:
-            return ("W", source, "medium")  # F M S -> winger
+        if has_d and has_f:
+            return ("CB", source, "low")  # D F -> CB with low confidence
         if has_f and has_m:
-            return ("AM", source, "medium")  # F M -> attacking mid
+            # F M: order matters — F listed first suggests more attacking
+            # "F M S" is common for wingers, "M F" would be AM
+            if s.split().index("F") < s.split().index("M"):
+                return ("W", source, "medium")  # F before M -> winger
+            return ("AM", source, "medium")  # M before F -> attacking mid
         if has_d:
             return ("CB", source, "low")  # D alone -> default CB, low confidence
-        if has_f or has_s:
-            return ("ST", source, "low")  # F or S alone -> striker, low confidence
+        if has_f:
+            return ("ST", source, "low")  # F alone -> striker, low confidence
         if has_m:
             return ("CM", source, "low")  # M alone -> CM, low confidence
+        # S alone or no recognized position -> fallback
         return ("CM", source, "low")
 
     # Fallback: try the old logic for any other format
@@ -482,6 +761,12 @@ def refine_role_positions(df: pd.DataFrame) -> pd.DataFrame:
     1. DF → FB：助攻/传中/进攻贡献显著高于 CB 典型值的边后卫
     2. MF → FB：历史有 DF,MF 线索且传中/防守量达标的翼卫
     3. MF → W/AM：进攻产量达标的边锋/前腰
+
+    阈值根据 position_confidence 调整：
+    - low（Understat 单字母）：更积极重判，阈值更低
+    - high（FBref 多位置组合）：更保守重判，阈值更高
+    - medium：使用默认阈值
+    重判后 low → medium，因为特征证据提升了位置置信度。
     """
     if "source_position" not in df.columns:
         return df
@@ -514,38 +799,130 @@ def refine_role_positions(df: pd.DataFrame) -> pd.DataFrame:
     raw_mf = source.eq("MF")
     raw_df = source.eq("DF")
 
+    # --- position_confidence masks ---
+    conf = refined.get("position_confidence", pd.Series("medium", index=refined.index))
+    if not isinstance(conf, pd.Series):
+        conf = pd.Series("medium", index=refined.index)
+    conf = conf.fillna("medium").astype(str)
+    is_low = conf.eq("low")
+    is_high = conf.eq("high")
+
     # --- DF → FB 重判 ---
     # 边后卫特征：助攻/传中显著高于 CB 均值，且有足够出场时间。
-    # 纯 CB 的 assists_p90 通常 < 0.10，crosses_p90 通常 < 1.0。
-    # FB 典型值：assists_p90 >= 0.10 或 crosses_p90 >= 1.0。
     sufficient_minutes = minutes >= 450
-    fb_attack_profile = (
+    fb_by_history = has_wingback_history & has_df_history
+
+    # Default (medium) thresholds
+    fb_attack_default = (
         (assists >= 0.10)
         | (crosses >= 1.0)
         | ((assists >= 0.06) & (crosses >= 0.6))
     )
-    # 历史有 DF,MF 线索的翼卫也重判
-    fb_by_history = has_wingback_history & has_df_history
-
-    refined.loc[current_cb & raw_df & sufficient_minutes & (fb_attack_profile | fb_by_history), "sub_position"] = "FB"
-
-    # --- MF → FB 重判 ---
-    wingback_like = has_df_history & (
-        (raw_df & has_wingback_history)
-        | (crosses >= 1.8)
-        | ((crosses >= 1.2) & (defense >= 0.8))
+    # Low confidence: lower thresholds (more aggressive reclassification)
+    fb_attack_low = (
+        (assists >= 0.07)
+        | (crosses >= 0.7)
+        | ((assists >= 0.04) & (crosses >= 0.4))
+    )
+    # High confidence: higher thresholds (more conservative reclassification)
+    fb_attack_high = (
+        (assists >= 0.15)
+        | (crosses >= 1.5)
+        | ((assists >= 0.10) & (crosses >= 1.0))
     )
 
+    fb_attack = (
+        (is_low & fb_attack_low)
+        | (is_high & fb_attack_high)
+        | (~is_low & ~is_high & fb_attack_default)
+    )
+
+    refined.loc[
+        current_cb & raw_df & sufficient_minutes & (fb_attack | fb_by_history),
+        "sub_position",
+    ] = "FB"
+
+    # --- MF → FB 重判 ---
+    # 收紧阈值：只有真正翼卫特征的才重判，避免定位球主罚中场被误判
+    # 必须同时满足：高传中 + 有后卫历史 + 防守达标
+    # Default (medium) thresholds
+    wingback_default = (
+        (crosses >= 2.5)
+        & (defense >= 0.8)
+    )
+    # Low confidence — 仍需双重条件
+    wingback_low = (
+        (crosses >= 2.0)
+        & (defense >= 0.6)
+    )
+    # High confidence
+    wingback_high = (
+        (crosses >= 3.0)
+        & (defense >= 1.0)
+    )
+
+    wingback_feature = (
+        (is_low & wingback_low)
+        | (is_high & wingback_high)
+        | (~is_low & ~is_high & wingback_default)
+    )
+    # MF→FB 必须同时有 DF 历史和翼卫特征，缺一不可
+    wingback_like = has_df_history & wingback_feature
+
     # --- MF → W/AM 重判 ---
-    forward_like = (
+    # Default (medium) thresholds
+    forward_like_default = (
         (has_fw_history & ((npg >= 0.20) | (assists >= 0.20) | (volume >= 8.0)))
         | ((npg >= 0.32) & (volume >= 10.0))
     )
-    pure_attacking_mid = (~has_fw_history) & (npg >= 0.24) & (assists >= 0.16)
+    pure_attacking_mid_default = (~has_fw_history) & (npg >= 0.24) & (assists >= 0.16)
 
-    refined.loc[current_cm & raw_mf & wingback_like, "sub_position"] = "FB"
-    refined.loc[current_cm & raw_mf & forward_like & ~wingback_like, "sub_position"] = "W"
-    refined.loc[current_cm & raw_mf & pure_attacking_mid & ~wingback_like, "sub_position"] = "AM"
+    # Low confidence thresholds
+    forward_like_low = (
+        (has_fw_history & ((npg >= 0.15) | (assists >= 0.15) | (volume >= 6.0)))
+        | ((npg >= 0.25) & (volume >= 8.0))
+    )
+    pure_attacking_mid_low = (~has_fw_history) & (npg >= 0.18) & (assists >= 0.12)
+
+    # High confidence thresholds
+    forward_like_high = (
+        (has_fw_history & ((npg >= 0.28) | (assists >= 0.28) | (volume >= 10.0)))
+        | ((npg >= 0.38) & (volume >= 12.0))
+    )
+    pure_attacking_mid_high = (~has_fw_history) & (npg >= 0.30) & (assists >= 0.20)
+
+    forward_like = (
+        (is_low & forward_like_low)
+        | (is_high & forward_like_high)
+        | (~is_low & ~is_high & forward_like_default)
+    )
+    pure_attacking_mid = (
+        (is_low & pure_attacking_mid_low)
+        | (is_high & pure_attacking_mid_high)
+        | (~is_low & ~is_high & pure_attacking_mid_default)
+    )
+
+    # Track which players get reclassified for confidence upgrade
+    reclassified = pd.Series(False, index=refined.index)
+
+    fb_mask = current_cm & raw_mf & wingback_like
+    w_mask = current_cm & raw_mf & forward_like & ~wingback_like
+    am_mask = current_cm & raw_mf & pure_attacking_mid & ~wingback_like
+
+    refined.loc[fb_mask, "sub_position"] = "FB"
+    refined.loc[w_mask, "sub_position"] = "W"
+    refined.loc[am_mask, "sub_position"] = "AM"
+
+    reclassified = fb_mask | w_mask | am_mask
+
+    # Also mark DF→FB reclassifications
+    df_fb_mask = current_cb & raw_df & sufficient_minutes & (fb_attack | fb_by_history)
+    reclassified = reclassified | df_fb_mask
+
+    # Upgrade position_confidence from low → medium for reclassified players
+    if "position_confidence" in refined.columns:
+        refined.loc[reclassified & is_low, "position_confidence"] = "medium"
+
     refined["pos_idx"] = (
         refined["sub_position"].map(POS_TO_IDX).fillna(POS_TO_IDX["CM"]).astype(int)
     )
@@ -572,6 +949,8 @@ def team_aggregation_config() -> dict[str, float]:
         "core_scale": TEAM_AGG_CORE_SCALE,
         "capped_minutes_blend": TEAM_AGG_CAPPED_MINUTES_BLEND,
         "core_rotation_blend": 1.0 - TEAM_AGG_CAPPED_MINUTES_BLEND,
+        "position_slot_groups": POSITION_SLOT_GROUPS,
+        "position_slot_caps": POSITION_SLOT_CAPS,
     }
 
 
@@ -828,7 +1207,8 @@ def load_data(data_dir: Path):
         # Select and rename columns
         understat_df = understat[[
             "player_name", "team_title", "league", "season", "position",
-            "sub_position", "pos_idx", "matches", "starts", "minutes",
+            "sub_position", "pos_idx", "position_source", "position_confidence",
+            "matches", "starts", "minutes",
             "npg_p90", "assists_p90", "g_a_volume",
         ]].copy()
         understat_df = understat_df.rename(
@@ -1652,6 +2032,29 @@ def _build_team_aggregation_weights(df_reset: pd.DataFrame) -> np.ndarray:
         TEAM_AGG_CAPPED_MINUTES_BLEND * capped_share
         + (1.0 - TEAM_AGG_CAPPED_MINUTES_BLEND) * core_share
     )
+
+    # Apply position slot caps
+    if "sub_position" in df_reset.columns:
+        slot_group = df_reset["sub_position"].map(POSITION_SLOT_GROUPS).fillna("MF")
+        work["slot_group"] = slot_group.values
+        work["team_season"] = (
+            work["team"] + "|" + work["league"] + "|" + work["season"]
+        )
+        work["weight"] = weights
+
+        # Compute slot totals per team-season
+        slot_totals = work.groupby(
+            ["team_season", "slot_group"], sort=False
+        )["weight"].transform("sum")
+        slot_caps = slot_group.map(POSITION_SLOT_CAPS).fillna(2.5)
+
+        # Scale down weights where slot total exceeds cap
+        overcap = slot_totals > slot_caps.values
+        if overcap.any():
+            scale_factor = np.where(overcap, slot_caps.values / slot_totals, 1.0)
+            weights = weights * scale_factor
+
+    # Normalize within team-season
     work["weight"] = weights
     weight_sum = work.groupby(["team", "league", "season"], sort=False)["weight"].transform(
         "sum",
@@ -1734,9 +2137,13 @@ def compute_ratings_torch(feat, params, device):
     attack_scale = torch.ones(N_POS, device=device)
     w_idx = POS_TO_IDX.get("W", 1)
     am_idx = POS_TO_IDX.get("AM", 2)
+    fb_idx = POS_TO_IDX.get("FB", 5)
     # ST 不压缩 attack：前锋本应由进攻主导，quality cap 已防止 quality 绕路霸榜
     attack_scale[w_idx] = 0.96
     attack_scale[am_idx] = 0.97
+    # FB 进攻输出（助攻/传中）不应等同前场：FB 的进攻是附加值，不是核心职责
+    # 0.82 压缩让高助攻 FB 仍能获得进攻加分，但不会靠进攻维度霸榜
+    attack_scale[fb_idx] = 0.82
     cm_idx = POS_TO_IDX.get("CM", 3)
     dm_idx = POS_TO_IDX.get("DM", 4)
     # FBref 粗位置会把部分边锋/前腰写成 MF。位置重判已处理明显样本；
@@ -1792,6 +2199,23 @@ def compute_ratings_torch(feat, params, device):
     sr = starts_t / torch.clamp(matches_t, min=1)
     rel_starts_ref = 0.3 + rel_starts_scale * 0.4
     start_rel = 0.85 + 0.15 * torch.clamp(sr / rel_starts_ref, max=1.0)
+
+    # ── 高首发率伤病保护 ──
+    # 首发率 >= 70% 的球员，低分钟数大概率是伤病/转会导致，不是替补刷分。
+    # 对这类球员，分钟惩罚的底分从 0.42 提升到 0.72，爬坡终点从 1200 降到 900。
+    # 这样一个首发率 90%、500 分钟的球员 reliability ≈ 0.85 而非 0.49。
+    high_start_mask = sr >= 0.70
+    injury_min_floor = 0.72
+    injury_min_ceiling = 900.0
+    injury_min_progress = torch.clamp(
+        (minutes - min_threshold) / (injury_min_ceiling - min_threshold),
+        min=0.0,
+        max=1.0,
+    )
+    injury_min_rel = injury_min_floor + (1.0 - injury_min_floor) * injury_min_progress
+    # 只对高首发率且低分钟的球员应用保护（分钟>=1200时两者相同，无需切换）
+    min_rel = torch.where(high_start_mask & (minutes < min_ceiling), injury_min_rel, min_rel)
+
     reliability = min_rel * start_rel
 
     # ── League coefficient ──
@@ -2089,6 +2513,7 @@ def objective_torch(
     prior_weight=0.05,
     prior_params=None,
     verbose=False,
+    return_components=False,
 ):
     """Composite objective: Spearman + NDCG + position consistency + extreme penalty + prior."""
     ratings = compute_ratings_torch(feat, params, device)
@@ -2096,7 +2521,10 @@ def objective_torch(
     matched_group_idx, actual_t = build_team_target_tensors(feat, team_pts_df, device)
 
     if len(matched_group_idx) < 10:
-        return torch.tensor(1.0, device=device, requires_grad=True)
+        dummy = torch.tensor(1.0, device=device, requires_grad=True)
+        if return_components:
+            return dummy, {}
+        return dummy
 
     pred_t = team_avgs.index_select(0, matched_group_idx)
 
@@ -2133,6 +2561,18 @@ def objective_torch(
             f"prior={prior_reg.item():.4f} total={total.item():.4f}"
         )
 
+    if return_components:
+        components = {
+            "rank_loss": float(rank_loss.detach().cpu()),
+            "ndcg": float(ndcg.detach().cpu()),
+            "pos_loss": float(pos_loss.detach().cpu()),
+            "extreme": float(ext_pen.detach().cpu()),
+            "prior": float(prior_reg.detach().cpu()),
+            "soft_spearman": float(soft_sp.detach().cpu()),
+            "soft_pearson": float(pr.detach().cpu()),
+        }
+        return total, components
+
     return total
 
 
@@ -2154,6 +2594,8 @@ def optimize(
     init_scale=0.35,
     patience=80,
     seed=None,
+    enable_viz=True,
+    output_dir=None,
 ):
     """
     多起点并行优化。
@@ -2180,6 +2622,9 @@ def optimize(
 
     prior_params = _get_default_params_tensor(device)
 
+    # 初始化可视化器
+    viz = OptimizationVisualizer(n_steps, pop_size, enable=enable_viz)
+
     # 初始化参数种群
     all_params = []
     all_losses = []
@@ -2200,10 +2645,10 @@ def optimize(
         best_params = params_t.clone().detach()
         patience_counter = 0
 
-        for _step in range(n_steps):
+        for step in range(n_steps):
             optimizer.zero_grad()
 
-            total_loss = objective_torch(
+            total_loss, components = objective_torch(
                 feat,
                 team_pts,
                 params_t,
@@ -2214,12 +2659,27 @@ def optimize(
                 extreme_penalty_weight=extreme_penalty_weight,
                 prior_weight=prior_strength,
                 prior_params=prior_params,
+                return_components=True,
             )
 
             total_loss.backward()
             optimizer.step()
 
             current_loss = float(total_loss.detach().cpu())
+
+            # 更新可视化 (每 5 步更新一次，避免频繁刷新)
+            if viz.enable and step % 5 == 0:
+                viz.update(
+                    step=step,
+                    pop_idx=pop_i,
+                    loss=current_loss,
+                    spearman=components.get("soft_spearman", 0.0),
+                    pearson=components.get("soft_pearson", 0.0),
+                    components=components,
+                    params=params_t,
+                    device=device,
+                )
+
             if current_loss < best_loss:
                 best_loss = current_loss
                 best_params = params_t.clone().detach()
@@ -2251,6 +2711,11 @@ def optimize(
     best_idx = int(np.argmin(all_losses))
     best_sp, best_pr = all_final_corrs[best_idx]
     print(f"\n  最优: Spearman={best_sp:.4f}  Pearson={best_pr:.4f}  (第 {best_idx+1} 组)")
+
+    # 关闭可视化
+    if output_dir is not None:
+        viz.save(Path(output_dir) / "optimization_progress.png")
+    viz.close()
 
     return all_params[best_idx].to(device)
 
@@ -2538,6 +3003,11 @@ def main():
         action="store_true",
         help="快速模式：大幅降低种群/步数/耐心，适合 Mac CPU/MPS 本地快速迭代",
     )
+    parser.add_argument(
+        "--no-viz",
+        action="store_true",
+        help="禁用实时可视化（适用于无 GUI 环境或远程服务器）",
+    )
     args = parser.parse_args()
 
     # Quick mode: Mac-friendly defaults
@@ -2579,6 +3049,14 @@ def main():
     print("\n[1] 加载数据...")
     t0 = time.time()
     df, team_pts = load_data(data_dir)
+
+    # 出场标记：不足 20 场的球员仍参与评分，但不参与优化训练
+    MIN_MATCHES_OPT = 20
+    if "matches" in df.columns:
+        df["low_appearance"] = df["matches"] < MIN_MATCHES_OPT
+        n_low = df["low_appearance"].sum()
+        print(f"  出场标记 (<{MIN_MATCHES_OPT}场): {n_low} 人标记为 low_appearance")
+
     print(f"  球员: {len(df)}, 球队赛季: {len(team_pts)}")
     print(f"  耗时: {time.time()-t0:.1f}s")
 
@@ -2597,6 +3075,13 @@ def main():
     test_df = _filter_by_seasons(df, holdout.test_seasons)
     train_team_pts = _filter_by_seasons(team_pts, holdout.train_seasons)
     test_team_pts = _filter_by_seasons(team_pts, holdout.test_seasons)
+
+    # 优化训练排除 low_appearance 球员（仍参与最终评分）
+    if "low_appearance" in train_df.columns:
+        n_low_train = train_df["low_appearance"].sum()
+        train_df = train_df[~train_df["low_appearance"]].copy()
+        print(f"  训练集排除 low_appearance: {n_low_train} 人")
+
     print(f"  train seasons: {list(holdout.train_seasons)}")
     print(f"  test seasons:  {list(holdout.test_seasons)}")
     print(f"  train players={len(train_df)}, test players={len(test_df)}")
@@ -2645,6 +3130,8 @@ def main():
         init_scale=args.init_scale,
         patience=args.patience,
         seed=args.seed,
+        enable_viz=not args.no_viz,
+        output_dir=data_dir / "gold" / "feature_store",
     )
     print(f"  总耗时: {time.time()-t0:.1f}s")
 
@@ -2868,15 +3355,16 @@ def main():
     holdout_predictions = optimized_test_eval["matched"].rename(
         columns={"pred_rating": "optimized_rating"},
     )
-    baseline_holdout = baseline_test_eval["matched"].loc[
-        :,
-        ["team", "league", "season", "pred_rating"],
-    ].rename(columns={"pred_rating": "baseline_v3_rating"})
-    holdout_predictions = holdout_predictions.merge(
-        baseline_holdout,
-        on=["team", "league", "season"],
-        how="left",
-    )
+    if not holdout_predictions.empty and not baseline_test_eval["matched"].empty:
+        baseline_holdout = baseline_test_eval["matched"].loc[
+            :,
+            ["team", "league", "season", "pred_rating"],
+        ].rename(columns={"pred_rating": "baseline_v3_rating"})
+        holdout_predictions = holdout_predictions.merge(
+            baseline_holdout,
+            on=["team", "league", "season"],
+            how="left",
+        )
     holdout_predictions.to_parquet(output / "rating_holdout_predictions.parquet", index=False)
     if not cv_metrics.empty:
         cv_metrics.to_parquet(output / "rating_cv_metrics.parquet", index=False)
@@ -2951,6 +3439,49 @@ def main():
     all_ratings = compute_ratings_torch(all_feat, best_params, device)
     scored_df = df.copy()
     scored_df["optimized_score"] = all_ratings.detach().cpu().numpy()
+
+    # 低出场额外扣分：不足 20 场的球员按出场比例打折
+    if "low_appearance" in scored_df.columns and "matches" in scored_df.columns:
+        MIN_MATCHES_PENALTY = 20
+        low_mask = scored_df["low_appearance"]
+        if low_mask.any():
+            # 线性惩罚：0场→扣30%，10场→扣15%，20场→不扣
+            penalty = 1.0 - 0.30 * (1.0 - scored_df["matches"] / MIN_MATCHES_PENALTY).clip(0, 1)
+            scored_df.loc[low_mask, "optimized_score"] *= penalty[low_mask]
+            n_low = low_mask.sum()
+            print(f"  低出场扣分: {n_low} 人 (最多扣 30%)")
+
+    # Compute same_position_score: percentile rank within season + sub_position
+    min_position_group_size = 5
+
+    def _compute_position_percentile(group):
+        """Compute percentile rank within a group, returning NaN if too few members."""
+        if len(group) < min_position_group_size:
+            return pd.Series(np.nan, index=group.index)
+        return group.rank(pct=True) * 100
+
+    # Primary: season + sub_position percentile
+    scored_df["same_position_score"] = (
+        scored_df.groupby(["season", "sub_position"])["optimized_score"]
+        .transform(_compute_position_percentile)
+    )
+
+    # Fallback: sub_position global percentile for groups that were too small
+    needs_fallback = scored_df["same_position_score"].isna()
+    if needs_fallback.any():
+        global_pct = (
+            scored_df.loc[needs_fallback]
+            .groupby("sub_position")["optimized_score"]
+            .transform(
+                lambda g: (
+                    g.rank(pct=True) * 100
+                    if len(g) >= min_position_group_size
+                    else pd.Series(np.nan, index=g.index)
+                )
+            )
+        )
+        scored_df.loc[needs_fallback, "same_position_score"] = global_pct
+
     scored_df = scored_df.sort_values("optimized_score", ascending=False)
     scored_df.to_parquet(output / "player_ratings_optimized.parquet", index=False)
     print(f"  球员评分已保存: {output / 'player_ratings_optimized.parquet'}")
@@ -2960,6 +3491,62 @@ def main():
     for i, (_, row) in enumerate(scored_df.head(20).iterrows(), 1):
         print(f"  {i:>3}  {row['player']:<28} {row['team']:<22} "
               f"{row['sub_position']:<3} {row['optimized_score']:>6.1f}")
+
+    # ── Position distribution diagnostics ──
+    print("\n  位置分布诊断:")
+    print("-" * 60)
+    for n in [20, 50, 100]:
+        top_n = scored_df.head(n)
+        pos_counts = top_n["sub_position"].value_counts()
+        total = len(top_n)
+        print(f"\n  Top {n} 位置分布:")
+        for pos in POSITIONS:
+            count = pos_counts.get(pos, 0)
+            pct = count / total * 100 if total > 0 else 0
+            flag = " ⚠" if pct > 40 else ""
+            print(f"    {pos:>3}: {count:>3} ({pct:>5.1f}%){flag}")
+
+    if "position_confidence" in scored_df.columns:
+        top100 = scored_df.head(100)
+        low_conf = top100[top100["position_confidence"] == "low"]
+        if not low_conf.empty:
+            print(f"\n  Top 100 中 position_confidence=low 的球员 ({len(low_conf)} 人):")
+            print("-" * 80)
+            for _, row in low_conf.iterrows():
+                print(f"    {row['player']:<28} {row['team']:<22} "
+                      f"{row['sub_position']:<3} src={row.get('position_source', 'N/A'):<8} "
+                      f"score={row['optimized_score']:>6.1f}")
+        else:
+            print("\n  Top 100 中无 position_confidence=low 球员")
+
+    if "same_position_score" in scored_df.columns:
+        print("\n  同位置评分 Top 5 (按 same_position_score):")
+        print("-" * 80)
+        for pos in POSITIONS:
+            pos_players = scored_df[scored_df["sub_position"] == pos].head(5)
+            if pos_players.empty:
+                continue
+            print(f"\n  {pos}:")
+            for _, row in pos_players.iterrows():
+                sps = row.get("same_position_score", float("nan"))
+                sps_str = f"{sps:>5.1f}" if pd.notna(sps) else "  N/A"
+                print(f"    {row['player']:<28} {row['team']:<22} "
+                      f"abs={row['optimized_score']:>6.1f}  pos={sps_str}")
+
+    if "position_source" in scored_df.columns:
+        print("\n  位置映射统计 (position_source → sub_position):")
+        print("-" * 60)
+        mapping = (
+            scored_df.groupby(["position_source", "sub_position"])
+            .size()
+            .reset_index(name="count")
+        )
+        mapping = mapping.sort_values("count", ascending=False)
+        for _, row in mapping.head(30).iterrows():
+            pos_src = str(row['position_source'])
+            print(f"    {pos_src:<12} → {row['sub_position']:<4} ({row['count']:>4})")
+        if len(mapping) > 30:
+            print(f"    ... 共 {len(mapping)} 种映射，仅显示前 30")
 
 
 if __name__ == "__main__":
