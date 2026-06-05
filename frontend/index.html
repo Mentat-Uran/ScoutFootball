@@ -3,216 +3,321 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scoutlab - Liquid Glass UI</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <title>ScoutLab Analyst Console</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
 </head>
-<body class="overflow-hidden font-['Inter']">
-    <!-- 动态极光网格渐变背景 -->
-    <div class="mesh-bg absolute inset-0 -z-10"></div>
-    <div class="glow-orb orb-1"></div>
-    <div class="glow-orb orb-2"></div>
+<body>
+    <div class="mesh-bg" aria-hidden="true"></div>
 
-    <div class="flex h-screen w-screen p-6 gap-6 z-10 relative">
-        <!-- 导航侧边栏 -->
-        <nav class="liquid-panel w-24 rounded-[40px] flex flex-col items-center py-10 gap-8 h-full shadow-2xl transition-all duration-500 hover:w-64 group cursor-pointer overflow-hidden shrink-0">
-            <div class="flex items-center gap-4 w-full px-8">
-                <div class="text-3xl drop-shadow-md">🧭</div>
-                <span class="i18n text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" data-zh="概览" data-en="Dashboard">Dashboard</span>
+    <div class="app-shell">
+        <nav class="liquid-panel side-nav" aria-label="ScoutLab">
+            <button class="brand-lockup nav-action" data-view="overview" type="button" aria-label="ScoutLab">
+                <span class="brand-mark">S</span>
+                <span class="brand-text">ScoutLab</span>
+            </button>
+
+            <div class="nav-stack">
+                <button class="nav-action active" data-view="overview" type="button">
+                    <span class="nav-icon">◎</span>
+                    <span data-i18n="nav_overview">总览</span>
+                </button>
+                <button class="nav-action" data-view="players" type="button">
+                    <span class="nav-icon">◇</span>
+                    <span data-i18n="nav_players">球员</span>
+                </button>
+                <button class="nav-action" data-view="value" type="button">
+                    <span class="nav-icon">€</span>
+                    <span data-i18n="nav_value">身价</span>
+                </button>
+                <button class="nav-action" data-view="matches" type="button">
+                    <span class="nav-icon">△</span>
+                    <span data-i18n="nav_matches">预测</span>
+                </button>
+                <button class="nav-action" data-view="scouting" type="button">
+                    <span class="nav-icon">□</span>
+                    <span data-i18n="nav_scouting">球探</span>
+                </button>
+                <button class="nav-action" data-view="actions" type="button">
+                    <span class="nav-icon">⌁</span>
+                    <span data-i18n="nav_actions">动作价值</span>
+                </button>
+                <button class="nav-action" data-view="reports" type="button">
+                    <span class="nav-icon">▣</span>
+                    <span data-i18n="nav_reports">报告</span>
+                </button>
             </div>
-            <div class="flex items-center gap-4 w-full px-8">
-                <div class="text-3xl drop-shadow-md">🏃</div>
-                <span class="i18n text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" data-zh="球员选材" data-en="Scout Hub">Scout Hub</span>
-            </div>
-            <div class="flex items-center gap-4 w-full px-8">
-                <div class="text-3xl drop-shadow-md">⚔️</div>
-                <span class="i18n text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" data-zh="比赛预测" data-en="Match Center">Match Center</span>
-            </div>
-            
-            <div class="mt-auto flex flex-col gap-8 w-full">
-                <!-- Theme Toggle -->
-                <div class="flex items-center gap-4 w-full px-8 opacity-60 hover:opacity-100 transition-opacity" onclick="toggleTheme()">
-                    <div class="text-3xl drop-shadow-md" id="theme-icon">🌙</div>
-                    <span class="i18n text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap" data-zh="外观切换" data-en="Theme">Theme</span>
-                </div>
-                <!-- Lang Toggle -->
-                <div class="flex items-center gap-4 w-full px-8 opacity-60 hover:opacity-100 transition-opacity" onclick="toggleLanguage()">
-                    <div class="text-3xl drop-shadow-md">🌐</div>
-                    <span class="text-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">EN / 中文</span>
-                </div>
+
+            <div class="nav-footer">
+                <button class="icon-button" id="theme-toggle" type="button" aria-label="Theme">☾</button>
+                <button class="text-button" id="lang-toggle" type="button">EN</button>
             </div>
         </nav>
 
-        <!-- 主内容区 -->
-        <main class="flex-1 flex flex-col gap-6 overflow-hidden">
-            <!-- 头部 -->
-            <header class="liquid-panel h-20 rounded-[30px] flex items-center px-8 justify-between shrink-0">
-                <h1 class="i18n text-2xl font-bold tracking-wider opacity-90" data-zh="Scoutlab 数据终端" data-en="Scoutlab Data Terminal">Scoutlab Data Terminal</h1>
-                <input type="text" id="search-input" class="glass-input px-6 py-2 rounded-full outline-none w-80 transition-all font-light text-sm" placeholder="Search missing pieces...">
+        <main class="main-stage">
+            <header class="liquid-panel top-bar">
+                <div>
+                    <p class="eyebrow" data-i18n="status_label">本地产物</p>
+                    <h1 data-i18n="app_title">ScoutLab 分析终端</h1>
+                </div>
+                <div class="top-actions">
+                    <label class="search-box">
+                        <span>⌕</span>
+                        <input id="global-search" type="search" data-i18n-placeholder="search_placeholder" placeholder="搜索球员、球队、报告">
+                    </label>
+                    <span class="status-pill status-medium">94 real / 8595 proxy</span>
+                    <span class="status-pill status-high">OOF 6513</span>
+                </div>
             </header>
 
-            <!-- 核心数据展示与可视化区 -->
-            <section class="flex-1 overflow-y-auto pr-2 pb-6 grid gap-6 grid-cols-1 xl:grid-cols-3">
-                
-                <!-- 可视化雷达图区 -->
-                <div class="liquid-panel rounded-[40px] p-8 col-span-1 flex flex-col relative min-h-[350px]">
-                    <h2 class="i18n text-lg font-semibold mb-2 opacity-80" data-zh="球员多维画像" data-en="Player Radar Profile">Player Radar Profile</h2>
-                    <!-- 雷达图容器 -->
-                    <div id="radar-chart" class="w-full flex-1"></div>
-                    <div class="absolute top-8 right-8 px-4 py-1.5 text-xs rounded-full glass-input font-medium">
-                        J. Bellingham
-                    </div>
+            <section class="view active" id="view-overview" aria-label="overview">
+                <div class="hero-grid">
+                    <article class="liquid-panel hero-panel">
+                        <div class="hero-copy">
+                            <p class="eyebrow" data-i18n="overview_kicker">只读研究工作台</p>
+                            <h2 data-i18n="overview_title">覆盖、模型、球探决策</h2>
+                        </div>
+                        <div class="coverage-strip">
+                            <div>
+                                <span class="metric-value">8,689</span>
+                                <span data-i18n="metric_player_match">球员比赛行</span>
+                            </div>
+                            <div>
+                                <span class="metric-value">10,660</span>
+                                <span data-i18n="metric_team_match">球队比赛行</span>
+                            </div>
+                            <div>
+                                <span class="metric-value">27,254</span>
+                                <span data-i18n="metric_ratings">评分行</span>
+                            </div>
+                            <div>
+                                <span class="metric-value">11,871</span>
+                                <span data-i18n="metric_events">事件样本</span>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="liquid-panel compact-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="data_health">数据健康</h3>
+                            <span class="status-pill status-low">LOW</span>
+                        </div>
+                        <ul class="signal-list">
+                            <li><span class="dot status-high"></span><span data-i18n="health_oof">身价 OOF 可用</span></li>
+                            <li><span class="dot status-medium"></span><span data-i18n="health_proxy">球员 match-level 覆盖不足</span></li>
+                            <li><span class="dot status-medium"></span><span data-i18n="health_trends">趋势指标契约待统一</span></li>
+                            <li><span class="dot status-low"></span><span data-i18n="health_truth">真实标签仍为空表</span></li>
+                        </ul>
+                    </article>
                 </div>
 
-                <!-- 数据库表展现区 -->
-                <div class="liquid-panel rounded-[40px] p-8 col-span-1 xl:col-span-2 flex flex-col">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="i18n text-lg font-semibold opacity-80" data-zh="核心球员评分池 ( Parquet )" data-en="Core Player Ratings (Parquet)">Core Player Ratings (Parquet)</h2>
-                        <button class="i18n px-4 py-1.5 rounded-full glass-input text-sm hover:scale-105 transition" data-zh="刷新数据库" data-en="Sync Database" onclick="mockFetchData()">Sync Database</button>
-                    </div>
-                    
-                    <div class="w-full overflow-x-auto rounded-2xl glass-input border-0">
-                        <table class="w-full text-left text-sm whitespace-nowrap">
-                            <thead class="glass-table-head">
-                                <tr>
-                                    <th class="i18n px-6 py-4 font-semibold" data-zh="球员" data-en="Player">Player</th>
-                                    <th class="i18n px-6 py-4 font-semibold" data-zh="位置" data-en="Pos">Pos</th>
-                                    <th class="i18n px-6 py-4 font-semibold" data-zh="球队" data-en="Team">Team</th>
-                                    <th class="i18n px-6 py-4 font-semibold" data-zh="评分" data-en="Rating">Rating</th>
-                                    <th class="i18n px-6 py-4 font-semibold" data-zh="状态" data-en="Status">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="data-tbody">
-                                <!-- JS 渲染占位 -->
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="grid-3">
+                    <article class="liquid-panel work-card" data-jump="players">
+                        <span class="card-index">01</span>
+                        <h3 data-i18n="card_players">球员画像</h3>
+                        <p data-i18n="card_players_body">排名、位置内 percentile、雷达、置信度和详情卡。</p>
+                    </article>
+                    <article class="liquid-panel work-card" data-jump="value">
+                        <span class="card-index">02</span>
+                        <h3 data-i18n="card_value">身价偏离</h3>
+                        <p data-i18n="card_value_body">OOF 残差、偏差榜、年龄和联赛分层。</p>
+                    </article>
+                    <article class="liquid-panel work-card" data-jump="matches">
+                        <span class="card-index">03</span>
+                        <h3 data-i18n="card_match">比赛预测</h3>
+                        <p data-i18n="card_match_body">胜平负、比分矩阵、模型覆盖和校准入口。</p>
+                    </article>
                 </div>
+            </section>
 
-                <!-- 低置信度UI提醒 / 容错展示 -->
-                <div class="liquid-panel rounded-[40px] p-6 col-span-1 xl:col-span-3 flex items-center justify-between transition-colors" style="border: 1px solid rgba(239, 68, 68, 0.3);">
-                    <div>
-                        <h3 class="i18n text-lg font-semibold text-red-500" data-zh="低置信度数据警告" data-en="Low Confidence Warning">Low Confidence Warning</h3>
-                        <p class="i18n text-sm opacity-60 mt-1 font-light" data-zh="当前包含分钟数不足或缺少进阶数据的样本，强排序被临时禁用。" data-en="Includes samples with missing advanced stats or low minutes. Strict ranking disabled.">Includes samples with missing advanced stats or low minutes. Strict ranking disabled.</p>
-                    </div>
-                    <div class="text-3xl opacity-50 drop-shadow-md">❄️</div>
+            <section class="view" id="view-players" aria-label="players">
+                <div class="layout-2">
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <div>
+                                <p class="eyebrow" data-i18n="players_kicker">位置内画像</p>
+                                <h2 id="selected-player-name">Jude Bellingham</h2>
+                            </div>
+                            <span id="player-confidence" class="status-pill status-high">HIGH</span>
+                        </div>
+                        <div id="radar-chart" class="chart-box"></div>
+                        <div class="detail-grid" id="player-detail"></div>
+                    </article>
+
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="player_pool">球员池</h3>
+                            <div class="filter-row">
+                                <select id="position-filter" class="glass-control">
+                                    <option value="ALL">ALL</option>
+                                    <option value="AM">AM</option>
+                                    <option value="DM">DM</option>
+                                    <option value="CB">CB</option>
+                                    <option value="ST">ST</option>
+                                    <option value="W">W</option>
+                                </select>
+                                <button class="text-button" id="export-players" type="button" data-i18n="export">导出</button>
+                            </div>
+                        </div>
+                        <div class="table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="th_rank">排名</th>
+                                        <th data-i18n="th_player">球员</th>
+                                        <th data-i18n="th_pos">位置</th>
+                                        <th data-i18n="th_team">球队</th>
+                                        <th data-i18n="th_rating">评分</th>
+                                        <th data-i18n="th_conf">置信度</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="player-table"></tbody>
+                            </table>
+                        </div>
+                    </article>
                 </div>
+            </section>
 
+            <section class="view" id="view-value" aria-label="value">
+                <div class="layout-2 reverse">
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <div>
+                                <p class="eyebrow" data-i18n="value_kicker">OOF residual</p>
+                                <h2 data-i18n="value_title">实际身价 vs 预测身价</h2>
+                            </div>
+                            <span class="status-pill status-high">6513</span>
+                        </div>
+                        <div id="value-chart" class="chart-box"></div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="value_rank">偏离榜</h3>
+                            <div class="segmented" role="group">
+                                <button class="segment active" data-value-mode="under" type="button" data-i18n="undervalued">低估</button>
+                                <button class="segment" data-value-mode="over" type="button" data-i18n="overvalued">高估</button>
+                            </div>
+                        </div>
+                        <div id="value-list" class="rank-list"></div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="view" id="view-matches" aria-label="matches">
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="match_selector">比赛选择</h3>
+                            <span class="status-pill status-medium">Independent Poisson</span>
+                        </div>
+                        <div class="selector-grid">
+                            <label>
+                                <span data-i18n="home_team">主队</span>
+                                <select id="home-team" class="glass-control"></select>
+                            </label>
+                            <label>
+                                <span data-i18n="away_team">客队</span>
+                                <select id="away-team" class="glass-control"></select>
+                            </label>
+                        </div>
+                        <div id="match-probabilities" class="probability-stack"></div>
+                        <div class="detail-grid" id="match-detail"></div>
+                    </article>
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <div>
+                                <p class="eyebrow" data-i18n="score_matrix">比分矩阵</p>
+                                <h2 id="match-title">Arsenal vs Barcelona</h2>
+                            </div>
+                            <span class="status-pill status-medium">Brier/RPS</span>
+                        </div>
+                        <div id="score-chart" class="chart-box"></div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="view" id="view-scouting" aria-label="scouting">
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="review_queue">复核队列</h3>
+                            <span class="status-pill status-medium">Parquet contract</span>
+                        </div>
+                        <div id="review-list" class="rank-list"></div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="watchlist">Watchlist</h3>
+                            <button class="text-button" type="button" data-i18n="snapshot">快照</button>
+                        </div>
+                        <div id="watchlist" class="watch-grid"></div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="view" id="view-actions" aria-label="actions">
+                <div class="layout-2">
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <div>
+                                <p class="eyebrow" data-i18n="action_kicker">StatsBomb sample</p>
+                                <h2 data-i18n="action_title">动作价值热区</h2>
+                            </div>
+                            <span class="status-pill status-low">SAMPLE</span>
+                        </div>
+                        <div id="action-chart" class="chart-box"></div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="action_pipeline">动作价值后端</h3>
+                            <span class="status-pill status-medium">xT -> VAEP</span>
+                        </div>
+                        <ul class="backend-list">
+                            <li><span>internal actions schema</span><strong>P2</strong></li>
+                            <li><span>player_action_value.parquet</span><strong>P2</strong></li>
+                            <li><span>source attribution manifest</span><strong>P6</strong></li>
+                            <li><span>public chart guardrail</span><strong>P6</strong></li>
+                        </ul>
+                    </article>
+                </div>
+            </section>
+
+            <section class="view" id="view-reports" aria-label="reports">
+                <div class="grid-3">
+                    <article class="liquid-panel report-card">
+                        <p class="eyebrow">model run</p>
+                        <h3>rating_optimizer_gpu</h3>
+                        <span class="status-pill status-medium">holdout pending</span>
+                    </article>
+                    <article class="liquid-panel report-card">
+                        <p class="eyebrow">value model</p>
+                        <h3>value_fairness_oof</h3>
+                        <span class="status-pill status-high">ready</span>
+                    </article>
+                    <article class="liquid-panel report-card">
+                        <p class="eyebrow">prediction</p>
+                        <h3>poisson_baseline</h3>
+                        <span class="status-pill status-medium">calibration needed</span>
+                    </article>
+                </div>
+                <article class="liquid-panel table-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="backend_contracts">后端契约</h3>
+                        <span class="status-pill status-medium">FastAPI draft</span>
+                    </div>
+                    <ul class="backend-list two-col">
+                        <li><span>/health + artifact registry</span><strong>next</strong></li>
+                        <li><span>/players + player profile</span><strong>next</strong></li>
+                        <li><span>/ratings/snapshots</span><strong>P0/P3</strong></li>
+                        <li><span>/predictions/{home}/{away}</span><strong>P5</strong></li>
+                        <li><span>/review-queue</span><strong>P7</strong></li>
+                        <li><span>/reports/model-runs</span><strong>P4</strong></li>
+                    </ul>
+                </article>
             </section>
         </main>
     </div>
 
-    <!-- 逻辑脚本 -->
-    <script>
-        // 1. i18n & Theme
-        let currentLang = 'en';
-        let isLightMode = false;
-        
-        function updateLocales() {
-            document.querySelectorAll('.i18n').forEach(el => {
-                if(el.dataset[currentLang]) el.textContent = el.dataset[currentLang];
-            });
-            document.getElementById('search-input').placeholder = currentLang === 'zh' ? '搜索库内球员/数据...' : 'Search database pieces...';
-        }
-
-        function toggleLanguage() {
-            currentLang = currentLang === 'en' ? 'zh' : 'en';
-            updateLocales();
-            renderChart(); 
-        }
-
-        function toggleTheme() {
-            isLightMode = !isLightMode;
-            document.body.classList.toggle('light-mode', isLightMode);
-            document.getElementById('theme-icon').textContent = isLightMode ? '☀️' : '🌙';
-            renderChart(); // 更新 Echarts 颜色
-        }
-
-        // 2. 模拟数据库/Parquet 调用
-        const dbMock = [
-            { player: 'J. Bellingham', pos: 'AM', team: 'Real Madrid', rating: 94.8, status: 'High Confidence', verified: true },
-            { player: 'Rodri', pos: 'DM', team: 'Man City', rating: 93.2, status: 'High Confidence', verified: true },
-            { player: 'A. Bastoni', pos: 'CB', team: 'Inter', rating: 91.5, status: 'Verified', verified: false },
-            { player: 'S. Unknown', pos: 'ST', team: 'Lille', rating: 61.2, status: 'Missing Data', frosted: true }
-        ];
-
-        function mockFetchData() {
-            const tbody = document.getElementById('data-tbody');
-            tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center opacity-50 animate-pulse font-medium">Fetching Parquet records...</td></tr>';
-            
-            setTimeout(() => {
-                tbody.innerHTML = '';
-                dbMock.forEach(row => {
-                    const rowClass = row.frosted ? 'glass-table-row frosted-row' : 'glass-table-row transition-colors';
-                    const ratingColor = row.rating > 90 ? 'text-green-500 font-bold' : 'font-bold opacity-80';
-                    const statusColor = row.frosted ? 'text-red-500/80 bg-red-500/10' : 'opacity-80 glass-input';
-                    
-                    tbody.innerHTML += `
-                        <tr class="${rowClass}">
-                            <td class="px-6 py-4 font-semibold">${row.player} ${row.verified ? '<span class="text-yellow-500 drop-shadow-sm">★</span>' : ''}</td>
-                            <td class="px-6 py-4 opacity-70">${row.pos}</td>
-                            <td class="px-6 py-4 opacity-70">${row.team}</td>
-                            <td class="px-6 py-4 ${ratingColor}">${row.rating}</td>
-                            <td class="px-6 py-4 text-xs"><span class="px-3 py-1 rounded inline-block ${statusColor}">${row.status}</span></td>
-                        </tr>
-                    `;
-                });
-            }, 600);
-        }
-
-        // 3. 可视化 (ECharts)
-        let myChart = null;
-        function renderChart() {
-            const chartDom = document.getElementById('radar-chart');
-            if(!myChart) myChart = echarts.init(chartDom, null, { renderer: 'canvas' });
-            
-            const isZh = currentLang === 'zh';
-            
-            // 根据主题动态提取颜色
-            const textColor = isLightMode ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.6)';
-            const splitColor = isLightMode ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)';
-            const areaColor = isLightMode ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.08)';
-            const lineColor = isLightMode ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.3)';
-            const itemColor = isLightMode ? '#333' : '#fff';
-
-            const option = {
-                radar: {
-                    indicator: [
-                        { name: isZh ? '进攻维度' : 'Attacking', max: 100 },
-                        { name: isZh ? '传球组织' : 'Possession', max: 100 },
-                        { name: isZh ? '防守贡献' : 'Defending', max: 100 },
-                        { name: isZh ? '出勤可靠' : 'Availability', max: 100 },
-                        { name: isZh ? '比赛影响' : 'Impact', max: 100 }
-                    ],
-                    shape: 'circle',
-                    splitNumber: 4,
-                    axisName: { color: textColor, fontSize: 11, fontWeight: 600 },
-                    splitLine: { lineStyle: { color: splitColor } },
-                    splitArea: { show: false },
-                    axisLine: { lineStyle: { color: splitColor } }
-                },
-                series: [{
-                    type: 'radar',
-                    data: [{
-                        value: [88, 92, 75, 95, 98],
-                        name: 'J. Bellingham',
-                        areaStyle: { color: areaColor },
-                        lineStyle: { color: lineColor, width: 2 },
-                        itemStyle: { color: itemColor }
-                    }]
-                }]
-            };
-            myChart.setOption(option);
-        }
-
-        window.addEventListener('resize', () => myChart?.resize());
-        
-        // 初始化跑一次
-        updateLocales();
-        mockFetchData();
-        setTimeout(renderChart, 100);
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
