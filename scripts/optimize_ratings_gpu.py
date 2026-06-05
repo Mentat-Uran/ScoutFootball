@@ -1445,8 +1445,174 @@ def differentiable_rank_loss(pred, actual, spearman_weight=0.7, temperature=4.0)
     return -objective, soft_spearman, pearson_corr
 
 
-def objective_torch(feat, team_pts_df, params, device, verbose=False):
-    """负 soft-Spearman/Pearson 混合相关性 (最小化)。"""
+# ── 复合目标组件 ─────────────────────────────────────────────────────────
+
+POSITION_CORE_METRICS = {
+    "ST": "npg_p90",
+    "W": "g_a_volume",
+    "AM": "assists_p90",
+    "CM": "possession_composite",
+    "DM": "defense_composite",
+    "FB": "crosses_p90",
+    "CB": "defense_composite",
+    "GK": "defense_composite",
+}
+
+
+def ndcg_loss(feat, ratings, team_pts_df, device, k=20):
+    """Differentiable NDCG@K loss across league-season groups.
+
+    Returns 1 - mean(NDCG@K), so lower is better.
+    Uses soft-rank for differentiable predicted ranking.
+    """
+    # Build team average ratings per team-season group
+    team_avgs = compute_team_avg_ratings_torch(feat, ratings, device)
+
+    # Build actual points lookup (same logic as build_team_target_tensors)
+    valid_pts = team_pts_df.copy()
+    valid_pts["total_points"] = pd.to_numeric(valid_pts["total_points"], errors="coerce")
+    valid_pts = valid_pts[
+        valid_pts["total_points"].notna() & np.isfinite(valid_pts["total_points"])
+    ]
+
+    points_lookup = {
+        (str(row["team"]), str(row["league"]), str(row["season"])): float(row["total_points"])
+        for _, row in valid_pts.iterrows()
+    }
+
+    # Group team-season indices by league-season
+    league_season_groups: dict[tuple[str, str], list[int]] = {}
+    for i, (team, league, season) in enumerate(
+        zip(feat["ts_team_names"], feat["ts_leagues"], feat["ts_seasons"], strict=False)
+    ):
+        key = (str(team), str(league), str(season))
+        if key in points_lookup:
+            ls_key = (str(league), str(season))
+            league_season_groups.setdefault(ls_key, []).append(i)
+
+    if not league_season_groups:
+        return torch.tensor(0.0, device=device, requires_grad=True)
+
+    ndcg_values = []
+    for _ls_key, group_indices in league_season_groups.items():
+        if len(group_indices) < 3:
+            continue
+
+        idx_t = torch.tensor(group_indices, dtype=torch.long, device=device)
+        pred_ratings = team_avgs.index_select(0, idx_t)
+        actual_points = torch.tensor(
+            [points_lookup[(str(feat["ts_team_names"][i]),
+                            str(feat["ts_leagues"][i]),
+                            str(feat["ts_seasons"][i]))]
+             for i in group_indices],
+            dtype=torch.float32,
+            device=device,
+        )
+
+        # Soft sort predicted ratings (descending) using soft_rank
+        # soft_rank_torch gives ascending ranks; negate for descending
+        pred_soft_rank = soft_rank_torch(-pred_ratings, temperature=4.0)
+
+        # Normalize actual points to [0, 1] for relevance
+        pts_min = actual_points.min()
+        pts_max = actual_points.max()
+        pts_range = pts_max - pts_min
+        if pts_range < 1e-8:
+            continue
+        rel = (actual_points - pts_min) / pts_range
+
+        # DCG using soft-rank positions: position i has discount 1/log2(rank_i + 1)
+        # Use top-k only
+        top_k = min(k, len(group_indices))
+        # Sort by predicted soft rank (ascending = best predicted first)
+        sorted_indices = torch.argsort(pred_soft_rank)
+        sorted_rel = rel[sorted_indices[:top_k]]
+        positions = torch.arange(1, top_k + 1, dtype=torch.float32, device=device)
+        discounts = 1.0 / torch.log2(positions + 1.0)
+        dcg = torch.sum((torch.pow(2.0, sorted_rel) - 1.0) * discounts)
+
+        # Ideal DCG: sort by actual relevance descending
+        ideal_sorted_rel = torch.sort(rel, descending=True).values[:top_k]
+        idcg = torch.sum((torch.pow(2.0, ideal_sorted_rel) - 1.0) * discounts)
+        if idcg < 1e-8:
+            continue
+
+        ndcg_values.append(dcg / idcg)
+
+    if not ndcg_values:
+        return torch.tensor(0.0, device=device, requires_grad=True)
+
+    mean_ndcg = torch.stack(ndcg_values).mean()
+    return 1.0 - mean_ndcg
+
+
+def position_consistency_loss(feat, ratings, device):
+    """Penalize inconsistency between rating rank and core-stat rank within each position.
+
+    Returns mean(1 - soft_spearman) across positions.
+    """
+    pos_idx = feat["pos_idx"].to(device)
+    df = feat["df"]
+
+    losses = []
+    for pos_name, core_metric in POSITION_CORE_METRICS.items():
+        pos_i = POS_TO_IDX[pos_name]
+        mask = (pos_idx == pos_i)
+        n_pos = int(mask.sum().item())
+        if n_pos < 5:
+            continue
+
+        # Get core metric values from the DataFrame
+        if core_metric not in df.columns:
+            continue
+        metric_values = pd.to_numeric(df[core_metric], errors="coerce").fillna(0.0).values
+        metric_t = torch.tensor(metric_values, dtype=torch.float32, device=device)
+        pos_ratings = ratings[mask]
+        pos_metrics = metric_t[mask]
+
+        # Skip if all values are identical (no ranking signal)
+        if pos_metrics.std() < 1e-8 or pos_ratings.std() < 1e-8:
+            continue
+
+        # Soft Spearman between ratings and core metric
+        rating_rank = soft_rank_torch(pos_ratings, temperature=4.0)
+        metric_rank = soft_rank_torch(pos_metrics.detach(), temperature=4.0)
+        soft_sp = _corrcoef_torch(rating_rank, metric_rank)
+        losses.append(1.0 - soft_sp)
+
+    if not losses:
+        return torch.tensor(0.0, device=device, requires_grad=True)
+
+    return torch.stack(losses).mean()
+
+
+def extreme_penalty(ratings, sigma=3.0):
+    """L2 penalty on ratings beyond sigma standard deviations from mean.
+
+    Penalizes extreme ratings that may result from attendance shortcuts.
+    """
+    mean = ratings.mean()
+    std = ratings.std()
+    z = (ratings - mean) / (std + 1e-8)
+    extreme_mask = (z.abs() > sigma).float()
+    penalty = (extreme_mask * (z - sigma * z.sign()) ** 2).mean()
+    return penalty
+
+
+def objective_torch(
+    feat,
+    team_pts_df,
+    params,
+    device,
+    spearman_weight=0.50,
+    ndcg_weight=0.20,
+    position_consistency_weight=0.15,
+    extreme_penalty_weight=0.10,
+    prior_weight=0.05,
+    prior_params=None,
+    verbose=False,
+):
+    """Composite objective: Spearman + NDCG + position consistency + extreme penalty + prior."""
     ratings = compute_ratings_torch(feat, params, device)
     team_avgs = compute_team_avg_ratings_torch(feat, ratings, device)
     matched_group_idx, actual_t = build_team_target_tensors(feat, team_pts_df, device)
@@ -1455,12 +1621,41 @@ def objective_torch(feat, team_pts_df, params, device, verbose=False):
         return torch.tensor(1.0, device=device, requires_grad=True)
 
     pred_t = team_avgs.index_select(0, matched_group_idx)
-    loss, soft_sp, pr = differentiable_rank_loss(pred_t, actual_t)
+
+    # 1. Spearman/Pearson loss (existing)
+    rank_loss, soft_sp, pr = differentiable_rank_loss(pred_t, actual_t)
+
+    # 2. NDCG loss
+    ndcg = ndcg_loss(feat, ratings, team_pts_df, device, k=20)
+
+    # 3. Position consistency loss
+    pos_loss = position_consistency_loss(feat, ratings, device)
+
+    # 4. Extreme penalty
+    ext_pen = extreme_penalty(ratings)
+
+    # 5. Prior regularization
+    if prior_params is not None:
+        prior_reg = ((params - prior_params) ** 2).mean()
+    else:
+        prior_reg = torch.tensor(0.0, device=device)
+
+    total = (
+        spearman_weight * rank_loss
+        + ndcg_weight * ndcg
+        + position_consistency_weight * pos_loss
+        + extreme_penalty_weight * ext_pen
+        + prior_weight * prior_reg
+    )
 
     if verbose:
-        print(f"  soft-Spearman={soft_sp.item():.4f}  Pearson={pr.item():.4f}  N={len(pred_t)}")
+        print(
+            f"  rank={rank_loss.item():.4f} ndcg={ndcg.item():.4f} "
+            f"pos={pos_loss.item():.4f} ext={ext_pen.item():.4f} "
+            f"prior={prior_reg.item():.4f} total={total.item():.4f}"
+        )
 
-    return loss
+    return total
 
 
 # ── 优化循环 ──────────────────────────────────────────────────────────────
@@ -1472,9 +1667,12 @@ def optimize(
     n_steps=500,
     lr=0.05,
     pop_size=32,
-    spearman_weight=0.7,
+    spearman_weight=0.50,
     soft_rank_temperature=4.0,
-    prior_strength=0.01,
+    ndcg_weight=0.20,
+    position_consistency_weight=0.15,
+    extreme_penalty_weight=0.10,
+    prior_strength=0.05,
     init_scale=0.35,
     patience=80,
     seed=None,
@@ -1487,8 +1685,9 @@ def optimize(
     print(f"  种群: {pop_size}, 步数: {n_steps}, 学习率: {lr}")
     print(
         "  目标: "
-        f"{spearman_weight:.2f}*soft-Spearman + {1-spearman_weight:.2f}*Pearson, "
-        f"soft-rank温度={soft_rank_temperature}, prior={prior_strength}"
+        f"spearman={spearman_weight:.2f} ndcg={ndcg_weight:.2f} "
+        f"pos_consistency={position_consistency_weight:.2f} "
+        f"extreme={extreme_penalty_weight:.2f} prior={prior_strength:.2f}"
     )
 
     if seed is not None:
@@ -1526,25 +1725,23 @@ def optimize(
         for _step in range(n_steps):
             optimizer.zero_grad()
 
-            # Forward: compute ratings
-            ratings = compute_ratings_torch(feat, params_t, device)
-            team_avgs = compute_team_avg_ratings_torch(feat, ratings, device)
-            pred_t = team_avgs.index_select(0, matched_group_idx)
-            loss, soft_sp, pearson_corr = differentiable_rank_loss(
-                pred_t,
-                actual_t,
+            total_loss = objective_torch(
+                feat,
+                team_pts,
+                params_t,
+                device,
                 spearman_weight=spearman_weight,
-                temperature=soft_rank_temperature,
+                ndcg_weight=ndcg_weight,
+                position_consistency_weight=position_consistency_weight,
+                extreme_penalty_weight=extreme_penalty_weight,
+                prior_weight=prior_strength,
+                prior_params=prior_params,
             )
-
-            # Regularization: keep learned weights close to the explainable v3 prior.
-            reg = prior_strength * ((params_t - prior_params) ** 2).mean()
-            total_loss = loss + reg
 
             total_loss.backward()
             optimizer.step()
 
-            current_loss = float(loss.detach().cpu())
+            current_loss = float(total_loss.detach().cpu())
             if current_loss < best_loss:
                 best_loss = current_loss
                 best_params = params_t.clone().detach()
@@ -1614,9 +1811,12 @@ def run_cross_validation(
     n_steps=150,
     lr=0.05,
     pop_size=8,
-    spearman_weight=0.7,
+    spearman_weight=0.50,
     soft_rank_temperature=4.0,
-    prior_strength=0.01,
+    ndcg_weight=0.20,
+    position_consistency_weight=0.15,
+    extreme_penalty_weight=0.10,
+    prior_strength=0.05,
     init_scale=0.35,
     patience=40,
     seed=42,
@@ -1651,6 +1851,9 @@ def run_cross_validation(
             pop_size=pop_size,
             spearman_weight=spearman_weight,
             soft_rank_temperature=soft_rank_temperature,
+            ndcg_weight=ndcg_weight,
+            position_consistency_weight=position_consistency_weight,
+            extreme_penalty_weight=extreme_penalty_weight,
             prior_strength=prior_strength,
             init_scale=init_scale,
             patience=patience,
@@ -1694,9 +1897,12 @@ def run_parameter_stability(
     n_steps=150,
     lr=0.05,
     pop_size=8,
-    spearman_weight=0.7,
+    spearman_weight=0.50,
     soft_rank_temperature=4.0,
-    prior_strength=0.01,
+    ndcg_weight=0.20,
+    position_consistency_weight=0.15,
+    extreme_penalty_weight=0.10,
+    prior_strength=0.05,
     init_scale=0.35,
     patience=40,
     seed=42,
@@ -1721,6 +1927,9 @@ def run_parameter_stability(
             pop_size=pop_size,
             spearman_weight=spearman_weight,
             soft_rank_temperature=soft_rank_temperature,
+            ndcg_weight=ndcg_weight,
+            position_consistency_weight=position_consistency_weight,
+            extreme_penalty_weight=extreme_penalty_weight,
             prior_strength=prior_strength,
             init_scale=init_scale,
             patience=patience,
@@ -1807,12 +2016,20 @@ def main():
     parser.add_argument("--steps", type=int, default=500, help="每组优化步数")
     parser.add_argument("--lr", type=float, default=0.05, help="学习率")
     parser.add_argument("--pop", type=int, default=32, help="种群大小 (并行起点数)")
-    parser.add_argument("--spearman-weight", type=float, default=0.7,
-                        help="soft-Spearman 在训练目标中的权重 [0,1]")
+    parser.add_argument("--spearman-weight", type=float, default=0.50,
+                        help="Spearman/Pearson 排名损失在复合目标中的权重")
     parser.add_argument("--soft-rank-temperature", type=float, default=4.0,
                         help="soft-rank 温度；越小越接近硬排名但梯度更容易饱和")
-    parser.add_argument("--prior-strength", type=float, default=0.01,
+    parser.add_argument("--ndcg-weight", type=float, default=0.20,
+                        help="NDCG@20 损失在复合目标中的权重")
+    parser.add_argument("--position-consistency-weight", type=float, default=0.15,
+                        help="位置核心指标一致性损失在复合目标中的权重")
+    parser.add_argument("--extreme-penalty-weight", type=float, default=0.10,
+                        help="极端评分惩罚在复合目标中的权重")
+    parser.add_argument("--prior-weight", type=float, default=0.05,
                         help="锚定 v3 默认权重的正则强度")
+    parser.add_argument("--prior-strength", type=float, default=None,
+                        help="锚定 v3 默认权重的正则强度 (deprecated, use --prior-weight)")
     parser.add_argument("--init-scale", type=float, default=0.35,
                         help="多起点围绕 v3 默认参数的随机扰动标准差")
     parser.add_argument("--patience", type=int, default=80, help="单个起点的 early-stop 耐心步数")
@@ -1839,6 +2056,10 @@ def main():
     parser.add_argument("--importance-repeats", type=int, default=1, help="特征置换重要性重复次数")
     parser.add_argument("--calibration-bins", type=int, default=5, help="校准检查分箱数")
     args = parser.parse_args()
+
+    # Backward compatibility: --prior-strength overrides --prior-weight if set
+    if args.prior_strength is not None:
+        args.prior_weight = args.prior_strength
 
     data_dir = Path(args.data_dir).resolve()
     print("=" * 80)
@@ -1919,7 +2140,10 @@ def main():
         pop_size=args.pop,
         spearman_weight=args.spearman_weight,
         soft_rank_temperature=args.soft_rank_temperature,
-        prior_strength=args.prior_strength,
+        ndcg_weight=args.ndcg_weight,
+        position_consistency_weight=args.position_consistency_weight,
+        extreme_penalty_weight=args.extreme_penalty_weight,
+        prior_strength=args.prior_weight,
         init_scale=args.init_scale,
         patience=args.patience,
         seed=args.seed,
@@ -2036,7 +2260,10 @@ def main():
                 pop_size=args.cv_pop or max(2, args.pop // 4),
                 spearman_weight=args.spearman_weight,
                 soft_rank_temperature=args.soft_rank_temperature,
-                prior_strength=args.prior_strength,
+                ndcg_weight=args.ndcg_weight,
+                position_consistency_weight=args.position_consistency_weight,
+                extreme_penalty_weight=args.extreme_penalty_weight,
+                prior_strength=args.prior_weight,
                 init_scale=args.init_scale,
                 patience=min(args.patience, 40),
                 seed=args.seed,
@@ -2078,7 +2305,10 @@ def main():
             pop_size=args.stability_pop or max(2, args.pop // 4),
             spearman_weight=args.spearman_weight,
             soft_rank_temperature=args.soft_rank_temperature,
-            prior_strength=args.prior_strength,
+            ndcg_weight=args.ndcg_weight,
+            position_consistency_weight=args.position_consistency_weight,
+            extreme_penalty_weight=args.extreme_penalty_weight,
+            prior_strength=args.prior_weight,
             init_scale=args.init_scale,
             patience=min(args.patience, 40),
             seed=args.seed,
@@ -2163,7 +2393,7 @@ def main():
     calibration_test.to_parquet(output / "rating_calibration_test.parquet", index=False)
 
     meta = {
-        "optimizer": "adamw_soft_spearman",
+        "optimizer": "adamw_composite_objective",
         "metric_scope": "holdout_test",
         "n_params": N_PARAMS,
         "device": str(device),
@@ -2172,8 +2402,11 @@ def main():
         "steps": args.steps,
         "lr": args.lr,
         "spearman_weight": args.spearman_weight,
+        "ndcg_weight": args.ndcg_weight,
+        "position_consistency_weight": args.position_consistency_weight,
+        "extreme_penalty_weight": args.extreme_penalty_weight,
+        "prior_weight": args.prior_weight,
         "soft_rank_temperature": args.soft_rank_temperature,
-        "prior_strength": args.prior_strength,
         "init_scale": args.init_scale,
         "patience": args.patience,
         "holdout": {

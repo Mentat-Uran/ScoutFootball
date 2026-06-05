@@ -79,9 +79,17 @@ def cmd_optimize(server: str, args):
         "steps": args.steps,
         "lr": args.lr,
         "pop": args.pop,
+        "spearman_weight": args.spearman_weight,
+        "ndcg_weight": args.ndcg_weight,
+        "position_consistency_weight": args.position_consistency_weight,
+        "extreme_penalty_weight": args.extreme_penalty_weight,
+        "prior_weight": args.prior_weight,
     }
     print(f"发送优化请求到 {server}...")
     print(f"  步数: {args.steps}, 学习率: {args.lr}, 种群: {args.pop}")
+    print(f"  组合权重: Spearman={args.spearman_weight}, NDCG={args.ndcg_weight}, "
+          f"位置一致性={args.position_consistency_weight}, 极端惩罚={args.extreme_penalty_weight}, "
+          f"先验={args.prior_weight}")
     print(f"  预计耗时: {args.pop * args.steps // 100}~{args.pop * args.steps // 30} 秒")
     print()
 
@@ -290,6 +298,23 @@ def main():
     p_opt.add_argument("--steps", type=int, default=500, help="每组步数")
     p_opt.add_argument("--lr", type=float, default=0.05, help="学习率")
     p_opt.add_argument("--pop", type=int, default=32, help="种群大小")
+    p_opt.add_argument(
+        "--spearman-weight", type=float, default=0.50, help="Spearman 权重",
+    )
+    p_opt.add_argument(
+        "--ndcg-weight", type=float, default=0.20, help="NDCG@20 权重",
+    )
+    p_opt.add_argument(
+        "--position-consistency-weight", type=float, default=0.15,
+        help="位置内一致性权重",
+    )
+    p_opt.add_argument(
+        "--extreme-penalty-weight", type=float, default=0.10,
+        help="极端样本惩罚权重",
+    )
+    p_opt.add_argument(
+        "--prior-weight", type=float, default=0.05, help="先验正则权重",
+    )
 
     # score
     p_score = sub.add_parser("score", help="查询球员评分")

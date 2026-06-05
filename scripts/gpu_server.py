@@ -122,6 +122,11 @@ class OptimizeRequest(BaseModel):
     seed: int = Field(default=42)
     test_seasons: int = Field(default=1, ge=1, le=5, description="holdout 使用最近几个赛季")
     min_train_seasons: int = Field(default=2, ge=1, le=10)
+    spearman_weight: float = Field(default=0.50, ge=0, le=1.0)
+    ndcg_weight: float = Field(default=0.20, ge=0, le=1.0)
+    position_consistency_weight: float = Field(default=0.15, ge=0, le=1.0)
+    extreme_penalty_weight: float = Field(default=0.10, ge=0, le=1.0)
+    prior_weight: float = Field(default=0.05, ge=0, le=1.0)
 
 
 class ScoreRequest(BaseModel):
@@ -216,6 +221,11 @@ async def run_optimize(req: OptimizeRequest):
                 lr=req.lr,
                 pop_size=req.pop,
                 seed=req.seed,
+                spearman_weight=req.spearman_weight,
+                ndcg_weight=req.ndcg_weight,
+                position_consistency_weight=req.position_consistency_weight,
+                extreme_penalty_weight=req.extreme_penalty_weight,
+                prior_weight=req.prior_weight,
             )
             elapsed = time.time() - t0
 
@@ -283,6 +293,13 @@ async def run_optimize(req: OptimizeRequest):
                 "baseline_pearson": round(float(pr_b), 4),
                 "spearman_improvement": round(float(sp_opt - sp_b), 4),
                 "pearson_improvement": round(float(pr_opt - pr_b), 4),
+                "composite_weights": {
+                    "spearman": req.spearman_weight,
+                    "ndcg": req.ndcg_weight,
+                    "position_consistency": req.position_consistency_weight,
+                    "extreme_penalty": req.extreme_penalty_weight,
+                    "prior": req.prior_weight,
+                },
                 # Train metrics (for overfitting check)
                 "train_spearman": round(float(opt_train["metrics"]["spearman"]), 4),
                 "train_pearson": round(float(opt_train["metrics"]["pearson"]), 4),
