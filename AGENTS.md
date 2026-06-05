@@ -13,6 +13,14 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - Understat：10 赛季、6 个联赛，`players_10seasons.parquet` 当前为 31,902 个球员赛季行。
 - StatsBomb Open Data：126 场比赛，`events_all.parquet` 当前为 11,871 条事件。
 - 评分产物：`player_ratings_optimized.parquet` 当前为 27,254 行。
+- 评分特征矩阵：`rating_feature_matrix.parquet` + `rating_feature_manifest.json`，含缺失字段标记、数据源覆盖标记和位置内中位数 fallback。
+- Coverage 置信度规则：HIGH/MEDIUM/LOW 三级，coverage < 0.90 禁止强排序结论。
+- 出勤捷径诊断报告：置换重要性、位置 availability 权重、球队聚合权重分布、出勤驱动球员识别。
+- 位置内指标：GK/CB/FB/DM/CM/AM/W/ST 各位置核心维度、percentile rank 和中文解释模板。
+- Finishing shrinkage：经验贝叶斯收缩，K=50，小样本射门不过度放大。
+- mplsoccer 集成：`src/scoutlab/viz/pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
+- 低置信度提示：分钟不足、数据缺失、位置重判不确定、联赛 coverage 低。
+- Streamlit 从 5 页扩展到 8 页（+Player Rankings、Value Deviation、Match Prediction）。
 
 新增适配器（已实现，部分需特定环境运行）：
 - SofaScore、SoFIFA、WhoScored、Capology：需要 Chrome + Selenium，建议在 Windows GPU 服务器运行。
@@ -34,6 +42,8 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - 球队积分相关性会偏向出勤、CM 和 GK，不能单独作为球员影响力标签。
 - 弱联赛顶端样本已被压低，但仍需真实身价、奖项、专家标签或人工分档校准跨联赛等级。
 - FBref 粗位置只能保守重判，仍需要 StatsBomb、阵型或人工位置增强。
+- `player_value_metrics.parquet` 只有 StatsBomb 事件价值样本，不能当作全量联赛动作价值；`player_truth_labels.parquet` 尚未生成。
+- 神经网络评分器只能作为真实标签层完成后的候选实验；没有球员级标签、特征缺失标记、时间切分和 baseline 对比前，不要把 MLP/深度模型写成默认评分能力。
 - `PROBLEMS.md` 中记录的问题只能算完成第一轮代码级防护；完整结论必须重新跑 GPU 优化和 2526 holdout 误差复盘后再写。
 
 ## 后续架构方向
@@ -52,10 +62,10 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 
 1. P0：评分系统真实影响力标签和训练目标重构。
    - 近期先用新 availability cap 和稳健球队聚合重跑 GPU optimizer，并复盘 Everton/Stuttgart/Rennes/Napoli/Real Madrid/Arsenal/PSG 等误差案例。
-   - 随后引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为球员真实影响力标签。
+   - 随后引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为球员真实影响力标签，并补齐特征矩阵、缺失字段标记和神经网络准入门槛。
 2. P1：展示增强和可解释产品层，优先接入 mplsoccer。核心交付：球员雷达/排名页、身价偏离榜、比赛预测页 3 个可截图 Streamlit 页面，README 加 3–5 张截图和 demo 复现说明。
 3. P2：StatsBomb 事件动作价值层，先 xT，后 VAEP。
-4. P3：评分模型重构，把 action value 作为增强维度接入。
+4. P3：评分模型重构，把 action value 作为增强维度接入；真实标签层稳定后，神经网络只能先作为候选模型与当前优化器同口径对比。
 5. P4：模型评估文档和模型卡。补 `EVALUATION.md`（Spearman、时间切分、baseline、误差案例）和 `MODEL_CARD.md`（数据源、标签定义、适用边界、偏差、不可用场景）。
 6. P5：Dixon-Coles 比分预测升级。
 7. P6：kloppy、floodlight、xG+、tracking data 只作为远期方向。
@@ -76,6 +86,9 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - availability 只是可靠性/样本量信号，不是球员能力本身；未经真实标签验证，不要把 availability cap 提回 0.25 以上。
 - 球队赛季聚合不得回退为 raw minutes weighted mean；如果要改 aggregation，必须同时输出 holdout、联赛分层、误差案例和出勤置换重要性。
 - 报告 position weights 时必须使用 capped weights，不要把 raw softmax 权重当作实际模型权重。
+- 缺失的防守、控球、xT/VAEP、门将高阶字段必须用 missing flag 和低置信度 fallback 表达，不能把缺失值 0 当成真实低能力。
+- 新增神经网络或其他复杂模型前，先定义标签、评估指标和 baseline；只用球队积分相关性训练的模型不能作为球员真实能力模型。
+- 如果实现神经网络候选模型，必须保留当前评分优化器为 baseline，保存 feature manifest、参数、随机种子、输入 hash、holdout 指标、位置内指标和误差案例对比。
 - 对 team coverage 低于 0.90 的 league-season，只能输出低置信度诊断，不要写成完整联赛排名或前四预测结论。
 - 如果用户要求测试评分优化器，先在当前电脑小规模运行；未经用户明确允许，不要调用 Windows 5070 Ti 服务器。
 - Dixon-Coles 是比分预测第二主线，不能抢在评分系统 P0/P1/P2 前面。
@@ -86,13 +99,20 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - 现有命令入口是 `src/scoutlab/__main__.py`。
 - 现有 pipeline 入口是 `src/scoutlab/pipeline.py`。
 - 新增事件动作价值模块时使用 `src/scoutlab/action_value/`。
+- 新增神经网络评分候选模型时优先使用 `src/scoutlab/models/player_rating_nn.py` 或同级模块；训练脚本只做薄入口，不把核心逻辑堆在 `scripts/`。
 - 新增足球专用图表时优先扩展 `src/scoutlab/viz/`，不要把绘图逻辑堆进 Streamlit 页面。
+- 新增评分特征矩阵模块使用 `src/scoutlab/features/rating_matrix.py`。
+- 新增 coverage 置信度模块使用 `src/scoutlab/evaluation/coverage_confidence.py`。
+- 新增出勤诊断模块使用 `src/scoutlab/evaluation/availability_diagnostic.py`。
+- 新增位置内指标模块使用 `src/scoutlab/evaluation/position_metrics.py`。
+- 新增统一置信度模块使用 `src/scoutlab/evaluation/confidence.py`。
+- 新增足球专用图表扩展 `src/scoutlab/viz/pitch.py`，使用 mplsoccer。
 - Streamlit 页面只读本地产物，不直接执行重型训练。
 - 训练产物写入 `data/models/` 或 `data/gold/feature_store/`，并保存 feature manifest、参数、随机种子和输入 hash。
 
 ## 技术默认值
 
-Python, uv, DuckDB + Parquet, pandas, scikit-learn, PyTorch, Streamlit, Plotly, pytest, Ruff。socceraction 和 mplsoccer 是后续计划依赖，只有进入对应 phase 时再加入 `pyproject.toml`。
+Python, uv, DuckDB + Parquet, pandas, scikit-learn, Streamlit, Plotly, mplsoccer, pytest, Ruff。PyTorch 已用于评分优化/GPU 脚本；若把神经网络纳入主项目，必须同步更新 `pyproject.toml`、锁文件、训练入口、模型产物和评估文档。socceraction 是后续计划依赖，只有进入对应 phase 时再加入 `pyproject.toml`。
 
 ## 验证命令
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from scoutlab.app.data_loader import load_player_rolling
+from scoutlab.evaluation.confidence import assess_player_confidence, display_confidence_warnings
 from scoutlab.viz.radar import plot_player_radar
 
 st.header("Player Comparison")
@@ -44,6 +45,12 @@ else:
 position = st.selectbox("Position filter for reference pool", positions)
 
 pool = df if position == "All" else df.loc[df["position_group"] == position]
+
+# Confidence warnings for selected players
+for _label, row in [("Player A", row_a), ("Player B", row_b)]:
+    assessment = assess_player_confidence(row)
+    if assessment.is_low_confidence:
+        display_confidence_warnings(assessment)
 
 fig = plot_player_radar(row_a, row_b, pool)
 st.plotly_chart(fig, use_container_width=True)

@@ -9,10 +9,20 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
 - Pipeline: `ingest` -> `build-features` -> `train`。
 - 数据验证: `scoutlab validate`。
 - 本地数据层: DuckDB + Parquet，按 raw/silver/gold/models/reports/logs 分层。
-- 球员评分: PyTorch 优化器，已加入 holdout 评估、Pearson 修复、availability cap、ST/W quality cap、稳健球队聚合和 team coverage 报告；当前重点转向真实影响力标签和训练目标重构。
+- 球员评分: PyTorch 权重优化器，已加入 holdout 评估、Pearson 修复、availability cap、ST/W quality cap、稳健球队聚合和 team coverage 报告；当前重点转向真实影响力标签、训练目标和特征缺失标记重构。
 - 比分预测: Independent Poisson baseline。
 - 身价合理性: `value_fairness` OOF 训练产物。
-- 产品层: Streamlit 多页 MVP，FastAPI draft 入口。
+- 产品层: Streamlit 多页 MVP，FastAPI draft 入口。页面包括：
+  - Player Rankings: pizza chart、位置内 Top 20、球员详情卡
+  - Value Deviation: 实际 vs 预测身价散点图、高估/低估 Top 20
+  - Match Prediction: 胜平负概率、比分分布热力图
+- 评分特征矩阵: `rating_feature_matrix.parquet` + `rating_feature_manifest.json`，含缺失字段标记和数据源覆盖。
+- Coverage 置信度: HIGH/MEDIUM/LOW 三级，coverage < 0.90 禁止强排序结论。
+- 出勤捷径诊断: 置换重要性、位置 availability 权重、出勤驱动球员识别。
+- 位置内指标: GK/CB/FB/DM/CM/AM/W/ST 各位置核心维度和 percentile rank。
+- Finishing shrinkage: 经验贝叶斯收缩，避免小样本 goals-xG 过度放大。
+- mplsoccer 集成: `pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
+- 低置信度提示: 分钟不足、数据缺失、位置重判不确定、联赛 coverage 低。
 - GPU 远程计算: Windows RTX 5070 Ti REST API 脚本。
 
 ## 本地数据概览
@@ -26,7 +36,11 @@ ScoutLab 是本地优先的足球数据研究平台，目标是把公开数据�
 | Understat | 31,902 个球员赛季行 | 10 赛季，6 个联赛 |
 | StatsBomb Open Data matches | 126 场 | 公开比赛样本 |
 | StatsBomb Open Data events | 11,871 条事件 | 公开事件样本 |
+| player_value_metrics | 10 名样本球员 | StatsBomb 事件价值原型，不代表全量联赛能力 |
 | player_ratings_optimized | 27,254 行 | 当前评分产物 |
+| player_truth_labels | 未生成 | P0 待建真实影响力标签 |
+| rating_feature_matrix | 新增 | 评分特征矩阵，含缺失标记和 fallback |
+| rating_feature_manifest | 新增 | 特征列元数据 |
 
 ### 爬虫运行环境
 
@@ -55,7 +69,7 @@ SOCCERDATA_DIR=./data/soccerdata uv run python scripts/fetch_fbref_10seasons.py
 | 事件动作价值层 | StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP | 计划新增 |
 | 球员评分层 | 赛季统计 + xG/xA + action value + 出勤 + 联赛强度 + 趋势 | 当前迭代中 |
 | 评估与模型卡层 | baseline、时间切分、position-wise metrics、误差分析 | 计划补齐 |
-| 产品可视化层 | Streamlit、Plotly、mplsoccer 足球图表 | Streamlit 已有，mplsoccer 待接入 |
+| 产品可视化层 | Streamlit、Plotly、mplsoccer 足球图表 | Streamlit 8 页，mplsoccer 已接入 |
 | 比分预测层 | league average -> Independent Poisson -> Dixon-Coles | Poisson 已有，Dixon-Coles 待做 |
 
 ## 评分系统状态
@@ -68,15 +82,19 @@ SOCCERDATA_DIR=./data/soccerdata uv run python scripts/fetch_fbref_10seasons.py
 
 这些修复只是 guardrail，不等于评分系统已经完成。下一步必须继续在当前电脑先做小规模测试，再视情况重跑完整优化，复盘 2526 holdout 中 Arsenal、Real Madrid、Napoli、PSG 等误差案例，并引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为真实球员影响力标签。未经明确允许，不使用远程 5070 Ti 服务器。
 
+新增评分特征矩阵契约：`train` 阶段输出 `rating_feature_matrix.parquet` 和 `rating_feature_manifest.json`，记录每个特征的数据源、缺失率和填充策略。缺失高阶字段使用位置内中位数填充，不再把缺失值 0 当成真实低能力。Finishing 信号使用经验贝叶斯 shrinkage，小样本射门不过度放大。Coverage 置信度规则：coverage ≥ 0.90 为高置信度，0.70–0.90 为中置信度，< 0.70 为低置信度；中低置信度 league-season 禁止强排序结论。出勤捷径诊断报告可量化 availability 对评分的贡献，识别出勤驱动球员。8 个位置（GK/CB/FB/DM/CM/AM/W/ST）各有核心维度定义和位置内 percentile rank。
+
+神经网络可以作为后续候选评分器，但不能只是把当前球队积分监督目标换成更复杂的 MLP。没有 `player_truth_labels.parquet`、特征缺失标记、时间切分评估和现有优化器 baseline 对比前，神经网络只能作为离线实验，不进入默认评分产物。第一版应优先做浅层模型和多任务目标：球员真实标签排序为主，球队赛季积分相关性只做辅助校验。
+
 ## 未来更新策略
 
-P0：评分系统真实影响力校准。先用新 availability cap 和稳健球队聚合重新评估 holdout，再重写训练目标，引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集；球队积分相关性只能做辅助校验，不能当主标签。
+P0：评分系统真实影响力校准。先用新 availability cap 和稳健球队聚合重新评估 holdout，再重写训练目标，引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集；同时补齐特征矩阵、缺失字段标记和神经网络准入门槛。球队积分相关性只能做辅助校验，不能当主标签。
 
 P1：展示增强。引入 mplsoccer，补齐雷达图、pizza chart、shot map、pass map、xT heatmap、位置内榜单和低置信度提示。
 
 P2：事件动作价值。新增 `src/scoutlab/action_value/`，先基于 StatsBomb Open Data 做 xT，输出 `player_action_value.parquet`；xT 稳定后再推进 VAEP。
 
-P3：评分模型重构。把赛季统计、xG/xA、xT/VAEP、出勤可靠性、联赛强度、年龄趋势和置信度合成可解释评分，并输出模型卡。
+P3：评分模型重构。把赛季统计、xG/xA、xT/VAEP、出勤可靠性、联赛强度、年龄趋势和置信度合成可解释评分，并输出模型卡；在真实标签层稳定后，增加浅层神经网络候选模型，与当前权重优化器同口径对比。
 
 P4：评估文档。新增 `EVALUATION.md` 和 `MODEL_CARD.md`，记录 baseline、指标、切分、误差分析、数据覆盖和已知偏差。
 
@@ -158,7 +176,7 @@ uv run streamlit run src/scoutlab/app/streamlit_app.py
 
 ## 技术栈
 
-Python, uv, DuckDB + Parquet, pandas, scikit-learn, PyTorch, Streamlit, Plotly, FastAPI, pytest, Ruff。后续计划在对应 phase 接入 socceraction 和 mplsoccer。
+Python, uv, DuckDB + Parquet, pandas, scikit-learn, Streamlit, Plotly, mplsoccer, FastAPI, pytest, Ruff。PyTorch 已用于评分优化/GPU 脚本；若把神经网络纳入主项目，必须同步更新 `pyproject.toml`、锁文件、训练入口、模型产物和评估文档。后续计划在对应 phase 接入 socceraction。
 
 ## 合规边界
 

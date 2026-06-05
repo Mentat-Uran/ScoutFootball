@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from scoutlab.app.data_loader import load_oof_predictions
+from scoutlab.evaluation.confidence import assess_batch_confidence
 from scoutlab.viz.scatter import plot_value_scatter
 
 st.header("Value vs Performance")
@@ -16,6 +17,16 @@ if oof.empty:
 
 fig = plot_value_scatter(oof)
 st.plotly_chart(fig, use_container_width=True)
+
+# Low-confidence player count
+oof_assessed = assess_batch_confidence(oof)
+low_conf_count = (
+    oof_assessed["is_low_confidence"].sum()
+    if "is_low_confidence" in oof_assessed.columns
+    else 0
+)
+if low_conf_count > 0:
+    st.warning(f"有 {low_conf_count} 名球员评分置信度较低，散点图中可能包含不确定性较大的数据点。")
 
 st.subheader("Fairness Distribution")
 if "fairness_label" in oof.columns:

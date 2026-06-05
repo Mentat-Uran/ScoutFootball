@@ -59,3 +59,12 @@ c6.metric("BTTS Yes", f"{prediction.summary.btts_yes:.1%}")
 eg_home = prediction.home_lambda
 eg_away = prediction.away_lambda
 st.caption(f"Expected Goals — Home: {eg_home:.2f}  Away: {eg_away:.2f}")
+
+# Model confidence note
+n_teams = len(team_names)
+if n_teams < 20:
+    st.warning(
+        f"模型置信度低：仅覆盖 {n_teams} 支球队，预测结果仅供参考。"
+    )
+else:
+    st.info("比分概率基于独立 Poisson 模型，实际比赛受伤病、战术、天气等因素影响，预测仅供参考。")

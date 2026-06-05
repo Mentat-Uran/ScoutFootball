@@ -13,6 +13,7 @@ from scoutlab.entities.normalize import normalize_country_name, normalize_person
 from scoutlab.evaluation.validation import run_pre_training_validation
 from scoutlab.features.player_match import build_player_match_features
 from scoutlab.features.player_rolling import build_player_rolling_features
+from scoutlab.features.rating_matrix import build_rating_feature_matrix, write_feature_manifest
 from scoutlab.features.team_match import build_team_match_features
 from scoutlab.features.team_rolling import build_team_rolling_features
 from scoutlab.models.match_prediction import fit_independent_poisson
@@ -112,6 +113,24 @@ def run_build_features(
         results["player_rolling"] = (
             f"ok ({len(player_rolling)} rows -> {player_rolling_path.name}; built from proxy)"
         )
+
+        # --- Rating feature matrix ---
+        try:
+            rating_matrix = build_rating_feature_matrix(player_match, player_rolling)
+            if not rating_matrix.empty:
+                rating_matrix_path = (
+                    resolved.gold_root / "feature_store" / "rating_feature_matrix.parquet"
+                )
+                rating_matrix.to_parquet(rating_matrix_path, index=False)
+                write_feature_manifest(rating_matrix, rating_matrix_path)
+                results["rating_feature_matrix"] = (
+                    f"ok ({len(rating_matrix)} rows -> {rating_matrix_path.name})"
+                )
+            else:
+                results["rating_feature_matrix"] = "skipped: empty matrix produced"
+        except Exception as exc:
+            results["rating_feature_matrix"] = f"failed: {exc}"
+            logger.error("Rating feature matrix build failed: %s", exc)
     except Exception as exc:
         results["features"] = f"failed: {exc}"
         logger.error("Feature build failed: %s", exc)
@@ -160,6 +179,13 @@ def run_weekly_train(
         results["match_prediction"] = (
             "ok (trained IndependentPoissonModel and wrote artifacts to data/models/artifacts)"
         )
+
+        # --- availability diagnostic ---
+        try:
+            results["availability_diagnostic"] = _run_availability_diagnostic(resolved)
+        except Exception as exc:
+            results["availability_diagnostic"] = f"failed: {exc}"
+            logger.error("Availability diagnostic failed: %s", exc)
     except Exception as exc:
         results["training"] = f"failed: {exc}"
         logger.error("Training failed: %s", exc)
@@ -498,7 +524,11 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
         goals = int((shots["shot_outcome_name"] == "Goal").sum())
         shots_total = len(shots)
         shots_on = int(shots["shot_outcome_name"].isin(["Goal", "Saved", "Saved To Post"]).sum())
-        xg = float(shots["shot_statsbomb_xg"].sum()) if "shot_statsbomb_xg" in shots.columns else 0.0
+        xg = (
+            float(shots["shot_statsbomb_xg"].sum())
+            if "shot_statsbomb_xg" in shots.columns
+            else 0.0
+        )
 
         # Assists: passes with goal_assist flag
         assists = int(group.get("pass_goal_assist", pd.Series(False)).sum())
@@ -510,7 +540,12 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
         tackles = int((group["event_type"] == "Duel").sum())
 
         # Position from tactics
-        position_name = group["position_name"].dropna().iloc[0] if "position_name" in group.columns and group["position_name"].notna().any() else None
+        position_name = (
+            group["position_name"].dropna().iloc[0]
+            if "position_name" in group.columns
+            and group["position_name"].notna().any()
+            else None
+        )
 
         agg_records.append({
             "match_id": str(match_id),
@@ -570,7 +605,10 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
     player_match["match_date"] = pd.to_datetime(player_match["match_date"], errors="coerce")
 
     # Drop helper columns
-    player_match = player_match.drop(columns=["home_team_id", "away_team_id", "position_name"], errors="ignore")
+    player_match = player_match.drop(
+        columns=["home_team_id", "away_team_id", "position_name"],
+        errors="ignore",
+    )
 
     return build_player_match_features(player_match)
 
@@ -673,6 +711,18 @@ def _save_poisson_artifacts(
         }
     )
     strengths_df.to_parquet(artifact_dir / "team_strengths.parquet", index=False)
+
+
+def _run_availability_diagnostic(settings: PlatformSettings) -> str:
+    """Run availability shortcut diagnostic and save report."""
+    from scoutlab.evaluation.availability_diagnostic import (
+        generate_availability_diagnostic,
+        save_availability_diagnostic,
+    )
+
+    report = generate_availability_diagnostic(settings=settings)
+    output_dir = settings.model_root / "availability_diagnostic"
+    return save_availability_diagnostic(report, output_dir)
 
 
 def _train_value_fairness(settings: PlatformSettings) -> str:
@@ -857,7 +907,8 @@ def _generate_synthetic_market_values(player_rolling: pd.DataFrame) -> pd.DataFr
     age_factor = np.exp(-0.5 * ((age - 27) / 5) ** 2)
 
     # Performance multiplier
-    perf = 1.0 + goals_p90 * 2.0 + assists_p90 * 1.5 + (agg["total_minutes"] / 3000).clip(upper=1.0) * 0.5
+    minute_ratio = (agg["total_minutes"] / 3000).clip(upper=1.0)
+    perf = 1.0 + goals_p90 * 2.0 + assists_p90 * 1.5 + minute_ratio * 0.5
 
     # Synthetic market value
     rng = np.random.default_rng(42)

@@ -12,6 +12,8 @@ dependencies = [
   "duckdb>=1.4,<2.0",
   "fastapi>=0.115,<1.0",
   "lxml>=5.3,<6.0",
+  "matplotlib>=3.8,<4.0",
+  "mplsoccer>=1.4,<2.0",
   "pandas>=2.3,<3.0",
   "plotly>=6.0,<7.0",
   "pydantic>=2.11,<3.0",
@@ -25,6 +27,7 @@ scoutlab = "scoutlab.__main__:main"
 
 [dependency-groups]
 dev = [
+  "py>=1.11.0",
   "pytest>=8.4,<9.0",
   "ruff>=0.12,<1.0",
 ]

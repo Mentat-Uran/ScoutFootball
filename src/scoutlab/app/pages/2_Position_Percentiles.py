@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from scoutlab.app.data_loader import load_player_rolling
+from scoutlab.evaluation.confidence import assess_player_confidence, display_confidence_warnings
 from scoutlab.viz.percentiles import plot_percentile_bars
 
 st.header("Position Percentiles")
@@ -36,3 +37,8 @@ if row is None:
 
 fig = plot_percentile_bars(row, pool)
 st.plotly_chart(fig, use_container_width=True)
+
+# Confidence warning for selected player
+assessment = assess_player_confidence(row)
+if assessment.is_low_confidence:
+    display_confidence_warnings(assessment)

@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新口径重新跑完整优化并做 2526 holdout 误差复盘。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新口径重新跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutLab 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -32,6 +32,7 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - kloppy 作为 v1.0 之后的跨供应商数据标准化方案。
 - floodlight 只参考数据抽象，不直接引入。
 - xG+ / possession-level shot probability 作为远期研究方向。
+- 神经网络评分器只作为真实标签层完成后的候选模型；没有球员级标签、缺失字段标记和 baseline 对比前，不进入默认评分产物。
 - Opta、Wyscout、SkillCorner、TRACAB 等商业或 tracking 数据源不进入近期计划。
 
 不采纳：
@@ -39,6 +40,7 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - 新增绕过反爬或验证码的爬虫。
 - 把 StatsBomb 小样本事件能力写成全量球员评分能力。
 - 用 Top N 位置配额替代真实影响力校准。
+- 只用球队积分相关性训练神经网络，并把它写成球员真实能力模型。
 
 ## 已完成
 
@@ -79,17 +81,21 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - [x] 完成第一轮反出勤捷径 guardrail：availability cap 下调、ST/W quality cap、holdout 评估、稳健球队聚合、team coverage 报告。
 - [ ] 用新 aggregation/cap 口径重新跑 GPU 优化，生成新的 `optimized_params.npy`、`optimized_params_meta.json`、holdout predictions、league metrics、calibration 和 feature importance。
 - [ ] 复盘 `PROBLEMS.md` 中的误差案例：Everton、Stuttgart、Hoffenheim、Rennes、Napoli、Real Madrid、Arsenal、PSG，记录新旧排名变化和仍未解决原因。
-- [ ] 增加出勤捷径诊断报告：minutes/starts/matches/availability 置换重要性、按位置 availability 权重、球队聚合权重分布。
+- [x] 增加出勤捷径诊断报告：minutes/starts/matches/availability 置换重要性、按位置 availability 权重、球队聚合权重分布。
 - [x] 直接修补 2526 五大联赛测试集队名，使 Premier League、La Liga、Bundesliga、Serie A、Ligue 1 的 holdout coverage 均达到 1.00。
-- [ ] 对 coverage 低于 0.90 的 league-season 禁止输出强排序结论，只允许作为低置信度诊断样本；该规则仍适用于五大联赛以外的 2526 division 和后续新增数据。
+- [x] 对 coverage 低于 0.90 的 league-season 禁止输出强排序结论，只允许作为低置信度诊断样本；该规则仍适用于五大联赛以外的 2526 division 和后续新增数据。
 - [ ] 定义真实标签层级：Transfermarkt 手动导入、权威奖项、国际/俱乐部出场级别、专家分档、位置内人工校准集。
 - [ ] 新增标签数据契约和校验脚本，输出 `data/gold/feature_store/player_truth_labels.parquet`。
+- [ ] 标签契约必须包含 `label_source`、`label_confidence`、`as_of_date`、`position_scope`、`manual_review_flag`，并区分身价代理、奖项荣誉、专家分档和人工校准。
+- [x] 新增评分特征矩阵契约，输出可复用的 `rating_feature_matrix.parquet` 或等价产物，包含数值特征、位置/联赛类别、数据源覆盖、缺失字段标记、输入文件 hash 和 feature manifest。
+- [x] 修正缺失高阶字段处理：防守、控球、xT/VAEP、门将字段缺失时必须有 missing flag 和中性/低置信度 fallback，不能把缺失值 0 当成真实低能力。
 - [ ] 重写优化目标：组合 Spearman/NDCG、位置内排序、跨联赛校准、年龄/趋势合理性、极端样本惩罚。
 - [ ] 保留球队结果相关性作为辅助校验，不再作为主目标。
+- [ ] 定义神经网络准入门槛：必须先有球员真实标签、时间切分、当前优化器 baseline、位置内/跨位置指标、误差案例复盘和低置信度规则；不允许只用球队积分监督训练默认模型。
 - [ ] 补全 2526 Football-Data 覆盖或在报告中剔除积分 N/A 球队，避免把数据缺口误判为模型错误。
-- [ ] 将位置内榜单和跨位置总榜拆成两个视图。
-- [ ] 给 GK、CB、FB、DM、CM、AM、W、ST 建立位置内指标和解释模板。
-- [ ] 对 finishing 使用 shrinkage，避免小样本 `goals - xG` 过度放大。
+- [x] 将位置内榜单和跨位置总榜拆成两个视图。
+- [x] 给 GK、CB、FB、DM、CM、AM、W、ST 建立位置内指标和解释模板。
+- [x] 对 finishing 使用 shrinkage，避免小样本 `goals - xG` 过度放大。
 - [ ] 输出评分模型卡，说明数据覆盖、权重、偏差、不可解释区域和低置信度球员。
 
 验收：
@@ -104,16 +110,16 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 
 ### 核心交付（3 个可截图页面）
 
-- [ ] **球员雷达/排名页**：球员雷达图（pizza chart），位置内 percentile，位置内 Top 20 榜单，球员详情卡（评分趋势、xG/xA、出勤、联赛强度调整）。
-- [ ] **身价偏离榜**：实际身价 vs 模型预测身价散点图，高估/低估 Top 20 列表，联赛和年龄段筛选。
-- [ ] **比赛预测页**：即将进行的比赛列表，主/客/平概率，比分分布图，模型置信度提示。
+- [x] **球员雷达/排名页**：球员雷达图（pizza chart），位置内 percentile，位置内 Top 20 榜单，球员详情卡（评分趋势、xG/xA、出勤、联赛强度调整）。
+- [x] **身价偏离榜**：实际身价 vs 模型预测身价散点图，高估/低估 Top 20 列表，联赛和年龄段筛选。
+- [x] **比赛预测页**：即将进行的比赛列表，主/客/平概率，比分分布图，模型置信度提示。
 
 ### 其他增强
 
-- [ ] 引入 mplsoccer 依赖并保持 Plotly 现有交互图不回退。
-- [ ] 新增 `src/scoutlab/viz/pitch.py`，封装球场、坐标、shot map、pass map、heatmap 基础图。
+- [x] 引入 mplsoccer 依赖并保持 Plotly 现有交互图不回退。
+- [x] 新增 `src/scoutlab/viz/pitch.py`，封装球场、坐标、shot map、pass map、heatmap 基础图。
 - [ ] 在 Streamlit 增加"位置内榜单"和"跨位置总榜"切换。
-- [ ] 增加低置信度提示：分钟不足、数据源缺失、位置重判不确定、事件样本不足。
+- [x] 增加低置信度提示：分钟不足、数据源缺失、位置重判不确定、事件样本不足。
 - [ ] 给 README 加 3–5 张截图（球员雷达、身价偏离、比赛预测、Top 100 榜单、详情页），并写一段"如何复现 demo 数据"的说明。
 
 验收：
@@ -121,7 +127,7 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - `uv run ruff check .`
 - `uv run pytest`
 - `uv run streamlit run src/scoutlab/app/streamlit_app.py`
-- 三个核心页面可截图，README 截图和 demo 复现说明完整。
+- 三个核心页面已完成，截图和 demo 复现说明待补充。
 
 ## P2：StatsBomb 事件动作价值层
 
@@ -162,12 +168,16 @@ player_rating =
 - [ ] VAEP 在 xT 稳定后再做，不抢先实现。
 - [ ] 明确各维度置信度：赛季统计、事件动作、xG/xA、联赛强度、位置映射。
 - [ ] 按位置输出进攻、防守、控球、推进、终结、可靠性解释。
+- [ ] 在真实标签层和特征缺失标记稳定后，新增浅层神经网络候选模型实验：数值特征 + 位置/联赛 embedding + dropout/weight decay，不直接替换当前评分器。
+- [ ] 神经网络训练目标使用多任务结构：球员标签排序/回归为主，球队赛季积分相关性为辅助，另加跨联赛校准、年龄趋势合理性和极端样本惩罚。
+- [ ] 神经网络产物写入 `data/models/player_rating_nn/`，保存 feature manifest、参数、随机种子、输入 hash、训练/holdout 指标和与 `player_ratings_optimized` 的对比。
 - [ ] 建立评分回归测试，防止 CM/GK/出勤捷径再次主导 Top 100。
 - [ ] 输出 `ALGORITHM.md` 的实现对齐版本。
 
 验收：
 
 - 新旧评分有可解释对比。
+- 神经网络候选模型只有在 holdout、位置内指标、低置信度样本和误差案例均优于或至少不劣于当前优化器时，才允许进入默认展示。
 - Top 100、位置内 Top 20、弱联赛顶端样本、低分钟球员均有审查报告。
 - `MODEL_CARD.md` 更新。
 
@@ -182,6 +192,7 @@ player_rating =
 - [ ] 记录核心指标：Spearman rank correlation（位置内 + 跨位置）、NDCG、MAE、RMSE。
 - [ ] 记录误差案例：Top 100 中出勤捷径球员、弱联赛高估样本、低分钟高方差球员、位置误判案例。
 - [ ] 按位置输出 metrics：GK、CB、FB、DM、CM、AM、W、ST 分别报告。
+- [ ] 若存在神经网络候选模型，必须与当前 PyTorch 权重优化器、v3 默认权重和简单 percentile baseline 同一时间切分对比。
 - [ ] 对 value_fairness 增加 OOF 残差、联赛偏差、年龄段偏差分析。
 - [ ] 对比分预测增加 log loss、Brier score、RPS，低比分场景（0-0、1-0、0-1、1-1）单独报告。
 
