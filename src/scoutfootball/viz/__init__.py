@@ -7,7 +7,6 @@ from .pitch import draw_pitch, plot_heatmap, plot_pass_map, plot_pizza_chart, pl
 from .radar import plot_player_radar
 from .scatter import plot_value_scatter
 from .score_matrix import plot_score_matrix
-from .training_monitor import TrainingMonitor
 from .trends import plot_trend
 
 __all__ = [
@@ -21,5 +20,4 @@ __all__ = [
     "plot_shot_map",
     "plot_trend",
     "plot_value_scatter",
-    "TrainingMonitor",
 ]
