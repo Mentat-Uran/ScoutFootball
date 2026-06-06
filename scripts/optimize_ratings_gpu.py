@@ -35,18 +35,24 @@ import torch
 from scipy.stats import pearsonr, spearmanr
 
 # ── 可视化 ────────────────────────────────────────────────────────────────
+import platform as _platform
+
 try:
     import matplotlib
-    # 按优先级尝试交互后端，失败则回退 Agg（非交互，仅保存图片）
-    _backend_set = False
-    for _backend in ["macosx", "TkAgg", "Qt5Agg"]:
-        try:
-            matplotlib.use(_backend)
-            _backend_set = True
-            break
-        except Exception:
-            continue
-    if not _backend_set:
+    # Windows / Linux server 用 Agg（非交互，仅保存图片）
+    # macOS 桌面尝试交互后端
+    if _platform.system() == "Darwin":
+        _backend_set = False
+        for _backend in ["macosx", "TkAgg", "Qt5Agg"]:
+            try:
+                matplotlib.use(_backend)
+                _backend_set = True
+                break
+            except Exception:
+                continue
+        if not _backend_set:
+            matplotlib.use("Agg")
+    else:
         matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
@@ -148,7 +154,7 @@ class OptimizationVisualizer:
 
         self._heatmap_im = None  # 热力图 image 对象，首次更新时创建
 
-        plt.tight_layout()
+        # constrained_layout 与 make_axes_locatable 兼容，不需要 tight_layout
 
         if self.interactive:
             plt.show(block=False)
