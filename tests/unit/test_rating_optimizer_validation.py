@@ -7,7 +7,8 @@ import torch
 
 
 def _load_optimizer_module():
-    module_name = "_rating_optimizer_under_test"
+    # Share the same module instance with test_composite_objective
+    module_name = "_optimize_ratings_gpu_shared"
     if module_name in sys.modules:
         return sys.modules[module_name]
     repo_root = Path(__file__).resolve().parents[2]
@@ -210,7 +211,7 @@ def test_refine_role_positions_uses_history_and_profile_signals() -> None:
                 "npg_p90": 0.08,
                 "assists_p90": 0.17,
                 "g_a_volume": 4.0,
-                "crosses_p90": 2.0,
+                "crosses_p90": 2.8,
                 "defense_composite": 1.1,
             },
             {

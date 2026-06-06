@@ -664,6 +664,8 @@ def _build_player_match_proxy_from_fbref(settings: PlatformSettings) -> pd.DataF
         errors="coerce",
     ).fillna(0)
 
+    # Bundesliga rows have NaN league in FBref; fill before str conversion
+    index_frame["league"] = index_frame["league"].fillna("GER-Bundesliga")
     proxy = pd.DataFrame(
         {
             "competition_id": index_frame["league"].astype("string"),

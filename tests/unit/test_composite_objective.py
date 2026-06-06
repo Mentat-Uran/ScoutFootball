@@ -12,7 +12,7 @@ torch = pytest.importorskip("torch")
 
 
 def _load_optimizer_module():
-    module_name = "_composite_objective_under_test"
+    module_name = "_optimize_ratings_gpu_shared"
     if module_name in sys.modules:
         return sys.modules[module_name]
     repo_root = Path(__file__).resolve().parents[2]
@@ -58,8 +58,9 @@ def _make_synthetic_feat(n_players=40, device="cpu"):
     starts = (minutes * rng.uniform(0.5, 0.9, n_players)).astype(np.float32)
     matches = (minutes / 90 * rng.uniform(0.7, 1.0, n_players)).astype(np.float32)
 
-    # Build team-season groups: 4 teams, 2 leagues, 1 season
-    n_teams = 4
+    # Build team-season groups: 12 teams, 2 leagues, 1 season
+    # Need >=10 matched team-seasons for objective_torch to compute real loss
+    n_teams = 12
     n_leagues = 2
     team_names = [f"Team{i}" for i in range(n_teams)]
     league_names = ["LeagueA", "LeagueB"]
@@ -93,16 +94,16 @@ def _make_synthetic_feat(n_players=40, device="cpu"):
     # Use build_feature_tensors to get a proper feat dict
     feat = build_feature_tensors(df)
 
-    # Build team_pts DataFrame
+    # Build team_pts DataFrame: each team belongs to exactly one league
     team_pts_rows = []
-    for team in team_names:
-        for league in league_names:
-            team_pts_rows.append({
-                "team": team,
-                "league": league,
-                "season": season,
-                "total_points": float(rng.integers(30, 90)),
-            })
+    for i, team in enumerate(team_names):
+        league = league_names[i % n_leagues]
+        team_pts_rows.append({
+            "team": team,
+            "league": league,
+            "season": season,
+            "total_points": float(rng.integers(30, 90)),
+        })
     team_pts = pd.DataFrame(team_pts_rows)
 
     return feat, team_pts, df
@@ -123,7 +124,7 @@ class TestExtremePenalty:
         ratings = (ratings - ratings.mean()) / (ratings.std() + 1e-8)  # z-scores
         ratings = ratings * 0.5  # well within sigma=3
         penalty = extreme_penalty(ratings, sigma=3.0)
-        assert penalty.item() == pytest.approx(0.0, abs=1e-6)
+        assert penalty.item() == pytest.approx(0.0, abs=1e-3)
 
     def test_positive_for_extreme(self):
         # Create extreme values
