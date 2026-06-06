@@ -791,12 +791,17 @@ def refine_role_positions(df: pd.DataFrame) -> pd.DataFrame:
         regex=False,
     )
 
-    npg = pd.to_numeric(refined.get("npg_p90", 0.0), errors="coerce").fillna(0.0)
-    assists = pd.to_numeric(refined.get("assists_p90", 0.0), errors="coerce").fillna(0.0)
-    volume = pd.to_numeric(refined.get("g_a_volume", 0.0), errors="coerce").fillna(0.0)
-    crosses = pd.to_numeric(refined.get("crosses_p90", 0.0), errors="coerce").fillna(0.0)
-    defense = pd.to_numeric(refined.get("defense_composite", 0.0), errors="coerce").fillna(0.0)
-    minutes = pd.to_numeric(refined.get("minutes", 0.0), errors="coerce").fillna(0.0)
+    def _safe_numeric_col(col_name):
+        if col_name in refined.columns:
+            return pd.to_numeric(refined[col_name], errors="coerce").fillna(0.0)
+        return pd.Series(0.0, index=refined.index)
+
+    npg = _safe_numeric_col("npg_p90")
+    assists = _safe_numeric_col("assists_p90")
+    volume = _safe_numeric_col("g_a_volume")
+    crosses = _safe_numeric_col("crosses_p90")
+    defense = _safe_numeric_col("defense_composite")
+    minutes = _safe_numeric_col("minutes")
 
     current_cb = refined["sub_position"].eq("CB")
     current_cm = refined["sub_position"].eq("CM")
@@ -971,7 +976,9 @@ def load_data(data_dir: Path):
     starts = fbref[("Playing Time", "Starts")].values.astype(np.float32)
     matches = fbref[("Playing Time", "MP")].values.astype(np.float32)
     positions = fbref[("pos", "")].values
-    leagues_raw = fbref.index.get_level_values("league").astype(str).values
+    leagues_raw = fbref.index.get_level_values("league")
+    # Bundesliga rows have NaN league in FBref; fill before str conversion
+    leagues_raw = leagues_raw.fillna("GER-Bundesliga").astype(str).values
     seasons = fbref.index.get_level_values("season").values
     teams = fbref.index.get_level_values("team").values
     players = fbref.index.get_level_values("player").values
@@ -1566,6 +1573,8 @@ def team_coverage_table(feat, team_pts_df):
             "season": [str(season) for season in feat["ts_seasons"]],
         },
     ).drop_duplicates()
+    # Defensive: replace "nan" league with "Bundesliga" (FBref NaN league issue)
+    rated["league"] = rated["league"].replace("nan", "Bundesliga")
     matched = actual.merge(rated, on=["team", "league", "season"], how="inner")
 
     group_cols = ["league", "season"]
@@ -1984,7 +1993,7 @@ def build_feature_tensors(df, rank_reference_df=None):
         "league_names": league_names,
         "ts_indices": ts_indices,
         "ts_team_names": ts_team_names,
-        "ts_leagues": ts_leagues,
+        "ts_leagues": ["Bundesliga" if str(league) == "nan" else league for league in ts_leagues],
         "ts_seasons": ts_seasons,
         "df": df,
     }
@@ -2304,7 +2313,11 @@ def build_team_target_tensors(feat, team_pts_df, device):
     for i, (team, league, season) in enumerate(
         zip(feat["ts_team_names"], feat["ts_leagues"], feat["ts_seasons"], strict=False)
     ):
-        key = (str(team), str(league), str(season))
+        # Defensive: replace "nan" league with "Bundesliga" (FBref NaN league issue)
+        league_str = str(league)
+        if league_str == "nan":
+            league_str = "Bundesliga"
+        key = (str(team), league_str, str(season))
         if key in points_lookup:
             matched_group_idx.append(i)
             actual_points.append(points_lookup[key])
@@ -2500,7 +2513,7 @@ def extreme_penalty(ratings, sigma=3.0):
     mean = ratings.mean()
     std = ratings.std()
     z = (ratings - mean) / (std + 1e-8)
-    extreme_mask = (z.abs() > sigma).float()
+    extreme_mask = (z.abs() > z.new_full([], sigma)).float()
     penalty = (extreme_mask * (z - sigma * z.sign()) ** 2).mean()
     return penalty
 

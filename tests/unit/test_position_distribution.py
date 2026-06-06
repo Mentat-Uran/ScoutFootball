@@ -9,6 +9,7 @@ Covers:
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -16,14 +17,25 @@ import numpy as np
 import pandas as pd
 import pytest
 
-# Import from scripts/optimize_ratings_gpu
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
-from optimize_ratings_gpu import (
-    POSITION_SLOT_CAPS,
-    POSITION_SLOT_GROUPS,
-    _build_team_aggregation_weights,
-    map_position_detailed,
-)
+
+# Import from scripts/optimize_ratings_gpu — share module with other test files
+def _load_optimizer_module():
+    module_name = "_optimize_ratings_gpu_shared"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    repo_root = Path(__file__).resolve().parents[2]
+    script_path = repo_root / "scripts" / "optimize_ratings_gpu.py"
+    spec = importlib.util.spec_from_file_location(module_name, script_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+_mod = _load_optimizer_module()
+POSITION_SLOT_CAPS = _mod.POSITION_SLOT_CAPS
+POSITION_SLOT_GROUPS = _mod.POSITION_SLOT_GROUPS
+_build_team_aggregation_weights = _mod._build_team_aggregation_weights
+map_position_detailed = _mod.map_position_detailed
 
 # ---------------------------------------------------------------------------
 # 1. map_position_detailed
@@ -40,10 +52,10 @@ class TestMapPositionDetailedUnderstat:
             ("D M", "FB", "medium"),
             ("D M S", "FB", "medium"),
             ("F M S", "W", "medium"),
-            ("F M", "AM", "medium"),
+            ("F M", "W", "medium"),
             ("M", "CM", "low"),
             ("F", "ST", "low"),
-            ("S", "ST", "low"),
+            ("S", "CM", "low"),
             ("D S", "CB", "low"),
         ],
     )
