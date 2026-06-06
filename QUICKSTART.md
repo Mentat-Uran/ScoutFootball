@@ -1,0 +1,126 @@
+# ScoutFootball 快速启动指南
+
+## 🚀 一分钟启动
+
+### Windows 用户
+双击运行 `start.bat`，选择启动方式。
+
+### macOS/Linux 用户
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+---
+
+## 📋 启动选项说明
+
+| 选项 | 服务 | 访问地址 | 说明 |
+|-----|-----|---------|-----|
+| 1 | Streamlit 前端 | http://localhost:8501 | 12个页面，含世界杯功能 |
+| 2 | FastAPI + Liquid Glass | http://localhost:8000 | 7视图工作台，API文档在 /docs |
+| 3 | 两者同时启动 | 8501 + 8000 | 完整功能 |
+
+---
+
+## 🏗️ 三组件架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    ScoutFootball 项目                     │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌──────────────────────┐      ┌───────────────────────┐ │
+│  │   Streamlit 前端      │      │  Liquid Glass 前端    │ │
+│  │   (12个页面)          │      │   (7个视图)           │ │
+│  │   直接读本地数据      │      │   通过API/mock        │ │
+│  └──────────────┬───────┘      └───────────┬───────────┘ │
+│                 │                           │            │
+│                 └──────────────┬────────────┘            │
+│                                │                         │
+│                  ┌─────────────▼─────────────┐          │
+│                  │    FastAPI 后端服务       │          │
+│                  │  api_server.py + api.py   │          │
+│                  │     + data_loader.py      │          │
+│                  └─────────────┬─────────────┘          │
+│                                │                         │
+│                  ┌─────────────▼─────────────┐          │
+│                  │    本地数据仓库           │          │
+│                  │  Parquet / DuckDB        │          │
+│                  └───────────────────────────┘          │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📊 视图对照关系
+
+### Streamlit 页面 → Liquid Glass 视图 映射
+
+| Streamlit 页面 | Liquid Glass 视图 | 后端 API |
+|--------------|------------------|---------|
+| Player Comparison | 球员 | `/player/{name}/profile` |
+| Position Percentiles | 球员 | `/ratings` |
+| Player Rankings | 球员 | `/ratings` |
+| Trends | 无 | 待同步 |
+| Value vs Performance | 身价 | `/value-summary` |
+| Value Deviation | 身价 | `/value-summary` |
+| Score Matrix | 预测 | `/prediction/{home}/{away}` |
+| Match Prediction | 预测 | `/prediction/{home}/{away}` |
+| World Cup Schedule/Squads/Compare/Probability | 无 | 🆕 世界杯模块 |
+| - | 总览 | `/artifacts`, `/health`, `/ratings/meta` |
+| - | 球探 | `/review-queue`, `/teams` |
+| - | 动作价值 | 待实现 |
+| - | 报告 | `/model-runs` |
+
+---
+
+## 💾 数据准备
+
+### 已有数据 (demo 模式可运行)
+- 无需数据即可启动，自动使用 demo 数据
+- 但功能受限
+
+### 完整数据准备
+```bash
+# 1. 准备数据
+uv run python -m scoutfootball ingest
+
+# 2. 构建特征
+uv run python -m scoutfootball build-features
+
+# 3. 训练评分
+uv run python -m scoutfootball train
+
+# 4. 导出到 DuckDB (可选)
+uv run python -m scoutfootball export-ratings
+```
+
+---
+
+## 🔧 手动启动命令
+
+### Streamlit 单独启动
+```bash
+uv run streamlit run src/scoutfootball/app/streamlit_app.py
+```
+
+### FastAPI + Liquid Glass 单独启动
+```bash
+uv run python -m scoutfootball serve
+# 或
+uv run uvicorn scoutfootball.api_server:create_app --factory --host 0.0.0.0 --port 8000
+```
+
+### API 文档
+启动 API 服务后访问：http://localhost:8000/docs
+
+---
+
+## 📚 更多文档
+
+- 项目 README: [README.md](README.md)
+- 前后端同步分析: [docs/FRONTEND_SYNC.md](docs/FRONTEND_SYNC.md)
+- 模型说明: [MODEL_CARD.md](MODEL_CARD.md)
+- 算法说明: [ALGORITHM.md](ALGORITHM.md)

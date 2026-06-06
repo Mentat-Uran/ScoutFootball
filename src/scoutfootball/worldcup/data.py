@@ -130,7 +130,7 @@ class Match:
     venue: str
     city: str
     group: str | None = None  # None for knockout
-    round: str = "Group Stage"
+    stage: str = "Group Stage"
 
 
 def generate_group_stage_matches() -> list[Match]:
@@ -204,7 +204,7 @@ def generate_group_stage_matches() -> list[Match]:
                     venue=venue,
                     city=city,
                     group=group_letter,
-                    round="Group Stage",
+                    stage="Group Stage",
                 ))
 
     return matches
