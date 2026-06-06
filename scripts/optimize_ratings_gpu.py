@@ -18,8 +18,10 @@ Mac 完整模式 (较慢但更准):
   python optimize_ratings_gpu.py --data_dir ./data --steps 150 --pop 8 --patience 25
 
 实时可视化:
-  默认启用 matplotlib 实时图表，显示 Loss 曲线、Spearman/Pearson 跟踪、
-  组件分解和位置权重热力图。远程服务器或无 GUI 环境加 --no-viz 禁用。
+  默认启用 Plotly 交互式图表，显示 Loss 曲线、Spearman/Pearson 跟踪、
+  组件分解、位置权重热力图、联赛相关性、训练状态等 8 个子图。
+  支持导出为交互式 HTML 报告。远程服务器或无 GUI 环境加 --no-viz 禁用。
+  依赖: pip install plotly dash dash-bootstrap-components
 """
 
 import argparse
@@ -34,13 +36,14 @@ import pandas as pd
 import torch
 from scipy.stats import pearsonr, spearmanr
 
-# ── 可视化 ────────────────────────────────────────────────────────────────
+# ── 可视化 (使用新的 Plotly 版本) ────────────────────────────────────────
+from optimize_viz import create_visualizer, ConsoleViz
+
+# 旧版 matplotlib 可视化保留为备选
 import platform as _platform
 
 try:
     import matplotlib
-    # Windows / Linux server 用 Agg（非交互，仅保存图片）
-    # macOS 桌面尝试交互后端
     if _platform.system() == "Darwin":
         _backend_set = False
         for _backend in ["macosx", "TkAgg", "Qt5Agg"]:
@@ -61,235 +64,6 @@ try:
 except ImportError:
     _HAS_MATPLOTLIB = False
     _VIZ_INTERACTIVE = False
-
-# ── 实时可视化 ────────────────────────────────────────────────────────────
-
-class OptimizationVisualizer:
-    """实时显示优化过程的可视化器。
-
-    显示三个子图：
-    1. 总 Loss 曲线 + Spearman/Pearson 跟踪
-    2. 各组件 Loss 分解 (rank_loss, ndcg, position, extreme, prior)
-    3. 当前最优参数的位置权重热力图
-    """
-
-    def __init__(self, n_steps: int, pop_size: int, enable: bool = True):
-        self.enable = enable and _HAS_MATPLOTLIB
-        self.n_steps = n_steps
-        self.pop_size = pop_size
-        self.interactive = _VIZ_INTERACTIVE
-
-        if not self.enable:
-            return
-
-        # 创建图形
-        self.fig = plt.figure(figsize=(14, 9))
-        self.fig.suptitle("Player Rating Optimization", fontsize=14, fontweight="bold")
-        gs = GridSpec(2, 2, figure=self.fig, height_ratios=[1, 1])
-
-        # 子图 1: Loss 曲线
-        self.ax_loss = self.fig.add_subplot(gs[0, 0])
-        self.ax_loss.set_title("Total Loss")
-        self.ax_loss.set_xlabel("Step")
-        self.ax_loss.set_ylabel("Loss")
-        self.ax_loss.set_xlim(0, n_steps)
-        self.ax_loss.grid(True, alpha=0.3)
-
-        # 子图 2: Spearman/Pearson 跟踪
-        self.ax_corr = self.fig.add_subplot(gs[0, 1])
-        self.ax_corr.set_title("Correlation Metrics")
-        self.ax_corr.set_xlabel("Step")
-        self.ax_corr.set_ylabel("Correlation")
-        self.ax_corr.set_xlim(0, n_steps)
-        self.ax_corr.set_ylim(0, 1)
-        self.ax_corr.grid(True, alpha=0.3)
-
-        # 子图 3: 组件分解
-        self.ax_components = self.fig.add_subplot(gs[1, 0])
-        self.ax_components.set_title("Loss Components")
-        self.ax_components.set_xlabel("Step")
-        self.ax_components.set_ylabel("Component Loss")
-        self.ax_components.set_xlim(0, n_steps)
-        self.ax_components.grid(True, alpha=0.3)
-
-        # 子图 4: 位置权重热力图 — 用 make_axes_locatable 固定 colorbar 空间
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
-        self.ax_weights = self.fig.add_subplot(gs[1, 1])
-        self.ax_weights.set_title("Position-Dimension Weights")
-        self._divider = make_axes_locatable(self.ax_weights)
-        self._cax = self._divider.append_axes("right", size="5%", pad=0.05)
-
-        # 数据存储
-        self.steps = []
-        self.losses = []
-        self.spearmans = []
-        self.pearsons = []
-        self.rank_losses = []
-        self.ndcg_losses = []
-        self.pos_losses = []
-        self.extreme_losses = []
-        self.prior_losses = []
-
-        # 绘图对象
-        self.line_loss, = self.ax_loss.plot([], [], "b-", linewidth=2, label="Total Loss")
-        self.ax_loss.legend(loc="upper right")
-
-        self.line_sp, = self.ax_corr.plot([], [], "g-", linewidth=2, label="Spearman")
-        self.line_pr, = self.ax_corr.plot([], [], "r-", linewidth=2, label="Pearson")
-        self.ax_corr.legend(loc="lower right")
-
-        self.line_rank, = self.ax_components.plot([], [], "b-", linewidth=1.5, label="rank")
-        self.line_ndcg, = self.ax_components.plot([], [], "orange", linewidth=1.5, label="ndcg")
-        self.line_pos, = self.ax_components.plot([], [], "purple", linewidth=1.5, label="position")
-        self.line_ext, = self.ax_components.plot([], [], "cyan", linewidth=1.5, label="extreme")
-        self.line_prior, = self.ax_components.plot([], [], "gray", linewidth=1.5, label="prior")
-        self.ax_components.legend(loc="upper right")
-
-        # 状态文本
-        self.status_text = self.ax_loss.text(
-            0.02, 0.95, "", transform=self.ax_loss.transAxes,
-            fontsize=10, verticalalignment="top",
-            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
-        )
-
-        self._heatmap_im = None  # 热力图 image 对象，首次更新时创建
-
-        # constrained_layout 与 make_axes_locatable 兼容，不需要 tight_layout
-
-        if self.interactive:
-            plt.show(block=False)
-
-    def update(
-        self,
-        step: int,
-        pop_idx: int,
-        loss: float,
-        spearman: float,
-        pearson: float,
-        components: dict | None = None,
-        params: torch.Tensor | None = None,
-        device: torch.device | None = None,
-    ):
-        """更新可视化。"""
-        if not self.enable:
-            return
-
-        # 存储数据
-        self.steps.append(step)
-        self.losses.append(loss)
-        self.spearmans.append(spearman)
-        self.pearsons.append(pearson)
-
-        if components:
-            self.rank_losses.append(components.get("rank_loss", 0.0))
-            self.ndcg_losses.append(components.get("ndcg", 0.0))
-            self.pos_losses.append(components.get("pos_loss", 0.0))
-            self.extreme_losses.append(components.get("extreme", 0.0))
-            self.prior_losses.append(components.get("prior", 0.0))
-        else:
-            self.rank_losses.append(0.0)
-            self.ndcg_losses.append(0.0)
-            self.pos_losses.append(0.0)
-            self.extreme_losses.append(0.0)
-            self.prior_losses.append(0.0)
-
-        # 更新曲线
-        self.line_loss.set_data(self.steps, self.losses)
-        self.line_sp.set_data(self.steps, self.spearmans)
-        self.line_pr.set_data(self.steps, self.pearsons)
-        self.line_rank.set_data(self.steps, self.rank_losses)
-        self.line_ndcg.set_data(self.steps, self.ndcg_losses)
-        self.line_pos.set_data(self.steps, self.pos_losses)
-        self.line_ext.set_data(self.steps, self.extreme_losses)
-        self.line_prior.set_data(self.steps, self.prior_losses)
-
-        # 动态调整 Y 轴范围
-        if self.losses:
-            min_loss = min(self.losses)
-            max_loss = max(self.losses)
-            margin = (max_loss - min_loss) * 0.1 + 0.01
-            self.ax_loss.set_ylim(min_loss - margin, max_loss + margin)
-
-        if self.rank_losses:
-            max_comp = max(
-                max(self.rank_losses),
-                max(self.ndcg_losses),
-                max(self.pos_losses),
-                max(self.extreme_losses),
-                max(self.prior_losses),
-            )
-            self.ax_components.set_ylim(0, max_comp * 1.1 + 0.01)
-
-        # 更新状态文本
-        self.status_text.set_text(
-            f"Pop {pop_idx + 1}/{self.pop_size} | Step {step}/{self.n_steps}\n"
-            f"Loss: {loss:.4f} | Sp: {spearman:.4f} | Pr: {pearson:.4f}"
-        )
-
-        # 更新位置权重热力图
-        if params is not None and device is not None:
-            self._update_weight_heatmap(params, device)
-
-        # 刷新图形
-        if self.interactive:
-            self.fig.canvas.draw_idle()
-            self.fig.canvas.flush_events()
-
-    def _update_weight_heatmap(self, params: torch.Tensor, device: torch.device):
-        """更新位置权重热力图（不重建 colorbar，只刷新数据）。"""
-        params_cpu = params.detach().cpu()
-        pw_raw = params_cpu[:N_POS * N_DIM].reshape(N_POS, N_DIM)
-        pw = apply_position_weight_caps(torch.softmax(pw_raw, dim=1)).numpy()
-
-        # 只在首次创建 image 和 colorbar
-        if not hasattr(self, "_heatmap_im") or self._heatmap_im is None:
-            self._heatmap_im = self.ax_weights.imshow(
-                pw, cmap="YlOrRd", aspect="auto", vmin=0, vmax=0.5,
-            )
-            self.ax_weights.set_xticks(range(N_DIM))
-            self.ax_weights.set_xticklabels(DIMENSIONS, fontsize=9)
-            self.ax_weights.set_yticks(range(N_POS))
-            self.ax_weights.set_yticklabels(POSITIONS, fontsize=9)
-            self._cbar_obj = self.fig.colorbar(
-                self._heatmap_im, cax=self._cax,
-            )
-
-            # 初始化文本标注缓存
-            self._heatmap_texts = []
-            for i in range(N_POS):
-                row_texts = []
-                for j in range(N_DIM):
-                    val = pw[i, j]
-                    color = "white" if val > 0.25 else "black"
-                    t = self.ax_weights.text(
-                        j, i, f"{val:.2f}", ha="center", va="center",
-                        fontsize=8, color=color,
-                    )
-                    row_texts.append(t)
-                self._heatmap_texts.append(row_texts)
-
-        else:
-            # 只更新图像数据
-            self._heatmap_im.set_data(pw)
-            # 更新文本标注
-            for i in range(N_POS):
-                for j in range(N_DIM):
-                    val = pw[i, j]
-                    color = "white" if val > 0.25 else "black"
-                    self._heatmap_texts[i][j].set_text(f"{val:.2f}")
-                    self._heatmap_texts[i][j].set_color(color)
-
-    def close(self):
-        """关闭可视化窗口。"""
-        if self.enable and hasattr(self, "fig"):
-            plt.close(self.fig)
-
-    def save(self, path: Path):
-        """保存最终图表。"""
-        if self.enable and hasattr(self, "fig"):
-            self.fig.savefig(path, dpi=150, bbox_inches="tight")
-            print(f"  可视化图表已保存: {path}")
-
 
 # ── 位置映射 ──────────────────────────────────────────────────────────────
 
@@ -2645,8 +2419,9 @@ def optimize(
 
     prior_params = _get_default_params_tensor(device)
 
-    # 初始化可视化器
-    viz = OptimizationVisualizer(n_steps, pop_size, enable=enable_viz)
+    # 初始化可视化器 (使用新版 Plotly)
+    viz = create_visualizer(n_steps=n_steps, pop_size=pop_size, enable=enable_viz)
+    viz.start()
 
     # 初始化参数种群
     all_params = []
@@ -2690,8 +2465,17 @@ def optimize(
 
             current_loss = float(total_loss.detach().cpu())
 
-            # 更新可视化 (每 5 步更新一次，避免频繁刷新)
-            if viz.enable and step % 5 == 0:
+            # 更新可视化 (每 5 步更新一次)
+            if step % 5 == 0:
+                # 提取位置权重用于热力图
+                params_cpu = params_t.detach().cpu()
+                pw_raw = params_cpu[:N_POS * N_DIM].reshape(N_POS, N_DIM)
+                pw_np = torch.softmax(pw_raw, dim=1).numpy()
+                position_weights = {
+                    pos: {dim: pw_np[i, j] for j, dim in enumerate(DIMENSIONS)}
+                    for i, pos in enumerate(POSITIONS)
+                }
+                
                 viz.update(
                     step=step,
                     pop_idx=pop_i,
@@ -2699,8 +2483,7 @@ def optimize(
                     spearman=components.get("soft_spearman", 0.0),
                     pearson=components.get("soft_pearson", 0.0),
                     components=components,
-                    params=params_t,
-                    device=device,
+                    position_weights=position_weights,
                 )
 
             if current_loss < best_loss:
@@ -2735,9 +2518,11 @@ def optimize(
     best_sp, best_pr = all_final_corrs[best_idx]
     print(f"\n  最优: Spearman={best_sp:.4f}  Pearson={best_pr:.4f}  (第 {best_idx+1} 组)")
 
-    # 关闭可视化
+    # 训练结束，保存可视化报告
+    viz.finalize(best_params=all_params[best_idx], best_spearman=best_sp, best_pearson=best_pr)
     if output_dir is not None:
-        viz.save(Path(output_dir) / "optimization_progress.png")
+        viz.save(Path(output_dir) / "training_report.html")
+        viz.save_json(Path(output_dir) / "training_history.json")
     viz.close()
 
     return all_params[best_idx].to(device)
