@@ -357,7 +357,8 @@ body.light-mode .mesh-bg {
 }
 
 .view.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
 }
 
 .hero-grid,

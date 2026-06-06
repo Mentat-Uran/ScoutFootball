@@ -342,8 +342,15 @@ async function renderPlayerProfile() {
         <div><span>${appState.lang === "zh" ? "出场" : "Matches"}</span><strong>${detailMatches}</strong></div>
         <div><span>${t("th_pos")}</span><strong>${detailPosition}</strong></div>
         <div><span>${t("th_rating")}</span><strong>${detailScore}</strong></div>
-        ${lowAppWarning}
     `;
+    if (lowAppWarning) {
+        document.getElementById("player-detail").insertAdjacentHTML("afterend", lowAppWarning);
+    } else {
+        const existing = document.getElementById("player-detail").nextElementSibling;
+        if (existing && existing.classList && existing.classList.contains("low-appearance-warning")) {
+            existing.remove();
+        }
+    }
 
     // Use real radar data from profile API, or fallback to defaults
     const radar = (profile && profile.radar) ? profile.radar : player.radar;
@@ -358,6 +365,8 @@ function getChart(id) {
     }
     const element = document.getElementById(id);
     if (!element) return null;
+    // Don't init on hidden containers - will have zero dimensions
+    if (element.offsetParent === null) return null;
     if (!appState.charts[id]) appState.charts[id] = echarts.init(element);
     return appState.charts[id];
 }
@@ -505,7 +514,7 @@ function renderValue() {
     chart.resize();
 
     // Build scatter data with player key for click-through
-    const scatterData = data.map((player) => ({
+    const scatterData = data.filter(p => p.actualValue > 0 && p.predictedValue > 0).map((player) => ({
         value: [
             +(player.actualValue / 1e6).toFixed(1),
             +(player.predictedValue / 1e6).toFixed(1),
@@ -721,7 +730,8 @@ function renderScouting() {
             </div>
         `).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No low-confidence players in queue</div>';
-    document.getElementById("watchlist").innerHTML = players.slice(0, 4).map((player) => `
+    const watchlistPlayers = [...players].sort((a, b) => b.rating - a.rating).slice(0, 4);
+    document.getElementById("watchlist").innerHTML = watchlistPlayers.length > 0 ? watchlistPlayers.map((player) => `
         <div class="watch-card">
             <div>
                 <strong>${player.name}</strong>
@@ -729,7 +739,7 @@ function renderScouting() {
             </div>
             <span class="status-pill ${confidenceClass(player.confidence)}">${player.rating.toFixed(1)}</span>
         </div>
-    `).join("");
+    `}).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
 }
 
 function renderActions() {
@@ -763,22 +773,55 @@ function renderActions() {
     chart.resize();
 }
 
+function refreshAllChartColors() {
+    // Re-render all active charts with updated theme colors
+    Object.keys(appState.charts).forEach((id) => {
+        const element = document.getElementById(id);
+        if (!element || element.offsetParent === null) return; // Skip hidden charts
+        const chart = appState.charts[id];
+        if (!chart) return;
+        
+        // Re-render based on chart type
+        switch(id) {
+            case "radar-chart":
+                const player = players.find((item) => item.key === appState.selectedPlayerKey) || players[0];
+                if (player) renderRadar(player);
+                break;
+            case "value-chart":
+                renderValue();
+                break;
+            case "score-chart":
+                renderScoreMatrix(selectedMatch());
+                break;
+            case "action-chart":
+                renderActions();
+                break;
+        }
+    });
+}
+
 async function renderActiveView() {
     if (appState.view === "players") renderPlayers();
     if (appState.view === "value") renderValue();
     if (appState.view === "matches") await renderMatches();
     if (appState.view === "scouting") renderScouting();
     if (appState.view === "actions") renderActions();
-    Object.values(appState.charts).forEach((chart) => chart.resize());
+    // Resize charts after layout paint to ensure correct dimensions
+    requestAnimationFrame(() => {
+        Object.values(appState.charts).forEach((chart) => {
+            try { chart.resize(); } catch(e) { /* ignore disposed charts */ }
+        });
+    });
 }
 
 function exportPlayers() {
-    const header = ["rank", "player", "position", "team", "rating", "confidence"];
+    const header = ["rank", "player", "position", "team", "season", "rating", "confidence"];
     const rows = filteredPlayers().map((player, index) => [
         index + 1,
         player.name,
         player.position,
         player.team,
+        player.season,
         player.rating,
         player.confidence,
     ]);
@@ -802,6 +845,7 @@ function bindEvents() {
     document.getElementById("theme-toggle").addEventListener("click", () => {
         document.body.classList.toggle("light-mode");
         document.getElementById("theme-toggle").textContent = document.body.classList.contains("light-mode") ? "☀" : "☾";
+        refreshAllChartColors();
         renderActiveView();
     });
     document.getElementById("lang-toggle").addEventListener("click", () => {
@@ -817,9 +861,13 @@ function bindEvents() {
         appState.season = event.target.value;
         renderPlayers();
     });
+    let searchTimer = null;
     document.getElementById("global-search").addEventListener("input", () => {
-        if (appState.view !== "players") setView("players");
-        else renderPlayers();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            if (appState.view !== "players") setView("players");
+            else renderPlayers();
+        }, 300);
     });
     document.querySelectorAll("[data-value-mode]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -831,7 +879,8 @@ function bindEvents() {
     document.getElementById("home-team").addEventListener("change", (event) => {
         appState.home = event.target.value;
         if (appState.home === appState.away) {
-            appState.away = getTeams().find((team) => team !== appState.home) || appState.away;
+            const nextAway = getTeams().find((team) => team !== appState.home);
+            if (nextAway) appState.away = nextAway;
             document.getElementById("away-team").value = appState.away;
         }
         renderMatches();
@@ -839,7 +888,8 @@ function bindEvents() {
     document.getElementById("away-team").addEventListener("change", (event) => {
         appState.away = event.target.value;
         if (appState.home === appState.away) {
-            appState.home = getTeams().find((team) => team !== appState.away) || appState.home;
+            const nextHome = getTeams().find((team) => team !== appState.away);
+            if (nextHome) appState.home = nextHome;
             document.getElementById("home-team").value = appState.home;
         }
         renderMatches();
