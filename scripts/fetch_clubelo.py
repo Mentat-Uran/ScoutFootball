@@ -8,9 +8,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.clubelo import fetch_elo_by_date
-from scoutlab.adapters.common import CachedHttpClient
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.clubelo import fetch_elo_by_date
+from scoutfootball.adapters.common import CachedHttpClient
+from scoutfootball.config import PlatformSettings
 
 
 def main():

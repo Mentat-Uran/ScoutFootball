@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.config import PlatformSettings
-from scoutlab.entities.normalize import normalize_team_name
+from scoutfootball.config import PlatformSettings
+from scoutfootball.entities.normalize import normalize_team_name
 
 
 def main():

@@ -9,9 +9,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.common import CachedHttpClient
-from scoutlab.adapters.statsbomb_open import load_events, load_lineups, load_matches
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.common import CachedHttpClient
+from scoutfootball.adapters.statsbomb_open import load_events, load_lineups, load_matches
+from scoutfootball.config import PlatformSettings
 
 # StatsBomb Open Data competitions (Big 5 leagues + UCL/UEL)
 COMPETITIONS = [

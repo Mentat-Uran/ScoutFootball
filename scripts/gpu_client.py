@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ScoutLab GPU 计算客户端 — 在 Mac 上运行，发送任务给 Windows GPU 服务器
+ScoutFootball GPU 计算客户端 — 在 Mac 上运行，发送任务给 Windows GPU 服务器
 
 使用:
   # 健康检查
@@ -61,7 +61,7 @@ def cmd_health(server: str, args):
     """健康检查。"""
     data = _get(server, "/health")
     print("=" * 50)
-    print("ScoutLab GPU 服务器状态")
+    print("ScoutFootball GPU 服务器状态")
     print("=" * 50)
     print(f"  状态:       {data['status']}")
     print(f"  设备:       {data['device']}")
@@ -311,7 +311,7 @@ def cmd_download(server: str, args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="ScoutLab GPU 计算客户端")
+    parser = argparse.ArgumentParser(description="ScoutFootball GPU 计算客户端")
     parser.add_argument(
         "--server",
         type=str,

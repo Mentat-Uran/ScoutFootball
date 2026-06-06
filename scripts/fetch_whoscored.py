@@ -24,11 +24,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.whoscored import (
+from scoutfootball.adapters.whoscored import (
     fetch_match_events,
     fetch_player_match_ratings,
 )
-from scoutlab.config import PlatformSettings
+from scoutfootball.config import PlatformSettings
 
 # Big 5 leagues in soccerdata WhoScored format
 BIG5_LEAGUES = [

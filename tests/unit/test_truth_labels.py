@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from scoutlab.evaluation.truth_labels import (
+from scoutfootball.evaluation.truth_labels import (
     TRUTH_LABELS_COLUMNS,
     TRUTH_LABELS_SCHEMA,
     LabelConfidence,

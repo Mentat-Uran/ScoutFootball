@@ -1704,8 +1704,8 @@ wheels = [
 ]
 
 [[package]]
-name = "scoutlab"
-version = "0.3.0"
+name = "scoutfootball"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },

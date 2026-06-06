@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from scoutlab.evaluation.availability_diagnostic import (
+from scoutfootball.evaluation.availability_diagnostic import (
     AvailabilityDiagnosticReport,
     compute_permutation_importance,
     compute_position_availability_weights,
@@ -259,7 +259,7 @@ class TestIdentifyAvailabilityDrivenPlayers:
 class TestGenerateAvailabilityDiagnostic:
     def test_handles_missing_files_gracefully(self, tmp_path) -> None:
         """Test with non-existent file paths."""
-        from scoutlab.config import PlatformSettings
+        from scoutfootball.config import PlatformSettings
 
         settings = PlatformSettings.from_root(tmp_path)
         report = generate_availability_diagnostic(settings=settings)
@@ -273,7 +273,7 @@ class TestGenerateAvailabilityDiagnostic:
 
     def test_with_feature_matrix_only(self, tmp_path) -> None:
         """Test when only the feature matrix file exists."""
-        from scoutlab.config import PlatformSettings
+        from scoutfootball.config import PlatformSettings
 
         settings = PlatformSettings.from_root(tmp_path)
 

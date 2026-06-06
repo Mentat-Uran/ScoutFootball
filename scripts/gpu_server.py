@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ScoutLab GPU 计算服务器 v3 — 在 Windows (RTX 5070 Ti) 上运行
+ScoutFootball GPU 计算服务器 v3 — 在 Windows (RTX 5070 Ti) 上运行
 
 启动:
   pip install fastapi uvicorn torch pandas numpy scipy pyarrow
@@ -56,7 +56,7 @@ from optimize_ratings_gpu import (
 # ── FastAPI App ──────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="ScoutLab GPU Server",
+    title="ScoutFootball GPU Server",
     description="远程 GPU 计算服务 — 球员评分权重优化",
     version="3.0.0",
 )
@@ -487,7 +487,7 @@ async def download_file(file_path: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="ScoutLab GPU 计算服务器")
+    parser = argparse.ArgumentParser(description="ScoutFootball GPU 计算服务器")
     parser.add_argument("--data_dir", type=str, default="./data")
     parser.add_argument("--port", type=int, default=8420)
     parser.add_argument("--host", type=str, default="0.0.0.0")
@@ -496,7 +496,7 @@ def main():
     global DATA_DIR
     DATA_DIR = Path(args.data_dir).resolve()
     print("=" * 60)
-    print("ScoutLab GPU 计算服务器 v3")
+    print("ScoutFootball GPU 计算服务器 v3")
     print("=" * 60)
     print(f"  数据目录: {DATA_DIR}")
     print(f"  监听: {args.host}:{args.port}")

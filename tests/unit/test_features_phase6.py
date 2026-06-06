@@ -1,6 +1,6 @@
 import pandas as pd
 
-from scoutlab.features import (
+from scoutfootball.features import (
     build_player_match_features,
     build_player_rolling_features,
     build_team_match_features,

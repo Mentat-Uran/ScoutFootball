@@ -1,4 +1,4 @@
-from scoutlab.architecture import build_default_architecture
+from scoutfootball.architecture import build_default_architecture
 
 
 def test_architecture_covers_required_phase_one_modules() -> None:
@@ -23,6 +23,6 @@ def test_architecture_commands_include_live_entrypoints() -> None:
     assert "uv sync" in architecture.supported_commands
     assert "uv run pytest" in architecture.supported_commands
     assert "uv run ruff check ." in architecture.supported_commands
-    assert "uv run python -m scoutlab info" in architecture.supported_commands
-    assert "uv run python -m scoutlab ingest" in architecture.supported_commands
-    assert "uv run python -m scoutlab validate" in architecture.supported_commands
+    assert "uv run python -m scoutfootball info" in architecture.supported_commands
+    assert "uv run python -m scoutfootball ingest" in architecture.supported_commands
+    assert "uv run python -m scoutfootball validate" in architecture.supported_commands

@@ -8,7 +8,7 @@ const i18n = {
         nav_actions: "动作价值",
         nav_reports: "报告",
         status_label: "本地产物",
-        app_title: "ScoutLab 分析终端",
+        app_title: "ScoutFootball 分析终端",
         search_placeholder: "搜索球员、球队、报告",
         overview_kicker: "只读研究工作台",
         overview_title: "覆盖、模型、球探决策",
@@ -72,7 +72,7 @@ const i18n = {
         nav_actions: "Action Value",
         nav_reports: "Reports",
         status_label: "Local artifacts",
-        app_title: "ScoutLab Analyst Console",
+        app_title: "ScoutFootball Analyst Console",
         search_placeholder: "Search players, teams, reports",
         overview_kicker: "Read-only research desk",
         overview_title: "Coverage, models, scouting decisions",
@@ -129,7 +129,7 @@ const i18n = {
     },
 };
 
-const API_BASE = window.__SCOUTLAB_API__ || "";
+const API_BASE = window.__SCOUTFOOTBALL_API__ || "";
 
 let players = [];
 let reviews = [];
@@ -787,7 +787,7 @@ function exportPlayers() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "scoutlab-player-pool.csv";
+    link.download = "scoutfootball-player-pool.csv";
     link.click();
     URL.revokeObjectURL(url);
 }

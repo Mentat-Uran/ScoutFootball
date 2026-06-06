@@ -29,6 +29,9 @@ data/soccerdata/**
 # Hermes
 .hermes/
 
+# Trae IDE
+.trae/
+
 # Build artifacts
 scoutlab-gpu-server.zip
 *.zip

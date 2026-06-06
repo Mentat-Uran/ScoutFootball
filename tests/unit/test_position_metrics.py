@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from scoutlab.evaluation.position_metrics import (
+from scoutfootball.evaluation.position_metrics import (
     POSITION_DIMENSIONS,
     POSITION_GROUP_MAP,
     PlayerPositionMetrics,

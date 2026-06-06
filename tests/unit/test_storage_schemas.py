@@ -1,6 +1,6 @@
 import pytest
 
-from scoutlab.schemas import build_core_table_definitions
+from scoutfootball.schemas import build_core_table_definitions
 
 
 def test_core_table_definitions_cover_phase_two_contract() -> None:

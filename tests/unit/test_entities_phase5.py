@@ -2,7 +2,7 @@ from datetime import date
 
 import pandas as pd
 
-from scoutlab.entities import (
+from scoutfootball.entities import (
     match_players,
     match_teams,
     normalize_country_name,

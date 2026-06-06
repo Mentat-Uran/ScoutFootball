@@ -1,4 +1,4 @@
-# ScoutLab 球员价值评估系统指南
+# ScoutFootball 球员价值评估系统指南
 
 ## 一、数据源获取
 
@@ -119,7 +119,7 @@ PYTHONPATH=src uv run python scripts/player_value_system.py
 
 ```python
 import pandas as pd
-from scoutlab.config import PlatformSettings
+from scoutfootball.config import PlatformSettings
 
 settings = PlatformSettings.from_root()
 

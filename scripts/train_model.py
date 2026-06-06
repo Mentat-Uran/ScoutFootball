@@ -11,7 +11,7 @@ import pandas as pd
 from scipy.stats import poisson
 from sklearn.model_selection import TimeSeriesSplit
 
-from scoutlab.config import PlatformSettings
+from scoutfootball.config import PlatformSettings
 
 
 def main():

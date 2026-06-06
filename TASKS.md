@@ -2,16 +2,16 @@
 
 当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新组合目标在 GPU 服务器重跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标、组合优化目标、模型运行登记、神经网络准入门槛）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：`frontend/` 已有静态 Liquid Glass 分析工作台。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
 
-本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutLab 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
+本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutFootball 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
 ## 顶层架构
 
-ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是数据抓取集合。后续架构扩展为十层：前七层解决当前可落地的评分、事件价值、评估和展示，第八到第十层扩展到球探工作流、预测校准和空间/视频研究。
+ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不是数据抓取集合。后续架构扩展为十层：前七层解决当前可落地的评分、事件价值、评估和展示，第八到第十层扩展到球探工作流、预测校准和空间/视频研究。
 
 1. 数据与合规层：继续使用本地缓存、DuckDB 和 Parquet；Transfermarkt 只允许手动或授权导入；FBref 只作为受限低频补充源。
 2. 标准事实层：把比赛、球队、球员、阵容、事件、赛季统计、身价和联赛强度统一到 raw/silver/gold/models/reports/logs 分层。
-3. 跨供应商标准化层：先定义 ScoutLab 内部 event/tracking schema，再对齐 SPADL、atomic-SPADL、Common Data Format、kloppy/floodlight 抽象；短期不急加依赖。
-4. 事件动作价值层：以 StatsBomb Open Data 为第一主源，新增 `src/scoutlab/action_value/`，形成 StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP/Atomic-VAEP 的演进路线。
+3. 跨供应商标准化层：先定义 ScoutFootball 内部 event/tracking schema，再对齐 SPADL、atomic-SPADL、Common Data Format、kloppy/floodlight 抽象；短期不急加依赖。
+4. 事件动作价值层：以 StatsBomb Open Data 为第一主源，新增 `src/scoutfootball/action_value/`，形成 StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP/Atomic-VAEP 的演进路线。
 5. 球员真值与评分层：综合真实标签、赛季统计、xG/xA、xT/VAEP、出勤可靠性、联赛强度、年龄和趋势；训练目标必须引入真实球员标签，不能只优化球队积分相关性。
 6. 评估与模型卡层：建立 `EVALUATION.md`、`MODEL_CARD.md`、位置内指标、跨位置总榜指标、误差分析、数据覆盖说明和模型运行登记。
 7. 产品可视化与 API 层：Streamlit 保持本地只读；`frontend/` 静态工作台保留 Liquid Glass 风格并作为长期产品壳；Plotly/mplsoccer/ECharts 继续用于交互图和足球专用图；FastAPI 只暴露本地只读产物。
@@ -71,9 +71,9 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 - [x] IngestConfig 集中配置：15 联赛×10 赛季，YAML/JSON 可覆盖。
 - [x] Pipeline 配置驱动重构，新增 4 个数据源 handler。
 - [x] 跨源球员 ID 对齐：composite key + fuzzy match + 球队名规范化。
-- [x] Pipeline 端到端：`scoutlab ingest` -> `scoutlab build-features` -> `scoutlab train`。
-- [x] 数据验证入口：`scoutlab validate`。
-- [x] FastAPI draft 入口：`scoutlab serve`。
+- [x] Pipeline 端到端：`scoutfootball ingest` -> `scoutfootball build-features` -> `scoutfootball train`。
+- [x] 数据验证入口：`scoutfootball validate`。
+- [x] FastAPI draft 入口：`scoutfootball serve`。
 - [x] Streamlit MVP 入口和多页可视化骨架。
 - [x] `frontend/` 静态 Liquid Glass 前端原型：总览、球员、身价、比赛预测、球探、动作价值、报告 7 个视图。
 - [x] Poisson 比分预测 baseline。
@@ -136,9 +136,9 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 ### 其他增强
 
 - [x] 引入 mplsoccer 依赖并保持 Plotly 现有交互图不回退。
-- [x] 新增 `src/scoutlab/viz/pitch.py`，封装球场、坐标、shot map、pass map、heatmap 基础图。
+- [x] 新增 `src/scoutfootball/viz/pitch.py`，封装球场、坐标、shot map、pass map、heatmap 基础图。
 - [x] 在 Streamlit 增加"位置内榜单"和"跨位置总榜"切换。
-- [x] 修复 Streamlit `st.Page` 入口路径，支持从仓库根目录执行 `uv run streamlit run src/scoutlab/app/streamlit_app.py`。
+- [x] 修复 Streamlit `st.Page` 入口路径，支持从仓库根目录执行 `uv run streamlit run src/scoutfootball/app/streamlit_app.py`。
 - [x] 用 `frontend/index.html`、`frontend/style.css`、`frontend/app.js` 重构静态前端，保留 Liquid Glass 风格并补齐主要产品视图。
 - [x] 增加低置信度提示：分钟不足、数据源缺失、位置重判不确定、事件样本不足。
 - [ ] 给 README 加 3–5 张截图（球员雷达、身价偏离、比赛预测、Top 100 榜单、详情页），并写一段"如何复现 demo 数据"的说明。
@@ -158,7 +158,7 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 
 - `uv run ruff check .`
 - `uv run pytest`
-- `uv run streamlit run src/scoutlab/app/streamlit_app.py`
+- `uv run streamlit run src/scoutfootball/app/streamlit_app.py`
 - `node --check frontend/app.js`
 - `python3 -m http.server 8600 --directory frontend`
 - 三个 Streamlit 核心页面和静态 Liquid Glass 工作台已完成，截图和后端 API 联调待补充。
@@ -168,7 +168,7 @@ ScoutLab 的长期形态是本地优先的足球数据研究平台，而不是�
 目标：先用公开事件数据完成一条可复现的动作价值链路，不引入商业数据源。
 
 - [ ] 盘点 `events_all.parquet` 字段和坐标覆盖，写入事件数据覆盖说明。
-- [ ] 新增 `src/scoutlab/action_value/` 模块：`spadl_adapter.py`、`xt.py`、`vaep.py`、`aggregate.py`。
+- [ ] 新增 `src/scoutfootball/action_value/` 模块：`spadl_adapter.py`、`xt.py`、`vaep.py`、`aggregate.py`。
 - [ ] 第一版只做 StatsBomb events -> internal actions -> xT；internal actions 需记录 provider action id、坐标系、方向、动作结果、前后状态和 source coverage。
 - [ ] 输出 internal actions schema 文档，并说明它和 SPADL/atomic-SPADL、Common Data Format 的字段映射关系。
 - [ ] 输出 `data/gold/feature_store/player_action_value.parquet`。
@@ -244,7 +244,7 @@ player_rating =
 
 验收：
 
-- `scoutlab train` 产出模型报告或报告输入数据。
+- `scoutfootball train` 产出模型报告或报告输入数据。
 - `EVALUATION.md` 和 `MODEL_CARD.md` 能解释当前模型能做什么、不能做什么、误差在哪。
 
 ## P5：比分预测升级
@@ -264,9 +264,9 @@ player_rating =
 
 ## P6：跨供应商标准化与开放格式层
 
-目标：让 ScoutLab 未来可以接入更多 event/tracking 数据，但当前不新增商业数据源，不改变 DuckDB + Parquet 主干。
+目标：让 ScoutFootball 未来可以接入更多 event/tracking 数据，但当前不新增商业数据源，不改变 DuckDB + Parquet 主干。
 
-- [ ] 设计 ScoutLab internal match/event/tracking schema，字段至少覆盖 match metadata、team/player identity、period/time、coordinates、action type、outcome、freeze frame 可选字段和 source attribution。
+- [ ] 设计 ScoutFootball internal match/event/tracking schema，字段至少覆盖 match metadata、team/player identity、period/time、coordinates、action type、outcome、freeze frame 可选字段和 source attribution。
 - [ ] 写 `docs/DATA_CONTRACTS.md` 或等价文档，说明 StatsBomb events、internal actions、SPADL/atomic-SPADL、Common Data Format 之间的映射。
 - [ ] 评估 kloppy：作为直接依赖、离线转换工具或暂不接入三种方案都要给出依赖风险、坐标转换风险和测试成本。
 - [ ] 参考 floodlight 的 Game/Team/Player/Event/Frame/Segment 抽象，但只有在 tracking 样例数据进入仓库后才考虑代码接入。
@@ -324,8 +324,8 @@ player_rating =
 ```bash
 uv run ruff check .
 uv run pytest
-PYTHONPATH=src uv run python -m scoutlab info
-PYTHONPATH=src uv run python -m scoutlab validate
+PYTHONPATH=src uv run python -m scoutfootball info
+PYTHONPATH=src uv run python -m scoutfootball validate
 ```
 
 ## 爬虫运行环境说明

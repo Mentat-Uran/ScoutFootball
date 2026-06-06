@@ -116,7 +116,7 @@ Napoli、Real Madrid、Arsenal 等强队的顶级球员排名偏低。可能原�
 
 本轮直接编辑的测试集队名映射：
 
-| Football-Data | ScoutLab |
+| Football-Data | ScoutFootball |
 | --- | --- |
 | Leeds | Leeds United |
 | Man City | Manchester City |
@@ -155,7 +155,7 @@ Napoli、Real Madrid、Arsenal 等强队的顶级球员排名偏低。可能原�
 未使用 5070 Ti 服务器。命令：
 
 ```bash
-PYTHONPATH=src uv run python scripts/optimize_ratings_gpu.py --data_dir /tmp/scoutlab-smoke-patched.zKc8Cq --pop 2 --steps 20 --cv-folds 0 --stability-runs 0 --importance-repeats 0 --patience 10
+PYTHONPATH=src uv run python scripts/optimize_ratings_gpu.py --data_dir /tmp/scoutfootball-smoke-patched.zKc8Cq --pop 2 --steps 20 --cv-folds 0 --stability-runs 0 --importance-repeats 0 --patience 10
 ```
 
 修补后 2526 五大联赛 coverage：

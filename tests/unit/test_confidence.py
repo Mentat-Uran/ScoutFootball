@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from scoutlab.evaluation.confidence import (
+from scoutfootball.evaluation.confidence import (
     assess_batch_confidence,
     assess_player_confidence,
 )

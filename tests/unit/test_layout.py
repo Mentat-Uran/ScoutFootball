@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from scoutlab.config import PlatformSettings
-from scoutlab.storage import collect_required_directories
+from scoutfootball.config import PlatformSettings
+from scoutfootball.storage import collect_required_directories
 
 
 def test_collect_required_directories_stays_under_data_root(tmp_path: Path) -> None:

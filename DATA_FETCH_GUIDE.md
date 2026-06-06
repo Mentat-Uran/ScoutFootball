@@ -1,4 +1,4 @@
-# ScoutLab 数据获取指南
+# ScoutFootball 数据获取指南
 
 ## 已获取数据
 
@@ -15,7 +15,7 @@
 - **文件位置**: `data/raw/football_data/combined_results.parquet`
 
 ### 3. DuckDB 数据库
-- **位置**: `data/scoutlab.duckdb`
+- **位置**: `data/scoutfootball.duckdb`
 - **表**: fact_match (5,330 行), fact_event_statsbomb (11,871 行)
 
 ## 获取更多数据

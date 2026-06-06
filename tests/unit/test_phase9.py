@@ -5,23 +5,23 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from scoutlab.app.demo_data import (
+from scoutfootball.app.demo_data import (
     generate_oof_predictions,
     generate_player_match,
     generate_score_matrix,
     generate_team_match,
 )
-from scoutlab.viz.percentiles import plot_percentile_bars
-from scoutlab.viz.radar import plot_player_radar
-from scoutlab.viz.scatter import plot_value_scatter
-from scoutlab.viz.score_matrix import plot_score_matrix
-from scoutlab.viz.trends import plot_trend
+from scoutfootball.viz.percentiles import plot_percentile_bars
+from scoutfootball.viz.radar import plot_player_radar
+from scoutfootball.viz.scatter import plot_value_scatter
+from scoutfootball.viz.score_matrix import plot_score_matrix
+from scoutfootball.viz.trends import plot_trend
 
 
 def _build_player_rolling(n_rows: int = 200) -> pd.DataFrame:
     raw = generate_player_match(n_rows)
-    from scoutlab.features.player_match import build_player_match_features
-    from scoutlab.features.player_rolling import build_player_rolling_features
+    from scoutfootball.features.player_match import build_player_match_features
+    from scoutfootball.features.player_rolling import build_player_rolling_features
 
     pm = build_player_match_features(raw)
     return build_player_rolling_features(pm, windows=[10])
