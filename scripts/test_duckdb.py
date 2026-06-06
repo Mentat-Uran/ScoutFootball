@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import duckdb
 import pandas as pd
 
-from scoutlab.config import PlatformSettings
+from scoutfootball.config import PlatformSettings
 
 
 def main():
@@ -25,7 +25,7 @@ def main():
     print(f"\n[1] 加载数据: {len(fd)} 条记录")
 
     # Create DuckDB connection
-    db_path = settings.data_root / "scoutlab.duckdb"
+    db_path = settings.data_root / "scoutfootball.duckdb"
     conn = duckdb.connect(str(db_path))
 
     # Test 1: First write

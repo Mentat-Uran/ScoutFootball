@@ -4,7 +4,7 @@
 
 ## 当前项目状态
 
-Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> `scoutlab train`。当前文档真源是 `TASKS.md`，用户说明是 `README.md`，算法解释以 `ALGORITHM.md` 和 `MODEL_CARD.md` 为准。
+Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-features` -> `scoutfootball train`。当前文档真源是 `TASKS.md`，用户说明是 `README.md`，算法解释以 `ALGORITHM.md` 和 `MODEL_CARD.md` 为准。
 
 本地缓存当前可验证状态：
 
@@ -18,7 +18,7 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 - 出勤捷径诊断报告：置换重要性、位置 availability 权重、球队聚合权重分布、出勤驱动球员识别。
 - 位置内指标：GK/CB/FB/DM/CM/AM/W/ST 各位置核心维度、percentile rank 和中文解释模板。
 - Finishing shrinkage：经验贝叶斯收缩，K=50，小样本射门不过度放大。
-- mplsoccer 集成：`src/scoutlab/viz/pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
+- mplsoccer 集成：`src/scoutfootball/viz/pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
 - 低置信度提示：分钟不足、数据缺失、位置重判不确定、联赛 coverage 低。
 - Streamlit 从 5 页扩展到 8 页（+Player Rankings、Value Deviation、Match Prediction）。
 - `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。当前使用前端 mock 数据演示产品形态，不能写成已接入真实后端。
@@ -119,15 +119,15 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
 
 ## 模块约定
 
-- 现有包根目录是 `src/scoutlab/`。
-- 现有命令入口是 `src/scoutlab/__main__.py`。
-- 现有 pipeline 入口是 `src/scoutlab/pipeline.py`。
-- 新增事件动作价值模块时使用 `src/scoutlab/action_value/`。
-- 新增 internal actions schema 优先写入 `src/scoutlab/action_value/schema.py` 或 `src/scoutlab/schemas/`，并同步 `docs/DATA_CONTRACTS.md`。
-- 新增神经网络评分候选模型时优先使用 `src/scoutlab/models/player_rating_nn.py` 或同级模块；训练脚本只做薄入口，不把核心逻辑堆在 `scripts/`。
+- 现有包根目录是 `src/scoutfootball/`。
+- 现有命令入口是 `src/scoutfootball/__main__.py`。
+- 现有 pipeline 入口是 `src/scoutfootball/pipeline.py`。
+- 新增事件动作价值模块时使用 `src/scoutfootball/action_value/`。
+- 新增 internal actions schema 优先写入 `src/scoutfootball/action_value/schema.py` 或 `src/scoutfootball/schemas/`，并同步 `docs/DATA_CONTRACTS.md`。
+- 新增神经网络评分候选模型时优先使用 `src/scoutfootball/models/player_rating_nn.py` 或同级模块；训练脚本只做薄入口，不把核心逻辑堆在 `scripts/`。
 - 新增模型运行登记优先写入 `data/reports/model_runs/` 或 `data/models/runs/`，必须保存 dataset snapshot、输入 hash、参数、随机种子、依赖版本和指标。
 - 新增球探人工校准数据优先写入 `data/gold/feature_store/player_truth_labels.parquet`、`data/reports/review_queue/` 或等价本地产物；不要把人工标签和模型预测写进同一字段。
-- 新增足球专用图表时优先扩展 `src/scoutlab/viz/`，不要把绘图逻辑堆进 Streamlit 页面。
+- 新增足球专用图表时优先扩展 `src/scoutfootball/viz/`，不要把绘图逻辑堆进 Streamlit 页面。
 - `frontend/` 是静态产品壳：保留 `frontend/index.html`、`frontend/style.css`、`frontend/app.js` 的 Liquid Glass 风格，页面只做本地展示和轻量交互，不在浏览器中执行训练、爬取或重型数据处理。
 - `frontend/` 当前 mock 数据只能用于产品形态验证；接真实数据时先补 FastAPI read-only endpoint 和本地 Parquet 契约，再改前端 fetch。
 - 前端长期视图和后端契约对应关系：
@@ -138,13 +138,13 @@ Pipeline 端到端可运行：`scoutlab ingest` -> `scoutlab build-features` -> 
   - 球探：review queue/watchlist/shortlist Parquet 契约，只读展示优先。
   - 动作价值：P2 action_value 产物稳定前只展示样例，不声称全量能力。
   - 报告：model-run registry、输入 hash、随机种子、参数、指标、误差案例。
-- 新增评分特征矩阵模块使用 `src/scoutlab/features/rating_matrix.py`。
-- 新增 coverage 置信度模块使用 `src/scoutlab/evaluation/coverage_confidence.py`。
-- 新增出勤诊断模块使用 `src/scoutlab/evaluation/availability_diagnostic.py`。
-- 新增位置内指标模块使用 `src/scoutlab/evaluation/position_metrics.py`。
-- 新增统一置信度模块使用 `src/scoutlab/evaluation/confidence.py`。
-- 新增真实标签契约模块使用 `src/scoutlab/evaluation/truth_labels.py`。
-- 新增足球专用图表扩展 `src/scoutlab/viz/pitch.py`，使用 mplsoccer。
+- 新增评分特征矩阵模块使用 `src/scoutfootball/features/rating_matrix.py`。
+- 新增 coverage 置信度模块使用 `src/scoutfootball/evaluation/coverage_confidence.py`。
+- 新增出勤诊断模块使用 `src/scoutfootball/evaluation/availability_diagnostic.py`。
+- 新增位置内指标模块使用 `src/scoutfootball/evaluation/position_metrics.py`。
+- 新增统一置信度模块使用 `src/scoutfootball/evaluation/confidence.py`。
+- 新增真实标签契约模块使用 `src/scoutfootball/evaluation/truth_labels.py`。
+- 新增足球专用图表扩展 `src/scoutfootball/viz/pitch.py`，使用 mplsoccer。
 - Streamlit 页面只读本地产物，不直接执行重型训练。
 - 训练产物写入 `data/models/` 或 `data/gold/feature_store/`，并保存 feature manifest、参数、随机种子和输入 hash。
 - 数据合规和引用要求写入 data source license manifest；StatsBomb Open Data 衍生产物公开展示必须注明 StatsBomb。
@@ -159,10 +159,10 @@ Python, uv, DuckDB + Parquet, pandas, scikit-learn, Streamlit, Plotly, mplsoccer
 uv run ruff check .
 uv run pytest
 uv run pytest tests/unit/test_rating_optimizer_validation.py
-PYTHONPATH=src uv run python -m scoutlab info
-PYTHONPATH=src uv run python -m scoutlab validate
-PYTHONPATH=src uv run python -m scoutlab ingest
-PYTHONPATH=src uv run python -m scoutlab build-features
-PYTHONPATH=src uv run python -m scoutlab train
-uv run streamlit run src/scoutlab/app/streamlit_app.py
+PYTHONPATH=src uv run python -m scoutfootball info
+PYTHONPATH=src uv run python -m scoutfootball validate
+PYTHONPATH=src uv run python -m scoutfootball ingest
+PYTHONPATH=src uv run python -m scoutfootball build-features
+PYTHONPATH=src uv run python -m scoutfootball train
+uv run streamlit run src/scoutfootball/app/streamlit_app.py
 ```

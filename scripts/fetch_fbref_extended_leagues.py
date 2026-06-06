@@ -14,11 +14,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.fbref_soccerdata import (
+from scoutfootball.adapters.fbref_soccerdata import (
     EXTENDED_LEAGUES,
     read_player_season_stats_extended,
 )
-from scoutlab.config import PlatformSettings
+from scoutfootball.config import PlatformSettings
 
 STAT_TYPES = [
     "standard",

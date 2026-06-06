@@ -1,4 +1,4 @@
-# ScoutLab 数据获取完成报告
+# ScoutFootball 数据获取完成报告
 
 ## 完成状态
 
@@ -20,7 +20,7 @@
 - **存储**: `data/raw/football_data/combined_results.parquet`
 
 ### DuckDB 数据库
-- **位置**: `data/scoutlab.duckdb`
+- **位置**: `data/scoutfootball.duckdb`
 - **表**: fact_match, fact_event_statsbomb
 - **幂等写入**: ✓ 通过
 
@@ -62,7 +62,7 @@ uv run pytest tests/ -v
 # 查询示例
 PYTHONPATH=src uv run python -c "
 import duckdb
-conn = duckdb.connect('data/scoutlab.duckdb')
+conn = duckdb.connect('data/scoutfootball.duckdb')
 print(conn.execute('SELECT league, COUNT(*) FROM fact_match GROUP BY league').fetchdf())
 "
 ```

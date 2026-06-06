@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.sofifa import fetch_player_attributes
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.sofifa import fetch_player_attributes
+from scoutfootball.config import PlatformSettings
 
 
 def main():

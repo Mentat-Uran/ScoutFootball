@@ -25,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.common import CachedHttpClient, SourceFetchError
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.common import CachedHttpClient, SourceFetchError
+from scoutfootball.config import PlatformSettings
 
 RAW_BASE_URL = "https://raw.githubusercontent.com/statsbomb/open-data/master/data"
 

@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from scoutlab.schemas import (
+from scoutfootball.schemas import (
     IngestMetadata,
     SourceRequestLogEntry,
     build_core_table_definitions,
 )
-from scoutlab.storage import (
+from scoutfootball.storage import (
     append_source_request_log,
     connect_duckdb,
     metadata_path_for_dataset,

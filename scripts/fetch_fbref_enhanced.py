@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.fbref_soccerdata import read_player_season_stats_with_bundesliga_fallback
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.fbref_soccerdata import read_player_season_stats_with_bundesliga_fallback
+from scoutfootball.config import PlatformSettings
 
 
 def main():

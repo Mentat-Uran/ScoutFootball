@@ -4,16 +4,16 @@ from urllib.error import URLError
 
 import pytest
 
-from scoutlab.adapters.clubelo import fetch_elo_by_date
-from scoutlab.adapters.common import (
+from scoutfootball.adapters.clubelo import fetch_elo_by_date
+from scoutfootball.adapters.common import (
     CachedHttpClient,
     HttpResponse,
     SourceFetchError,
     SourceSchemaError,
 )
-from scoutlab.adapters.football_data import download_csv
-from scoutlab.adapters.statsbomb_open import load_events, load_lineups, load_matches
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.football_data import download_csv
+from scoutfootball.adapters.statsbomb_open import load_events, load_lineups, load_matches
+from scoutfootball.config import PlatformSettings
 
 
 class StaticTransport:

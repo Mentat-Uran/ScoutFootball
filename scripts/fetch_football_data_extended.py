@@ -10,9 +10,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.common import CachedHttpClient
-from scoutlab.adapters.football_data import download_csv
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.common import CachedHttpClient
+from scoutfootball.adapters.football_data import download_csv
+from scoutfootball.config import PlatformSettings
 
 # Football-Data.co.uk 联赛代码
 # 注意：部分联赛赛季覆盖有限，例如 SC2/SC3 可能只有近几个赛季的数据。

@@ -6,11 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from scoutlab.evaluation.calibration import (
+from scoutfootball.evaluation.calibration import (
     brier_score,
     calibrate_probabilities_isotonic,
 )
-from scoutlab.evaluation.validation import (
+from scoutfootball.evaluation.validation import (
     ValidationCheckResult,
     ValidationReport,
     validate_no_null_keys,
@@ -24,7 +24,7 @@ def _data_dir(tmp_path):
 
 
 def _make_settings(tmp_path):
-    from scoutlab.config import PlatformSettings
+    from scoutfootball.config import PlatformSettings
 
     return PlatformSettings.from_root(tmp_path)
 
@@ -158,19 +158,19 @@ class TestCalibration:
 
 class TestPipeline:
     def test_daily_ingest_returns_results(self):
-        from scoutlab.pipeline import run_daily_ingest
+        from scoutfootball.pipeline import run_daily_ingest
 
         results = run_daily_ingest(sources=("statsbomb_open",))
         assert "statsbomb_open" in results
 
     def test_build_features_returns_results(self):
-        from scoutlab.pipeline import run_build_features
+        from scoutfootball.pipeline import run_build_features
 
         results = run_build_features()
         assert "player_match" in results
 
     def test_weekly_train_skips_on_validation_failure(self, tmp_path):
-        from scoutlab.pipeline import run_weekly_train
+        from scoutfootball.pipeline import run_weekly_train
 
         results = run_weekly_train(
             skip_if_validation_fails=True,
@@ -181,27 +181,27 @@ class TestPipeline:
 
 class TestAPI:
     def test_health_check(self):
-        from scoutlab.api import health_check
+        from scoutfootball.api import health_check
 
         resp = health_check()
         assert resp.status == "ok"
         assert resp.version == "0.3.0"
 
     def test_list_players(self):
-        from scoutlab.api import list_players
+        from scoutfootball.api import list_players
 
         resp = list_players()
         assert resp.player_count >= 0
         assert isinstance(resp.players, list)
 
     def test_list_teams(self):
-        from scoutlab.api import list_teams
+        from scoutfootball.api import list_teams
 
         teams = list_teams()
         assert isinstance(teams, list)
 
     def test_get_match_prediction(self):
-        from scoutlab.api import get_match_prediction
+        from scoutfootball.api import get_match_prediction
 
         result = get_match_prediction("Arsenal", "Chelsea")
         if "error" in result:
@@ -214,7 +214,7 @@ class TestAPI:
             assert result["away_team"] == "Chelsea"
 
     def test_get_value_summary(self):
-        from scoutlab.api import get_value_summary
+        from scoutfootball.api import get_value_summary
 
         result = get_value_summary()
         assert "sample_count" in result

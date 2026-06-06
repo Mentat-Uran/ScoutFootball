@@ -3,9 +3,9 @@ requires = ["setuptools>=80.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "scoutlab"
-version = "0.3.0"
-description = "Local-first football data research platform with compliant data sourcing."
+name = "scoutfootball"
+version = "0.4.0"
+description = "ScoutFootball for World Cup — local-first football analytics platform for the 2026 FIFA World Cup."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-scoutlab = "scoutlab.__main__:main"
+scoutfootball = "scoutfootball.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -52,4 +52,5 @@ target-version = "py311"
 select = ["B", "E", "F", "I", "N", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/scoutlab/app/pages/*" = ["N999"]
+"src/scoutfootball/app/pages/*" = ["N999"]
+"src/scoutfootball/worldcup/data.py" = ["E501"]

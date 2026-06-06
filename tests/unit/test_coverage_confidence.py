@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from scoutlab.evaluation.coverage_confidence import (
+from scoutfootball.evaluation.coverage_confidence import (
     ConfidenceLevel,
     add_confidence_to_ratings,
     assess_coverage_batch,

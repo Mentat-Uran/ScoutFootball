@@ -2,8 +2,8 @@ import math
 
 import pandas as pd
 
-from scoutlab.evaluation import run_poisson_backtest
-from scoutlab.models import (
+from scoutfootball.evaluation import run_poisson_backtest
+from scoutfootball.models import (
     TimeSplitConfig,
     fit_dixon_coles_placeholder,
     fit_independent_poisson,

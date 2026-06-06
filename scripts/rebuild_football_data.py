@@ -13,8 +13,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from scoutlab.adapters.football_data import rebuild_combined_results
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.football_data import rebuild_combined_results
+from scoutfootball.config import PlatformSettings
 
 
 def main() -> int:

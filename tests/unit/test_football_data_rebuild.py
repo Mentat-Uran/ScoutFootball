@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from scoutlab.adapters.football_data import LEAGUE_CODE_NAMES, rebuild_combined_results
+from scoutfootball.adapters.football_data import LEAGUE_CODE_NAMES, rebuild_combined_results
 
 
 def _write_csv(path: Path, rows: list[dict]) -> None:

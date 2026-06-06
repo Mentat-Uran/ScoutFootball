@@ -1,4 +1,4 @@
-"""Unit tests for scoutlab.viz.pitch module."""
+"""Unit tests for scoutfootball.viz.pitch module."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from scoutlab.viz.pitch import (
+from scoutfootball.viz.pitch import (
     draw_pitch,
     plot_heatmap,
     plot_pass_map,
@@ -39,7 +39,7 @@ class TestDrawPitch:
         assert isinstance(fig, matplotlib.figure.Figure)
 
     def test_mplsoccer_missing(self) -> None:
-        with patch("scoutlab.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
+        with patch("scoutfootball.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
             fig = draw_pitch()
             import matplotlib.figure
 
@@ -80,7 +80,7 @@ class TestPlotShotMap:
         assert isinstance(fig, matplotlib.figure.Figure)
 
     def test_mplsoccer_missing(self) -> None:
-        with patch("scoutlab.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
+        with patch("scoutfootball.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
             fig = plot_shot_map(pd.DataFrame())
             import matplotlib.figure
 
@@ -122,7 +122,7 @@ class TestPlotPassMap:
         assert isinstance(fig, matplotlib.figure.Figure)
 
     def test_mplsoccer_missing(self) -> None:
-        with patch("scoutlab.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
+        with patch("scoutfootball.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
             fig = plot_pass_map(pd.DataFrame())
             import matplotlib.figure
 
@@ -174,7 +174,7 @@ class TestPlotHeatmap:
         assert isinstance(fig, matplotlib.figure.Figure)
 
     def test_mplsoccer_missing(self) -> None:
-        with patch("scoutlab.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
+        with patch("scoutfootball.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
             fig = plot_heatmap(pd.DataFrame())
             import matplotlib.figure
 
@@ -214,7 +214,7 @@ class TestPlotPizzaChart:
         assert isinstance(fig, matplotlib.figure.Figure)
 
     def test_mplsoccer_missing(self) -> None:
-        with patch("scoutlab.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
+        with patch("scoutfootball.viz.pitch._check_mplsoccer", side_effect=ImportError("no")):
             fig = plot_pizza_chart({"Goals": 80, "Assists": 60})
             import matplotlib.figure
 
@@ -225,7 +225,7 @@ class TestPlotPizzaChart:
         mock_mplsoccer = MagicMock()
         del mock_mplsoccer.PyPizza  # AttributeError when accessing PyPizza
 
-        with patch("scoutlab.viz.pitch._check_mplsoccer", return_value=mock_mplsoccer):
+        with patch("scoutfootball.viz.pitch._check_mplsoccer", return_value=mock_mplsoccer):
             percentiles = {"Goals": 80, "Assists": 60, "Passes": 70, "Tackles": 50}
             fig = plot_pizza_chart(percentiles, player_name="Fallback Test")
             import matplotlib.figure

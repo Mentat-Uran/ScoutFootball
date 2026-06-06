@@ -1,7 +1,7 @@
-# Scoutlab Liquid Glass 前端开发状态追踪
+# ScoutFootball Liquid Glass 前端开发状态追踪
 
 ## 📅 项目愿景
-为 Scoutlab 提供基于 macOS 26/iOS 26 “液态玻璃”美学的前端交互。特点包含：超高折射率毛玻璃 (`backdrop-filter: blur(40px)`)、流体物理交互、Mesh Gradient 动态光影、以及带有降级容错（针对低置信度数据的“冰霜”效果）的内容呈现。
+为 ScoutFootball 提供基于 macOS 26/iOS 26 “液态玻璃”美学的前端交互。特点包含：超高折射率毛玻璃 (`backdrop-filter: blur(40px)`)、流体物理交互、Mesh Gradient 动态光影、以及带有降级容错（针对低置信度数据的“冰霜”效果）的内容呈现。
 
 ## 📍 当前进度 (静态工作台阶段)
 - [x] **架构设计**: 确立了液态玻璃的设计规范。
@@ -13,7 +13,7 @@
 - [x] **模拟数据读取结构**: 在界面中集成了数据表视图(Data Grid)、球员画像、身价偏离、比赛预测、球探复核、动作价值和报告视图，当前仍使用前端 mock 数据。
 - [x] **静态单页工作台**: `frontend/index.html` + `frontend/style.css` + `frontend/app.js` 已可通过本地静态服务器打开，不依赖前端构建工具。
 - [ ] **框架引入**: 计划引入 Vue/React/Next.js 以完全接管路由和流体动画 (Framer Motion)。
-- [ ] **API 联调**: 将 FastAPI 与现有的 `src/scoutlab/` 生成的 Parquet 产物完全连接，提供给前端读取。
+- [ ] **API 联调**: 将 FastAPI 与现有的 `src/scoutfootball/` 生成的 Parquet 产物完全连接，提供给前端读取。
 
 ## 🧩 核心功能模块实现表
 | 模块 | 功能描述 | 状态 | 涉及组件 (前端) |

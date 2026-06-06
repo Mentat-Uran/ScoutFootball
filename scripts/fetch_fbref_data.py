@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from scoutlab.config import PlatformSettings
+from scoutfootball.config import PlatformSettings
 
 
 def main():

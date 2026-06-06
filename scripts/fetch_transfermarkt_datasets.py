@@ -6,13 +6,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from scoutlab.adapters.transfermarkt_datasets import (
+from scoutfootball.adapters.transfermarkt_datasets import (
     PRIORITY_TABLES,
     download_duckdb,
     export_priority_tables,
     export_table,
 )
-from scoutlab.config import PlatformSettings
+from scoutfootball.config import PlatformSettings
 
 
 def main():

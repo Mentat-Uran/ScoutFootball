@@ -1,6 +1,6 @@
 import pandas as pd
 
-from scoutlab.models import TimeSplitConfig, classify_fairness, fit_regressor
+from scoutfootball.models import TimeSplitConfig, classify_fairness, fit_regressor
 
 
 def test_classify_fairness_assigns_three_bands_consistently() -> None:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scoutlab.features.rating_matrix import (
+from scoutfootball.features.rating_matrix import (
     FIELD_GROUPS,
     build_rating_feature_matrix,
     compute_finishing_shrinkage,

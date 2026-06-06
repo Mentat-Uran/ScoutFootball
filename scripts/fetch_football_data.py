@@ -8,9 +8,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.common import CachedHttpClient
-from scoutlab.adapters.football_data import download_csv
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.common import CachedHttpClient
+from scoutfootball.adapters.football_data import download_csv
+from scoutfootball.config import PlatformSettings
 
 # Big 5 leagues
 LEAGUES = {

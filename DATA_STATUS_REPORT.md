@@ -1,4 +1,4 @@
-# ScoutLab 数据获取完成报告
+# ScoutFootball 数据获取完成报告
 
 ## 数据规模
 
@@ -55,7 +55,7 @@ data/
 │   ├── player_value_metrics.parquet              # 球员价值指标
 │   ├── team_features.parquet                     # 球队特征
 │   └── match_features.parquet                    # 比赛特征
-└── scoutlab.duckdb                               # DuckDB 数据库
+└── scoutfootball.duckdb                               # DuckDB 数据库
 ```
 
 ---

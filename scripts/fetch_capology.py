@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pandas as pd
 
-from scoutlab.adapters.capology import fetch_player_salaries
-from scoutlab.config import PlatformSettings
+from scoutfootball.adapters.capology import fetch_player_salaries
+from scoutfootball.config import PlatformSettings
 
 
 def main():

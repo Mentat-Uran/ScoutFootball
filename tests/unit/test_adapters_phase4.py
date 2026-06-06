@@ -4,17 +4,17 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from scoutlab.adapters.common import CachedHttpClient, HttpResponse, SourceSchemaError
-from scoutlab.adapters.fbref import FBREF_RATE_LIMIT_SECONDS, fetch_player_standard
-from scoutlab.adapters.fbref_soccerdata import (
+from scoutfootball.adapters.common import CachedHttpClient, HttpResponse, SourceSchemaError
+from scoutfootball.adapters.fbref import FBREF_RATE_LIMIT_SECONDS, fetch_player_standard
+from scoutfootball.adapters.fbref_soccerdata import (
     bundesliga_is_missing,
     merge_stat_frames,
     normalize_big5_combined_frame,
 )
-from scoutlab.adapters.transfermarkt_manual import load_snapshot
-from scoutlab.adapters.understat import fetch_league_players
-from scoutlab.config import PlatformSettings
-from scoutlab.storage.duckdb_io import connect_duckdb
+from scoutfootball.adapters.transfermarkt_manual import load_snapshot
+from scoutfootball.adapters.understat import fetch_league_players
+from scoutfootball.config import PlatformSettings
+from scoutfootball.storage.duckdb_io import connect_duckdb
 
 
 class HeaderAwareTransport:

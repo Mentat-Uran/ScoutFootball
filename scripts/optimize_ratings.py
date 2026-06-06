@@ -339,7 +339,7 @@ def objective(params, player_df, team_standings, verbose=False):
 
 
 def main():
-    from scoutlab.config import PlatformSettings
+    from scoutfootball.config import PlatformSettings
     settings = PlatformSettings.from_root()
 
     print("=" * 80)
