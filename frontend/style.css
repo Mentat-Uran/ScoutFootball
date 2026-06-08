@@ -738,6 +738,112 @@ tbody button {
     }
 }
 
+/* ── World Cup ────────────────────────────────────────────────────────── */
+
+.nav-divider {
+    height: 1px;
+    background: var(--glass-border);
+    margin: 8px 12px;
+}
+
+.wc-header {
+    margin-bottom: var(--space);
+}
+
+.wc-header .hero-panel.compact {
+    padding: 20px 24px;
+}
+
+.wc-filter-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: var(--space);
+    align-items: center;
+}
+
+.vs-label {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 0 4px;
+}
+
+.wc-summary-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: var(--space);
+    flex-wrap: wrap;
+}
+
+.wc-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 12px 16px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    min-width: 80px;
+}
+
+.wc-metric .metric-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.wc-metric span:last-child {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.wc-warning {
+    width: 100%;
+    padding: 10px 16px;
+    background: rgba(243, 188, 98, 0.12);
+    border: 1px solid rgba(243, 188, 98, 0.3);
+    border-radius: var(--radius-md);
+    color: var(--warn);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.wc-group-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+}
+
+.wc-group-list li {
+    padding: 3px 0;
+}
+
+.wc-prob-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+}
+
+.wc-prob-row span:first-child {
+    min-width: 90px;
+    color: var(--text-muted);
+}
+
+.wc-prob-row .probability-track {
+    flex: 1;
+}
+
+.wc-prob-row strong {
+    min-width: 36px;
+    text-align: right;
+    color: var(--text-primary);
+}
+
 @media (max-width: 760px) {
     body {
         overflow: auto;
