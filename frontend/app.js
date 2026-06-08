@@ -62,6 +62,39 @@ const i18n = {
         away: "客胜",
         expected_goals: "期望进球",
         coverage: "覆盖",
+        nav_wc_schedule: "赛程",
+        nav_wc_squads: "名单",
+        nav_wc_compare: "对比",
+        nav_wc_probability: "出线",
+        wc_kicker: "2026 美加墨世界杯",
+        wc_schedule_title: "小组赛赛程",
+        wc_squads_title: "球队名单 & 评分",
+        wc_compare_title: "球队实力对比",
+        wc_prob_title: "小组出线概率",
+        wc_teams: "球队",
+        wc_groups: "小组",
+        wc_group_matches: "小组赛",
+        wc_fixtures: "赛程表",
+        wc_date: "日期",
+        wc_time: "时间",
+        wc_group_col: "小组",
+        wc_home: "主队",
+        wc_away_col: "客队",
+        wc_venue: "场馆",
+        wc_squad_list: "球员名单",
+        wc_club: "俱乐部",
+        wc_league: "联赛",
+        wc_rating_dist: "评分分布",
+        wc_compare_summary: "总览对比",
+        wc_strength_rank: "48 队实力排名",
+        wc_strength: "实力评分",
+        wc_entertainment: "娱乐性估算",
+        wc_squad_size: "名单",
+        wc_rated: "有评分",
+        wc_big5: "五大联赛",
+        wc_avg_rating: "均分",
+        wc_no_data: "无数据",
+        wc_low_coverage: "评分覆盖率低于50%，结论置信度较低",
     },
     en: {
         nav_overview: "Overview",
@@ -126,6 +159,39 @@ const i18n = {
         away: "Away",
         expected_goals: "Expected goals",
         coverage: "Coverage",
+        nav_wc_schedule: "Schedule",
+        nav_wc_squads: "Squads",
+        nav_wc_compare: "Compare",
+        nav_wc_probability: "Odds",
+        wc_kicker: "2026 FIFA World Cup",
+        wc_schedule_title: "Group Stage Schedule",
+        wc_squads_title: "Squad Ratings",
+        wc_compare_title: "Team Comparison",
+        wc_prob_title: "Advancement Probability",
+        wc_teams: "Teams",
+        wc_groups: "Groups",
+        wc_group_matches: "Group Matches",
+        wc_fixtures: "Fixtures",
+        wc_date: "Date",
+        wc_time: "Time",
+        wc_group_col: "Group",
+        wc_home: "Home",
+        wc_away_col: "Away",
+        wc_venue: "Venue",
+        wc_squad_list: "Squad List",
+        wc_club: "Club",
+        wc_league: "League",
+        wc_rating_dist: "Rating Distribution",
+        wc_compare_summary: "Summary",
+        wc_strength_rank: "48-Team Strength Ranking",
+        wc_strength: "Strength",
+        wc_entertainment: "Entertainment estimate",
+        wc_squad_size: "Squad",
+        wc_rated: "Rated",
+        wc_big5: "Big 5",
+        wc_avg_rating: "Avg",
+        wc_no_data: "No data",
+        wc_low_coverage: "Rating coverage below 50%, low confidence",
     },
 };
 
@@ -806,6 +872,10 @@ async function renderActiveView() {
     if (appState.view === "matches") await renderMatches();
     if (appState.view === "scouting") renderScouting();
     if (appState.view === "actions") renderActions();
+    if (appState.view === "wc_schedule") renderWcSchedule();
+    if (appState.view === "wc_squads") renderWcSquads();
+    if (appState.view === "wc_compare") renderWcCompare();
+    if (appState.view === "wc_probability") renderWcProbability();
     // Resize charts after layout paint to ensure correct dimensions
     requestAnimationFrame(() => {
         Object.values(appState.charts).forEach((chart) => {
@@ -895,14 +965,452 @@ function bindEvents() {
         renderMatches();
     });
     document.getElementById("export-players").addEventListener("click", exportPlayers);
+    // World Cup events
+    document.getElementById("wc-group-filter").addEventListener("change", () => renderWcSchedule());
+    document.getElementById("wc-matchday-filter").addEventListener("change", () => renderWcSchedule());
+    document.getElementById("wc-squad-team").addEventListener("change", (e) => {
+        appState.wcSquadTeam = e.target.value;
+        renderWcSquads();
+    });
+    document.getElementById("wc-compare-a").addEventListener("change", (e) => {
+        appState.wcCompareA = e.target.value;
+        renderWcCompare();
+    });
+    document.getElementById("wc-compare-b").addEventListener("change", (e) => {
+        appState.wcCompareB = e.target.value;
+        renderWcCompare();
+    });
     window.addEventListener("resize", () => {
         Object.values(appState.charts).forEach((chart) => chart.resize());
     });
 }
 
+// ── World Cup Data ───────────────────────────────────────────────────────
+
+const WC_GROUPS = {
+    A: ["Mexico", "South Africa", "South Korea", "Czech Republic"],
+    B: ["Canada", "Bosnia and Herzegovina", "Qatar", "Switzerland"],
+    C: ["Brazil", "Morocco", "Haiti", "Scotland"],
+    D: ["United States", "Paraguay", "Australia", "Turkey"],
+    E: ["Germany", "Curacao", "Ivory Coast", "Ecuador"],
+    F: ["Netherlands", "Japan", "Sweden", "Tunisia"],
+    G: ["Belgium", "Egypt", "Iran", "New Zealand"],
+    H: ["Spain", "Cape Verde", "Saudi Arabia", "Uruguay"],
+    I: ["France", "Senegal", "Iraq", "Norway"],
+    J: ["Argentina", "Algeria", "Austria", "Jordan"],
+    K: ["Portugal", "DR Congo", "Uzbekistan", "Colombia"],
+    L: ["England", "Croatia", "Ghana", "Panama"],
+};
+
+const WC_HOSTS = ["United States", "Canada", "Mexico"];
+const WC_BIG5 = new Set(["Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1"]);
+
+const WC_WIN_PROB = {
+    Spain: 0.161, France: 0.128, Brazil: 0.112, England: 0.098,
+    Argentina: 0.087, Germany: 0.072, Portugal: 0.065,
+    Netherlands: 0.054, Uruguay: 0.038, Belgium: 0.032,
+};
+
+// Simplified squads (key players)
+const WC_SQUADS = {
+    Argentina: [
+        {name:"Lionel Messi",position:"AM",club:"Inter Miami",league:"MLS"},
+        {name:"Julian Alvarez",position:"ST",club:"Atletico Madrid",league:"La Liga"},
+        {name:"Lautaro Martinez",position:"ST",club:"Inter Milan",league:"Serie A"},
+        {name:"Rodrigo De Paul",position:"CM",club:"Atletico Madrid",league:"La Liga"},
+        {name:"Enzo Fernandez",position:"CM",club:"Chelsea",league:"Premier League"},
+        {name:"Alexis Mac Allister",position:"CM",club:"Liverpool",league:"Premier League"},
+        {name:"Emiliano Martinez",position:"GK",club:"Aston Villa",league:"Premier League"},
+        {name:"Cristian Romero",position:"CB",club:"Tottenham",league:"Premier League"},
+        {name:"Nahuel Molina",position:"FB",club:"Atletico Madrid",league:"La Liga"},
+        {name:"Paulo Dybala",position:"AM",club:"Roma",league:"Serie A"},
+    ],
+    Brazil: [
+        {name:"Vinicius Junior",position:"W",club:"Real Madrid",league:"La Liga"},
+        {name:"Rodrygo",position:"W",club:"Real Madrid",league:"La Liga"},
+        {name:"Raphinha",position:"W",club:"Barcelona",league:"La Liga"},
+        {name:"Bruno Guimaraes",position:"CM",club:"Newcastle",league:"Premier League"},
+        {name:"Casemiro",position:"DM",club:"Manchester United",league:"Premier League"},
+        {name:"Marquinhos",position:"CB",club:"PSG",league:"Ligue 1"},
+        {name:"Alisson",position:"GK",club:"Liverpool",league:"Premier League"},
+        {name:"Endrick",position:"ST",club:"Real Madrid",league:"La Liga"},
+        {name:"Eder Militao",position:"CB",club:"Real Madrid",league:"La Liga"},
+    ],
+    France: [
+        {name:"Kylian Mbappe",position:"ST",club:"Real Madrid",league:"La Liga"},
+        {name:"Ousmane Dembele",position:"W",club:"PSG",league:"Ligue 1"},
+        {name:"Antoine Griezmann",position:"AM",club:"Atletico Madrid",league:"La Liga"},
+        {name:"Aurelien Tchouameni",position:"DM",club:"Real Madrid",league:"La Liga"},
+        {name:"Eduardo Camavinga",position:"CM",club:"Real Madrid",league:"La Liga"},
+        {name:"Mike Maignan",position:"GK",club:"AC Milan",league:"Serie A"},
+        {name:"Theo Hernandez",position:"FB",club:"AC Milan",league:"Serie A"},
+        {name:"William Saliba",position:"CB",club:"Arsenal",league:"Premier League"},
+        {name:"Jules Kounde",position:"FB",club:"Barcelona",league:"La Liga"},
+    ],
+    England: [
+        {name:"Harry Kane",position:"ST",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Jude Bellingham",position:"AM",club:"Real Madrid",league:"La Liga"},
+        {name:"Phil Foden",position:"W",club:"Manchester City",league:"Premier League"},
+        {name:"Bukayo Saka",position:"W",club:"Arsenal",league:"Premier League"},
+        {name:"Declan Rice",position:"DM",club:"Arsenal",league:"Premier League"},
+        {name:"Jordan Pickford",position:"GK",club:"Everton",league:"Premier League"},
+        {name:"John Stones",position:"CB",club:"Manchester City",league:"Premier League"},
+        {name:"Cole Palmer",position:"AM",club:"Chelsea",league:"Premier League"},
+        {name:"Trent Alexander-Arnold",position:"FB",club:"Real Madrid",league:"La Liga"},
+    ],
+    Germany: [
+        {name:"Jamal Musiala",position:"AM",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Florian Wirtz",position:"AM",club:"Bayer Leverkusen",league:"Bundesliga"},
+        {name:"Joshua Kimmich",position:"DM",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Manuel Neuer",position:"GK",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Antonio Rudiger",position:"CB",club:"Real Madrid",league:"La Liga"},
+        {name:"Kai Havertz",position:"ST",club:"Arsenal",league:"Premier League"},
+        {name:"Leroy Sane",position:"W",club:"Bayern Munich",league:"Bundesliga"},
+    ],
+    Spain: [
+        {name:"Lamine Yamal",position:"W",club:"Barcelona",league:"La Liga"},
+        {name:"Pedri",position:"CM",club:"Barcelona",league:"La Liga"},
+        {name:"Rodri",position:"DM",club:"Manchester City",league:"Premier League"},
+        {name:"Dani Olmo",position:"AM",club:"Barcelona",league:"La Liga"},
+        {name:"Ferran Torres",position:"W",club:"Barcelona",league:"La Liga"},
+        {name:"Nico Williams",position:"W",club:"Athletic Bilbao",league:"La Liga"},
+        {name:"Gavi",position:"CM",club:"Barcelona",league:"La Liga"},
+    ],
+    Portugal: [
+        {name:"Cristiano Ronaldo",position:"ST",club:"Al-Nassr",league:"SPL"},
+        {name:"Bruno Fernandes",position:"AM",club:"Manchester United",league:"Premier League"},
+        {name:"Bernardo Silva",position:"W",club:"Manchester City",league:"Premier League"},
+        {name:"Ruben Dias",position:"CB",club:"Manchester City",league:"Premier League"},
+        {name:"Diogo Jota",position:"ST",club:"Liverpool",league:"Premier League"},
+        {name:"Rafael Leao",position:"W",club:"AC Milan",league:"Serie A"},
+        {name:"Vitinha",position:"CM",club:"PSG",league:"Ligue 1"},
+    ],
+    Netherlands: [
+        {name:"Virgil van Dijk",position:"CB",club:"Liverpool",league:"Premier League"},
+        {name:"Frenkie de Jong",position:"CM",club:"Barcelona",league:"La Liga"},
+        {name:"Cody Gakpo",position:"W",club:"Liverpool",league:"Premier League"},
+        {name:"Xavi Simons",position:"AM",club:"RB Leipzig",league:"Bundesliga"},
+        {name:"Denzel Dumfries",position:"FB",club:"Inter Milan",league:"Serie A"},
+    ],
+    Uruguay: [
+        {name:"Darwin Nunez",position:"ST",club:"Liverpool",league:"Premier League"},
+        {name:"Federico Valverde",position:"CM",club:"Real Madrid",league:"La Liga"},
+        {name:"Ronald Araujo",position:"CB",club:"Barcelona",league:"La Liga"},
+    ],
+    Croatia: [
+        {name:"Luka Modric",position:"CM",club:"Real Madrid",league:"La Liga"},
+        {name:"Mateo Kovacic",position:"CM",club:"Manchester City",league:"Premier League"},
+        {name:"Joško Gvardiol",position:"CB",club:"Manchester City",league:"Premier League"},
+    ],
+    Belgium: [
+        {name:"Kevin De Bruyne",position:"AM",club:"Manchester City",league:"Premier League"},
+        {name:"Romelu Lukaku",position:"ST",club:"Napoli",league:"Serie A"},
+        {name:"Thibaut Courtois",position:"GK",club:"Real Madrid",league:"La Liga"},
+    ],
+    "United States": [
+        {name:"Christian Pulisic",position:"W",club:"AC Milan",league:"Serie A"},
+        {name:"Weston McKennie",position:"CM",club:"Juventus",league:"Serie A"},
+        {name:"Giovanni Reyna",position:"AM",club:"Borussia Dortmund",league:"Bundesliga"},
+        {name:"Antonee Robinson",position:"FB",club:"Fulham",league:"Premier League"},
+        {name:"Yunus Musah",position:"CM",club:"AC Milan",league:"Serie A"},
+    ],
+    Mexico: [
+        {name:"Santiago Gimenez",position:"ST",club:"Feyenoord",league:"Eredivisie"},
+        {name:"Hirving Lozano",position:"W",club:"PSV",league:"Eredivisie"},
+        {name:"Edson Alvarez",position:"DM",club:"West Ham",league:"Premier League"},
+    ],
+    Canada: [
+        {name:"Alphonso Davies",position:"FB",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Jonathan David",position:"ST",club:"Lille",league:"Ligue 1"},
+    ],
+    Morocco: [
+        {name:"Achraf Hakimi",position:"FB",club:"PSG",league:"Ligue 1"},
+    ],
+    Switzerland: [
+        {name:"Granit Xhaka",position:"CM",club:"Bayer Leverkusen",league:"Bundesliga"},
+        {name:"Manuel Akanji",position:"CB",club:"Manchester City",league:"Premier League"},
+    ],
+    Turkey: [
+        {name:"Hakan Calhanoglu",position:"CM",club:"Inter Milan",league:"Serie A"},
+        {name:"Arda Guler",position:"AM",club:"Real Madrid",league:"La Liga"},
+    ],
+    Norway: [
+        {name:"Erling Haaland",position:"ST",club:"Manchester City",league:"Premier League"},
+        {name:"Martin Odegaard",position:"AM",club:"Arsenal",league:"Premier League"},
+    ],
+    Austria: [
+        {name:"David Alaba",position:"CB",club:"Real Madrid",league:"La Liga"},
+        {name:"Marcel Sabitzer",position:"CM",club:"Borussia Dortmund",league:"Bundesliga"},
+    ],
+    Colombia: [
+        {name:"Luis Diaz",position:"W",club:"Liverpool",league:"Premier League"},
+    ],
+    Ecuador: [
+        {name:"Moises Caicedo",position:"DM",club:"Chelsea",league:"Premier League"},
+    ],
+    Egypt: [
+        {name:"Mohamed Salah",position:"W",club:"Liverpool",league:"Premier League"},
+    ],
+    Iran: [
+        {name:"Mehdi Taremi",position:"ST",club:"Inter Milan",league:"Serie A"},
+    ],
+    Japan: [
+        {name:"Kaoru Mitoma",position:"W",club:"Brighton",league:"Premier League"},
+        {name:"Takefusa Kubo",position:"W",club:"Real Sociedad",league:"La Liga"},
+    ],
+    "South Korea": [
+        {name:"Son Heung-min",position:"W",club:"Tottenham",league:"Premier League"},
+        {name:"Lee Kang-in",position:"AM",club:"PSG",league:"Ligue 1"},
+    ],
+    Scotland: [
+        {name:"Andy Robertson",position:"FB",club:"Liverpool",league:"Premier League"},
+        {name:"Scott McTominay",position:"CM",club:"Napoli",league:"Serie A"},
+    ],
+};
+
+function wcAllTeams() {
+    return Object.values(WC_GROUPS).flat();
+}
+
+function wcTeamGroup(team) {
+    for (const [letter, teams] of Object.entries(WC_GROUPS)) {
+        if (teams.includes(team)) return letter;
+    }
+    return "?";
+}
+
+// Enrich squad with ratings from the players array
+function wcEnrichSquad(team) {
+    const raw = WC_SQUADS[team] || [];
+    return raw.map((p) => {
+        const match = players.find((pl) =>
+            pl.name.toLowerCase().includes(p.name.split(" ").pop().toLowerCase())
+        );
+        return {
+            ...p,
+            hasRating: !!match,
+            rating: match ? match.rating : null,
+            confidence: match ? match.confidence : "NONE",
+        };
+    });
+}
+
+function wcTeamStrength(team) {
+    const squad = wcEnrichSquad(team);
+    const rated = squad.filter((p) => p.hasRating);
+    const ratingScore = rated.length > 0
+        ? Math.min(Math.max((rated.reduce((s, p) => s + p.rating, 0) / rated.length - 0.3) / 0.5, 0), 1)
+        : 0.2;
+    const optaScore = WC_WIN_PROB[team] || 0.01;
+    const optaNorm = Math.min(optaScore / 0.16, 1);
+    const big5Count = squad.filter((p) => WC_BIG5.has(p.league)).length;
+    const big5Score = Math.min(big5Count / 10, 1);
+    return 0.5 * ratingScore + 0.3 * optaNorm + 0.2 * big5Score;
+}
+
+// ── World Cup Renderers ──────────────────────────────────────────────────
+
+function renderWcSchedule() {
+    const groupFilter = document.getElementById("wc-group-filter").value;
+    const mdFilter = document.getElementById("wc-matchday-filter").value;
+
+    // Groups overview
+    const overview = document.getElementById("wc-groups-overview");
+    overview.innerHTML = Object.entries(WC_GROUPS).map(([letter, teams]) => {
+        const hostTag = (t) => WC_HOSTS.includes(t) ? " 🏠" : "";
+        return `<article class="liquid-panel compact-panel">
+            <h3>${letter}</h3>
+            <ul class="wc-group-list">${teams.map((t, i) => `<li>${i + 1}. ${t}${hostTag(t)}</li>`).join("")}</ul>
+        </article>`;
+    }).join("");
+
+    // Generate group stage matches
+    const matches = [];
+    const groupStartOffsets = {A:0,B:0,C:0,D:0,E:1,F:1,G:1,H:1,I:2,J:2,K:2,L:2};
+    const mdGaps = [0, 4, 8];
+    const groupVenues = {
+        A:["Estadio Azteca","Mexico City"],B:["BMO Field","Toronto"],
+        C:["SoFi Stadium","Los Angeles"],D:["AT&T Stadium","Arlington"],
+        E:["MetLife Stadium","New York"],F:["Lumen Field","Seattle"],
+        G:["Mercedes-Benz Stadium","Atlanta"],H:["Hard Rock Stadium","Miami"],
+        I:["Gillette Stadium","Boston"],J:["NRG Stadium","Houston"],
+        K:["Levi's Stadium","San Francisco"],L:["Lincoln Financial Field","Philadelphia"],
+    };
+
+    for (const [letter, teams] of Object.entries(WC_GROUPS)) {
+        const offset = groupStartOffsets[letter];
+        const [venue, city] = groupVenues[letter];
+        const [t1, t2, t3, t4] = teams;
+        for (let md = 0; md < 3; md++) {
+            const day = 11 + offset + mdGaps[md];
+            const dateStr = `2026-06-${String(day).padStart(2, "0")}`;
+            const pairings = md === 0 ? [[t1,t2],[t3,t4]] : md === 1 ? [[t1,t3],[t2,t4]] : [[t1,t4],[t2,t3]];
+            pairings.forEach(([home, away], gi) => {
+                matches.push({date: dateStr, time: gi === 0 ? "19:30" : "22:00", group: letter, home, away, venue, city, matchday: md + 1});
+            });
+        }
+    }
+
+    const filtered = matches.filter((m) => {
+        if (groupFilter !== "ALL" && m.group !== groupFilter) return false;
+        if (mdFilter !== "ALL" && String(m.matchday) !== mdFilter) return false;
+        return true;
+    });
+
+    const tbody = document.getElementById("wc-schedule-table");
+    tbody.innerHTML = filtered.map((m) => `<tr>
+        <td>${m.date}</td><td>${m.time} ET</td><td>${m.group}</td>
+        <td>${m.home}</td><td>${m.away}</td><td>${m.venue}, ${m.city}</td>
+    </tr>`).join("");
+}
+
+function renderWcSquads() {
+    const team = appState.wcSquadTeam;
+    const squad = wcEnrichSquad(team);
+    const rated = squad.filter((p) => p.hasRating);
+    const big5 = squad.filter((p) => WC_BIG5.has(p.league));
+    const avgRating = rated.length > 0 ? (rated.reduce((s, p) => s + p.rating, 0) / rated.length).toFixed(2) : "—";
+    const group = wcTeamGroup(team);
+
+    document.getElementById("wc-squad-summary").innerHTML = `
+        <div class="wc-metric"><span class="metric-value">${squad.length}</span><span>${t("wc_squad_size")}</span></div>
+        <div class="wc-metric"><span class="metric-value">${rated.length}</span><span>${t("wc_rated")}</span></div>
+        <div class="wc-metric"><span class="metric-value">${big5.length}</span><span>${t("wc_big5")}</span></div>
+        <div class="wc-metric"><span class="metric-value">${avgRating}</span><span>${t("wc_avg_rating")}</span></div>
+        <div class="wc-metric"><span class="metric-value">${group}</span><span>${t("wc_group_col")}</span></div>
+    `;
+
+    const tbody = document.getElementById("wc-squad-table");
+    tbody.innerHTML = squad.map((p) => `<tr>
+        <td>${p.name}</td><td>${p.position}</td><td>${p.club}</td><td>${p.league}</td>
+        <td>${p.hasRating ? p.rating.toFixed(2) : "—"}</td>
+        <td><span class="status-pill ${p.hasRating ? (p.confidence === "HIGH" ? "status-high" : "status-medium") : "status-low"}">${p.hasRating ? p.confidence : t("wc_no_data")}</span></td>
+    </tr>`).join("");
+
+    // Rating distribution chart
+    const chart = getChart("wc-squad-chart");
+    if (!chart) return;
+    const chartData = rated.sort((a, b) => b.rating - a.rating);
+    chart.setOption({
+        animation: false,
+        grid: {left: 80, right: 20, top: 20, bottom: 40},
+        xAxis: {type: "value", axisLabel: {color: chartTextColor()}, splitLine: {lineStyle: {color: chartGridColor()}}},
+        yAxis: {type: "category", data: chartData.map((p) => p.name), axisLabel: {color: chartTextColor(), fontSize: 11}},
+        series: [{type: "bar", data: chartData.map((p) => p.rating), itemStyle: {color: "#7ca8ff"}}],
+    }, true);
+    chart.resize();
+
+    if (squad.length > 0 && rated.length / squad.length < 0.5) {
+        document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">⚠️ ${t("wc_low_coverage")}</div>`;
+    }
+}
+
+function renderWcCompare() {
+    const teamA = appState.wcCompareA;
+    const teamB = appState.wcCompareB;
+    const squadA = wcEnrichSquad(teamA);
+    const squadB = wcEnrichSquad(teamB);
+    const ratedA = squadA.filter((p) => p.hasRating);
+    const ratedB = squadB.filter((p) => p.hasRating);
+
+    document.getElementById("wc-compare-a-name").textContent = teamA;
+    document.getElementById("wc-compare-b-name").textContent = teamB;
+
+    const avgA = ratedA.length > 0 ? (ratedA.reduce((s, p) => s + p.rating, 0) / ratedA.length).toFixed(2) : "—";
+    const avgB = ratedB.length > 0 ? (ratedB.reduce((s, p) => s + p.rating, 0) / ratedB.length).toFixed(2) : "—";
+    const big5A = squadA.filter((p) => WC_BIG5.has(p.league)).length;
+    const big5B = squadB.filter((p) => WC_BIG5.has(p.league)).length;
+
+    document.getElementById("wc-compare-table").innerHTML = [
+        [t("wc_squad_size"), squadA.length, squadB.length],
+        [t("wc_rated"), ratedA.length, ratedB.length],
+        [t("wc_big5"), big5A, big5B],
+        [t("wc_avg_rating"), avgA, avgB],
+    ].map(([label, a, b]) => `<tr><td>${label}</td><td>${a}</td><td>${b}</td></tr>`).join("");
+
+    // Chart
+    const chart = getChart("wc-compare-chart");
+    if (chart) {
+        const allRated = [
+            ...ratedA.map((p) => ({...p, team: teamA})),
+            ...ratedB.map((p) => ({...p, team: teamB})),
+        ].sort((a, b) => b.rating - a.rating);
+        chart.setOption({
+            animation: false,
+            grid: {left: 80, right: 20, top: 20, bottom: 40},
+            xAxis: {type: "value", axisLabel: {color: chartTextColor()}, splitLine: {lineStyle: {color: chartGridColor()}}},
+            yAxis: {type: "category", data: allRated.map((p) => p.name), axisLabel: {color: chartTextColor(), fontSize: 11}},
+            series: [{type: "bar", data: allRated.map((p) => ({value: p.rating, itemStyle: {color: p.team === teamA ? "#7ca8ff" : "#57d68d"}}))}],
+        }, true);
+        chart.resize();
+    }
+
+    // Top 5
+    const renderTop = (rated, el) => {
+        el.innerHTML = rated.sort((a, b) => b.rating - a.rating).slice(0, 5).map((p) =>
+            `<div class="rank-item"><div><strong>${p.name}</strong><span class="rank-meta">${p.position} · ${p.club}</span></div><span class="status-pill status-high">${p.rating.toFixed(2)}</span></div>`
+        ).join("") || `<div style="color:var(--text-muted);text-align:center;padding:1rem">${t("wc_no_data")}</div>`;
+    };
+    document.getElementById("wc-compare-a-top-title").textContent = `${teamA} Top 5`;
+    document.getElementById("wc-compare-b-top-title").textContent = `${teamB} Top 5`;
+    renderTop([...ratedA], document.getElementById("wc-compare-a-top"));
+    renderTop([...ratedB], document.getElementById("wc-compare-b-top"));
+}
+
+function renderWcProbability() {
+    const teams = wcAllTeams();
+    const strengths = {};
+    teams.forEach((t) => { strengths[t] = wcTeamStrength(t); });
+
+    // Group probability cards
+    const container = document.getElementById("wc-prob-groups");
+    container.innerHTML = Object.entries(WC_GROUPS).map(([letter, groupTeams]) => {
+        const teamStrs = groupTeams.map((t) => ({team: t, strength: strengths[t]}));
+        const total = teamStrs.reduce((s, x) => s + x.strength, 0);
+        const rows = teamStrs.sort((a, b) => b.strength - a.strength).map((x) => {
+            const p1 = x.strength / total;
+            const pct = Math.round(p1 * 100);
+            return `<div class="wc-prob-row"><span>${x.team}</span><div class="probability-track"><div class="probability-fill" style="width:${pct}%"></div></div><strong>${pct}%</strong></div>`;
+        }).join("");
+        return `<article class="liquid-panel compact-panel"><h3>${letter}</h3>${rows}</article>`;
+    }).join("");
+
+    // 48-team ranking
+    const ranked = teams.map((t) => ({team: t, strength: strengths[t], group: wcTeamGroup(t)}))
+        .sort((a, b) => b.strength - a.strength);
+    document.getElementById("wc-prob-table").innerHTML = ranked.map((x, i) => `<tr>
+        <td>${i + 1}</td><td>${x.team}</td><td>${x.group}</td><td>${x.strength.toFixed(3)}</td>
+    </tr>`).join("");
+}
+
+// ── Init World Cup ───────────────────────────────────────────────────────
+
+function initWorldCup() {
+    const teams = wcAllTeams();
+    // Populate group filter
+    const groupFilter = document.getElementById("wc-group-filter");
+    groupFilter.innerHTML = '<option value="ALL">ALL</option>' +
+        Object.keys(WC_GROUPS).map((g) => `<option value="${g}">${g}</option>`).join("");
+    // Populate squad team selector
+    const squadSelect = document.getElementById("wc-squad-team");
+    squadSelect.innerHTML = teams.map((t) => `<option value="${t}">${t}</option>`).join("");
+    squadSelect.value = "Argentina";
+    appState.wcSquadTeam = "Argentina";
+    // Populate compare selectors
+    const selA = document.getElementById("wc-compare-a");
+    const selB = document.getElementById("wc-compare-b");
+    selA.innerHTML = teams.map((t) => `<option value="${t}">${t}</option>`).join("");
+    selB.innerHTML = teams.map((t) => `<option value="${t}">${t}</option>`).join("");
+    selA.value = "Argentina";
+    selB.value = "France";
+    appState.wcCompareA = "Argentina";
+    appState.wcCompareB = "France";
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     applyLocale();
     renderMatchSelectors();
+    initWorldCup();
     bindEvents();
     setView("overview");
 
