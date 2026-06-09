@@ -380,6 +380,14 @@ def get_artifacts_summary() -> dict:
             "oof_available": has_oof,
             "truth_labels_available": has_truth,
             "player_match_coverage": pm_coverage,
+            "confidence_gate": "coverage < 0.90 → low confidence only",
+        },
+        "license_attribution": {
+            "statsbomb": "StatsBomb Open Data — free for research, must attribute source",
+            "fbref": "FBref via soccerdata — personal research use only",
+            "football_data": "Football-Data.co.uk — free for non-commercial use",
+            "understat": "Understat — public data, attribution appreciated",
+            "transfermarkt": "Transfermarkt — manual import only, no automated scraping",
         },
     })
 
