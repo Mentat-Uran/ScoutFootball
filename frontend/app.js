@@ -1074,10 +1074,11 @@ function refreshAllChartColors() {
         
         // Re-render based on chart type
         switch(id) {
-            case "radar-chart":
+            case "radar-chart": {
                 const player = players.find((item) => item.key === appState.selectedPlayerKey) || players[0];
                 if (player) renderRadar(player);
                 break;
+            }
             case "value-chart":
                 renderValue();
                 break;
