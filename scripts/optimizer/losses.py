@@ -285,7 +285,8 @@ def _dixon_coles_log_tau(x, y, lam_home, lam_away, rho, eps=1e-8):
     # (1, 1): τ = 1 - ρ
     mask_11 = (x == 1) & (y == 1)
     if mask_11.any():
-        val = 1.0 - rho
+        n11 = int(mask_11.sum())
+        val = torch.full((n11,), 1.0 - rho, device=log_tau.device, dtype=log_tau.dtype)
         log_tau = log_tau.masked_scatter(mask_11, torch.log(val.clamp(min=eps)))
 
     return log_tau
