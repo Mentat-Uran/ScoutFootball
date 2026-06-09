@@ -22,7 +22,7 @@ LEAGUES = {
 }
 
 # Recent seasons
-SEASONS = ["2425", "2324", "2223"]
+SEASONS = ["2526", "2425", "2324", "2223"]
 
 
 def main():

@@ -28,6 +28,7 @@ import argparse
 import json
 import re
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -164,6 +165,7 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "manchester united": "Man United",
     "man united": "Man United",
     "man utd": "Man United",
+    "manchester utd": "Man United",
     "newcastle united": "Newcastle",
     "newcastle": "Newcastle",
     "norwich city": "Norwich",
@@ -220,8 +222,10 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "osasuna": "Osasuna",
     "rayo vallecano": "Rayo Vallecano",
     "rayo": "Rayo Vallecano",
+    "vallecano": "Rayo Vallecano",
     "real madrid": "Real Madrid",
     "real sociedad": "Real Sociedad",
+    "sociedad": "Real Sociedad",
     "sevilla": "Sevilla",
     "sevilla fc": "Sevilla",
     "valencia": "Valencia",
@@ -249,6 +253,7 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "borussia monchengladbach": "M'gladbach",
     "monchengladbach": "M'gladbach",
     "borussia mgladbach": "M'gladbach",
+    "gladbach": "M'gladbach",
     "darmstadt": "Darmstadt",
     "sv darmstadt": "Darmstadt",
     "eintracht frankfurt": "Ein Frankfurt",
@@ -407,10 +412,17 @@ TEAM_NAME_ALIASES: dict[str, str] = {
 
 
 def normalize_team_name(name: str) -> str:
-    """Normalize team name to Football-Data canonical form for cross-source matching."""
+    """Normalize team name to canonical form for cross-source matching.
+
+    Strips accents, lowercases, and looks up in TEAM_NAME_ALIASES.
+    Falls back to the original stripped name if no alias is found.
+    """
     if not name or not isinstance(name, str):
         return str(name) if name is not None else ""
-    lower = name.strip().lower()
+    # Strip accents for matching
+    normalized = unicodedata.normalize("NFKD", name.strip())
+    ascii_name = "".join(c for c in normalized if not unicodedata.combining(c))
+    lower = ascii_name.strip().lower()
     return TEAM_NAME_ALIASES.get(lower, name.strip())
 
 
@@ -1295,6 +1307,7 @@ def build_matched_results(feat, team_pts_df, team_avgs):
     """Match predicted team-season ratings with actual points.
 
     Teams with NaN or non-finite total_points are excluded from matching.
+    Uses normalize_team_name for cross-source team name matching.
     """
     # Filter out teams with NaN or non-finite total_points
     valid_pts = team_pts_df.copy()
@@ -1305,20 +1318,24 @@ def build_matched_results(feat, team_pts_df, team_avgs):
     ]
     n_excluded = n_before - len(valid_pts)
 
+    # Build lookup with normalized team names
     points_lookup = {
-        (str(row["team"]), str(row["league"]), str(row["season"])): float(row["total_points"])
+        (normalize_team_name(row["team"]), str(row["league"]), str(row["season"])): float(row["total_points"])
         for _, row in valid_pts.iterrows()
     }
     rows = []
     for i, (team, league, season) in enumerate(
         zip(feat["ts_team_names"], feat["ts_leagues"], feat["ts_seasons"], strict=False)
     ):
-        key = (str(team), str(league), str(season))
+        # Normalize team name for matching
+        normalized_team = normalize_team_name(team)
+        key = (normalized_team, str(league), str(season))
         if key not in points_lookup:
             continue
         rows.append(
             {
                 "team": str(team),
+                "normalized_team": normalized_team,
                 "league": str(league),
                 "season": str(season),
                 "pred_rating": float(team_avgs[i]),
@@ -1346,9 +1363,12 @@ def team_coverage_table(feat, team_pts_df):
         )
 
     actual = actual.astype(str).drop_duplicates()
+    # Normalize team names in actual
+    actual["team"] = actual["team"].apply(normalize_team_name)
+
     rated = pd.DataFrame(
         {
-            "team": [str(team) for team in feat["ts_team_names"]],
+            "team": [normalize_team_name(team) for team in feat["ts_team_names"]],
             "league": [str(league) for league in feat["ts_leagues"]],
             "season": [str(season) for season in feat["ts_seasons"]],
         },
