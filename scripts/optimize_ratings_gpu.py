@@ -45,6 +45,7 @@ from optimizer.constants import (
 )
 from optimizer.data import (
     _filter_by_seasons,
+    build_dc_tensors,
     compute_input_hash,
     evaluate_params,
     fit_team_points_calibrator,
@@ -59,7 +60,7 @@ from optimizer.optimization import _get_default_params_tensor, optimize
 from optimizer.scoring import build_feature_tensors
 
 # ── 可视化 (使用新的 Plotly 版本) ────────────────────────────────────────
-from optimize_viz import create_visualizer, ConsoleViz
+from optimizer.viz import create_visualizer, ConsoleViz
 
 
 def main():
@@ -93,6 +94,8 @@ def main():
                         help="球员评分离群 guardrail 在复合目标中的权重")
     parser.add_argument("--prior-weight", type=float, default=0.01,
                         help="锚定 v3 默认权重的正则强度")
+    parser.add_argument("--dc-likelihood-weight", type=float, default=0.00,
+                        help="Dixon-Coles 对数似然损失权重 (需要 Football-Data 比赛数据)")
     parser.add_argument("--prior-strength", type=float, default=None,
                         help="锚定 v3 默认权重的正则强度 (deprecated, use --prior-weight)")
     parser.add_argument("--init-scale", type=float, default=0.35,
@@ -186,6 +189,16 @@ def main():
     print(f"  球员: {len(df)}, 球队赛季: {len(team_pts)}")
     print(f"  耗时: {time.time()-t0:.1f}s")
 
+    # Build Dixon-Coles tensors (optional, for dc_likelihood loss)
+    dc_tensors = None
+    if args.dc_likelihood_weight > 0 and matches_df is not None:
+        train_feat_preview = build_feature_tensors(df)  # need ts_team_names for lookup
+        dc_tensors = build_dc_tensors(train_feat_preview, matches_df, device)
+        if dc_tensors:
+            print(f"  Dixon-Coles: {dc_tensors['n_matches']} 场比赛已映射")
+        else:
+            print("  Dixon-Coles: 无比赛可映射，dc_likelihood 已禁用")
+
     # Compute input hash for reproducibility
     feat_hash = compute_input_hash(data_dir)
     print(f"  输入哈希: {feat_hash}")
@@ -257,6 +270,8 @@ def main():
         league_bias_weight=args.league_bias_weight,
         extreme_penalty_weight=args.extreme_penalty_weight,
         prior_strength=args.prior_weight,
+        dc_likelihood_weight=args.dc_likelihood_weight,
+        dc_tensors=dc_tensors,
         init_scale=args.init_scale, patience=args.patience,
         warmup_steps=args.warmup_steps, min_lr_ratio=args.min_lr_ratio,
         grad_clip=args.grad_clip, seed=args.seed,
