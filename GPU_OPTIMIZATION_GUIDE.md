@@ -25,9 +25,19 @@ cd ScoutFootball_for_World_Cup
 pip install torch pandas numpy scipy pyarrow matplotlib plotly dash dash-bootstrap-components
 ```
 
-如果 PyTorch 需要 CUDA 版本：
+**RTX 5070 Ti (Blackwell, sm_120) 注意**：PyTorch 官方 cu121 稳定版不支持 sm_120
+（会报 `CUDA error: no kernel image is available for execution on the device`）。
+必须安装 `cu128` 版本：
+
 ```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install torch --index-url https://download.pytorch.org/whl/nightly/cu128
+```
+
+或使用 uv：
+
+```bash
+uv pip install pip
+.venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/nightly/cu128
 ```
 
 ### 3. 运行优化
