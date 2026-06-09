@@ -258,8 +258,8 @@ async function fetchRatings(position, league) {
             p.percentile = pctRank(p.rating, pool, "rating");
             p.radar = [
                 attackPct,
-                pctRank(p.possession_composite || 0, pool, "possession_composite"),
-                pctRank(p.defense_composite || 0, pool, "defense_composite"),
+                p.possession_composite != null ? pctRank(p.possession_composite, pool, "possession_composite") : 50,
+                p.defense_composite != null ? pctRank(p.defense_composite, pool, "defense_composite") : 50,
                 Math.min(100, Math.round((p.minutes || 0) / 2700 * 100)),
                 p.percentile,
             ];
@@ -476,13 +476,13 @@ async function renderPlayerProfile() {
         <div><span>${t("th_pos")}</span><strong>${detailPosition}</strong></div>
         <div><span>${t("th_rating")}</span><strong>${detailScore}</strong></div>
     `;
+    // Always remove existing warning before conditionally inserting new one
+    const existing = document.getElementById("player-detail").nextElementSibling;
+    if (existing && existing.classList && existing.classList.contains("low-appearance-warning")) {
+        existing.remove();
+    }
     if (lowAppWarning) {
         document.getElementById("player-detail").insertAdjacentHTML("afterend", lowAppWarning);
-    } else {
-        const existing = document.getElementById("player-detail").nextElementSibling;
-        if (existing && existing.classList && existing.classList.contains("low-appearance-warning")) {
-            existing.remove();
-        }
     }
 
     // Use real radar data from profile API, or fallback to defaults
@@ -1208,7 +1208,9 @@ function bindEvents() {
         renderWcCompare();
     });
     window.addEventListener("resize", () => {
-        Object.values(appState.charts).forEach((chart) => chart.resize());
+        Object.values(appState.charts).forEach((chart) => {
+            try { chart.resize(); } catch { /* ignore disposed chart */ }
+        });
     });
 }
 
@@ -1444,7 +1446,7 @@ function renderWcSchedule() {
     // Groups overview
     const overview = document.getElementById("wc-groups-overview");
     overview.innerHTML = Object.entries(WC_GROUPS).map(([letter, teams]) => {
-        const hostTag = (t) => WC_HOSTS.includes(t) ? " ★" : "";
+        const hostTag = (tm) => WC_HOSTS.includes(tm) ? " ★" : "";
         return `<article class="liquid-panel compact-panel">
             <h3>${letter}</h3>
             <ul class="wc-group-list">${teams.map((t, i) => `<li>${i + 1}. ${t}${hostTag(t)}</li>`).join("")}</ul>
@@ -1717,19 +1719,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderActiveView();
 
     // Check API connection status
-    try {
-        const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
-        const apiPill = document.getElementById("top-api-pill");
-        if (healthResp.ok) {
-            apiPill.textContent = "API OK";
-            apiPill.className = "status-pill status-high";
-        } else {
-            apiPill.textContent = "API ERR";
+    const apiPill = document.getElementById("top-api-pill");
+    if (apiPill) {
+        try {
+            const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+            if (healthResp.ok) {
+                apiPill.textContent = "API OK";
+                apiPill.className = "status-pill status-high";
+            } else {
+                apiPill.textContent = "API ERR";
+                apiPill.className = "status-pill status-low";
+            }
+        } catch {
+            apiPill.textContent = "OFFLINE";
             apiPill.className = "status-pill status-low";
         }
-    } catch {
-        const apiPill = document.getElementById("top-api-pill");
-        apiPill.textContent = "OFFLINE";
-        apiPill.className = "status-pill status-low";
     }
 });
