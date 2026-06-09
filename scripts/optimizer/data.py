@@ -24,7 +24,6 @@ from .constants import (
     refine_role_positions,
 )
 
-
 # ── 数据加载 ──────────────────────────────────────────────────────────────
 
 def load_data(data_dir: Path):
@@ -229,7 +228,7 @@ def load_data(data_dir: Path):
     if understat_path.exists():
         print("  加载 Understat 数据...")
         understat = pd.read_parquet(understat_path)
-        
+
         # Normalize league names
         understat_league_map = {
             "EPL": "Premier League",
@@ -241,33 +240,33 @@ def load_data(data_dir: Path):
         understat["league"] = (
             understat["league"].map(understat_league_map).fillna(understat["league"])
         )
-        
+
         # Convert numeric columns
         for col in ["games", "time", "goals", "xG", "assists", "xA", "npxG", "shots", "key_passes"]:
             understat[col] = pd.to_numeric(understat[col], errors="coerce")
-        
+
         # Normalize season format: "201617" -> "1617"
         def _normalize_season(s):
             s = str(s)
             if len(s) == 6 and s.startswith("20"):
                 return s[2:]  # "201617" -> "1617"
             return s
-        
+
         understat["season"] = understat["season"].apply(_normalize_season)
-        
+
         # Calculate per-90 metrics
         safe_min_us = np.maximum(understat["time"].values.astype(np.float32), 1.0)
         understat["minutes"] = understat["time"].values.astype(np.float32)
         understat["matches"] = understat["games"].values.astype(np.float32)
         understat["starts"] = understat["games"].values.astype(np.float32)  # Approximate
-        
+
         # Position mapping
         understat_pos_details = understat["position"].apply(map_position_detailed)
         understat["sub_position"] = understat_pos_details.apply(lambda x: x[0])
         understat["pos_idx"] = understat["sub_position"].map(POS_TO_IDX).fillna(4).astype(int)
         understat["position_source"] = understat_pos_details.apply(lambda x: x[1])
         understat["position_confidence"] = understat_pos_details.apply(lambda x: x[2])
-        
+
         # Per-90 metrics
         understat["npg_p90"] = (
             (understat["goals"].values - understat["goals"].values * 0.1)
@@ -276,7 +275,7 @@ def load_data(data_dir: Path):
         )
         understat["assists_p90"] = understat["assists"].values / safe_min_us * 90
         understat["g_a_volume"] = understat["goals"].values + understat["assists"].values
-        
+
         # Select and rename columns
         understat_df = understat[[
             "player_name", "team_title", "league", "season", "position",
@@ -294,7 +293,7 @@ def load_data(data_dir: Path):
 
         # Normalize Understat team names to Football-Data canonical form
         understat_df["team"] = understat_df["team"].apply(normalize_team_name)
-        
+
         # Add missing columns with NaN (not 0) for defense/possession stats.
         # NaN rows are excluded from percentile ranking, so they get the
         # position median (50th percentile) instead of being forced to 0.
@@ -319,16 +318,16 @@ def load_data(data_dir: Path):
             "possession_composite",
         ]:
             understat_df[col] = np.nan
-        
+
         # Find seasons in Understat but not in FBref
         fbref_seasons = set(df["season"].unique())
         understat_only = understat_df[~understat_df["season"].isin(fbref_seasons)]
         print(f"    Understat 独有赛季: {sorted(understat_only['season'].unique())}")
-        
+
         # Combine: FBref takes priority for overlapping seasons
         df = pd.concat([df, understat_only], ignore_index=True, sort=False)
         print(f"    合并后: {len(df)} 行")
-        
+
         # Recompute per-90 and composite metrics for all rows.
         # Understat rows have NaN defense/possession — keep NaN so percentile
         # ranking assigns them the position median instead of 0.
@@ -357,12 +356,12 @@ def load_data(data_dir: Path):
             df["crosses_p90"] * 0.5 + df["fouls_drawn_p90"] * 0.5,
             np.nan,
         )
-        
+
         # Recompute trend and experience for all rows
         df = df.sort_values(["player", "season"])
         df["season_rank"] = df.groupby("player").cumcount()
         df["experience_factor"] = np.clip((df["season_rank"] + 1) / 3, 0.5, 1.0)
-        
+
         # Recompute trends
         past_avg = (
             df.groupby("player")[["npg_p90", "defense_composite", "possession_composite"]]
@@ -414,9 +413,11 @@ def load_data(data_dir: Path):
     matched_teams = player_teams & pts_teams
     unmatched_player = player_teams - pts_teams
     if unmatched_player:
+        # Only warn if a large fraction of teams with matches are unmatched
+        n_with_matches = len(pts_teams)
         print(
-            f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 球员侧球队匹配积分侧, "
-            f"未匹配: {sorted(unmatched_player)[:20]}"
+            f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 球员侧球队有积分, "
+            f"积分侧 {n_with_matches} 队 (球员侧含无积分联赛球队)"
         )
     else:
         print(f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 全部匹配")
@@ -1076,8 +1077,10 @@ def build_dc_tensors(feat, matches_df, device):
     used by the rating optimizer, so dc_likelihood loss can be computed.
 
     Args:
-        feat: output of build_feature_tensors (contains ts_team_names, ts_leagues, ts_seasons)
-        matches_df: DataFrame with columns [home_team, away_team, home_goals, away_goals, season, league]
+        feat: output of build_feature_tensors
+            (contains ts_team_names, ts_leagues, ts_seasons)
+        matches_df: DataFrame with columns
+            [home_team, away_team, home_goals, away_goals, season, league]
         device: torch device
 
     Returns:

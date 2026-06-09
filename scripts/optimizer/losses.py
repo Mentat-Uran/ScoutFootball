@@ -88,7 +88,11 @@ def calibrate_points_torch(pred_strength, actual_points, eps=1e-6):
         beta = torch.linalg.solve(XtX, Xty).squeeze(1)  # (3,)
     except Exception:
         # Fallback to linear
-        beta = torch.stack([actual_detached.mean(), actual_detached.std(), torch.tensor(0.0, device=X.device)])
+        beta = torch.stack([
+            actual_detached.mean(),
+            actual_detached.std(),
+            torch.tensor(0.0, device=X.device),
+        ])
 
     c, b, a = beta[0], beta[1], beta[2]
 
@@ -99,7 +103,11 @@ def calibrate_points_torch(pred_strength, actual_points, eps=1e-6):
     cal_std = calibrated.detach().std(unbiased=False).clamp(min=eps)
     actual_std = actual_detached.std(unbiased=False).clamp(min=eps)
     # Soft rescale to match actual spread
-    calibrated = (calibrated - calibrated.detach().mean()) / cal_std * actual_std + actual_detached.mean()
+    calibrated = (
+        (calibrated - calibrated.detach().mean())
+        / cal_std * actual_std
+        + actual_detached.mean()
+    )
 
     return calibrated
 

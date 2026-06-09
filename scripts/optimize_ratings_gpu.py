@@ -27,7 +27,6 @@ Mac 完整模式 (较慢但更准):
 """
 
 import argparse
-import sys
 import time
 from pathlib import Path
 
@@ -58,9 +57,6 @@ from optimizer.data import (
 from optimizer.cv import _print_metric_block, run_cross_validation, run_parameter_stability
 from optimizer.optimization import _get_default_params_tensor, optimize
 from optimizer.scoring import build_feature_tensors
-
-# ── 可视化 (使用新的 Plotly 版本) ────────────────────────────────────────
-from optimizer.viz import create_visualizer, ConsoleViz
 
 
 def main():
@@ -317,7 +313,10 @@ def main():
     print(f"{'位置':<5} {'出勤':>7} {'进攻':>7} {'防守':>7} {'控球':>7} {'质量':>7}")
     print("-" * 80)
     for i, pos in enumerate(POSITIONS):
-        print(f"{pos:<5} {pw[i,0]:>7.4f} {pw[i,1]:>7.4f} {pw[i,2]:>7.4f} {pw[i,3]:>7.4f} {pw[i,4]:>7.4f}")
+        row = f"{pos:<5}"
+        for j in range(N_DIM):
+            row += f" {pw[i,j]:>7.4f}"
+        print(row)
 
     aw_raw = best_params_cpu[N_POS * N_DIM:N_POS * N_DIM + N_POS * N_ATK].reshape(N_POS, N_ATK)
     aw = torch.softmax(aw_raw, dim=1).cpu().numpy()
@@ -388,7 +387,10 @@ def main():
                 dc_tensors=dc_tensors,
                 init_scale=args.init_scale,
                 patience=min(args.patience, 40),
-                warmup_steps=min(args.warmup_steps, max(1, (args.cv_steps or max(50, args.steps // 3)) // 5)),
+                warmup_steps=min(
+                    args.warmup_steps,
+                    max(1, (args.cv_steps or max(50, args.steps // 3)) // 5),
+                ),
                 min_lr_ratio=args.min_lr_ratio, grad_clip=args.grad_clip,
                 seed=args.seed, calibration_bins=args.calibration_bins,
                 league_calibration_prior_n=args.league_calibration_prior_n,
@@ -438,7 +440,10 @@ def main():
             dc_tensors=dc_tensors,
             init_scale=args.init_scale,
             patience=min(args.patience, 40),
-            warmup_steps=min(args.warmup_steps, max(1, (args.stability_steps or max(50, args.steps // 3)) // 5)),
+            warmup_steps=min(
+                args.warmup_steps,
+                max(1, (args.stability_steps or max(50, args.steps // 3)) // 5),
+            ),
             min_lr_ratio=args.min_lr_ratio, grad_clip=args.grad_clip, seed=args.seed,
         )
         if stability_summary:
@@ -473,11 +478,10 @@ def main():
         "overfit_rank_loss_gap": overfit_gap,
     }
 
-    meta = save_model_run(
+    save_model_run(
         params=best_params_cpu.numpy(),
         metrics=metrics,
         args=args,
-        output_dir=output_dir,
         feat_hash=feat_hash,
     )
 

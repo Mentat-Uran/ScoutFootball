@@ -13,7 +13,6 @@ import unicodedata
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import numpy as np
 import torch
 
 if TYPE_CHECKING:
@@ -578,7 +577,7 @@ def map_position_detailed(pos_str):
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def refine_role_positions(df: "pd.DataFrame") -> "pd.DataFrame":
+def refine_role_positions(df: pd.DataFrame) -> pd.DataFrame:
     """用历史粗位置和当前输出特征修正明显的角色误分。
 
     FBref 的 `pos` 在部分赛季会把边锋、前腰和翼卫统一写成 `MF`，
