@@ -79,16 +79,19 @@ def _normalize_ratings_frame(df: pd.DataFrame) -> pd.DataFrame:
 def _load_all_player_ratings() -> pd.DataFrame:
     """Load all player ratings into memory (cached)."""
     if _duckdb_exists():
-        import duckdb
-
-        con = duckdb.connect(str(_duckdb_path()), read_only=True)
         try:
-            df = con.execute(
-                "SELECT * FROM player_ratings ORDER BY optimized_score DESC"
-            ).fetchdf()
-            return _normalize_ratings_frame(df)
-        finally:
-            con.close()
+            import duckdb
+
+            con = duckdb.connect(str(_duckdb_path()), read_only=True)
+            try:
+                df = con.execute(
+                    "SELECT * FROM player_ratings ORDER BY optimized_score DESC"
+                ).fetchdf()
+                return _normalize_ratings_frame(df)
+            finally:
+                con.close()
+        except Exception:
+            logger.warning("DuckDB read failed, falling back to Parquet", exc_info=True)
 
     # Fallback to Parquet
     rel = "gold/feature_store/player_ratings_optimized.parquet"
@@ -136,13 +139,16 @@ def load_player_ratings(
 def load_model_meta() -> pd.DataFrame:
     """Load model metadata from DuckDB or JSON."""
     if _duckdb_exists():
-        import duckdb
-
-        con = duckdb.connect(str(_duckdb_path()), read_only=True)
         try:
-            return con.execute("SELECT * FROM model_meta").fetchdf()
-        finally:
-            con.close()
+            import duckdb
+
+            con = duckdb.connect(str(_duckdb_path()), read_only=True)
+            try:
+                return con.execute("SELECT * FROM model_meta").fetchdf()
+            finally:
+                con.close()
+        except Exception:
+            logger.warning("DuckDB model_meta read failed, falling back to JSON", exc_info=True)
 
     # Fallback to JSON
     json_path = _parquet_path("gold/feature_store/optimized_params_meta.json")
@@ -168,13 +174,16 @@ def load_model_meta() -> pd.DataFrame:
 def load_league_metrics() -> pd.DataFrame:
     """Load league metrics from DuckDB or Parquet."""
     if _duckdb_exists():
-        import duckdb
-
-        con = duckdb.connect(str(_duckdb_path()), read_only=True)
         try:
-            return con.execute("SELECT * FROM league_metrics").fetchdf()
-        finally:
-            con.close()
+            import duckdb
+
+            con = duckdb.connect(str(_duckdb_path()), read_only=True)
+            try:
+                return con.execute("SELECT * FROM league_metrics").fetchdf()
+            finally:
+                con.close()
+        except Exception:
+            logger.warning("DuckDB league_metrics failed, falling back", exc_info=True)
 
     rel = "gold/feature_store/rating_league_metrics.parquet"
     if _parquet_exists(rel):

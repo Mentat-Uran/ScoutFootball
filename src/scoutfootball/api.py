@@ -42,7 +42,15 @@ def _settings():
 
 
 def _clean_json_value(value: Any) -> Any:
-    if isinstance(value, float) and math.isnan(value):
+    import numpy as np
+
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        value = float(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
         return None
     if isinstance(value, dict):
         return {key: _clean_json_value(val) for key, val in value.items()}
@@ -113,8 +121,10 @@ def list_teams() -> list[str]:
 def get_match_prediction(home_team: str, away_team: str) -> dict:
     try:
         prediction = load_score_prediction(home_team, away_team)
-    except ValueError as exc:
+    except Exception as exc:
         return {"error": str(exc)}
+    if isinstance(prediction, dict):
+        return prediction
     return {
         "home_team": home_team,
         "away_team": away_team,
