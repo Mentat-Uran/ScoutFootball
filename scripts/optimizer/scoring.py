@@ -118,6 +118,19 @@ def build_feature_tensors(df, rank_reference_df=None):
         "def_pct": torch.tensor(def_pct, dtype=torch.float32),
         "pos_pct": torch.tensor(pos_pct, dtype=torch.float32),
         "trend_pct": torch.tensor(trend_pct, dtype=torch.float32),
+        # Missing-data flags: 1.0 = has data, 0.0 = missing (NaN source)
+        "has_defense": torch.tensor(
+            np.isfinite(df["defense_composite"].to_numpy(dtype=np.float32)).astype(np.float32)
+            if "defense_composite" in df.columns
+            else np.zeros(n_rows, dtype=np.float32),
+            dtype=torch.float32,
+        ),
+        "has_possession": torch.tensor(
+            np.isfinite(df["possession_composite"].to_numpy(dtype=np.float32)).astype(np.float32)
+            if "possession_composite" in df.columns
+            else np.zeros(n_rows, dtype=np.float32),
+            dtype=torch.float32,
+        ),
         "experience": torch.tensor(
             np.clip(
                 df["experience_factor"].values
@@ -320,15 +333,23 @@ def compute_ratings_torch(feat, params, device):
 
     # ── Defense (percentile-based, real data) ──
     def_pct = feat["def_pct"].to(device)
-    defense = def_pct  # Already percentile-ranked within position group
+    has_def = feat["has_defense"].to(device)
+    # For rows missing defense data (Understat), blend toward position median
+    # instead of treating 50th percentile as real performance
+    defense = def_pct * has_def + 50.0 * (1.0 - has_def)
 
     # ── Possession (percentile-based, real data) ──
     pos_pct = feat["pos_pct"].to(device)
-    possession = pos_pct  # Already percentile-ranked within position group
+    has_pos = feat["has_possession"].to(device)
+    possession = pos_pct * has_pos + 50.0 * (1.0 - has_pos)
 
     # ── Quality ──
+    # Reduce quality weight for rows missing defense/possession data
+    quality_has_data = torch.min(has_def, has_pos)  # 1.0 only if both present
+    quality_def = def_pct * qual_sw[2] * quality_has_data + 50.0 * qual_sw[2] * (1.0 - quality_has_data)
+    quality_pos = pos_pct * qual_sw[3] * quality_has_data + 50.0 * qual_sw[3] * (1.0 - quality_has_data)
     quality = (npg_pct * qual_sw[0] + ast_pct * qual_sw[1]
-               + def_pct * qual_sw[2] + pos_pct * qual_sw[3])
+               + quality_def + quality_pos)
     # quality 是跨维度效率项，不应让中场通过"进攻百分位 + 出勤"获得前锋级
     # 影响力。ST 的 quality 已被 cap 限制在 0.30，不需要额外下调；
     # CM/DM 下调，避免优化器把中场 quality 当作低风险的统一捷径。
