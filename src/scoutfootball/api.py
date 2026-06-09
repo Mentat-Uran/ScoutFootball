@@ -173,18 +173,24 @@ def get_value_summary() -> dict:
         if not results_df.empty:
             metrics = _clean_json_value(results_df.iloc[0].to_dict())
 
-    return {
+    mean_residual = None
+    if "residual_log" in oof.columns:
+        try:
+            raw = oof["residual_log"].mean()
+            mean_residual = float(raw) if raw == raw else None
+        except Exception:
+            mean_residual = None
+
+    return _clean_json_value({
         "status": "ok",
         "sample_count": len(oof),
         "fairness_distribution": oof["fairness_label"].value_counts().to_dict()
         if "fairness_label" in oof.columns
         else {},
-        "mean_residual_log": float(oof["residual_log"].mean())
-        if "residual_log" in oof.columns
-        else None,
+        "mean_residual_log": mean_residual,
         "metrics": metrics,
         "players": player_data,
-    }
+    })
 
 
 def get_player_ratings(

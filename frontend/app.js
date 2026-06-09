@@ -668,7 +668,7 @@ function renderValue() {
     chart.resize();
 
     // Build scatter data with player key for click-through
-    const scatterData = data.filter(p => p.actualValue > 0 && p.predictedValue > 0).map((player) => ({
+    const scatterData = data.filter(p => p.actualValue > 100000 && p.predictedValue > 100000).map((player) => ({
         value: [
             +(player.actualValue / 1e6).toFixed(1),
             +(player.predictedValue / 1e6).toFixed(1),
