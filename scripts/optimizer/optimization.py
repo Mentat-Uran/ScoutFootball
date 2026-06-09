@@ -18,8 +18,8 @@ from .constants import (
     N_DIM,
     N_PARAMS,
     N_POS,
-    POSITIONS,
     POSITION_DIMENSION_PRIOR,
+    POSITIONS,
     QUALITY_SUBWEIGHT_PRIOR,
 )
 from .losses import objective_torch
@@ -28,8 +28,7 @@ from .scoring import (
     compute_ratings_torch,
     compute_team_avg_ratings,
 )
-from optimize_viz import create_visualizer
-
+from .viz import create_visualizer
 
 # ── 学习率调度 ───────────────────────────────────────────────────────────
 
