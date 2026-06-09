@@ -1139,6 +1139,7 @@ async function renderActiveView() {
     if (appState.view === "scouting") renderScouting();
     if (appState.view === "actions") renderActions();
     if (appState.view === "reports") renderReports();
+    if (appState.view === "tactical") renderTactical();
     if (appState.view === "wc_schedule") renderWcSchedule();
     if (appState.view === "wc_squads") renderWcSquads();
     if (appState.view === "wc_compare") renderWcCompare();
@@ -1247,6 +1248,84 @@ function bindEvents() {
         appState.wcCompareB = e.target.value;
         renderWcCompare();
     });
+
+    // Tactical board event handlers
+    const tacticalLoadHome = document.getElementById("tactical-load-home");
+    if (tacticalLoadHome) {
+        tacticalLoadHome.addEventListener("click", () => {
+            const formation = document.getElementById("tactical-formation").value;
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.loadFormation(formation, "home");
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+    const tacticalLoadAway = document.getElementById("tactical-load-away");
+    if (tacticalLoadAway) {
+        tacticalLoadAway.addEventListener("click", () => {
+            const formation = document.getElementById("tactical-formation").value;
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.loadFormation(formation, "away");
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+    const tacticalClear = document.getElementById("tactical-clear");
+    if (tacticalClear) {
+        tacticalClear.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.clearBoard();
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+    const tacticalSave = document.getElementById("tactical-save");
+    if (tacticalSave) {
+        tacticalSave.addEventListener("click", () => {
+            if (tacticalProject) {
+                TACTICAL_BOARD.saveProject(tacticalProject);
+                renderTacticalProjectList();
+            }
+        });
+    }
+    const tacticalExport = document.getElementById("tactical-export");
+    if (tacticalExport) {
+        tacticalExport.addEventListener("click", () => {
+            if (tacticalProject) {
+                const json = TACTICAL_BOARD.exportJSON(tacticalProject);
+                const blob = new Blob([json], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `tactical-board-${tacticalProject.board_id}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        });
+    }
+    const tacticalImport = document.getElementById("tactical-import");
+    if (tacticalImport) {
+        tacticalImport.addEventListener("click", () => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".json";
+            input.addEventListener("change", (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const project = TACTICAL_BOARD.importJSON(ev.target.result);
+                    if (project) {
+                        tacticalProject = project;
+                        renderTactical();
+                    }
+                };
+                reader.readAsText(file);
+            });
+            input.click();
+        });
+    }
+
     window.addEventListener("resize", () => {
         Object.values(appState.charts).forEach((chart) => {
             try { chart.resize(); } catch { /* ignore disposed chart */ }
@@ -1674,6 +1753,53 @@ function initWorldCup() {
     selB.value = "France";
     appState.wcCompareA = "Argentina";
     appState.wcCompareB = "France";
+}
+
+/* ── Tactical Board ─────────────────────────────────────────────────── */
+
+let tacticalProject = null;
+
+function renderTactical() {
+    if (!tacticalProject) {
+        tacticalProject = TACTICAL_BOARD.createProject("ScoutFootball 战术板");
+        // Load default formation
+        tacticalProject.objects = TACTICAL_BOARD.generateFormation("4-3-3", "home");
+    }
+
+    if (typeof TacticalRenderer !== "undefined") {
+        TacticalRenderer.init("tactical-canvas", tacticalProject);
+    }
+
+    // Update project list
+    renderTacticalProjectList();
+}
+
+function renderTacticalProjectList() {
+    const list = document.getElementById("tactical-project-list");
+    if (!list) return;
+
+    const projects = TACTICAL_BOARD.listProjects();
+    list.innerHTML = projects.length > 0
+        ? projects.map((p) => `
+            <div class="rank-item" style="cursor:pointer" data-board-id="${p.board_id}">
+                <div>
+                    <strong>${p.title || "Untitled"}</strong>
+                    <span class="rank-meta">${p.updated_at ? new Date(p.updated_at).toLocaleDateString() : ""}</span>
+                </div>
+            </div>
+        `).join("")
+        : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No saved projects</div>';
+
+    // Click to load
+    list.querySelectorAll("[data-board-id]").forEach((el) => {
+        el.addEventListener("click", () => {
+            const loaded = TACTICAL_BOARD.loadProject(el.dataset.boardId);
+            if (loaded) {
+                tacticalProject = loaded;
+                renderTactical();
+            }
+        });
+    });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
