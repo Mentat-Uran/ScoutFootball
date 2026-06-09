@@ -34,7 +34,7 @@ The focus right now: upgrading the rating system into an interpretable, evaluabl
 - **Local Data Layer:** DuckDB + Parquet, organized into raw/silver/gold/models/reports/logs.
 - **Player Ratings:** PyTorch optimizer with composite objective (Spearman + soft NDCG@20 + position consistency + train-fitted points/league calibration + distribution/tail/league-bias losses + player-score guardrails), holdout evaluation, availability caps, quality caps, robust team pooling, coverage reports, and model run registry.
 - **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet` — transfermarkt value, awards, expert tiers, manual calibration.
-- **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `MODEL_CARD.md`.
+- **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `docs/MODEL_CARD.md`.
 - **Match Prediction:** Independent Poisson baseline with score probability matrices.
 - **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages. Liquid Glass static frontend with 7 analysis views (Overview, Players, Value, Matches, Scouting, Action Values, Reports) and 4 World Cup views (Schedule, Squads, Compare, Probability). FastAPI read-only backend for artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, and model runs. `mplsoccer` powers pitch plots, pizza charts, and shot maps. A browser-based electronic tactical board is planned, not implemented yet.
 

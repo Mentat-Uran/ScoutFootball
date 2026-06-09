@@ -3,12 +3,12 @@
 ## 🚀 一分钟启动
 
 ### Windows 用户
-双击运行 `start.bat`，选择启动方式。
+双击运行 `scripts/start.bat`，选择启动方式。
 
 ### macOS/Linux 用户
 ```bash
-chmod +x start.sh
-./start.sh
+chmod +x scripts/start.sh
+./scripts/start.sh
 ```
 
 ---
