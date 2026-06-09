@@ -931,8 +931,8 @@ def evaluate_params(
     points_calibrator: TeamPointsCalibrator | None = None,
 ):
     """Evaluate params on a slice without letting that slice define train statistics."""
-    # Local imports to avoid circular dependency with evaluate module
-    from .evaluate import build_feature_tensors, compute_ratings_torch, compute_team_avg_ratings
+    # Local imports to avoid circular dependency
+    from .scoring import build_feature_tensors, compute_ratings_torch, compute_team_avg_ratings
 
     feat_eval = build_feature_tensors(eval_df, rank_reference_df=rank_reference_df)
     ratings = compute_ratings_torch(feat_eval, params.to(device), device)
@@ -1121,6 +1121,22 @@ def build_dc_tensors(feat, matches_df, device):
     }
 
 
+def _serialize_metrics(obj):
+    """Recursively convert metrics dict to JSON-safe types."""
+    if isinstance(obj, dict):
+        return {k: _serialize_metrics(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_serialize_metrics(v) for v in obj]
+    if isinstance(obj, (int, float, np.floating)):
+        f = float(obj)
+        if np.isnan(f) or np.isinf(f):
+            return 0.0
+        return f
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    return str(obj) if obj is not None else None
+
+
 def save_model_run(
     params: np.ndarray,
     metrics: dict,
@@ -1151,10 +1167,7 @@ def save_model_run(
         "params_mean": float(params.mean()),
         "params_std": float(params.std()),
         "input_hash": feat_hash,
-        "metrics": {
-            k: float(v) if isinstance(v, (int, float, np.floating)) else str(v)
-            for k, v in metrics.items()
-        },
+        "metrics": _serialize_metrics(metrics),
     }
 
     if args is not None:

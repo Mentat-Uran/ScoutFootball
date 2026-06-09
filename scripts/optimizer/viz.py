@@ -600,6 +600,8 @@ class LiveTrainingViz:
 
     def save(self, path):
         path = Path(path)
+        if self.fig is None:
+            return
         self.fig.write_html(str(path))
         print(f"  [Viz] 报告已保存: {path}")
 

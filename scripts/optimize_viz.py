@@ -133,10 +133,13 @@ COLORS = {
     "pos_loss": "#f59e0b",    # 橙色 - Position Loss
     "points_loss": "#14b8a6", # 青绿 - Points Regression
     "distribution": "#eab308", # 黄色 - Distribution
+    "quantile": "#d946ef",     # 洋红 - Quantile
+    "range_penalty": "#f472b6", # 浅粉 - Range Penalty
     "tail": "#fb7185",        # 粉红 - Tail Calibration
     "league_bias": "#818cf8",  # 淡紫 - League Bias
     "extreme": "#06b6d4",     # 青色 - Extreme
     "prior": "#6b7280",       # 灰色 - Prior
+    "dc_likelihood": "#34d399", # 薄荷绿 - Dixon-Coles
 }
 
 COMPONENT_KEYS = [
@@ -145,10 +148,13 @@ COMPONENT_KEYS = [
     "pos_loss",
     "points_loss",
     "distribution",
+    "quantile",
+    "range_penalty",
     "tail",
     "league_bias",
     "extreme",
     "prior",
+    "dc_likelihood",
 ]
 
 POSITION_COLORS = {
