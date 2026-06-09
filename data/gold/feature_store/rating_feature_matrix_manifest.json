@@ -1,0 +1,181 @@
+{
+  "total_rows": 8141,
+  "columns": [
+    {
+      "name": "player_id",
+      "dtype": "object",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "season_id",
+      "dtype": "string",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "goals",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "assists",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "shots",
+      "dtype": "object",
+      "source": "player_stats",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "shots_on_target",
+      "dtype": "object",
+      "source": "player_stats",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "minutes_played",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "starts",
+      "dtype": "int64",
+      "source": "player_stats",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "npxg",
+      "dtype": "object",
+      "source": "player_stats",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xa",
+      "dtype": "object",
+      "source": "player_stats",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "available_flag",
+      "dtype": "float64",
+      "source": "player_stats",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "tackles",
+      "dtype": "object",
+      "source": "player_stats",
+      "missing_rate": 0.2232
+    },
+    {
+      "name": "passes",
+      "dtype": "object",
+      "source": "player_stats",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xT_added",
+      "dtype": "object",
+      "source": "player_stats",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "player_name",
+      "dtype": "object",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "team_id",
+      "dtype": "object",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "team_name",
+      "dtype": "object",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "competition_id",
+      "dtype": "string",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "position_group",
+      "dtype": "object",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "defense_missing",
+      "dtype": "bool",
+      "source": "missing_marker",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "possession_missing",
+      "dtype": "bool",
+      "source": "missing_marker",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "xT_VAEP_missing",
+      "dtype": "bool",
+      "source": "missing_marker",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "goalkeeper_missing",
+      "dtype": "bool",
+      "source": "missing_marker",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "finishing_raw",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "finishing_shrunk",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "statsbomb_open_source_covered",
+      "dtype": "bool",
+      "source": "source_coverage",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "fbref_source_covered",
+      "dtype": "bool",
+      "source": "source_coverage",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "has_expected_metrics",
+      "dtype": "bool",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "has_ball_value_data",
+      "dtype": "bool",
+      "source": "derived",
+      "missing_rate": 0.0
+    }
+  ],
+  "input_hash": "unknown",
+  "timestamp": "2026-06-08T10:21:05.778424+00:00"
+}
