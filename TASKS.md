@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。GPU 优化已完成 3-fold CV（2026-06-09，RTX 5070 Ti）：有效 fold 平均 test Spearman=0.717/Pearson=0.718（baseline 0.513，提升 +0.203）。Fold 1（2324）Spearman=0.655，Fold 2（2425）Spearman=0.778，Fold 3（2526）N/A（Football-Data 无 2526 数据）。已识别强队系统性低估（Napoli -35.9, Barcelona -35.8）和降级队高估（Southampton +25.8）。8 个球队名 alias 不匹配（GPU 优化器未调用 normalize_team_name()）。Bundesliga 联赛标签 NaN 导致 coverage=0。`EVALUATION.md` 和 `MODEL_CARD.md` 已更新为实际 CV 数据。前端 demo 数据已替换为 2425 赛季真实评分 Top 30。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。GPU 优化已完成（2026-06-09，alias 修复后重跑）：2526 holdout Spearman=0.740/Pearson=0.744（baseline 0.618，提升 +0.122）。3-fold CV 平均 test Spearman=0.718。Fold 1（2324）Spearman=0.662，Fold 2（2425）Spearman=0.792，Fold 3（2526）Spearman=0.701。alias 匹配已修复（重音符号去除 + 12 个新 alias），Football-Data 2526 赛季数据已补充（1,751 场比赛）。Bundesliga coverage 0.778（4 队未匹配，alias 已修复待重跑验证）。`EVALUATION.md`、`MODEL_CARD.md` 已更新。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutFootball 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -104,9 +104,9 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 用新 aggregation/cap 口径重新跑 GPU 优化，生成新的 `optimized_params.npy`、`optimized_params_meta.json`、holdout predictions、league metrics、calibration 和 feature importance。（2026-06-09，3-fold CV 有效 fold 平均 test Spearman=0.717）
 - [x] 复盘 `PROBLEMS.md` 中的误差案例：Everton（+0.9 ✓）、Stuttgart（+3.8 ✓）、Rennes（-0.4 ✓）、Napoli（-35.9 ✗）、Real Madrid（-29.7 ✗）、Arsenal（-15.9 ✗），记录新旧排名变化和仍未解决原因。强队系统性低估根因：评分聚合上限约 55-60，实际强队积分 80-90。
 - [x] 增加出勤捷径诊断报告：minutes/starts/matches/availability 置换重要性、按位置 availability 权重、球队聚合权重分布。
-- [ ] 修复 GPU 优化器 `build_matched_results()` 中的 alias 匹配：集成 `normalize_team_name()` 解决 8 个球队名不匹配问题。
-- [ ] 修复 Bundesliga 联赛标签 NaN 问题：评分侧 Bundesliga 球队的 league 字段为 "nan"，导致 team_coverage 匹配失败。
-- [ ] 补充 Football-Data 2526 赛季数据，或改用 2425 作为最终 holdout 赛季。
+- [x] 修复 GPU 优化器 `build_matched_results()` 中的 alias 匹配：集成 `normalize_team_name()` + 重音符号去除 + 12 个新 alias。（2026-06-09）
+- [x] 修复 Bundesliga 联赛标签 NaN 问题：评分侧 Bundesliga 球队的 league 字段为 "nan"，已在数据构建时替换。（2026-06-09）
+- [x] 补充 Football-Data 2526 赛季数据：已下载 1,751 场比赛，combined_results.parquet 从 5,330 行增至 7,081 行。（2026-06-09）
 - [x] 对 coverage 低于 0.90 的 league-season 禁止输出强排序结论，只允许作为低置信度诊断样本；该规则仍适用于五大联赛以外的 2526 division 和后续新增数据。
 - [x] 定义真实标签层级：Transfermarkt 手动导入、权威奖项、国际/俱乐部出场级别、专家分档、位置内人工校准集。
 - [x] 新增标签数据契约和校验脚本，输出 `data/gold/feature_store/player_truth_labels.parquet`。
