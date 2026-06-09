@@ -3593,7 +3593,12 @@ def main():
     # Load data
     print("\n[1] 加载数据...")
     t0 = time.time()
-    df, team_pts = load_data(data_dir)
+    data_load_result = load_data(data_dir)
+    if len(data_load_result) == 3:
+        df, team_pts, matches_df = data_load_result
+    else:
+        df, team_pts = data_load_result
+        matches_df = None
 
     # 出场标记：不足 20 场的球员仍参与评分，但不参与优化训练
     min_matches_opt = 20
