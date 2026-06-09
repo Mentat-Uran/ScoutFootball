@@ -1192,6 +1192,7 @@ def save_model_run(
             "extreme_penalty_weight": getattr(args, "extreme_penalty_weight", None),
             "prior_weight": getattr(args, "prior_weight", None),
             "dc_likelihood_weight": getattr(args, "dc_likelihood_weight", None),
+            "dc_rho": getattr(args, "dc_rho", None),
             "warmup_steps": getattr(args, "warmup_steps", None),
             "min_lr_ratio": getattr(args, "min_lr_ratio", None),
             "grad_clip": getattr(args, "grad_clip", None),

@@ -76,6 +76,7 @@ def optimize(
     prior_strength=0.01,
     dc_likelihood_weight=0.08,
     dc_tensors=None,
+    dc_rho=-0.13,
     init_scale=0.35,
     patience=80,
     warmup_steps=20,
@@ -172,6 +173,7 @@ def optimize(
                 prior_weight=prior_strength,
                 dc_likelihood_weight=dc_likelihood_weight,
                 dc_tensors=dc_tensors,
+                dc_rho=dc_rho,
                 prior_params=prior_params,
                 return_components=True,
             )
