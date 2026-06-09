@@ -21,7 +21,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - mplsoccer 集成：`src/scoutfootball/viz/pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
 - 低置信度提示：分钟不足、数据缺失、位置重判不确定、联赛 coverage 低。
 - Streamlit 当前为 15 页工作台：总览、5 个分析页、3 个 P1 展示页、4 个世界杯页、1 个球探队列页和 1 个动作价值样本页；总览页已接入 artifact/model-run 读取，球探页已接入 review queue/watchlist/shortlist 读取，动作价值页已接入 `player_value_metrics.parquet` 样本。
-- `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。总览、球员画像、身价、比赛预测、球探、动作价值和报告页已改为读取 FastAPI 本地产物；世界杯页仍含样例/混合数据，不能写成全量真实后端。
+- `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。所有导航图标统一使用几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。总览、球员画像、身价、比赛预测、球探、动作价值和报告页已改为读取 FastAPI 本地产物；身价页 API 无数据时显示 DEMO 标记；世界杯页仍含样例/混合数据，不能写成全量真实后端。
 - 电子战术板已规划为 P1.5，尚未实现；目标是 `frontend/` 本地战术演示、动画时间轴和 PNG/PDF/WebM 导出，不要写成现有能力。
 
 新增适配器（已实现，部分需特定环境运行）：

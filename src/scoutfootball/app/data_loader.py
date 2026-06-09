@@ -33,7 +33,7 @@ def _mark_synthetic(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _duckdb_path() -> Path:
-    return _settings().data_root / "gold" / "scoutfootball.duckdb"
+    return _settings().data_root / "gold" / "scoutlab.duckdb"
 
 
 def _duckdb_exists() -> bool:

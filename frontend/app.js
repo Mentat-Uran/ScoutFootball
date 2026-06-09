@@ -441,7 +441,7 @@ async function renderPlayerProfile() {
     const detailMatches = profile ? profile.matches : player.matches;
     const detailLowApp = profile ? profile.low_appearance : player.low_appearance;
     const lowAppWarning = detailLowApp
-        ? `<div class="low-appearance-warning">${appState.lang === "zh" ? "⚠ 出场不足20场，评分已扣减最多30%" : "⚠ Under 20 matches, score penalized up to 30%"}</div>`
+        ? `<div class="low-appearance-warning">${appState.lang === "zh" ? "▲ 出场不足20场，评分已扣减最多30%" : "▲ Under 20 matches, score penalized up to 30%"}</div>`
         : "";
     document.getElementById("player-detail").innerHTML = `
         <div><span>${t("th_team")}</span><strong>${player.team}</strong></div>
@@ -598,10 +598,30 @@ async function fetchValueReport() {
 }
 
 function renderValue() {
-    const data = valuePlayers.length > 0 ? valuePlayers : MOCK_VALUE_DATA;
+    const isMock = valuePlayers.length === 0;
+    const data = isMock ? MOCK_VALUE_DATA : valuePlayers;
     const sorted = [...data].sort((a, b) => (
         appState.valueMode === "under" ? b.residual - a.residual : a.residual - b.residual
     ));
+
+    // Show demo data indicator when using mock data
+    const valueTitle = document.querySelector("#view-value .chart-panel .panel-head div");
+    if (valueTitle) {
+        let indicator = valueTitle.querySelector(".data-source-indicator");
+        if (!indicator) {
+            indicator = document.createElement("span");
+            indicator.className = "status-pill data-source-indicator";
+            valueTitle.appendChild(indicator);
+        }
+        if (isMock) {
+            indicator.textContent = appState.lang === "zh" ? "DEMO" : "DEMO";
+            indicator.className = "status-pill status-low data-source-indicator";
+        } else {
+            indicator.textContent = "";
+            indicator.className = "status-pill data-source-indicator";
+        }
+    }
+
     document.getElementById("value-list").innerHTML = sorted.slice(0, 50).map((player) => {
         const valM = (player.actualValue / 1e6).toFixed(1);
         return `
@@ -1398,7 +1418,7 @@ function renderWcSchedule() {
     // Groups overview
     const overview = document.getElementById("wc-groups-overview");
     overview.innerHTML = Object.entries(WC_GROUPS).map(([letter, teams]) => {
-        const hostTag = (t) => WC_HOSTS.includes(t) ? " 🏠" : "";
+        const hostTag = (t) => WC_HOSTS.includes(t) ? " ★" : "";
         return `<article class="liquid-panel compact-panel">
             <h3>${letter}</h3>
             <ul class="wc-group-list">${teams.map((t, i) => `<li>${i + 1}. ${t}${hostTag(t)}</li>`).join("")}</ul>
@@ -1482,7 +1502,7 @@ function renderWcSquads() {
     chart.resize();
 
     if (squad.length > 0 && rated.length / squad.length < 0.5) {
-        document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">⚠️ ${t("wc_low_coverage")}</div>`;
+        document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">▲ ${t("wc_low_coverage")}</div>`;
     }
 }
 
