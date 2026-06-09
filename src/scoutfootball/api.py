@@ -52,6 +52,13 @@ def _clean_json_value(value: Any) -> Any:
         return bool(value)
     if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
         return None
+    # Handle pandas NA/NaT
+    try:
+        import pandas as pd
+        if value is pd.NA or value is pd.NaT:
+            return None
+    except (ImportError, AttributeError):
+        pass
     if isinstance(value, dict):
         return {key: _clean_json_value(val) for key, val in value.items()}
     if isinstance(value, list):
@@ -248,7 +255,10 @@ def get_prediction_summary() -> dict[str, Any]:
 
     import pandas as pd
 
-    frame = pd.read_parquet(artifact_path)
+    try:
+        frame = pd.read_parquet(artifact_path)
+    except Exception:
+        return {"status": "no_data"}
     if frame.empty:
         return {"status": "no_data"}
     row = frame.iloc[0].to_dict()
@@ -304,17 +314,25 @@ def get_artifacts_summary() -> dict:
     events_count = 0
     events_path = settings.raw_root / "statsbomb_open" / "events_all.parquet"
     if events_path.exists():
-        import pandas as pd
-        events_count = len(pd.read_parquet(events_path))
+        try:
+            import pandas as pd
+            events_count = len(pd.read_parquet(events_path))
+        except Exception:
+            events_count = 0
 
     # Data health flags
     has_oof = not oof.empty
     has_truth = False
+    truth_rows = 0
     truth_path = settings.data_root / "gold" / "feature_store" / "player_truth_labels.parquet"
     if truth_path.exists():
-        import pandas as pd
-        truth_df = pd.read_parquet(truth_path)
-        has_truth = len(truth_df) > 0
+        try:
+            import pandas as pd
+            truth_df = pd.read_parquet(truth_path)
+            has_truth = len(truth_df) > 0
+            truth_rows = len(truth_df)
+        except Exception:
+            pass
 
     # Player match coverage
     pm_coverage = ""
@@ -322,12 +340,6 @@ def get_artifacts_summary() -> dict:
         match_count = (player_match["data_granularity"] == "match").sum()
         proxy_count = (player_match["data_granularity"] == "season_proxy").sum()
         pm_coverage = f"{match_count} real + {proxy_count} season proxy"
-
-    truth_rows = 0
-    if truth_path.exists():
-        import pandas as pd
-
-        truth_rows = len(pd.read_parquet(truth_path))
 
     artifact_registry = [
         _artifact_file_info(
@@ -453,7 +465,10 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
         return {"player": player_name, "found": False}
 
     # Pick the best season (highest score) if multiple
-    row = rows.loc[rows["optimized_score"].idxmax()]
+    try:
+        row = rows.loc[rows["optimized_score"].idxmax()]
+    except (ValueError, TypeError):
+        row = rows.iloc[0]
 
     # Build radar dimensions from available data
     # Attack: npg_p90 + assists_p90 percentile within position

@@ -107,8 +107,8 @@ def _load_all_player_ratings() -> pd.DataFrame:
 
     # Fallback to Parquet
     rel = "gold/feature_store/player_ratings_optimized.parquet"
-    if _parquet_exists(rel):
-        df = pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet(rel)
+    if df is not None:
         df = _normalize_ratings_frame(df)
         return df.sort_values("optimized_score", ascending=False).reset_index(drop=True)
 
@@ -198,8 +198,9 @@ def load_league_metrics() -> pd.DataFrame:
             logger.warning("DuckDB league_metrics failed, falling back", exc_info=True)
 
     rel = "gold/feature_store/rating_league_metrics.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet(rel)
+    if df is not None:
+        return df
 
     return pd.DataFrame()
 
