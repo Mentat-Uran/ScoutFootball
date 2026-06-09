@@ -46,6 +46,10 @@
                     <span class="nav-icon">▣</span>
                     <span data-i18n="nav_reports">报告</span>
                 </button>
+                <button class="nav-action" data-view="tactical" type="button">
+                    <span class="nav-icon">◫</span>
+                    <span>战术板</span>
+                </button>
                 <div class="nav-divider"></div>
                 <button class="nav-action" data-view="wc_schedule" type="button">
                     <span class="nav-icon">⬡</span>
@@ -367,6 +371,59 @@
                 </article>
             </section>
 
+            <!-- Tactical Board -->
+            <section class="view" id="view-tactical" aria-label="tactical">
+                <div class="layout-2">
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <div>
+                                <p class="eyebrow">P1.5 Electronic Tactical Board</p>
+                                <h2>战术板</h2>
+                            </div>
+                            <div class="filter-row">
+                                <select id="tactical-formation" class="glass-control">
+                                    <option value="4-3-3">4-3-3</option>
+                                    <option value="4-2-3-1">4-2-3-1</option>
+                                    <option value="3-5-2">3-5-2</option>
+                                    <option value="4-4-2">4-4-2</option>
+                                    <option value="5-3-2">5-3-2</option>
+                                </select>
+                                <button class="text-button" id="tactical-load-home" type="button">主队阵型</button>
+                                <button class="text-button" id="tactical-load-away" type="button">客队阵型</button>
+                                <button class="text-button" id="tactical-clear" type="button">清空</button>
+                            </div>
+                        </div>
+                        <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">
+                            <canvas id="tactical-canvas" style="width:100%;height:100%"></canvas>
+                        </div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3>工程管理</h3>
+                        </div>
+                        <div class="filter-row" style="margin-bottom:1rem">
+                            <button class="text-button" id="tactical-save" type="button">保存</button>
+                            <button class="text-button" id="tactical-export" type="button">导出 JSON</button>
+                            <button class="text-button" id="tactical-import" type="button">导入 JSON</button>
+                        </div>
+                        <div id="tactical-project-list" class="rank-list"></div>
+                        <div style="margin-top:1rem">
+                            <p class="eyebrow">快捷键</p>
+                            <ul class="signal-list" style="font-size:0.85rem;color:var(--text-muted)">
+                                <li>Ctrl+Z 撤销</li>
+                                <li>Ctrl+Y 重做</li>
+                                <li>Delete 删除选中</li>
+                                <li>拖拽移动球员/足球</li>
+                            </ul>
+                        </div>
+                        <div style="margin-top:1rem">
+                            <p class="eyebrow">Source Attribution</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted)">ScoutFootball tactical board. Local JSON projects only. No data leaves the browser.</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
             <!-- World Cup Schedule -->
             <section class="view" id="view-wc_schedule" aria-label="wc_schedule">
                 <div class="wc-header">
@@ -548,6 +605,8 @@
         </main>
     </div>
 
+    <script src="tactical-board.js"></script>
+    <script src="tactical-renderer.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
