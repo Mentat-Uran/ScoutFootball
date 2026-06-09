@@ -10,7 +10,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-Optimized-ee4c2c)](https://pytorch.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B)](https://streamlit.io/)
 
-🌐 **[English](#english)** | 🇨🇳 **[中文](#简体中文)**
+**[English](#english)** | **[中文](#简体中文)**
 
 ---
 
@@ -36,7 +36,57 @@ The focus right now: upgrading the rating system into an interpretable, evaluabl
 - **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet` — transfermarkt value, awards, expert tiers, manual calibration.
 - **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `MODEL_CARD.md`.
 - **Match Prediction:** Independent Poisson baseline with score probability matrices.
-- **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages, Liquid Glass static frontend, and a FastAPI read-only backend for artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, and model runs. Player Rankings, Value Deviation, Match Prediction, Scouting Queue, and Action Value pages are available. `mplsoccer` powers pitch plots, pizza charts, and shot maps. A browser-based electronic tactical board is planned, not implemented yet.
+- **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages. Liquid Glass static frontend with 7 analysis views (Overview, Players, Value, Matches, Scouting, Action Values, Reports) and 4 World Cup views (Schedule, Squads, Compare, Probability). FastAPI read-only backend for artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, and model runs. `mplsoccer` powers pitch plots, pizza charts, and shot maps. A browser-based electronic tactical board is planned, not implemented yet.
+
+### Liquid Glass Frontend
+
+The `frontend/` directory contains a static analysis workbench with a consistent geometric icon system (no emojis). All navigation icons use minimal Unicode symbols (◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞) for visual consistency.
+
+**7 Analysis Views:**
+
+| View | Description | Data Source |
+| --- | --- | --- |
+| **Overview** (◎) | Artifact registry, data health, coverage metrics | `/artifacts` API |
+| **Players** (◇) | Player pool, radar charts, position percentiles | `/ratings`, `/players/{name}` API |
+| **Value** (€) | Value deviation scatter, over/under-valued rankings | `/value-summary` API |
+| **Matches** (△) | Match prediction, score probability matrix | `/predictions/{home}/{away}` API |
+| **Scouting** (□) | Review queue, watchlist, shortlist | `/review-queue`, `/watchlist`, `/shortlist` API |
+| **Actions** (⌁) | StatsBomb action value heatmaps | `/action-values` API |
+| **Reports** (▣) | Model runs, backend contracts, metrics | `/reports/model-runs` API |
+
+**4 World Cup Views:**
+
+| View | Description |
+| --- | --- |
+| **Schedule** (⬡) | Group stage fixtures, team groups, venues |
+| **Squads** (⊕) | Team rosters with club, league, rating, confidence |
+| **Compare** (⟷) | Head-to-head team comparison with radar overlay |
+| **Probability** (⊞) | Group advancement probabilities, 48-team strength ranking |
+
+### Demo Data
+
+The frontend falls back to built-in demo data when the FastAPI backend is unavailable or when specific artifacts are missing. Views using demo data display a **DEMO** badge.
+
+To see real data:
+
+```bash
+# 1. Start the FastAPI backend (serves local Parquet/DuckDB artifacts)
+PYTHONPATH=src uv run python -m scoutfootball serve
+
+# 2. In another terminal, start the frontend
+python3 -m http.server 8600 --directory frontend
+
+# 3. Open http://localhost:8600 in your browser
+```
+
+To generate the rating artifacts the frontend reads:
+
+```bash
+uv sync
+PYTHONPATH=src uv run python -m scoutfootball ingest
+PYTHONPATH=src uv run python -m scoutfootball build-features
+PYTHONPATH=src uv run python -m scoutfootball train
+```
 
 ### World Cup Readiness
 
@@ -140,7 +190,57 @@ ScoutFootball 是本地优先的足球分析平台，把公开数据、手动导
 - **真实标签契约:** `player_truth_labels.parquet` schema 与校验，支持历史身价、奖项、专家分档、人工校准。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界和已知偏差。
 - **比分预测:** Independent Poisson baseline，含比分概率矩阵。
-- **产品与可视化:** 15 页 Streamlit 工作台（含产物总览页、球探队列页和动作价值样本页）、Liquid Glass 静态前端，以及面向 artifact、球员画像、评分快照、预测、复核队列、watchlist、shortlist、动作价值样本和模型运行的 FastAPI 只读入口。集成 mplsoccer 绘制球员雷达、pizza chart、shot map。低覆盖和样本不足有醒目提示。电子战术板已纳入规划，尚未实现。
+- **产品与可视化:** 15 页 Streamlit 工作台（含产物总览页、球探队列页和动作价值样本页）。Liquid Glass 静态前端含 7 个分析视图（总览、球员、身价、预测、球探、动作价值、报告）和 4 个世界杯视图（赛程、名单、对比、出线）。面向 artifact、球员画像、评分快照、预测、复核队列、watchlist、shortlist、动作价值样本和模型运行的 FastAPI 只读入口。集成 mplsoccer 绘制球员雷达、pizza chart、shot map。低覆盖和样本不足有醒目提示。电子战术板已纳入规划，尚未实现。
+
+### Liquid Glass 前端
+
+`frontend/` 目录包含静态分析工作台，采用统一的几何图标系统（无 emoji）。所有导航图标使用最小化 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），保持视觉一致性。
+
+**7 个分析视图：**
+
+| 视图 | 说明 | 数据来源 |
+| --- | --- | --- |
+| **总览** (◎) | 产物注册表、数据健康、覆盖指标 | `/artifacts` API |
+| **球员** (◇) | 球员池、雷达图、位置内百分位 | `/ratings`、`/players/{name}` API |
+| **身价** (€) | 身价偏离散点图、高估/低估排名 | `/value-summary` API |
+| **预测** (△) | 比赛预测、比分概率矩阵 | `/predictions/{home}/{away}` API |
+| **球探** (□) | 复核队列、watchlist、shortlist | `/review-queue`、`/watchlist`、`/shortlist` API |
+| **动作价值** (⌁) | StatsBomb 动作价值热区 | `/action-values` API |
+| **报告** (▣) | 模型运行记录、后端契约、指标 | `/reports/model-runs` API |
+
+**4 个世界杯视图：**
+
+| 视图 | 说明 |
+| --- | --- |
+| **赛程** (⬡) | 小组赛赛程、分组、场馆 |
+| **名单** (⊕) | 球队阵容含俱乐部、联赛、评分、置信度 |
+| **对比** (⟷) | 两队实力对比含雷达叠加 |
+| **出线** (⊞) | 小组出线概率、48 队实力排名 |
+
+### Demo 数据
+
+当 FastAPI 后端不可用或特定产物缺失时，前端会回退到内置 demo 数据。使用 demo 数据的视图会显示 **DEMO** 标记。
+
+查看真实数据：
+
+```bash
+# 1. 启动 FastAPI 后端（提供本地 Parquet/DuckDB 产物）
+PYTHONPATH=src uv run python -m scoutfootball serve
+
+# 2. 在另一个终端启动前端
+python3 -m http.server 8600 --directory frontend
+
+# 3. 浏览器打开 http://localhost:8600
+```
+
+生成前端读取的评分产物：
+
+```bash
+uv sync
+PYTHONPATH=src uv run python -m scoutfootball ingest
+PYTHONPATH=src uv run python -m scoutfootball build-features
+PYTHONPATH=src uv run python -m scoutfootball train
+```
 
 ### 世界杯准备度
 
