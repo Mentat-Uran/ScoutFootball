@@ -314,3 +314,57 @@ def test_holdout_evaluation_reports_metrics_calibration_and_league_layers() -> N
         evaluation["coverage"].columns,
     )
     assert set(by_league["league"]) == {"La Liga", "Premier League"}
+
+
+def test_team_points_calibrator_expands_compressed_strength_scale() -> None:
+    opt = _load_optimizer_module()
+    matched = pd.DataFrame(
+        {
+            "team": [f"t{i}" for i in range(5)],
+            "league": ["Premier League"] * 5,
+            "season": ["2024-2025"] * 5,
+            "pred_rating": [42.0, 45.0, 48.0, 51.0, 54.0],
+            "actual_points": [18.0, 34.0, 52.0, 73.0, 92.0],
+        },
+    )
+
+    calibrator = opt.fit_team_points_calibrator(matched)
+    calibrated = opt.apply_team_points_calibrator(matched, calibrator)
+    metrics = opt.rating_metrics(calibrated)
+
+    assert calibrator.slope > 3.0
+    assert metrics["raw_spread_ratio"] < 0.35
+    assert 0.95 <= metrics["points_spread_ratio"] <= 1.05
+    assert "pred_points_calibrated" in calibrated.columns
+
+
+def test_composite_objective_includes_points_distribution_and_tail_losses() -> None:
+    opt = _load_optimizer_module()
+    players, standings = _sample_frames()
+    feat = opt.build_feature_tensors(players)
+    params = opt._get_default_params_tensor(torch.device("cpu")).clone().requires_grad_(True)
+
+    loss, components = opt.objective_torch(
+        feat,
+        standings,
+        params,
+        torch.device("cpu"),
+        return_components=True,
+    )
+    loss.backward()
+
+    assert {"points_loss", "distribution", "tail"}.issubset(components)
+    assert params.grad is not None
+    assert torch.isfinite(params.grad).all()
+
+
+def test_cosine_lr_scale_warmup_and_decay_shape() -> None:
+    opt = _load_optimizer_module()
+
+    first = opt.cosine_lr_scale(0, total_steps=100, warmup_steps=10, min_lr_ratio=0.08)
+    warm = opt.cosine_lr_scale(9, total_steps=100, warmup_steps=10, min_lr_ratio=0.08)
+    final = opt.cosine_lr_scale(100, total_steps=100, warmup_steps=10, min_lr_ratio=0.08)
+
+    assert first < warm
+    assert warm == 1.0
+    assert 0.079 <= final <= 0.081

@@ -246,7 +246,11 @@ class TestCompositeObjective:
         loss_sp = objective_torch(
             feat, team_pts, params, device,
             spearman_weight=1.0, ndcg_weight=0.0,
-            position_consistency_weight=0.0, extreme_penalty_weight=0.0,
+            position_consistency_weight=0.0,
+            points_regression_weight=0.0,
+            distribution_weight=0.0,
+            tail_calibration_weight=0.0,
+            extreme_penalty_weight=0.0,
             prior_weight=0.0,
         )
 
@@ -254,7 +258,11 @@ class TestCompositeObjective:
         loss_ext = objective_torch(
             feat, team_pts, params, device,
             spearman_weight=0.0, ndcg_weight=0.0,
-            position_consistency_weight=0.0, extreme_penalty_weight=1.0,
+            position_consistency_weight=0.0,
+            points_regression_weight=0.0,
+            distribution_weight=0.0,
+            tail_calibration_weight=0.0,
+            extreme_penalty_weight=1.0,
             prior_weight=0.0,
         )
 
@@ -273,7 +281,11 @@ class TestCompositeObjective:
         loss = objective_torch(
             feat, team_pts, params, device,
             spearman_weight=0.0, ndcg_weight=0.0,
-            position_consistency_weight=0.0, extreme_penalty_weight=0.0,
+            position_consistency_weight=0.0,
+            points_regression_weight=0.0,
+            distribution_weight=0.0,
+            tail_calibration_weight=0.0,
+            extreme_penalty_weight=0.0,
             prior_weight=1.0, prior_params=prior,
         )
         # Prior reg = mean((params - prior)^2) = mean(1.0^2) = 1.0

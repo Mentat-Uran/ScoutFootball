@@ -57,6 +57,42 @@ ScoutFootball 的球员评分不应只衡量热度或直接进攻产出，而应
 
 所有分项统一映射到 0-100。优先使用“同赛季、同联赛、同细分位置”的百分位；样本太小时回退到“同赛季、同细分位置”；仍不足时回退到位置组或全库分布。
 
+## 球队积分校准与优化目标
+
+球员评分和球队赛季积分不是同一个量纲。球员评分聚合后的 `team_strength` 表示阵容强度，不再直接当作赛季积分解释；积分预测必须经过只在训练赛季拟合的单调校准层：
+
+```text
+pred_points = intercept_train + slope_train × team_strength
+slope_train = std(actual_points_train) / std(team_strength_train)
+intercept_train = mean(actual_points_train) - slope_train × mean(team_strength_train)
+```
+
+holdout/test 只能复用训练集的 `slope_train` 和 `intercept_train`，不能用测试集积分重新拟合。输出报告必须同时保留：
+
+```text
+raw_team_strength
+pred_points_calibrated
+raw_spread_ratio = std(raw_team_strength) / std(actual_points)
+points_spread_ratio = std(pred_points_calibrated) / std(actual_points)
+points_MAE / points_RMSE / points_bias
+```
+
+v1.3-dev 复合目标：
+
+```text
+loss =
+  0.42 × soft_rank_loss(Spearman/Pearson)
++ 0.16 × soft_NDCG@20_loss
++ 0.12 × position_consistency_loss
++ 0.16 × calibrated_points_regression_loss
++ 0.10 × points_distribution_matching_loss
++ 0.14 × tail_calibration_loss(title/relegation teams)
++ 0.05 × player_score_extreme_guardrail
++ 0.04 × prior_regularization
+```
+
+其中 `player_score_extreme_guardrail` 只约束球员评分离群，不能用来解决强队/弱队积分尾部误差；尾部误差由 calibrated points regression、distribution matching 和 tail calibration 负责。
+
 ## 位置细分
 
 旧版只分 FW、MF、DF、GK，职责过粗。新版至少使用以下细分位置：

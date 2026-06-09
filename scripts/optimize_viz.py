@@ -43,8 +43,8 @@ from pathlib import Path
 
 try:
     import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
     import plotly.io as pio
+    from plotly.subplots import make_subplots
 
     # 设置 Plotly 主题
     pio.templates.default = "plotly_white"
@@ -53,7 +53,6 @@ except ImportError:
     _HAS_PLOTLY = False
 
 import numpy as np
-
 
 # ── 默认配色方案 ────────────────────────────────────────────────────────────
 
@@ -76,9 +75,23 @@ COLORS = {
     "rank_loss": "#ef4444",   # 红色 - Rank Loss
     "ndcg": "#a855f7",        # 紫色 - NDCG
     "pos_loss": "#f59e0b",    # 橙色 - Position Loss
+    "points_loss": "#14b8a6", # 青绿 - Points Regression
+    "distribution": "#eab308", # 黄色 - Distribution
+    "tail": "#fb7185",        # 粉红 - Tail Calibration
     "extreme": "#06b6d4",     # 青色 - Extreme
     "prior": "#6b7280",       # 灰色 - Prior
 }
+
+COMPONENT_KEYS = [
+    "rank_loss",
+    "ndcg",
+    "pos_loss",
+    "points_loss",
+    "distribution",
+    "tail",
+    "extreme",
+    "prior",
+]
 
 POSITION_COLORS = {
     "ST": "#ef4444",
@@ -113,6 +126,9 @@ class TrainingStep:
     rank_loss: float = 0.0
     ndcg: float = 0.0
     pos_loss: float = 0.0
+    points_loss: float = 0.0
+    distribution: float = 0.0
+    tail: float = 0.0
     extreme: float = 0.0
     prior: float = 0.0
     timestamp: float = field(default_factory=time.time)
@@ -298,17 +314,13 @@ class LiveTrainingViz:
         )
 
         # 3. Loss 组件分解 (堆叠面积图)
-        components = ["rank_loss", "ndcg", "pos_loss", "extreme", "prior"]
-        comp_colors = [
-            COLORS["rank_loss"], COLORS["ndcg"], COLORS["pos_loss"],
-            COLORS["extreme"], COLORS["prior"]
-        ]
         def _rgba(hex6, alpha=0.25):
             h = hex6.lstrip("#")
             r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
             return f"rgba({r},{g},{b},{alpha})"
 
-        for comp, color in zip(components, comp_colors):
+        for comp in COMPONENT_KEYS:
+            color = COLORS[comp]
             self.fig.add_trace(
                 go.Scatter(
                     x=[], y=[], mode="lines", stackgroup="components",
@@ -373,8 +385,8 @@ class LiveTrainingViz:
     def _run_server(self):
         """后台运行 Plotly Dash 服务。"""
         try:
-            from dash import Dash, dcc, html, callback, Output, Input
             import dash_bootstrap_components as dbc
+            from dash import Dash, Input, Output, dcc, html
 
             self._dash_app = Dash(
                 __name__,
@@ -447,6 +459,9 @@ class LiveTrainingViz:
                 rank_loss=components.get("rank_loss", 0.0) if components else 0.0,
                 ndcg=components.get("ndcg", 0.0) if components else 0.0,
                 pos_loss=components.get("pos_loss", 0.0) if components else 0.0,
+                points_loss=components.get("points_loss", 0.0) if components else 0.0,
+                distribution=components.get("distribution", 0.0) if components else 0.0,
+                tail=components.get("tail", 0.0) if components else 0.0,
                 extreme=components.get("extreme", 0.0) if components else 0.0,
                 prior=components.get("prior", 0.0) if components else 0.0,
             )
@@ -488,14 +503,9 @@ class LiveTrainingViz:
         self.fig.data[4].y = [self.baseline_spearman, self.baseline_spearman]
 
         # 更新组件分解
-        components_map = [
-            (self.fig.data[5], "rank_loss"),
-            (self.fig.data[6], "ndcg"),
-            (self.fig.data[7], "pos_loss"),
-            (self.fig.data[8], "extreme"),
-            (self.fig.data[9], "prior"),
-        ]
-        for trace, key in components_map:
+        component_start = 5
+        for offset, key in enumerate(COMPONENT_KEYS):
+            trace = self.fig.data[component_start + offset]
             trace.x = [s.step for s in self.history]
             trace.y = [getattr(s, key, 0.0) for s in self.history]
 
@@ -508,27 +518,29 @@ class LiveTrainingViz:
             self._update_league_bars(league_corrs, step_data.step)
 
         # 更新状态指示器
-        if len(self.fig.data) > 10:
-            self.fig.data[10].value = step_data.spearman
+        status_idx = 5 + len(COMPONENT_KEYS)
+        if len(self.fig.data) > status_idx:
+            self.fig.data[status_idx].value = step_data.spearman
 
         # 更新进度
-        if len(self.fig.data) > 11:
+        progress_idx = status_idx + 1
+        if len(self.fig.data) > progress_idx:
             progress = step_data.step / max(self.n_steps * self.pop_size, 1)
-            self.fig.data[11].x = [progress]
-            self.fig.data[11].marker.color = [
+            self.fig.data[progress_idx].x = [progress]
+            self.fig.data[progress_idx].marker.color = [
                 COLORS["accent"] if progress < 1 else COLORS["success"]
             ]
 
     def _update_heatmap(self, position_weights: dict, step: int):
         """更新位置权重热力图。"""
-        POSITIONS = ["ST", "W", "AM", "CM", "DM", "FB", "CB", "GK"]
-        DIMENSIONS = ["availability", "attack", "defense", "possession", "quality"]
+        positions = ["ST", "W", "AM", "CM", "DM", "FB", "CB", "GK"]
+        dimensions = ["availability", "attack", "defense", "possession", "quality"]
 
         # 提取权重矩阵
         z = []
-        for pos in POSITIONS:
+        for pos in positions:
             pos_w = position_weights.get(pos, {})
-            row = [pos_w.get(dim, 0) for dim in DIMENSIONS]
+            row = [pos_w.get(dim, 0) for dim in dimensions]
             z.append(row)
 
         # 查找热力图 trace (通常是 trace 12 或之后)
@@ -543,8 +555,8 @@ class LiveTrainingViz:
             self.fig.add_trace(
                 go.Heatmap(
                     z=z,
-                    x=DIMENSIONS,
-                    y=POSITIONS,
+                    x=dimensions,
+                    y=positions,
                     colorscale="RdYlGn",
                     zmin=0,
                     zmax=0.5,
@@ -552,7 +564,10 @@ class LiveTrainingViz:
                     text=[[f"{v:.2f}" for v in row] for row in z],
                     texttemplate="%{text}",
                     textfont={"color": "white" if sum(row) / len(row) > 0.25 else "black"},
-                    hovertemplate="Position: %{y}<br>Dimension: %{x}<br>Weight: %{z:.3f}<extra></extra>",
+                    hovertemplate=(
+                        "Position: %{y}<br>Dimension: %{x}<br>"
+                        "Weight: %{z:.3f}<extra></extra>"
+                    ),
                 ),
                 row=3, col=1,
             )
@@ -565,7 +580,7 @@ class LiveTrainingViz:
         """更新联赛相关性条形图。"""
         leagues = list(league_corrs.keys())
         corrs = list(league_corrs.values())
-        colors = [LEAGUE_COLORS.get(l, COLORS["text_secondary"]) for l in leagues]
+        colors = [LEAGUE_COLORS.get(league, COLORS["text_secondary"]) for league in leagues]
 
         # 查找条形图 trace
         bar_idx = None
@@ -658,6 +673,9 @@ class LiveTrainingViz:
                     "rank_loss": s.rank_loss,
                     "ndcg": s.ndcg,
                     "pos_loss": s.pos_loss,
+                    "points_loss": s.points_loss,
+                    "distribution": s.distribution,
+                    "tail": s.tail,
                     "extreme": s.extreme,
                     "prior": s.prior,
                 }
@@ -694,6 +712,8 @@ class ConsoleViz:
         self.n_steps = n_steps
         self.pop_size = pop_size
         self.history: list[TrainingStep] = []
+        self.best_spearman = 0.0
+        self.best_pearson = 0.0
 
     def start(self):
         print("  [Console Viz] 使用控制台输出模式")
@@ -717,6 +737,9 @@ class ConsoleViz:
             rank_loss=components.get("rank_loss", 0.0) if components else 0.0,
             ndcg=components.get("ndcg", 0.0) if components else 0.0,
             pos_loss=components.get("pos_loss", 0.0) if components else 0.0,
+            points_loss=components.get("points_loss", 0.0) if components else 0.0,
+            distribution=components.get("distribution", 0.0) if components else 0.0,
+            tail=components.get("tail", 0.0) if components else 0.0,
             extreme=components.get("extreme", 0.0) if components else 0.0,
             prior=components.get("prior", 0.0) if components else 0.0,
         )
@@ -743,7 +766,9 @@ class ConsoleViz:
             )
 
     def finalize(self, best_params, best_spearman: float, best_pearson: float):
-        print(f"\n\n  ✓ 训练完成!")
+        self.best_spearman = best_spearman
+        self.best_pearson = best_pearson
+        print("\n\n  ✓ 训练完成!")
         print(f"  Best Spearman: {best_spearman:.4f}")
         print(f"  Best Pearson: {best_pearson:.4f}")
 
@@ -760,8 +785,8 @@ class ConsoleViz:
                 }
                 for s in self.history
             ],
-            "best_spearman": best_spearman,
-            "best_pearson": best_pearson,
+            "best_spearman": self.best_spearman,
+            "best_pearson": self.best_pearson,
         }
         with open(path, "w") as f:
             json.dump(data, f, indent=2)

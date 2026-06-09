@@ -4,7 +4,7 @@
 
 ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，覆盖 Big 5 联赛（英超、西甲、德甲、意甲、法甲）2016/17–2025/26 赛季。模型将球员能力拆解为出勤可靠性、进攻贡献、防守贡献、控球推进、效率质量等维度，按位置组分配不同权重，经联赛强度和球队环境修正后输出最终评分。
 
-**当前版本：v1.2（校准阶段，不可用于正式球探决策）**
+**当前版本：v1.3-dev（校准目标代码已更新，完整 GPU 重跑待执行；不可用于正式球探决策）**
 
 ## 数据源
 
@@ -17,11 +17,19 @@ ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，
 
 ## 标签定义
 
-模型训练目标为**球队赛季积分的排序相关性**（Spearman + NDCG + 位置内排序 + 极端惩罚 + 先验正则）。
+模型训练目标为**球队赛季积分的排序与校准辅助监督**：
+
+- 排序目标：Spearman/Pearson soft rank + soft NDCG@20。
+- 球员解释目标：位置内核心指标一致性 + v3 prior 正则 + 球员评分离群 guardrail。
+- 积分校准目标：训练集拟合的单调 affine 校准层，把 raw team strength 映射为 season points，并优化积分回归、1D 分布匹配和争冠/降级尾部球队误差。
 
 **标签局限**：无球员级真实标签，球队积分 ≠ 球员影响力，强队系统性低估，降级队系统性高估。
 
+**校准边界**：积分校准层只能在训练赛季拟合，holdout/test 必须复用训练集 `slope/intercept`；不能用测试集实际积分重新拟合。
+
 ## 当前指标
+
+以下指标来自 v1.2 GPU 重跑结果。v1.3-dev 目标函数已通过本地单测，但尚未完成完整 GPU 重跑，不能把下面指标视为新目标结果。
 
 ### Holdout（2526 赛季，首次有效评估）
 
@@ -65,6 +73,15 @@ Test Spearman: mean=0.737, std=0.002
 不可用于：单场评分、转会决策、青训评估、伤病预测、合同谈判、跨联赛精确排名、战术适配评估。
 
 ## 版本历史
+
+### v1.3-dev（2026-06-09）
+
+- 新增 train-fitted team points calibration：raw team strength 与 season points 分离。
+- 复合目标新增 points regression、distribution matching、tail calibration 三类积分校准损失。
+- NDCG@20 改为 soft discount 可微目标，`--soft-rank-temperature` 贯穿 Spearman/NDCG/位置一致性。
+- AdamW 训练循环新增 warmup + cosine decay、梯度裁剪；默认学习率从 0.05 降至 0.035。
+- 输出 `pred_points_calibrated`、points MAE/RMSE/bias、raw spread ratio 和 points spread ratio。
+- 待办：完整 GPU 重跑、2526 holdout 尾部误差复盘、CV/stability/feature importance 重新生成。
 
 ### v1.2（2026-06-09）
 
