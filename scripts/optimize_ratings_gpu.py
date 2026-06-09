@@ -238,6 +238,8 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "ud las palmas": "Las Palmas",
     "almeria": "Almeria",
     "ud almeria": "Almeria",
+    "oviedo": "Oviedo",
+    "real oviedo": "Oviedo",
     "girona fc": "Girona",
     # Bundesliga
     "augsburg": "Augsburg",
