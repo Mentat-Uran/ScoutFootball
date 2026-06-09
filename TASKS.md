@@ -189,13 +189,13 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 ### 第一切片：本地战术板画布
 
-- [ ] 在 `frontend/` 增加“战术板”视图，保留 Liquid Glass 风格，但画布区域要像工作台，不做营销页。
-- [ ] 建立标准化球场坐标系：`x`/`y` 使用 0-100 归一化，支持 11v11、7v7、5v5、半场、定位球和门后视角预留。
-- [ ] 支持基础对象：主队/客队球员、门将、足球、教练标记、箭头、折线、曲线路径、区域、多边形、文本标签、编号和颜色。
-- [ ] 支持阵型预设：4-3-3、4-2-3-1、3-5-2、4-4-2、5-3-2、定位球模板，并允许从当前球员/队伍数据生成初始名单但不强依赖后端。
-- [ ] 支持选择、拖拽、复制、删除、锁定、图层顺序、撤销/重做、缩放、适配屏幕和键盘快捷键。
-- [ ] 定义本地 JSON 工程 schema：`board_id`、`title`、`sport`、`pitch_type`、`objects`、`layers`、`frames`、`version`、`created_at`、`updated_at`、`source_attribution`。
-- [ ] 将工程保存为浏览器本地存储 + 可下载 JSON；后端持久化先不做，避免把前端原型误写成正式数据产品。
+- [x] 在 `frontend/` 增加"战术板"视图，保留 Liquid Glass 风格，但画布区域要像工作台，不做营销页。
+- [x] 建立标准化球场坐标系：`x`/`y` 使用 0-100 归一化，支持 11v11、7v7、5v5、半场、定位球和门后视角预留。
+- [x] 支持基础对象：主队/客队球员、门将、足球、教练标记、箭头、折线、曲线路径、区域、多边形、文本标签、编号和颜色。
+- [x] 支持阵型预设：4-3-3、4-2-3-1、3-5-2、4-4-2、5-3-2、定位球模板，并允许从当前球员/队伍数据生成初始名单但不强依赖后端。
+- [x] 支持选择、拖拽、复制、删除、锁定、图层顺序、撤销/重做、缩放、适配屏幕和键盘快捷键。
+- [x] 定义本地 JSON 工程 schema：`board_id`、`title`、`sport`、`pitch_type`、`objects`、`layers`、`frames`、`version`、`created_at`、`updated_at`、`source_attribution`。
+- [x] 将工程保存为浏览器本地存储 + 可下载 JSON；后端持久化先不做，避免把前端原型误写成正式数据产品。
 
 ### 第二切片：战术演示和动画时间轴
 
@@ -236,10 +236,10 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 目标：先用公开事件数据完成一条可复现的动作价值链路，不引入商业数据源。
 
-- [ ] 盘点 `events_all.parquet` 字段和坐标覆盖，写入事件数据覆盖说明。
-- [ ] 新增 `src/scoutfootball/action_value/` 模块：`spadl_adapter.py`、`xt.py`、`vaep.py`、`aggregate.py`。
-- [ ] 第一版只做 StatsBomb events -> internal actions -> xT；internal actions 需记录 provider action id、坐标系、方向、动作结果、前后状态和 source coverage。
-- [ ] 输出 internal actions schema 文档，并说明它和 SPADL/atomic-SPADL、Common Data Format 的字段映射关系。
+- [x] 盘点 `events_all.parquet` 字段和坐标覆盖，写入事件数据覆盖说明。
+- [x] 新增 `src/scoutfootball/action_value/` 模块：`spadl_adapter.py`、`xt.py`、`aggregate.py`。
+- [x] 第一版只做 StatsBomb events -> internal actions -> xT；internal actions 需记录 provider action id、坐标系、方向、动作结果、前后状态和 source coverage。
+- [x] 输出 internal actions schema 文档，并说明它和 SPADL/atomic-SPADL、Common Data Format 的字段映射关系。
 - [ ] 输出 `data/gold/feature_store/player_action_value.parquet`。
 - [ ] 生成球员 xT 排行榜、球队 xT 热区图、球员传球/带球推进价值图。
 - [ ] 评估 socceraction 作为依赖的可维护性，优先复用其 SPADL/xT/VAEP 能力。
@@ -291,7 +291,7 @@ player_rating =
 
 ### EVALUATION.md
 
-- [ ] 说明数据切分方式：按赛季时间切分（train/test split），明确 holdout 赛季范围。
+- [x] 说明数据切分方式：按赛季时间切分（train/test split），明确 holdout 赛季范围。
 - [ ] 记录 baselines：league average、Independent Poisson、简单 percentile 聚合。
 - [ ] 记录核心指标：Spearman rank correlation（位置内 + 跨位置）、NDCG、MAE、RMSE。
 - [ ] 记录误差案例：Top 100 中出勤捷径球员、弱联赛高估样本、低分钟高方差球员、位置误判案例。
