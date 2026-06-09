@@ -450,9 +450,6 @@ async function renderPlayerProfile() {
     const player = players.find((item) => item.key === appState.selectedPlayerKey) || players[0];
     if (!player) return;
     document.getElementById("selected-player-name").textContent = player.name;
-    const badge = document.getElementById("player-confidence");
-    badge.textContent = player.confidence;
-    badge.className = `status-pill ${confidenceClass(player.confidence)}`;
 
     // Fetch real profile data for radar
     let profile = null;
@@ -466,6 +463,8 @@ async function renderPlayerProfile() {
     const detailPosition = profile ? profile.position_group : player.position;
     const detailMatches = profile ? profile.matches : player.matches;
     const detailLowApp = profile ? profile.low_appearance : player.low_appearance;
+    const detailConfidence = profile ? profile.confidence_level : player.confidence;
+    const detailLeague = profile ? profile.league : player.league;
     const lowAppWarning = detailLowApp
         ? `<div class="low-appearance-warning">${appState.lang === "zh" ? "▲ 出场不足20场，评分已扣减最多30%" : "▲ Under 20 matches, score penalized up to 30%"}</div>`
         : "";
@@ -475,6 +474,7 @@ async function renderPlayerProfile() {
         <div><span>${appState.lang === "zh" ? "出场" : "Matches"}</span><strong>${detailMatches}</strong></div>
         <div><span>${t("th_pos")}</span><strong>${detailPosition}</strong></div>
         <div><span>${t("th_rating")}</span><strong>${detailScore}</strong></div>
+        <div><span>${appState.lang === "zh" ? "联赛" : "League"}</span><strong>${detailLeague || "–"}</strong></div>
     `;
     // Always remove existing warning before conditionally inserting new one
     const existing = document.getElementById("player-detail").nextElementSibling;
@@ -488,6 +488,14 @@ async function renderPlayerProfile() {
     // Use real radar data from profile API, or fallback to defaults
     const radar = (profile && profile.radar) ? profile.radar : player.radar;
     renderRadar({ ...player, radar });
+
+    // Update confidence badge with profile data if available
+    const confidence = profile ? (profile.confidence_level || player.confidence) : player.confidence;
+    const badge = document.getElementById("player-confidence");
+    if (badge) {
+        badge.textContent = confidence;
+        badge.className = `status-pill ${confidenceClass(confidence)}`;
+    }
 }
 
 function getChart(id) {
