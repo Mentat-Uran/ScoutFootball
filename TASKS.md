@@ -414,11 +414,11 @@ PYTHONPATH=src uv run python -m scoutfootball validate
 | SofaScore | 需要 Chrome + Selenium | Windows GPU 服务器 |
 | SoFIFA | 需要 Chrome + Selenium | Windows GPU 服务器 |
 | Capology | 需要 ScraperFC + Chrome | Windows GPU 服务器 |
-| StatsBomb | 无特殊要求，但下载量大（~1000+ 场事件） | 稳定网络环境，运行 `scripts/fetch_statsbomb_full.py` |
+| StatsBomb | 无特殊要求，但下载量大（~1000+ 场事件） | 稳定网络环境，使用 `scoutfootball ingest --sources statsbomb` |
 | Transfermarkt-datasets | 无特殊要求，但 DuckDB 文件 ~500MB | 手动下载 DuckDB 放到 `data/raw/transfermarkt_datasets/` |
 | API-Football | 需要 API Key（环境变量 `API_FOOTBALL_KEY`） | 任意环境，免费 100 请求/天 |
 
-运行 soccerdata 相关脚本时需设置环境变量：
+运行 soccerdata 相关适配器时需设置环境变量：
 ```bash
-SOCCERDATA_DIR=./data/soccerdata uv run python scripts/fetch_fbref_10seasons.py
+SOCCERDATA_DIR=./data/soccerdata uv run python -m scoutfootball ingest --sources fbref
 ```
