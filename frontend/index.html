@@ -82,8 +82,8 @@
                         <span>⌕</span>
                         <input id="global-search" type="search" data-i18n-placeholder="search_placeholder" placeholder="搜索球员、球队、报告">
                     </label>
-                    <span class="status-pill status-medium">94 real / 8595 proxy</span>
-                    <span class="status-pill status-high">OOF 6513</span>
+                    <span class="status-pill status-medium" id="top-coverage-pill">loading</span>
+                    <span class="status-pill status-high" id="top-oof-pill">loading</span>
                 </div>
             </header>
 
@@ -274,6 +274,11 @@
                             <button class="text-button" type="button" data-i18n="snapshot">快照</button>
                         </div>
                         <div id="watchlist" class="watch-grid"></div>
+                        <div class="panel-head" style="margin-top:1rem">
+                            <h3>Shortlist</h3>
+                            <span class="status-pill status-high" id="shortlist-count">0</span>
+                        </div>
+                        <div id="shortlist" class="watch-grid"></div>
                     </article>
                 </div>
             </section>
@@ -286,7 +291,7 @@
                                 <p class="eyebrow" data-i18n="action_kicker">StatsBomb sample</p>
                                 <h2 data-i18n="action_title">动作价值热区</h2>
                             </div>
-                            <span class="status-pill status-low">SAMPLE</span>
+                            <span class="status-pill status-medium" id="action-status-pill">loading</span>
                         </div>
                         <div id="action-chart" class="chart-box"></div>
                     </article>
@@ -295,6 +300,7 @@
                             <h3 data-i18n="action_pipeline">动作价值后端</h3>
                             <span class="status-pill status-medium">xT -> VAEP</span>
                         </div>
+                        <div id="action-list" class="rank-list"></div>
                         <ul class="backend-list">
                             <li><span>internal actions schema</span><strong>P2</strong></li>
                             <li><span>player_action_value.parquet</span><strong>P2</strong></li>
@@ -308,34 +314,41 @@
             <section class="view" id="view-reports" aria-label="reports">
                 <div class="grid-3">
                     <article class="liquid-panel report-card">
-                        <p class="eyebrow">model run</p>
-                        <h3>rating_optimizer_gpu</h3>
-                        <span class="status-pill status-medium">holdout pending</span>
+                        <p class="eyebrow" id="report-run-kicker">model run</p>
+                        <h3 id="report-run-title">rating_optimizer_gpu</h3>
+                        <span class="status-pill status-medium" id="report-run-status">loading</span>
                     </article>
                     <article class="liquid-panel report-card">
-                        <p class="eyebrow">value model</p>
-                        <h3>value_fairness_oof</h3>
-                        <span class="status-pill status-high">ready</span>
+                        <p class="eyebrow" id="report-value-kicker">value model</p>
+                        <h3 id="report-value-title">value_fairness_oof</h3>
+                        <span class="status-pill status-high" id="report-value-status">loading</span>
                     </article>
                     <article class="liquid-panel report-card">
-                        <p class="eyebrow">prediction</p>
-                        <h3>poisson_baseline</h3>
-                        <span class="status-pill status-medium">calibration needed</span>
+                        <p class="eyebrow" id="report-prediction-kicker">prediction</p>
+                        <h3 id="report-prediction-title">poisson_baseline</h3>
+                        <span class="status-pill status-medium" id="report-prediction-status">loading</span>
                     </article>
                 </div>
                 <article class="liquid-panel table-panel">
                     <div class="panel-head">
                         <h3 data-i18n="backend_contracts">后端契约</h3>
-                        <span class="status-pill status-medium">FastAPI draft</span>
+                        <span class="status-pill status-high">FastAPI read-only</span>
                     </div>
                     <ul class="backend-list two-col">
-                        <li><span>/health + artifact registry</span><strong>next</strong></li>
-                        <li><span>/players + player profile</span><strong>next</strong></li>
-                        <li><span>/ratings/snapshots</span><strong>P0/P3</strong></li>
-                        <li><span>/predictions/{home}/{away}</span><strong>P5</strong></li>
-                        <li><span>/review-queue</span><strong>P7</strong></li>
-                        <li><span>/reports/model-runs</span><strong>P4</strong></li>
+                        <li><span>/health + artifact registry</span><strong>live</strong></li>
+                        <li><span>/players/{player_name}</span><strong>live</strong></li>
+                        <li><span>/ratings/snapshots</span><strong>live</strong></li>
+                        <li><span>/predictions/{home}/{away}</span><strong>live</strong></li>
+                        <li><span>/review-queue</span><strong>live</strong></li>
+                        <li><span>/reports/model-runs</span><strong>live</strong></li>
                     </ul>
+                </article>
+                <article class="liquid-panel table-panel">
+                    <div class="panel-head">
+                        <h3>Model Runs</h3>
+                        <span class="status-pill status-medium" id="model-runs-count">0</span>
+                    </div>
+                    <div id="model-runs-list" class="rank-list"></div>
                 </article>
             </section>
 

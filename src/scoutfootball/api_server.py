@@ -7,13 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from scoutfootball.api import (
+    get_action_value_summary,
     get_artifacts_summary,
     get_match_prediction,
     get_model_runs,
+    get_player_profile,
     get_player_ratings,
+    get_prediction_summary,
     get_ratings_meta,
     get_review_queue,
+    get_shortlist,
     get_value_summary,
+    get_watchlist,
     health_check,
     list_players,
     list_teams,
@@ -51,12 +56,36 @@ def create_app() -> FastAPI:
     def prediction(home_team: str, away_team: str):
         return get_match_prediction(home_team, away_team)
 
+    @app.get("/predictions/{home_team}/{away_team}")
+    def predictions(home_team: str, away_team: str):
+        return get_match_prediction(home_team, away_team)
+
+    @app.get("/predictions/meta")
+    def predictions_meta():
+        return get_prediction_summary()
+
     @app.get("/value-summary")
     def value_summary():
         return get_value_summary()
 
+    @app.get("/action-values")
+    def action_values(limit: int = 20):
+        return get_action_value_summary(limit=limit)
+
     @app.get("/ratings")
     def ratings(
+        position: str | None = None,
+        league: str | None = None,
+        team: str | None = None,
+        season: str | None = None,
+        limit: int = 20000,
+    ):
+        return get_player_ratings(
+            position=position, league=league, team=team, season=season, limit=limit,
+        )
+
+    @app.get("/ratings/snapshots")
+    def rating_snapshots(
         position: str | None = None,
         league: str | None = None,
         team: str | None = None,
@@ -73,7 +102,10 @@ def create_app() -> FastAPI:
 
     @app.get("/player/{player_name}/profile")
     def player_profile(player_name: str, season: str | None = None):
-        from scoutfootball.api import get_player_profile
+        return get_player_profile(player_name, season=season)
+
+    @app.get("/players/{player_name}")
+    def player_detail(player_name: str, season: str | None = None):
         return get_player_profile(player_name, season=season)
 
     @app.get("/artifacts")
@@ -84,8 +116,20 @@ def create_app() -> FastAPI:
     def review_queue(limit: int = 200):
         return get_review_queue(limit=limit)
 
+    @app.get("/watchlist")
+    def watchlist(limit: int = 100):
+        return get_watchlist(limit=limit)
+
+    @app.get("/shortlist")
+    def shortlist(limit: int = 100):
+        return get_shortlist(limit=limit)
+
     @app.get("/model-runs")
     def model_runs():
+        return get_model_runs()
+
+    @app.get("/reports/model-runs")
+    def report_model_runs():
         return get_model_runs()
 
     # Serve frontend static files
