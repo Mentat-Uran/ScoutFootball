@@ -40,5 +40,7 @@ scoutlab-gpu-server.zip
 # Large binary artifacts
 data/gold/**/*.npy
 !data/gold/feature_store/optimized_params.npy
+# Interactive HTML reports — regenerate locally from training_history.json
+data/gold/feature_store/training_report.html
 # data/models/**/* already handled above with !data/models/runs/** exception
 data/logs/**/*
