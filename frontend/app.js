@@ -631,7 +631,7 @@ function renderValue() {
     ));
 
     // Show demo data indicator when using mock data
-    const valueTitle = document.querySelector("#view-value .chart-panel .panel-head div");
+    const valueTitle = document.getElementById("value-panel-title");
     if (valueTitle) {
         let indicator = valueTitle.querySelector(".data-source-indicator");
         if (!indicator) {
