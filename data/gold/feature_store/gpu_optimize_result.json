@@ -1,0 +1,215 @@
+{
+  "status": "ok",
+  "spearman": 0.6346,
+  "pearson": 0.6251,
+  "baseline_spearman": 0.425,
+  "baseline_pearson": 0.4068,
+  "spearman_improvement": 0.2096,
+  "pearson_improvement": 0.2184,
+  "composite_weights": {
+    "spearman": 0.5,
+    "ndcg": 0.2,
+    "position_consistency": 0.15,
+    "extreme_penalty": 0.1,
+    "prior": 0.05
+  },
+  "train_spearman": 0.6883,
+  "train_pearson": 0.6931,
+  "overfit_rank_loss_gap": 0.0537,
+  "train_seasons": [
+    "1617",
+    "1718",
+    "1819",
+    "1920",
+    "2021",
+    "2122",
+    "2223",
+    "2324",
+    "2425"
+  ],
+  "test_seasons": [
+    "2526"
+  ],
+  "n_players": 27254,
+  "n_train_players": 24482,
+  "n_test_players": 2772,
+  "n_team_seasons": 74,
+  "device": "cuda",
+  "elapsed_seconds": 624.6,
+  "position_weights": {
+    "ST": {
+      "availability": 0.045,
+      "attack": 0.735,
+      "defense": 0.0277,
+      "possession": 0.0435,
+      "quality": 0.1488
+    },
+    "W": {
+      "availability": 0.0378,
+      "attack": 0.7508,
+      "defense": 0.0266,
+      "possession": 0.0489,
+      "quality": 0.136
+    },
+    "AM": {
+      "availability": 0.0722,
+      "attack": 0.3459,
+      "defense": 0.0536,
+      "possession": 0.2515,
+      "quality": 0.2769
+    },
+    "CM": {
+      "availability": 0.18,
+      "attack": 0.22,
+      "defense": 0.1122,
+      "possession": 0.2478,
+      "quality": 0.24
+    },
+    "DM": {
+      "availability": 0.1395,
+      "attack": 0.0794,
+      "defense": 0.2981,
+      "possession": 0.281,
+      "quality": 0.202
+    },
+    "FB": {
+      "availability": 0.2,
+      "attack": 0.16,
+      "defense": 0.1173,
+      "possession": 0.2437,
+      "quality": 0.279
+    },
+    "CB": {
+      "availability": 0.18,
+      "attack": 0.1,
+      "defense": 0.2298,
+      "possession": 0.2402,
+      "quality": 0.25
+    },
+    "GK": {
+      "availability": 0.18,
+      "attack": 0.0598,
+      "defense": 0.2956,
+      "possession": 0.1845,
+      "quality": 0.28
+    }
+  },
+  "attack_weights": {
+    "ST": {
+      "npxg_p90": 0.6209,
+      "assists_p90": 0.1219,
+      "g_a_volume": 0.2572
+    },
+    "W": {
+      "npxg_p90": 0.1341,
+      "assists_p90": 0.554,
+      "g_a_volume": 0.3119
+    },
+    "AM": {
+      "npxg_p90": 0.163,
+      "assists_p90": 0.6058,
+      "g_a_volume": 0.2312
+    },
+    "CM": {
+      "npxg_p90": 0.1503,
+      "assists_p90": 0.3305,
+      "g_a_volume": 0.5192
+    },
+    "DM": {
+      "npxg_p90": 0.1002,
+      "assists_p90": 0.2504,
+      "g_a_volume": 0.6495
+    },
+    "FB": {
+      "npxg_p90": 0.0915,
+      "assists_p90": 0.3533,
+      "g_a_volume": 0.5553
+    },
+    "CB": {
+      "npxg_p90": 0.1912,
+      "assists_p90": 0.1917,
+      "g_a_volume": 0.6171
+    },
+    "GK": {
+      "npxg_p90": 0.0485,
+      "assists_p90": 0.0495,
+      "g_a_volume": 0.9019
+    }
+  },
+  "team_aggregation": {
+    "minutes_cap": 1500.0,
+    "core_minutes": 450.0,
+    "core_scale": 180.0,
+    "capped_minutes_blend": 0.55,
+    "core_rotation_blend": 0.44999999999999996
+  },
+  "team_coverage": [
+    {
+      "league": "Bundesliga",
+      "season": "2526",
+      "target_teams": 18,
+      "rated_teams": 18,
+      "matched_teams": 13,
+      "coverage": 0.7222222222222222
+    },
+    {
+      "league": "La Liga",
+      "season": "2526",
+      "target_teams": 20,
+      "rated_teams": 20,
+      "matched_teams": 12,
+      "coverage": 0.6
+    },
+    {
+      "league": "Ligue 1",
+      "season": "2526",
+      "target_teams": 18,
+      "rated_teams": 18,
+      "matched_teams": 17,
+      "coverage": 0.9444444444444444
+    },
+    {
+      "league": "Premier League",
+      "season": "2526",
+      "target_teams": 20,
+      "rated_teams": 20,
+      "matched_teams": 13,
+      "coverage": 0.65
+    },
+    {
+      "league": "Serie A",
+      "season": "2526",
+      "target_teams": 20,
+      "rated_teams": 20,
+      "matched_teams": 19,
+      "coverage": 0.95
+    }
+  ],
+  "per_league": {
+    "Bundesliga": {
+      "spearman": 0.7345,
+      "pearson": 0.7103,
+      "n": 13
+    },
+    "La Liga": {
+      "spearman": 0.7302,
+      "pearson": 0.8097,
+      "n": 12
+    },
+    "Ligue 1": {
+      "spearman": 0.7252,
+      "pearson": 0.6349,
+      "n": 17
+    },
+    "Premier League": {
+      "spearman": 0.3251,
+      "pearson": 0.5262,
+      "n": 13
+    },
+    "Serie A": {
+      "spearman": 0.8311,
+      "pearson": 0.8911,
+      "n": 19
+    }
+  }
+}
