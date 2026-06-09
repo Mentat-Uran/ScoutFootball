@@ -174,11 +174,14 @@ def get_value_summary() -> dict:
     metrics: dict[str, Any] = {}
     results_path = _settings().data_root / "models" / "artifacts" / "value_fairness_results.parquet"
     if results_path.exists():
-        import pandas as pd
+        try:
+            import pandas as pd
 
-        results_df = pd.read_parquet(results_path)
-        if not results_df.empty:
-            metrics = _clean_json_value(results_df.iloc[0].to_dict())
+            results_df = pd.read_parquet(results_path)
+            if not results_df.empty:
+                metrics = _clean_json_value(results_df.iloc[0].to_dict())
+        except Exception:
+            pass
 
     mean_residual = None
     if "residual_log" in oof.columns:

@@ -142,7 +142,10 @@ def _load_curated_queues(reports_root: Path, *, run_id: str) -> ScoutingQueues |
     def _read(path: Path) -> pd.DataFrame:
         if not path.exists():
             return pd.DataFrame(columns=SCOUTING_QUEUE_COLUMNS)
-        frame = pd.read_parquet(path)
+        try:
+            frame = pd.read_parquet(path)
+        except Exception:
+            return pd.DataFrame(columns=SCOUTING_QUEUE_COLUMNS)
         for col in SCOUTING_QUEUE_COLUMNS:
             if col not in frame.columns:
                 frame[col] = pd.NA
