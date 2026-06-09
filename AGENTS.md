@@ -4,7 +4,7 @@
 
 ## 当前项目状态
 
-Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-features` -> `scoutfootball train`。当前文档真源是 `TASKS.md`，用户说明是 `README.md`，算法解释以 `ALGORITHM.md` 和 `MODEL_CARD.md` 为准。
+Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-features` -> `scoutfootball train`。当前文档真源是 `docs/TASKS.md`，用户说明是 `README.md`，算法解释以 `docs/ALGORITHM.md` 和 `docs/MODEL_CARD.md` 为准。
 
 本地缓存当前可验证状态：
 
@@ -40,7 +40,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - PyTorch GPU 优化器和远程 GPU 计算脚本已存在。
 - 优化目标已从纯 Spearman/Pearson 改为组合目标：Spearman(0.42) + soft NDCG@20(0.16) + 位置内排序一致性(0.12) + 训练集积分回归校准(0.16) + 积分分布匹配(0.10) + 争冠/降级尾部校准(0.14) + 训练集联赛平均残差惩罚(0.08) + 球员评分离群 guardrail(0.05) + 先验正则(0.04)；各权重可通过命令行参数覆盖。v1.3 GPU 重跑已完成：2526 holdout Spearman=0.737/Pearson=0.742，points spread ratio=0.985，points MAE=11.55；主要残留问题是联赛截距偏差。v1.3.1-dev 已新增 train-fitted league residual offset 和 league-bias loss，只读复算可把当前参数 points MAE 从 11.55 降到 9.44，完整 GPU 重跑待执行。
 - 模型运行登记已实现：每次优化后保存到 `data/models/runs/<timestamp>/`，含 optimized_params.npy + meta.json（参数、种子、输入 hash、指标、位置内指标、误差案例摘要）。
-- 神经网络准入门槛已写入 MODEL_CARD.md：必须先有球员真实标签、时间切分、baseline 对比、位置内指标、误差案例复盘；禁止纯球队积分监督训练。
+- 神经网络准入门槛已写入 `docs/MODEL_CARD.md`：必须先有球员真实标签、时间切分、baseline 对比、位置内指标、误差案例复盘；禁止纯球队积分监督训练。
 - 当前评分层优先做角色、联赛、真实影响力校准，不再把 Top N 配额作为主目标。
 - 已加入粗位置角色重判、较强联赛强度曲线、holdout 评估、Pearson 指标修复、ST/W quality cap。
 - 已把所有位置 availability cap 降到 0.18-0.20，CM/DM/FB/CB/GK 不能再用 0.30-0.36 的出勤权重主导评分。
@@ -52,9 +52,9 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - FBref 粗位置只能保守重判，仍需要 StatsBomb、阵型或人工位置增强。
 - `player_value_metrics.parquet` 只有 StatsBomb 事件价值样本，不能当作全量联赛动作价值；`player_truth_labels.parquet` 已有空表模板和 schema 契约（`truth_labels.py`），待手动填充真实标签数据。
 - 评估流程已增加 N/A 球队过滤：`build_matched_results()` 和 `build_team_target_tensors()` 自动剔除积分 NaN/inf 球队，`evaluate_params()` 报告剔除数量。
-- 评分模型卡 `MODEL_CARD.md` 已输出，记录数据源、标签定义、适用边界、已知偏差和不可用场景。
+- 评分模型卡 `docs/MODEL_CARD.md` 已输出，记录数据源、标签定义、适用边界、已知偏差和不可用场景。
 - 神经网络评分器只能作为真实标签层完成后的候选实验；没有球员级标签、特征缺失标记、时间切分和 baseline 对比前，不要把 MLP/深度模型写成默认评分能力。
-- `PROBLEMS.md` 中记录的问题只能算完成第一轮代码级防护；完整结论必须重新跑 GPU 优化和 2526 holdout 误差复盘后再写。
+- `docs/PROBLEMS.md` 中记录的问题只能算完成第一轮代码级防护；完整结论必须重新跑 GPU 优化和 2526 holdout 误差复盘后再写。
 - GPU 重跑已完成（2026-06-09，alias 修复后，RTX 5070 Ti）：2526 holdout Spearman=0.740/Pearson=0.744（baseline 0.618，提升 +0.122）。3-fold CV 平均 test Spearman=0.718/Pearson=0.719。Fold 1（2324）Spearman=0.662，Fold 2（2425）Spearman=0.792，Fold 3（2526）Spearman=0.701。参数稳定性 3 seeds std=0.002。特征重要性：assists_p90 > npg_p90 > minutes。强队系统性低估（Barcelona -37.7, Real Madrid -33.4），降级队高估（Burnley +24.9）。alias 已修复（12 个新 alias + 重音符号去除），Bundesliga coverage 0.778 待重跑验证。
 
 ## 后续架构方向
@@ -66,7 +66,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 3. 跨供应商标准化层：internal event/tracking schema，对齐 SPADL、atomic-SPADL、Common Data Format、kloppy/floodlight 思路；短期不急加依赖。
 4. 事件动作价值层：StatsBomb events -> internal actions -> SPADL/atomic-SPADL -> xT -> VAEP/Atomic-VAEP。
 5. 球员真值与评分层：真实标签 + 赛季统计 + xG/xA + xT/VAEP + 出勤可靠性 + 联赛强度 + 年龄/趋势 + 置信度。
-6. 评估与模型卡层：`EVALUATION.md`、`MODEL_CARD.md`、position-wise metrics、误差分析、模型运行登记。
+6. 评估与模型卡层：`docs/EVALUATION.md`、`docs/MODEL_CARD.md`、position-wise metrics、误差分析、模型运行登记。
 7. 产品可视化与 API 层：Streamlit + Plotly + mplsoccer + FastAPI 只读产物 + 电子战术板。
 8. 球探决策层：watchlist、shortlist、人工标签审阅、低置信度复核队列、战术备注。
 9. 比分预测与概率校准层：league average -> Independent Poisson -> Dixon-Coles + time decay -> calibration。
@@ -91,7 +91,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 3. P1.5：电子战术板、战术演示和动画导出。先做本地画布、JSON 工程、关键帧/步骤式动画、演示播放、PNG/PDF/WebM 导出；MP4、视频叠画、tracking 导入和实时协作后置。
 4. P2：StatsBomb 事件动作价值层，先 xT，后 VAEP。
 5. P3：评分模型重构，把 action value 作为增强维度接入；真实标签层稳定后，神经网络只能先作为候选模型与当前优化器同口径对比。
-6. P4：模型评估文档和模型卡。补 `EVALUATION.md`（Spearman、时间切分、baseline、误差案例）和 `MODEL_CARD.md`（数据源、标签定义、适用边界、偏差、不可用场景）。
+6. P4：模型评估文档和模型卡。补 `docs/EVALUATION.md`（Spearman、时间切分、baseline、误差案例）和 `docs/MODEL_CARD.md`（数据源、标签定义、适用边界、偏差、不可用场景）。
 7. P5：Dixon-Coles 比分预测升级。
 8. P6：跨供应商标准化和开放格式层，先做 schema、license manifest 和转换实验，不改变当前 pipeline。
 9. P7：球探决策与人工校准层，把真实标签、低置信度样本、误差案例和战术备注纳入 review queue、watchlist、shortlist。
