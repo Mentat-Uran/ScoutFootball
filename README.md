@@ -32,7 +32,7 @@ The focus right now: upgrading the rating system into an interpretable, evaluabl
 - **Pipeline:** End-to-end `ingest` -> `build-features` -> `train`.
 - **Data Validation:** `scoutfootball validate` checks data integrity before training.
 - **Local Data Layer:** DuckDB + Parquet, organized into raw/silver/gold/models/reports/logs.
-- **Player Ratings:** PyTorch optimizer with composite objective (Spearman + soft NDCG@20 + position consistency + train-fitted points calibration + distribution/tail losses + player-score guardrails), holdout evaluation, availability caps, quality caps, robust team pooling, coverage reports, and model run registry.
+- **Player Ratings:** PyTorch optimizer with composite objective (Spearman + soft NDCG@20 + position consistency + train-fitted points/league calibration + distribution/tail/league-bias losses + player-score guardrails), holdout evaluation, availability caps, quality caps, robust team pooling, coverage reports, and model run registry.
 - **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet` — transfermarkt value, awards, expert tiers, manual calibration.
 - **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `MODEL_CARD.md`.
 - **Match Prediction:** Independent Poisson baseline with score probability matrices.
@@ -186,7 +186,7 @@ ScoutFootball 是本地优先的足球分析平台，把公开数据、手动导
 - **研发流水线:** `ingest` -> `build-features` -> `train`。
 - **数据验证:** `scoutfootball validate` 检查训练前数据一致性。
 - **本地数据层:** DuckDB + Parquet，按 raw/silver/gold/models/reports/logs 分层。
-- **球员评分:** PyTorch 权重优化器，组合目标（Spearman + soft NDCG@20 + 位置内一致性 + 训练集积分校准 + 分布/尾部损失 + 球员评分 guardrail），holdout 评估、availability cap、quality cap、稳健球队聚合、覆盖率过滤和模型运行登记。
+- **球员评分:** PyTorch 权重优化器，组合目标（Spearman + soft NDCG@20 + 位置内一致性 + 训练集积分/联赛校准 + 分布/尾部/联赛偏差损失 + 球员评分 guardrail），holdout 评估、availability cap、quality cap、稳健球队聚合、覆盖率过滤和模型运行登记。
 - **真实标签契约:** `player_truth_labels.parquet` schema 与校验，支持历史身价、奖项、专家分档、人工校准。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界和已知偏差。
 - **比分预测:** Independent Poisson baseline，含比分概率矩阵。

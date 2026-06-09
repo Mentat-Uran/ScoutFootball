@@ -338,6 +338,39 @@ def test_team_points_calibrator_expands_compressed_strength_scale() -> None:
     assert "pred_points_calibrated" in calibrated.columns
 
 
+def test_team_points_calibrator_applies_shrunken_league_offsets() -> None:
+    opt = _load_optimizer_module()
+    matched = pd.DataFrame(
+        {
+            "team": [f"a{i}" for i in range(6)] + [f"b{i}" for i in range(6)],
+            "league": ["League A"] * 6 + ["League B"] * 6,
+            "season": ["2024-2025"] * 12,
+            "pred_rating": [40, 42, 44, 46, 48, 50, 40, 42, 44, 46, 48, 50],
+            "actual_points": [42, 45, 48, 51, 54, 57, 22, 25, 28, 31, 34, 37],
+        },
+    )
+
+    global_only = opt.apply_team_points_calibrator(
+        matched,
+        opt.fit_team_points_calibrator(matched, use_league_offsets=False),
+    )
+    league_calibrated = opt.apply_team_points_calibrator(
+        matched,
+        opt.fit_team_points_calibrator(
+            matched,
+            league_prior_n=1,
+            league_offset_cap=20,
+        ),
+    )
+    global_mae = (global_only["pred_points_calibrated"] - global_only["actual_points"]).abs().mean()
+    league_mae = (
+        league_calibrated["pred_points_calibrated"] - league_calibrated["actual_points"]
+    ).abs().mean()
+
+    assert league_mae < global_mae
+    assert league_calibrated["pred_points_league_offset"].abs().max() > 0
+
+
 def test_composite_objective_includes_points_distribution_and_tail_losses() -> None:
     opt = _load_optimizer_module()
     players, standings = _sample_frames()
@@ -353,7 +386,7 @@ def test_composite_objective_includes_points_distribution_and_tail_losses() -> N
     )
     loss.backward()
 
-    assert {"points_loss", "distribution", "tail"}.issubset(components)
+    assert {"points_loss", "distribution", "tail", "league_bias"}.issubset(components)
     assert params.grad is not None
     assert torch.isfinite(params.grad).all()
 

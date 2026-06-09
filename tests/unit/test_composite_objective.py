@@ -250,6 +250,7 @@ class TestCompositeObjective:
             points_regression_weight=0.0,
             distribution_weight=0.0,
             tail_calibration_weight=0.0,
+            league_bias_weight=0.0,
             extreme_penalty_weight=0.0,
             prior_weight=0.0,
         )
@@ -262,6 +263,7 @@ class TestCompositeObjective:
             points_regression_weight=0.0,
             distribution_weight=0.0,
             tail_calibration_weight=0.0,
+            league_bias_weight=0.0,
             extreme_penalty_weight=1.0,
             prior_weight=0.0,
         )
@@ -285,6 +287,7 @@ class TestCompositeObjective:
             points_regression_weight=0.0,
             distribution_weight=0.0,
             tail_calibration_weight=0.0,
+            league_bias_weight=0.0,
             extreme_penalty_weight=0.0,
             prior_weight=1.0, prior_params=prior,
         )
@@ -304,6 +307,7 @@ class TestCompositeObjective:
         assert "rank=" in captured.out
         assert "ndcg=" in captured.out
         assert "pos=" in captured.out
+        assert "league_bias=" in captured.out
         assert "ext=" in captured.out
         assert "prior=" in captured.out
         assert "total=" in captured.out

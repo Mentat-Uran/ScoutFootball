@@ -38,7 +38,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 评分系统仍处于校准阶段：
 
 - PyTorch GPU 优化器和远程 GPU 计算脚本已存在。
-- 优化目标已从纯 Spearman/Pearson 改为组合目标：Spearman(0.42) + soft NDCG@20(0.16) + 位置内排序一致性(0.12) + 训练集积分回归校准(0.16) + 积分分布匹配(0.10) + 争冠/降级尾部校准(0.14) + 球员评分离群 guardrail(0.05) + 先验正则(0.04)；各权重可通过命令行参数覆盖。该 v1.3-dev 目标已通过本地单测，完整 GPU 重跑和 holdout 误差复盘仍待执行。
+- 优化目标已从纯 Spearman/Pearson 改为组合目标：Spearman(0.42) + soft NDCG@20(0.16) + 位置内排序一致性(0.12) + 训练集积分回归校准(0.16) + 积分分布匹配(0.10) + 争冠/降级尾部校准(0.14) + 训练集联赛平均残差惩罚(0.08) + 球员评分离群 guardrail(0.05) + 先验正则(0.04)；各权重可通过命令行参数覆盖。v1.3 GPU 重跑已完成：2526 holdout Spearman=0.737/Pearson=0.742，points spread ratio=0.985，points MAE=11.55；主要残留问题是联赛截距偏差。v1.3.1-dev 已新增 train-fitted league residual offset 和 league-bias loss，只读复算可把当前参数 points MAE 从 11.55 降到 9.44，完整 GPU 重跑待执行。
 - 模型运行登记已实现：每次优化后保存到 `data/models/runs/<timestamp>/`，含 optimized_params.npy + meta.json（参数、种子、输入 hash、指标、位置内指标、误差案例摘要）。
 - 神经网络准入门槛已写入 MODEL_CARD.md：必须先有球员真实标签、时间切分、baseline 对比、位置内指标、误差案例复盘；禁止纯球队积分监督训练。
 - 当前评分层优先做角色、联赛、真实影响力校准，不再把 Top N 配额作为主目标。
