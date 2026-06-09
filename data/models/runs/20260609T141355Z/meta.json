@@ -1,0 +1,35 @@
+{
+  "timestamp": "20260609T141355Z",
+  "params_shape": [
+    77
+  ],
+  "params_mean": -0.01983039639890194,
+  "params_std": 0.7972638010978699,
+  "input_hash": "fd90f3db708417fd",
+  "metrics": {
+    "n_team_seasons": 95.0,
+    "spearman": 0.7360564808045976,
+    "pearson": 0.7378759396833073,
+    "rank_loss": 0.2639435191954024,
+    "z_mse": 0.5242481206333856,
+    "calibration_mae": 7.346260387811637,
+    "split": "test",
+    "n_players": 3245.0,
+    "target_team_seasons": 96.0,
+    "rated_team_seasons": 191.0,
+    "team_coverage": 0.9895833333333334,
+    "n_excluded_na_teams": 0.0
+  },
+  "args": {
+    "pop_size": 8,
+    "n_steps": 150,
+    "lr": 0.05,
+    "patience": 25,
+    "seed": 42,
+    "spearman_weight": 0.5,
+    "ndcg_weight": 0.2,
+    "position_consistency_weight": 0.15,
+    "extreme_penalty_weight": 0.1,
+    "prior_weight": 0.05
+  }
+}
