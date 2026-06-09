@@ -2669,7 +2669,7 @@ def dixon_coles_log_likelihood(
     return -(ll_home + ll_away + log_tau).mean()
 
 
-# ── 复合目标组件 ─────────────────────────────────────────────────────────
+# ── 复合目标组件 (v2: quantile + range_penalty + quadratic calibration) ─────
 
 POSITION_CORE_METRICS = {
     "ST": "npg_p90",
