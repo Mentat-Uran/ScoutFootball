@@ -1,8 +1,17 @@
 """Market value vs performance scatter page."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from scoutfootball.app.data_loader import load_oof_predictions
 from scoutfootball.evaluation.confidence import assess_batch_confidence

@@ -41,6 +41,12 @@ from .position_metrics import (
     compute_position_rankings,
     generate_explanation,
 )
+from .scouting_queue import (
+    BIG5_LEAGUES,
+    SCOUTING_QUEUE_COLUMNS,
+    ScoutingQueues,
+    build_scouting_queues,
+)
 from .truth_labels import (
     TRUTH_LABELS_COLUMNS,
     TRUTH_LABELS_SCHEMA,
@@ -73,9 +79,12 @@ __all__ = [
     "PositionDimensionScore",
     "POSITION_DIMENSIONS",
     "POSITION_GROUP_MAP",
+    "SCOUTING_QUEUE_COLUMNS",
+    "ScoutingQueues",
     "TRUTH_LABELS_COLUMNS",
     "TRUTH_LABELS_SCHEMA",
     "ValidationReport",
+    "BIG5_LEAGUES",
     "add_confidence_to_ratings",
     "assess_batch_confidence",
     "assess_coverage_batch",
@@ -83,6 +92,7 @@ __all__ = [
     "assess_player_confidence",
     "brier_score",
     "calibrate_probabilities_isotonic",
+    "build_scouting_queues",
     "classify_confidence",
     "compute_cross_position_ranking",
     "compute_dimension_percentile",

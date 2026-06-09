@@ -46,6 +46,27 @@
                     <span class="nav-icon">▣</span>
                     <span data-i18n="nav_reports">报告</span>
                 </button>
+                <button class="nav-action" data-view="tactical" type="button">
+                    <span class="nav-icon">◫</span>
+                    <span>战术板</span>
+                </button>
+                <div class="nav-divider"></div>
+                <button class="nav-action" data-view="wc_schedule" type="button">
+                    <span class="nav-icon">⬡</span>
+                    <span data-i18n="nav_wc_schedule">赛程</span>
+                </button>
+                <button class="nav-action" data-view="wc_squads" type="button">
+                    <span class="nav-icon">⊕</span>
+                    <span data-i18n="nav_wc_squads">名单</span>
+                </button>
+                <button class="nav-action" data-view="wc_compare" type="button">
+                    <span class="nav-icon">⟷</span>
+                    <span data-i18n="nav_wc_compare">对比</span>
+                </button>
+                <button class="nav-action" data-view="wc_probability" type="button">
+                    <span class="nav-icon">⊞</span>
+                    <span data-i18n="nav_wc_probability">出线</span>
+                </button>
             </div>
 
             <div class="nav-footer">
@@ -65,8 +86,9 @@
                         <span>⌕</span>
                         <input id="global-search" type="search" data-i18n-placeholder="search_placeholder" placeholder="搜索球员、球队、报告">
                     </label>
-                    <span class="status-pill status-medium">94 real / 8595 proxy</span>
-                    <span class="status-pill status-high">OOF 6513</span>
+                    <span class="status-pill status-low" id="top-api-pill">API</span>
+                    <span class="status-pill status-medium" id="top-coverage-pill">loading</span>
+                    <span class="status-pill status-high" id="top-oof-pill">loading</span>
                 </div>
             </header>
 
@@ -106,6 +128,20 @@
                             <li class="health-item"><span class="dot status-high"></span><span data-i18n="health_oof">身价 OOF 可用</span> <span class="status-pill status-low">LOW</span></li>
                             <li class="health-item"><span class="dot status-medium"></span><span data-i18n="health_proxy">球员 match-level 覆盖不足</span> <span class="status-pill status-medium">MED</span></li>
                             <li class="health-item"><span class="dot status-low"></span><span data-i18n="health_truth">真实标签仍为空表</span> <span class="status-pill status-low">LOW</span></li>
+                        </ul>
+                    </article>
+                </div>
+
+                <div id="license-attribution" style="margin-bottom:var(--space)">
+                    <article class="liquid-panel compact-panel">
+                        <div class="panel-head">
+                            <h3>License Attribution</h3>
+                            <span class="status-pill status-medium" id="confidence-gate-pill">–</span>
+                        </div>
+                        <ul class="signal-list" id="license-list">
+                            <li class="health-item"><span class="dot status-high"></span><span>StatsBomb Open Data</span></li>
+                            <li class="health-item"><span class="dot status-medium"></span><span>Football-Data.co.uk</span></li>
+                            <li class="health-item"><span class="dot status-medium"></span><span>FBref / Understat</span></li>
                         </ul>
                     </article>
                 </div>
@@ -188,7 +224,7 @@
                 <div class="layout-2 reverse">
                     <article class="liquid-panel chart-panel">
                         <div class="panel-head">
-                            <div>
+                            <div id="value-panel-title">
                                 <p class="eyebrow" data-i18n="value_kicker">OOF residual</p>
                                 <h2 data-i18n="value_title">实际身价 vs 预测身价</h2>
                             </div>
@@ -257,6 +293,11 @@
                             <button class="text-button" type="button" data-i18n="snapshot">快照</button>
                         </div>
                         <div id="watchlist" class="watch-grid"></div>
+                        <div class="panel-head" style="margin-top:1rem">
+                            <h3>Shortlist</h3>
+                            <span class="status-pill status-high" id="shortlist-count">0</span>
+                        </div>
+                        <div id="shortlist" class="watch-grid"></div>
                     </article>
                 </div>
             </section>
@@ -269,7 +310,7 @@
                                 <p class="eyebrow" data-i18n="action_kicker">StatsBomb sample</p>
                                 <h2 data-i18n="action_title">动作价值热区</h2>
                             </div>
-                            <span class="status-pill status-low">SAMPLE</span>
+                            <span class="status-pill status-medium" id="action-status-pill">loading</span>
                         </div>
                         <div id="action-chart" class="chart-box"></div>
                     </article>
@@ -278,6 +319,7 @@
                             <h3 data-i18n="action_pipeline">动作价值后端</h3>
                             <span class="status-pill status-medium">xT -> VAEP</span>
                         </div>
+                        <div id="action-list" class="rank-list"></div>
                         <ul class="backend-list">
                             <li><span>internal actions schema</span><strong>P2</strong></li>
                             <li><span>player_action_value.parquet</span><strong>P2</strong></li>
@@ -291,39 +333,294 @@
             <section class="view" id="view-reports" aria-label="reports">
                 <div class="grid-3">
                     <article class="liquid-panel report-card">
-                        <p class="eyebrow">model run</p>
-                        <h3>rating_optimizer_gpu</h3>
-                        <span class="status-pill status-medium">holdout pending</span>
+                        <p class="eyebrow" id="report-run-kicker">model run</p>
+                        <h3 id="report-run-title">rating_optimizer_gpu</h3>
+                        <span class="status-pill status-medium" id="report-run-status">loading</span>
                     </article>
                     <article class="liquid-panel report-card">
-                        <p class="eyebrow">value model</p>
-                        <h3>value_fairness_oof</h3>
-                        <span class="status-pill status-high">ready</span>
+                        <p class="eyebrow" id="report-value-kicker">value model</p>
+                        <h3 id="report-value-title">value_fairness_oof</h3>
+                        <span class="status-pill status-high" id="report-value-status">loading</span>
                     </article>
                     <article class="liquid-panel report-card">
-                        <p class="eyebrow">prediction</p>
-                        <h3>poisson_baseline</h3>
-                        <span class="status-pill status-medium">calibration needed</span>
+                        <p class="eyebrow" id="report-prediction-kicker">prediction</p>
+                        <h3 id="report-prediction-title">poisson_baseline</h3>
+                        <span class="status-pill status-medium" id="report-prediction-status">loading</span>
                     </article>
                 </div>
                 <article class="liquid-panel table-panel">
                     <div class="panel-head">
                         <h3 data-i18n="backend_contracts">后端契约</h3>
-                        <span class="status-pill status-medium">FastAPI draft</span>
+                        <span class="status-pill status-high">FastAPI read-only</span>
                     </div>
                     <ul class="backend-list two-col">
-                        <li><span>/health + artifact registry</span><strong>next</strong></li>
-                        <li><span>/players + player profile</span><strong>next</strong></li>
-                        <li><span>/ratings/snapshots</span><strong>P0/P3</strong></li>
-                        <li><span>/predictions/{home}/{away}</span><strong>P5</strong></li>
-                        <li><span>/review-queue</span><strong>P7</strong></li>
-                        <li><span>/reports/model-runs</span><strong>P4</strong></li>
+                        <li><span>/health + artifact registry</span><strong>live</strong></li>
+                        <li><span>/players/{player_name}</span><strong>live</strong></li>
+                        <li><span>/ratings/snapshots</span><strong>live</strong></li>
+                        <li><span>/predictions/{home}/{away}</span><strong>live</strong></li>
+                        <li><span>/review-queue</span><strong>live</strong></li>
+                        <li><span>/reports/model-runs</span><strong>live</strong></li>
                     </ul>
+                </article>
+                <article class="liquid-panel table-panel">
+                    <div class="panel-head">
+                        <h3>Model Runs</h3>
+                        <span class="status-pill status-medium" id="model-runs-count">0</span>
+                    </div>
+                    <div id="model-runs-list" class="rank-list"></div>
+                </article>
+            </section>
+
+            <!-- Tactical Board -->
+            <section class="view" id="view-tactical" aria-label="tactical">
+                <div class="layout-2">
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <div>
+                                <p class="eyebrow">P1.5 Electronic Tactical Board</p>
+                                <h2>战术板</h2>
+                            </div>
+                            <div class="filter-row">
+                                <select id="tactical-formation" class="glass-control">
+                                    <option value="4-3-3">4-3-3</option>
+                                    <option value="4-2-3-1">4-2-3-1</option>
+                                    <option value="3-5-2">3-5-2</option>
+                                    <option value="4-4-2">4-4-2</option>
+                                    <option value="5-3-2">5-3-2</option>
+                                </select>
+                                <button class="text-button" id="tactical-load-home" type="button">主队阵型</button>
+                                <button class="text-button" id="tactical-load-away" type="button">客队阵型</button>
+                                <button class="text-button" id="tactical-clear" type="button">清空</button>
+                            </div>
+                        </div>
+                        <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">
+                            <canvas id="tactical-canvas" style="width:100%;height:100%"></canvas>
+                        </div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3>工程管理</h3>
+                        </div>
+                        <div class="filter-row" style="margin-bottom:1rem">
+                            <button class="text-button" id="tactical-save" type="button">保存</button>
+                            <button class="text-button" id="tactical-export" type="button">导出 JSON</button>
+                            <button class="text-button" id="tactical-import" type="button">导入 JSON</button>
+                        </div>
+                        <div class="panel-head" style="margin-top:1rem">
+                            <h3>动画时间轴</h3>
+                        </div>
+                        <div class="filter-row" style="margin-bottom:0.5rem">
+                            <button class="text-button" id="tactical-add-frame" type="button">+ 关键帧</button>
+                            <button class="text-button" id="tactical-save-frame" type="button">保存当前帧</button>
+                        </div>
+                        <div id="tactical-frame-list" class="rank-list" style="margin-bottom:0.5rem"></div>
+                        <div class="filter-row">
+                            <button class="text-button" id="tactical-prev-frame" type="button">◀ 上一帧</button>
+                            <button class="text-button" id="tactical-play" type="button">▶ 播放</button>
+                            <button class="text-button" id="tactical-stop" type="button">■ 停止</button>
+                            <button class="text-button" id="tactical-next-frame" type="button">下一帧 ▶</button>
+                        </div>
+                        <div id="tactical-project-list" class="rank-list"></div>
+                        <div style="margin-top:1rem">
+                            <p class="eyebrow">快捷键</p>
+                            <ul class="signal-list" style="font-size:0.85rem;color:var(--text-muted)">
+                                <li>Ctrl+Z 撤销</li>
+                                <li>Ctrl+Y 重做</li>
+                                <li>Delete 删除选中</li>
+                                <li>拖拽移动球员/足球</li>
+                            </ul>
+                        </div>
+                        <div style="margin-top:1rem">
+                            <p class="eyebrow">Source Attribution</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted)">ScoutFootball tactical board. Local JSON projects only. No data leaves the browser.</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <!-- World Cup Schedule -->
+            <section class="view" id="view-wc_schedule" aria-label="wc_schedule">
+                <div class="wc-header">
+                    <article class="liquid-panel hero-panel compact">
+                        <div class="hero-copy">
+                            <p class="eyebrow" data-i18n="wc_kicker">2026 美加墨世界杯</p>
+                            <h2 data-i18n="wc_schedule_title">小组赛赛程</h2>
+                        </div>
+                        <div class="coverage-strip">
+                            <div><span class="metric-value">48</span><span data-i18n="wc_teams">球队</span></div>
+                            <div><span class="metric-value">12</span><span data-i18n="wc_groups">小组</span></div>
+                            <div><span class="metric-value">72</span><span data-i18n="wc_group_matches">小组赛</span></div>
+                        </div>
+                    </article>
+                </div>
+                <div class="wc-filter-row">
+                    <select id="wc-group-filter" class="glass-control">
+                        <option value="ALL">ALL</option>
+                    </select>
+                    <select id="wc-matchday-filter" class="glass-control">
+                        <option value="ALL">ALL</option>
+                        <option value="1">MD1</option>
+                        <option value="2">MD2</option>
+                        <option value="3">MD3</option>
+                    </select>
+                </div>
+                <div class="grid-3" id="wc-groups-overview"></div>
+                <article class="liquid-panel table-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="wc_fixtures">赛程表</h3>
+                    </div>
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-i18n="wc_date">日期</th>
+                                    <th data-i18n="wc_time">时间</th>
+                                    <th data-i18n="wc_group_col">小组</th>
+                                    <th data-i18n="wc_home">主队</th>
+                                    <th data-i18n="wc_away_col">客队</th>
+                                    <th data-i18n="wc_venue">场馆</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wc-schedule-table"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+            <!-- World Cup Squads -->
+            <section class="view" id="view-wc_squads" aria-label="wc_squads">
+                <div class="wc-header">
+                    <article class="liquid-panel hero-panel compact">
+                        <div class="hero-copy">
+                            <p class="eyebrow" data-i18n="wc_kicker">2026 美加墨世界杯</p>
+                            <h2 data-i18n="wc_squads_title">球队名单 & 评分</h2>
+                        </div>
+                    </article>
+                </div>
+                <div class="wc-filter-row">
+                    <select id="wc-squad-team" class="glass-control"></select>
+                </div>
+                <div class="wc-summary-row" id="wc-squad-summary"></div>
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="wc_squad_list">球员名单</h3>
+                        </div>
+                        <div class="table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="th_player">球员</th>
+                                        <th data-i18n="th_pos">位置</th>
+                                        <th data-i18n="wc_club">俱乐部</th>
+                                        <th data-i18n="wc_league">联赛</th>
+                                        <th data-i18n="th_rating">评分</th>
+                                        <th data-i18n="th_conf">置信度</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="wc-squad-table"></tbody>
+                            </table>
+                        </div>
+                    </article>
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="wc_rating_dist">评分分布</h3>
+                        </div>
+                        <div id="wc-squad-chart" class="chart-box"></div>
+                    </article>
+                </div>
+            </section>
+
+            <!-- World Cup Compare -->
+            <section class="view" id="view-wc_compare" aria-label="wc_compare">
+                <div class="wc-header">
+                    <article class="liquid-panel hero-panel compact">
+                        <div class="hero-copy">
+                            <p class="eyebrow" data-i18n="wc_kicker">2026 美加墨世界杯</p>
+                            <h2 data-i18n="wc_compare_title">球队实力对比</h2>
+                        </div>
+                    </article>
+                </div>
+                <div class="wc-filter-row">
+                    <select id="wc-compare-a" class="glass-control"></select>
+                    <span class="vs-label">VS</span>
+                    <select id="wc-compare-b" class="glass-control"></select>
+                </div>
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="wc_compare_summary">总览对比</h3>
+                        </div>
+                        <div class="table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th id="wc-compare-a-name">A</th>
+                                        <th id="wc-compare-b-name">B</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="wc-compare-table"></tbody>
+                            </table>
+                        </div>
+                    </article>
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="wc_rating_dist">评分分布</h3>
+                        </div>
+                        <div id="wc-compare-chart" class="chart-box"></div>
+                    </article>
+                </div>
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head"><h3 id="wc-compare-a-top-title">A Top 5</h3></div>
+                        <div id="wc-compare-a-top" class="rank-list"></div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head"><h3 id="wc-compare-b-top-title">B Top 5</h3></div>
+                        <div id="wc-compare-b-top" class="rank-list"></div>
+                    </article>
+                </div>
+            </section>
+
+            <!-- World Cup Probability -->
+            <section class="view" id="view-wc_probability" aria-label="wc_probability">
+                <div class="wc-header">
+                    <article class="liquid-panel hero-panel compact">
+                        <div class="hero-copy">
+                            <p class="eyebrow" data-i18n="wc_kicker">2026 美加墨世界杯</p>
+                            <h2 data-i18n="wc_prob_title">小组出线概率</h2>
+                        </div>
+                        <div class="coverage-strip">
+                            <div><span class="metric-value">▲</span><span data-i18n="wc_entertainment">娱乐性估算</span></div>
+                        </div>
+                    </article>
+                </div>
+                <div class="grid-3" id="wc-prob-groups"></div>
+                <article class="liquid-panel table-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="wc_strength_rank">48 队实力排名</h3>
+                    </div>
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th_rank">排名</th>
+                                    <th data-i18n="th_player">球队</th>
+                                    <th data-i18n="wc_group_col">小组</th>
+                                    <th data-i18n="wc_strength">实力评分</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wc-prob-table"></tbody>
+                        </table>
+                    </div>
                 </article>
             </section>
         </main>
     </div>
 
+    <script src="tactical-board.js"></script>
+    <script src="tactical-renderer.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

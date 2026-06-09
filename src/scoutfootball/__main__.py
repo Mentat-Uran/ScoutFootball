@@ -76,7 +76,7 @@ def _cmd_export_ratings(_args: argparse.Namespace) -> None:
 
     project_root = Path(__file__).resolve().parents[2]
     feature_store = project_root / "data" / "gold" / "feature_store"
-    output_path = project_root / "data" / "gold" / "scoutfootball.duckdb"
+    output_path = project_root / "data" / "gold" / "scoutlab.duckdb"
 
     # --- player_ratings ---
     ratings_path = feature_store / "player_ratings_optimized.parquet"
