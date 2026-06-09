@@ -240,8 +240,8 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 新增 `src/scoutfootball/action_value/` 模块：`spadl_adapter.py`、`xt.py`、`aggregate.py`。
 - [x] 第一版只做 StatsBomb events -> internal actions -> xT；internal actions 需记录 provider action id、坐标系、方向、动作结果、前后状态和 source coverage。
 - [x] 输出 internal actions schema 文档，并说明它和 SPADL/atomic-SPADL、Common Data Format 的字段映射关系。
-- [ ] 输出 `data/gold/feature_store/player_action_value.parquet`。
-- [ ] 生成球员 xT 排行榜、球队 xT 热区图、球员传球/带球推进价值图。
+- [x] 输出 `data/gold/feature_store/player_action_value.parquet`。
+- [x] 生成球员 xT 排行榜、球队 xT 热区图、球员传球/带球推进价值图。
 - [ ] 评估 socceraction 作为依赖的可维护性，优先复用其 SPADL/xT/VAEP 能力。
 - [ ] 明确 StatsBomb 数据引用要求：公开展示研究或图表时必须注明数据源。
 
@@ -292,10 +292,10 @@ player_rating =
 ### EVALUATION.md
 
 - [x] 说明数据切分方式：按赛季时间切分（train/test split），明确 holdout 赛季范围。
-- [ ] 记录 baselines：league average、Independent Poisson、简单 percentile 聚合。
-- [ ] 记录核心指标：Spearman rank correlation（位置内 + 跨位置）、NDCG、MAE、RMSE。
-- [ ] 记录误差案例：Top 100 中出勤捷径球员、弱联赛高估样本、低分钟高方差球员、位置误判案例。
-- [ ] 按位置输出 metrics：GK、CB、FB、DM、CM、AM、W、ST 分别报告。
+- [x] 记录 baselines：league average、Independent Poisson、简单 percentile 聚合。
+- [x] 记录核心指标：Spearman rank correlation（位置内 + 跨位置）、NDCG、MAE、RMSE。
+- [x] 记录误差案例：Top 100 中出勤捷径球员、弱联赛高估样本、低分钟高方差球员、位置误判案例。
+- [x] 按位置输出 metrics：GK、CB、FB、DM、CM、AM、W、ST 分别报告。
 - [ ] 若存在神经网络候选模型，必须与当前 PyTorch 权重优化器、v3 默认权重和简单 percentile baseline 同一时间切分对比。
 - [ ] 对 value_fairness 增加 OOF 残差、联赛偏差、年龄段偏差分析。
 - [ ] 对比分预测增加 log loss、Brier score、RPS，低比分场景（0-0、1-0、0-1、1-1）单独报告。

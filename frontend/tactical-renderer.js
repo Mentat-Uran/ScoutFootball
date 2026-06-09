@@ -407,4 +407,93 @@ const TacticalRenderer = {
         this.project.updated_at = new Date().toISOString();
         return this.project;
     },
+
+    /* ── Animation Playback ─────────────────────────────────────────── */
+    animationState: {
+        isPlaying: false,
+        currentFrame: 0,
+        animationId: null,
+        startTime: 0,
+    },
+
+    play() {
+        if (!this.project || !this.project.frames || this.project.frames.length < 2) return;
+        this.animationState.isPlaying = true;
+        this.animationState.currentFrame = 0;
+        this.animationState.startTime = performance.now();
+        this._animate();
+    },
+
+    stop() {
+        this.animationState.isPlaying = false;
+        if (this.animationState.animationId) {
+            cancelAnimationFrame(this.animationState.animationId);
+            this.animationState.animationId = null;
+        }
+        // Restore current frame
+        if (this.project && this.project.frames) {
+            TACTICAL_BOARD.loadFrame(this.project, this.animationState.currentFrame, this);
+        }
+    },
+
+    _animate() {
+        if (!this.animationState.isPlaying) return;
+
+        const frames = this.project.frames;
+        const elapsed = performance.now() - this.animationState.startTime;
+
+        // Find current frame based on elapsed time
+        let totalDuration = 0;
+        let fromFrame = 0;
+        let toFrame = 0;
+        let frameElapsed = 0;
+
+        for (let i = 0; i < frames.length; i++) {
+            const dur = frames[i].duration_ms || 3000;
+            if (elapsed < totalDuration + dur) {
+                fromFrame = i;
+                toFrame = (i + 1) % frames.length;
+                frameElapsed = elapsed - totalDuration;
+                break;
+            }
+            totalDuration += dur;
+        }
+
+        const fromDur = frames[fromFrame].duration_ms || 3000;
+        const t = Math.min(1, frameElapsed / fromDur);
+
+        // Interpolate
+        const fromObjs = frames[fromFrame].objects || [];
+        const toObjs = frames[toFrame].objects || [];
+        this.project.objects = TACTICAL_BOARD.interpolateObjects(fromObjs, toObjs, t);
+        this.render();
+
+        // Check if animation is complete
+        const totalAnimDuration = frames.reduce((sum, f) => sum + (f.duration_ms || 3000), 0);
+        if (elapsed >= totalAnimDuration) {
+            this.animationState.isPlaying = false;
+            return;
+        }
+
+        this.animationState.animationId = requestAnimationFrame(() => this._animate());
+    },
+
+    goToFrame(index) {
+        if (!this.project || !this.project.frames) return;
+        if (index < 0 || index >= this.project.frames.length) return;
+        this.animationState.currentFrame = index;
+        TACTICAL_BOARD.loadFrame(this.project, index, this);
+    },
+
+    nextFrame() {
+        if (!this.project || !this.project.frames) return;
+        const next = (this.animationState.currentFrame + 1) % this.project.frames.length;
+        this.goToFrame(next);
+    },
+
+    prevFrame() {
+        if (!this.project || !this.project.frames) return;
+        const prev = (this.animationState.currentFrame - 1 + this.project.frames.length) % this.project.frames.length;
+        this.goToFrame(prev);
+    },
 };

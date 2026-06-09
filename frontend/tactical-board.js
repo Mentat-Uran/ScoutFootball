@@ -239,4 +239,65 @@ const TACTICAL_BOARD = {
             return null;
         }
     },
+
+    /* ── Animation / Keyframes ──────────────────────────────────────── */
+    createFrame(name = "Frame", durationMs = 3000) {
+        return {
+            id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2),
+            name,
+            objects: [],       // snapshot of objects at this frame
+            duration_ms: durationMs,
+            notes: "",
+        };
+    },
+
+    saveFrame(project, frameIndex) {
+        if (!project || !project.frames) return;
+        const frame = project.frames[frameIndex];
+        if (frame) {
+            frame.objects = JSON.parse(JSON.stringify(project.objects));
+        }
+    },
+
+    loadFrame(project, frameIndex, renderer) {
+        if (!project || !project.frames) return;
+        const frame = project.frames[frameIndex];
+        if (frame && frame.objects) {
+            project.objects = JSON.parse(JSON.stringify(frame.objects));
+            if (renderer) renderer.render();
+        }
+    },
+
+    addFrame(project, name, durationMs = 3000) {
+        if (!project.frames) project.frames = [];
+        const frame = this.createFrame(name || `Frame ${project.frames.length + 1}`, durationMs);
+        frame.objects = JSON.parse(JSON.stringify(project.objects));
+        project.frames.push(frame);
+        return frame;
+    },
+
+    removeFrame(project, frameIndex) {
+        if (!project.frames || project.frames.length <= 1) return;
+        project.frames.splice(frameIndex, 1);
+    },
+
+    /* ── Animation Playback ─────────────────────────────────────────── */
+    interpolateObjects(fromObjs, toObjs, t) {
+        // Linear interpolation between two object sets
+        const result = [];
+        for (const toObj of toObjs) {
+            const fromObj = fromObjs.find((o) => o.id === toObj.id);
+            if (!fromObj) {
+                result.push({ ...toObj });
+                continue;
+            }
+            const interp = { ...toObj };
+            if (toObj.type === "player" || toObj.type === "ball") {
+                interp.x = fromObj.x + (toObj.x - fromObj.x) * t;
+                interp.y = fromObj.y + (toObj.y - fromObj.y) * t;
+            }
+            result.push(interp);
+        }
+        return result;
+    },
 };
