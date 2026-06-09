@@ -218,3 +218,45 @@ class TestAPI:
 
         result = get_value_summary()
         assert "sample_count" in result
+
+    def test_get_artifacts_summary(self):
+        from scoutfootball.api import get_artifacts_summary
+
+        result = get_artifacts_summary()
+        assert "player_match_rows" in result
+        assert "artifacts" in result
+        assert isinstance(result["artifacts"], list)
+
+    def test_get_prediction_summary(self):
+        from scoutfootball.api import get_prediction_summary
+
+        result = get_prediction_summary()
+        assert "status" in result
+
+    def test_get_model_runs(self):
+        from scoutfootball.api import get_model_runs
+
+        result = get_model_runs()
+        assert "count" in result
+        assert "runs" in result
+
+    def test_get_watchlist(self):
+        from scoutfootball.api import get_watchlist
+
+        result = get_watchlist(limit=10)
+        assert "count" in result
+        assert "players" in result
+
+    def test_get_shortlist(self):
+        from scoutfootball.api import get_shortlist
+
+        result = get_shortlist(limit=10)
+        assert "count" in result
+        assert "players" in result
+
+    def test_get_action_value_summary(self):
+        from scoutfootball.api import get_action_value_summary
+
+        result = get_action_value_summary(limit=5)
+        assert "status" in result
+        assert "players" in result

@@ -1,8 +1,12 @@
-"""FastAPI service layer draft for ScoutFootball."""
+"""FastAPI read-only service layer for ScoutFootball."""
 
 from __future__ import annotations
 
+import json
+import math
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from scoutfootball.app.data_loader import (
     data_source_label,
@@ -11,9 +15,11 @@ from scoutfootball.app.data_loader import (
     load_oof_predictions,
     load_player_match,
     load_player_ratings,
+    load_player_value_metrics,
     load_score_prediction,
     load_team_match,
 )
+from scoutfootball.evaluation.scouting_queue import build_scouting_queues
 
 
 @dataclass(frozen=True)
@@ -27,6 +33,66 @@ class HealthResponse:
 class PlayerListResponse:
     player_count: int
     players: list[str]
+
+
+def _settings():
+    from scoutfootball.config import PlatformSettings
+
+    return PlatformSettings.from_root()
+
+
+def _clean_json_value(value: Any) -> Any:
+    import numpy as np
+
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        value = float(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return None
+    # Handle pandas NA/NaT
+    try:
+        import pandas as pd
+        if value is pd.NA or value is pd.NaT:
+            return None
+    except (ImportError, AttributeError):
+        pass
+    if isinstance(value, dict):
+        return {key: _clean_json_value(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_clean_json_value(item) for item in value]
+    return value
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    with path.open() as handle:
+        return json.load(handle)
+
+
+def _artifact_file_info(path: Path, label: str, *, rows: int | None = None) -> dict[str, Any]:
+    return {
+        "label": label,
+        "path": str(path),
+        "exists": path.exists(),
+        "rows": rows,
+        "updated_at": path.stat().st_mtime if path.exists() else None,
+    }
+
+
+def _latest_run_id() -> str:
+    runs = get_model_runs()
+    run_list = runs.get("runs", [])
+    if run_list:
+        return str(run_list[0].get("run_id", "latest-local"))
+    return "latest-local"
+
+
+def _queue_payload(frame, *, limit: int) -> dict[str, Any]:
+    limited = frame.head(limit).copy()
+    records = _clean_json_value(limited.to_dict(orient="records"))
+    return {"count": len(frame), "players": records}
 
 
 def health_check() -> HealthResponse:
@@ -62,8 +128,10 @@ def list_teams() -> list[str]:
 def get_match_prediction(home_team: str, away_team: str) -> dict:
     try:
         prediction = load_score_prediction(home_team, away_team)
-    except ValueError as exc:
+    except Exception as exc:
         return {"error": str(exc)}
+    if isinstance(prediction, dict):
+        return prediction
     return {
         "home_team": home_team,
         "away_team": away_team,
@@ -80,7 +148,7 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
 def get_value_summary() -> dict:
     oof = load_oof_predictions()
     if oof.empty:
-        return {"status": "no_data", "players": []}
+        return {"status": "no_data", "players": [], "metrics": {}}
 
     # Filter out records with suspiciously low market values (Transfermarkt placeholder)
     # Values <= 200k are almost certainly data errors, not real valuations
@@ -88,7 +156,6 @@ def get_value_summary() -> dict:
         oof = oof[oof["actual_market_value"] > 200000].copy()
 
     # Build player-level value data
-    import math
     player_data = []
     for _, row in oof.iterrows():
         record = {
@@ -102,19 +169,38 @@ def get_value_summary() -> dict:
         for key, value in record.items():
             if isinstance(value, float) and math.isnan(value):
                 record[key] = None
-        player_data.append(record)
+        player_data.append(_clean_json_value(record))
 
-    return {
+    metrics: dict[str, Any] = {}
+    results_path = _settings().data_root / "models" / "artifacts" / "value_fairness_results.parquet"
+    if results_path.exists():
+        try:
+            import pandas as pd
+
+            results_df = pd.read_parquet(results_path)
+            if not results_df.empty:
+                metrics = _clean_json_value(results_df.iloc[0].to_dict())
+        except Exception:
+            pass
+
+    mean_residual = None
+    if "residual_log" in oof.columns:
+        try:
+            raw = oof["residual_log"].mean()
+            mean_residual = float(raw) if raw == raw else None
+        except Exception:
+            mean_residual = None
+
+    return _clean_json_value({
         "status": "ok",
         "sample_count": len(oof),
         "fairness_distribution": oof["fairness_label"].value_counts().to_dict()
         if "fairness_label" in oof.columns
         else {},
-        "mean_residual_log": float(oof["residual_log"].mean())
-        if "residual_log" in oof.columns
-        else None,
+        "mean_residual_log": mean_residual,
+        "metrics": metrics,
         "players": player_data,
-    }
+    })
 
 
 def get_player_ratings(
@@ -142,14 +228,7 @@ def get_player_ratings(
 
     players = df.to_dict(orient="records")
     # Convert NaN to None for JSON serialization
-    import math
-
-    for record in players:
-        for key, value in record.items():
-            if isinstance(value, float) and math.isnan(value):
-                record[key] = None
-
-    return {"count": len(players), "players": players}
+    return _clean_json_value({"count": len(players), "players": players})
 
 
 def get_ratings_meta() -> dict:
@@ -159,19 +238,70 @@ def get_ratings_meta() -> dict:
 
     meta = {}
     if not meta_df.empty:
-        row = meta_df.iloc[0].to_dict()
-        for key, value in row.items():
-            if isinstance(value, float) and value != value:
-                row[key] = None
-        meta = row
+        meta = meta_df.iloc[0].to_dict()
 
     leagues = league_df.to_dict(orient="records") if not league_df.empty else []
-    for record in leagues:
-        for key, value in record.items():
-            if isinstance(value, float) and value != value:
-                record[key] = None
 
-    return {"model_meta": meta, "league_metrics": leagues}
+    return _clean_json_value({"model_meta": meta, "league_metrics": leagues})
+
+
+def get_prediction_summary() -> dict[str, Any]:
+    """Return baseline prediction artifact metadata."""
+    artifact_path = (
+        _settings().data_root
+        / "models"
+        / "artifacts"
+        / "poisson_baseline_results.parquet"
+    )
+    if not artifact_path.exists():
+        return {"status": "no_data"}
+
+    import pandas as pd
+
+    try:
+        frame = pd.read_parquet(artifact_path)
+    except Exception:
+        return {"status": "no_data"}
+    if frame.empty:
+        return {"status": "no_data"}
+    row = frame.iloc[0].to_dict()
+    row["status"] = "ok"
+    return _clean_json_value(row)
+
+
+def get_action_value_summary(limit: int = 20) -> dict[str, Any]:
+    frame = load_player_value_metrics()
+    if frame.empty:
+        return {"status": "no_data", "count": 0, "players": []}
+
+    working = frame.copy()
+    if "composite_score" in working.columns:
+        working = working.sort_values("composite_score", ascending=False)
+
+    summary = {
+        "status": "ok",
+        "count": len(working),
+        "metrics": {
+            "players_with_xt": (
+                int(working["xT_per_90"].notna().sum())
+                if "xT_per_90" in working.columns
+                else 0
+            ),
+            "players_with_finishing": int(working["finishing_delta"].notna().sum())
+            if "finishing_delta" in working.columns
+            else 0,
+            "mean_xt_per_90": (
+                float(working["xT_per_90"].dropna().mean())
+                if "xT_per_90" in working.columns
+                else None
+            ),
+            "mean_composite_score": float(working["composite_score"].dropna().mean())
+            if "composite_score" in working.columns
+            else None,
+        },
+        "players": _clean_json_value(working.head(limit).to_dict(orient="records")),
+    }
+    return summary
 
 
 def get_artifacts_summary() -> dict:
@@ -181,23 +311,31 @@ def get_artifacts_summary() -> dict:
     team_match = load_team_match()
     oof = load_oof_predictions()
 
+    settings = _settings()
+
     # Count events from StatsBomb
     events_count = 0
-    from scoutfootball.config import PlatformSettings
-    settings = PlatformSettings.from_root()
-    events_path = settings.data_root / "gold" / "feature_store" / "events_all.parquet"
+    events_path = settings.raw_root / "statsbomb_open" / "events_all.parquet"
     if events_path.exists():
-        import pandas as pd
-        events_count = len(pd.read_parquet(events_path))
+        try:
+            import pandas as pd
+            events_count = len(pd.read_parquet(events_path))
+        except Exception:
+            events_count = 0
 
     # Data health flags
     has_oof = not oof.empty
     has_truth = False
+    truth_rows = 0
     truth_path = settings.data_root / "gold" / "feature_store" / "player_truth_labels.parquet"
     if truth_path.exists():
-        import pandas as pd
-        truth_df = pd.read_parquet(truth_path)
-        has_truth = len(truth_df) > 0
+        try:
+            import pandas as pd
+            truth_df = pd.read_parquet(truth_path)
+            has_truth = len(truth_df) > 0
+            truth_rows = len(truth_df)
+        except Exception:
+            pass
 
     # Player match coverage
     pm_coverage = ""
@@ -206,78 +344,118 @@ def get_artifacts_summary() -> dict:
         proxy_count = (player_match["data_granularity"] == "season_proxy").sum()
         pm_coverage = f"{match_count} real + {proxy_count} season proxy"
 
-    return {
+    artifact_registry = [
+        _artifact_file_info(
+            settings.data_root / "gold" / "feature_store" / "player_match.parquet",
+            "player_match",
+            rows=len(player_match),
+        ),
+        _artifact_file_info(
+            settings.data_root / "gold" / "feature_store" / "team_match.parquet",
+            "team_match",
+            rows=len(team_match),
+        ),
+        _artifact_file_info(
+            settings.data_root / "gold" / "feature_store" / "player_ratings_optimized.parquet",
+            "player_ratings_optimized",
+            rows=len(ratings),
+        ),
+        _artifact_file_info(events_path, "events_all", rows=events_count),
+        _artifact_file_info(
+            settings.data_root / "models" / "oof_predictions" / "value_fairness_oof.parquet",
+            "value_fairness_oof",
+            rows=len(oof),
+        ),
+        _artifact_file_info(truth_path, "player_truth_labels", rows=truth_rows),
+    ]
+
+    return _clean_json_value({
         "player_match_rows": len(player_match),
         "team_match_rows": len(team_match),
         "rating_rows": len(ratings),
         "event_samples": events_count,
+        "data_source_label": data_source_label(),
+        "artifacts": artifact_registry,
         "data_health": {
             "oof_available": has_oof,
             "truth_labels_available": has_truth,
             "player_match_coverage": pm_coverage,
+            "confidence_gate": "coverage < 0.90 → low confidence only",
         },
-    }
+        "license_attribution": {
+            "statsbomb": "StatsBomb Open Data — free for research, must attribute source",
+            "fbref": "FBref via soccerdata — personal research use only",
+            "football_data": "Football-Data.co.uk — free for non-commercial use",
+            "understat": "Understat — public data, attribution appreciated",
+            "transfermarkt": "Transfermarkt — manual import only, no automated scraping",
+        },
+    })
 
 
 def get_review_queue(limit: int = 200) -> dict:
     """Return low-confidence players from ratings data as a review queue."""
     df = load_player_ratings()
-    if df.empty or "confidence_level" not in df.columns:
+    if df.empty:
         return {"count": 0, "players": []}
 
-    # Normalize confidence_level to uppercase
-    df["confidence_level"] = df["confidence_level"].str.upper()
+    queues = build_scouting_queues(
+        df,
+        run_id=_latest_run_id(),
+        reports_root=_settings().data_root / "reports",
+    )
+    return _queue_payload(queues.review_queue, limit=limit)
 
-    low_conf = df[df["confidence_level"] == "LOW"]
-    if low_conf.empty:
+
+def get_watchlist(limit: int = 100) -> dict:
+    df = load_player_ratings()
+    if df.empty:
         return {"count": 0, "players": []}
+    queues = build_scouting_queues(
+        df,
+        run_id=_latest_run_id(),
+        reports_root=_settings().data_root / "reports",
+    )
+    return _queue_payload(queues.watchlist, limit=limit)
 
-    # Sort by optimized_score descending so the most interesting low-conf players appear first
-    if "optimized_score" in low_conf.columns:
-        low_conf = low_conf.sort_values("optimized_score", ascending=False)
 
-    low_conf = low_conf.head(limit)
-    players = low_conf.to_dict(orient="records")
-
-    import math
-    for record in players:
-        for key, value in record.items():
-            if isinstance(value, float) and math.isnan(value):
-                record[key] = None
-
-    return {"count": len(players), "players": players}
+def get_shortlist(limit: int = 100) -> dict:
+    df = load_player_ratings()
+    if df.empty:
+        return {"count": 0, "players": []}
+    queues = build_scouting_queues(
+        df,
+        run_id=_latest_run_id(),
+        reports_root=_settings().data_root / "reports",
+    )
+    return _queue_payload(queues.shortlist, limit=limit)
 
 
 def get_model_runs() -> dict:
     """Return model run registry from local artifacts."""
-    import json
-
-    from scoutfootball.config import PlatformSettings
-
-    settings = PlatformSettings.from_root()
+    settings = _settings()
     runs = []
 
     # Check data/models/runs/ directory
     runs_dir = settings.data_root / "models" / "runs"
     if runs_dir.exists():
-        for run_dir in sorted(runs_dir.iterdir()):
+        for run_dir in sorted(runs_dir.iterdir(), reverse=True):
             meta_path = run_dir / "meta.json"
             if meta_path.exists():
-                with open(meta_path) as f:
-                    meta = json.load(f)
+                meta = _read_json(meta_path)
                 meta["run_id"] = run_dir.name
+                meta["updated_at"] = meta_path.stat().st_mtime
                 runs.append(meta)
 
     # Fallback: read optimized_params_meta.json
     if not runs:
         meta_path = settings.data_root / "gold" / "feature_store" / "optimized_params_meta.json"
         if meta_path.exists():
-            with open(meta_path) as f:
-                meta = json.load(f)
+            meta = _read_json(meta_path)
             meta["run_id"] = "latest"
+            meta["updated_at"] = meta_path.stat().st_mtime
             runs.append(meta)
 
-    return {"runs": runs, "count": len(runs)}
+    return _clean_json_value({"runs": runs, "count": len(runs)})
 
 
 def get_player_profile(player_name: str, season: str | None = None) -> dict:
@@ -298,7 +476,10 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
         return {"player": player_name, "found": False}
 
     # Pick the best season (highest score) if multiple
-    row = rows.loc[rows["optimized_score"].idxmax()]
+    try:
+        row = rows.loc[rows["optimized_score"].idxmax()]
+    except (ValueError, TypeError):
+        row = rows.iloc[0]
 
     # Build radar dimensions from available data
     # Attack: npg_p90 + assists_p90 percentile within position
@@ -347,7 +528,7 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
     low_appearance = bool(row.get("low_appearance", False))
     matches_count = int(row.get("matches", 0) or 0)
 
-    return {
+    return _clean_json_value({
         "player": player_name,
         "found": True,
         "team": row.get("team", ""),
@@ -365,4 +546,4 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
         "possession_composite": round(possession, 2) if possession == possession else None,
         "radar": radar,
         "seasons": seasons,
-    }
+    })

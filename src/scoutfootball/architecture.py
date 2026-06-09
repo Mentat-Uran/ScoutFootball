@@ -12,7 +12,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "Phase 10 pipeline and API layer initialized; "
             "CLI ingest/build-features/train/validate/serve commands, "
             "data validation gates, probability calibration, "
-            "FastAPI draft, and Streamlit MVP all operational."
+            "FastAPI read-only endpoints, and Streamlit multi-page app all operational."
         ),
         module_boundaries=(
             ModuleBoundary(

@@ -1,8 +1,17 @@
 """Score probability matrix page."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from scoutfootball.app.data_loader import load_score_prediction, load_team_match
 from scoutfootball.viz.score_matrix import plot_score_matrix

@@ -12,10 +12,11 @@ __pycache__/
 # Raw data: allow specific sources, exclude others
 data/raw/transfermarkt_datasets/
 data/silver/**
-data/gold/**
-!data/gold/.gitkeep
-!data/sample/**
-data/models/**
+data/gold/scoutlab.duckdb
+data/gold/scoutfootball.duckdb
+data/gold/scoutlab.duckdb.wal
+data/models/*
+!data/models/runs
 data/reports/**
 data/logs/**
 data/soccerdata/**
@@ -38,5 +39,6 @@ scoutlab-gpu-server.zip
 
 # Large binary artifacts
 data/gold/**/*.npy
-data/models/**/*
+!data/gold/feature_store/optimized_params.npy
+# data/models/**/* already handled above with !data/models/runs/** exception
 data/logs/**/*

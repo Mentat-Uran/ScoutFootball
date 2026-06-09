@@ -12,6 +12,7 @@ from scoutfootball.config import PlatformSettings
 logger = logging.getLogger(__name__)
 
 
+@lru_cache(maxsize=1)
 def _settings() -> PlatformSettings:
     return PlatformSettings.from_root()
 
@@ -33,33 +34,82 @@ def _mark_synthetic(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _duckdb_path() -> Path:
-    return _settings().data_root / "gold" / "scoutfootball.duckdb"
+    return _settings().data_root / "gold" / "scoutlab.duckdb"
 
 
 def _duckdb_exists() -> bool:
     return _duckdb_path().exists()
 
 
+def _minutes_to_confidence(minutes: float) -> str:
+    if minutes >= 900:
+        return "HIGH"
+    if minutes >= 450:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _safe_read_parquet(relative_path: str) -> pd.DataFrame | None:
+    """Read a Parquet file, returning None on any error."""
+    if not _parquet_exists(relative_path):
+        return None
+    try:
+        return pd.read_parquet(_parquet_path(relative_path))
+    except Exception:
+        logger.warning("Failed to read %s", relative_path, exc_info=True)
+        return None
+
+
+def _normalize_ratings_frame(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    result = df.copy()
+    if "sub_position" in result.columns and "position_group" not in result.columns:
+        result = result.rename(columns={"sub_position": "position_group"})
+
+    if "minutes" in result.columns:
+        result["minutes"] = pd.to_numeric(result["minutes"], errors="coerce").fillna(0.0)
+
+    if "confidence_level" not in result.columns:
+        if "minutes" in result.columns:
+            result["confidence_level"] = result["minutes"].map(_minutes_to_confidence)
+        else:
+            result["confidence_level"] = "LOW"
+    else:
+        result["confidence_level"] = result["confidence_level"].astype(str).str.upper()
+
+    if "player" in result.columns and "player_name" not in result.columns:
+        result["player_name"] = result["player"]
+    if "team" in result.columns and "team_name" not in result.columns:
+        result["team_name"] = result["team"]
+
+    return result
+
+
 @lru_cache(maxsize=1)
 def _load_all_player_ratings() -> pd.DataFrame:
     """Load all player ratings into memory (cached)."""
     if _duckdb_exists():
-        import duckdb
-
-        con = duckdb.connect(str(_duckdb_path()), read_only=True)
         try:
-            return con.execute(
-                "SELECT * FROM player_ratings ORDER BY optimized_score DESC"
-            ).fetchdf()
-        finally:
-            con.close()
+            import duckdb
+
+            con = duckdb.connect(str(_duckdb_path()), read_only=True)
+            try:
+                df = con.execute(
+                    "SELECT * FROM player_ratings ORDER BY optimized_score DESC"
+                ).fetchdf()
+                return _normalize_ratings_frame(df)
+            finally:
+                con.close()
+        except Exception:
+            logger.warning("DuckDB read failed, falling back to Parquet", exc_info=True)
 
     # Fallback to Parquet
     rel = "gold/feature_store/player_ratings_optimized.parquet"
-    if _parquet_exists(rel):
-        df = pd.read_parquet(_parquet_path(rel))
-        if "sub_position" in df.columns and "position_group" not in df.columns:
-            df = df.rename(columns={"sub_position": "position_group"})
+    df = _safe_read_parquet(rel)
+    if df is not None:
+        df = _normalize_ratings_frame(df)
         return df.sort_values("optimized_score", ascending=False).reset_index(drop=True)
 
     logger.warning("No ratings data found — falling back to synthetic demo data")
@@ -68,8 +118,8 @@ def _load_all_player_ratings() -> pd.DataFrame:
     demo = generate_player_match()
     demo["optimized_score"] = demo.get("rating", 0.5)
     demo["position_group"] = demo.get("position", "MF")
-    demo["confidence_level"] = "medium"
-    return _mark_synthetic(demo)
+    demo["confidence_level"] = "MEDIUM"
+    return _mark_synthetic(_normalize_ratings_frame(demo))
 
 
 def load_player_ratings(
@@ -101,13 +151,16 @@ def load_player_ratings(
 def load_model_meta() -> pd.DataFrame:
     """Load model metadata from DuckDB or JSON."""
     if _duckdb_exists():
-        import duckdb
-
-        con = duckdb.connect(str(_duckdb_path()), read_only=True)
         try:
-            return con.execute("SELECT * FROM model_meta").fetchdf()
-        finally:
-            con.close()
+            import duckdb
+
+            con = duckdb.connect(str(_duckdb_path()), read_only=True)
+            try:
+                return con.execute("SELECT * FROM model_meta").fetchdf()
+            finally:
+                con.close()
+        except Exception:
+            logger.warning("DuckDB model_meta read failed, falling back to JSON", exc_info=True)
 
     # Fallback to JSON
     json_path = _parquet_path("gold/feature_store/optimized_params_meta.json")
@@ -133,25 +186,29 @@ def load_model_meta() -> pd.DataFrame:
 def load_league_metrics() -> pd.DataFrame:
     """Load league metrics from DuckDB or Parquet."""
     if _duckdb_exists():
-        import duckdb
-
-        con = duckdb.connect(str(_duckdb_path()), read_only=True)
         try:
-            return con.execute("SELECT * FROM league_metrics").fetchdf()
-        finally:
-            con.close()
+            import duckdb
+
+            con = duckdb.connect(str(_duckdb_path()), read_only=True)
+            try:
+                return con.execute("SELECT * FROM league_metrics").fetchdf()
+            finally:
+                con.close()
+        except Exception:
+            logger.warning("DuckDB league_metrics failed, falling back", exc_info=True)
 
     rel = "gold/feature_store/rating_league_metrics.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet(rel)
+    if df is not None:
+        return df
 
     return pd.DataFrame()
 
 
 def load_player_match() -> pd.DataFrame:
-    rel = "gold/feature_store/player_match.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("gold/feature_store/player_match.parquet")
+    if df is not None:
+        return df
     logger.warning("player_match.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_player_match
 
@@ -159,9 +216,9 @@ def load_player_match() -> pd.DataFrame:
 
 
 def load_team_match() -> pd.DataFrame:
-    rel = "gold/feature_store/team_match.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("gold/feature_store/team_match.parquet")
+    if df is not None:
+        return df
     logger.warning("team_match.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_team_match
 
@@ -170,9 +227,9 @@ def load_team_match() -> pd.DataFrame:
 
 @lru_cache(maxsize=2)
 def load_player_rolling() -> pd.DataFrame:
-    rel = "gold/feature_store/player_rolling.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("gold/feature_store/player_rolling.parquet")
+    if df is not None:
+        return df
     logger.warning("player_rolling.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_player_match, generate_player_rolling
 
@@ -181,9 +238,9 @@ def load_player_rolling() -> pd.DataFrame:
 
 @lru_cache(maxsize=2)
 def load_team_rolling() -> pd.DataFrame:
-    rel = "gold/feature_store/team_rolling.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("gold/feature_store/team_rolling.parquet")
+    if df is not None:
+        return df
     logger.warning("team_rolling.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_team_match, generate_team_rolling
 
@@ -191,13 +248,19 @@ def load_team_rolling() -> pd.DataFrame:
 
 
 def load_oof_predictions() -> pd.DataFrame:
-    rel = "models/oof_predictions/value_fairness_oof.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("models/oof_predictions/value_fairness_oof.parquet")
+    if df is not None:
+        return df
     logger.warning("value_fairness_oof.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_oof_predictions
 
     return _mark_synthetic(generate_oof_predictions())
+
+
+@lru_cache(maxsize=2)
+def load_player_value_metrics() -> pd.DataFrame:
+    df = _safe_read_parquet("gold/feature_store/player_value_metrics.parquet")
+    return df if df is not None else pd.DataFrame()
 
 
 def load_score_prediction(home_team: str | None = None, away_team: str | None = None):
@@ -228,6 +291,7 @@ def load_score_prediction(home_team: str | None = None, away_team: str | None = 
                     f"Available: {', '.join(sorted(team_ids)[:15])}..."
                 )
             return predict_match(model, resolved_home, resolved_away)
+        logger.warning("Only %d team_ids found; need >= 2 for prediction", len(team_ids))
     logger.warning("Poisson artifacts not found — falling back to synthetic demo prediction")
     from scoutfootball.app.demo_data import generate_score_matrix
 

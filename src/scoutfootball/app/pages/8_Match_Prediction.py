@@ -1,10 +1,19 @@
 """Match Prediction page: upcoming matches, probabilities, and score distribution."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
+
+import sys
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from scoutfootball.app.data_loader import load_team_match
 from scoutfootball.evaluation.coverage_confidence import (

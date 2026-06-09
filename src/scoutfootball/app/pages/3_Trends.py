@@ -1,8 +1,17 @@
 """Player and team trend chart page."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from scoutfootball.app.data_loader import load_player_rolling, load_team_rolling
 from scoutfootball.evaluation.confidence import (
