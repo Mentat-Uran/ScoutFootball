@@ -3480,25 +3480,29 @@ def main():
     parser.add_argument("--steps", type=int, default=500, help="每组优化步数")
     parser.add_argument("--lr", type=float, default=0.035, help="初始学习率")
     parser.add_argument("--pop", type=int, default=32, help="种群大小 (并行起点数)")
-    parser.add_argument("--spearman-weight", type=float, default=0.42,
+    parser.add_argument("--spearman-weight", type=float, default=0.30,
                         help="Spearman/Pearson 排名损失在复合目标中的权重")
     parser.add_argument("--soft-rank-temperature", type=float, default=4.0,
                         help="soft-rank 温度；越小越接近硬排名但梯度更容易饱和")
-    parser.add_argument("--ndcg-weight", type=float, default=0.16,
+    parser.add_argument("--ndcg-weight", type=float, default=0.12,
                         help="NDCG@20 损失在复合目标中的权重")
-    parser.add_argument("--position-consistency-weight", type=float, default=0.12,
+    parser.add_argument("--position-consistency-weight", type=float, default=0.10,
                         help="位置核心指标一致性损失在复合目标中的权重")
-    parser.add_argument("--points-regression-weight", type=float, default=0.16,
+    parser.add_argument("--points-regression-weight", type=float, default=0.20,
                         help="训练集校准后球队积分回归损失在复合目标中的权重")
-    parser.add_argument("--distribution-weight", type=float, default=0.10,
+    parser.add_argument("--distribution-weight", type=float, default=0.05,
                         help="校准后积分分布匹配损失在复合目标中的权重")
-    parser.add_argument("--tail-calibration-weight", type=float, default=0.14,
+    parser.add_argument("--quantile-weight", type=float, default=0.08,
+                        help="预测分布分位数匹配损失权重")
+    parser.add_argument("--range-penalty-weight", type=float, default=0.10,
+                        help="预测范围压缩惩罚权重")
+    parser.add_argument("--tail-calibration-weight", type=float, default=0.08,
                         help="争冠/降级尾部球队校准损失在复合目标中的权重")
-    parser.add_argument("--league-bias-weight", type=float, default=0.08,
+    parser.add_argument("--league-bias-weight", type=float, default=0.05,
                         help="训练集联赛平均积分残差惩罚在复合目标中的权重")
-    parser.add_argument("--extreme-penalty-weight", type=float, default=0.05,
+    parser.add_argument("--extreme-penalty-weight", type=float, default=0.02,
                         help="球员评分离群 guardrail 在复合目标中的权重")
-    parser.add_argument("--prior-weight", type=float, default=0.04,
+    parser.add_argument("--prior-weight", type=float, default=0.01,
                         help="锚定 v3 默认权重的正则强度")
     parser.add_argument("--prior-strength", type=float, default=None,
                         help="锚定 v3 默认权重的正则强度 (deprecated, use --prior-weight)")
@@ -3694,6 +3698,8 @@ def main():
         position_consistency_weight=args.position_consistency_weight,
         points_regression_weight=args.points_regression_weight,
         distribution_weight=args.distribution_weight,
+        quantile_weight=args.quantile_weight,
+        range_penalty_weight=args.range_penalty_weight,
         tail_calibration_weight=args.tail_calibration_weight,
         league_bias_weight=args.league_bias_weight,
         extreme_penalty_weight=args.extreme_penalty_weight,
@@ -3840,6 +3846,8 @@ def main():
                 position_consistency_weight=args.position_consistency_weight,
                 points_regression_weight=args.points_regression_weight,
                 distribution_weight=args.distribution_weight,
+                quantile_weight=args.quantile_weight,
+                range_penalty_weight=args.range_penalty_weight,
                 tail_calibration_weight=args.tail_calibration_weight,
                 league_bias_weight=args.league_bias_weight,
                 extreme_penalty_weight=args.extreme_penalty_weight,
@@ -3898,6 +3906,8 @@ def main():
             position_consistency_weight=args.position_consistency_weight,
             points_regression_weight=args.points_regression_weight,
             distribution_weight=args.distribution_weight,
+            quantile_weight=args.quantile_weight,
+            range_penalty_weight=args.range_penalty_weight,
             tail_calibration_weight=args.tail_calibration_weight,
             league_bias_weight=args.league_bias_weight,
             extreme_penalty_weight=args.extreme_penalty_weight,
