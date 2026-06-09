@@ -33,9 +33,9 @@
     "baseline_train": {
       "n_team_seasons": 289,
       "spearman": 0.3843984548241807,
-      "pearson": 0.378336386441808,
+      "pearson": 0.37833634522783466,
       "rank_loss": 0.6156015451758192,
-      "z_mse": 1.2433272271163842,
+      "z_mse": 1.2433273095443311,
       "calibration_mae": 15.239281138875253,
       "split": "train",
       "n_players": 13782,
@@ -45,25 +45,25 @@
       "n_excluded_na_teams": 0
     },
     "baseline_test": {
-      "n_team_seasons": 90,
-      "spearman": 0.6183043597944123,
-      "pearson": 0.6189208792600023,
-      "rank_loss": 0.38169564020558766,
-      "z_mse": 0.7621582414799953,
-      "calibration_mae": 11.0,
+      "n_team_seasons": 94,
+      "spearman": 0.6121415576245061,
+      "pearson": 0.6110472050412972,
+      "rank_loss": 0.38785844237549394,
+      "z_mse": 0.7779055899174058,
+      "calibration_mae": 11.226799456767766,
       "split": "test",
       "n_players": 3245,
       "target_team_seasons": 96,
       "rated_team_seasons": 191,
-      "team_coverage": 0.9375,
+      "team_coverage": 0.9791666666666666,
       "n_excluded_na_teams": 0
     },
     "optimized_train": {
       "n_team_seasons": 289,
       "spearman": 0.6559049147380478,
-      "pearson": 0.6531090904285177,
+      "pearson": 0.6531091134705088,
       "rank_loss": 0.3440950852619522,
-      "z_mse": 0.6937818191429641,
+      "z_mse": 0.6937817730589823,
       "calibration_mae": 9.05041845763341,
       "split": "train",
       "n_players": 13782,
@@ -73,20 +73,20 @@
       "n_excluded_na_teams": 0
     },
     "optimized_test": {
-      "n_team_seasons": 90,
-      "spearman": 0.740349492546416,
-      "pearson": 0.7440013275460877,
-      "rank_loss": 0.259650507453584,
-      "z_mse": 0.5119973449078243,
-      "calibration_mae": 6.851851851851856,
+      "n_team_seasons": 94,
+      "spearman": 0.7303328500909537,
+      "pearson": 0.7325851661254461,
+      "rank_loss": 0.2696671499090463,
+      "z_mse": 0.5348296677491077,
+      "calibration_mae": 7.548664554096877,
       "split": "test",
       "n_players": 3245,
       "target_team_seasons": 96,
       "rated_team_seasons": 191,
-      "team_coverage": 0.9375,
+      "team_coverage": 0.9791666666666666,
       "n_excluded_na_teams": 0
     },
-    "overfit_rank_loss_gap": -0.08444457780836823
+    "overfit_rank_loss_gap": -0.07442793535290593
   },
   "team_aggregation": {
     "minutes_cap": 1500.0,
@@ -112,10 +112,10 @@
       "ATT": 2.5
     }
   },
-  "baseline_spearman": 0.6183043597944123,
-  "baseline_pearson": 0.6189208792600023,
-  "optimized_spearman": 0.740349492546416,
-  "optimized_pearson": 0.7440013275460877,
+  "baseline_spearman": 0.6121415576245061,
+  "baseline_pearson": 0.6110472050412972,
+  "optimized_spearman": 0.7303328500909537,
+  "optimized_pearson": 0.7325851661254461,
   "cv": {
     "folds": 3,
     "error": null,
@@ -129,9 +129,9 @@
         "test_seasons": "2324",
         "n_team_seasons": 98,
         "spearman": 0.37600413086863094,
-        "pearson": 0.3841430964142743,
+        "pearson": 0.38414315003670985,
         "rank_loss": 0.6239958691313691,
-        "z_mse": 1.2317138071714513,
+        "z_mse": 1.2317136999265799,
         "calibration_mae": 15.483132028321535,
         "n_players": 21692,
         "target_team_seasons": 98,
@@ -148,9 +148,9 @@
         "test_seasons": "2324",
         "n_team_seasons": 95,
         "spearman": 0.44215665230367296,
-        "pearson": 0.44304898083968636,
+        "pearson": 0.4430490132653161,
         "rank_loss": 0.557843347696327,
-        "z_mse": 1.113902038320627,
+        "z_mse": 1.1139019734693676,
         "calibration_mae": 12.753462603878118,
         "n_players": 2774,
         "target_team_seasons": 96,
@@ -167,9 +167,9 @@
         "test_seasons": "2324",
         "n_team_seasons": 98,
         "spearman": 0.6725215433416083,
-        "pearson": 0.6773027445822728,
+        "pearson": 0.6773026222959008,
         "rank_loss": 0.3274784566583917,
-        "z_mse": 0.6453945108354542,
+        "z_mse": 0.6453947554081979,
         "calibration_mae": 8.31945022907122,
         "n_players": 21692,
         "target_team_seasons": 98,
@@ -186,9 +186,9 @@
         "test_seasons": "2324",
         "n_team_seasons": 95,
         "spearman": 0.661705230557032,
-        "pearson": 0.6871973037869014,
+        "pearson": 0.6871971285553541,
         "rank_loss": 0.338294769442968,
-        "z_mse": 0.6256053924261971,
+        "z_mse": 0.6256057428892917,
         "calibration_mae": 9.606648199445985,
         "n_players": 2774,
         "target_team_seasons": 96,
@@ -205,9 +205,9 @@
         "test_seasons": "2425",
         "n_team_seasons": 193,
         "spearman": 0.4039224352218159,
-        "pearson": 0.408402377649519,
+        "pearson": 0.40840244129836223,
         "rank_loss": 0.5960775647781841,
-        "z_mse": 1.1831952447009617,
+        "z_mse": 1.1831951174032753,
         "calibration_mae": 13.87419796504604,
         "n_players": 24466,
         "target_team_seasons": 194,
@@ -224,9 +224,9 @@
         "test_seasons": "2425",
         "n_team_seasons": 96,
         "spearman": 0.5946100762895462,
-        "pearson": 0.5801301607183061,
+        "pearson": 0.5801300341326654,
         "rank_loss": 0.4053899237104538,
-        "z_mse": 0.8397396785633875,
+        "z_mse": 0.8397399317346691,
         "calibration_mae": 9.646267361111109,
         "n_players": 2772,
         "target_team_seasons": 96,
@@ -243,9 +243,9 @@
         "test_seasons": "2425",
         "n_team_seasons": 193,
         "spearman": 0.6564613025787321,
-        "pearson": 0.6737556282037744,
+        "pearson": 0.6737556114736549,
         "rank_loss": 0.34353869742126786,
-        "z_mse": 0.6524887435924511,
+        "z_mse": 0.6524887770526901,
         "calibration_mae": 8.338478885339201,
         "n_players": 24466,
         "target_team_seasons": 194,
@@ -262,9 +262,9 @@
         "test_seasons": "2425",
         "n_team_seasons": 96,
         "spearman": 0.7922818768295118,
-        "pearson": 0.7655150439916988,
+        "pearson": 0.7655149985671621,
         "rank_loss": 0.2077181231704882,
-        "z_mse": 0.46896991201660193,
+        "z_mse": 0.4689700028656754,
         "calibration_mae": 6.098090277777779,
         "n_players": 2772,
         "target_team_seasons": 96,
@@ -281,9 +281,9 @@
         "test_seasons": "2526",
         "n_team_seasons": 289,
         "spearman": 0.46851874904167556,
-        "pearson": 0.4628214142276204,
+        "pearson": 0.4628215448321272,
         "rank_loss": 0.5314812509583244,
-        "z_mse": 1.0743571715447595,
+        "z_mse": 1.074356910335746,
         "calibration_mae": 12.607607667532712,
         "n_players": 27238,
         "target_team_seasons": 290,
@@ -298,16 +298,16 @@
         "split": "test",
         "train_seasons": "1617,1718,1819,1920,2021,2122,2223,2324,2425",
         "test_seasons": "2526",
-        "n_team_seasons": 90,
-        "spearman": 0.5745838733045076,
-        "pearson": 0.5612468033621295,
-        "rank_loss": 0.42541612669549245,
-        "z_mse": 0.8775063932757411,
-        "calibration_mae": 11.925925925925927,
+        "n_team_seasons": 94,
+        "spearman": 0.5731612714043769,
+        "pearson": 0.5585877443619175,
+        "rank_loss": 0.4268387285956231,
+        "z_mse": 0.8828245112761647,
+        "calibration_mae": 11.226799456767768,
         "n_players": 3245,
         "target_team_seasons": 96,
         "rated_team_seasons": 191,
-        "team_coverage": 0.9375,
+        "team_coverage": 0.9791666666666666,
         "n_excluded_na_teams": 0
       },
       {
@@ -319,9 +319,9 @@
         "test_seasons": "2526",
         "n_team_seasons": 289,
         "spearman": 0.6997058401219278,
-        "pearson": 0.7029777997174518,
+        "pearson": 0.7029777864268792,
         "rank_loss": 0.3002941598780722,
-        "z_mse": 0.5940444005650964,
+        "z_mse": 0.5940444271462413,
         "calibration_mae": 7.4544126626836364,
         "n_players": 27238,
         "target_team_seasons": 290,
@@ -336,16 +336,16 @@
         "split": "test",
         "train_seasons": "1617,1718,1819,1920,2021,2122,2223,2324,2425",
         "test_seasons": "2526",
-        "n_team_seasons": 90,
-        "spearman": 0.7010924650276035,
-        "pearson": 0.7046030332630592,
-        "rank_loss": 0.2989075349723965,
-        "z_mse": 0.5907939334738812,
-        "calibration_mae": 6.555555555555555,
+        "n_team_seasons": 94,
+        "spearman": 0.6949159388210423,
+        "pearson": 0.6978622807924975,
+        "rank_loss": 0.3050840611789577,
+        "z_mse": 0.6042754384150048,
+        "calibration_mae": 6.779085559076506,
         "n_players": 3245,
         "target_team_seasons": 96,
         "rated_team_seasons": 191,
-        "team_coverage": 0.9375,
+        "team_coverage": 0.9791666666666666,
         "n_excluded_na_teams": 0
       }
     ]
@@ -354,145 +354,145 @@
     "runs": 3,
     "summary": {
       "runs": 3,
-      "test_spearman_mean": 0.7370856224869887,
-      "test_spearman_std": 0.0018803404409571403,
-      "test_spearman_min": 0.7350789874882998,
-      "test_spearman_max": 0.739600092608465,
-      "param_std_mean": 0.05006830766797066,
-      "param_std_max": 0.15466004610061646
+      "test_spearman_mean": 0.7264972226935592,
+      "test_spearman_std": 0.001644779714564583,
+      "test_spearman_min": 0.7252732913381091,
+      "test_spearman_max": 0.7288222104061759,
+      "param_std_mean": 0.050068341195583344,
+      "param_std_max": 0.15465997159481049
     },
     "runs_detail": [
       {
         "run": 1,
         "seed": 42,
         "train_spearman": 0.6552477404799167,
-        "test_spearman": 0.739600092608465,
+        "test_spearman": 0.7288222104061759,
         "train_rank_loss": 0.34475225952008326,
-        "test_rank_loss": 0.26039990739153496,
-        "overfit_rank_loss_gap": -0.0843523521285483
+        "test_rank_loss": 0.2711777895938241,
+        "overfit_rank_loss_gap": -0.07357446992625916
       },
       {
         "run": 2,
         "seed": 143,
         "train_spearman": 0.6550893522837649,
-        "test_spearman": 0.7350789874882998,
+        "test_spearman": 0.7253961663363926,
         "train_rank_loss": 0.34491064771623514,
-        "test_rank_loss": 0.2649210125117002,
-        "overfit_rank_loss_gap": -0.07998963520453495
+        "test_rank_loss": 0.2746038336636074,
+        "overfit_rank_loss_gap": -0.07030681405262773
       },
       {
         "run": 3,
         "seed": 244,
         "train_spearman": 0.6550769199292789,
-        "test_spearman": 0.7365777873642015,
+        "test_spearman": 0.7252732913381091,
         "train_rank_loss": 0.34492308007072114,
-        "test_rank_loss": 0.26342221263579846,
-        "overfit_rank_loss_gap": -0.08150086743492269
+        "test_rank_loss": 0.27472670866189086,
+        "overfit_rank_loss_gap": -0.07019637140883028
       }
     ]
   },
   "feature_importance": [
     {
       "feature": "assists_p90",
-      "baseline_spearman": 0.740349492546416,
-      "shuffled_spearman_mean": 0.6072198288440617,
-      "spearman_drop_mean": 0.13312966370235435,
+      "baseline_spearman": 0.7303328500909537,
+      "shuffled_spearman_mean": 0.6028753371657251,
+      "spearman_drop_mean": 0.12745751292522867,
       "spearman_drop_std": 0.0,
       "n_repeats": 1
     },
     {
       "feature": "npg_p90",
-      "baseline_spearman": 0.740349492546416,
-      "shuffled_spearman_mean": 0.6681023974294573,
-      "spearman_drop_mean": 0.0722470951169587,
+      "baseline_spearman": 0.7303328500909537,
+      "shuffled_spearman_mean": 0.6590436672633746,
+      "spearman_drop_mean": 0.07128918282757912,
       "spearman_drop_std": 0.0,
       "n_repeats": 1
     },
     {
       "feature": "minutes",
-      "baseline_spearman": 0.740349492546416,
-      "shuffled_spearman_mean": 0.692297309711872,
-      "spearman_drop_mean": 0.048052182834544044,
-      "spearman_drop_std": 0.0,
-      "n_repeats": 1
-    },
-    {
-      "feature": "g_a_volume",
-      "baseline_spearman": 0.740349492546416,
-      "shuffled_spearman_mean": 0.7011830518332899,
-      "spearman_drop_mean": 0.03916644071312614,
+      "baseline_spearman": 0.7303328500909537,
+      "shuffled_spearman_mean": 0.6593616966706963,
+      "spearman_drop_mean": 0.0709711534202574,
       "spearman_drop_std": 0.0,
       "n_repeats": 1
     },
     {
       "feature": "matches",
-      "baseline_spearman": 0.740349492546416,
-      "shuffled_spearman_mean": 0.7036783065717417,
-      "spearman_drop_mean": 0.036671185974674336,
+      "baseline_spearman": 0.7303328500909537,
+      "shuffled_spearman_mean": 0.6723286229601292,
+      "spearman_drop_mean": 0.05800422713082454,
+      "spearman_drop_std": 0.0,
+      "n_repeats": 1
+    },
+    {
+      "feature": "g_a_volume",
+      "baseline_spearman": 0.7303328500909537,
+      "shuffled_spearman_mean": 0.6908032403490871,
+      "spearman_drop_mean": 0.03952960974186659,
       "spearman_drop_std": 0.0,
       "n_repeats": 1
     },
     {
       "feature": "starts",
-      "baseline_spearman": 0.740349492546416,
-      "shuffled_spearman_mean": 0.7160228176375484,
-      "spearman_drop_mean": 0.02432667490886764,
+      "baseline_spearman": 0.7303328500909537,
+      "shuffled_spearman_mean": 0.7075865195263799,
+      "spearman_drop_mean": 0.02274633056457387,
       "spearman_drop_std": 0.0,
       "n_repeats": 1
     },
     {
       "feature": "npg_trend",
-      "baseline_spearman": 0.740349492546416,
-      "shuffled_spearman_mean": 0.7336460689256243,
-      "spearman_drop_mean": 0.006703423620791682,
+      "baseline_spearman": 0.7303328500909537,
+      "shuffled_spearman_mean": 0.72087870316421,
+      "spearman_drop_mean": 0.009454146926743734,
       "spearman_drop_std": 0.0,
       "n_repeats": 1
     }
   ],
   "league_metrics": [
     {
-      "n_team_seasons": 14,
-      "spearman": 0.8857142857142857,
-      "pearson": 0.8760153142202226,
-      "rank_loss": 0.11428571428571432,
-      "z_mse": 0.2479693715595547,
-      "calibration_mae": 9.183673469387754,
+      "n_team_seasons": 17,
+      "spearman": 0.8459191754421631,
+      "pearson": 0.8792586564582581,
+      "rank_loss": 0.1540808245578369,
+      "z_mse": 0.2414826870834836,
+      "calibration_mae": 10.034602076124566,
       "league": "Bundesliga"
     },
     {
       "n_team_seasons": 19,
       "spearman": 0.6543424347409229,
-      "pearson": 0.8092703158609205,
+      "pearson": 0.8092703279975786,
       "rank_loss": 0.3456575652590771,
-      "z_mse": 0.3814593682781589,
+      "z_mse": 0.3814593440048424,
       "calibration_mae": 10.526315789473685,
       "league": "La Liga"
     },
     {
       "n_team_seasons": 18,
       "spearman": 0.8894632845388815,
-      "pearson": 0.900388303846759,
+      "pearson": 0.9003883463537387,
       "rank_loss": 0.11053671546111854,
-      "z_mse": 0.1992233923064821,
+      "z_mse": 0.1992233072925228,
       "calibration_mae": 6.1728395061728385,
       "league": "Ligue 1"
     },
     {
       "n_team_seasons": 20,
       "spearman": 0.7805800986156058,
-      "pearson": 0.8003348159347297,
+      "pearson": 0.8003346373747665,
       "rank_loss": 0.21941990138439416,
-      "z_mse": 0.399330368130541,
+      "z_mse": 0.3993307252504671,
       "calibration_mae": 6.5,
       "league": "Premier League"
     },
     {
-      "n_team_seasons": 19,
-      "spearman": 0.9175438596491228,
-      "pearson": 0.9458102817420584,
-      "rank_loss": 0.08245614035087723,
-      "z_mse": 0.10837943651588336,
-      "calibration_mae": 3.32409972299169,
+      "n_team_seasons": 20,
+      "spearman": 0.895073399138834,
+      "pearson": 0.9243126776255404,
+      "rank_loss": 0.10492660086116601,
+      "z_mse": 0.151374644748919,
+      "calibration_mae": 4.75,
       "league": "Serie A"
     }
   ],
@@ -502,8 +502,8 @@
       "season": "2526",
       "target_teams": 18,
       "rated_teams": 26,
-      "matched_teams": 14,
-      "coverage": 0.7777777777777778
+      "matched_teams": 17,
+      "coverage": 0.9444444444444444
     },
     {
       "league": "La Liga",
@@ -542,49 +542,49 @@
       "season": "2526",
       "target_teams": 20,
       "rated_teams": 40,
-      "matched_teams": 19,
-      "coverage": 0.95
+      "matched_teams": 20,
+      "coverage": 1.0
     }
   ],
   "calibration_test": [
     {
       "bin": 0,
-      "n": 18,
-      "pred_percentile_mean": 10.555555555555555,
-      "actual_percentile_mean": 22.808641975308642,
-      "calibration_gap": -12.253086419753087
+      "n": 19,
+      "pred_percentile_mean": 10.638297872340425,
+      "actual_percentile_mean": 22.060470324748042,
+      "calibration_gap": -11.422172452407617
     },
     {
       "bin": 1,
-      "n": 18,
-      "pred_percentile_mean": 30.555555555555557,
-      "actual_percentile_mean": 35.4320987654321,
-      "calibration_gap": -4.876543209876544
+      "n": 19,
+      "pred_percentile_mean": 30.851063829787233,
+      "actual_percentile_mean": 38.10190369540874,
+      "calibration_gap": -7.250839865621504
     },
     {
       "bin": 2,
       "n": 18,
-      "pred_percentile_mean": 50.55555555555556,
-      "actual_percentile_mean": 49.5679012345679,
-      "calibration_gap": 0.9876543209876587
+      "pred_percentile_mean": 50.53191489361703,
+      "actual_percentile_mean": 44.65130023640662,
+      "calibration_gap": 5.880614657210408
     },
     {
       "bin": 3,
-      "n": 18,
-      "pred_percentile_mean": 70.55555555555556,
-      "actual_percentile_mean": 65.06172839506172,
-      "calibration_gap": 5.4938271604938365
+      "n": 19,
+      "pred_percentile_mean": 70.2127659574468,
+      "actual_percentile_mean": 65.92945128779395,
+      "calibration_gap": 4.283314669652853
     },
     {
       "bin": 4,
-      "n": 18,
-      "pred_percentile_mean": 90.55555555555556,
-      "actual_percentile_mean": 79.9074074074074,
-      "calibration_gap": 10.648148148148152
+      "n": 19,
+      "pred_percentile_mean": 90.42553191489361,
+      "actual_percentile_mean": 81.60694288913774,
+      "calibration_gap": 8.81858902575587
     }
   ],
   "n_players": 30483,
   "n_train_players": 13782,
   "n_test_players": 3245,
-  "n_team_seasons": 90
+  "n_team_seasons": 94
 }
