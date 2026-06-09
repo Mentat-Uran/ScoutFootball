@@ -40,6 +40,18 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Global exception handler — return JSON instead of raw traceback
+    import logging
+
+    from fastapi.responses import JSONResponse
+
+    logger = logging.getLogger(__name__)
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request, exc):
+        logger.error("Unhandled exception: %s", exc, exc_info=True)
+        return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
     @app.get("/health")
     def health():
         return health_check()
