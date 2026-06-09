@@ -1069,6 +1069,58 @@ def compute_input_hash(data_dir: Path) -> str:
     return hasher.hexdigest()[:16]
 
 
+def build_dc_tensors(feat, matches_df, device):
+    """Build Dixon-Coles tensors from match data and feature tensors.
+
+    Maps Football-Data match home/away teams to the same team group indices
+    used by the rating optimizer, so dc_likelihood loss can be computed.
+
+    Args:
+        feat: output of build_feature_tensors (contains ts_team_names, ts_leagues, ts_seasons)
+        matches_df: DataFrame with columns [home_team, away_team, home_goals, away_goals, season, league]
+        device: torch device
+
+    Returns:
+        dict with keys: home_group_idx, away_group_idx, home_goals, away_goals, n_matches
+        Returns None if no matches can be mapped.
+    """
+    ts_names = feat["ts_team_names"]
+    ts_leagues = feat["ts_leagues"]
+    ts_seasons = feat["ts_seasons"]
+
+    # Build lookup: (normalize(team), league, season) -> group_idx
+    lookup = {}
+    for i, (name, lg, ssn) in enumerate(zip(ts_names, ts_leagues, ts_seasons, strict=False)):
+        key = (normalize_team_name(name), str(lg), str(ssn))
+        lookup[key] = i
+
+    home_idx, away_idx, hg_list, ag_list = [], [], [], []
+    for _, row in matches_df.iterrows():
+        home = normalize_team_name(str(row["home_team"]))
+        away = normalize_team_name(str(row["away_team"]))
+        lg = str(row["league"])
+        ssn = str(row["season"])
+        hi = lookup.get((home, lg, ssn))
+        ai = lookup.get((away, lg, ssn))
+        if hi is not None and ai is not None:
+            home_idx.append(hi)
+            away_idx.append(ai)
+            hg_list.append(float(row["home_goals"]))
+            ag_list.append(float(row["away_goals"]))
+
+    n = len(home_idx)
+    if n == 0:
+        return None
+
+    return {
+        "home_group_idx": torch.tensor(home_idx, dtype=torch.long, device=device),
+        "away_group_idx": torch.tensor(away_idx, dtype=torch.long, device=device),
+        "home_goals": torch.tensor(hg_list, dtype=torch.float32, device=device),
+        "away_goals": torch.tensor(ag_list, dtype=torch.float32, device=device),
+        "n_matches": n,
+    }
+
+
 def save_model_run(
     params: np.ndarray,
     metrics: dict,
@@ -1117,10 +1169,13 @@ def save_model_run(
             "position_consistency_weight": getattr(args, "position_consistency_weight", None),
             "points_regression_weight": getattr(args, "points_regression_weight", None),
             "distribution_weight": getattr(args, "distribution_weight", None),
+            "quantile_weight": getattr(args, "quantile_weight", None),
+            "range_penalty_weight": getattr(args, "range_penalty_weight", None),
             "tail_calibration_weight": getattr(args, "tail_calibration_weight", None),
             "league_bias_weight": getattr(args, "league_bias_weight", None),
             "extreme_penalty_weight": getattr(args, "extreme_penalty_weight", None),
             "prior_weight": getattr(args, "prior_weight", None),
+            "dc_likelihood_weight": getattr(args, "dc_likelihood_weight", None),
             "warmup_steps": getattr(args, "warmup_steps", None),
             "min_lr_ratio": getattr(args, "min_lr_ratio", None),
             "grad_clip": getattr(args, "grad_clip", None),
