@@ -32,13 +32,13 @@
 from __future__ import annotations
 
 import json
+import math as _math
 import os
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-import math as _math
 
 
 def _json_ready(value):
@@ -108,7 +108,6 @@ try:
 except ImportError:
     _HAS_PLOTLY = False
 
-import numpy as np
 
 # ── 默认配色方案 ────────────────────────────────────────────────────────────
 
