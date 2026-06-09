@@ -4,7 +4,7 @@
 
 ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，覆盖 Big 5 联赛（英超、西甲、德甲、意甲、法甲）2016/17–2025/26 赛季。模型将球员能力拆解为出勤可靠性、进攻贡献、防守贡献、控球推进、效率质量等维度，按位置组分配不同权重，经联赛强度和球队环境修正后输出最终评分。
 
-**当前版本：v1.3-dev（校准目标代码已更新，完整 GPU 重跑待执行；不可用于正式球探决策）**
+**当前版本：v1.3.1-dev（联赛校准目标代码已更新，完整 GPU 重跑待执行；不可用于正式球探决策）**
 
 ## 数据源
 
@@ -21,50 +21,55 @@ ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，
 
 - 排序目标：Spearman/Pearson soft rank + soft NDCG@20。
 - 球员解释目标：位置内核心指标一致性 + v3 prior 正则 + 球员评分离群 guardrail。
-- 积分校准目标：训练集拟合的单调 affine 校准层，把 raw team strength 映射为 season points，并优化积分回归、1D 分布匹配和争冠/降级尾部球队误差。
+- 积分校准目标：训练集拟合的单调 affine 校准层，把 raw team strength 映射为 season points，并优化积分回归、1D 分布匹配、争冠/降级尾部球队误差和联赛平均残差。
 
 **标签局限**：无球员级真实标签，球队积分 ≠ 球员影响力，强队系统性低估，降级队系统性高估。
 
-**校准边界**：积分校准层只能在训练赛季拟合，holdout/test 必须复用训练集 `slope/intercept`；不能用测试集实际积分重新拟合。
+**校准边界**：积分校准层只能在训练赛季拟合，holdout/test 必须复用训练集 `slope/intercept` 和训练集联赛 residual offset；不能用测试集实际积分重新拟合。
 
 ## 当前指标
 
-以下指标来自 v1.2 GPU 重跑结果。v1.3-dev 目标函数已通过本地单测，但尚未完成完整 GPU 重跑，不能把下面指标视为新目标结果。
+以下指标来自 v1.3 GPU 重跑结果（2026-06-09 23:05，本地 `optimized_params_meta.json`）。v1.3.1-dev 新增的 league-bias loss 尚未完整重跑。
 
-### Holdout（2526 赛季，首次有效评估）
+### Holdout（2526 赛季）
 
 | 指标 | Baseline | Optimized | 提升 |
 |---|---|---|---|
-| Spearman | 0.618 | **0.740** | +0.122 |
-| Pearson | 0.619 | **0.744** | +0.125 |
-| Coverage | 0.938 | 0.938 | — |
+| Spearman | 0.621 | **0.737** | +0.116 |
+| Pearson | 0.618 | **0.742** | +0.124 |
+| Raw spread ratio | 0.265 | **0.336** | +0.071 |
+| Global points spread ratio | 0.875 | **0.985** | +0.110 |
+| Points MAE | 11.84 | **11.55** | -0.29 |
+| Coverage | 0.990 | 0.990 | — |
+
+只读验证：在不重新训练参数的前提下，使用 v1.3.1-dev 的 train-fitted league residual offset，当前参数的 holdout points MAE 从 11.55 降到 9.44；该结果需要完整 GPU 重跑后再写成正式指标。
 
 ### 3-Fold CV 平均
 
 | 指标 | Baseline | Optimized | 提升 |
 |---|---|---|---|
-| Test Spearman | 0.537 | **0.718** | +0.181 |
-| Test Pearson | — | **0.719** | — |
+| Test Spearman | 0.540 | **0.694** | +0.154 |
+| Test Pearson | 0.530 | **0.698** | +0.168 |
 
 ### 参数稳定性（3 seeds）
 
-Test Spearman: mean=0.737, std=0.002
+Test Spearman: mean=0.716, std=0.001
 
 ### 特征重要性
 
 | 特征 | Spearman 下降 |
 |---|---|
-| assists_p90 | 0.133 |
-| npg_p90 | 0.072 |
-| minutes | 0.048 |
+| assists_p90 | 0.109 |
+| minutes | 0.073 |
+| npg_p90 | 0.059 |
 
 ## 已知偏差
 
-1. **强队系统性低估**：Barcelona (-37.7), Real Madrid (-33.4), Inter (-31.5)。评分聚合上限约 55-60，实际强队积分 80-90。
-2. **降级队系统性高估**：Burnley (+24.9), Wolves (+23.8)。球员个体能力不差但球队整体表现差。
-3. **出勤偏差**：CM/GK 倾向高出勤高排名。
-4. **防守/控球维度缺失**：全量球员使用位置中位数 fallback。
-5. **联赛强度偏差**：弱联赛顶端样本校准未经真实标签验证。
+1. **联赛截距偏差**：v1.3 全局积分校准后，Serie A (-16.6)、Ligue 1 (-11.3)、La Liga (-11.2) 整体低估，Premier League (+5.8) 整体高估。
+2. **强队仍低估**：Barcelona (-25.1), Real Madrid (-27.6), Inter (-18.5)。全局 spread 已修复，但联赛和顶端截距仍不足。
+3. **降级队改善但未消失**：Burnley 从 baseline +31.5 改到 +18.9，Wolves 从 +25.8 改到 +12.5。
+4. **出勤偏差仍存在**：minutes 是第二重要置换特征（Spearman drop 0.073），matches drop 0.032。
+5. **防守/控球维度缺失**：全量球员大量使用位置中位数 fallback。
 
 ## 适用边界
 
@@ -74,14 +79,21 @@ Test Spearman: mean=0.737, std=0.002
 
 ## 版本历史
 
-### v1.3-dev（2026-06-09）
+### v1.3.1-dev（2026-06-09）
+
+- 新增 train-fitted league residual offset：输出 `pred_points_global`、`pred_points_league_offset`、`pred_points_calibrated`。
+- 新增 `league_bias_weight` 训练损失，惩罚训练集同联赛 calibrated points 平均残差。
+- 新增 `--league-calibration-prior-n`、`--league-calibration-cap`、`--disable-league-calibration`。
+- 只读验证：当前 v1.3 参数 points MAE 11.55 -> 9.44；完整重跑待执行。
+
+### v1.3（2026-06-09）
 
 - 新增 train-fitted team points calibration：raw team strength 与 season points 分离。
 - 复合目标新增 points regression、distribution matching、tail calibration 三类积分校准损失。
 - NDCG@20 改为 soft discount 可微目标，`--soft-rank-temperature` 贯穿 Spearman/NDCG/位置一致性。
 - AdamW 训练循环新增 warmup + cosine decay、梯度裁剪；默认学习率从 0.05 降至 0.035。
 - 输出 `pred_points_calibrated`、points MAE/RMSE/bias、raw spread ratio 和 points spread ratio。
-- 待办：完整 GPU 重跑、2526 holdout 尾部误差复盘、CV/stability/feature importance 重新生成。
+- 完整 GPU 重跑已完成；主要残留问题从“全局分布压缩”转为“联赛截距偏差”。
 
 ### v1.2（2026-06-09）
 

@@ -457,6 +457,11 @@ class TeamPointsCalibrator:
     actual_std: float
     min_slope: float
     max_slope: float
+    league_offsets: dict[str, float] | None = None
+    league_residual_means: dict[str, float] | None = None
+    league_counts: dict[str, int] | None = None
+    league_prior_n: float = 60.0
+    league_offset_cap: float = 8.0
 
 
 def map_position(pos_str):
@@ -1332,6 +1337,9 @@ def fit_team_points_calibrator(
     *,
     min_slope: float = 0.05,
     max_slope: float = 8.0,
+    use_league_offsets: bool = True,
+    league_prior_n: float = 60.0,
+    league_offset_cap: float = 8.0,
 ) -> TeamPointsCalibrator:
     """Fit a leakage-safe monotonic mapping from strength ratings to points.
 
@@ -1385,6 +1393,37 @@ def fit_team_points_calibrator(
         intercept = actual_mean - slope * pred_mean
         method = "zscore_affine_train_fit"
 
+    league_offsets = None
+    league_residual_means = None
+    league_counts = None
+    if use_league_offsets and "league" in matched_df.columns:
+        prepared = matched_df.loc[valid].copy()
+        prepared["pred_points_global"] = intercept + slope * pred
+        prepared["residual"] = (
+            pd.to_numeric(prepared["actual_points"], errors="coerce")
+            - prepared["pred_points_global"]
+        )
+        league_grouped = prepared.groupby("league", observed=True)["residual"].agg(
+            ["count", "mean"],
+        )
+        if not league_grouped.empty:
+            league_counts = {
+                str(league): int(row["count"])
+                for league, row in league_grouped.iterrows()
+            }
+            league_residual_means = {
+                str(league): float(row["mean"])
+                for league, row in league_grouped.iterrows()
+            }
+            prior = max(float(league_prior_n), 0.0)
+            cap = max(float(league_offset_cap), 0.0)
+            offsets = {}
+            for league, row in league_grouped.iterrows():
+                shrink = float(row["count"]) / (float(row["count"]) + prior) if prior > 0 else 1.0
+                offset = float(row["mean"]) * shrink
+                offsets[str(league)] = float(np.clip(offset, -cap, cap))
+            league_offsets = offsets
+
     return TeamPointsCalibrator(
         method=method,
         slope=slope,
@@ -1395,6 +1434,11 @@ def fit_team_points_calibrator(
         actual_std=actual_std,
         min_slope=float(min_slope),
         max_slope=float(max_slope),
+        league_offsets=league_offsets,
+        league_residual_means=league_residual_means,
+        league_counts=league_counts,
+        league_prior_n=float(league_prior_n),
+        league_offset_cap=float(league_offset_cap),
     )
 
 
@@ -1407,7 +1451,14 @@ def apply_team_points_calibrator(
         return matched_df
     result = matched_df.copy()
     pred = pd.to_numeric(result["pred_rating"], errors="coerce").to_numpy(dtype=float)
-    result["pred_points_calibrated"] = calibrator.intercept + calibrator.slope * pred
+    result["pred_points_global"] = calibrator.intercept + calibrator.slope * pred
+    if calibrator.league_offsets:
+        offsets = result["league"].astype(str).map(calibrator.league_offsets).fillna(0.0)
+        result["pred_points_league_offset"] = offsets.to_numpy(dtype=float)
+        result["pred_points_calibrated"] = result["pred_points_global"] + offsets
+    else:
+        result["pred_points_league_offset"] = 0.0
+        result["pred_points_calibrated"] = result["pred_points_global"]
     return result
 
 
@@ -1818,11 +1869,15 @@ def save_model_run(
             "points_regression_weight": getattr(args, "points_regression_weight", None),
             "distribution_weight": getattr(args, "distribution_weight", None),
             "tail_calibration_weight": getattr(args, "tail_calibration_weight", None),
+            "league_bias_weight": getattr(args, "league_bias_weight", None),
             "extreme_penalty_weight": getattr(args, "extreme_penalty_weight", None),
             "prior_weight": getattr(args, "prior_weight", None),
             "warmup_steps": getattr(args, "warmup_steps", None),
             "min_lr_ratio": getattr(args, "min_lr_ratio", None),
             "grad_clip": getattr(args, "grad_clip", None),
+            "league_calibration_prior_n": getattr(args, "league_calibration_prior_n", None),
+            "league_calibration_cap": getattr(args, "league_calibration_cap", None),
+            "disable_league_calibration": getattr(args, "disable_league_calibration", None),
         }
 
     with open(run_dir / "meta.json", "w", encoding="utf-8") as f:
@@ -2366,6 +2421,37 @@ def tail_calibration_loss(pred_points, actual_points, tail_quantile=0.20):
     return torch.mean(residual ** 2)
 
 
+def league_bias_loss(
+    feat,
+    matched_group_idx,
+    pred_points,
+    actual_points,
+    device,
+    min_teams=5,
+):
+    """Penalize systematic calibrated point bias by league-season source league."""
+    if int(actual_points.numel()) < min_teams:
+        return torch.tensor(0.0, dtype=pred_points.dtype, device=device)
+    group_indices = matched_group_idx.detach().cpu().tolist()
+    leagues = [str(feat["ts_leagues"][int(group_i)]) for group_i in group_indices]
+    if not leagues:
+        return torch.tensor(0.0, dtype=pred_points.dtype, device=device)
+
+    residual = pred_points - actual_points.detach()
+    scale = actual_points.detach().std(unbiased=False).clamp_min(1.0)
+    losses = []
+    for league in sorted(set(leagues)):
+        mask_values = [item == league for item in leagues]
+        if sum(mask_values) < min_teams:
+            continue
+        mask = torch.tensor(mask_values, dtype=torch.bool, device=device)
+        league_bias = residual[mask].mean() / scale
+        losses.append(league_bias ** 2)
+    if not losses:
+        return torch.tensor(0.0, dtype=pred_points.dtype, device=device)
+    return torch.stack(losses).mean()
+
+
 # ── 复合目标组件 ─────────────────────────────────────────────────────────
 
 POSITION_CORE_METRICS = {
@@ -2541,6 +2627,7 @@ def objective_torch(
     points_regression_weight=0.16,
     distribution_weight=0.10,
     tail_calibration_weight=0.14,
+    league_bias_weight=0.08,
     extreme_penalty_weight=0.05,
     prior_weight=0.04,
     prior_params=None,
@@ -2577,6 +2664,7 @@ def objective_torch(
     points_loss, pred_points = points_regression_loss(pred_t, actual_t)
     dist_loss = distribution_matching_loss(pred_points, actual_t)
     tail_loss = tail_calibration_loss(pred_points, actual_t)
+    lg_bias_loss = league_bias_loss(feat, matched_group_idx, pred_points, actual_t, device)
 
     # 5. Player-score guardrail. This is not the team-points tail loss.
     ext_pen = extreme_penalty(ratings)
@@ -2594,6 +2682,7 @@ def objective_torch(
         + points_regression_weight * points_loss
         + distribution_weight * dist_loss
         + tail_calibration_weight * tail_loss
+        + league_bias_weight * lg_bias_loss
         + extreme_penalty_weight * ext_pen
         + prior_weight * prior_reg
     )
@@ -2603,6 +2692,7 @@ def objective_torch(
             f"  rank={rank_loss.item():.4f} ndcg={ndcg.item():.4f} "
             f"pos={pos_loss.item():.4f} points={points_loss.item():.4f} "
             f"dist={dist_loss.item():.4f} tail={tail_loss.item():.4f} "
+            f"league_bias={lg_bias_loss.item():.4f} "
             f"ext={ext_pen.item():.4f} "
             f"prior={prior_reg.item():.4f} total={total.item():.4f}"
         )
@@ -2615,6 +2705,7 @@ def objective_torch(
             "points_loss": float(points_loss.detach().cpu()),
             "distribution": float(dist_loss.detach().cpu()),
             "tail": float(tail_loss.detach().cpu()),
+            "league_bias": float(lg_bias_loss.detach().cpu()),
             "extreme": float(ext_pen.detach().cpu()),
             "prior": float(prior_reg.detach().cpu()),
             "soft_spearman": float(soft_sp.detach().cpu()),
@@ -2662,6 +2753,7 @@ def optimize(
     points_regression_weight=0.16,
     distribution_weight=0.10,
     tail_calibration_weight=0.14,
+    league_bias_weight=0.08,
     extreme_penalty_weight=0.05,
     prior_strength=0.04,
     init_scale=0.35,
@@ -2684,7 +2776,7 @@ def optimize(
         f"spearman={spearman_weight:.2f} ndcg={ndcg_weight:.2f} "
         f"pos_consistency={position_consistency_weight:.2f} "
         f"points={points_regression_weight:.2f} dist={distribution_weight:.2f} "
-        f"tail={tail_calibration_weight:.2f} "
+        f"tail={tail_calibration_weight:.2f} league_bias={league_bias_weight:.2f} "
         f"player_extreme={extreme_penalty_weight:.2f} prior={prior_strength:.2f}"
     )
     print(
@@ -2752,6 +2844,7 @@ def optimize(
                 points_regression_weight=points_regression_weight,
                 distribution_weight=distribution_weight,
                 tail_calibration_weight=tail_calibration_weight,
+                league_bias_weight=league_bias_weight,
                 extreme_penalty_weight=extreme_penalty_weight,
                 prior_weight=prior_strength,
                 prior_params=prior_params,
@@ -2869,6 +2962,7 @@ def run_cross_validation(
     points_regression_weight=0.16,
     distribution_weight=0.10,
     tail_calibration_weight=0.14,
+    league_bias_weight=0.08,
     extreme_penalty_weight=0.05,
     prior_strength=0.04,
     init_scale=0.35,
@@ -2878,6 +2972,9 @@ def run_cross_validation(
     grad_clip=5.0,
     seed=42,
     calibration_bins=5,
+    league_calibration_prior_n=60.0,
+    league_calibration_cap=8.0,
+    disable_league_calibration=False,
 ):
     """Run expanding-window CV; each fold optimizes only on its train seasons."""
     splits = make_season_splits(
@@ -2913,6 +3010,7 @@ def run_cross_validation(
             points_regression_weight=points_regression_weight,
             distribution_weight=distribution_weight,
             tail_calibration_weight=tail_calibration_weight,
+            league_bias_weight=league_bias_weight,
             extreme_penalty_weight=extreme_penalty_weight,
             prior_strength=prior_strength,
             init_scale=init_scale,
@@ -2932,7 +3030,12 @@ def run_cross_validation(
                 split_name="train",
                 calibration_bins=calibration_bins,
             )
-            points_calibrator = fit_team_points_calibrator(train_raw["matched"])
+            points_calibrator = fit_team_points_calibrator(
+                train_raw["matched"],
+                use_league_offsets=not disable_league_calibration,
+                league_prior_n=league_calibration_prior_n,
+                league_offset_cap=league_calibration_cap,
+            )
             for split_name, eval_df, eval_team_pts in [
                 ("train", train_df, train_team_pts),
                 ("test", test_df, test_team_pts),
@@ -2978,6 +3081,7 @@ def run_parameter_stability(
     points_regression_weight=0.16,
     distribution_weight=0.10,
     tail_calibration_weight=0.14,
+    league_bias_weight=0.08,
     extreme_penalty_weight=0.05,
     prior_strength=0.04,
     init_scale=0.35,
@@ -2987,6 +3091,9 @@ def run_parameter_stability(
     grad_clip=5.0,
     seed=42,
     calibration_bins=5,
+    league_calibration_prior_n=60.0,
+    league_calibration_cap=8.0,
+    disable_league_calibration=False,
 ):
     """Repeat optimization across seeds and summarize metric/parameter variance."""
     if n_runs <= 1:
@@ -3012,6 +3119,7 @@ def run_parameter_stability(
             points_regression_weight=points_regression_weight,
             distribution_weight=distribution_weight,
             tail_calibration_weight=tail_calibration_weight,
+            league_bias_weight=league_bias_weight,
             extreme_penalty_weight=extreme_penalty_weight,
             prior_strength=prior_strength,
             init_scale=init_scale,
@@ -3030,7 +3138,12 @@ def run_parameter_stability(
             split_name="train",
             calibration_bins=calibration_bins,
         )
-        points_calibrator = fit_team_points_calibrator(train_raw["matched"])
+        points_calibrator = fit_team_points_calibrator(
+            train_raw["matched"],
+            use_league_offsets=not disable_league_calibration,
+            league_prior_n=league_calibration_prior_n,
+            league_offset_cap=league_calibration_cap,
+        )
         train_eval = evaluate_params(
             params,
             train_df,
@@ -3132,6 +3245,8 @@ def main():
                         help="校准后积分分布匹配损失在复合目标中的权重")
     parser.add_argument("--tail-calibration-weight", type=float, default=0.14,
                         help="争冠/降级尾部球队校准损失在复合目标中的权重")
+    parser.add_argument("--league-bias-weight", type=float, default=0.08,
+                        help="训练集联赛平均积分残差惩罚在复合目标中的权重")
     parser.add_argument("--extreme-penalty-weight", type=float, default=0.05,
                         help="球员评分离群 guardrail 在复合目标中的权重")
     parser.add_argument("--prior-weight", type=float, default=0.04,
@@ -3168,6 +3283,15 @@ def main():
     parser.add_argument("--stability-pop", type=int, default=None, help="稳定性运行每次起点数")
     parser.add_argument("--importance-repeats", type=int, default=1, help="特征置换重要性重复次数")
     parser.add_argument("--calibration-bins", type=int, default=5, help="校准检查分箱数")
+    parser.add_argument("--league-calibration-prior-n", type=float, default=60.0,
+                        help="训练集联赛残差 offset 的收缩强度；越大越保守")
+    parser.add_argument("--league-calibration-cap", type=float, default=8.0,
+                        help="训练集联赛残差 offset 的绝对值上限")
+    parser.add_argument(
+        "--disable-league-calibration",
+        action="store_true",
+        help="禁用 train-fitted 联赛残差 offset，仅使用全局积分校准",
+    )
     parser.add_argument(
         "--quick",
         action="store_true",
@@ -3269,7 +3393,12 @@ def main():
         split_name="train",
         calibration_bins=args.calibration_bins,
     )
-    baseline_points_calibrator = fit_team_points_calibrator(baseline_train_raw_eval["matched"])
+    baseline_points_calibrator = fit_team_points_calibrator(
+        baseline_train_raw_eval["matched"],
+        use_league_offsets=not args.disable_league_calibration,
+        league_prior_n=args.league_calibration_prior_n,
+        league_offset_cap=args.league_calibration_cap,
+    )
     baseline_train_eval = evaluate_params(
         default_params,
         train_df,
@@ -3312,6 +3441,7 @@ def main():
         points_regression_weight=args.points_regression_weight,
         distribution_weight=args.distribution_weight,
         tail_calibration_weight=args.tail_calibration_weight,
+        league_bias_weight=args.league_bias_weight,
         extreme_penalty_weight=args.extreme_penalty_weight,
         prior_strength=args.prior_weight,
         init_scale=args.init_scale,
@@ -3334,7 +3464,12 @@ def main():
         split_name="train",
         calibration_bins=args.calibration_bins,
     )
-    optimized_points_calibrator = fit_team_points_calibrator(optimized_train_raw_eval["matched"])
+    optimized_points_calibrator = fit_team_points_calibrator(
+        optimized_train_raw_eval["matched"],
+        use_league_offsets=not args.disable_league_calibration,
+        league_prior_n=args.league_calibration_prior_n,
+        league_offset_cap=args.league_calibration_cap,
+    )
     optimized_train_eval = evaluate_params(
         best_params,
         train_df,
@@ -3452,6 +3587,7 @@ def main():
                 points_regression_weight=args.points_regression_weight,
                 distribution_weight=args.distribution_weight,
                 tail_calibration_weight=args.tail_calibration_weight,
+                league_bias_weight=args.league_bias_weight,
                 extreme_penalty_weight=args.extreme_penalty_weight,
                 prior_strength=args.prior_weight,
                 init_scale=args.init_scale,
@@ -3464,6 +3600,9 @@ def main():
                 grad_clip=args.grad_clip,
                 seed=args.seed,
                 calibration_bins=args.calibration_bins,
+                league_calibration_prior_n=args.league_calibration_prior_n,
+                league_calibration_cap=args.league_calibration_cap,
+                disable_league_calibration=args.disable_league_calibration,
             )
             cv_test = cv_metrics.loc[
                 (cv_metrics["model"] == "optimized") & (cv_metrics["split"] == "test")
@@ -3506,6 +3645,7 @@ def main():
             points_regression_weight=args.points_regression_weight,
             distribution_weight=args.distribution_weight,
             tail_calibration_weight=args.tail_calibration_weight,
+            league_bias_weight=args.league_bias_weight,
             extreme_penalty_weight=args.extreme_penalty_weight,
             prior_strength=args.prior_weight,
             init_scale=args.init_scale,
@@ -3518,6 +3658,9 @@ def main():
             grad_clip=args.grad_clip,
             seed=args.seed,
             calibration_bins=args.calibration_bins,
+            league_calibration_prior_n=args.league_calibration_prior_n,
+            league_calibration_cap=args.league_calibration_cap,
+            disable_league_calibration=args.disable_league_calibration,
         )
         print(
             "  test Spearman: "
@@ -3575,6 +3718,8 @@ def main():
     holdout_predictions = optimized_test_eval["matched"].rename(
         columns={
             "pred_rating": "optimized_rating",
+            "pred_points_global": "optimized_points_global",
+            "pred_points_league_offset": "optimized_points_league_offset",
             "pred_points_calibrated": "optimized_points_calibrated",
         },
     )
@@ -3586,11 +3731,15 @@ def main():
                 "league",
                 "season",
                 "pred_rating",
+                "pred_points_global",
+                "pred_points_league_offset",
                 "pred_points_calibrated",
             ],
         ].rename(
             columns={
                 "pred_rating": "baseline_v3_rating",
+                "pred_points_global": "baseline_v3_points_global",
+                "pred_points_league_offset": "baseline_v3_points_league_offset",
                 "pred_points_calibrated": "baseline_v3_points_calibrated",
             },
         )
@@ -3627,6 +3776,7 @@ def main():
         "points_regression_weight": args.points_regression_weight,
         "distribution_weight": args.distribution_weight,
         "tail_calibration_weight": args.tail_calibration_weight,
+        "league_bias_weight": args.league_bias_weight,
         "extreme_penalty_weight": args.extreme_penalty_weight,
         "prior_weight": args.prior_weight,
         "soft_rank_temperature": args.soft_rank_temperature,
@@ -3635,6 +3785,9 @@ def main():
         "warmup_steps": args.warmup_steps,
         "min_lr_ratio": args.min_lr_ratio,
         "grad_clip": args.grad_clip,
+        "league_calibration_prior_n": args.league_calibration_prior_n,
+        "league_calibration_cap": args.league_calibration_cap,
+        "disable_league_calibration": args.disable_league_calibration,
         "points_calibration": {
             "baseline_v3": baseline_points_calibrator,
             "optimized": optimized_points_calibrator,

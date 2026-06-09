@@ -78,6 +78,7 @@ COLORS = {
     "points_loss": "#14b8a6", # 青绿 - Points Regression
     "distribution": "#eab308", # 黄色 - Distribution
     "tail": "#fb7185",        # 粉红 - Tail Calibration
+    "league_bias": "#818cf8",  # 淡紫 - League Bias
     "extreme": "#06b6d4",     # 青色 - Extreme
     "prior": "#6b7280",       # 灰色 - Prior
 }
@@ -89,6 +90,7 @@ COMPONENT_KEYS = [
     "points_loss",
     "distribution",
     "tail",
+    "league_bias",
     "extreme",
     "prior",
 ]
@@ -129,6 +131,7 @@ class TrainingStep:
     points_loss: float = 0.0
     distribution: float = 0.0
     tail: float = 0.0
+    league_bias: float = 0.0
     extreme: float = 0.0
     prior: float = 0.0
     timestamp: float = field(default_factory=time.time)
@@ -462,6 +465,7 @@ class LiveTrainingViz:
                 points_loss=components.get("points_loss", 0.0) if components else 0.0,
                 distribution=components.get("distribution", 0.0) if components else 0.0,
                 tail=components.get("tail", 0.0) if components else 0.0,
+                league_bias=components.get("league_bias", 0.0) if components else 0.0,
                 extreme=components.get("extreme", 0.0) if components else 0.0,
                 prior=components.get("prior", 0.0) if components else 0.0,
             )
@@ -676,6 +680,7 @@ class LiveTrainingViz:
                     "points_loss": s.points_loss,
                     "distribution": s.distribution,
                     "tail": s.tail,
+                    "league_bias": s.league_bias,
                     "extreme": s.extreme,
                     "prior": s.prior,
                 }
@@ -740,6 +745,7 @@ class ConsoleViz:
             points_loss=components.get("points_loss", 0.0) if components else 0.0,
             distribution=components.get("distribution", 0.0) if components else 0.0,
             tail=components.get("tail", 0.0) if components else 0.0,
+            league_bias=components.get("league_bias", 0.0) if components else 0.0,
             extreme=components.get("extreme", 0.0) if components else 0.0,
             prior=components.get("prior", 0.0) if components else 0.0,
         )

@@ -67,10 +67,25 @@ slope_train = std(actual_points_train) / std(team_strength_train)
 intercept_train = mean(actual_points_train) - slope_train × mean(team_strength_train)
 ```
 
-holdout/test 只能复用训练集的 `slope_train` 和 `intercept_train`，不能用测试集积分重新拟合。输出报告必须同时保留：
+v1.3.1-dev 在全局校准后加入训练集联赛残差 offset：
+
+```text
+global_pred_points = intercept_train + slope_train × team_strength
+league_residual_mean[L] = mean(actual_points_train - global_pred_points | league=L)
+league_offset[L] = clip(
+  league_residual_mean[L] × n_league_train / (n_league_train + prior_n),
+  -offset_cap,
+  +offset_cap
+)
+pred_points_calibrated = global_pred_points + league_offset[league]
+```
+
+holdout/test 只能复用训练集的 `slope_train`、`intercept_train` 和 `league_offset`，不能用测试集积分重新拟合。输出报告必须同时保留：
 
 ```text
 raw_team_strength
+pred_points_global
+pred_points_league_offset
 pred_points_calibrated
 raw_spread_ratio = std(raw_team_strength) / std(actual_points)
 points_spread_ratio = std(pred_points_calibrated) / std(actual_points)
@@ -87,11 +102,12 @@ loss =
 + 0.16 × calibrated_points_regression_loss
 + 0.10 × points_distribution_matching_loss
 + 0.14 × tail_calibration_loss(title/relegation teams)
++ 0.08 × league_bias_loss
 + 0.05 × player_score_extreme_guardrail
 + 0.04 × prior_regularization
 ```
 
-其中 `player_score_extreme_guardrail` 只约束球员评分离群，不能用来解决强队/弱队积分尾部误差；尾部误差由 calibrated points regression、distribution matching 和 tail calibration 负责。
+其中 `player_score_extreme_guardrail` 只约束球员评分离群，不能用来解决强队/弱队积分尾部误差；尾部误差由 calibrated points regression、distribution matching 和 tail calibration 负责；联赛整体高估/低估由 train-fitted league offset 和 `league_bias_loss` 负责。
 
 ## 位置细分
 
