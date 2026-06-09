@@ -162,7 +162,7 @@ def get_value_summary() -> dict:
         for key, value in record.items():
             if isinstance(value, float) and math.isnan(value):
                 record[key] = None
-        player_data.append(record)
+        player_data.append(_clean_json_value(record))
 
     metrics: dict[str, Any] = {}
     results_path = _settings().data_root / "models" / "artifacts" / "value_fairness_results.parquet"
@@ -212,14 +212,7 @@ def get_player_ratings(
 
     players = df.to_dict(orient="records")
     # Convert NaN to None for JSON serialization
-    import math
-
-    for record in players:
-        for key, value in record.items():
-            if isinstance(value, float) and math.isnan(value):
-                record[key] = None
-
-    return {"count": len(players), "players": players}
+    return _clean_json_value({"count": len(players), "players": players})
 
 
 def get_ratings_meta() -> dict:
@@ -229,17 +222,9 @@ def get_ratings_meta() -> dict:
 
     meta = {}
     if not meta_df.empty:
-        row = meta_df.iloc[0].to_dict()
-        for key, value in row.items():
-            if isinstance(value, float) and value != value:
-                row[key] = None
-        meta = row
+        meta = meta_df.iloc[0].to_dict()
 
     leagues = league_df.to_dict(orient="records") if not league_df.empty else []
-    for record in leagues:
-        for key, value in record.items():
-            if isinstance(value, float) and value != value:
-                record[key] = None
 
     return _clean_json_value({"model_meta": meta, "league_metrics": leagues})
 
