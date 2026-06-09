@@ -38,6 +38,62 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+import math as _math
+
+
+def _json_ready(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        f = float(value)
+        if _math.isnan(f) or _math.isinf(f):
+            return 0.0
+        return f
+    if isinstance(value, str):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _json_ready(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(v) for v in value]
+    try:
+        import numpy as _np
+        if isinstance(value, _np.ndarray):
+            return [_json_ready(x) for x in value.tolist()]
+        if isinstance(value, _np.floating):
+            f = float(value)
+            if _math.isnan(f) or _math.isinf(f):
+                return 0.0
+            return f
+        if isinstance(value, _np.integer):
+            return int(value)
+        if isinstance(value, _np.bool_):
+            return bool(value)
+    except Exception:
+        pass
+    try:
+        import torch as _torch
+        if isinstance(value, _torch.Tensor):
+            return _json_ready(value.detach().cpu().tolist())
+    except Exception:
+        pass
+    try:
+        return str(value)
+    except Exception:
+        return None
+
+
+def _rgba(hex6, alpha=0.25):
+    h = hex6.lstrip("#")
+    if len(h) >= 8:
+        h = h[:6]
+    if len(h) != 6:
+        return f"rgba(128,128,128,{alpha})"
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
 
 # ── 依赖检查 ────────────────────────────────────────────────────────────────
 
@@ -130,10 +186,13 @@ class TrainingStep:
     pos_loss: float = 0.0
     points_loss: float = 0.0
     distribution: float = 0.0
+    quantile: float = 0.0
+    range_penalty: float = 0.0
     tail: float = 0.0
     league_bias: float = 0.0
     extreme: float = 0.0
     prior: float = 0.0
+    dc_likelihood: float = 0.0
     timestamp: float = field(default_factory=time.time)
 
 
@@ -464,10 +523,13 @@ class LiveTrainingViz:
                 pos_loss=components.get("pos_loss", 0.0) if components else 0.0,
                 points_loss=components.get("points_loss", 0.0) if components else 0.0,
                 distribution=components.get("distribution", 0.0) if components else 0.0,
+                quantile=components.get("quantile", 0.0) if components else 0.0,
+                range_penalty=components.get("range_penalty", 0.0) if components else 0.0,
                 tail=components.get("tail", 0.0) if components else 0.0,
                 league_bias=components.get("league_bias", 0.0) if components else 0.0,
                 extreme=components.get("extreme", 0.0) if components else 0.0,
                 prior=components.get("prior", 0.0) if components else 0.0,
+                dc_likelihood=components.get("dc_likelihood", 0.0) if components else 0.0,
             )
             self.history.append(step_data)
 
@@ -657,15 +719,6 @@ class LiveTrainingViz:
 
     def save_json(self, path):
         """把训练历史保存为 JSON，供后续分析。"""
-        class _NpEncoder(json.JSONEncoder):
-            def default(self, o):
-                if isinstance(o, (np.integer,)):
-                    return int(o)
-                if isinstance(o, (np.floating,)):
-                    return float(o)
-                if isinstance(o, np.ndarray):
-                    return o.tolist()
-                return super().default(o)
         data = {
             "history": [
                 {
@@ -679,10 +732,13 @@ class LiveTrainingViz:
                     "pos_loss": s.pos_loss,
                     "points_loss": s.points_loss,
                     "distribution": s.distribution,
+                    "quantile": s.quantile,
+                    "range_penalty": s.range_penalty,
                     "tail": s.tail,
                     "league_bias": s.league_bias,
                     "extreme": s.extreme,
                     "prior": s.prior,
+                    "dc_likelihood": s.dc_likelihood,
                 }
                 for s in self.history
             ],
@@ -690,8 +746,8 @@ class LiveTrainingViz:
             "best_pearson": self.best_pearson,
             "baseline_spearman": self.baseline_spearman,
         }
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2, cls=_NpEncoder)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(_json_ready(data), f, indent=2)
         print(f"  [Viz] 历史数据已保存: {path}")
 
     def close(self):
@@ -744,10 +800,13 @@ class ConsoleViz:
             pos_loss=components.get("pos_loss", 0.0) if components else 0.0,
             points_loss=components.get("points_loss", 0.0) if components else 0.0,
             distribution=components.get("distribution", 0.0) if components else 0.0,
+            quantile=components.get("quantile", 0.0) if components else 0.0,
+            range_penalty=components.get("range_penalty", 0.0) if components else 0.0,
             tail=components.get("tail", 0.0) if components else 0.0,
             league_bias=components.get("league_bias", 0.0) if components else 0.0,
             extreme=components.get("extreme", 0.0) if components else 0.0,
             prior=components.get("prior", 0.0) if components else 0.0,
+            dc_likelihood=components.get("dc_likelihood", 0.0) if components else 0.0,
         )
         self.history.append(step_data)
 
@@ -779,23 +838,36 @@ class ConsoleViz:
         print(f"  Best Pearson: {best_pearson:.4f}")
 
     def save(self, path: str | Path = "training_history.json"):
-        import json
+        import json as _json_mod
         path = Path(path)
         data = {
-            "steps": [
+            "history": [
                 {
                     "step": s.step,
+                    "pop_idx": s.pop_idx,
                     "loss": s.loss,
                     "spearman": s.spearman,
                     "pearson": s.pearson,
+                    "rank_loss": s.rank_loss,
+                    "ndcg": s.ndcg,
+                    "pos_loss": s.pos_loss,
+                    "points_loss": s.points_loss,
+                    "distribution": s.distribution,
+                    "quantile": s.quantile,
+                    "range_penalty": s.range_penalty,
+                    "tail": s.tail,
+                    "league_bias": s.league_bias,
+                    "extreme": s.extreme,
+                    "prior": s.prior,
+                    "dc_likelihood": s.dc_likelihood,
                 }
                 for s in self.history
             ],
             "best_spearman": self.best_spearman,
             "best_pearson": self.best_pearson,
         }
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+        with open(path, "w", encoding="utf-8") as f:
+            _json_mod.dump(_json_ready(data), f, indent=2)
         print(f"  历史已保存: {path}")
 
     def save_json(self, path: str | Path = "training_history.json"):
