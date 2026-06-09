@@ -523,6 +523,7 @@ def objective_torch(
     prior_weight=0.01,
     dc_likelihood_weight=0.08,
     dc_tensors=None,
+    dc_rho=-0.13,
     prior_params=None,
     verbose=False,
     return_components=False,
@@ -564,7 +565,7 @@ def objective_torch(
     # 5b. Dixon-Coles match-level likelihood
     dc_loss = torch.tensor(0.0, device=device)
     if dc_tensors is not None and dc_likelihood_weight > 0:
-        dc_loss = dixon_coles_log_likelihood(team_avgs, dc_tensors)
+        dc_loss = dixon_coles_log_likelihood(team_avgs, dc_tensors, rho=dc_rho)
 
     # 6. Player-score guardrail. This is not the team-points tail loss.
     ext_pen = extreme_penalty(ratings)

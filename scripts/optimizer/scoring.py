@@ -346,8 +346,14 @@ def compute_ratings_torch(feat, params, device):
     # ── Quality ──
     # Reduce quality weight for rows missing defense/possession data
     quality_has_data = torch.min(has_def, has_pos)  # 1.0 only if both present
-    quality_def = def_pct * qual_sw[2] * quality_has_data + 50.0 * qual_sw[2] * (1.0 - quality_has_data)
-    quality_pos = pos_pct * qual_sw[3] * quality_has_data + 50.0 * qual_sw[3] * (1.0 - quality_has_data)
+    quality_def = (
+        def_pct * qual_sw[2] * quality_has_data
+        + 50.0 * qual_sw[2] * (1.0 - quality_has_data)
+    )
+    quality_pos = (
+        pos_pct * qual_sw[3] * quality_has_data
+        + 50.0 * qual_sw[3] * (1.0 - quality_has_data)
+    )
     quality = (npg_pct * qual_sw[0] + ast_pct * qual_sw[1]
                + quality_def + quality_pos)
     # quality 是跨维度效率项，不应让中场通过"进攻百分位 + 出勤"获得前锋级

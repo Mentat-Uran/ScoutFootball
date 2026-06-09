@@ -17,13 +17,15 @@ Mac 快速模式 (几分钟完成):
 Mac 完整模式 (较慢但更准):
   python optimize_ratings_gpu.py --data_dir ./data --steps 150 --pop 8 --patience 25
 
-模块结构:
+模块结构 (scripts/optimizer/):
+  optimizer/__init__.py   - 包入口，导出 viz 和核心类
   optimizer/constants.py  - 队名别名、位置映射、配置常量
-  optimizer/data.py       - 数据加载、评估指标、校准
-  optimizer/scoring.py    - 评分计算、张量构建、球队聚合
+  optimizer/data.py       - 数据加载、评估指标、校准、dc_tensors 构建
+  optimizer/scoring.py    - 评分计算、张量构建、球队聚合、缺失标记
   optimizer/losses.py     - 损失函数、Dixon-Coles、复合目标
   optimizer/optimization.py - 优化循环、学习率调度
   optimizer/cv.py         - 交叉验证、参数稳定性
+  optimizer/viz.py        - 训练可视化 (Plotly/Console)
 """
 
 import argparse
@@ -92,6 +94,8 @@ def main():
                         help="锚定 v3 默认权重的正则强度")
     parser.add_argument("--dc-likelihood-weight", type=float, default=0.00,
                         help="Dixon-Coles 对数似然损失权重 (需要 Football-Data 比赛数据)")
+    parser.add_argument("--dc-rho", type=float, default=-0.13,
+                        help="Dixon-Coles 低比分相关性修正参数 (典型范围 -0.1 ~ -0.2)")
     parser.add_argument("--prior-strength", type=float, default=None,
                         help="锚定 v3 默认权重的正则强度 (deprecated, use --prior-weight)")
     parser.add_argument("--init-scale", type=float, default=0.35,
@@ -268,6 +272,7 @@ def main():
         prior_strength=args.prior_weight,
         dc_likelihood_weight=args.dc_likelihood_weight,
         dc_tensors=dc_tensors,
+        dc_rho=args.dc_rho,
         init_scale=args.init_scale, patience=args.patience,
         warmup_steps=args.warmup_steps, min_lr_ratio=args.min_lr_ratio,
         grad_clip=args.grad_clip, seed=args.seed,
