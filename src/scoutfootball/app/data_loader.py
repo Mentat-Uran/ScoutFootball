@@ -12,6 +12,7 @@ from scoutfootball.config import PlatformSettings
 logger = logging.getLogger(__name__)
 
 
+@lru_cache(maxsize=1)
 def _settings() -> PlatformSettings:
     return PlatformSettings.from_root()
 

@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新组合目标在 GPU 服务器重跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标、组合优化目标、模型运行登记、神经网络准入门槛）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：Streamlit 已扩展为 15 页工作台并补上 artifact overview、scouting queue 与 action value sample；`frontend/` 总览、球员画像、身价、比赛预测、球探、动作价值与报告页已接入 FastAPI 本地产物，世界杯页仍保留样例/混合数据；前端图标已统一为几何 Unicode 符号（无 emoji），身价页 API 无数据时显示 DEMO 标记；DuckDB 文件名已修正为 `scoutlab.duckdb`；README 已补充前端视图说明和 Demo 数据复现步骤；电子战术板规划为 P1.5，尚未实现。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新组合目标在 GPU 服务器重跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标、组合优化目标、模型运行登记、神经网络准入门槛）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：Streamlit 已扩展为 15 页工作台并补上 artifact overview、scouting queue 与 action value sample；`frontend/` 总览、球员画像、身价、比赛预测、球探、动作价值与报告页已接入 FastAPI 本地产物，世界杯页仍保留样例/混合数据；前端图标已统一为几何 Unicode 符号（无 emoji），身价页 API 无数据时显示 DEMO 标记，顶部栏有 API 连接状态指示器，fetchRatings() 按位置分组计算客户端 radar 百分位；DuckDB 文件名已修正为 `scoutlab.duckdb`；后端 data_loader 和 api 已加固容错（DuckDB fallback、corrupt parquet 处理、numpy 类型序列化、异常捕获）；README 已补充前端视图说明和 Demo 数据复现步骤；电子战术板规划为 P1.5，尚未实现。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutFootball 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -149,6 +149,9 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 前端图标统一为几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。
 - [x] 身价页 API 无数据时显示 DEMO 标记，避免静默展示假数据。
 - [x] 修正 DuckDB 文件名不匹配（`scoutfootball.duckdb` → `scoutlab.duckdb`）。
+- [x] 顶部栏新增 API 连接状态指示器（OK/OFFLINE）。
+- [x] `fetchRatings()` 按位置分组计算客户端 radar 百分位，球员列表加载后即有真实 radar 数据。
+- [x] 后端容错加固：DuckDB 读取 fallback、`_safe_read_parquet`、numpy 类型序列化、异常捕获。
 - [x] 给 README 加截图说明和 demo 复现步骤（前端视图表 + 数据复现命令；实际截图待补充）。
 
 ### 前端长期功能和后端配套
