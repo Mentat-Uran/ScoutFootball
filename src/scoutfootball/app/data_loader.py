@@ -48,6 +48,17 @@ def _minutes_to_confidence(minutes: float) -> str:
     return "LOW"
 
 
+def _safe_read_parquet(relative_path: str) -> pd.DataFrame | None:
+    """Read a Parquet file, returning None on any error."""
+    if not _parquet_exists(relative_path):
+        return None
+    try:
+        return pd.read_parquet(_parquet_path(relative_path))
+    except Exception:
+        logger.warning("Failed to read %s", relative_path, exc_info=True)
+        return None
+
+
 def _normalize_ratings_frame(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
@@ -193,9 +204,9 @@ def load_league_metrics() -> pd.DataFrame:
 
 
 def load_player_match() -> pd.DataFrame:
-    rel = "gold/feature_store/player_match.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("gold/feature_store/player_match.parquet")
+    if df is not None:
+        return df
     logger.warning("player_match.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_player_match
 
@@ -203,9 +214,9 @@ def load_player_match() -> pd.DataFrame:
 
 
 def load_team_match() -> pd.DataFrame:
-    rel = "gold/feature_store/team_match.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("gold/feature_store/team_match.parquet")
+    if df is not None:
+        return df
     logger.warning("team_match.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_team_match
 
@@ -214,9 +225,9 @@ def load_team_match() -> pd.DataFrame:
 
 @lru_cache(maxsize=2)
 def load_player_rolling() -> pd.DataFrame:
-    rel = "gold/feature_store/player_rolling.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("gold/feature_store/player_rolling.parquet")
+    if df is not None:
+        return df
     logger.warning("player_rolling.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_player_match, generate_player_rolling
 
@@ -225,9 +236,9 @@ def load_player_rolling() -> pd.DataFrame:
 
 @lru_cache(maxsize=2)
 def load_team_rolling() -> pd.DataFrame:
-    rel = "gold/feature_store/team_rolling.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("gold/feature_store/team_rolling.parquet")
+    if df is not None:
+        return df
     logger.warning("team_rolling.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_team_match, generate_team_rolling
 
@@ -235,9 +246,9 @@ def load_team_rolling() -> pd.DataFrame:
 
 
 def load_oof_predictions() -> pd.DataFrame:
-    rel = "models/oof_predictions/value_fairness_oof.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
+    df = _safe_read_parquet("models/oof_predictions/value_fairness_oof.parquet")
+    if df is not None:
+        return df
     logger.warning("value_fairness_oof.parquet not found — falling back to synthetic demo data")
     from scoutfootball.app.demo_data import generate_oof_predictions
 
@@ -246,10 +257,8 @@ def load_oof_predictions() -> pd.DataFrame:
 
 @lru_cache(maxsize=2)
 def load_player_value_metrics() -> pd.DataFrame:
-    rel = "gold/feature_store/player_value_metrics.parquet"
-    if _parquet_exists(rel):
-        return pd.read_parquet(_parquet_path(rel))
-    return pd.DataFrame()
+    df = _safe_read_parquet("gold/feature_store/player_value_metrics.parquet")
+    return df if df is not None else pd.DataFrame()
 
 
 def load_score_prediction(home_team: str | None = None, away_team: str | None = None):
@@ -280,6 +289,7 @@ def load_score_prediction(home_team: str | None = None, away_team: str | None = 
                     f"Available: {', '.join(sorted(team_ids)[:15])}..."
                 )
             return predict_match(model, resolved_home, resolved_away)
+        logger.warning("Only %d team_ids found; need >= 2 for prediction", len(team_ids))
     logger.warning("Poisson artifacts not found — falling back to synthetic demo prediction")
     from scoutfootball.app.demo_data import generate_score_matrix
 
