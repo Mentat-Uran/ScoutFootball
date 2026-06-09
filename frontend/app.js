@@ -218,7 +218,7 @@ async function fetchRatings(position, league) {
         const resp = await fetch(`${API_BASE}/ratings?${params}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-        return (data.players || []).map((p) => ({
+        const rawPlayers = (data.players || []).map((p) => ({
             name: p.player || "",
             position: p.position_group || "",
             team: p.team || "",
@@ -234,11 +234,37 @@ async function fetchRatings(position, league) {
             assists_p90: +(p.assists_p90 || 0).toFixed(3),
             defense_composite: p.defense_composite,
             possession_composite: p.possession_composite,
-            percentile: 50,
             value: 0,
             residual: 0,
-            radar: [50, 50, 50, 50, 50],
         }));
+
+        // Compute position-relative percentiles client-side for radar
+        const byPosition = {};
+        for (const p of rawPlayers) {
+            if (!byPosition[p.position]) byPosition[p.position] = [];
+            byPosition[p.position].push(p);
+        }
+        function pctRank(value, arr, key) {
+            const vals = arr.map((p) => p[key]).filter((v) => v != null && !isNaN(v)).sort((a, b) => a - b);
+            if (vals.length === 0) return 50;
+            const idx = vals.filter((v) => v < value).length;
+            return Math.round(idx / vals.length * 100);
+        }
+        for (const p of rawPlayers) {
+            const pool = byPosition[p.position] || [];
+            const attack = (p.npg_p90 || 0) + (p.assists_p90 || 0);
+            const attackPool = pool.map((x) => (x.npg_p90 || 0) + (x.assists_p90 || 0));
+            const attackPct = attackPool.length > 0 ? Math.round(attackPool.filter((v) => v < attack).length / attackPool.length * 100) : 50;
+            p.percentile = pctRank(p.rating, pool, "rating");
+            p.radar = [
+                attackPct,
+                pctRank(p.possession_composite || 0, pool, "possession_composite"),
+                pctRank(p.defense_composite || 0, pool, "defense_composite"),
+                Math.min(100, Math.round((p.minutes || 0) / 2700 * 100)),
+                p.percentile,
+            ];
+        }
+        return rawPlayers;
     } catch (err) {
         console.warn("Failed to fetch ratings:", err);
         return [];
@@ -1689,4 +1715,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     renderActiveView();
+
+    // Check API connection status
+    try {
+        const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+        const apiPill = document.getElementById("top-api-pill");
+        if (healthResp.ok) {
+            apiPill.textContent = "API OK";
+            apiPill.className = "status-pill status-high";
+        } else {
+            apiPill.textContent = "API ERR";
+            apiPill.className = "status-pill status-low";
+        }
+    } catch {
+        const apiPill = document.getElementById("top-api-pill");
+        apiPill.textContent = "OFFLINE";
+        apiPill.className = "status-pill status-low";
+    }
 });
