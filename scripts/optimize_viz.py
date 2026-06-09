@@ -202,9 +202,9 @@ class LiveTrainingViz:
         self.fig = make_subplots(
             rows=3, cols=3,
             specs=[
-                [{"colspan": 2, "rowspan": 1}, None, {"rowspan": 1}],
-                [{"colspan": 2}, None, {"rowspan": 1}],
-                [{"type": "bar"}, {"type": "bar"}, {"type": "indicator"}],
+                [{"colspan": 2, "rowspan": 1}, None, {"rowspan": 1, "type": "xy"}],
+                [{"colspan": 2}, None, {"rowspan": 1, "type": "indicator"}],
+                [{"type": "bar"}, {"type": "bar"}, {"type": "xy"}],
             ],
             subplot_titles=(
                 "<b>1. Loss 曲线</b>",
@@ -303,6 +303,11 @@ class LiveTrainingViz:
             COLORS["rank_loss"], COLORS["ndcg"], COLORS["pos_loss"],
             COLORS["extreme"], COLORS["prior"]
         ]
+        def _rgba(hex6, alpha=0.25):
+            h = hex6.lstrip("#")
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+            return f"rgba({r},{g},{b},{alpha})"
+
         for comp, color in zip(components, comp_colors):
             self.fig.add_trace(
                 go.Scatter(
@@ -310,7 +315,7 @@ class LiveTrainingViz:
                     name=comp.replace("_", " ").title(),
                     line=dict(color=color, width=0.5),
                     fill="tonexty" if comp != "rank_loss" else None,
-                    fillcolor=color + "40",
+                    fillcolor=_rgba(color, 0.25),
                 ),
                 row=2, col=1,
             )
@@ -325,7 +330,7 @@ class LiveTrainingViz:
                 value=0,
                 title=dict(text="Spearman", font=dict(size=14)),
                 gauge=dict(
-                    axis=dict(range=[0, 1], color=COLORS["text_secondary"]),
+                    axis=dict(range=[0, 1], tickcolor=COLORS["text_secondary"]),
                     bar=dict(color=COLORS["spearman"]),
                     bgcolor=COLORS["paper_bg"],
                     bordercolor=COLORS["card_border"],
@@ -631,11 +636,19 @@ class LiveTrainingViz:
         self.fig.write_html(str(path))
         print(f"  [Viz] 报告已保存: {path}")
 
-    def save_json(self, path: str | Path = "training_history.json"):
-        """保存训练历史为 JSON。"""
-        path = Path(path)
+    def save_json(self, path):
+        """把训练历史保存为 JSON，供后续分析。"""
+        class _NpEncoder(json.JSONEncoder):
+            def default(self, o):
+                if isinstance(o, (np.integer,)):
+                    return int(o)
+                if isinstance(o, (np.floating,)):
+                    return float(o)
+                if isinstance(o, np.ndarray):
+                    return o.tolist()
+                return super().default(o)
         data = {
-            "steps": [
+            "history": [
                 {
                     "step": s.step,
                     "pop_idx": s.pop_idx,
@@ -655,7 +668,7 @@ class LiveTrainingViz:
             "baseline_spearman": self.baseline_spearman,
         }
         with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(data, f, indent=2, cls=_NpEncoder)
         print(f"  [Viz] 历史数据已保存: {path}")
 
     def close(self):
