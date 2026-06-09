@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。GPU 优化已完成（2026-06-09，alias 修复后重跑）：2526 holdout Spearman=0.740/Pearson=0.744（baseline 0.618，提升 +0.122）。3-fold CV 平均 test Spearman=0.718。Fold 1（2324）Spearman=0.662，Fold 2（2425）Spearman=0.792，Fold 3（2526）Spearman=0.701。alias 匹配已修复（重音符号去除 + 12 个新 alias），Football-Data 2526 赛季数据已补充（1,751 场比赛）。Bundesliga coverage 0.778（4 队未匹配，alias 已修复待重跑验证）。`EVALUATION.md`、`MODEL_CARD.md` 已更新。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。GPU 优化已完成（2026-06-09，alias 修复后重跑）：2526 holdout Spearman=0.740/Pearson=0.744（baseline 0.618，提升 +0.122）。3-fold CV 平均 test Spearman=0.718。Fold 1（2324）Spearman=0.662，Fold 2（2425）Spearman=0.792，Fold 3（2526）Spearman=0.701。alias 匹配已修复（重音符号去除 + 12 个新 alias），Football-Data 2526 赛季数据已补充（1,751 场比赛）。Bundesliga coverage 0.778（4 队未匹配，alias 已修复待重跑验证）。2026-06-09 已完成 v1.3-dev 优化器代码级重构：训练目标新增 train-fitted 积分校准、积分回归、分布匹配、争冠/降级尾部损失、soft NDCG 可微化、warmup+cosine 学习率调度和梯度裁剪；完整 GPU 重跑和 holdout 误差复盘仍待执行，不能把旧指标写成新目标结果。`EVALUATION.md`、`MODEL_CARD.md` 已更新。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutFootball 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -107,6 +107,9 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 修复 GPU 优化器 `build_matched_results()` 中的 alias 匹配：集成 `normalize_team_name()` + 重音符号去除 + 12 个新 alias。（2026-06-09）
 - [x] 修复 Bundesliga 联赛标签 NaN 问题：评分侧 Bundesliga 球队的 league 字段为 "nan"，已在数据构建时替换。（2026-06-09）
 - [x] 补充 Football-Data 2526 赛季数据：已下载 1,751 场比赛，combined_results.parquet 从 5,330 行增至 7,081 行。（2026-06-09）
+- [x] 完成 v1.3-dev 优化器目标函数重构：区分 raw team strength 与 calibrated season points，新增训练集拟合积分校准层、积分回归损失、1D 分布匹配损失、争冠/降级尾部校准损失；`--soft-rank-temperature` 已贯穿 Spearman/NDCG/位置一致性，NDCG 改为 soft discount 可微目标。
+- [x] 优化器训练循环加入 warmup + cosine decay、梯度裁剪和新的默认目标权重：Spearman 0.42、soft NDCG 0.16、位置一致性 0.12、积分回归 0.16、分布匹配 0.10、尾部校准 0.14、球员评分离群 guardrail 0.05、prior 0.04。
+- [ ] 用 v1.3-dev 目标完整重跑 GPU optimizer，重新生成 `optimized_params.npy`、`optimized_params_meta.json`、`rating_holdout_predictions.parquet`、CV/stability/feature importance，并复盘 Barcelona/Real Madrid/Burnley 等尾部误差是否改善。
 - [x] 对 coverage 低于 0.90 的 league-season 禁止输出强排序结论，只允许作为低置信度诊断样本；该规则仍适用于五大联赛以外的 2526 division 和后续新增数据。
 - [x] 定义真实标签层级：Transfermarkt 手动导入、权威奖项、国际/俱乐部出场级别、专家分档、位置内人工校准集。
 - [x] 新增标签数据契约和校验脚本，输出 `data/gold/feature_store/player_truth_labels.parquet`。

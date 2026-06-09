@@ -27,9 +27,10 @@ Mac 完整模式 (较慢但更准):
 import argparse
 import json
 import re
+import sys
 import time
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -38,7 +39,11 @@ import torch
 from scipy.stats import pearsonr, spearmanr
 
 # ── 可视化 (使用新的 Plotly 版本) ────────────────────────────────────────
-from optimize_viz import create_visualizer, ConsoleViz
+try:
+    from optimize_viz import create_visualizer
+except ModuleNotFoundError:
+    sys.path.append(str(Path(__file__).resolve().parent))
+    from optimize_viz import create_visualizer
 
 # 旧版 matplotlib 可视化保留为备选
 import platform as _platform
@@ -58,8 +63,6 @@ try:
             matplotlib.use("Agg")
     else:
         matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
     _HAS_MATPLOTLIB = True
     _VIZ_INTERACTIVE = matplotlib.get_backend() != "agg"
 except ImportError:
@@ -439,6 +442,21 @@ class SeasonSplit:
     name: str
     train_seasons: tuple[str, ...]
     test_seasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TeamPointsCalibrator:
+    """Monotonic train-fitted mapping from team strength rating to season points."""
+
+    method: str
+    slope: float
+    intercept: float
+    pred_mean: float
+    pred_std: float
+    actual_mean: float
+    actual_std: float
+    min_slope: float
+    max_slope: float
 
 
 def map_position(pos_str):
@@ -1309,6 +1327,90 @@ def _standardized_mse(pred, actual):
     return float(np.nanmean((pred_z - actual_z) ** 2))
 
 
+def fit_team_points_calibrator(
+    matched_df: pd.DataFrame,
+    *,
+    min_slope: float = 0.05,
+    max_slope: float = 8.0,
+) -> TeamPointsCalibrator:
+    """Fit a leakage-safe monotonic mapping from strength ratings to points.
+
+    The raw team aggregate is a squad-strength score, not a season-points model.
+    This z-score affine layer fixes the known range compression while preserving
+    the learned ordering. It must be fitted on train seasons and then reused for
+    holdout/test seasons.
+    """
+    if matched_df.empty:
+        return TeamPointsCalibrator(
+            method="zscore_affine_empty",
+            slope=0.0,
+            intercept=0.0,
+            pred_mean=0.0,
+            pred_std=0.0,
+            actual_mean=0.0,
+            actual_std=0.0,
+            min_slope=float(min_slope),
+            max_slope=float(max_slope),
+        )
+
+    pred = pd.to_numeric(matched_df["pred_rating"], errors="coerce").to_numpy(dtype=float)
+    actual = pd.to_numeric(matched_df["actual_points"], errors="coerce").to_numpy(dtype=float)
+    valid = np.isfinite(pred) & np.isfinite(actual)
+    if valid.sum() < 2:
+        actual_mean = float(np.nanmean(actual[valid])) if valid.any() else 0.0
+        return TeamPointsCalibrator(
+            method="zscore_affine_degenerate",
+            slope=0.0,
+            intercept=actual_mean,
+            pred_mean=float(np.nanmean(pred[valid])) if valid.any() else 0.0,
+            pred_std=0.0,
+            actual_mean=actual_mean,
+            actual_std=0.0,
+            min_slope=float(min_slope),
+            max_slope=float(max_slope),
+        )
+
+    pred = pred[valid]
+    actual = actual[valid]
+    pred_mean = float(np.mean(pred))
+    actual_mean = float(np.mean(actual))
+    pred_std = float(np.std(pred))
+    actual_std = float(np.std(actual))
+    if pred_std < 1e-8 or actual_std < 1e-8:
+        slope = 0.0
+        intercept = actual_mean
+        method = "zscore_affine_constant"
+    else:
+        slope = float(np.clip(actual_std / pred_std, min_slope, max_slope))
+        intercept = actual_mean - slope * pred_mean
+        method = "zscore_affine_train_fit"
+
+    return TeamPointsCalibrator(
+        method=method,
+        slope=slope,
+        intercept=float(intercept),
+        pred_mean=pred_mean,
+        pred_std=pred_std,
+        actual_mean=actual_mean,
+        actual_std=actual_std,
+        min_slope=float(min_slope),
+        max_slope=float(max_slope),
+    )
+
+
+def apply_team_points_calibrator(
+    matched_df: pd.DataFrame,
+    calibrator: TeamPointsCalibrator | None,
+) -> pd.DataFrame:
+    """Attach calibrated season-point predictions to a matched result frame."""
+    if calibrator is None or matched_df.empty:
+        return matched_df
+    result = matched_df.copy()
+    pred = pd.to_numeric(result["pred_rating"], errors="coerce").to_numpy(dtype=float)
+    result["pred_points_calibrated"] = calibrator.intercept + calibrator.slope * pred
+    return result
+
+
 def build_matched_results(feat, team_pts_df, team_avgs):
     """Match predicted team-season ratings with actual points.
 
@@ -1326,7 +1428,9 @@ def build_matched_results(feat, team_pts_df, team_avgs):
 
     # Build lookup with normalized team names
     points_lookup = {
-        (normalize_team_name(row["team"]), str(row["league"]), str(row["season"])): float(row["total_points"])
+        (normalize_team_name(row["team"]), str(row["league"]), str(row["season"])): float(
+            row["total_points"],
+        )
         for _, row in valid_pts.iterrows()
     }
     rows = []
@@ -1454,10 +1558,51 @@ def rating_metrics(matched_df, *, n_bins=5):
             "rank_loss": float("nan"),
             "z_mse": float("nan"),
             "calibration_mae": float("nan"),
+            "raw_pred_range": float("nan"),
+            "actual_points_range": float("nan"),
+            "raw_spread_ratio": float("nan"),
+            "points_mae": float("nan"),
+            "points_rmse": float("nan"),
+            "points_bias": float("nan"),
+            "points_spread_ratio": float("nan"),
         }
     spearman = _safe_spearman(matched_df["pred_rating"], matched_df["actual_points"])
     pearson = _safe_pearson(matched_df["pred_rating"], matched_df["actual_points"])
     rank_loss = 1.0 - spearman if np.isfinite(spearman) else float("nan")
+    pred_arr = pd.to_numeric(matched_df["pred_rating"], errors="coerce").to_numpy(dtype=float)
+    actual_arr = pd.to_numeric(matched_df["actual_points"], errors="coerce").to_numpy(dtype=float)
+    actual_std = np.nanstd(actual_arr)
+    pred_std = np.nanstd(pred_arr)
+    raw_spread_ratio = (
+        float(pred_std / actual_std)
+        if np.isfinite(pred_std) and np.isfinite(actual_std) and actual_std > 0
+        else float("nan")
+    )
+    raw_pred_range = (
+        float(np.nanmax(pred_arr) - np.nanmin(pred_arr)) if len(pred_arr) else float("nan")
+    )
+    actual_points_range = (
+        float(np.nanmax(actual_arr) - np.nanmin(actual_arr)) if len(actual_arr) else float("nan")
+    )
+    points_mae = float("nan")
+    points_rmse = float("nan")
+    points_bias = float("nan")
+    points_spread_ratio = float("nan")
+    if "pred_points_calibrated" in matched_df.columns:
+        points_arr = pd.to_numeric(
+            matched_df["pred_points_calibrated"],
+            errors="coerce",
+        ).to_numpy(dtype=float)
+        diff = points_arr - actual_arr
+        points_mae = float(np.nanmean(np.abs(diff)))
+        points_rmse = float(np.sqrt(np.nanmean(diff ** 2)))
+        points_bias = float(np.nanmean(diff))
+        points_std = np.nanstd(points_arr)
+        points_spread_ratio = (
+            float(points_std / actual_std)
+            if np.isfinite(points_std) and np.isfinite(actual_std) and actual_std > 0
+            else float("nan")
+        )
     return {
         "n_team_seasons": int(len(matched_df)),
         "spearman": spearman,
@@ -1465,6 +1610,13 @@ def rating_metrics(matched_df, *, n_bins=5):
         "rank_loss": rank_loss,
         "z_mse": _standardized_mse(matched_df["pred_rating"], matched_df["actual_points"]),
         "calibration_mae": calibration_mae(matched_df, n_bins=n_bins),
+        "raw_pred_range": raw_pred_range,
+        "actual_points_range": actual_points_range,
+        "raw_spread_ratio": raw_spread_ratio,
+        "points_mae": points_mae,
+        "points_rmse": points_rmse,
+        "points_bias": points_bias,
+        "points_spread_ratio": points_spread_ratio,
     }
 
 
@@ -1477,12 +1629,14 @@ def evaluate_params(
     *,
     split_name,
     calibration_bins=5,
+    points_calibrator: TeamPointsCalibrator | None = None,
 ):
     """Evaluate params on a slice without letting that slice define train statistics."""
     feat_eval = build_feature_tensors(eval_df, rank_reference_df=rank_reference_df)
     ratings = compute_ratings_torch(feat_eval, params.to(device), device)
     team_avgs = compute_team_avg_ratings(feat_eval, ratings, device)
     matched_df = build_matched_results(feat_eval, team_pts_df, team_avgs)
+    matched_df = apply_team_points_calibrator(matched_df, points_calibrator)
     coverage = team_coverage_table(feat_eval, team_pts_df)
     metrics = rating_metrics(matched_df, n_bins=calibration_bins)
     metrics["split"] = split_name
@@ -1661,8 +1815,14 @@ def save_model_run(
             "spearman_weight": getattr(args, "spearman_weight", None),
             "ndcg_weight": getattr(args, "ndcg_weight", None),
             "position_consistency_weight": getattr(args, "position_consistency_weight", None),
+            "points_regression_weight": getattr(args, "points_regression_weight", None),
+            "distribution_weight": getattr(args, "distribution_weight", None),
+            "tail_calibration_weight": getattr(args, "tail_calibration_weight", None),
             "extreme_penalty_weight": getattr(args, "extreme_penalty_weight", None),
             "prior_weight": getattr(args, "prior_weight", None),
+            "warmup_steps": getattr(args, "warmup_steps", None),
+            "min_lr_ratio": getattr(args, "min_lr_ratio", None),
+            "grad_clip": getattr(args, "grad_clip", None),
         }
 
     with open(run_dir / "meta.json", "w", encoding="utf-8") as f:
@@ -1674,6 +1834,8 @@ def save_model_run(
 
 def _json_ready(value):
     """Convert numpy/pandas scalars and NaN values to JSON-safe objects."""
+    if hasattr(value, "__dataclass_fields__"):
+        return _json_ready(asdict(value))
     if isinstance(value, dict):
         return {str(k): _json_ready(v) for k, v in value.items()}
     if isinstance(value, list | tuple):
@@ -2161,6 +2323,49 @@ def differentiable_rank_loss(pred, actual, spearman_weight=0.7, temperature=4.0)
     return -objective, soft_spearman, pearson_corr
 
 
+def calibrate_points_torch(pred_strength, actual_points, eps=1e-6):
+    """Differentiable z-score affine calibration from strength to point scale."""
+    pred_mean = pred_strength.mean()
+    pred_std = pred_strength.std(unbiased=False).clamp_min(eps)
+    actual_mean = actual_points.detach().mean()
+    actual_std = actual_points.detach().std(unbiased=False).clamp_min(eps)
+    return (pred_strength - pred_mean) / pred_std * actual_std + actual_mean
+
+
+def points_regression_loss(pred_strength, actual_points):
+    """Optimize calibrated point distance, not just ordering."""
+    pred_points = calibrate_points_torch(pred_strength, actual_points)
+    scale = actual_points.detach().std(unbiased=False).clamp_min(1.0)
+    residual = (pred_points - actual_points.detach()) / scale
+    return torch.mean(residual ** 2), pred_points
+
+
+def distribution_matching_loss(pred_points, actual_points):
+    """1D Wasserstein-style loss between calibrated predicted and actual points."""
+    if len(pred_points) < 2:
+        return torch.tensor(0.0, dtype=pred_points.dtype, device=pred_points.device)
+    scale = actual_points.detach().std(unbiased=False).clamp_min(1.0)
+    pred_sorted = torch.sort(pred_points).values
+    actual_sorted = torch.sort(actual_points.detach()).values
+    return torch.mean(((pred_sorted - actual_sorted) / scale) ** 2)
+
+
+def tail_calibration_loss(pred_points, actual_points, tail_quantile=0.20):
+    """Upweight title-race and relegation-zone teams in calibrated point loss."""
+    n = int(actual_points.numel())
+    if n < 5:
+        return torch.tensor(0.0, dtype=pred_points.dtype, device=pred_points.device)
+    actual_detached = actual_points.detach()
+    low_cut = torch.quantile(actual_detached, float(tail_quantile))
+    high_cut = torch.quantile(actual_detached, float(1.0 - tail_quantile))
+    tail_mask = (actual_detached <= low_cut) | (actual_detached >= high_cut)
+    if int(tail_mask.sum().item()) == 0:
+        return torch.tensor(0.0, dtype=pred_points.dtype, device=pred_points.device)
+    scale = actual_detached.std(unbiased=False).clamp_min(1.0)
+    residual = (pred_points[tail_mask] - actual_detached[tail_mask]) / scale
+    return torch.mean(residual ** 2)
+
+
 # ── 复合目标组件 ─────────────────────────────────────────────────────────
 
 POSITION_CORE_METRICS = {
@@ -2175,11 +2380,11 @@ POSITION_CORE_METRICS = {
 }
 
 
-def ndcg_loss(feat, ratings, team_pts_df, device, k=20):
+def ndcg_loss(feat, ratings, team_pts_df, device, k=20, temperature=4.0):
     """Differentiable NDCG@K loss across league-season groups.
 
     Returns 1 - mean(NDCG@K), so lower is better.
-    Uses soft-rank for differentiable predicted ranking.
+    Uses soft-rank discounts for differentiable predicted ranking.
     """
     # Build team average ratings per team-season group
     team_avgs = compute_team_avg_ratings_torch(feat, ratings, device)
@@ -2225,9 +2430,10 @@ def ndcg_loss(feat, ratings, team_pts_df, device, k=20):
             device=device,
         )
 
-        # Soft sort predicted ratings (descending) using soft_rank
-        # soft_rank_torch gives ascending ranks; negate for descending
-        pred_soft_rank = soft_rank_torch(-pred_ratings, temperature=4.0)
+        # soft_rank_torch gives ascending ranks; negate ratings so stronger
+        # predictions receive lower rank values. Avoid argsort here because it
+        # would detach NDCG from the prediction graph.
+        pred_soft_rank = soft_rank_torch(-pred_ratings, temperature=temperature)
 
         # Normalize actual points to [0, 1] for relevance
         pts_min = actual_points.min()
@@ -2237,18 +2443,17 @@ def ndcg_loss(feat, ratings, team_pts_df, device, k=20):
             continue
         rel = (actual_points - pts_min) / pts_range
 
-        # DCG using soft-rank positions: position i has discount 1/log2(rank_i + 1)
-        # Use top-k only
         top_k = min(k, len(group_indices))
-        # Sort by predicted soft rank (ascending = best predicted first)
-        sorted_indices = torch.argsort(pred_soft_rank)
-        sorted_rel = rel[sorted_indices[:top_k]]
-        positions = torch.arange(1, top_k + 1, dtype=torch.float32, device=device)
-        discounts = 1.0 / torch.log2(positions + 1.0)
-        dcg = torch.sum((torch.pow(2.0, sorted_rel) - 1.0) * discounts)
+        gains = torch.pow(2.0, rel) - 1.0
+        soft_discounts = 1.0 / torch.log2(pred_soft_rank + 2.0)
+        gate_temperature = max(float(temperature) / 4.0, 0.5)
+        top_gate = torch.sigmoid((top_k - pred_soft_rank) / gate_temperature)
+        dcg = torch.sum(gains * soft_discounts * top_gate)
 
         # Ideal DCG: sort by actual relevance descending
         ideal_sorted_rel = torch.sort(rel, descending=True).values[:top_k]
+        positions = torch.arange(1, top_k + 1, dtype=torch.float32, device=device)
+        discounts = 1.0 / torch.log2(positions + 1.0)
         idcg = torch.sum((torch.pow(2.0, ideal_sorted_rel) - 1.0) * discounts)
         if idcg < 1e-8:
             continue
@@ -2262,7 +2467,7 @@ def ndcg_loss(feat, ratings, team_pts_df, device, k=20):
     return 1.0 - mean_ndcg
 
 
-def position_consistency_loss(feat, ratings, device):
+def position_consistency_loss(feat, ratings, device, temperature=4.0):
     """Penalize inconsistency between rating rank and core-stat rank within each position.
 
     Returns mean(1 - soft_spearman) across positions.
@@ -2300,8 +2505,8 @@ def position_consistency_loss(feat, ratings, device):
             continue
 
         # Soft Spearman between ratings and core metric
-        rating_rank = soft_rank_torch(pos_ratings, temperature=4.0)
-        metric_rank = soft_rank_torch(pos_metrics.detach(), temperature=4.0)
+        rating_rank = soft_rank_torch(pos_ratings, temperature=temperature)
+        metric_rank = soft_rank_torch(pos_metrics.detach(), temperature=temperature)
         soft_sp = _corrcoef_torch(rating_rank, metric_rank)
         losses.append(1.0 - soft_sp)
 
@@ -2329,16 +2534,20 @@ def objective_torch(
     team_pts_df,
     params,
     device,
-    spearman_weight=0.50,
-    ndcg_weight=0.20,
-    position_consistency_weight=0.15,
-    extreme_penalty_weight=0.10,
-    prior_weight=0.05,
+    spearman_weight=0.42,
+    soft_rank_temperature=4.0,
+    ndcg_weight=0.16,
+    position_consistency_weight=0.12,
+    points_regression_weight=0.16,
+    distribution_weight=0.10,
+    tail_calibration_weight=0.14,
+    extreme_penalty_weight=0.05,
+    prior_weight=0.04,
     prior_params=None,
     verbose=False,
     return_components=False,
 ):
-    """Composite objective: Spearman + NDCG + position consistency + extreme penalty + prior."""
+    """Composite objective with ranking, calibrated points, distribution and guardrails."""
     ratings = compute_ratings_torch(feat, params, device)
     team_avgs = compute_team_avg_ratings_torch(feat, ratings, device)
     matched_group_idx, actual_t = build_team_target_tensors(feat, team_pts_df, device)
@@ -2351,19 +2560,28 @@ def objective_torch(
 
     pred_t = team_avgs.index_select(0, matched_group_idx)
 
-    # 1. Spearman/Pearson loss (existing)
-    rank_loss, soft_sp, pr = differentiable_rank_loss(pred_t, actual_t)
+    # 1. Spearman/Pearson loss
+    rank_loss, soft_sp, pr = differentiable_rank_loss(
+        pred_t,
+        actual_t,
+        temperature=soft_rank_temperature,
+    )
 
     # 2. NDCG loss
-    ndcg = ndcg_loss(feat, ratings, team_pts_df, device, k=20)
+    ndcg = ndcg_loss(feat, ratings, team_pts_df, device, k=20, temperature=soft_rank_temperature)
 
     # 3. Position consistency loss
-    pos_loss = position_consistency_loss(feat, ratings, device)
+    pos_loss = position_consistency_loss(feat, ratings, device, temperature=soft_rank_temperature)
 
-    # 4. Extreme penalty
+    # 4. Calibrated team-points losses
+    points_loss, pred_points = points_regression_loss(pred_t, actual_t)
+    dist_loss = distribution_matching_loss(pred_points, actual_t)
+    tail_loss = tail_calibration_loss(pred_points, actual_t)
+
+    # 5. Player-score guardrail. This is not the team-points tail loss.
     ext_pen = extreme_penalty(ratings)
 
-    # 5. Prior regularization
+    # 6. Prior regularization
     if prior_params is not None:
         prior_reg = ((params - prior_params) ** 2).mean()
     else:
@@ -2373,6 +2591,9 @@ def objective_torch(
         spearman_weight * rank_loss
         + ndcg_weight * ndcg
         + position_consistency_weight * pos_loss
+        + points_regression_weight * points_loss
+        + distribution_weight * dist_loss
+        + tail_calibration_weight * tail_loss
         + extreme_penalty_weight * ext_pen
         + prior_weight * prior_reg
     )
@@ -2380,7 +2601,9 @@ def objective_torch(
     if verbose:
         print(
             f"  rank={rank_loss.item():.4f} ndcg={ndcg.item():.4f} "
-            f"pos={pos_loss.item():.4f} ext={ext_pen.item():.4f} "
+            f"pos={pos_loss.item():.4f} points={points_loss.item():.4f} "
+            f"dist={dist_loss.item():.4f} tail={tail_loss.item():.4f} "
+            f"ext={ext_pen.item():.4f} "
             f"prior={prior_reg.item():.4f} total={total.item():.4f}"
         )
 
@@ -2389,10 +2612,15 @@ def objective_torch(
             "rank_loss": float(rank_loss.detach().cpu()),
             "ndcg": float(ndcg.detach().cpu()),
             "pos_loss": float(pos_loss.detach().cpu()),
+            "points_loss": float(points_loss.detach().cpu()),
+            "distribution": float(dist_loss.detach().cpu()),
+            "tail": float(tail_loss.detach().cpu()),
             "extreme": float(ext_pen.detach().cpu()),
             "prior": float(prior_reg.detach().cpu()),
             "soft_spearman": float(soft_sp.detach().cpu()),
             "soft_pearson": float(pr.detach().cpu()),
+            "pred_points_std": float(pred_points.detach().std(unbiased=False).cpu()),
+            "actual_points_std": float(actual_t.detach().std(unbiased=False).cpu()),
         }
         return total, components
 
@@ -2401,21 +2629,46 @@ def objective_torch(
 
 # ── 优化循环 ──────────────────────────────────────────────────────────────
 
+def cosine_lr_scale(
+    step: int,
+    total_steps: int,
+    warmup_steps: int = 20,
+    min_lr_ratio: float = 0.08,
+) -> float:
+    """Warm up linearly, then decay with a cosine floor."""
+    total_steps = max(int(total_steps), 1)
+    warmup_steps = max(0, min(int(warmup_steps), total_steps))
+    min_lr_ratio = float(np.clip(min_lr_ratio, 0.0, 1.0))
+    if warmup_steps > 0 and step < warmup_steps:
+        return max((step + 1) / warmup_steps, min_lr_ratio)
+    decay_steps = max(total_steps - warmup_steps, 1)
+    progress = (step - warmup_steps) / decay_steps
+    progress = float(np.clip(progress, 0.0, 1.0))
+    cosine = 0.5 * (1.0 + np.cos(np.pi * progress))
+    return min_lr_ratio + (1.0 - min_lr_ratio) * cosine
+
+
 def optimize(
     feat,
     team_pts,
     device,
     n_steps=500,
-    lr=0.05,
+    lr=0.035,
     pop_size=32,
-    spearman_weight=0.50,
+    spearman_weight=0.42,
     soft_rank_temperature=4.0,
-    ndcg_weight=0.20,
-    position_consistency_weight=0.15,
-    extreme_penalty_weight=0.10,
-    prior_strength=0.05,
+    ndcg_weight=0.16,
+    position_consistency_weight=0.12,
+    points_regression_weight=0.16,
+    distribution_weight=0.10,
+    tail_calibration_weight=0.14,
+    extreme_penalty_weight=0.05,
+    prior_strength=0.04,
     init_scale=0.35,
     patience=80,
+    warmup_steps=20,
+    min_lr_ratio=0.08,
+    grad_clip=5.0,
     seed=None,
     enable_viz=True,
     output_dir=None,
@@ -2430,7 +2683,13 @@ def optimize(
         "  目标: "
         f"spearman={spearman_weight:.2f} ndcg={ndcg_weight:.2f} "
         f"pos_consistency={position_consistency_weight:.2f} "
-        f"extreme={extreme_penalty_weight:.2f} prior={prior_strength:.2f}"
+        f"points={points_regression_weight:.2f} dist={distribution_weight:.2f} "
+        f"tail={tail_calibration_weight:.2f} "
+        f"player_extreme={extreme_penalty_weight:.2f} prior={prior_strength:.2f}"
+    )
+    print(
+        "  调度: "
+        f"warmup={warmup_steps}, min_lr_ratio={min_lr_ratio:.2f}, grad_clip={grad_clip:.2f}"
     )
 
     if seed is not None:
@@ -2470,6 +2729,15 @@ def optimize(
         patience_counter = 0
 
         for step in range(n_steps):
+            lr_scale = cosine_lr_scale(
+                step,
+                n_steps,
+                warmup_steps=warmup_steps,
+                min_lr_ratio=min_lr_ratio,
+            )
+            for group in optimizer.param_groups:
+                group["lr"] = lr * lr_scale
+
             optimizer.zero_grad()
 
             total_loss, components = objective_torch(
@@ -2478,8 +2746,12 @@ def optimize(
                 params_t,
                 device,
                 spearman_weight=spearman_weight,
+                soft_rank_temperature=soft_rank_temperature,
                 ndcg_weight=ndcg_weight,
                 position_consistency_weight=position_consistency_weight,
+                points_regression_weight=points_regression_weight,
+                distribution_weight=distribution_weight,
+                tail_calibration_weight=tail_calibration_weight,
                 extreme_penalty_weight=extreme_penalty_weight,
                 prior_weight=prior_strength,
                 prior_params=prior_params,
@@ -2487,6 +2759,8 @@ def optimize(
             )
 
             total_loss.backward()
+            if grad_clip and grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_([params_t], max_norm=float(grad_clip))
             optimizer.step()
 
             current_loss = float(total_loss.detach().cpu())
@@ -2586,16 +2860,22 @@ def run_cross_validation(
     min_train_seasons=2,
     gap_seasons=0,
     n_steps=150,
-    lr=0.05,
+    lr=0.035,
     pop_size=8,
-    spearman_weight=0.50,
+    spearman_weight=0.42,
     soft_rank_temperature=4.0,
-    ndcg_weight=0.20,
-    position_consistency_weight=0.15,
-    extreme_penalty_weight=0.10,
-    prior_strength=0.05,
+    ndcg_weight=0.16,
+    position_consistency_weight=0.12,
+    points_regression_weight=0.16,
+    distribution_weight=0.10,
+    tail_calibration_weight=0.14,
+    extreme_penalty_weight=0.05,
+    prior_strength=0.04,
     init_scale=0.35,
     patience=40,
+    warmup_steps=20,
+    min_lr_ratio=0.08,
+    grad_clip=5.0,
     seed=42,
     calibration_bins=5,
 ):
@@ -2630,13 +2910,29 @@ def run_cross_validation(
             soft_rank_temperature=soft_rank_temperature,
             ndcg_weight=ndcg_weight,
             position_consistency_weight=position_consistency_weight,
+            points_regression_weight=points_regression_weight,
+            distribution_weight=distribution_weight,
+            tail_calibration_weight=tail_calibration_weight,
             extreme_penalty_weight=extreme_penalty_weight,
             prior_strength=prior_strength,
             init_scale=init_scale,
             patience=patience,
+            warmup_steps=warmup_steps,
+            min_lr_ratio=min_lr_ratio,
+            grad_clip=grad_clip,
             seed=seed + fold_idx,
         )
         for model_name, params in [("baseline_v3", default_params), ("optimized", fold_params)]:
+            train_raw = evaluate_params(
+                params,
+                train_df,
+                train_team_pts,
+                train_df,
+                device,
+                split_name="train",
+                calibration_bins=calibration_bins,
+            )
+            points_calibrator = fit_team_points_calibrator(train_raw["matched"])
             for split_name, eval_df, eval_team_pts in [
                 ("train", train_df, train_team_pts),
                 ("test", test_df, test_team_pts),
@@ -2649,6 +2945,7 @@ def run_cross_validation(
                     device,
                     split_name=split_name,
                     calibration_bins=calibration_bins,
+                    points_calibrator=points_calibrator,
                 )
                 row = {
                     "fold": fold_idx,
@@ -2672,16 +2969,22 @@ def run_parameter_stability(
     *,
     n_runs=3,
     n_steps=150,
-    lr=0.05,
+    lr=0.035,
     pop_size=8,
-    spearman_weight=0.50,
+    spearman_weight=0.42,
     soft_rank_temperature=4.0,
-    ndcg_weight=0.20,
-    position_consistency_weight=0.15,
-    extreme_penalty_weight=0.10,
-    prior_strength=0.05,
+    ndcg_weight=0.16,
+    position_consistency_weight=0.12,
+    points_regression_weight=0.16,
+    distribution_weight=0.10,
+    tail_calibration_weight=0.14,
+    extreme_penalty_weight=0.05,
+    prior_strength=0.04,
     init_scale=0.35,
     patience=40,
+    warmup_steps=20,
+    min_lr_ratio=0.08,
+    grad_clip=5.0,
     seed=42,
     calibration_bins=5,
 ):
@@ -2706,12 +3009,28 @@ def run_parameter_stability(
             soft_rank_temperature=soft_rank_temperature,
             ndcg_weight=ndcg_weight,
             position_consistency_weight=position_consistency_weight,
+            points_regression_weight=points_regression_weight,
+            distribution_weight=distribution_weight,
+            tail_calibration_weight=tail_calibration_weight,
             extreme_penalty_weight=extreme_penalty_weight,
             prior_strength=prior_strength,
             init_scale=init_scale,
             patience=patience,
+            warmup_steps=warmup_steps,
+            min_lr_ratio=min_lr_ratio,
+            grad_clip=grad_clip,
             seed=run_seed,
         )
+        train_raw = evaluate_params(
+            params,
+            train_df,
+            train_team_pts,
+            train_df,
+            device,
+            split_name="train",
+            calibration_bins=calibration_bins,
+        )
+        points_calibrator = fit_team_points_calibrator(train_raw["matched"])
         train_eval = evaluate_params(
             params,
             train_df,
@@ -2720,6 +3039,7 @@ def run_parameter_stability(
             device,
             split_name="train",
             calibration_bins=calibration_bins,
+            points_calibrator=points_calibrator,
         )
         test_eval = evaluate_params(
             params,
@@ -2729,6 +3049,7 @@ def run_parameter_stability(
             device,
             split_name="test",
             calibration_bins=calibration_bins,
+            points_calibrator=points_calibrator,
         )
         rows.append(
             {
@@ -2769,12 +3090,16 @@ def _print_metric_block(title, baseline_eval, optimized_eval):
         "  baseline_v3: "
         f"Spearman={base['spearman']:.4f}  Pearson={base['pearson']:.4f}  "
         f"rank_loss={base['rank_loss']:.4f}  calib_MAE={base['calibration_mae']:.2f}  "
+        f"points_MAE={base['points_mae']:.2f}  "
+        f"raw_spread={base['raw_spread_ratio']:.2f}  "
         f"N={base['n_team_seasons']}"
     )
     print(
         "  optimized:   "
         f"Spearman={opt['spearman']:.4f}  Pearson={opt['pearson']:.4f}  "
         f"rank_loss={opt['rank_loss']:.4f}  calib_MAE={opt['calibration_mae']:.2f}  "
+        f"points_MAE={opt['points_mae']:.2f}  "
+        f"raw_spread={opt['raw_spread_ratio']:.2f}  "
         f"N={opt['n_team_seasons']}"
     )
     print(
@@ -2791,25 +3116,36 @@ def main():
     parser.add_argument("--data_dir", type=str, default="./data",
                         help="数据目录路径 (包含 raw/ 和 gold/)")
     parser.add_argument("--steps", type=int, default=500, help="每组优化步数")
-    parser.add_argument("--lr", type=float, default=0.05, help="学习率")
+    parser.add_argument("--lr", type=float, default=0.035, help="初始学习率")
     parser.add_argument("--pop", type=int, default=32, help="种群大小 (并行起点数)")
-    parser.add_argument("--spearman-weight", type=float, default=0.50,
+    parser.add_argument("--spearman-weight", type=float, default=0.42,
                         help="Spearman/Pearson 排名损失在复合目标中的权重")
     parser.add_argument("--soft-rank-temperature", type=float, default=4.0,
                         help="soft-rank 温度；越小越接近硬排名但梯度更容易饱和")
-    parser.add_argument("--ndcg-weight", type=float, default=0.20,
+    parser.add_argument("--ndcg-weight", type=float, default=0.16,
                         help="NDCG@20 损失在复合目标中的权重")
-    parser.add_argument("--position-consistency-weight", type=float, default=0.15,
+    parser.add_argument("--position-consistency-weight", type=float, default=0.12,
                         help="位置核心指标一致性损失在复合目标中的权重")
-    parser.add_argument("--extreme-penalty-weight", type=float, default=0.10,
-                        help="极端评分惩罚在复合目标中的权重")
-    parser.add_argument("--prior-weight", type=float, default=0.05,
+    parser.add_argument("--points-regression-weight", type=float, default=0.16,
+                        help="训练集校准后球队积分回归损失在复合目标中的权重")
+    parser.add_argument("--distribution-weight", type=float, default=0.10,
+                        help="校准后积分分布匹配损失在复合目标中的权重")
+    parser.add_argument("--tail-calibration-weight", type=float, default=0.14,
+                        help="争冠/降级尾部球队校准损失在复合目标中的权重")
+    parser.add_argument("--extreme-penalty-weight", type=float, default=0.05,
+                        help="球员评分离群 guardrail 在复合目标中的权重")
+    parser.add_argument("--prior-weight", type=float, default=0.04,
                         help="锚定 v3 默认权重的正则强度")
     parser.add_argument("--prior-strength", type=float, default=None,
                         help="锚定 v3 默认权重的正则强度 (deprecated, use --prior-weight)")
     parser.add_argument("--init-scale", type=float, default=0.35,
                         help="多起点围绕 v3 默认参数的随机扰动标准差")
     parser.add_argument("--patience", type=int, default=80, help="单个起点的 early-stop 耐心步数")
+    parser.add_argument("--warmup-steps", type=int, default=20, help="学习率线性 warmup 步数")
+    parser.add_argument("--min-lr-ratio", type=float, default=0.08,
+                        help="余弦衰减后的最小学习率比例")
+    parser.add_argument("--grad-clip", type=float, default=5.0,
+                        help="梯度裁剪阈值；<=0 表示禁用")
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--test-seasons", type=int, default=1, help="最终 holdout 使用最近几个赛季")
     parser.add_argument(
@@ -2852,6 +3188,8 @@ def main():
             args.pop = 6
         if args.patience == 80:
             args.patience = 15
+        if args.warmup_steps == 20:
+            args.warmup_steps = 8
         if args.cv_folds == 3:
             args.cv_folds = 0
         if args.stability_runs == 3:
@@ -2885,11 +3223,11 @@ def main():
     df, team_pts = load_data(data_dir)
 
     # 出场标记：不足 20 场的球员仍参与评分，但不参与优化训练
-    MIN_MATCHES_OPT = 20
+    min_matches_opt = 20
     if "matches" in df.columns:
-        df["low_appearance"] = df["matches"] < MIN_MATCHES_OPT
+        df["low_appearance"] = df["matches"] < min_matches_opt
         n_low = df["low_appearance"].sum()
-        print(f"  出场标记 (<{MIN_MATCHES_OPT}场): {n_low} 人标记为 low_appearance")
+        print(f"  出场标记 (<{min_matches_opt}场): {n_low} 人标记为 low_appearance")
 
     print(f"  球员: {len(df)}, 球队赛季: {len(team_pts)}")
     print(f"  耗时: {time.time()-t0:.1f}s")
@@ -2922,6 +3260,16 @@ def main():
 
     print("\n[3] 基线 (v3 默认权重, 不训练)...")
     default_params = _get_default_params_tensor(device)
+    baseline_train_raw_eval = evaluate_params(
+        default_params,
+        train_df,
+        train_team_pts,
+        train_df,
+        device,
+        split_name="train",
+        calibration_bins=args.calibration_bins,
+    )
+    baseline_points_calibrator = fit_team_points_calibrator(baseline_train_raw_eval["matched"])
     baseline_train_eval = evaluate_params(
         default_params,
         train_df,
@@ -2930,6 +3278,7 @@ def main():
         device,
         split_name="train",
         calibration_bins=args.calibration_bins,
+        points_calibrator=baseline_points_calibrator,
     )
     baseline_test_eval = evaluate_params(
         default_params,
@@ -2939,6 +3288,7 @@ def main():
         device,
         split_name="test",
         calibration_bins=args.calibration_bins,
+        points_calibrator=baseline_points_calibrator,
     )
     print(
         f"  train Spearman={baseline_train_eval['metrics']['spearman']:.4f}  "
@@ -2959,16 +3309,32 @@ def main():
         soft_rank_temperature=args.soft_rank_temperature,
         ndcg_weight=args.ndcg_weight,
         position_consistency_weight=args.position_consistency_weight,
+        points_regression_weight=args.points_regression_weight,
+        distribution_weight=args.distribution_weight,
+        tail_calibration_weight=args.tail_calibration_weight,
         extreme_penalty_weight=args.extreme_penalty_weight,
         prior_strength=args.prior_weight,
         init_scale=args.init_scale,
         patience=args.patience,
+        warmup_steps=args.warmup_steps,
+        min_lr_ratio=args.min_lr_ratio,
+        grad_clip=args.grad_clip,
         seed=args.seed,
         enable_viz=not args.no_viz,
         output_dir=data_dir / "gold" / "feature_store",
     )
     print(f"  总耗时: {time.time()-t0:.1f}s")
 
+    optimized_train_raw_eval = evaluate_params(
+        best_params,
+        train_df,
+        train_team_pts,
+        train_df,
+        device,
+        split_name="train",
+        calibration_bins=args.calibration_bins,
+    )
+    optimized_points_calibrator = fit_team_points_calibrator(optimized_train_raw_eval["matched"])
     optimized_train_eval = evaluate_params(
         best_params,
         train_df,
@@ -2977,6 +3343,7 @@ def main():
         device,
         split_name="train",
         calibration_bins=args.calibration_bins,
+        points_calibrator=optimized_points_calibrator,
     )
     optimized_test_eval = evaluate_params(
         best_params,
@@ -2986,6 +3353,7 @@ def main():
         device,
         split_name="test",
         calibration_bins=args.calibration_bins,
+        points_calibrator=optimized_points_calibrator,
     )
 
     print("\n[5] Train/Test 对比:")
@@ -3081,10 +3449,19 @@ def main():
                 soft_rank_temperature=args.soft_rank_temperature,
                 ndcg_weight=args.ndcg_weight,
                 position_consistency_weight=args.position_consistency_weight,
+                points_regression_weight=args.points_regression_weight,
+                distribution_weight=args.distribution_weight,
+                tail_calibration_weight=args.tail_calibration_weight,
                 extreme_penalty_weight=args.extreme_penalty_weight,
                 prior_strength=args.prior_weight,
                 init_scale=args.init_scale,
                 patience=min(args.patience, 40),
+                warmup_steps=min(
+                    args.warmup_steps,
+                    max(1, (args.cv_steps or max(50, args.steps // 3)) // 5),
+                ),
+                min_lr_ratio=args.min_lr_ratio,
+                grad_clip=args.grad_clip,
                 seed=args.seed,
                 calibration_bins=args.calibration_bins,
             )
@@ -3126,10 +3503,19 @@ def main():
             soft_rank_temperature=args.soft_rank_temperature,
             ndcg_weight=args.ndcg_weight,
             position_consistency_weight=args.position_consistency_weight,
+            points_regression_weight=args.points_regression_weight,
+            distribution_weight=args.distribution_weight,
+            tail_calibration_weight=args.tail_calibration_weight,
             extreme_penalty_weight=args.extreme_penalty_weight,
             prior_strength=args.prior_weight,
             init_scale=args.init_scale,
             patience=min(args.patience, 40),
+            warmup_steps=min(
+                args.warmup_steps,
+                max(1, (args.stability_steps or max(50, args.steps // 3)) // 5),
+            ),
+            min_lr_ratio=args.min_lr_ratio,
+            grad_clip=args.grad_clip,
             seed=args.seed,
             calibration_bins=args.calibration_bins,
         )
@@ -3187,13 +3573,27 @@ def main():
         print(f"  模型运行登记保存失败: {exc}")
 
     holdout_predictions = optimized_test_eval["matched"].rename(
-        columns={"pred_rating": "optimized_rating"},
+        columns={
+            "pred_rating": "optimized_rating",
+            "pred_points_calibrated": "optimized_points_calibrated",
+        },
     )
     if not holdout_predictions.empty and not baseline_test_eval["matched"].empty:
         baseline_holdout = baseline_test_eval["matched"].loc[
             :,
-            ["team", "league", "season", "pred_rating"],
-        ].rename(columns={"pred_rating": "baseline_v3_rating"})
+            [
+                "team",
+                "league",
+                "season",
+                "pred_rating",
+                "pred_points_calibrated",
+            ],
+        ].rename(
+            columns={
+                "pred_rating": "baseline_v3_rating",
+                "pred_points_calibrated": "baseline_v3_points_calibrated",
+            },
+        )
         holdout_predictions = holdout_predictions.merge(
             baseline_holdout,
             on=["team", "league", "season"],
@@ -3224,11 +3624,22 @@ def main():
         "spearman_weight": args.spearman_weight,
         "ndcg_weight": args.ndcg_weight,
         "position_consistency_weight": args.position_consistency_weight,
+        "points_regression_weight": args.points_regression_weight,
+        "distribution_weight": args.distribution_weight,
+        "tail_calibration_weight": args.tail_calibration_weight,
         "extreme_penalty_weight": args.extreme_penalty_weight,
         "prior_weight": args.prior_weight,
         "soft_rank_temperature": args.soft_rank_temperature,
         "init_scale": args.init_scale,
         "patience": args.patience,
+        "warmup_steps": args.warmup_steps,
+        "min_lr_ratio": args.min_lr_ratio,
+        "grad_clip": args.grad_clip,
+        "points_calibration": {
+            "baseline_v3": baseline_points_calibrator,
+            "optimized": optimized_points_calibrator,
+            "fit_scope": "train seasons only",
+        },
         "holdout": {
             "train_seasons": list(holdout.train_seasons),
             "test_seasons": list(holdout.test_seasons),
@@ -3276,11 +3687,13 @@ def main():
 
     # 低出场额外扣分：不足 20 场的球员按出场比例打折
     if "low_appearance" in scored_df.columns and "matches" in scored_df.columns:
-        MIN_MATCHES_PENALTY = 20
+        min_matches_penalty = 20
         low_mask = scored_df["low_appearance"]
         if low_mask.any():
             # 线性惩罚：0场→扣30%，10场→扣15%，20场→不扣
-            penalty = 1.0 - 0.30 * (1.0 - scored_df["matches"] / MIN_MATCHES_PENALTY).clip(0, 1)
+            penalty = 1.0 - 0.30 * (
+                1.0 - scored_df["matches"] / min_matches_penalty
+            ).clip(0, 1)
             scored_df.loc[low_mask, "optimized_score"] *= penalty[low_mask]
             n_low = low_mask.sum()
             print(f"  低出场扣分: {n_low} 人 (最多扣 30%)")
