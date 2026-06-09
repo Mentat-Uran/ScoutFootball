@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import streamlit as st
+
+SRC_ROOT = Path(__file__).resolve().parents[2]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 st.set_page_config(page_title="ScoutFootball", page_icon="⚽", layout="wide")
 
@@ -20,6 +25,11 @@ st.sidebar.info(f"Data source: {source}")
 
 pg = st.navigation(
     [
+        st.Page(
+            APP_DIR / "pages/0_Overview.py",
+            title="Overview",
+            icon="🧭",
+        ),
         st.Page(
             APP_DIR / "pages/1_Player_Comparison.py",
             title="Player Comparison",
@@ -79,6 +89,16 @@ pg = st.navigation(
             APP_DIR / "pages/12_World_Cup_Probability.py",
             title="World Cup Probability",
             icon="🎲",
+        ),
+        st.Page(
+            APP_DIR / "pages/13_Scouting_Queue.py",
+            title="Scouting Queue",
+            icon="🗂️",
+        ),
+        st.Page(
+            APP_DIR / "pages/14_Action_Value.py",
+            title="Action Value",
+            icon="🧪",
         ),
     ]
 )

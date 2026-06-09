@@ -200,6 +200,14 @@ const API_BASE = window.__SCOUTFOOTBALL_API__ || "";
 let players = [];
 let reviews = [];
 let matches = [];
+let ratingsMeta = { model_meta: {}, league_metrics: [] };
+let artifactSummary = { data_health: {}, artifacts: [] };
+let predictionMeta = { status: "no_data" };
+let valueSummaryMeta = { sample_count: 0, metrics: {} };
+let modelRuns = { count: 0, runs: [] };
+let watchlistData = [];
+let shortlistData = [];
+let actionValueSummary = { status: "no_data", players: [], metrics: {} };
 
 async function fetchRatings(position, league) {
     const params = new URLSearchParams();
@@ -273,12 +281,45 @@ async function fetchTeams() {
 
 async function fetchPrediction(homeTeam, awayTeam) {
     try {
-        const resp = await fetch(`${API_BASE}/prediction/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
+        const resp = await fetch(`${API_BASE}/predictions/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return await resp.json();
     } catch (err) {
         console.warn("Failed to fetch prediction:", err);
         return null;
+    }
+}
+
+async function fetchPredictionMeta() {
+    try {
+        const resp = await fetch(`${API_BASE}/predictions/meta`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (err) {
+        console.warn("Failed to fetch prediction meta:", err);
+        return { status: "no_data" };
+    }
+}
+
+async function fetchModelRuns() {
+    try {
+        const resp = await fetch(`${API_BASE}/reports/model-runs`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (err) {
+        console.warn("Failed to fetch model runs:", err);
+        return { count: 0, runs: [] };
+    }
+}
+
+async function fetchActionValues() {
+    try {
+        const resp = await fetch(`${API_BASE}/action-values?limit=12`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (err) {
+        console.warn("Failed to fetch action values:", err);
+        return { status: "no_data", players: [], metrics: {} };
     }
 }
 
@@ -390,7 +431,7 @@ async function renderPlayerProfile() {
     // Fetch real profile data for radar
     let profile = null;
     try {
-        const resp = await fetch(`${API_BASE}/player/${encodeURIComponent(player.name)}/profile?season=${player.season}`);
+        const resp = await fetch(`${API_BASE}/players/${encodeURIComponent(player.name)}?season=${player.season}`);
         if (resp.ok) profile = await resp.json();
     } catch (err) { /* fallback to list data */ }
 
@@ -538,6 +579,7 @@ async function fetchValueReport() {
         const resp = await fetch(`${API_BASE}/value-summary`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
+        valueSummaryMeta = data;
         if (data.players && data.players.length > 0) {
             return data.players.map((p) => ({
                 name: p.player || "",
@@ -693,6 +735,9 @@ async function renderMatches() {
     // Fetch prediction from API
     currentPrediction = await fetchPrediction(appState.home, appState.away);
     const match = selectedMatch();
+    const predictionCoverage = predictionMeta.status === "ok" && predictionMeta.num_teams
+        ? `${predictionMeta.num_teams} teams`
+        : "artifact pending";
     document.getElementById("match-title").textContent = `${match.home} vs ${match.away}`;
     const probabilityRows = [
         [t("home"), match.hw],
@@ -708,9 +753,9 @@ async function renderMatches() {
     `).join("");
     document.getElementById("match-detail").innerHTML = `
         <div><span>${t("expected_goals")}</span><strong>${match.xh.toFixed(2)} / ${match.xa.toFixed(2)}</strong></div>
-        <div><span>${t("coverage")}</span><strong>0.92</strong></div>
-        <div><span>model</span><strong>Poisson</strong></div>
-        <div><span>calibration</span><strong>pending</strong></div>
+        <div><span>${t("coverage")}</span><strong>${predictionCoverage}</strong></div>
+        <div><span>model</span><strong>${predictionMeta.model_type || "Poisson"}</strong></div>
+        <div><span>train_rows</span><strong>${predictionMeta.train_rows || "pending"}</strong></div>
     `;
     renderScoreMatrix(match);
 }
@@ -783,59 +828,193 @@ async function fetchReviewQueue() {
     }
 }
 
+async function fetchWatchlist() {
+    try {
+        const resp = await fetch(`${API_BASE}/watchlist?limit=12`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        return data.players || [];
+    } catch (err) {
+        console.warn("Failed to fetch watchlist:", err);
+        return [];
+    }
+}
+
+async function fetchShortlist() {
+    try {
+        const resp = await fetch(`${API_BASE}/shortlist?limit=12`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        return data.players || [];
+    } catch (err) {
+        console.warn("Failed to fetch shortlist:", err);
+        return [];
+    }
+}
+
 function renderScouting() {
     const queue = reviewQueue.length > 0 ? reviewQueue : [];
     document.getElementById("review-list").innerHTML = queue.length > 0
         ? queue.map((p) => `
             <div class="rank-item">
                 <div>
-                    <strong>${p.name}</strong>
-                    <span class="rank-meta">${p.team} · ${p.position} · ${p.minutes}min</span>
+                    <strong>${p.player_name || p.name}</strong>
+                    <span class="rank-meta">${p.team} · ${p.position_group || p.position || ""} · ${p.minutes}min · ${p.reason_code || ""}</span>
                 </div>
-                <span class="status-pill ${confidenceClass(p.confidence)}">${p.confidence}</span>
+                <span class="status-pill ${confidenceClass((p.confidence_level || p.confidence || "LOW").toUpperCase())}">${(p.confidence_level || p.confidence || "LOW").toUpperCase()}</span>
             </div>
         `).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No low-confidence players in queue</div>';
-    const watchlistPlayers = [...players].sort((a, b) => b.rating - a.rating).slice(0, 4);
-    document.getElementById("watchlist").innerHTML = watchlistPlayers.length > 0 ? watchlistPlayers.map((player) => `
+
+    document.getElementById("watchlist").innerHTML = watchlistData.length > 0 ? watchlistData.map((player) => `
         <div class="watch-card">
             <div>
-                <strong>${player.name}</strong>
-                <span class="rank-meta">${player.team} · ${player.position}</span>
+                <strong>${player.player_name || player.name}</strong>
+                <span class="rank-meta">${player.team} · ${player.position_group || player.position || ""} · ${player.reason_code || ""}</span>
             </div>
-            <span class="status-pill ${confidenceClass(player.confidence)}">${player.rating.toFixed(1)}</span>
+            <span class="status-pill ${confidenceClass((player.confidence_level || player.confidence || "LOW").toUpperCase())}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
         </div>
-    `}).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
+    `).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
+
+    document.getElementById("shortlist-count").textContent = String(shortlistData.length);
+    document.getElementById("shortlist").innerHTML = shortlistData.length > 0 ? shortlistData.map((player) => `
+        <div class="watch-card">
+            <div>
+                <strong>${player.player_name || player.name}</strong>
+                <span class="rank-meta">${player.team} · ${player.position_group || player.position || ""} · ${player.reason_code || ""}</span>
+            </div>
+            <span class="status-pill ${confidenceClass((player.confidence_level || player.confidence || "HIGH").toUpperCase())}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
+        </div>
+    `).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
+}
+
+function renderOverview() {
+    const health = artifactSummary.data_health || {};
+    const healthItems = document.querySelectorAll("#data-health-list .health-item");
+    if (healthItems.length >= 3) {
+        const oofBadge = healthItems[0].querySelector(".status-pill");
+        oofBadge.className = `status-pill ${health.oof_available ? "status-high" : "status-low"}`;
+        oofBadge.textContent = health.oof_available ? "HIGH" : "LOW";
+
+        const proxyBadge = healthItems[1].querySelector(".status-pill");
+        proxyBadge.className = `status-pill ${health.player_match_coverage ? "status-medium" : "status-low"}`;
+        proxyBadge.textContent = health.player_match_coverage ? "MED" : "LOW";
+        healthItems[1].querySelector("span[data-i18n='health_proxy']").textContent = health.player_match_coverage || t("health_proxy");
+
+        const truthBadge = healthItems[2].querySelector(".status-pill");
+        truthBadge.className = `status-pill ${health.truth_labels_available ? "status-high" : "status-low"}`;
+        truthBadge.textContent = health.truth_labels_available ? "HIGH" : "LOW";
+    }
+
+    const overallBadge = document.querySelector("#view-overview .compact-panel .panel-head .status-pill");
+    if (overallBadge) {
+        const overallHigh = health.oof_available && health.truth_labels_available;
+        overallBadge.className = `status-pill ${overallHigh ? "status-high" : "status-medium"}`;
+        overallBadge.textContent = overallHigh ? "HIGH" : "MED";
+    }
+}
+
+function renderReports() {
+    const latestRun = (modelRuns.runs || [])[0] || {};
+    const latestMetrics = latestRun.metrics || {};
+    const runSpearman = latestMetrics.spearman ?? latestRun.spearman;
+    const runStatus = runSpearman != null ? `Spearman ${Number(runSpearman).toFixed(3)}` : "no metrics";
+    document.getElementById("report-run-title").textContent = latestRun.run_id || "rating_optimizer_gpu";
+    document.getElementById("report-run-status").textContent = runStatus;
+    document.getElementById("report-run-status").className = `status-pill ${runSpearman != null ? "status-high" : "status-low"}`;
+
+    const valueMetrics = valueSummaryMeta.metrics || {};
+    const valueImprovement = valueMetrics.mae_improvement_vs_baseline;
+    document.getElementById("report-value-title").textContent = valueMetrics.estimator || "value_fairness_oof";
+    document.getElementById("report-value-status").textContent = valueImprovement ? `+${Math.round(valueImprovement).toLocaleString()} MAE` : "ready";
+    document.getElementById("report-value-status").className = `status-pill ${valueSummaryMeta.sample_count > 0 ? "status-high" : "status-low"}`;
+
+    const predictionReady = predictionMeta.status === "ok";
+    const predictionLabel = predictionReady
+        ? `${predictionMeta.model_type || "independent_poisson"} · ${predictionMeta.num_teams || 0} teams`
+        : "no artifact";
+    document.getElementById("report-prediction-title").textContent = "poisson_baseline";
+    document.getElementById("report-prediction-status").textContent = predictionLabel;
+    document.getElementById("report-prediction-status").className = `status-pill ${predictionReady ? "status-medium" : "status-low"}`;
+
+    document.getElementById("model-runs-count").textContent = String(modelRuns.count || 0);
+    const runList = document.getElementById("model-runs-list");
+    const runs = (modelRuns.runs || []).slice(0, 12);
+    runList.innerHTML = runs.length > 0
+        ? runs.map((run) => {
+            const metrics = run.metrics || {};
+            const spearman = metrics.spearman ?? run.spearman;
+            const pearson = metrics.pearson ?? run.pearson;
+            const hash = run.input_hash || "n/a";
+            return `
+            <div class="rank-item">
+                <div>
+                    <strong>${run.run_id || "run"}</strong>
+                    <span class="rank-meta">hash ${hash} · spearman ${spearman != null ? Number(spearman).toFixed(3) : "n/a"} · pearson ${pearson != null ? Number(pearson).toFixed(3) : "n/a"}</span>
+                </div>
+                <span class="status-pill ${spearman != null ? "status-high" : "status-low"}">${spearman != null ? "READY" : "N/A"}</span>
+            </div>`;
+        }).join("")
+        : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No model runs found</div>';
 }
 
 function renderActions() {
     const chart = getChart("action-chart");
+    const players = actionValueSummary.players || [];
+    const actionList = document.getElementById("action-list");
+    const actionStatus = document.getElementById("action-status-pill");
+
+    if (actionStatus) {
+        actionStatus.textContent = actionValueSummary.status === "ok"
+            ? `REAL ${players.length}`
+            : "NO DATA";
+        actionStatus.className = `status-pill ${actionValueSummary.status === "ok" ? "status-medium" : "status-low"}`;
+    }
+
+    actionList.innerHTML = players.length > 0
+        ? players.map((player) => `
+            <div class="rank-item">
+                <div>
+                    <strong>${player.player_name || ""}</strong>
+                    <span class="rank-meta">xT/90 ${Number(player.xT_per_90 || 0).toFixed(3)} · composite ${Number(player.composite_score || 0).toFixed(1)}</span>
+                </div>
+                <span class="status-pill status-medium">${Number(player.finishing_delta || 0).toFixed(2)}</span>
+            </div>
+        `).join("")
+        : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No action value artifact</div>';
+
     if (!chart) return;
-    const zones = [];
-    for (let x = 0; x < 8; x += 1) {
-        for (let y = 0; y < 5; y += 1) {
-            const centerBias = Math.max(0, 1 - Math.abs(y - 2) * 0.23);
-            const finalThird = x > 4 ? 0.55 : 0.2;
-            zones.push([x, y, +(centerBias * (0.3 + finalThird + x * 0.055)).toFixed(2)]);
-        }
+    const chartPlayers = players.filter((player) => player.player_name && player.xT_per_90 != null);
+    if (chartPlayers.length === 0) {
+        chart.clear();
+        return;
     }
     chart.setOption({
         title: {
-            text: appState.lang === "zh" ? "样例数据 · 非真实 xT/VAEP 产物" : "Sample data · Not real xT/VAEP output",
+            text: appState.lang === "zh" ? "真实 StatsBomb 样本 · 非全量联赛能力" : "Real StatsBomb sample · Not full-league coverage",
             left: "center", top: 0,
             textStyle: { color: "rgba(255,180,60,.85)", fontSize: 12, fontWeight: 400 },
         },
-        grid: { left: 36, right: 20, top: 30, bottom: 28 },
-        xAxis: { type: "category", data: ["1", "2", "3", "4", "5", "6", "7", "8"], axisLabel: { color: chartTextColor() } },
-        yAxis: { type: "category", data: ["L", "HL", "C", "HR", "R"], axisLabel: { color: chartTextColor() } },
-        visualMap: {
-            min: 0,
-            max: 1.3,
-            show: false,
-            inRange: { color: ["rgba(255,255,255,.04)", "rgba(87,214,141,.78)"] },
+        grid: { left: 56, right: 20, top: 34, bottom: 60 },
+        xAxis: {
+            type: "category",
+            data: chartPlayers.map((player) => player.player_name),
+            axisLabel: { color: chartTextColor(), rotate: 30 },
         },
-        series: [{ type: "heatmap", data: zones, label: { show: false } }],
-    });
+        yAxis: {
+            type: "value",
+            name: "xT/90",
+            nameTextStyle: { color: chartTextColor() },
+            axisLabel: { color: chartTextColor() },
+            splitLine: { lineStyle: { color: chartGridColor() } },
+        },
+        series: [{
+            type: "bar",
+            data: chartPlayers.map((player) => Number(player.xT_per_90 || 0)),
+            itemStyle: { color: "rgba(87,214,141,.78)" },
+            label: { show: false },
+        }],
+    }, true);
     chart.resize();
 }
 
@@ -867,11 +1046,13 @@ function refreshAllChartColors() {
 }
 
 async function renderActiveView() {
+    if (appState.view === "overview") renderOverview();
     if (appState.view === "players") renderPlayers();
     if (appState.view === "value") renderValue();
     if (appState.view === "matches") await renderMatches();
     if (appState.view === "scouting") renderScouting();
     if (appState.view === "actions") renderActions();
+    if (appState.view === "reports") renderReports();
     if (appState.view === "wc_schedule") renderWcSchedule();
     if (appState.view === "wc_squads") renderWcSquads();
     if (appState.view === "wc_compare") renderWcCompare();
@@ -1415,18 +1596,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     setView("overview");
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData] = await Promise.all([
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, runs, watchlistRows, shortlistRows, actionValues] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
         fetchArtifacts(),
         fetchTeams(),
         fetchValueReport(),
         fetchReviewQueue(),
+        fetchPredictionMeta(),
+        fetchModelRuns(),
+        fetchWatchlist(),
+        fetchShortlist(),
+        fetchActionValues(),
     ]);
 
     players = ratingsData;
+    ratingsMeta = meta;
+    artifactSummary = artifacts;
     valuePlayers = valueData;
     reviewQueue = reviewData;
+    predictionMeta = predictionArtifact;
+    modelRuns = runs;
+    watchlistData = watchlistRows;
+    shortlistData = shortlistRows;
+    actionValueSummary = actionValues;
     if (players.length > 0) {
         appState.selectedPlayerKey = players[0].key;
     }
@@ -1458,9 +1651,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (healthItems.length >= 3) {
         healthItems[0].querySelector(".status-pill").className = `status-pill ${health.oof_available ? "status-high" : "status-low"}`;
         healthItems[0].querySelector(".status-pill").textContent = health.oof_available ? "HIGH" : "LOW";
-        healthItems[1].querySelector(".status-pill").className = "status-pill status-low";
+        healthItems[1].querySelector(".status-pill").className = `status-pill ${health.player_match_coverage ? "status-medium" : "status-low"}`;
+        healthItems[1].querySelector(".status-pill").textContent = health.player_match_coverage ? "MED" : "LOW";
         healthItems[2].querySelector(".status-pill").className = `status-pill ${health.truth_labels_available ? "status-high" : "status-low"}`;
         healthItems[2].querySelector(".status-pill").textContent = health.truth_labels_available ? "HIGH" : "LOW";
+    }
+
+    const topCoveragePill = document.getElementById("top-coverage-pill");
+    if (topCoveragePill) {
+        topCoveragePill.textContent = health.player_match_coverage || artifacts.data_source_label || "local parquet";
+        topCoveragePill.className = `status-pill ${health.player_match_coverage ? "status-medium" : "status-low"}`;
+    }
+    const topOofPill = document.getElementById("top-oof-pill");
+    if (topOofPill) {
+        topOofPill.textContent = valueSummaryMeta.sample_count ? `OOF ${valueSummaryMeta.sample_count}` : "OOF none";
+        topOofPill.className = `status-pill ${valueSummaryMeta.sample_count ? "status-high" : "status-low"}`;
     }
 
     renderActiveView();

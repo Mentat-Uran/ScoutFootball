@@ -40,6 +40,41 @@ def _duckdb_exists() -> bool:
     return _duckdb_path().exists()
 
 
+def _minutes_to_confidence(minutes: float) -> str:
+    if minutes >= 900:
+        return "HIGH"
+    if minutes >= 450:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _normalize_ratings_frame(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    result = df.copy()
+    if "sub_position" in result.columns and "position_group" not in result.columns:
+        result = result.rename(columns={"sub_position": "position_group"})
+
+    if "minutes" in result.columns:
+        result["minutes"] = pd.to_numeric(result["minutes"], errors="coerce").fillna(0.0)
+
+    if "confidence_level" not in result.columns:
+        if "minutes" in result.columns:
+            result["confidence_level"] = result["minutes"].map(_minutes_to_confidence)
+        else:
+            result["confidence_level"] = "LOW"
+    else:
+        result["confidence_level"] = result["confidence_level"].astype(str).str.upper()
+
+    if "player" in result.columns and "player_name" not in result.columns:
+        result["player_name"] = result["player"]
+    if "team" in result.columns and "team_name" not in result.columns:
+        result["team_name"] = result["team"]
+
+    return result
+
+
 @lru_cache(maxsize=1)
 def _load_all_player_ratings() -> pd.DataFrame:
     """Load all player ratings into memory (cached)."""
@@ -48,9 +83,10 @@ def _load_all_player_ratings() -> pd.DataFrame:
 
         con = duckdb.connect(str(_duckdb_path()), read_only=True)
         try:
-            return con.execute(
+            df = con.execute(
                 "SELECT * FROM player_ratings ORDER BY optimized_score DESC"
             ).fetchdf()
+            return _normalize_ratings_frame(df)
         finally:
             con.close()
 
@@ -58,8 +94,7 @@ def _load_all_player_ratings() -> pd.DataFrame:
     rel = "gold/feature_store/player_ratings_optimized.parquet"
     if _parquet_exists(rel):
         df = pd.read_parquet(_parquet_path(rel))
-        if "sub_position" in df.columns and "position_group" not in df.columns:
-            df = df.rename(columns={"sub_position": "position_group"})
+        df = _normalize_ratings_frame(df)
         return df.sort_values("optimized_score", ascending=False).reset_index(drop=True)
 
     logger.warning("No ratings data found — falling back to synthetic demo data")
@@ -68,8 +103,8 @@ def _load_all_player_ratings() -> pd.DataFrame:
     demo = generate_player_match()
     demo["optimized_score"] = demo.get("rating", 0.5)
     demo["position_group"] = demo.get("position", "MF")
-    demo["confidence_level"] = "medium"
-    return _mark_synthetic(demo)
+    demo["confidence_level"] = "MEDIUM"
+    return _mark_synthetic(_normalize_ratings_frame(demo))
 
 
 def load_player_ratings(
@@ -198,6 +233,14 @@ def load_oof_predictions() -> pd.DataFrame:
     from scoutfootball.app.demo_data import generate_oof_predictions
 
     return _mark_synthetic(generate_oof_predictions())
+
+
+@lru_cache(maxsize=2)
+def load_player_value_metrics() -> pd.DataFrame:
+    rel = "gold/feature_store/player_value_metrics.parquet"
+    if _parquet_exists(rel):
+        return pd.read_parquet(_parquet_path(rel))
+    return pd.DataFrame()
 
 
 def load_score_prediction(home_team: str | None = None, away_team: str | None = None):

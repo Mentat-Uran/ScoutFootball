@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新组合目标在 GPU 服务器重跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标、组合优化目标、模型运行登记、神经网络准入门槛）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：`frontend/` 已有静态 Liquid Glass 分析工作台。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新组合目标在 GPU 服务器重跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标、组合优化目标、模型运行登记、神经网络准入门槛）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：Streamlit 已扩展为 15 页工作台并补上 artifact overview、scouting queue 与 action value sample；`frontend/` 总览、球员画像、身价、比赛预测、球探、动作价值与报告页已接入 FastAPI 本地产物，世界杯页仍保留样例/混合数据；电子战术板规划为 P1.5，尚未实现。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutFootball 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -14,8 +14,8 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 4. 事件动作价值层：以 StatsBomb Open Data 为第一主源，新增 `src/scoutfootball/action_value/`，形成 StatsBomb events -> SPADL/atomic-SPADL -> xT -> VAEP/Atomic-VAEP 的演进路线。
 5. 球员真值与评分层：综合真实标签、赛季统计、xG/xA、xT/VAEP、出勤可靠性、联赛强度、年龄和趋势；训练目标必须引入真实球员标签，不能只优化球队积分相关性。
 6. 评估与模型卡层：建立 `EVALUATION.md`、`MODEL_CARD.md`、位置内指标、跨位置总榜指标、误差分析、数据覆盖说明和模型运行登记。
-7. 产品可视化与 API 层：Streamlit 保持本地只读；`frontend/` 静态工作台保留 Liquid Glass 风格并作为长期产品壳；Plotly/mplsoccer/ECharts 继续用于交互图和足球专用图；FastAPI 只暴露本地只读产物。
-8. 球探决策层：围绕真实标签、低置信度球员和误差案例建立 watchlist、shortlist、人工审阅队列和可复现报告。
+7. 产品可视化与 API 层：Streamlit 保持本地只读；`frontend/` 静态工作台保留 Liquid Glass 风格并作为长期产品壳；Plotly/mplsoccer/ECharts 继续用于交互图和足球专用图；新增电子战术板作为本地战术演示、动画和导出工作台；FastAPI 只暴露本地只读产物。
+8. 球探决策层：围绕真实标签、低置信度球员、误差案例和战术备注建立 watchlist、shortlist、人工审阅队列和可复现报告。
 9. 比分预测与概率校准层：保持 Independent Poisson 作为基线，后续升级 Dixon-Coles + time decay，并用 log loss、Brier score、RPS 做对照。
 10. 空间/视频/离球研究层：只在有合规样例数据后研究 StatsBomb 360、Metrica/open tracking、space control、xG+、off-ball value 或强化学习。
 
@@ -29,6 +29,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - VAEP 论文作为评分解释和动作价值建模的理论核心。
 - PlayeRank 的角色内、多维度评分思路，作为位置内指标和球探解释模板参考。
 - 2026 combined rating 论文的 top-down + bottom-up 评分框架，作为真实标签层和评分目标重构参考。
+- 电子战术板先采纳浏览器本地工作台思路：标准化球场坐标、可拖拽球员/足球、箭头/区域/标签、轨迹/关键帧/步骤式动画、演示播放、PNG/PDF/WebM 导出、本地 JSON 工程。
 - Dixon-Coles 作为比分预测第二主线，但优先级低于球员评分。
 - xG finishing signal 使用样本量 shrinkage，禁止简单用 `goals - xG` 判定射术。
 - StatsBomb Open Data 的引用要求进入数据源 license manifest。
@@ -40,6 +41,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - Common Data Format 作为 schema 对照和验证参考，短期不改变当前 Parquet 主干。
 - xG+ / possession-level shot probability 作为远期研究方向。
 - StatsBomb 360、Metrica/open tracking、SoccerNet/video 作为远期空间/视频研究方向。
+- 战术板 MP4 导出、本地 ffmpeg、视频叠画、tracking 数据导入、3D/门后视角和实时协作放到战术板核心画布稳定之后。
 - 神经网络评分器只作为真实标签层完成后的候选模型；没有球员级标签、缺失字段标记和 baseline 对比前，不进入默认评分产物。
 - Opta、Wyscout、SkillCorner、TRACAB 等商业或 tracking 数据源不进入近期计划。
 
@@ -47,6 +49,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 - 新增绕过反爬或验证码的爬虫。
 - 把 StatsBomb 小样本事件能力写成全量球员评分能力。
+- 在浏览器端执行训练、爬取、视频批量转码或重型模型推理。
 - 用 Top N 位置配额替代真实影响力校准。
 - 只用球队积分相关性训练神经网络，并把它写成球员真实能力模型。
 - 在没有 tracking 样例、标签和评估 baseline 前，直接把强化学习、GCN、Transformer 写成默认评分架构。
@@ -54,6 +57,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 ## 调研参考
 
 - 开源项目：[`socceraction`](https://socceraction.readthedocs.io/en/stable/index.html)、[`StatsBomb Open Data`](https://github.com/statsbomb/open-data)、[`mplsoccer`](https://mplsoccer.readthedocs.io/)、[`kloppy`](https://kloppy.pysport.org/)、[`floodlight`](https://floodlight.readthedocs.io/en/latest/)、[`Common Data Format`](https://www.cdf.football/)。
+- 战术板案例：[`Tactico`](https://tactico.pro/) 的浏览器战术板和动画导出、[`DrawTactics`](https://drawtactics.com/animated-tactics-board) 的路径动画/时间轴/WebM 导出、[`TacticSlate`](https://tacticslate.com/football-tactic-board) 的离线优先战术板和 WebM 导出、[`JLA Tactics Board`](https://jlatacticsboard.com/) 的 MP4/PNG 与实时协作、[`Metrica Tactical Boards`](https://www.metrica-sports.com/help-center/tactical-boards) 的战术板到视频时间线/叠画工作流、[`TacticalBoards`](https://tacticalboards.com/) 的训练计划和动画导出。
 - 学术主线：[`VAEP`](https://arxiv.org/abs/1802.07127)、[`xT vs VAEP`](https://tomdecroos.github.io/reports/xt_vs_vaep.pdf)、[`PlayeRank`](https://arxiv.org/abs/1802.04987)、[`combined player rating`](https://link.springer.com/article/10.1186/s40537-026-01369-w)、[`xG finishing bias`](https://arxiv.org/abs/2401.09940)、[`Dixon-Coles`](https://research-information.bris.ac.uk/en/publications/modelling-association-football-scores-and-inefficiencies-in-the-f/)。
 - 架构结论：近中期以 StatsBomb -> internal actions -> xT -> VAEP 和真实球员标签为主线；跨供应商 schema、tracking/video、xG+、off-ball value 和强化学习只作为 P6 之后的扩展，不抢 P0-P4。
 
@@ -73,9 +77,10 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 跨源球员 ID 对齐：composite key + fuzzy match + 球队名规范化。
 - [x] Pipeline 端到端：`scoutfootball ingest` -> `scoutfootball build-features` -> `scoutfootball train`。
 - [x] 数据验证入口：`scoutfootball validate`。
-- [x] FastAPI draft 入口：`scoutfootball serve`。
-- [x] Streamlit MVP 入口和多页可视化骨架。
+- [x] FastAPI 只读入口：`scoutfootball serve`。
+- [x] Streamlit 多页工作台入口，当前含总览、分析页、P1 页面、世界杯页、球探队列页和动作价值样本页。
 - [x] `frontend/` 静态 Liquid Glass 前端原型：总览、球员、身价、比赛预测、球探、动作价值、报告 7 个视图。
+- [ ] `frontend/` 电子战术板：本地画布、战术演示、动画时间轴和导出能力仍处于 P1.5 规划阶段，尚未实现。
 - [x] Poisson 比分预测 baseline。
 - [x] `value_fairness` OOF 训练产物。
 - [x] PyTorch GPU 评分优化器和远程 GPU 计算脚本。
@@ -146,13 +151,15 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 ### 前端长期功能和后端配套
 
 - [ ] 全局数据状态页读取 artifact registry，显示产物更新时间、行数、真实/代理/合成数据标记、license attribution 和 confidence gate。
+- 当前已接入 artifact registry、更新时间、行数和 data source label；license attribution 与 confidence gate 仍待补齐。
 - [ ] 球员画像页接入 player profile API：搜索、分页、位置过滤、评分快照、位置内指标、低置信度原因和 CSV/报告导出。
 - [ ] 身价偏离页接入 value-fairness report API：OOF 残差、联赛/年龄/位置偏差、手动身价导入边界和误差案例。
 - [ ] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：选择球队必须传入预测服务，输出模型版本、覆盖率、log loss/Brier/RPS 和比分矩阵。
-- [ ] 球探页接入 review queue/watchlist/shortlist Parquet 契约，先只读展示，写入型人工标注暂用本地 CSV/Parquet。
-- [ ] 动作价值页等待 P2 `player_action_value.parquet` 和 action zone artifacts 后再替换 mock heatmap，不把 StatsBomb 样本写成全量能力。
+- [x] 球探页接入 review queue/watchlist/shortlist 只读契约；当前优先读取 `data/reports/scouting/*.parquet`，缺失时从评分产物派生只读队列。
+- [x] 动作价值页已切到 `player_value_metrics.parquet` 的真实 StatsBomb 样本；仍明确标注为样本页，不写成全量动作价值能力。
 - [ ] 报告页接入 `data/reports/model_runs/` 或等价 model-run registry，展示输入 hash、随机种子、参数、指标和误差案例。
-- [ ] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{id}`、`/ratings/snapshots`、`/value-report`、`/predictions/{home}/{away}`、`/review-queue`、`/reports/model-runs`。
+- 当前已接入 model-run registry 的 `run_id`、`input_hash`、Spearman/Pearson 等基础指标；随机种子、参数和误差案例仍待补齐。
+- [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
 
 验收：
 
@@ -161,7 +168,63 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - `uv run streamlit run src/scoutfootball/app/streamlit_app.py`
 - `node --check frontend/app.js`
 - `python3 -m http.server 8600 --directory frontend`
-- 三个 Streamlit 核心页面和静态 Liquid Glass 工作台已完成，截图和后端 API 联调待补充。
+- 三个 Streamlit 核心页面、Streamlit 总览页、Streamlit 球探队列页、Streamlit 动作价值样本页和静态 Liquid Glass 工作台已完成；截图、更多 API 指标和世界杯页的真实产物联调待补充。
+
+## P1.5：电子战术板、战术演示和动画导出
+
+目标：把 `frontend/` 从静态分析工作台扩展为可用于教练讲解、赛前演示和报告嵌入的电子战术板。该阶段只做本地轻量产品能力，不进入模型训练，也不替代 P2/P3 的动作价值和评分主线。
+
+### 调研结论
+
+- Tactico、TacticalBoards 等产品把战术板和训练计划放在同一工作流，核心是阵型、球员拖拽、动画和面向球队的分享。
+- DrawTactics、TacticSlate 类产品强调路径动画、时间轴、曲线跑动、步骤式或时间式动画，以及 WebM/视频导出。
+- JLA Tactics Board 把 MP4/PNG 导出和实时协作作为进阶能力；实时协作对本项目不是第一阶段重点。
+- Metrica Tactical Boards 和 Coach Paint 类工作流更偏视频分析/叠画，可作为后续视频 telestration 参考，但不应在当前阶段引入重型视频处理。
+
+### 第一切片：本地战术板画布
+
+- [ ] 在 `frontend/` 增加“战术板”视图，保留 Liquid Glass 风格，但画布区域要像工作台，不做营销页。
+- [ ] 建立标准化球场坐标系：`x`/`y` 使用 0-100 归一化，支持 11v11、7v7、5v5、半场、定位球和门后视角预留。
+- [ ] 支持基础对象：主队/客队球员、门将、足球、教练标记、箭头、折线、曲线路径、区域、多边形、文本标签、编号和颜色。
+- [ ] 支持阵型预设：4-3-3、4-2-3-1、3-5-2、4-4-2、5-3-2、定位球模板，并允许从当前球员/队伍数据生成初始名单但不强依赖后端。
+- [ ] 支持选择、拖拽、复制、删除、锁定、图层顺序、撤销/重做、缩放、适配屏幕和键盘快捷键。
+- [ ] 定义本地 JSON 工程 schema：`board_id`、`title`、`sport`、`pitch_type`、`objects`、`layers`、`frames`、`version`、`created_at`、`updated_at`、`source_attribution`。
+- [ ] 将工程保存为浏览器本地存储 + 可下载 JSON；后端持久化先不做，避免把前端原型误写成正式数据产品。
+
+### 第二切片：战术演示和动画时间轴
+
+- [ ] 增加 Animate mode：关键帧、步骤帧、帧时长、播放/暂停/单步、时间轴 scrubber、循环播放。
+- [ ] 支持对象路径插值：直线、曲线、折线、球员移动、足球移动、箭头/区域淡入淡出、路径尾迹和触发标签。
+- [ ] 支持战术片段结构：`phase`、`trigger`、`coaching_point`、`roles`、`duration_ms`，用于解释高压、低位防守、边路 overload、反击和定位球。
+- [ ] 支持演示模式：隐藏编辑控件、全屏播放、逐帧讲解、当前帧备注和报告页嵌入预览。
+- [ ] 动画只在浏览器里播放；不在浏览器里运行训练、爬虫、批量视频转码或模型推理。
+
+### 第三切片：导出、报告和后端契约
+
+- [ ] 支持 PNG 静态导出：当前画布、透明/球场背景、16:9/1:1/9:16 裁切。
+- [ ] 支持 PDF 导出：多帧战术卡、帧备注、对象图例、数据来源说明。
+- [ ] 支持 WebM 动画导出：优先用 `canvas.captureStream` + `MediaRecorder`；导出失败时给出清晰降级提示。
+- [ ] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。
+- [ ] 支持 JSON 工程导入/导出，版本不兼容时走迁移或只读打开。
+- [ ] 后续 FastAPI read-only endpoint 可设计为 `/tactical-boards`、`/tactical-boards/{id}`、`/tactical-boards/{id}/exports`，但第一阶段不急于实现写入 API。
+- [ ] 战术板可嵌入报告页：把 board snapshot、动画导出路径、source attribution 和 coaching notes 纳入报告预览。
+
+### 第四切片：数据分析联动
+
+- [ ] 从球员画像页发送球员到战术板，自动带入姓名、号码、位置、低置信度标记和最近评分快照。
+- [ ] 从比赛预测页创建赛前方案：主客队阵型、预测比分矩阵、模型版本和 coverage 警示作为战术板元数据。
+- [ ] 从 P2 动作价值产物读取样例热区或 xT 区域，仅作为背景参考；P2 稳定前不能写成全量动作价值战术建议。
+- [ ] 从 P7 watchlist/shortlist 读取球员备注，生成可审阅的战术角色说明。
+- [ ] 公开导出物如果包含 StatsBomb Open Data 或其他衍生数据，必须带 data source attribution。
+
+验收：
+
+- `node --check frontend/app.js`
+- `python3 -m http.server 8600 --directory frontend`
+- 手动验证桌面和移动宽度下：对象不溢出、文本不重叠、画布非空、拖拽/撤销/播放/导出可用。
+- JSON 工程 round-trip：创建 -> 导出 -> 重新导入 -> 对象、帧、备注一致。
+- PNG 和 WebM 导出至少在本机浏览器通过；MP4 没有 ffmpeg 时必须优雅降级。
+- README、TASKS、AGENTS 同步说明该功能是否已实现，不得把未接入后端的 mock 数据写成正式能力。
 
 ## P2：StatsBomb 事件动作价值层
 
@@ -283,7 +346,7 @@ player_rating =
 目标：把评分系统从“给分”推进到“可审阅的球探工作流”，同时为真实标签层提供人工闭环。
 
 - [ ] 新增人工审阅队列：低置信度球员、弱联赛顶端样本、位置重判不确定样本、误差案例球员自动进入 review queue。
-- [ ] 设计 watchlist/shortlist 数据契约，字段包括 `player_id`、`reason_code`、`rating_snapshot_id`、`confidence_level`、`review_status`、`reviewer_note`、`as_of_date`。
+- [x] 设计 watchlist/shortlist 数据契约，字段包括 `player_id`、`reason_code`、`rating_snapshot_id`、`confidence_level`、`review_status`、`reviewer_note`、`as_of_date`；默认放在 `data/reports/scouting/*.parquet`，缺失时可由评分产物派生只读结果。
 - [ ] 将 Transfermarkt 手动导入、奖项、专家分档、人工校准集统一进入 `player_truth_labels.parquet`，并保留标签来源和置信度。
 - [ ] Streamlit 后续只读展示 review queue；写入型人工标注先用本地 CSV/Parquet 管理，不直接放进生产页面。
 - [ ] 每轮评分优化后输出 watchlist diff：新增、移除、置信度变化、排名变化和触发原因。
