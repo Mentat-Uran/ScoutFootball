@@ -1326,6 +1326,63 @@ function bindEvents() {
         });
     }
 
+    // Animation controls
+    const tacticalAddFrame = document.getElementById("tactical-add-frame");
+    if (tacticalAddFrame) {
+        tacticalAddFrame.addEventListener("click", () => {
+            if (tacticalProject && typeof TacticalRenderer !== "undefined") {
+                TACTICAL_BOARD.saveFrame(tacticalProject, TacticalRenderer.animationState.currentFrame);
+                TACTICAL_BOARD.addFrame(tacticalProject);
+                renderTacticalFrameList();
+            }
+        });
+    }
+    const tacticalSaveFrame = document.getElementById("tactical-save-frame");
+    if (tacticalSaveFrame) {
+        tacticalSaveFrame.addEventListener("click", () => {
+            if (tacticalProject && typeof TacticalRenderer !== "undefined") {
+                TACTICAL_BOARD.saveFrame(tacticalProject, TacticalRenderer.animationState.currentFrame);
+                renderTacticalFrameList();
+            }
+        });
+    }
+    const tacticalPlay = document.getElementById("tactical-play");
+    if (tacticalPlay) {
+        tacticalPlay.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.play();
+            }
+        });
+    }
+    const tacticalStop = document.getElementById("tactical-stop");
+    if (tacticalStop) {
+        tacticalStop.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.stop();
+            }
+        });
+    }
+    const tacticalPrevFrame = document.getElementById("tactical-prev-frame");
+    if (tacticalPrevFrame) {
+        tacticalPrevFrame.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.prevFrame();
+                tacticalProject = TacticalRenderer.getProject();
+                renderTacticalFrameList();
+            }
+        });
+    }
+    const tacticalNextFrame = document.getElementById("tactical-next-frame");
+    if (tacticalNextFrame) {
+        tacticalNextFrame.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.nextFrame();
+                tacticalProject = TacticalRenderer.getProject();
+                renderTacticalFrameList();
+            }
+        });
+    }
+
     window.addEventListener("resize", () => {
         Object.values(appState.charts).forEach((chart) => {
             try { chart.resize(); } catch { /* ignore disposed chart */ }
@@ -1797,6 +1854,35 @@ function renderTacticalProjectList() {
             if (loaded) {
                 tacticalProject = loaded;
                 renderTactical();
+            }
+        });
+    });
+}
+
+function renderTacticalFrameList() {
+    const list = document.getElementById("tactical-frame-list");
+    if (!list || !tacticalProject || !tacticalProject.frames) return;
+
+    const currentFrame = (typeof TacticalRenderer !== "undefined")
+        ? TacticalRenderer.animationState.currentFrame
+        : 0;
+
+    list.innerHTML = tacticalProject.frames.map((frame, i) => `
+        <div class="rank-item" style="cursor:pointer;${i === currentFrame ? 'background:var(--glass-bg-hover)' : ''}" data-frame-index="${i}">
+            <div>
+                <strong>${frame.name || `Frame ${i + 1}`}</strong>
+                <span class="rank-meta">${frame.duration_ms || 3000}ms · ${(frame.objects || []).length} objects</span>
+            </div>
+        </div>
+    `).join("");
+
+    list.querySelectorAll("[data-frame-index]").forEach((el) => {
+        el.addEventListener("click", () => {
+            const idx = parseInt(el.dataset.frameIndex, 10);
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.goToFrame(idx);
+                tacticalProject = TacticalRenderer.getProject();
+                renderTacticalFrameList();
             }
         });
     });
