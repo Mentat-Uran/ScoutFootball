@@ -958,6 +958,25 @@ function renderOverview() {
         overallBadge.className = `status-pill ${overallHigh ? "status-high" : "status-medium"}`;
         overallBadge.textContent = overallHigh ? "HIGH" : "MED";
     }
+
+    // Confidence gate
+    const gatePill = document.getElementById("confidence-gate-pill");
+    if (gatePill && health.confidence_gate) {
+        gatePill.textContent = "< 0.90 → LOW";
+        gatePill.title = health.confidence_gate;
+    }
+
+    // License attribution from API
+    const licenses = artifactSummary.license_attribution;
+    if (licenses) {
+        const licenseList = document.getElementById("license-list");
+        if (licenseList) {
+            const entries = Object.entries(licenses);
+            licenseList.innerHTML = entries.map(([key, desc]) =>
+                `<li class="health-item"><span class="dot status-high"></span><span title="${desc}">${key}</span></li>`
+            ).join("");
+        }
+    }
 }
 
 function renderReports() {
@@ -989,14 +1008,26 @@ function renderReports() {
     runList.innerHTML = runs.length > 0
         ? runs.map((run) => {
             const metrics = run.metrics || {};
+            const args = run.args || {};
             const spearman = metrics.spearman ?? run.spearman;
             const pearson = metrics.pearson ?? run.pearson;
             const hash = run.input_hash || "n/a";
+            const seed = args.seed ?? run.seed ?? "–";
+            const nPlayers = metrics.n_players ?? run.n_players ?? "–";
+            const nSteps = args.n_steps ?? run.steps ?? "–";
+            const metaParts = [
+                `hash ${hash}`,
+                `seed ${seed}`,
+                `players ${nPlayers}`,
+                `steps ${nSteps}`,
+            ];
+            if (spearman != null) metaParts.push(`sp ${Number(spearman).toFixed(3)}`);
+            if (pearson != null) metaParts.push(`pr ${Number(pearson).toFixed(3)}`);
             return `
             <div class="rank-item">
                 <div>
                     <strong>${run.run_id || "run"}</strong>
-                    <span class="rank-meta">hash ${hash} · spearman ${spearman != null ? Number(spearman).toFixed(3) : "n/a"} · pearson ${pearson != null ? Number(pearson).toFixed(3) : "n/a"}</span>
+                    <span class="rank-meta">${metaParts.join(" · ")}</span>
                 </div>
                 <span class="status-pill ${spearman != null ? "status-high" : "status-low"}">${spearman != null ? "READY" : "N/A"}</span>
             </div>`;
