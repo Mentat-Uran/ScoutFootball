@@ -333,14 +333,14 @@ def compute_ratings_torch(feat, params, device):
 
     # ── Defense (percentile-based, real data) ──
     def_pct = feat["def_pct"].to(device)
-    has_def = feat["has_defense"].to(device)
+    has_def = feat.get("has_defense", torch.ones_like(def_pct)).to(device)
     # For rows missing defense data (Understat), blend toward position median
     # instead of treating 50th percentile as real performance
     defense = def_pct * has_def + 50.0 * (1.0 - has_def)
 
     # ── Possession (percentile-based, real data) ──
     pos_pct = feat["pos_pct"].to(device)
-    has_pos = feat["has_possession"].to(device)
+    has_pos = feat.get("has_possession", torch.ones_like(pos_pct)).to(device)
     possession = pos_pct * has_pos + 50.0 * (1.0 - has_pos)
 
     # ── Quality ──

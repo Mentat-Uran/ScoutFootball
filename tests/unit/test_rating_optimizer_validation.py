@@ -7,17 +7,64 @@ import torch
 
 
 def _load_optimizer_module():
-    # Share the same module instance with test_composite_objective
-    module_name = "_optimize_ratings_gpu_shared"
-    if module_name in sys.modules:
-        return sys.modules[module_name]
+    """Import optimizer package modules directly."""
     repo_root = Path(__file__).resolve().parents[2]
-    script_path = repo_root / "scripts" / "optimize_ratings_gpu.py"
-    spec = importlib.util.spec_from_file_location(module_name, script_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+    scripts_dir = str(repo_root / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import optimizer.constants as _c
+    import optimizer.scoring as _s
+    import optimizer.data as _d
+    import optimizer.optimization as _o
+    import types
+    mod = types.SimpleNamespace()
+    # constants
+    mod.POSITIONS = _c.POSITIONS
+    mod.POS_TO_IDX = _c.POS_TO_IDX
+    mod.N_POS = _c.N_POS
+    mod.N_DIM = _c.N_DIM
+    mod.N_PARAMS = _c.N_PARAMS
+    mod.DIMENSIONS = _c.DIMENSIONS
+    mod.POSITION_DIMENSION_PRIOR = _c.POSITION_DIMENSION_PRIOR
+    mod.ATTACK_WEIGHT_PRIOR = _c.ATTACK_WEIGHT_PRIOR
+    mod.QUALITY_SUBWEIGHT_PRIOR = _c.QUALITY_SUBWEIGHT_PRIOR
+    mod.TEAM_AGG_MINUTES_CAP = _c.TEAM_AGG_MINUTES_CAP
+    mod.TEAM_AGG_CORE_MINUTES = _c.TEAM_AGG_CORE_MINUTES
+    mod.TEAM_AGG_CORE_SCALE = _c.TEAM_AGG_CORE_SCALE
+    mod.TEAM_AGG_CAPPED_MINUTES_BLEND = _c.TEAM_AGG_CAPPED_MINUTES_BLEND
+    mod.POSITION_SLOT_CAPS = _c.POSITION_SLOT_CAPS
+    mod.POSITION_SLOT_GROUPS = _c.POSITION_SLOT_GROUPS
+    mod.POSITION_DIMENSION_CAPS = _c.POSITION_DIMENSION_CAPS
+    mod.map_position_detailed = _c.map_position_detailed
+    mod.normalize_team_name = _c.normalize_team_name
+    mod.refine_role_positions = _c.refine_role_positions
+    mod.apply_position_weight_caps = _c.apply_position_weight_caps
+    mod.SeasonSplit = _c.SeasonSplit
+    mod.TeamPointsCalibrator = _c.TeamPointsCalibrator
+    # scoring
+    mod.build_feature_tensors = _s.build_feature_tensors
+    mod.compute_ratings_torch = _s.compute_ratings_torch
+    mod.compute_team_avg_ratings = _s.compute_team_avg_ratings
+    mod.compute_team_avg_ratings_torch = _s.compute_team_avg_ratings_torch
+    mod.build_team_target_tensors = _s.build_team_target_tensors
+    mod._build_team_aggregation_weights = _s._build_team_aggregation_weights
+    # data
+    mod.make_season_splits = _d.make_season_splits
+    mod.compute_input_hash = _d.compute_input_hash
+    mod.save_model_run = _d.save_model_run
+    mod.build_dc_tensors = _d.build_dc_tensors
+    mod.evaluate_params = _d.evaluate_params
+    mod.fit_team_points_calibrator = _d.fit_team_points_calibrator
+    mod.apply_team_points_calibrator = _d.apply_team_points_calibrator
+    mod.league_metrics = _d.league_metrics
+    mod.rating_metrics = _d.rating_metrics
+    # losses
+    import optimizer.losses as _l
+    mod.objective_torch = _l.objective_torch
+    # optimization
+    mod._get_default_params_tensor = _o._get_default_params_tensor
+    mod.cosine_lr_scale = _o.cosine_lr_scale
+    return mod
 
 
 def _sample_frames():
