@@ -19,7 +19,7 @@ _mock_torch.is_tensor = lambda x: False
 sys.modules["torch"] = _mock_torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from optimize_ratings_gpu import compute_input_hash, save_model_run  # noqa: E402
+from optimizer.data import compute_input_hash, save_model_run  # noqa: E402
 
 # Restore real torch so other test files are not poisoned
 if _real_torch is not None:
