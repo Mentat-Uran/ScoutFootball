@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。`PROBLEMS.md` 中记录的 Pearson 误算、无 holdout、ST/W quality 绕路、availability 出勤捷径、球队聚合被高分钟球员拉拽和 holdout 覆盖不透明等问题，已经完成第一轮代码级防护；仍需用新组合目标在 GPU 服务器重跑完整优化并做 2526 holdout 误差复盘。P0 代码级改进（特征矩阵、缺失字段、finishing shrinkage、coverage 置信度、出勤诊断、位置内指标、组合优化目标、模型运行登记、神经网络准入门槛）和 P1 展示增强（mplsoccer、3 个核心页面、低置信度提示）已完成。新增前端状态：Streamlit 已扩展为 15 页工作台并补上 artifact overview、scouting queue 与 action value sample；`frontend/` 总览、球员画像、身价、比赛预测、球探、动作价值与报告页已接入 FastAPI 本地产物，世界杯页仍保留样例/混合数据；前端图标已统一为几何 Unicode 符号（无 emoji），身价页 API 无数据时显示 DEMO 标记，顶部栏有 API 连接状态指示器，fetchRatings() 按位置分组计算客户端 radar 百分位；DuckDB 文件名已修正为 `scoutlab.duckdb`；后端 data_loader 和 api 已加固容错（DuckDB fallback、corrupt parquet 处理、numpy 类型序列化、异常捕获）；README 已补充前端视图说明和 Demo 数据复现步骤；电子战术板规划为 P1.5，尚未实现。另有 Football-Data 10 赛季重建脚本、真实标签数据契约（`truth_labels.py`）、2526 评估 N/A 球队过滤、评分模型卡（`MODEL_CARD.md`）。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。GPU 优化已完成 3-fold CV（2026-06-09，RTX 5070 Ti）：有效 fold 平均 test Spearman=0.717/Pearson=0.718（baseline 0.513，提升 +0.203）。Fold 1（2324）Spearman=0.655，Fold 2（2425）Spearman=0.778，Fold 3（2526）N/A（Football-Data 无 2526 数据）。已识别强队系统性低估（Napoli -35.9, Barcelona -35.8）和降级队高估（Southampton +25.8）。8 个球队名 alias 不匹配（GPU 优化器未调用 normalize_team_name()）。Bundesliga 联赛标签 NaN 导致 coverage=0。`EVALUATION.md` 和 `MODEL_CARD.md` 已更新为实际 CV 数据。前端 demo 数据已替换为 2425 赛季真实评分 Top 30。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutFootball 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -101,10 +101,12 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 - [x] 完成第一轮反出勤捷径 guardrail：availability cap 下调、ST/W quality cap、holdout 评估、稳健球队聚合、team coverage 报告。
 - [x] 重建 Football-Data 10 赛季 `combined_results.parquet`，保留 2526 alias patch，并输出 raw CSV 总行数、active Parquet 行数、league-season 覆盖和输入 hash。
-- [ ] 用新 aggregation/cap 口径重新跑 GPU 优化，生成新的 `optimized_params.npy`、`optimized_params_meta.json`、holdout predictions、league metrics、calibration 和 feature importance。
-- [ ] 复盘 `PROBLEMS.md` 中的误差案例：Everton、Stuttgart、Hoffenheim、Rennes、Napoli、Real Madrid、Arsenal、PSG，记录新旧排名变化和仍未解决原因。
+- [x] 用新 aggregation/cap 口径重新跑 GPU 优化，生成新的 `optimized_params.npy`、`optimized_params_meta.json`、holdout predictions、league metrics、calibration 和 feature importance。（2026-06-09，3-fold CV 有效 fold 平均 test Spearman=0.717）
+- [x] 复盘 `PROBLEMS.md` 中的误差案例：Everton（+0.9 ✓）、Stuttgart（+3.8 ✓）、Rennes（-0.4 ✓）、Napoli（-35.9 ✗）、Real Madrid（-29.7 ✗）、Arsenal（-15.9 ✗），记录新旧排名变化和仍未解决原因。强队系统性低估根因：评分聚合上限约 55-60，实际强队积分 80-90。
 - [x] 增加出勤捷径诊断报告：minutes/starts/matches/availability 置换重要性、按位置 availability 权重、球队聚合权重分布。
-- [x] 直接修补 2526 五大联赛测试集队名，使 Premier League、La Liga、Bundesliga、Serie A、Ligue 1 的 holdout coverage 均达到 1.00。
+- [ ] 修复 GPU 优化器 `build_matched_results()` 中的 alias 匹配：集成 `normalize_team_name()` 解决 8 个球队名不匹配问题。
+- [ ] 修复 Bundesliga 联赛标签 NaN 问题：评分侧 Bundesliga 球队的 league 字段为 "nan"，导致 team_coverage 匹配失败。
+- [ ] 补充 Football-Data 2526 赛季数据，或改用 2425 作为最终 holdout 赛季。
 - [x] 对 coverage 低于 0.90 的 league-season 禁止输出强排序结论，只允许作为低置信度诊断样本；该规则仍适用于五大联赛以外的 2526 division 和后续新增数据。
 - [x] 定义真实标签层级：Transfermarkt 手动导入、权威奖项、国际/俱乐部出场级别、专家分档、位置内人工校准集。
 - [x] 新增标签数据契约和校验脚本，输出 `data/gold/feature_store/player_truth_labels.parquet`。

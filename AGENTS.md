@@ -9,10 +9,11 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 本地缓存当前可验证状态：
 
 - FBref：5 赛季标准、射门、misc 表均为 14,356 行。
-- Football-Data：10 赛季、20 个 league/division，原始 CSV 合计 68,953 行；重建脚本 `scripts/rebuild_football_data.py` 可生成完整 10 赛季 `combined_results.parquet`，`rebuild_combined_results()` 函数封装在 `football_data.py` 中。
+- Football-Data：`data/raw/football_data/combined_results.parquet` 当前为 3 赛季（2223/2324/2425）、5 个联赛、5,330 行；原始 CSV 10 赛季 68,953 行可通过 `scripts/rebuild_football_data.py` 重建，但当前活动 Parquet 仅 3 赛季。2526 赛季缺失导致 holdout 评估 N=0。8 个球队名 alias 不匹配（Alavés/Alaves、Atlético Madrid/Ath Madrid 等），GPU 优化器的 `build_matched_results()` 未调用 `normalize_team_name()`。
 - Understat：10 赛季、6 个联赛，`players_10seasons.parquet` 当前为 31,902 个球员赛季行。
 - StatsBomb Open Data：`big5_matches.parquet` 当前为 126 场比赛，`events_all.parquet` 当前为 11,871 条事件；`matches_all.parquet` 当前为空表，不要把它当 matches 真源。
-- 评分产物：`player_ratings_optimized.parquet` 当前为 27,254 行。
+- 评分产物：`player_ratings_optimized.parquet` 当前为 30,483 行。
+- GPU 优化结果（2026-06-09）：3-fold CV，Fold 1（2324）test Spearman=0.655/Pearson=0.679，Fold 2（2425）test Spearman=0.778/Pearson=0.757，Fold 3（2526）N/A（Football-Data 无 2526 数据）。参数稳定性 3 seeds std=0.0002。强队系统性低估（Napoli -35.9, Barcelona -35.8），降级队高估（Southampton +25.8）。
 - 评分特征矩阵：`rating_feature_matrix.parquet`（8,141 行）+ `rating_feature_matrix_manifest.json`，含缺失字段标记、数据源覆盖标记和位置内中位数 fallback。
 - Coverage 置信度规则：HIGH/MEDIUM/LOW 三级，coverage < 0.90 禁止强排序结论。
 - 出勤捷径诊断报告：置换重要性、位置 availability 权重、球队聚合权重分布、出勤驱动球员识别。
@@ -54,7 +55,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 评分模型卡 `MODEL_CARD.md` 已输出，记录数据源、标签定义、适用边界、已知偏差和不可用场景。
 - 神经网络评分器只能作为真实标签层完成后的候选实验；没有球员级标签、特征缺失标记、时间切分和 baseline 对比前，不要把 MLP/深度模型写成默认评分能力。
 - `PROBLEMS.md` 中记录的问题只能算完成第一轮代码级防护；完整结论必须重新跑 GPU 优化和 2526 holdout 误差复盘后再写。
-- GPU 重跑已完成（2026-06-05，RTX 5070 Ti）：Holdout Spearman=0.6346，Pearson=0.6251，相比 baseline 提升 +0.2096；overfit gap=0.0537。Serie A/Ligue 1 coverage≥0.94 可信；PL/La Liga coverage 0.65/0.60 不可靠，需补全 alias。
+- GPU 重跑已完成（2026-06-09，RTX 5070 Ti）：3-fold CV 有效 fold 平均 test Spearman=0.717/Pearson=0.718（baseline 0.513，提升 +0.203）。Fold 1（2324）Spearman=0.655，Fold 2（2425）Spearman=0.778，Fold 3（2526）N/A（Football-Data 无 2526 数据）。强队系统性低估（Napoli -35.9, Barcelona -35.8），降级队高估（Southampton +25.8）。8 个 alias 不匹配，GPU 优化器未调用 normalize_team_name()。
 
 ## 后续架构方向
 
