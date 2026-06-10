@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -246,6 +247,7 @@ def run_dc_calibration_backtest(
     model_root: Path,
     *,
     max_goals: int = 10,
+    save_detail: bool = False,
 ) -> DCCalibrationResult:
     """Evaluate DC calibration against held-out or full data.
 
@@ -261,6 +263,8 @@ def run_dc_calibration_backtest(
         Must contain artifacts/dixon_coles_results.parquet and
         artifacts/dc_team_strengths.parquet.
     max_goals : Maximum goal count for the score matrix.
+    save_detail : If True, save detailed calibration artifacts to
+        data/models/artifacts/dc_calibration_detail.parquet.
 
     Returns
     -------
@@ -268,6 +272,13 @@ def run_dc_calibration_backtest(
     """
     model = _load_dc_artifacts(model_root)
     fixtures = _build_fixture_frame(team_match_df)
+
+    # Merge league info if available
+    has_league = "league" in team_match_df.columns
+    league_lookup: dict[str, str] = {}
+    if has_league:
+        for _, row in team_match_df.iterrows():
+            league_lookup[str(row["match_id"])] = str(row.get("league", ""))
 
     prediction_rows: list[dict] = []
     for _, fixture in fixtures.iterrows():
@@ -287,25 +298,27 @@ def run_dc_calibration_backtest(
         exact_prob = float(prediction.score_matrix.loc[hg, ag])
         outcome_label = _outcome_label(hg, ag)
         score_bucket = f"{hg}-{ag}"
+        mid = str(fixture["match_id"])
 
-        prediction_rows.append(
-            {
-                "match_id": fixture["match_id"],
-                "match_date": fixture["match_date"],
-                "home_team_id": home_id,
-                "away_team_id": away_id,
-                "home_goals": hg,
-                "away_goals": ag,
-                "score_bucket": score_bucket,
-                "exact_score_probability": exact_prob,
-                "home_win_probability": prediction.summary.home_win,
-                "draw_probability": prediction.summary.draw,
-                "away_win_probability": prediction.summary.away_win,
-                "actual_outcome": outcome_label,
-                "home_lambda": prediction.home_lambda,
-                "away_lambda": prediction.away_lambda,
-            },
-        )
+        row_data: dict[str, Any] = {
+            "match_id": mid,
+            "match_date": fixture["match_date"],
+            "home_team_id": home_id,
+            "away_team_id": away_id,
+            "home_goals": hg,
+            "away_goals": ag,
+            "score_bucket": score_bucket,
+            "exact_score_probability": exact_prob,
+            "home_win_probability": prediction.summary.home_win,
+            "draw_probability": prediction.summary.draw,
+            "away_win_probability": prediction.summary.away_win,
+            "actual_outcome": outcome_label,
+            "home_lambda": prediction.home_lambda,
+            "away_lambda": prediction.away_lambda,
+        }
+        if has_league and mid in league_lookup:
+            row_data["league"] = league_lookup[mid]
+        prediction_rows.append(row_data)
 
     if not prediction_rows:
         raise ValueError("DC calibration backtest produced no predictions")
@@ -323,10 +336,52 @@ def run_dc_calibration_backtest(
     # --- Per-score-bucket calibration ---
     calibration = _compute_score_bucket_calibration(predictions)
 
+    # --- Low-score calibration detail (saved in detail parquet) ---
+    _low_score_detail = _compute_low_score_calibration(predictions)
+
+    # --- Brier score decomposition ---
+    brier_decomposition = _compute_brier_decomposition(predictions)
+
+    # --- Calibration plot data (saved in detail parquet) ---
+    _calibration_plot = _compute_calibration_plot_data(predictions)
+
+    # --- Coverage by league (saved in detail parquet) ---
+    _league_coverage = _compute_league_coverage(predictions)
+
+    # --- Save detailed artifacts ---
+    if save_detail:
+        artifact_dir = model_root / "artifacts"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        detail_path = artifact_dir / "dc_calibration_detail.parquet"
+        detail_records: list[dict[str, Any]] = []
+        for _, row in predictions.iterrows():
+            detail_records.append({
+                "match_id": row["match_id"],
+                "score_bucket": row["score_bucket"],
+                "exact_score_probability": row["exact_score_probability"],
+                "home_win_probability": row["home_win_probability"],
+                "draw_probability": row["draw_probability"],
+                "away_win_probability": row["away_win_probability"],
+                "actual_outcome": row["actual_outcome"],
+                "home_lambda": row["home_lambda"],
+                "away_lambda": row["away_lambda"],
+                "league": row.get("league", ""),
+            })
+        detail_df = pd.DataFrame(detail_records)
+        detail_df.to_parquet(detail_path, index=False)
+
+    # Enrich metrics with decomposition
+    all_metrics: dict[str, float] = {
+        **metrics,
+        "brier_reliability": brier_decomposition["reliability"],
+        "brier_resolution": brier_decomposition["resolution"],
+        "brier_uncertainty": brier_decomposition["uncertainty"],
+    }
+
     return DCCalibrationResult(
         predictions=predictions,
         calibration=calibration,
-        metrics=metrics,
+        metrics=all_metrics,
     )
 
 
@@ -519,3 +574,166 @@ def run_dixon_coles_backtest(
         fold_metrics=fold_metrics,
         metrics=metrics,
     )
+
+
+def _compute_low_score_calibration(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Compute per-score-bucket log-loss for low-scoring outcomes.
+
+    Focuses on the four Dixon-Coles tau-corrected buckets: 0-0, 1-0, 0-1, 1-1.
+    Returns a DataFrame with columns:
+      score_bucket, n_matches, actual_pct, mean_predicted_pct,
+      calibration_error, log_loss_bucket
+    """
+    low_scores = ["0-0", "1-0", "0-1", "1-1"]
+    total = len(predictions)
+    rows: list[dict[str, Any]] = []
+
+    for bucket in low_scores:
+        group = predictions[predictions["score_bucket"] == bucket]
+        n = len(group)
+        if n == 0:
+            rows.append({
+                "score_bucket": bucket,
+                "n_matches": 0,
+                "actual_pct": 0.0,
+                "mean_predicted_pct": 0.0,
+                "calibration_error": 0.0,
+                "log_loss_bucket": float("nan"),
+            })
+            continue
+        actual_pct = n / total * 100.0
+        mean_pred_pct = float(group["exact_score_probability"].mean()) * 100.0
+        cal_error = abs(actual_pct - mean_pred_pct)
+        clipped = group["exact_score_probability"].clip(lower=1e-12)
+        log_loss_b = float(-(np.log(clipped)).mean())
+        rows.append({
+            "score_bucket": bucket,
+            "n_matches": n,
+            "actual_pct": round(actual_pct, 2),
+            "mean_predicted_pct": round(mean_pred_pct, 2),
+            "calibration_error": round(cal_error, 2),
+            "log_loss_bucket": round(log_loss_b, 4),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _compute_brier_decomposition(predictions: pd.DataFrame) -> dict[str, float]:
+    """Brier score decomposition into reliability, resolution, and uncertainty.
+
+    For the 1x2 (home/draw/away) outcome using predicted probabilities.
+    Brier = reliability - resolution + uncertainty
+    """
+    probs = predictions.loc[
+        :,
+        ["home_win_probability", "draw_probability", "away_win_probability"],
+    ].to_numpy()
+    actual = np.vstack(
+        predictions["actual_outcome"].map(
+            {
+                "home_win": [1.0, 0.0, 0.0],
+                "draw": [0.0, 1.0, 0.0],
+                "away_win": [0.0, 0.0, 1.0],
+            },
+        ),
+    )
+
+    n = len(predictions)
+    overall_mean = actual.mean(axis=0)
+    uncertainty = float(np.sum(overall_mean * (1 - overall_mean)))
+
+    # Bin by rounded predicted home-win probability (10 bins)
+    bin_edges = np.linspace(0, 1, 11)
+    bin_indices = np.digitize(probs[:, 0], bin_edges) - 1
+    bin_indices = np.clip(bin_indices, 0, 9)
+
+    reliability = 0.0
+    resolution = 0.0
+    for b in range(10):
+        mask = bin_indices == b
+        if mask.sum() == 0:
+            continue
+        bin_size = int(mask.sum())
+        mean_pred = probs[mask].mean(axis=0)
+        mean_actual = actual[mask].mean(axis=0)
+        reliability += bin_size * float(np.sum((mean_pred - mean_actual) ** 2))
+        resolution += bin_size * float(np.sum((mean_actual - overall_mean) ** 2))
+
+    reliability /= n
+    resolution /= n
+
+    return {
+        "reliability": round(float(reliability), 6),
+        "resolution": round(float(resolution), 6),
+        "uncertainty": round(float(uncertainty), 6),
+    }
+
+
+def _compute_calibration_plot_data(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Compute calibration plot data: predicted vs actual probability bins.
+
+    For 1x2 outcome, bins predicted home-win probability into deciles.
+    Returns DataFrame with columns: bin_center, n_matches, mean_predicted, mean_actual.
+    """
+    probs = predictions["home_win_probability"].to_numpy()
+    actual_hw = (predictions["actual_outcome"] == "home_win").to_numpy().astype(float)
+
+    bin_edges = np.linspace(0, 1, 11)
+    bin_indices = np.digitize(probs, bin_edges) - 1
+    bin_indices = np.clip(bin_indices, 0, 9)
+
+    rows: list[dict[str, Any]] = []
+    for b in range(10):
+        mask = bin_indices == b
+        if mask.sum() == 0:
+            continue
+        bin_center = round(float((bin_edges[b] + bin_edges[b + 1]) / 2), 2)
+        rows.append({
+            "bin_center": bin_center,
+            "n_matches": int(mask.sum()),
+            "mean_predicted": round(float(probs[mask].mean()), 4),
+            "mean_actual": round(float(actual_hw[mask].mean()), 4),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _compute_league_coverage(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Compute prediction coverage by league.
+
+    Returns DataFrame with columns: league, n_matches, mean_log_loss, mean_brier.
+    """
+    if "league" not in predictions.columns:
+        return pd.DataFrame(columns=["league", "n_matches", "mean_log_loss", "mean_brier"])
+
+    rows: list[dict[str, Any]] = []
+    for league, group in predictions.groupby("league", sort=True):
+        n = len(group)
+        if n == 0:
+            continue
+        clipped = group["exact_score_probability"].clip(lower=1e-12)
+        ll = float(-(np.log(clipped)).mean())
+
+        probs = group.loc[
+            :,
+            ["home_win_probability", "draw_probability", "away_win_probability"],
+        ].to_numpy()
+        actual = np.vstack(
+            group["actual_outcome"].map(
+                {
+                    "home_win": [1.0, 0.0, 0.0],
+                    "draw": [0.0, 1.0, 0.0],
+                    "away_win": [0.0, 0.0, 1.0],
+                },
+            ),
+        )
+        brier = float(np.mean(np.sum((probs - actual) ** 2, axis=1)))
+
+        rows.append({
+            "league": str(league),
+            "n_matches": n,
+            "mean_log_loss": round(ll, 4),
+            "mean_brier": round(brier, 4),
+        })
+
+    return pd.DataFrame(rows)
