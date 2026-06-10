@@ -2444,7 +2444,7 @@ function renderTacticalProjectList() {
         ? projects.map((p) => `
             <div class="rank-item" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between" data-board-id="${escapeAttr(p.board_id)}">
                 <div>
-                    <strong>${escapeHtml(p.title || "Untitled")}</strong>
+                    <span class="tactical-project-title" data-board-id="${escapeAttr(p.board_id)}">${escapeHtml(p.title || "Untitled")}</span>
                     <span class="rank-meta">${escapeHtml(p.updated_at ? new Date(p.updated_at).toLocaleDateString() : "")}</span>
                 </div>
                 <button class="text-button" data-delete-board="${escapeAttr(p.board_id)}" title="Delete project" style="color:var(--danger,#e74c3c);font-size:0.85rem;padding:0.2rem 0.4rem">✕</button>
@@ -2454,12 +2454,54 @@ function renderTacticalProjectList() {
 
     // Click to load
     list.querySelectorAll("[data-board-id]").forEach((el) => {
-        el.addEventListener("click", () => {
-            const loaded = TACTICAL_BOARD.loadProject(el.dataset.boardId);
-            if (loaded) {
-                tacticalProject = loaded;
-                renderTactical();
+        if (!el.classList.contains("tactical-project-title")) {
+            el.addEventListener("click", () => {
+                const loaded = TACTICAL_BOARD.loadProject(el.dataset.boardId);
+                if (loaded) {
+                    tacticalProject = loaded;
+                    renderTactical();
+                }
+            });
+        }
+    });
+
+    // Double-click to rename project title
+    list.querySelectorAll(".tactical-project-title").forEach((titleSpan) => {
+        titleSpan.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            const boardId = titleSpan.dataset.boardId;
+            const currentTitle = titleSpan.textContent;
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = currentTitle;
+            input.style.cssText = "font-size:inherit;font-weight:bold;width:100%;padding:0 0.15rem;border:1px solid var(--accent,#7ca8ff);border-radius:3px;background:var(--bg,#1a1a2e);color:var(--text,#e0e0e0)";
+            titleSpan.replaceWith(input);
+            input.focus();
+            input.select();
+
+            function commitRename() {
+                const newTitle = input.value.trim() || currentTitle;
+                const loaded = TACTICAL_BOARD.loadProject(boardId);
+                if (loaded) {
+                    TACTICAL_BOARD.renameProject(loaded, newTitle);
+                    TACTICAL_BOARD.saveProject(loaded);
+                    if (tacticalProject && tacticalProject.board_id === boardId) {
+                        tacticalProject.title = loaded.title;
+                        tacticalProject.updated_at = loaded.updated_at;
+                    }
+                }
+                renderTacticalProjectList();
             }
+
+            function cancelRename() {
+                renderTacticalProjectList();
+            }
+
+            input.addEventListener("keydown", (ev) => {
+                if (ev.key === "Enter") { ev.preventDefault(); commitRename(); }
+                if (ev.key === "Escape") { ev.preventDefault(); cancelRename(); }
+            });
+            input.addEventListener("blur", commitRename);
         });
     });
 
@@ -2481,13 +2523,19 @@ function renderTacticalFrameList() {
         ? TacticalRenderer.animationState.currentFrame
         : 0;
 
+    const frameCount = tacticalProject.frames.length;
+
     list.innerHTML = tacticalProject.frames.map((frame, i) => `
         <div class="rank-item" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;${i === currentFrame ? 'background:var(--glass-bg-hover)' : ''}" data-frame-index="${i}">
             <div>
                 <strong>${escapeHtml(frame.name || `Frame ${i + 1}`)}</strong>
                 <span class="rank-meta">${escapeHtml(frame.duration_ms || 3000)}ms · ${escapeHtml((frame.objects || []).length)} objects</span>
             </div>
-            <button class="text-button" data-delete-frame="${i}" title="Delete frame" style="color:var(--danger,#e74c3c);font-size:0.85rem;padding:0.2rem 0.4rem">✕</button>
+            <div style="display:flex;align-items:center;gap:0.2rem">
+                <button class="text-button" data-frame-up="${i}" title="Move frame earlier" style="font-size:0.85rem;padding:0.2rem 0.4rem;${i === 0 ? 'opacity:0.3;pointer-events:none' : ''}">\u25C0</button>
+                <button class="text-button" data-frame-down="${i}" title="Move frame later" style="font-size:0.85rem;padding:0.2rem 0.4rem;${i === frameCount - 1 ? 'opacity:0.3;pointer-events:none' : ''}">\u25B6</button>
+                <button class="text-button" data-delete-frame="${i}" title="Delete frame" style="color:var(--danger,#e74c3c);font-size:0.85rem;padding:0.2rem 0.4rem">\u2715</button>
+            </div>
         </div>
     `).join("");
 
@@ -2499,6 +2547,34 @@ function renderTacticalFrameList() {
                 tacticalProject = TacticalRenderer.getProject();
                 renderTacticalFrameList();
             }
+        });
+    });
+
+    // Frame up (move earlier)
+    list.querySelectorAll("[data-frame-up]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.frameUp, 10);
+            if (idx <= 0 || !tacticalProject || !tacticalProject.frames) return;
+            const tmp = tacticalProject.frames[idx - 1];
+            tacticalProject.frames[idx - 1] = tacticalProject.frames[idx];
+            tacticalProject.frames[idx] = tmp;
+            TACTICAL_BOARD.saveProject(tacticalProject);
+            renderTacticalFrameList();
+        });
+    });
+
+    // Frame down (move later)
+    list.querySelectorAll("[data-frame-down]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.frameDown, 10);
+            if (!tacticalProject || !tacticalProject.frames || idx >= tacticalProject.frames.length - 1) return;
+            const tmp = tacticalProject.frames[idx + 1];
+            tacticalProject.frames[idx + 1] = tacticalProject.frames[idx];
+            tacticalProject.frames[idx] = tmp;
+            TACTICAL_BOARD.saveProject(tacticalProject);
+            renderTacticalFrameList();
         });
     });
 
