@@ -1475,15 +1475,19 @@ async function renderActiveView() {
 }
 
 function exportPlayers() {
-    const header = ["rank", "player", "position", "team", "season", "rating", "confidence"];
+    const header = ["rank", "player", "position", "team", "league", "season", "rating", "confidence", "minutes", "goals", "assists"];
     const rows = filteredPlayers().map((player, index) => [
         index + 1,
         player.name,
         player.position,
         player.team,
+        player.league || "",
         player.season,
         player.rating,
         player.confidence,
+        player.minutes || "",
+        player.goals || "",
+        player.assists || "",
     ]);
     const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -2252,6 +2256,15 @@ function initWorldCup() {
 /* ── Tactical Board ─────────────────────────────────────────────────── */
 
 let tacticalProject = null;
+let _tacticalAutoSaveTimer = null;
+function tacticalAutoSave() {
+    clearTimeout(_tacticalAutoSaveTimer);
+    _tacticalAutoSaveTimer = setTimeout(() => {
+        if (tacticalProject && typeof TACTICAL_BOARD !== "undefined") {
+            TACTICAL_BOARD.saveProject(tacticalProject);
+        }
+    }, 2000);
+}
 
 function renderTactical() {
     if (!tacticalProject) {
@@ -2262,6 +2275,7 @@ function renderTactical() {
 
     if (typeof TacticalRenderer !== "undefined") {
         TacticalRenderer.init("tactical-canvas", tacticalProject);
+        TacticalRenderer.onChange = tacticalAutoSave;
     }
 
     // Update project list

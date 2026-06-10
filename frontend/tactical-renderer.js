@@ -40,6 +40,7 @@ const TacticalRenderer = {
         this.project = project;
         this.undoStack = [];
         this.redoStack = [];
+        this.onChange = null;
         this.drawingMode = null;
         this.drawStart = null;
         this.drawPreview = null;
@@ -580,6 +581,7 @@ const TacticalRenderer = {
             this.render();
         }
         this.isDragging = false;
+        if (this.onChange) this.onChange();
     },
 
     /* ── Drawing mode ────────────────────────────────────────────────── */
@@ -638,6 +640,7 @@ const TacticalRenderer = {
         this.project.objects = this.project.objects.filter((o) => o.id !== this.selectedObject.id);
         this.selectedObject = null;
         this.render();
+        if (this.onChange) this.onChange();
     },
 
     /* ── Public API ─────────────────────────────────────────────────── */
