@@ -454,7 +454,9 @@ const TACTICAL_BOARD = {
         try {
             const key = `tactical-board-${boardId}`;
             const data = localStorage.getItem(key);
-            return data ? this.sanitizeProject(JSON.parse(data)) : null;
+            if (!data) return null;
+            const project = this.sanitizeProject(JSON.parse(data));
+            return project ? this.migrateProject(project) : null;
         } catch (e) {
             console.warn("Failed to load tactical board project:", e);
             return null;
@@ -501,10 +503,11 @@ const TACTICAL_BOARD = {
                 throw new Error("Project file too large");
             }
             const project = JSON.parse(jsonString);
-            if (!project.board_id || !project.version) {
-                throw new Error("Invalid project: missing board_id or version");
+            if (!project.board_id) {
+                throw new Error("Invalid project: missing board_id");
             }
-            return this.sanitizeProject(project);
+            const safe = this.sanitizeProject(project);
+            return safe ? this.migrateProject(safe) : null;
         } catch (e) {
             console.warn("Failed to import tactical board project:", e);
             return null;
@@ -561,6 +564,61 @@ const TACTICAL_BOARD = {
         return project.animationState.loop;
     },
 
+    /* ── Version migration ─────────────────────────────────────────── */
+    migrateProject(project) {
+        if (!project || typeof project !== "object") return null;
+
+        // Set version if missing
+        if (!project.version) {
+            project.version = this.SCHEMA_VERSION;
+        }
+
+        // Add missing layers
+        if (!Array.isArray(project.layers) || project.layers.length === 0) {
+            project.layers = [{ id: "default", name: "Layer 1", visible: true, locked: false }];
+        }
+
+        // Add missing frames
+        if (!Array.isArray(project.frames) || project.frames.length === 0) {
+            project.frames = [{ id: "frame-0", name: "Frame 1", objects: [], duration_ms: 3000 }];
+        }
+
+        // Add missing animationState
+        if (!project.animationState || typeof project.animationState !== "object") {
+            project.animationState = { playing: false, currentFrame: 0, loop: false };
+        }
+
+        // Fix objects missing visible/locked defaults
+        if (Array.isArray(project.objects)) {
+            for (const obj of project.objects) {
+                if (obj && typeof obj === "object") {
+                    if (obj.visible === undefined) obj.visible = true;
+                    if (obj.locked === undefined) obj.locked = false;
+                }
+            }
+        }
+
+        // Sanitize all objects through _sanitizeObject
+        if (Array.isArray(project.objects)) {
+            project.objects = project.objects
+                .map((obj) => this._sanitizeObject(obj))
+                .filter(Boolean);
+        }
+
+        // Sanitize frame objects too
+        if (Array.isArray(project.frames)) {
+            for (const frame of project.frames) {
+                if (frame && Array.isArray(frame.objects)) {
+                    frame.objects = frame.objects
+                        .map((obj) => this._sanitizeObject(obj))
+                        .filter(Boolean);
+                }
+            }
+        }
+
+        return project;
+    },
+
     /* ── Animation Playback ─────────────────────────────────────────── */
     interpolateObjects(fromObjs, toObjs, t) {
         // Linear interpolation between two object sets
@@ -581,3 +639,68 @@ const TACTICAL_BOARD = {
         return result;
     },
 };
+
+/* ── migrateProject self-test ─────────────────────────────────────────── */
+(function testMigrateProject() {
+    // Simulate an old project missing version, layers, frames, animationState,
+    // and objects without visible/locked fields.
+    const oldProject = {
+        board_id: "test-old-001",
+        title: "Old Project",
+        sport: "football",
+        objects: [
+            { id: "p1", type: "player", x: 50, y: 50, team: "home", color: "#7ca8ff", radius: 3, label: "", number: 1 },
+            { id: "b1", type: "ball", x: 50, y: 50, color: "#ffffff", radius: 1.5 },
+            { id: "a1", type: "arrow", startX: 10, startY: 10, endX: 90, endY: 90, style: "solid", color: "#ffffff", width: 2 },
+        ],
+        created_at: "2024-01-01T00:00:00.000Z",
+        updated_at: "2024-01-01T00:00:00.000Z",
+    };
+
+    const migrated = TACTICAL_BOARD.migrateProject(oldProject);
+
+    const checks = [];
+
+    // Version should be set
+    checks.push(["version set", migrated.version === "1.0.0"]);
+
+    // Layers should be added
+    checks.push(["layers added", Array.isArray(migrated.layers) && migrated.layers.length >= 1]);
+    checks.push(["layer has id", migrated.layers[0].id === "default"]);
+
+    // Frames should be added
+    checks.push(["frames added", Array.isArray(migrated.frames) && migrated.frames.length >= 1]);
+    checks.push(["frame has id", migrated.frames[0].id === "frame-0"]);
+
+    // animationState should be added
+    checks.push(["animationState added", !!migrated.animationState]);
+    checks.push(["animationState.playing", migrated.animationState.playing === false]);
+    checks.push(["animationState.currentFrame", migrated.animationState.currentFrame === 0]);
+    checks.push(["animationState.loop", migrated.animationState.loop === false]);
+
+    // Objects should be sanitized (visible/locked defaults applied, then sanitized)
+    checks.push(["objects preserved", migrated.objects.length === 3]);
+
+    const player = migrated.objects.find((o) => o.type === "player");
+    checks.push(["player visible", player.visible === true]);
+    checks.push(["player locked", player.locked === false]);
+
+    const ball = migrated.objects.find((o) => o.type === "ball");
+    checks.push(["ball visible", ball.visible === true]);
+    checks.push(["ball locked", ball.locked === false]);
+
+    const arrow = migrated.objects.find((o) => o.type === "arrow");
+    checks.push(["arrow visible", arrow.visible === true]);
+    checks.push(["arrow locked", arrow.locked === false]);
+
+    // Null input should return null
+    checks.push(["null returns null", TACTICAL_BOARD.migrateProject(null) === null]);
+
+    // Report results
+    const failed = checks.filter(([, ok]) => !ok);
+    if (failed.length > 0) {
+        console.error("[migrateProject test] FAIL:", failed.map(([name]) => name).join(", "));
+    } else {
+        console.log("[migrateProject test] PASS — all " + checks.length + " checks passed");
+    }
+})();
