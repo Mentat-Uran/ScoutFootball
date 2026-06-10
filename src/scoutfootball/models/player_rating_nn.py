@@ -196,7 +196,25 @@ def build_player_rating_nn_dataset(
         .reset_index(drop=True)
     )
 
-    dataset = features.merge(labels, on=["player_id", "season"], how="inner")
+    # Normalize player_id for matching: feature matrix uses "name|birth_year|nationality",
+    # truth labels use just "name". Extract name part for join.
+    def _extract_name(pid: str) -> str:
+        return str(pid).split("|")[0].strip().lower()
+
+    features["_join_name"] = features["player_id"].apply(lambda x: _extract_name(str(x)))
+    labels["_join_name"] = labels["player_id"].apply(lambda x: _extract_name(str(x)))
+
+    dataset = features.merge(
+        labels,
+        on=["_join_name", "season"],
+        how="inner",
+        suffixes=("", "_label"),
+    )
+    dataset = dataset.drop(columns=["_join_name"])
+    # Clean up duplicate columns from merge
+    for col in list(dataset.columns):
+        if col.endswith("_label") and col.replace("_label", "") in dataset.columns:
+            dataset = dataset.drop(columns=[col])
     dataset = _attach_optimizer_baseline(dataset, baseline_ratings)
     return dataset
 
