@@ -437,6 +437,11 @@
                                     <option value="training">Training</option>
                                     <option value="blank">Blank</option>
                                 </select>
+                                <select id="tactical-display-mode" class="glass-control">
+                                    <option value="single">Single Team</option>
+                                    <option value="both">Both Teams</option>
+                                    <option value="transition">Transition</option>
+                                </select>
                                 <button class="text-button" id="tactical-load-home" type="button">主队阵型</button>
                                 <button class="text-button" id="tactical-load-away" type="button">客队阵型</button>
                                 <button class="text-button" id="tactical-clear" type="button">清空</button>
@@ -490,6 +495,20 @@
                                 <button class="text-button" id="tactical-presentation" type="button" title="Presentation mode (fullscreen)">◇ 演示</button>
                                 <button class="text-button" id="tactical-toggle-trails" type="button" title="Toggle animation trails">◇ 轨迹</button>
                             </div>
+                            <div class="filter-row" style="margin-top:0.25rem">
+                                <span style="font-size:0.82rem;color:var(--text-muted);margin-right:0.3rem">事件标记:</span>
+                                <select id="tactical-event-marker-type" class="glass-control" style="font-size:0.82rem">
+                                    <option value="press">P Press</option>
+                                    <option value="pass">\u2192 Pass</option>
+                                    <option value="shot">\u2299 Shot</option>
+                                    <option value="turnover">X Turnover</option>
+                                    <option value="overlap">O Overlap</option>
+                                    <option value="underlap">U Underlap</option>
+                                    <option value="third-man">3 Third Man</option>
+                                    <option value="cover">\u25A3 Cover</option>
+                                </select>
+                                <button class="text-button" id="tactical-event-marker" type="button" title="Place event marker">\u25C8 标记</button>
+                            </div>
                         </div>
                         <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">
                             <canvas id="tactical-canvas" style="width:100%;height:100%" role="img" aria-label="Tactical board canvas for football formations and annotations"></canvas>
@@ -505,6 +524,7 @@
                             <button class="text-button" id="tactical-import" type="button">导入 JSON</button>
                             <button class="text-button" id="tactical-export-png" type="button">导出 PNG</button>
                             <button class="text-button" id="tactical-export-webm" type="button">◆ 导出 WebM</button>
+                            <button class="text-button" id="tactical-export-print" type="button">▣ 打印</button>
                         </div>
                         <div class="filter-row" style="margin-bottom:0.5rem">
                             <label style="font-size:0.85rem;color:var(--text-muted)">

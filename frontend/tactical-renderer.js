@@ -137,12 +137,28 @@ const TacticalRenderer = {
 
         // Draw objects (with frame visibility check)
         const currentFrame = this.animationState.currentFrame || 0;
+        const dMode = (this.project && this.project.displayMode) || "single";
         for (const obj of this.project.objects) {
             if (!obj.visible) continue;
             // Frame visibility: object only renders when currentFrame is within [visibleFrom, visibleTo]
             const vf = Number.isFinite(obj.visibleFrom) ? obj.visibleFrom : 0;
             const vt = Number.isFinite(obj.visibleTo) ? obj.visibleTo : Infinity;
             if (currentFrame < vf || currentFrame > vt) continue;
+
+            // Both-teams display mode: reposition players based on team
+            const savedX = obj.x;
+            const savedY = obj.y;
+            if (dMode !== "single" && obj.type === "player") {
+                if (dMode === "both") {
+                    // Home team on left half (0-48), away team on right half (52-100)
+                    obj.x = obj.team === "home" ? obj.x * 0.48 : 52 + obj.x * 0.48;
+                } else if (dMode === "transition") {
+                    // Both teams shown, mirrored for away
+                    obj.x = obj.team === "home" ? obj.x * 0.85 + 5 : obj.x * 0.85 + 10;
+                    if (obj.team === "away") obj.y = 100 - obj.y;
+                }
+            }
+
             switch (obj.type) {
                 case "player": this.drawPlayer(obj); break;
                 case "ball":   this.drawBall(obj); break;
@@ -158,7 +174,17 @@ const TacticalRenderer = {
                 case "pole":   this.drawPole(obj); break;
                 case "ladder": this.drawLadder(obj); break;
                 case "minigoal": this.drawMiniGoal(obj); break;
+                case "event-marker": this.drawEventMarker(obj); break;
             }
+
+            // Restore original coordinates
+            obj.x = savedX;
+            obj.y = savedY;
+        }
+
+        // Draw transition mode attack direction arrows
+        if (dMode === "transition") {
+            this._drawTransitionArrows();
         }
 
         // Draw preview during drawing mode
@@ -496,11 +522,46 @@ const TacticalRenderer = {
         const pos = this.toCanvas(obj.x, obj.y);
         const r = obj.radius * this.scale;
 
-        // Circle
+        // Shape rendering based on appearance
         ctx.fillStyle = obj.color;
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.globalAlpha = (obj.appearance && typeof obj.appearance.opacity === "number") ? obj.appearance.opacity : 1.0;
+
+        const shape = (obj.appearance && obj.appearance.shape) || "circle";
+        switch (shape) {
+            case "square": {
+                const s = r * 1.6;
+                ctx.fillRect(pos.x - s / 2, pos.y - s / 2, s, s);
+                break;
+            }
+            case "triangle": {
+                const s = r * 1.8;
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y - s);
+                ctx.lineTo(pos.x - s * 0.87, pos.y + s * 0.5);
+                ctx.lineTo(pos.x + s * 0.87, pos.y + s * 0.5);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case "diamond": {
+                const s = r * 1.6;
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y - s);
+                ctx.lineTo(pos.x + s, pos.y);
+                ctx.lineTo(pos.x, pos.y + s);
+                ctx.lineTo(pos.x - s, pos.y);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            default: { // circle
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+        }
+        ctx.globalAlpha = 1.0;
 
         // Border
         ctx.strokeStyle = "rgba(0,0,0,0.3)";
@@ -702,6 +763,49 @@ const TacticalRenderer = {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(obj.text || obj.label || "", pos.x, pos.y);
+    },
+
+    /* ── Transition Mode Arrows ────────────────────────────────────── */
+    _drawTransitionArrows() {
+        const ctx = this.ctx;
+        // Draw attack direction arrows for each team
+        // Home team: arrow from left to center
+        const homeStart = this.toCanvas(8, 50);
+        const homeEnd = this.toCanvas(42, 50);
+        ctx.strokeStyle = "rgba(124,168,255,0.5)";
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(homeStart.x, homeStart.y);
+        ctx.lineTo(homeEnd.x, homeEnd.y);
+        ctx.stroke();
+        // Arrowhead
+        const hAngle = Math.atan2(homeEnd.y - homeStart.y, homeEnd.x - homeStart.x);
+        ctx.beginPath();
+        ctx.moveTo(homeEnd.x, homeEnd.y);
+        ctx.lineTo(homeEnd.x - 10 * Math.cos(hAngle - Math.PI / 6), homeEnd.y - 10 * Math.sin(hAngle - Math.PI / 6));
+        ctx.moveTo(homeEnd.x, homeEnd.y);
+        ctx.lineTo(homeEnd.x - 10 * Math.cos(hAngle + Math.PI / 6), homeEnd.y - 10 * Math.sin(hAngle + Math.PI / 6));
+        ctx.stroke();
+
+        // Away team: arrow from right to center
+        const awayStart = this.toCanvas(92, 50);
+        const awayEnd = this.toCanvas(58, 50);
+        ctx.strokeStyle = "rgba(255,107,123,0.5)";
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(awayStart.x, awayStart.y);
+        ctx.lineTo(awayEnd.x, awayEnd.y);
+        ctx.stroke();
+        const aAngle = Math.atan2(awayEnd.y - awayStart.y, awayEnd.x - awayStart.x);
+        ctx.beginPath();
+        ctx.moveTo(awayEnd.x, awayEnd.y);
+        ctx.lineTo(awayEnd.x - 10 * Math.cos(aAngle - Math.PI / 6), awayEnd.y - 10 * Math.sin(aAngle - Math.PI / 6));
+        ctx.moveTo(awayEnd.x, awayEnd.y);
+        ctx.lineTo(awayEnd.x - 10 * Math.cos(aAngle + Math.PI / 6), awayEnd.y - 10 * Math.sin(aAngle + Math.PI / 6));
+        ctx.stroke();
+        ctx.setLineDash([]);
     },
 
     /* ── Grid ──────────────────────────────────────────────────────── */
@@ -1271,6 +1375,18 @@ const TacticalRenderer = {
             return;
         }
 
+        // Event marker mode: place marker at click position
+        if (this.drawingMode === "event-marker") {
+            this.pushUndo();
+            const markerType = this._eventMarkerType || "press";
+            const marker = TACTICAL_BOARD.createEventMarker(x, y, markerType);
+            this.project.objects.push(marker);
+            this.selectedObject = marker;
+            this.render();
+            if (this.onChange) this.onChange();
+            return;
+        }
+
         // Find all objects under cursor (for overlap cycling)
         const hits = [];
         for (const obj of [...this.project.objects].reverse()) {
@@ -1560,13 +1676,13 @@ const TacticalRenderer = {
     },
 
     /* ── Double-click: edit jersey number ──────────────────────────── */
+    /* ── Double-click: open player detail panel ────────────────────── */
     onDoubleClick(e) {
         if (!this.project || !this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
         const cx = e.clientX - rect.left;
         const cy = e.clientY - rect.top;
         const { x, y } = this.fromCanvas(cx, cy);
-
         // Find player/bench object under cursor
         let found = null;
         for (const obj of [...this.project.objects].reverse()) {
@@ -1580,54 +1696,192 @@ const TacticalRenderer = {
                 }
             }
         }
-        if (!found) return;
-
-        // Create inline input
-        this._removeJerseyInput();
-        const input = document.createElement("input");
-        input.type = "number";
-        input.min = "0";
-        input.max = "99";
-        input.value = found.number || "";
-        input.style.cssText = `position:fixed;left:${e.clientX - 16}px;top:${e.clientY - 16}px;` +
-            "width:40px;height:28px;background:rgba(20,24,36,0.95);color:#fff;border:1px solid #7ca8ff;" +
-            "border-radius:4px;text-align:center;font:14px/1 Inter,sans-serif;z-index:10000;outline:none;" +
-            "box-shadow:0 2px 10px rgba(0,0,0,0.5)";
-        input.dataset.playerId = found.id;
-
-        const commit = () => {
-            const val = parseInt(input.value, 10);
-            if (!isNaN(val) && val >= 0 && val <= 99) {
-                this.pushUndo();
-                found.number = val;
-                this.render();
-                if (this.onChange) this.onChange();
-            }
-            this._removeJerseyInput();
-        };
-
-        input.addEventListener("keydown", (ev) => {
-            if (ev.key === "Enter") { ev.preventDefault(); commit(); }
-            if (ev.key === "Escape") { this._removeJerseyInput(); }
-        });
-        input.addEventListener("blur", commit);
-
-        document.body.appendChild(input);
-        input.focus();
-        input.select();
-        this._jerseyInput = input;
+        if (!found) {
+            this._closePlayerDetailPanel();
+            return;
+        }
+        this._showPlayerDetailPanel(found, cx, cy, e.clientX, e.clientY);
     },
 
-    _removeJerseyInput() {
-        if (this._jerseyInput) {
-            if (this._jerseyInput.parentNode) this._jerseyInput.parentNode.removeChild(this._jerseyInput);
-            this._jerseyInput = null;
+    /* ── Player Detail Panel ───────────────────────────────────────── */
+    _initPlayerDetailPanel() {
+        if (this._playerDetailPanelEl) return;
+        const el = document.createElement("div");
+        el.id = "player-detail-panel";
+        el.style.cssText = "position:fixed;display:none;z-index:10001;" +
+            "background:rgba(16,20,32,0.96);backdrop-filter:blur(16px);border:1px solid rgba(124,168,255,0.35);" +
+            "border-radius:10px;padding:14px 16px;color:#e0e6f0;font:13px/1.4 Inter,sans-serif;" +
+            "box-shadow:0 8px 32px rgba(0,0,0,0.6);width:280px;";
+        document.body.appendChild(el);
+        this._playerDetailPanelEl = el;
+        this._playerDetailPanelTarget = null;
+
+        // Close on click elsewhere
+        this._panelOutsideClickHandler = (ev) => {
+            if (this._playerDetailPanelEl && this._playerDetailPanelEl.style.display !== "none") {
+                if (!this._playerDetailPanelEl.contains(ev.target) && this.canvas && !this.canvas.contains(ev.target)) {
+                    this._closePlayerDetailPanel();
+                }
+            }
+        };
+        document.addEventListener("mousedown", this._panelOutsideClickHandler);
+
+        // Close on Escape
+        this._panelEscapeHandler = (ev) => {
+            if (ev.key === "Escape") this._closePlayerDetailPanel();
+        };
+        document.addEventListener("keydown", this._panelEscapeHandler);
+    },
+
+    _showPlayerDetailPanel(obj, canvasX, canvasY, clientX, clientY) {
+        this._initPlayerDetailPanel();
+        this._playerDetailPanelTarget = obj;
+        const el = this._playerDetailPanelEl;
+
+        const name = obj.label || "";
+        const num = obj.number || 0;
+        const role = obj.label || "CB";
+        const team = obj.team || "home";
+        const notes = obj.notes || "";
+        const shape = (obj.appearance && obj.appearance.shape) || "circle";
+        const size = (obj.appearance && obj.appearance.size) || 3;
+        const opacity = (obj.appearance && typeof obj.appearance.opacity === "number") ? obj.appearance.opacity : 1.0;
+
+        el.innerHTML = `
+            <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#7ca8ff">Player Detail</div>
+            <div style="margin-bottom:6px">
+                <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Name</label>
+                <input type="text" id="_pd_name" value="${this._escAttr(name)}" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+                <div style="flex:1">
+                    <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Number</label>
+                    <input type="number" id="_pd_number" min="0" max="99" value="${num}" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                </div>
+                <div style="flex:1">
+                    <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Position</label>
+                    <select id="_pd_position" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                        ${["GK","CB","FB","DM","CM","AM","W","ST"].map(p => `<option value="${p}" ${role===p?"selected":""}>${p}</option>`).join("")}
+                    </select>
+                </div>
+            </div>
+            <div style="margin-bottom:6px">
+                <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Team</label>
+                <select id="_pd_team" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                    <option value="home" ${team==="home"?"selected":""}>Home</option>
+                    <option value="away" ${team==="away"?"selected":""}>Away</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+                <div style="flex:1">
+                    <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Shape</label>
+                    <select id="_pd_shape" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                        ${["circle","square","triangle","diamond"].map(s => `<option value="${s}" ${shape===s?"selected":""}>${s}</option>`).join("")}
+                    </select>
+                </div>
+                <div style="flex:1">
+                    <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Size (${size})</label>
+                    <input type="range" id="_pd_size" min="1" max="5" step="1" value="${size}" style="width:100%;accent-color:#7ca8ff">
+                </div>
+            </div>
+            <div style="margin-bottom:6px">
+                <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Opacity (${opacity.toFixed(1)})</label>
+                <input type="range" id="_pd_opacity" min="0.3" max="1.0" step="0.1" value="${opacity}" style="width:100%;accent-color:#7ca8ff">
+            </div>
+            <div style="margin-bottom:10px">
+                <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Notes</label>
+                <textarea id="_pd_notes" rows="3" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:12px/1.3 Inter,sans-serif;outline:none;resize:vertical">${this._escHtml(notes)}</textarea>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+                <button id="_pd_cancel" style="padding:5px 14px;border:1px solid rgba(255,255,255,0.2);border-radius:5px;background:transparent;color:#c0c8d8;cursor:pointer;font:12px/1 Inter,sans-serif">Cancel</button>
+                <button id="_pd_save" style="padding:5px 14px;border:none;border-radius:5px;background:#7ca8ff;color:#0a0e1a;cursor:pointer;font:12px/1 Inter,sans-serif;font-weight:600">Save</button>
+            </div>
+        `;
+
+        // Position the panel
+        const panelW = 280;
+        const panelH = 420;
+        let left = clientX + 16;
+        let top = clientY - 20;
+        if (left + panelW > window.innerWidth - 10) left = clientX - panelW - 16;
+        if (top + panelH > window.innerHeight - 10) top = window.innerHeight - panelH - 10;
+        if (top < 10) top = 10;
+        el.style.left = left + "px";
+        el.style.top = top + "px";
+        el.style.display = "block";
+
+        // Update labels on range inputs
+        const sizeInput = el.querySelector("#_pd_size");
+        const opacityInput = el.querySelector("#_pd_opacity");
+        if (sizeInput) {
+            sizeInput.addEventListener("input", () => {
+                const lbl = sizeInput.previousElementSibling;
+                if (lbl) lbl.textContent = `Size (${sizeInput.value})`;
+            });
         }
+        if (opacityInput) {
+            opacityInput.addEventListener("input", () => {
+                const lbl = opacityInput.previousElementSibling;
+                if (lbl) lbl.textContent = `Opacity (${parseFloat(opacityInput.value).toFixed(1)})`;
+            });
+        }
+
+        // Save handler
+        el.querySelector("#_pd_save").addEventListener("click", () => {
+            const target = this._playerDetailPanelTarget;
+            if (!target) return;
+            this.pushUndo();
+            const newName = el.querySelector("#_pd_name").value.trim();
+            const newNum = parseInt(el.querySelector("#_pd_number").value, 10);
+            const newPosition = el.querySelector("#_pd_position").value;
+            const newTeam = el.querySelector("#_pd_team").value;
+            const newShape = el.querySelector("#_pd_shape").value;
+            const newSize = parseInt(el.querySelector("#_pd_size").value, 10);
+            const newOpacity = parseFloat(el.querySelector("#_pd_opacity").value);
+            const newNotes = el.querySelector("#_pd_notes").value;
+
+            target.label = newName;
+            if (!isNaN(newNum) && newNum >= 0 && newNum <= 99) target.number = newNum;
+            // Update label to position role if name is empty
+            if (!target.label) target.label = newPosition;
+            target.team = newTeam;
+            if (target.team === "away") target.color = "#ff6b7b";
+            else target.color = "#7ca8ff";
+            if (!target.appearance) target.appearance = {};
+            target.appearance.shape = ["circle","square","triangle","diamond"].includes(newShape) ? newShape : "circle";
+            target.appearance.size = Math.max(1, Math.min(5, newSize || 3));
+            target.appearance.opacity = Math.max(0.3, Math.min(1.0, isNaN(newOpacity) ? 1.0 : newOpacity));
+            target.radius = target.appearance.size;
+            target.notes = String(newNotes || "").slice(0, 500);
+            this._closePlayerDetailPanel();
+            this.render();
+            if (this.onChange) this.onChange();
+        });
+
+        // Cancel handler
+        el.querySelector("#_pd_cancel").addEventListener("click", () => {
+            this._closePlayerDetailPanel();
+        });
+    },
+
+    _closePlayerDetailPanel() {
+        if (this._playerDetailPanelEl) {
+            this._playerDetailPanelEl.style.display = "none";
+        }
+        this._playerDetailPanelTarget = null;
+    },
+
+    _escAttr(s) {
+        return String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    },
+
+    _escHtml(s) {
+        return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     },
 
     /* ── Drawing mode ────────────────────────────────────────────────── */
     setDrawingMode(mode) {
-        this.drawingMode = mode; // null | 'arrow' | 'zone' | 'text'
+        this.drawingMode = mode; // null | 'arrow' | 'zone' | 'text' | 'event-marker'
         this.drawStart = null;
         this.drawPreview = null;
         this._penPoints = [];
@@ -1637,6 +1891,7 @@ const TacticalRenderer = {
             else if (mode === "arrow" || mode === "zone" || mode === "rect" || mode === "ellipse") this.canvas.style.cursor = "crosshair";
             else if (mode === "pen") this.canvas.style.cursor = "crosshair";
             else if (mode === "eraser") this.canvas.style.cursor = "pointer";
+            else if (mode === "event-marker") this.canvas.style.cursor = "crosshair";
             else this.canvas.style.cursor = "default";
         }
         this.render();
@@ -2111,6 +2366,7 @@ const TacticalRenderer = {
                         case "pole":   this.drawPole(obj); break;
                         case "ladder": this.drawLadder(obj); break;
                         case "minigoal": this.drawMiniGoal(obj); break;
+                        case "event-marker": this.drawEventMarker(obj); break;
                     }
                 }
             } else {
@@ -2381,5 +2637,180 @@ const TacticalRenderer = {
         const idx = this.animationState.currentFrame;
         const frame = this.project.frames[idx];
         return frame ? (frame.notes || "") : "";
+    },
+
+    /* ── Event Marker Drawing ────────────────────────────────────────── */
+    drawEventMarker(obj) {
+        const ctx = this.ctx;
+        const pos = this.toCanvas(obj.x, obj.y);
+        const r = 3 * this.scale;
+        const markerType = obj.markerType || "press";
+
+        // Background circle
+        ctx.fillStyle = "rgba(255,200,0,0.85)";
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.5)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Icon text inside
+        ctx.fillStyle = "#000";
+        ctx.font = `bold ${Math.max(8, r * 1.1)}px Inter, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const icons = {
+            "press": "P",
+            "pass": "\u2192",
+            "shot": "\u2299",
+            "turnover": "X",
+            "overlap": "O",
+            "underlap": "U",
+            "third-man": "3",
+            "cover": "\u25A3",
+        };
+        ctx.fillText(icons[markerType] || "P", pos.x, pos.y);
+
+        // Label below
+        if (obj.label) {
+            ctx.fillStyle = "#fff";
+            ctx.font = `${Math.max(8, 9 * this.scale / 3)}px Inter, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.fillText(obj.label, pos.x, pos.y + r + 8);
+        }
+    },
+
+    /* ── Print Mode Export ───────────────────────────────────────────── */
+    exportPrint() {
+        if (!this.project) return;
+        const frames = this.project.frames || [];
+        const title = this.project.title || "Tactical Board";
+        const attribution = this.project.source_attribution || "ScoutFootball tactical board";
+
+        // Collect unique players across all frames
+        const playerMap = new Map();
+        for (const frame of frames) {
+            for (const obj of (frame.objects || [])) {
+                if (obj.type === "player" && obj.label) {
+                    const key = obj.label + "|" + obj.number + "|" + obj.team;
+                    if (!playerMap.has(key)) {
+                        playerMap.set(key, {
+                            name: obj.label,
+                            number: obj.number || "",
+                            team: obj.team || "home",
+                        });
+                    }
+                }
+            }
+        }
+        const players = Array.from(playerMap.values());
+
+        // Phase icons
+        const phaseIcons = {
+            "buildup": "\u25CE",
+            "pressing": "\u25CB",
+            "defense": "\u25A3",
+            "counter": "\u25B6",
+            "set-piece": "\u25C7",
+        };
+
+        // Build frame pages
+        const savedFrame = this.animationState.currentFrame;
+        const savedSelection = this.selectedObject;
+        this.selectedObject = null;
+        let framePages = "";
+        for (let i = 0; i < frames.length; i++) {
+            // Render frame
+            this.animationState.currentFrame = i;
+            if (frames[i].objects && frames[i].objects.length > 0) {
+                this.project.objects = JSON.parse(JSON.stringify(frames[i].objects));
+            }
+            this.render();
+            const dataUrl = this.canvas.toDataURL("image/png");
+
+            const notes = frames[i].notes || "";
+            const phase = frames[i].phase || "";
+            const phaseLabel = phase ? (phaseIcons[phase] || "") + " " + phase : "";
+            const trigger = frames[i].trigger || "";
+            const roles = frames[i].roles || "";
+            const duration = frames[i].duration_ms || 3000;
+
+            let metaHtml = "";
+            if (phaseLabel) metaHtml += '<div style="font-size:13px;color:#555;margin:4px 0"><strong>' + this._escapeNotesHtml(phaseLabel) + '</strong></div>';
+            if (trigger) metaHtml += '<div style="font-size:12px;color:#666;margin:2px 0">Trigger: ' + this._escapeNotesHtml(trigger) + '</div>';
+            if (roles) metaHtml += '<div style="font-size:12px;color:#666;margin:2px 0">Roles: ' + this._escapeNotesHtml(roles) + '</div>';
+
+            let notesHtml = "";
+            if (notes) {
+                const lines = notes.split("\n").filter(l => l.trim());
+                notesHtml = '<div style="margin:8px 0;padding:8px 12px;background:#f9f9f9;border-radius:4px;font-size:13px;line-height:1.6">';
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith("- ")) {
+                        notesHtml += '<div style="padding:1px 0;color:#333">\u25CB ' + this._escapeNotesHtml(trimmed.slice(2)) + '</div>';
+                    } else {
+                        notesHtml += '<div style="padding:1px 0;color:#222;font-weight:600">' + this._escapeNotesHtml(trimmed) + '</div>';
+                    }
+                }
+                notesHtml += '</div>';
+            }
+
+            framePages += '<div class="print-frame" style="page-break-inside:avoid;margin:20px 0">';
+            framePages += '<h3 style="margin:0 0 4px;font-size:16px;color:#222">' + this._escapeNotesHtml(frames[i].name || ("Frame " + (i + 1))) + ' <span style="font-size:12px;color:#888">(' + duration + 'ms)</span></h3>';
+            framePages += metaHtml;
+            framePages += '<img src="' + dataUrl + '" style="max-width:100%;border:1px solid #ddd;border-radius:4px" />';
+            framePages += notesHtml;
+            framePages += '</div>';
+        }
+
+        // Restore state
+        this.animationState.currentFrame = savedFrame;
+        this.selectedObject = savedSelection;
+        if (frames[savedFrame] && frames[savedFrame].objects) {
+            this.project.objects = JSON.parse(JSON.stringify(frames[savedFrame].objects));
+        }
+        this.render();
+
+        // Legend HTML
+        let legendHtml = "";
+        if (players.length > 0) {
+            legendHtml = '<div style="margin:16px 0"><h3 style="font-size:15px;color:#222;border-bottom:1px solid #ddd;padding-bottom:4px">Player Legend</h3>';
+            legendHtml += '<table style="font-size:13px;width:100%;border-collapse:collapse">';
+            legendHtml += '<tr style="background:#f0f0f0"><th style="text-align:left;padding:4px 8px">Name</th><th style="text-align:left;padding:4px 8px">Number</th><th style="text-align:left;padding:4px 8px">Team</th></tr>';
+            for (const p of players) {
+                const teamLabel = p.team === "away" ? "Away" : "Home";
+                legendHtml += '<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">' + this._escapeNotesHtml(p.name) + '</td>';
+                legendHtml += '<td style="padding:4px 8px;border-bottom:1px solid #eee">' + (p.number || "-") + '</td>';
+                legendHtml += '<td style="padding:4px 8px;border-bottom:1px solid #eee">' + teamLabel + '</td></tr>';
+            }
+            legendHtml += '</table></div>';
+        }
+
+        // Open print window
+        const w = window.open("", "_blank");
+        if (!w) {
+            alert("\u25C6 Please allow pop-ups to use print mode");
+            return;
+        }
+        w.document.write(
+            '<!DOCTYPE html><html><head><title>' + this._escapeNotesHtml(title) + '</title>' +
+            '<style>' +
+            '@media print { body { margin: 0; } .print-frame { page-break-inside: avoid; } }' +
+            'body { margin: 20px; font-family: Inter, Arial, sans-serif; color: #222; background: #fff; }' +
+            'h1 { font-size: 22px; margin: 0 0 4px; }' +
+            '.subtitle { font-size: 13px; color: #888; margin-bottom: 16px; }' +
+            '</style></head><body>' +
+            '<h1>' + this._escapeNotesHtml(title) + '</h1>' +
+            '<div class="subtitle">' + this._escapeNotesHtml(attribution) + '</div>' +
+            framePages +
+            legendHtml +
+            '<div style="margin-top:24px;padding-top:8px;border-top:1px solid #ddd;font-size:11px;color:#999">' +
+            'Generated by ' + this._escapeNotesHtml(attribution) + ' \u2014 ' + new Date().toISOString().slice(0, 10) +
+            '</div>' +
+            '<script>setTimeout(function(){window.print()},600)<\/script>' +
+            '</body></html>'
+        );
+        w.document.close();
     },
 };
