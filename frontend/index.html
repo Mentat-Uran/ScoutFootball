@@ -525,6 +525,43 @@
                                 </select>
                                 <button class="text-button" id="tactical-event-marker" type="button" title="Place event marker">\u25C8 标记</button>
                             </div>
+                            <div class="filter-row" style="margin-top:0.25rem">
+                                <span style="font-size:0.82rem;color:var(--text-muted);margin-right:0.3rem">动画模式:</span>
+                                <select id="tactical-animation-mode" class="glass-control" style="font-size:0.82rem">
+                                    <option value="timing">Timing</option>
+                                    <option value="step">Step</option>
+                                </select>
+                                <label id="tactical-step-duration-label" style="font-size:0.82rem;color:var(--text-muted);display:none;align-items:center;gap:4px">
+                                    Step:
+                                    <input type="range" id="tactical-step-duration" min="500" max="3000" step="100" value="1000" style="width:80px">
+                                    <span id="tactical-step-duration-value">1000ms</span>
+                                </label>
+                            </div>
+                            <div class="filter-row" style="margin-top:0.25rem">
+                                <span style="font-size:0.82rem;color:var(--text-muted);margin-right:0.3rem">路径编辑:</span>
+                                <button class="text-button" id="tactical-add-path-point" type="button" title="Add path points to selected object">+ 路径点</button>
+                                <button class="text-button" id="tactical-clear-path-points" type="button" title="Clear path points">清空路径</button>
+                                <select id="tactical-path-type" class="glass-control" style="font-size:0.82rem">
+                                    <option value="linear">Linear</option>
+                                    <option value="curved">Curved (Bezier)</option>
+                                </select>
+                                <select id="tactical-easing" class="glass-control" style="font-size:0.82rem">
+                                    <option value="linear">Linear</option>
+                                    <option value="ease-in">Ease In</option>
+                                    <option value="ease-out">Ease Out</option>
+                                    <option value="ease-in-out">Ease In-Out</option>
+                                </select>
+                            </div>
+                            <div class="filter-row" style="margin-top:0.25rem">
+                                <label style="font-size:0.82rem;color:var(--text-muted);align-items:center;gap:4px">
+                                    Delay(ms):
+                                    <input type="number" id="tactical-obj-delay" class="glass-control" style="width:60px;font-size:0.82rem" min="0" max="10000" value="0" step="100">
+                                </label>
+                                <label style="font-size:0.82rem;color:var(--text-muted);align-items:center;gap:4px">
+                                    Pause(ms):
+                                    <input type="number" id="tactical-obj-pause" class="glass-control" style="width:60px;font-size:0.82rem" min="0" max="10000" value="0" step="100">
+                                </label>
+                            </div>
                         </div>
                         <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">
                             <canvas id="tactical-canvas" style="width:100%;height:100%" role="img" aria-label="Tactical board canvas for football formations and annotations"></canvas>
