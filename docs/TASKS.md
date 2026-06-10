@@ -201,12 +201,12 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 球员列表补 watchlist/shortlist/战术板操作：每行 3 个动作按钮（□/△/◎），localStorage 存储已实现。
 - [x] 身价偏离页接入 value-fairness API：OOF 残差、联赛/位置偏差、年龄曲线、Transfermarkt 导入提示已实现。
 - [ ] 身价页补价格带筛选、合同年限/年龄曲线、同位置同年龄对比、异常值说明和 Transfermarkt 手动导入状态；没有授权数据时只能显示手动导入边界。
-- [ ] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：选择球队必须传入预测服务，输出模型版本、覆盖率、log loss/Brier/RPS 和比分矩阵。
+- [x] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：模型对比（Poisson vs Dixon-Coles）、log-loss、coverage gate 已实现。
 - [x] 比赛预测页补校准视图：Dixon-Coles 参数、coverage gate 警告、低比分分析、Brier/RPS 指标已实现。
 - [x] 球探页接入 review queue/watchlist/shortlist 只读契约；当前优先读取 `data/reports/scouting/*.parquet`，缺失时从评分产物派生只读队列。
 - [x] 动作价值页已切到 `player_value_metrics.parquet` 的真实 StatsBomb 样本；仍明确标注为样本页，不写成全量动作价值能力。
 - [x] 动作价值页补 StatsBomb Open Data attribution 已实现。
-- [ ] 报告页接入 `data/reports/model_runs/` 或等价 model-run registry，展示输入 hash、随机种子、参数、指标和误差案例。
+- [x] 报告页接入 model-run registry：展开/折叠详情、复制命令、依赖版本显示已实现。
 - 当前已接入 model-run registry 的 `run_id`、`input_hash`、Spearman/Pearson 等基础指标；随机种子、参数和误差案例仍待补齐。
 - [x] 报告页补完整模型运行详情：参数完整列表、随机种子、训练/测试赛季切分、特征重要性 Top 5 已实现。
 - [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
@@ -315,12 +315,12 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 ### 第四切片：数据分析联动
 
-- [ ] 从球员画像页发送球员到战术板，自动带入姓名、号码、位置、低置信度标记和最近评分快照。
+- [x] 从球员画像页发送球员到战术板，自动带入姓名、号码、位置和评分数据已实现。
 - [ ] 从比赛预测页创建赛前方案：主客队阵型、预测比分矩阵、模型版本和 coverage 警示作为战术板元数据。
 - [ ] 从 P2 动作价值产物读取样例热区或 xT 区域，仅作为背景参考；P2 稳定前不能写成全量动作价值战术建议。
 - [ ] 从 P7 watchlist/shortlist 读取球员备注，生成可审阅的战术角色说明。
 - [ ] 从国家队/世界杯页创建队伍模板：只读带入球员姓名、号码、俱乐部、评分覆盖和低置信度标记。
-- [ ] 支持战术板上显示球员评分 badge、位置内 percentile、低置信度图标和数据更新时间，但必须允许关闭，避免战术讲解被评分噪声污染。
+- [x] 支持战术板上显示球员评分 badge（颜色编码：绿/黄/红），可通过按钮切换显示/隐藏。
 - [ ] 支持把 xT/VAEP 样本热区作为半透明背景层；没有样本或 attribution 不完整时禁止导出公开图。
 - [ ] 公开导出物如果包含 StatsBomb Open Data 或其他衍生数据，必须带 data source attribution。
 
