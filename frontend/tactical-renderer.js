@@ -129,6 +129,7 @@ const TacticalRenderer = {
                 case "path":   this.drawPath(obj); break;
                 case "rect":   this.drawRect(obj); break;
                 case "ellipse": this.drawEllipse(obj); break;
+                case "bench":  this.drawBench(obj); break;
             }
         }
 
@@ -241,6 +242,33 @@ const TacticalRenderer = {
         if (obj.label || obj.number) {
             ctx.fillStyle = "#fff";
             ctx.font = `bold ${Math.max(10, r * 0.8)}px Inter, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(obj.number || obj.label, pos.x, pos.y);
+        }
+    },
+
+    drawBench(obj) {
+        const ctx = this.ctx;
+        const pos = this.toCanvas(obj.x, obj.y);
+        const r = (obj.radius || 2) * this.scale;
+
+        // Smaller circle with dashed border
+        ctx.fillStyle = obj.color;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label
+        if (obj.label || obj.number) {
+            ctx.fillStyle = "#fff";
+            ctx.font = `bold ${Math.max(8, r * 0.7)}px Inter, sans-serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(obj.number || obj.label, pos.x, pos.y);
@@ -607,6 +635,7 @@ const TacticalRenderer = {
         this.canvas.addEventListener("mousedown", (e) => this.onMouseDown(e));
         this.canvas.addEventListener("mousemove", (e) => this.onMouseMove(e));
         this.canvas.addEventListener("mouseup", (e) => this.onMouseUp(e));
+        this.canvas.addEventListener("dblclick", (e) => this.onDoubleClick(e));
         this.canvas.addEventListener("mouseleave", (e) => {
             this.onMouseUp(e);
             if (this._hoverCardEl) this._hoverCardEl.style.display = "none";
@@ -684,7 +713,7 @@ const TacticalRenderer = {
         if (this.drawingMode === "eraser") {
             for (const obj of [...this.project.objects].reverse()) {
                 if (!obj.visible || obj.locked) continue;
-                if (obj.type === "player" || obj.type === "ball") {
+                if (obj.type === "player" || obj.type === "ball" || obj.type === "bench") {
                     const dx = x - obj.x, dy = y - obj.y;
                     if (dx * dx + dy * dy < (obj.radius + 2) * (obj.radius + 2)) {
                         this.pushUndo();
@@ -763,7 +792,7 @@ const TacticalRenderer = {
         let found = null;
         for (const obj of [...this.project.objects].reverse()) {
             if (!obj.visible || obj.locked) continue;
-            if (obj.type === "player" || obj.type === "ball") {
+            if (obj.type === "player" || obj.type === "ball" || obj.type === "bench") {
                 const dx = x - obj.x;
                 const dy = y - obj.y;
                 if (dx * dx + dy * dy < (obj.radius + 2) * (obj.radius + 2)) {
@@ -803,6 +832,12 @@ const TacticalRenderer = {
         this.selectedObject = found;
         if (found) {
             this.isDragging = true;
+            // Track bench drag start for swap logic
+            if (found.type === "bench") {
+                this._benchDragStart = { x: found.x, y: found.y };
+            } else {
+                this._benchDragStart = null;
+            }
             if (found.type === "arrow" || found.type === "path") {
                 this.dragOffset = {
                     x: found.type === "path" && found.points && found.points.length > 0 ? x - found.points[0].x : x - (found.startX || 0),
@@ -976,8 +1011,116 @@ const TacticalRenderer = {
             this.drawPreview = null;
             this.render();
         }
+
+        // Bench-to-pitch swap: if a bench player was dragged onto the pitch area
+        if (this.selectedObject && this.selectedObject.type === "bench") {
+            const bx = this.selectedObject.x;
+            const by = this.selectedObject.y;
+            // Check if now on the pitch (0-100 range)
+            if (bx >= 0 && bx <= 100 && by >= 0 && by <= 100) {
+                const benchTeam = this.selectedObject.team;
+                // Find nearest player of same team
+                let nearest = null;
+                let nearestDist = Infinity;
+                for (const obj of this.project.objects) {
+                    if (obj.type === "player" && obj.team === benchTeam) {
+                        const dx = bx - obj.x;
+                        const dy = by - obj.y;
+                        const d = dx * dx + dy * dy;
+                        if (d < nearestDist) {
+                            nearestDist = d;
+                            nearest = obj;
+                        }
+                    }
+                }
+                if (nearest && nearestDist < 400) {
+                    // Swap: move the player to bench's original position, bench to player's position
+                    this.pushUndo();
+                    const origBenchX = this._benchDragStart ? this._benchDragStart.x : bx;
+                    const origBenchY = this._benchDragStart ? this._benchDragStart.y : by;
+                    const playerX = nearest.x;
+                    const playerY = nearest.y;
+                    nearest.x = origBenchX;
+                    nearest.y = origBenchY;
+                    nearest.type = "bench";
+                    nearest.radius = 2;
+                    this.selectedObject.x = playerX;
+                    this.selectedObject.y = playerY;
+                    this.selectedObject.type = "player";
+                    this.selectedObject.radius = 3;
+                }
+            }
+        }
+        this._benchDragStart = null;
+
         this.isDragging = false;
         if (this.onChange) this.onChange();
+    },
+
+    /* ── Double-click: edit jersey number ──────────────────────────── */
+    onDoubleClick(e) {
+        if (!this.project || !this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        const { x, y } = this.fromCanvas(cx, cy);
+
+        // Find player/bench object under cursor
+        let found = null;
+        for (const obj of [...this.project.objects].reverse()) {
+            if (!obj.visible) continue;
+            if (obj.type === "player" || obj.type === "bench") {
+                const dx = x - obj.x;
+                const dy = y - obj.y;
+                if (dx * dx + dy * dy < (obj.radius + 2) * (obj.radius + 2)) {
+                    found = obj;
+                    break;
+                }
+            }
+        }
+        if (!found) return;
+
+        // Create inline input
+        this._removeJerseyInput();
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "0";
+        input.max = "99";
+        input.value = found.number || "";
+        input.style.cssText = `position:fixed;left:${e.clientX - 16}px;top:${e.clientY - 16}px;` +
+            "width:40px;height:28px;background:rgba(20,24,36,0.95);color:#fff;border:1px solid #7ca8ff;" +
+            "border-radius:4px;text-align:center;font:14px/1 Inter,sans-serif;z-index:10000;outline:none;" +
+            "box-shadow:0 2px 10px rgba(0,0,0,0.5)";
+        input.dataset.playerId = found.id;
+
+        const commit = () => {
+            const val = parseInt(input.value, 10);
+            if (!isNaN(val) && val >= 0 && val <= 99) {
+                this.pushUndo();
+                found.number = val;
+                this.render();
+                if (this.onChange) this.onChange();
+            }
+            this._removeJerseyInput();
+        };
+
+        input.addEventListener("keydown", (ev) => {
+            if (ev.key === "Enter") { ev.preventDefault(); commit(); }
+            if (ev.key === "Escape") { this._removeJerseyInput(); }
+        });
+        input.addEventListener("blur", commit);
+
+        document.body.appendChild(input);
+        input.focus();
+        input.select();
+        this._jerseyInput = input;
+    },
+
+    _removeJerseyInput() {
+        if (this._jerseyInput) {
+            if (this._jerseyInput.parentNode) this._jerseyInput.parentNode.removeChild(this._jerseyInput);
+            this._jerseyInput = null;
+        }
     },
 
     /* ── Drawing mode ────────────────────────────────────────────────── */
@@ -1183,17 +1326,18 @@ const TacticalRenderer = {
         let hovered = null;
         for (const obj of [...this.project.objects].reverse()) {
             if (!obj.visible) continue;
-            if (obj.type === "player") {
+            if (obj.type === "player" || obj.type === "bench") {
                 const dx = nx - obj.x, dy = ny - obj.y;
                 if (dx * dx + dy * dy < (obj.radius + 2) * (obj.radius + 2)) { hovered = obj; break; }
             }
         }
         if (hovered) {
             const team = hovered.team === "away" ? "\u5BA2\u573A" : "\u4E3B\u573A";
+            const pos = hovered.type === "bench" ? " \u66FF\u8865" : "";
             const num = hovered.number ? `#${hovered.number}` : "";
             const label = hovered.label || "";
             this._hoverCardEl.innerHTML = `<div style="font-weight:600;margin-bottom:2px">\u25CB ${label} ${num}</div>` +
-                `<div style="opacity:0.7;font-size:11px">\u7403\u961F: ${team}</div>` +
+                `<div style="opacity:0.7;font-size:11px">\u7403\u961F: ${team}${pos}</div>` +
                 `<div style="opacity:0.7;font-size:11px">\u4F4D\u7F6E: (${hovered.x.toFixed(0)}, ${hovered.y.toFixed(0)})</div>`;
             const rect = this.canvas.getBoundingClientRect();
             this._hoverCardEl.style.display = "block";
