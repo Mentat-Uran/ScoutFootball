@@ -160,6 +160,16 @@ const i18n = {
         age_curve_label: "年龄曲线",
         transfermarkt_notice: "Transfermarkt 数据需手动导入，当前为估算值",
         value_no_fairness: "暂无身价公平性数据",
+        price_band_label: "价格区间",
+        price_all: "全部",
+        price_low: "低 (<20M)",
+        price_medium: "中 (20-80M)",
+        price_high: "高 (>80M)",
+        age_curve_title: "年龄曲线",
+        same_cohort_title: "同位置同年龄对比",
+        watchlist_notes_label: "观察备注",
+        generate_tactical_role: "生成战术角色",
+        tactical_role_label: "战术角色分析",
     },
     en: {
         nav_overview: "Overview",
@@ -322,6 +332,16 @@ const i18n = {
         age_curve_label: "Age Curve",
         transfermarkt_notice: "Transfermarkt data requires manual import, estimates shown",
         value_no_fairness: "No value fairness data available",
+        price_band_label: "Price Band",
+        price_all: "All",
+        price_low: "Low (<20M)",
+        price_medium: "Mid (20-80M)",
+        price_high: "High (>80M)",
+        age_curve_title: "Age Curve",
+        same_cohort_title: "Same-Position Same-Age Comparison",
+        watchlist_notes_label: "Watchlist Notes",
+        generate_tactical_role: "Generate Tactical Role",
+        tactical_role_label: "Tactical Role Analysis",
     },
 };
 
@@ -588,6 +608,7 @@ const appState = {
     season: "ALL",
     league: "ALL",
     valueMode: "under",
+    valuePriceBand: "all",
     home: "Arsenal",
     away: "Barcelona",
     charts: {},
@@ -835,6 +856,16 @@ async function renderPlayerProfile() {
             const label = appState.lang === 'zh' ? '缺失字段' : 'Missing fields';
             return `<div><span>${escapeHtml(label)}</span><strong style="color:#ff6b6b">\u25CB ${escapeHtml(missing.join(', '))}</strong></div>`;
         })()}
+        ${/* Watchlist/Shortlist notes */ (() => {
+            const wlNote = watchlistNotes[player.name] || "";
+            const slNote = scoutShortlistNotes[player.name] || "";
+            if (!wlNote && !slNote) return "";
+            const label = appState.lang === "zh" ? "球探备注" : "Scout notes";
+            let noteHtml = "";
+            if (wlNote) noteHtml += (appState.lang === "zh" ? "观察: " : "Watch: ") + escapeHtml(wlNote);
+            if (slNote) noteHtml += (noteHtml ? " | " : "") + (appState.lang === "zh" ? "候选: " : "Short: ") + escapeHtml(slNote);
+            return `<div><span>${escapeHtml(label)}</span><strong style="font-size:0.82rem;color:var(--text-muted)">${noteHtml}</strong></div>`;
+        })()}
     `;
     // Always remove existing warning before conditionally inserting new one
     const existing = document.getElementById("player-detail").nextElementSibling;
@@ -1063,7 +1094,13 @@ async function fetchValueReport() {
 function renderValue() {
     const isMock = valuePlayers.length === 0;
     const data = isMock ? MOCK_VALUE_DATA : valuePlayers;
-    const sorted = [...data].sort((a, b) => (
+    // Apply price band filter
+    const band = appState.valuePriceBand || "all";
+    let filtered = data;
+    if (band === "low") filtered = data.filter((p) => p.actualValue < 20e6);
+    else if (band === "medium") filtered = data.filter((p) => p.actualValue >= 20e6 && p.actualValue <= 80e6);
+    else if (band === "high") filtered = data.filter((p) => p.actualValue > 80e6);
+    const sorted = [...filtered].sort((a, b) => (
         appState.valueMode === "under" ? b.residual - a.residual : a.residual - b.residual
     ));
 
@@ -1235,6 +1272,91 @@ function renderValue() {
     });
 
     chart.resize();
+
+    // ── Age Curve Scatter: x=age, y=rating, color=position ──
+    renderAgeCurveScatter(filtered);
+
+    // ── Same-position same-age comparison table ──
+    renderSameCohortComparison(filtered);
+}
+
+// ── Age Curve Scatter Chart ──────────────────────────────────────
+const POS_COLORS = {
+    GK: "#f59e0b", CB: "#3b82f6", FB: "#06b6d4", DM: "#8b5cf6",
+    CM: "#6366f1", AM: "#ec4899", W: "#10b981", ST: "#ef4444",
+};
+
+function renderAgeCurveScatter(data) {
+    const chart = getChart("age-curve-chart");
+    if (!chart) return;
+    const isZh = appState.lang === "zh";
+    chart.resize();
+    // Group by position for color coding
+    const positions = [...new Set(data.map((p) => p.position || p.position_group || ""))].filter(Boolean);
+    const series = positions.map((pos) => ({
+        name: pos,
+        type: "scatter",
+        data: data.filter((p) => (p.position || p.position_group || "") === pos).map((p) => ({
+            value: [p.age || 25, (p.rating || p.optimized_score || 0)],
+            name: p.name || p.player_name || "",
+            team: p.team || "",
+        })),
+        symbolSize: 8,
+        itemStyle: { color: POS_COLORS[pos] || "rgba(160,170,200,.7)" },
+        emphasis: { itemStyle: { shadowBlur: 8 } },
+    }));
+    // Fallback: if data has no age field, generate synthetic ages from mock data
+    const hasAge = data.some((p) => p.age != null);
+    if (!hasAge) {
+        // Generate synthetic age data for the mock
+        for (const s of series) {
+            s.data = s.data.map((d) => ({ ...d, value: [20 + Math.random() * 15, d.value[1]] }));
+        }
+    }
+    chart.setOption({
+        animation: false,
+        title: { text: isZh ? "年龄曲线" : "Age Curve", left: "center", top: 0, textStyle: { color: chartTextColor(), fontSize: 12 } },
+        tooltip: {
+            trigger: "item",
+            formatter(params) {
+                const d = params.data;
+                return `<strong>${escapeHtml(d.name)}</strong><br/>${escapeHtml(d.team)}<br/>${isZh ? "年龄" : "Age"}: ${d.value[0]}<br/>${isZh ? "评分" : "Rating"}: ${d.value[1].toFixed(1)}`;
+            },
+        },
+        legend: { bottom: 0, textStyle: { color: chartTextColor(), fontSize: 10 }, data: positions },
+        grid: { left: 48, right: 20, top: 36, bottom: 48 },
+        xAxis: { type: "value", name: isZh ? "年龄" : "Age", nameTextStyle: { color: chartTextColor() }, axisLabel: { color: chartTextColor() }, splitLine: { lineStyle: { color: chartGridColor() } }, min: 17, max: 40 },
+        yAxis: { type: "value", name: isZh ? "评分" : "Rating", nameTextStyle: { color: chartTextColor() }, axisLabel: { color: chartTextColor() }, splitLine: { lineStyle: { color: chartGridColor() } }, min: 60, max: 100 },
+        series,
+    }, true);
+    chart.resize();
+}
+
+function renderSameCohortComparison(data) {
+    const el = document.getElementById("value-same-cohort");
+    if (!el) return;
+    const z = appState.lang === "zh";
+    // Find a selected player from value list or use first entry
+    const selected = data[0];
+    if (!selected) { el.innerHTML = ""; return; }
+    const sPos = selected.position || selected.position_group || "";
+    const sAge = selected.age || 25;
+    // Find same-position same-age (within 2 years) players
+    const cohort = data.filter((p) => {
+        const pos = p.position || p.position_group || "";
+        const age = p.age || 25;
+        return pos === sPos && Math.abs(age - sAge) <= 2;
+    }).sort((a, b) => (b.rating || b.optimized_score || 0) - (a.rating || a.optimized_score || 0)).slice(0, 10);
+    if (cohort.length <= 1) { el.innerHTML = ""; return; }
+    let html = `<p style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.3rem 0">${escapeHtml(t("same_cohort_title"))} (${escapeHtml(sPos)}, ${sAge}+/-2)</p>`;
+    html += '<div style="font-size:0.75rem;line-height:1.6">';
+    for (const p of cohort) {
+        const name = p.name || p.player_name || "";
+        const score = Number(p.rating || p.optimized_score || 0).toFixed(1);
+        html += `<div style="display:flex;justify-content:space-between;gap:0.4rem"><span>${escapeHtml(name)}</span><span style="color:var(--text-muted)">${escapeHtml(String(score))}</span></div>`;
+    }
+    html += '</div>';
+    el.innerHTML = html;
 }
 
 let currentPrediction = null;
@@ -1558,6 +1680,7 @@ function renderScouting() {
     document.getElementById("watchlist").innerHTML = watchlistData.length > 0 ? watchlistData.map((player) => {
         const pName = player.player_name || player.name || "";
         const conf = (player.confidence_level || player.confidence || "LOW").toUpperCase();
+        const wlNote = watchlistNotes[pName] || "";
         return `
         <div class="watch-card">
             <div>
@@ -1565,6 +1688,10 @@ function renderScouting() {
                 <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
             </div>
             <span class="status-pill ${confidenceClass(conf)}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
+            <div class="watch-card-extra">
+                ${wlNote ? `<div class="scout-note-display">\u25B8 ${escapeHtml(wlNote)}</div>` : ""}
+                <textarea class="scout-note-textarea" data-wl-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(wlNote)}</textarea>
+            </div>
         </div>`;
     }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
 
@@ -1586,7 +1713,8 @@ function renderScouting() {
             <span class="status-pill ${confidenceClass(conf)}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
             <div class="watch-card-extra">
                 ${note ? `<div class="scout-note-display">\u25B8 ${escapeHtml(note)}</div>` : ""}
-                <input class="scout-note-input" type="text" data-note-player="${escapeAttr(pName)}" value="${escapeAttr(note)}" placeholder="${escapeAttr(t("scout_note_placeholder"))}" />
+                <textarea class="scout-note-textarea" data-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(note)}</textarea>
+                <button class="text-button scout-tactical-role-btn" data-tactical-role="${escapeAttr(pName)}" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem;margin-top:0.2rem">\u25C6 ${escapeHtml(t("generate_tactical_role"))}</button>
             </div>
         </div>`;
     }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
@@ -2947,26 +3075,65 @@ function bindEvents() {
 
     // Scouting: note input change
     document.addEventListener("change", (e) => {
-        if (e.target.matches(".scout-note-input")) {
+        if (e.target.matches(".scout-note-textarea") && e.target.dataset.notePlayer) {
             const pName = e.target.dataset.notePlayer;
             if (pName != null) {
                 scoutShortlistNotes[pName] = e.target.value;
                 saveScoutShortlistNotes();
             }
         }
+        // Watchlist notes textarea
+        if (e.target.matches(".scout-note-textarea") && e.target.dataset.wlNotePlayer) {
+            const pName = e.target.dataset.wlNotePlayer;
+            if (pName != null) {
+                watchlistNotes[pName] = e.target.value;
+                saveWatchlistNotes();
+            }
+        }
     });
-
     // Scouting: note input live update on keyup
     document.addEventListener("keyup", (e) => {
-        if (e.target.matches(".scout-note-input")) {
+        if (e.target.matches(".scout-note-textarea") && e.target.dataset.notePlayer) {
             const pName = e.target.dataset.notePlayer;
             if (pName != null) {
                 scoutShortlistNotes[pName] = e.target.value;
                 saveScoutShortlistNotes();
             }
         }
+        // Watchlist notes textarea live update
+        if (e.target.matches(".scout-note-textarea") && e.target.dataset.wlNotePlayer) {
+            const pName = e.target.dataset.wlNotePlayer;
+            if (pName != null) {
+                watchlistNotes[pName] = e.target.value;
+                saveWatchlistNotes();
+            }
+        }
     });
 
+    // Scouting: tactical role button click
+    document.addEventListener("click", (e) => {
+        const roleBtn = e.target.closest("[data-tactical-role]");
+        if (roleBtn) {
+            const pName = roleBtn.dataset.tacticalRole;
+            const player = shortlistData.find((p) => (p.player_name || p.name || "") === pName);
+            if (player) {
+                const role = generateTacticalRole(player);
+                const roleEl = document.getElementById("player-tactical-role");
+                if (roleEl) {
+                    roleEl.innerHTML = `<div style="font-size:0.78rem;padding:0.3rem 0"><strong>${escapeHtml(t("tactical_role_label"))}:</strong> ${escapeHtml(role)}</div>`;
+                }
+            }
+        }
+    });
+
+    // Value page: price band filter
+    const priceBandSelect = document.getElementById("value-price-band");
+    if (priceBandSelect) {
+        priceBandSelect.addEventListener("change", (e) => {
+            appState.valuePriceBand = e.target.value;
+            renderValue();
+        });
+    }
     window.addEventListener("resize", () => {
         Object.values(appState.charts).forEach((chart) => {
             try { chart.resize(); } catch { /* ignore disposed chart */ }
@@ -3887,6 +4054,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Load scouting localStorage state
     loadScoutQueueStatuses();
     loadScoutShortlistNotes();
+    loadWatchlistNotes();
 
     // Load real data from API in parallel
     const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, runs, watchlistRows, shortlistRows, actionValues, licenseResp] = await Promise.all([
@@ -3994,6 +4162,7 @@ const SCOUT_QUEUE_KEY = "scout-queue-statuses";
 const SCOUT_NOTES_KEY = "scout-shortlist-notes";
 const SCOUT_LASTVISIT_KEY = "scout-watchlist-lastvisit";
 const SCOUT_SNAPSHOT_KEY = "scout-watchlist-snapshot";
+const WATCHLIST_NOTES_KEY = "sf-watchlist-notes";
 const PLAYER_WATCHLIST_KEY = "sf-player-watchlist";
 const PLAYER_SHORTLIST_KEY = "sf-player-shortlist";
 const STATUS_CYCLE = ["pending", "reviewing", "approved", "rejected"];
@@ -4001,6 +4170,7 @@ const STATUS_ICONS = { pending: "\u25CB", reviewing: "\u25B2", approved: "\u2713
 
 let scoutQueueStatuses = {};
 let scoutShortlistNotes = {};
+let watchlistNotes = {};
 let scoutSortMode = "priority";
 let watchlistDiffCount = 0;
 
@@ -4084,6 +4254,38 @@ function loadScoutShortlistNotes() {
 
 function saveScoutShortlistNotes() {
     try { localStorage.setItem(SCOUT_NOTES_KEY, JSON.stringify(scoutShortlistNotes)); } catch {}
+}
+function loadWatchlistNotes() {
+    try { watchlistNotes = JSON.parse(localStorage.getItem(WATCHLIST_NOTES_KEY)) || {}; } catch { watchlistNotes = {}; }
+}
+
+function saveWatchlistNotes() {
+    try { localStorage.setItem(WATCHLIST_NOTES_KEY, JSON.stringify(watchlistNotes)); } catch {}
+}
+
+function generateTacticalRole(player) {
+    const pos = (player.position_group || player.position || "").toUpperCase();
+    const score = Number(player.optimized_score || player.rating || 0);
+    const minutes = Math.round(player.minutes || 0);
+    const z = appState.lang === "zh";
+    const roleMap = {
+        GK: { zh: "门将 - 最后防线组织者", en: "Goalkeeper - Last line organizer" },
+        CB: { zh: "中后卫 - 防线核心，负责拦截和出球", en: "Centre-Back - Defensive anchor, ball-playing defender" },
+        FB: { zh: "边后卫 - 攻守转换枢纽，提供宽度", en: "Full-Back - Transition hub, provides width" },
+        DM: { zh: "防守型中场 - 屏障型后腰，扫荡和分球", en: "Defensive Midfielder - Shield pivot, screen and distribute" },
+        CM: { zh: "中场 - 节拍器型中场，串联攻守", en: "Central Midfielder - Tempo-setter, links attack and defense" },
+        AM: { zh: "前腰 - 创造型10号位，关键传球和远射", en: "Attacking Midfielder - Creative No.10, key passes and long shots" },
+        W: { zh: "边锋 - 突破型翼锋，内切或下底传中", en: "Winger - Dribbling flanker, cuts inside or delivers crosses" },
+        ST: { zh: "前锋 - 终结者型中锋，禁区嗅觉", en: "Striker - Finisher centre-forward, box presence" },
+    };
+    const role = roleMap[pos] || { zh: "多功能球员", en: "Versatile player" };
+    let tier = "";
+    if (score >= 90) tier = z ? "世界级" : "World-class";
+    else if (score >= 85) tier = z ? "精英级" : "Elite";
+    else if (score >= 78) tier = z ? "可靠级" : "Reliable";
+    else tier = z ? "发展中" : "Developing";
+    const workload = minutes >= 2700 ? (z ? "主力" : "Starter") : (z ? "轮换" : "Rotation");
+    return (z ? role.zh : role.en) + " | " + tier + " | " + workload;
 }
 
 function cycleQueueStatus(playerKey) {

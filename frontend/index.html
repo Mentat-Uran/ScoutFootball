@@ -258,7 +258,20 @@
                             </div>
                             <span class="status-pill status-high">6513</span>
                         </div>
+                        <div id="value-price-filter" style="padding:0.4rem 0.8rem;display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap">
+                            <span style="font-size:0.78rem;color:var(--text-muted)" data-i18n="price_band_label">价格区间</span>
+                            <select id="value-price-band" class="glass-control" style="font-size:0.78rem">
+                                <option value="all" data-i18n-opt="price_all">全部</option>
+                                <option value="low" data-i18n-opt="price_low">低 (小于20M)</option>
+                                <option value="medium" data-i18n-opt="price_medium">中 (20-80M)</option>
+                                <option value="high" data-i18n-opt="price_high">高 (大于80M)</option>
+                            </select>
+                        </div>
                         <div id="value-chart" class="chart-box"></div>
+                        <div style="padding:0.4rem 0.8rem">
+                            <p style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.3rem 0" data-i18n="transfermarkt_notice">Transfermarkt 数据需手动导入，当前为估算值</p>
+                        </div>
+                        <div id="age-curve-chart" class="chart-box" style="height:280px"></div>
                     </article>
                     <article class="liquid-panel table-panel">
                         <div class="panel-head">
@@ -270,6 +283,7 @@
                         </div>
                         <div id="value-list" class="rank-list"></div>
                         <div id="value-fairness" style="padding:0 0.8rem"></div>
+                        <div id="value-same-cohort" style="padding:0.4rem 0.8rem"></div>
                     </article>
                 </div>
             </section>
@@ -331,6 +345,8 @@
                             <span class="status-pill status-high" id="shortlist-count">0</span>
                         </div>
                         <div id="shortlist" class="watch-grid"></div>
+                        <div id="player-detail-notes" style="padding:0.4rem 0.8rem"></div>
+                        <div id="player-tactical-role" style="padding:0.4rem 0.8rem"></div>
                     </article>
                 </div>
             </section>
