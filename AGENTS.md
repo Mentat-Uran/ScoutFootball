@@ -22,10 +22,10 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - mplsoccer 集成：`src/scoutfootball/viz/pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
 - 低置信度提示：分钟不足、数据缺失、位置重判不确定、联赛 coverage 低。
 - Streamlit 当前为 15 页工作台：总览、5 个分析页、3 个 P1 展示页、4 个世界杯页、1 个球探队列页和 1 个动作价值样本页；总览页已接入 artifact/model-run 读取，球探页已接入 review queue/watchlist/shortlist 读取，动作价值页已接入 `player_value_metrics.parquet` 样本。
-- `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。所有导航图标统一使用几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。总览、球员画像、身价、比赛预测、球探、动作价值和报告页已改为读取 FastAPI 本地产物；身价页 API 无数据时显示 DEMO 标记；顶部栏有 API 连接状态指示器（OK/OFFLINE）；`fetchRatings()` 按位置分组计算客户端 radar 百分位，球员列表加载后即有真实 radar 数据；世界杯页仍含样例/混合数据，不能写成全量真实后端。
+- `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。所有导航图标统一使用几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。总览、球员画像、身价、比赛预测、球探、动作价值和报告页已改为读取 FastAPI 本地产物；身价页 API 无数据时显示 DEMO 标记；顶部栏有 API 连接状态指示器（OK/OFFLINE）；`fetchRatings()` 按位置分组计算客户端 radar 百分位，球员列表加载后即有真实 radar 数据；API/本地 JSON 字符串进入 HTML 前已统一转义，CSV 导出有公式注入防护；世界杯页仍含样例/混合数据，不能写成全量真实后端。
 - `data_loader.py` 已加固：DuckDB 读取异常时正确 fallback 到 Parquet；新增 `_safe_read_parquet` 辅助函数，corrupt Parquet 文件不会导致 500；6 个数据加载函数已改用安全读取。
 - `api.py` 已加固：`_clean_json_value` 支持 numpy.int64/float64/bool_ 和 inf；`get_match_prediction` 捕获所有异常类型；内联 NaN 清理代码已合并到 `_clean_json_value`。
-- 电子战术板已规划为 P1.5，尚未实现；目标是 `frontend/` 本地战术演示、动画时间轴和 PNG/PDF/WebM 导出，不要写成现有能力。
+- 电子战术板 P1.5 第一切片已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。动画时间轴、PNG/PDF/WebM 导出、报告嵌入、版本迁移、MP4、视频叠画和 tracking 导入仍未实现，不能写成现有能力。
 
 新增适配器（已实现，部分需特定环境运行）：
 - SofaScore、SoFIFA、WhoScored、Capology：需要 Chrome + Selenium，建议在 Windows GPU 服务器运行。
@@ -111,6 +111,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 新增公开图表、报告或导出产物前，必须确认 data source attribution 和可公开展示边界。
 - 新增电子战术板导出前，必须明确导出物是否包含真实数据、StatsBomb Open Data 或模型衍生产物；包含时必须保留 source attribution。
 - 电子战术板第一阶段只允许浏览器本地画布、JSON 工程和轻量导出；不要在浏览器端执行训练、爬取、批量视频转码或重型模型推理。
+- 前端凡是把 API、Parquet 派生 JSON、本地 JSON、demo 字符串或用户导入字段写入 `innerHTML`，必须先使用现有 escaping/sanitizer；CSV 导出必须走 `csvCell()`；战术板导入/保存/读取必须走 `TACTICAL_BOARD.sanitizeProject()`。
 - `goals - xG` 不能直接当射术；必须用样本量 shrinkage 或低置信度标记。
 - Top N 位置配额不能替代真实影响力校准。
 - availability 只是可靠性/样本量信号，不是球员能力本身；未经真实标签验证，不要把 availability cap 提回 0.25 以上。
@@ -139,6 +140,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 新增足球专用图表时优先扩展 `src/scoutfootball/viz/`，不要把绘图逻辑堆进 Streamlit 页面。
 - `frontend/` 是静态产品壳：保留 `frontend/index.html`、`frontend/style.css`、`frontend/app.js` 的 Liquid Glass 风格，页面只做本地展示和轻量交互，不在浏览器中执行训练、爬取或重型数据处理。
 - `frontend/` 当前 mock 数据只能用于产品形态验证；接真实数据时先补 FastAPI read-only endpoint 和本地 Parquet 契约，再改前端 fetch。
+- `frontend/app.js` 中已有 `escapeHtml()`、`escapeAttr()`、`sanitizeCssPercent()` 和 `csvCell()`；新增 HTML 模板、attribute、style width 或 CSV 导出时优先复用这些 helper，不要把后端/本地字符串直接拼进 HTML。
 - 当前已落地的 FastAPI 只读契约子集：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；旧路由别名继续保留给现有页面兼容使用。
 - 新增电子战术板优先放在 `frontend/`：使用归一化球场坐标、本地 JSON 工程、对象/图层/帧 schema、关键帧或步骤式时间轴；第一阶段导出 PNG/PDF/WebM，MP4 只能作为检测到本地 ffmpeg 后的可选后端能力。
 - 电子战术板工程 schema 至少包含 `board_id`、`title`、`sport`、`pitch_type`、`objects`、`layers`、`frames`、`version`、`created_at`、`updated_at`、`source_attribution`。

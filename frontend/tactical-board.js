@@ -12,6 +12,10 @@
 const TACTICAL_BOARD = {
     /* ── Schema version ────────────────────────────────────────────── */
     SCHEMA_VERSION: "1.0.0",
+    MAX_OBJECTS: 200,
+    MAX_FRAMES: 60,
+    MAX_TEXT_LENGTH: 120,
+    MAX_IMPORT_BYTES: 1_000_000,
 
     /* ── Pitch config ──────────────────────────────────────────────── */
     PITCH: {
@@ -171,11 +175,103 @@ const TACTICAL_BOARD = {
     },
 
     /* ── Local storage ──────────────────────────────────────────────── */
+    _safeString(value, fallback = "") {
+        const text = String(value ?? fallback).slice(0, this.MAX_TEXT_LENGTH);
+        return text.replace(/[\u0000-\u001F\u007F]/g, "");
+    },
+
+    _safeId(value, fallback = "") {
+        const text = this._safeString(value, fallback || Date.now().toString(36));
+        return text.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || Date.now().toString(36);
+    },
+
+    _clampNumber(value, min, max, fallback = 0) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return fallback;
+        return Math.max(min, Math.min(max, n));
+    },
+
+    _sanitizeObject(object) {
+        if (!object || typeof object !== "object") return null;
+        const type = ["player", "ball", "arrow", "zone"].includes(object.type)
+            ? object.type
+            : "player";
+        const safe = {
+            id: this._safeId(object.id),
+            type,
+            locked: !!object.locked,
+            visible: object.visible !== false,
+        };
+        if (type === "arrow") {
+            safe.startX = this._clampNumber(object.startX, 0, 100, 50);
+            safe.startY = this._clampNumber(object.startY, 0, 100, 50);
+            safe.endX = this._clampNumber(object.endX, 0, 100, 55);
+            safe.endY = this._clampNumber(object.endY, 0, 100, 55);
+            safe.style = ["solid", "dashed", "curved"].includes(object.style) ? object.style : "solid";
+            safe.color = this._safeString(object.color, "#ffffff").slice(0, 32);
+            safe.width = this._clampNumber(object.width, 0.5, 8, 2);
+            return safe;
+        }
+        safe.x = this._clampNumber(object.x, 0, 100, 50);
+        safe.y = this._clampNumber(object.y, 0, 100, 50);
+        safe.color = this._safeString(object.color, type === "player" ? "#7ca8ff" : "#ffffff").slice(0, 32);
+        safe.radius = this._clampNumber(object.radius, 0.5, 8, type === "ball" ? 1.5 : 3);
+        if (type === "player") {
+            safe.team = object.team === "away" ? "away" : "home";
+            safe.label = this._safeString(object.label);
+            safe.number = Math.round(this._clampNumber(object.number, 0, 99, 0));
+        }
+        if (type === "zone") {
+            safe.width = this._clampNumber(object.width, 1, 100, 20);
+            safe.height = this._clampNumber(object.height, 1, 100, 20);
+            safe.label = this._safeString(object.label);
+            safe.borderColor = this._safeString(object.borderColor, "rgba(255,255,255,0.4)").slice(0, 48);
+        }
+        return safe;
+    },
+
+    sanitizeProject(project) {
+        if (!project || typeof project !== "object") return null;
+        const now = new Date().toISOString();
+        const objects = Array.isArray(project.objects)
+            ? project.objects.slice(0, this.MAX_OBJECTS).map((item) => this._sanitizeObject(item)).filter(Boolean)
+            : [];
+        const frames = Array.isArray(project.frames) && project.frames.length > 0
+            ? project.frames.slice(0, this.MAX_FRAMES).map((frame, i) => ({
+                id: this._safeId(frame?.id, `frame-${i}`),
+                name: this._safeString(frame?.name, `Frame ${i + 1}`),
+                duration_ms: Math.round(this._clampNumber(frame?.duration_ms, 250, 60000, 3000)),
+                notes: this._safeString(frame?.notes),
+                objects: Array.isArray(frame?.objects)
+                    ? frame.objects.slice(0, this.MAX_OBJECTS).map((item) => this._sanitizeObject(item)).filter(Boolean)
+                    : [],
+            }))
+            : [{ id: "frame-0", name: "Frame 1", objects: [], duration_ms: 3000, notes: "" }];
+        return {
+            board_id: this._safeId(project.board_id),
+            title: this._safeString(project.title, "Untitled"),
+            sport: "football",
+            pitch_type: project.pitch_type === "7v7" ? "7v7" : "11v11",
+            objects,
+            layers: [{ id: "default", name: "Layer 1", visible: true, locked: false }],
+            frames,
+            version: this.SCHEMA_VERSION,
+            created_at: this._safeString(project.created_at, now),
+            updated_at: this._safeString(project.updated_at, now),
+            source_attribution: this._safeString(
+                project.source_attribution,
+                "ScoutFootball tactical board",
+            ),
+        };
+    },
+
     saveProject(project) {
         try {
-            project.updated_at = new Date().toISOString();
-            const key = `tactical-board-${project.board_id}`;
-            localStorage.setItem(key, JSON.stringify(project));
+            const safeProject = this.sanitizeProject(project);
+            if (!safeProject) throw new Error("Invalid project");
+            safeProject.updated_at = new Date().toISOString();
+            const key = `tactical-board-${safeProject.board_id}`;
+            localStorage.setItem(key, JSON.stringify(safeProject));
             return true;
         } catch (e) {
             console.warn("Failed to save tactical board project:", e);
@@ -187,7 +283,7 @@ const TACTICAL_BOARD = {
         try {
             const key = `tactical-board-${boardId}`;
             const data = localStorage.getItem(key);
-            return data ? JSON.parse(data) : null;
+            return data ? this.sanitizeProject(JSON.parse(data)) : null;
         } catch (e) {
             console.warn("Failed to load tactical board project:", e);
             return null;
@@ -201,11 +297,12 @@ const TACTICAL_BOARD = {
             if (key && key.startsWith("tactical-board-")) {
                 try {
                     const data = JSON.parse(localStorage.getItem(key));
-                    if (data && data.board_id) {
+                    const safeProject = this.sanitizeProject(data);
+                    if (safeProject && safeProject.board_id) {
                         projects.push({
-                            board_id: data.board_id,
-                            title: data.title,
-                            updated_at: data.updated_at,
+                            board_id: safeProject.board_id,
+                            title: safeProject.title,
+                            updated_at: safeProject.updated_at,
                         });
                     }
                 } catch { /* skip corrupt entries */ }
@@ -229,11 +326,14 @@ const TACTICAL_BOARD = {
 
     importJSON(jsonString) {
         try {
+            if (String(jsonString ?? "").length > this.MAX_IMPORT_BYTES) {
+                throw new Error("Project file too large");
+            }
             const project = JSON.parse(jsonString);
             if (!project.board_id || !project.version) {
                 throw new Error("Invalid project: missing board_id or version");
             }
-            return project;
+            return this.sanitizeProject(project);
         } catch (e) {
             console.warn("Failed to import tactical board project:", e);
             return null;

@@ -37,11 +37,11 @@ The focus right now: upgrading the rating system into an interpretable, evaluabl
 - **Neural Rating Candidate:** `scoutfootball train-rating-nn` trains a supervised sklearn MLP candidate from `rating_feature_matrix.parquet` + `player_truth_labels.parquet` and writes artifacts to `data/models/player_rating_nn/`; it does not replace `player_ratings_optimized.parquet` unless it beats the current optimizer on the same holdout and baseline checks.
 - **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `docs/MODEL_CARD.md`.
 - **Match Prediction:** Independent Poisson baseline with score probability matrices.
-- **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages. Liquid Glass static frontend with 7 analysis views (Overview, Players, Value, Matches, Scouting, Action Values, Reports) and 4 World Cup views (Schedule, Squads, Compare, Probability). FastAPI read-only backend for artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, and model runs. `mplsoccer` powers pitch plots, pizza charts, and shot maps. A browser-based electronic tactical board is planned, not implemented yet.
+- **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages. Liquid Glass static frontend with 7 analysis views (Overview, Players, Value, Matches, Scouting, Action Values, Reports), 4 World Cup views (Schedule, Squads, Compare, Probability), and a first-slice local tactical board. FastAPI read-only backend serves artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, and model runs. `mplsoccer` powers pitch plots, pizza charts, and shot maps. Frontend rendering now escapes API/local JSON strings, CSV exports guard against spreadsheet formula injection, and tactical-board JSON imports pass through a schema sanitizer.
 
 ### Liquid Glass Frontend
 
-The `frontend/` directory contains a static analysis workbench with a consistent geometric icon system (no emojis). All navigation icons use minimal Unicode symbols (◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞) for visual consistency.
+The `frontend/` directory contains a static analysis workbench with a consistent geometric icon system (no emojis). All navigation icons use minimal Unicode symbols (◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞) for visual consistency. API, local Parquet-derived JSON, demo strings, and imported tactical-board project fields are escaped or sanitized before entering HTML.
 
 **7 Analysis Views:**
 
@@ -101,14 +101,14 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 | Player radar / pizza chart | Available via mplsoccer |
 | Position-relative rankings | Available with confidence badges |
 | Score probability matrix | Available in Streamlit |
-| Electronic tactical board | Planned (P1.5) — local board, animation timeline, PNG/PDF/WebM export first |
+| Electronic tactical board | First local canvas/JSON slice available; animation timeline, PNG/PDF/WebM export, report embedding, and version migration remain P1.5 work |
 | Dixon-Coles with time decay | Planned (P5) |
 
-### Planned Electronic Tactical Board
+### Electronic Tactical Board
 
-The tactical board is planned as a local-first coaching and analysis workspace inside `frontend/`, aligned with products such as [Tactico](https://tactico.pro/), [DrawTactics](https://drawtactics.com/animated-tactics-board), [TacticSlate](https://tacticslate.com/football-tactic-board), [JLA Tactics Board](https://jlatacticsboard.com/), [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards), and [TacticalBoards](https://tacticalboards.com/). It should support static diagrams, formation presets, draggable players and ball, arrows, zones, labels, movement trails, keyframe or step-based animation, presentation playback, and export.
+The first tactical-board slice is available as a local-first coaching and analysis workspace inside `frontend/`, aligned with products such as [Tactico](https://tactico.pro/), [DrawTactics](https://drawtactics.com/animated-tactics-board), [TacticSlate](https://tacticslate.com/football-tactic-board), [JLA Tactics Board](https://jlatacticsboard.com/), [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards), and [TacticalBoards](https://tacticalboards.com/). The current slice covers static local canvas work, normalized coordinates, basic objects, formation presets, local JSON projects, localStorage persistence, and schema-sanitized import/export.
 
-Initial scope stays lightweight: local JSON projects, normalized pitch coordinates, browser playback, PNG/PDF still export, WebM animation export via the browser, and report embedding. MP4 export through local ffmpeg, video telestration, tracking-data import, and 3D/behind-goal views are later extensions after the canvas model, data contract, and attribution rules are stable.
+Remaining P1.5 scope stays lightweight: animation timeline, browser playback, PNG/PDF still export, WebM animation export via the browser, report embedding, version migration, and read-only fallback for incompatible projects. MP4 export through local ffmpeg, video telestration, tracking-data import, and 3D/behind-goal views are later extensions after the canvas model, data contract, and attribution rules are stable.
 
 ### Local Data Overview
 
@@ -195,11 +195,11 @@ ScoutFootball 是本地优先的足球分析平台，把公开数据、手动导
 - **神经网络候选模型:** `scoutfootball train-rating-nn` 使用 `rating_feature_matrix.parquet` + `player_truth_labels.parquet` 训练监督式 sklearn MLP 候选模型，并写入 `data/models/player_rating_nn/`；除非同切分下优于当前优化器和 baseline，否则不替换 `player_ratings_optimized.parquet`。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界和已知偏差。
 - **比分预测:** Independent Poisson baseline，含比分概率矩阵。
-- **产品与可视化:** 15 页 Streamlit 工作台（含产物总览页、球探队列页和动作价值样本页）。Liquid Glass 静态前端含 7 个分析视图（总览、球员、身价、预测、球探、动作价值、报告）和 4 个世界杯视图（赛程、名单、对比、出线）。面向 artifact、球员画像、评分快照、预测、复核队列、watchlist、shortlist、动作价值样本和模型运行的 FastAPI 只读入口。集成 mplsoccer 绘制球员雷达、pizza chart、shot map。低覆盖和样本不足有醒目提示。电子战术板已纳入规划，尚未实现。
+- **产品与可视化:** 15 页 Streamlit 工作台（含产物总览页、球探队列页和动作价值样本页）。Liquid Glass 静态前端含 7 个分析视图（总览、球员、身价、预测、球探、动作价值、报告）、4 个世界杯视图（赛程、名单、对比、出线）和电子战术板第一切片。面向 artifact、球员画像、评分快照、预测、复核队列、watchlist、shortlist、动作价值样本和模型运行的 FastAPI 只读入口。集成 mplsoccer 绘制球员雷达、pizza chart、shot map。低覆盖和样本不足有醒目提示。前端渲染已对 API/本地 JSON 字符串做转义，CSV 导出已防表格公式注入，战术板 JSON 导入已走 schema sanitizer。
 
 ### Liquid Glass 前端
 
-`frontend/` 目录包含静态分析工作台，采用统一的几何图标系统（无 emoji）。所有导航图标使用最小化 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），保持视觉一致性。
+`frontend/` 目录包含静态分析工作台，采用统一的几何图标系统（无 emoji）。所有导航图标使用最小化 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），保持视觉一致性。API、本地 Parquet 派生 JSON、demo 字符串和导入的战术板工程字段进入 HTML 前都会转义或清洗。
 
 **7 个分析视图：**
 
@@ -259,14 +259,14 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 | 球员雷达 / Pizza chart | 已集成 mplsoccer |
 | 位置内排名 | 可用，带置信度标记 |
 | 比分概率矩阵 | Streamlit 可用 |
-| 电子战术板 | 计划中 (P1.5) — 先做本地战术板、动画时间轴、PNG/PDF/WebM 导出 |
+| 电子战术板 | 已有本地画布/JSON 第一切片；动画时间轴、PNG/PDF/WebM 导出、报告嵌入和版本迁移仍属 P1.5 |
 | Dixon-Coles + 时间衰减 | 计划中 (P5) |
 
-### 规划中的电子战术板
+### 电子战术板
 
-电子战术板计划作为 `frontend/` 内的本地优先教练和分析工作台建设，参考 [Tactico](https://tactico.pro/)、[DrawTactics](https://drawtactics.com/animated-tactics-board)、[TacticSlate](https://tacticslate.com/football-tactic-board)、[JLA Tactics Board](https://jlatacticsboard.com/)、[Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards) 和 [TacticalBoards](https://tacticalboards.com/) 等案例。核心能力包括静态战术图、阵型预设、球员和足球拖拽、箭头、区域、标签、跑动轨迹、关键帧或步骤式动画、演示播放和导出。
+电子战术板第一切片已作为 `frontend/` 内的本地优先教练和分析工作台落地，参考 [Tactico](https://tactico.pro/)、[DrawTactics](https://drawtactics.com/animated-tactics-board)、[TacticSlate](https://tacticslate.com/football-tactic-board)、[JLA Tactics Board](https://jlatacticsboard.com/)、[Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards) 和 [TacticalBoards](https://tacticalboards.com/) 等案例。当前能力包括静态本地画布、标准化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。
 
-第一阶段保持轻量：本地 JSON 工程、标准化球场坐标、浏览器播放、PNG/PDF 静态导出、浏览器 WebM 动画导出，以及嵌入报告。MP4 导出、本地 ffmpeg、视频叠画、tracking 数据导入、3D 和门后视角放到后续阶段，等画布模型、数据契约和引用边界稳定后再做。
+剩余 P1.5 仍保持轻量：动画时间轴、浏览器播放、PNG/PDF 静态导出、浏览器 WebM 动画导出、嵌入报告、版本迁移和不兼容工程只读打开。MP4 导出、本地 ffmpeg、视频叠画、tracking 数据导入、3D 和门后视角放到后续阶段，等画布模型、数据契约和引用边界稳定后再做。
 
 ### 本地数据概览
 

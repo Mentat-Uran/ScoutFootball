@@ -444,6 +444,32 @@ function t(key) {
     return i18n[appState.lang][key] || key;
 }
 
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;",
+    }[char]));
+}
+
+function escapeAttr(value) {
+    return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function sanitizeCssPercent(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function csvCell(value) {
+    const raw = String(value ?? "");
+    const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+    return `"${safe.replace(/"/g, '""')}"`;
+}
+
 function confidenceClass(confidence) {
     if (confidence === "HIGH") return "status-high";
     if (confidence === "MEDIUM") return "status-medium";
@@ -494,20 +520,20 @@ function renderPlayers() {
             ? `<span class="status-pill low-appearance" title="${appState.lang === 'zh' ? '出场不足20场，评分已扣减' : 'Under 20 matches, score penalized'}">${appState.lang === 'zh' ? '低出场' : 'LOW APP'}</span>`
             : '';
         return `
-        <tr class="${player.key === appState.selectedPlayerKey ? "selected" : ""}${player.low_appearance ? " low-appearance-row" : ""}" data-player="${player.key}" style="cursor:pointer">
+        <tr class="${player.key === appState.selectedPlayerKey ? "selected" : ""}${player.low_appearance ? " low-appearance-row" : ""}" data-player-index="${index}" style="cursor:pointer">
             <td>${index + 1}</td>
-            <td>${player.name}${lowAppBadge}</td>
-            <td>${player.position}</td>
-            <td>${player.team}</td>
-            <td>${player.season}</td>
+            <td>${escapeHtml(player.name)}${lowAppBadge}</td>
+            <td>${escapeHtml(player.position)}</td>
+            <td>${escapeHtml(player.team)}</td>
+            <td>${escapeHtml(player.season)}</td>
             <td>${player.rating.toFixed(1)}</td>
-            <td><span class="status-pill ${confidenceClass(player.confidence)}">${player.confidence}</span></td>
+            <td><span class="status-pill ${confidenceClass(player.confidence)}">${escapeHtml(player.confidence)}</span></td>
         </tr>`;
     }).join("");
 
-    tbody.querySelectorAll("tr[data-player]").forEach((row) => {
+    tbody.querySelectorAll("tr[data-player-index]").forEach((row) => {
         row.addEventListener("click", () => {
-            appState.selectedPlayerKey = row.dataset.player;
+            appState.selectedPlayerKey = rows[Number(row.dataset.playerIndex)]?.key || "";
             renderPlayers();
             renderPlayerProfile();
         });
@@ -542,12 +568,12 @@ async function renderPlayerProfile() {
         ? `<div class="low-appearance-warning">${appState.lang === "zh" ? "▲ 出场不足20场，评分已扣减最多30%" : "▲ Under 20 matches, score penalized up to 30%"}</div>`
         : "";
     document.getElementById("player-detail").innerHTML = `
-        <div><span>${t("th_team")}</span><strong>${player.team}</strong></div>
-        <div><span>${t("minutes")}</span><strong>${detailMinutes}</strong></div>
-        <div><span>${appState.lang === "zh" ? "出场" : "Matches"}</span><strong>${detailMatches}</strong></div>
-        <div><span>${t("th_pos")}</span><strong>${detailPosition}</strong></div>
-        <div><span>${t("th_rating")}</span><strong>${detailScore}</strong></div>
-        <div><span>${appState.lang === "zh" ? "联赛" : "League"}</span><strong>${detailLeague || "–"}</strong></div>
+        <div><span>${escapeHtml(t("th_team"))}</span><strong>${escapeHtml(player.team)}</strong></div>
+        <div><span>${escapeHtml(t("minutes"))}</span><strong>${escapeHtml(detailMinutes)}</strong></div>
+        <div><span>${appState.lang === "zh" ? "出场" : "Matches"}</span><strong>${escapeHtml(detailMatches)}</strong></div>
+        <div><span>${escapeHtml(t("th_pos"))}</span><strong>${escapeHtml(detailPosition)}</strong></div>
+        <div><span>${escapeHtml(t("th_rating"))}</span><strong>${escapeHtml(detailScore)}</strong></div>
+        <div><span>${appState.lang === "zh" ? "联赛" : "League"}</span><strong>${escapeHtml(detailLeague || "–")}</strong></div>
     `;
     // Always remove existing warning before conditionally inserting new one
     const existing = document.getElementById("player-detail").nextElementSibling;
@@ -734,8 +760,8 @@ function renderValue() {
         return `
         <div class="rank-item">
             <div>
-                <strong>${player.name}</strong>
-                <span class="rank-meta">${player.team} · €${valM}M</span>
+                <strong>${escapeHtml(player.name)}</strong>
+                <span class="rank-meta">${escapeHtml(player.team)} · €${valM}M</span>
             </div>
             <span class="status-pill ${player.residual >= 0 ? "status-high" : "status-medium"}">${player.residual > 0 ? "+" : ""}${player.residual.toFixed(2)}</span>
         </div>
@@ -767,7 +793,7 @@ function renderValue() {
             formatter(params) {
                 if (params.componentType !== "series" || params.seriesIndex !== 0) return "";
                 const d = params.data;
-                return `<strong>${d.name}</strong><br/>${d.team}<br/>${isZh ? "实际" : "Actual"}: €${d.value[0]}M<br/>${isZh ? "预测" : "Predicted"}: €${d.value[1]}M<br/>${isZh ? "残差" : "Residual"}: ${d.residual > 0 ? "+" : ""}${d.residual.toFixed(2)}`;
+                return `<strong>${escapeHtml(d.name)}</strong><br/>${escapeHtml(d.team)}<br/>${isZh ? "实际" : "Actual"}: €${d.value[0]}M<br/>${isZh ? "预测" : "Predicted"}: €${d.value[1]}M<br/>${isZh ? "残差" : "Residual"}: ${d.residual > 0 ? "+" : ""}${d.residual.toFixed(2)}`;
             },
         },
         grid: { left: 54, right: 20, top: 24, bottom: 48 },
@@ -852,8 +878,8 @@ function renderMatchSelectors() {
     const teams = getTeams();
     const home = document.getElementById("home-team");
     const away = document.getElementById("away-team");
-    home.innerHTML = teams.map((team) => `<option value="${team}">${team}</option>`).join("");
-    away.innerHTML = teams.map((team) => `<option value="${team}">${team}</option>`).join("");
+    home.innerHTML = teams.map((team) => `<option value="${escapeAttr(team)}">${escapeHtml(team)}</option>`).join("");
+    away.innerHTML = teams.map((team) => `<option value="${escapeAttr(team)}">${escapeHtml(team)}</option>`).join("");
     home.value = appState.home;
     away.value = appState.away;
 }
@@ -873,16 +899,16 @@ async function renderMatches() {
     ];
     document.getElementById("match-probabilities").innerHTML = probabilityRows.map(([label, value]) => `
         <div class="probability-row">
-            <span class="probability-label">${label}</span>
-            <div class="probability-track"><div class="probability-fill" style="width:${Math.round(value * 100)}%"></div></div>
-            <strong>${Math.round(value * 100)}%</strong>
+            <span class="probability-label">${escapeHtml(label)}</span>
+            <div class="probability-track"><div class="probability-fill" style="width:${sanitizeCssPercent(value * 100)}%"></div></div>
+            <strong>${sanitizeCssPercent(value * 100)}%</strong>
         </div>
     `).join("");
     document.getElementById("match-detail").innerHTML = `
-        <div><span>${t("expected_goals")}</span><strong>${match.xh.toFixed(2)} / ${match.xa.toFixed(2)}</strong></div>
-        <div><span>${t("coverage")}</span><strong>${predictionCoverage}</strong></div>
-        <div><span>model</span><strong>${predictionMeta.model_type || "Poisson"}</strong></div>
-        <div><span>train_rows</span><strong>${predictionMeta.train_rows || "pending"}</strong></div>
+        <div><span>${escapeHtml(t("expected_goals"))}</span><strong>${match.xh.toFixed(2)} / ${match.xa.toFixed(2)}</strong></div>
+        <div><span>${escapeHtml(t("coverage"))}</span><strong>${escapeHtml(predictionCoverage)}</strong></div>
+        <div><span>model</span><strong>${escapeHtml(predictionMeta.model_type || "Poisson")}</strong></div>
+        <div><span>train_rows</span><strong>${escapeHtml(predictionMeta.train_rows || "pending")}</strong></div>
     `;
     renderScoreMatrix(match);
 }
@@ -990,10 +1016,10 @@ function renderScouting() {
         ? queue.map((p) => `
             <div class="rank-item">
                 <div>
-                    <strong>${p.player_name || p.name}</strong>
-                    <span class="rank-meta">${p.team} · ${p.position_group || p.position || ""} · ${p.minutes}min · ${p.reason_code || ""}</span>
+                    <strong>${escapeHtml(p.player_name || p.name)}</strong>
+                    <span class="rank-meta">${escapeHtml(p.team)} · ${escapeHtml(p.position_group || p.position || "")} · ${escapeHtml(p.minutes)}min · ${escapeHtml(p.reason_code || "")}</span>
                 </div>
-                <span class="status-pill ${confidenceClass((p.confidence_level || p.confidence || "LOW").toUpperCase())}">${(p.confidence_level || p.confidence || "LOW").toUpperCase()}</span>
+                <span class="status-pill ${confidenceClass((p.confidence_level || p.confidence || "LOW").toUpperCase())}">${escapeHtml((p.confidence_level || p.confidence || "LOW").toUpperCase())}</span>
             </div>
         `).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No low-confidence players in queue</div>';
@@ -1001,8 +1027,8 @@ function renderScouting() {
     document.getElementById("watchlist").innerHTML = watchlistData.length > 0 ? watchlistData.map((player) => `
         <div class="watch-card">
             <div>
-                <strong>${player.player_name || player.name}</strong>
-                <span class="rank-meta">${player.team} · ${player.position_group || player.position || ""} · ${player.reason_code || ""}</span>
+                <strong>${escapeHtml(player.player_name || player.name)}</strong>
+                <span class="rank-meta">${escapeHtml(player.team)} · ${escapeHtml(player.position_group || player.position || "")} · ${escapeHtml(player.reason_code || "")}</span>
             </div>
             <span class="status-pill ${confidenceClass((player.confidence_level || player.confidence || "LOW").toUpperCase())}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
         </div>
@@ -1012,8 +1038,8 @@ function renderScouting() {
     document.getElementById("shortlist").innerHTML = shortlistData.length > 0 ? shortlistData.map((player) => `
         <div class="watch-card">
             <div>
-                <strong>${player.player_name || player.name}</strong>
-                <span class="rank-meta">${player.team} · ${player.position_group || player.position || ""} · ${player.reason_code || ""}</span>
+                <strong>${escapeHtml(player.player_name || player.name)}</strong>
+                <span class="rank-meta">${escapeHtml(player.team)} · ${escapeHtml(player.position_group || player.position || "")} · ${escapeHtml(player.reason_code || "")}</span>
             </div>
             <span class="status-pill ${confidenceClass((player.confidence_level || player.confidence || "HIGH").toUpperCase())}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
         </div>
@@ -1059,7 +1085,7 @@ function renderOverview() {
         if (licenseList) {
             const entries = Object.entries(licenses);
             licenseList.innerHTML = entries.map(([key, desc]) =>
-                `<li class="health-item"><span class="dot status-high"></span><span title="${desc}">${key}</span></li>`
+                `<li class="health-item"><span class="dot status-high"></span><span title="${escapeAttr(desc)}">${escapeHtml(key)}</span></li>`
             ).join("");
         }
     }
@@ -1112,8 +1138,8 @@ function renderReports() {
             return `
             <div class="rank-item">
                 <div>
-                    <strong>${run.run_id || "run"}</strong>
-                    <span class="rank-meta">${metaParts.join(" · ")}</span>
+                    <strong>${escapeHtml(run.run_id || "run")}</strong>
+                    <span class="rank-meta">${escapeHtml(metaParts.join(" · "))}</span>
                 </div>
                 <span class="status-pill ${spearman != null ? "status-high" : "status-low"}">${spearman != null ? "READY" : "N/A"}</span>
             </div>`;
@@ -1138,7 +1164,7 @@ function renderActions() {
         ? players.map((player) => `
             <div class="rank-item">
                 <div>
-                    <strong>${player.player_name || ""}</strong>
+                    <strong>${escapeHtml(player.player_name || "")}</strong>
                     <span class="rank-meta">xT/90 ${Number(player.xT_per_90 || 0).toFixed(3)} · composite ${Number(player.composite_score || 0).toFixed(1)}</span>
                 </div>
                 <span class="status-pill status-medium">${Number(player.finishing_delta || 0).toFixed(2)}</span>
@@ -1241,7 +1267,7 @@ function exportPlayers() {
         player.rating,
         player.confidence,
     ]);
-    const csv = [header, ...rows].map((row) => row.join(",")).join("\n");
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1702,8 +1728,8 @@ function renderWcSchedule() {
     overview.innerHTML = Object.entries(WC_GROUPS).map(([letter, teams]) => {
         const hostTag = (tm) => WC_HOSTS.includes(tm) ? " ★" : "";
         return `<article class="liquid-panel compact-panel">
-            <h3>${letter}</h3>
-            <ul class="wc-group-list">${teams.map((t, i) => `<li>${i + 1}. ${t}${hostTag(t)}</li>`).join("")}</ul>
+            <h3>${escapeHtml(letter)}</h3>
+            <ul class="wc-group-list">${teams.map((tm, i) => `<li>${i + 1}. ${escapeHtml(tm)}${hostTag(tm)}</li>`).join("")}</ul>
         </article>`;
     }).join("");
 
@@ -1742,8 +1768,8 @@ function renderWcSchedule() {
 
     const tbody = document.getElementById("wc-schedule-table");
     tbody.innerHTML = filtered.map((m) => `<tr>
-        <td>${m.date}</td><td>${m.time} ET</td><td>${m.group}</td>
-        <td>${m.home}</td><td>${m.away}</td><td>${m.venue}, ${m.city}</td>
+        <td>${escapeHtml(m.date)}</td><td>${escapeHtml(m.time)} ET</td><td>${escapeHtml(m.group)}</td>
+        <td>${escapeHtml(m.home)}</td><td>${escapeHtml(m.away)}</td><td>${escapeHtml(m.venue)}, ${escapeHtml(m.city)}</td>
     </tr>`).join("");
 }
 
@@ -1756,18 +1782,18 @@ function renderWcSquads() {
     const group = wcTeamGroup(team);
 
     document.getElementById("wc-squad-summary").innerHTML = `
-        <div class="wc-metric"><span class="metric-value">${squad.length}</span><span>${t("wc_squad_size")}</span></div>
-        <div class="wc-metric"><span class="metric-value">${rated.length}</span><span>${t("wc_rated")}</span></div>
-        <div class="wc-metric"><span class="metric-value">${big5.length}</span><span>${t("wc_big5")}</span></div>
-        <div class="wc-metric"><span class="metric-value">${avgRating}</span><span>${t("wc_avg_rating")}</span></div>
-        <div class="wc-metric"><span class="metric-value">${group}</span><span>${t("wc_group_col")}</span></div>
+        <div class="wc-metric"><span class="metric-value">${squad.length}</span><span>${escapeHtml(t("wc_squad_size"))}</span></div>
+        <div class="wc-metric"><span class="metric-value">${rated.length}</span><span>${escapeHtml(t("wc_rated"))}</span></div>
+        <div class="wc-metric"><span class="metric-value">${big5.length}</span><span>${escapeHtml(t("wc_big5"))}</span></div>
+        <div class="wc-metric"><span class="metric-value">${escapeHtml(avgRating)}</span><span>${escapeHtml(t("wc_avg_rating"))}</span></div>
+        <div class="wc-metric"><span class="metric-value">${escapeHtml(group)}</span><span>${escapeHtml(t("wc_group_col"))}</span></div>
     `;
 
     const tbody = document.getElementById("wc-squad-table");
     tbody.innerHTML = squad.map((p) => `<tr>
-        <td>${p.name}</td><td>${p.position}</td><td>${p.club}</td><td>${p.league}</td>
+        <td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.position)}</td><td>${escapeHtml(p.club)}</td><td>${escapeHtml(p.league)}</td>
         <td>${p.hasRating ? p.rating.toFixed(2) : "—"}</td>
-        <td><span class="status-pill ${p.hasRating ? (p.confidence === "HIGH" ? "status-high" : "status-medium") : "status-low"}">${p.hasRating ? p.confidence : t("wc_no_data")}</span></td>
+        <td><span class="status-pill ${p.hasRating ? (p.confidence === "HIGH" ? "status-high" : "status-medium") : "status-low"}">${escapeHtml(p.hasRating ? p.confidence : t("wc_no_data"))}</span></td>
     </tr>`).join("");
 
     // Rating distribution chart
@@ -1784,7 +1810,7 @@ function renderWcSquads() {
     chart.resize();
 
     if (squad.length > 0 && rated.length / squad.length < 0.5) {
-        document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">▲ ${t("wc_low_coverage")}</div>`;
+        document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">▲ ${escapeHtml(t("wc_low_coverage"))}</div>`;
     }
 }
 
@@ -1809,7 +1835,7 @@ function renderWcCompare() {
         [t("wc_rated"), ratedA.length, ratedB.length],
         [t("wc_big5"), big5A, big5B],
         [t("wc_avg_rating"), avgA, avgB],
-    ].map(([label, a, b]) => `<tr><td>${label}</td><td>${a}</td><td>${b}</td></tr>`).join("");
+    ].map(([label, a, b]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(a)}</td><td>${escapeHtml(b)}</td></tr>`).join("");
 
     // Chart
     const chart = getChart("wc-compare-chart");
@@ -1831,7 +1857,7 @@ function renderWcCompare() {
     // Top 5
     const renderTop = (rated, el) => {
         el.innerHTML = rated.sort((a, b) => b.rating - a.rating).slice(0, 5).map((p) =>
-            `<div class="rank-item"><div><strong>${p.name}</strong><span class="rank-meta">${p.position} · ${p.club}</span></div><span class="status-pill status-high">${p.rating.toFixed(2)}</span></div>`
+            `<div class="rank-item"><div><strong>${escapeHtml(p.name)}</strong><span class="rank-meta">${escapeHtml(p.position)} · ${escapeHtml(p.club)}</span></div><span class="status-pill status-high">${p.rating.toFixed(2)}</span></div>`
         ).join("") || `<div style="color:var(--text-muted);text-align:center;padding:1rem">${t("wc_no_data")}</div>`;
     };
     document.getElementById("wc-compare-a-top-title").textContent = `${teamA} Top 5`;
@@ -1853,16 +1879,16 @@ function renderWcProbability() {
         const rows = teamStrs.sort((a, b) => b.strength - a.strength).map((x) => {
             const p1 = x.strength / total;
             const pct = Math.round(p1 * 100);
-            return `<div class="wc-prob-row"><span>${x.team}</span><div class="probability-track"><div class="probability-fill" style="width:${pct}%"></div></div><strong>${pct}%</strong></div>`;
+            return `<div class="wc-prob-row"><span>${escapeHtml(x.team)}</span><div class="probability-track"><div class="probability-fill" style="width:${sanitizeCssPercent(pct)}%"></div></div><strong>${pct}%</strong></div>`;
         }).join("");
-        return `<article class="liquid-panel compact-panel"><h3>${letter}</h3>${rows}</article>`;
+        return `<article class="liquid-panel compact-panel"><h3>${escapeHtml(letter)}</h3>${rows}</article>`;
     }).join("");
 
     // 48-team ranking
     const ranked = teams.map((t) => ({team: t, strength: strengths[t], group: wcTeamGroup(t)}))
         .sort((a, b) => b.strength - a.strength);
     document.getElementById("wc-prob-table").innerHTML = ranked.map((x, i) => `<tr>
-        <td>${i + 1}</td><td>${x.team}</td><td>${x.group}</td><td>${x.strength.toFixed(3)}</td>
+        <td>${i + 1}</td><td>${escapeHtml(x.team)}</td><td>${escapeHtml(x.group)}</td><td>${x.strength.toFixed(3)}</td>
     </tr>`).join("");
 }
 
@@ -1873,17 +1899,17 @@ function initWorldCup() {
     // Populate group filter
     const groupFilter = document.getElementById("wc-group-filter");
     groupFilter.innerHTML = '<option value="ALL">ALL</option>' +
-        Object.keys(WC_GROUPS).map((g) => `<option value="${g}">${g}</option>`).join("");
+        Object.keys(WC_GROUPS).map((g) => `<option value="${escapeAttr(g)}">${escapeHtml(g)}</option>`).join("");
     // Populate squad team selector
     const squadSelect = document.getElementById("wc-squad-team");
-    squadSelect.innerHTML = teams.map((t) => `<option value="${t}">${t}</option>`).join("");
+    squadSelect.innerHTML = teams.map((tm) => `<option value="${escapeAttr(tm)}">${escapeHtml(tm)}</option>`).join("");
     squadSelect.value = "Argentina";
     appState.wcSquadTeam = "Argentina";
     // Populate compare selectors
     const selA = document.getElementById("wc-compare-a");
     const selB = document.getElementById("wc-compare-b");
-    selA.innerHTML = teams.map((t) => `<option value="${t}">${t}</option>`).join("");
-    selB.innerHTML = teams.map((t) => `<option value="${t}">${t}</option>`).join("");
+    selA.innerHTML = teams.map((tm) => `<option value="${escapeAttr(tm)}">${escapeHtml(tm)}</option>`).join("");
+    selB.innerHTML = teams.map((tm) => `<option value="${escapeAttr(tm)}">${escapeHtml(tm)}</option>`).join("");
     selA.value = "Argentina";
     selB.value = "France";
     appState.wcCompareA = "Argentina";
@@ -1916,10 +1942,10 @@ function renderTacticalProjectList() {
     const projects = TACTICAL_BOARD.listProjects();
     list.innerHTML = projects.length > 0
         ? projects.map((p) => `
-            <div class="rank-item" style="cursor:pointer" data-board-id="${p.board_id}">
+            <div class="rank-item" style="cursor:pointer" data-board-id="${escapeAttr(p.board_id)}">
                 <div>
-                    <strong>${p.title || "Untitled"}</strong>
-                    <span class="rank-meta">${p.updated_at ? new Date(p.updated_at).toLocaleDateString() : ""}</span>
+                    <strong>${escapeHtml(p.title || "Untitled")}</strong>
+                    <span class="rank-meta">${escapeHtml(p.updated_at ? new Date(p.updated_at).toLocaleDateString() : "")}</span>
                 </div>
             </div>
         `).join("")
@@ -1948,8 +1974,8 @@ function renderTacticalFrameList() {
     list.innerHTML = tacticalProject.frames.map((frame, i) => `
         <div class="rank-item" style="cursor:pointer;${i === currentFrame ? 'background:var(--glass-bg-hover)' : ''}" data-frame-index="${i}">
             <div>
-                <strong>${frame.name || `Frame ${i + 1}`}</strong>
-                <span class="rank-meta">${frame.duration_ms || 3000}ms · ${(frame.objects || []).length} objects</span>
+                <strong>${escapeHtml(frame.name || `Frame ${i + 1}`)}</strong>
+                <span class="rank-meta">${escapeHtml(frame.duration_ms || 3000)}ms · ${escapeHtml((frame.objects || []).length)} objects</span>
             </div>
         </div>
     `).join("");
@@ -2005,7 +2031,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Populate season filter dropdown
     const seasons = [...new Set(players.map((p) => p.season).filter(Boolean))].sort();
     const seasonSelect = document.getElementById("season-filter");
-    seasonSelect.innerHTML = '<option value="ALL">ALL</option>' + seasons.map((s) => `<option value="${s}">${s}</option>`).join("");
+    seasonSelect.innerHTML = '<option value="ALL">ALL</option>' + seasons.map((s) => `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`).join("");
     seasonSelect.value = appState.season;
 
     // Update team list for match prediction

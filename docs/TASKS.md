@@ -80,7 +80,8 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] FastAPI 只读入口：`scoutfootball serve`。
 - [x] Streamlit 多页工作台入口，当前含总览、分析页、P1 页面、世界杯页、球探队列页和动作价值样本页。
 - [x] `frontend/` 静态 Liquid Glass 前端原型：总览、球员、身价、比赛预测、球探、动作价值、报告 7 个视图。
-- [ ] `frontend/` 电子战术板：本地画布、战术演示、动画时间轴和导出能力仍处于 P1.5 规划阶段，尚未实现。
+- [x] `frontend/` 电子战术板第一切片：本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程和 localStorage 保存已落地。
+- [ ] `frontend/` 电子战术板后续能力：动画时间轴、PNG/PDF/WebM 导出、报告嵌入和数据分析联动仍待实现。
 - [x] Poisson 比分预测 baseline。
 - [x] `value_fairness` OOF 训练产物。
 - [x] PyTorch GPU 评分优化器和远程 GPU 计算脚本。
@@ -161,6 +162,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] `fetchRatings()` 按位置分组计算客户端 radar 百分位，球员列表加载后即有真实 radar 数据。
 - [x] 后端容错加固：DuckDB 读取 fallback、`_safe_read_parquet`、numpy 类型序列化、异常捕获。
 - [x] 给 README 加截图说明和 demo 复现步骤（前端视图表 + 数据复现命令；实际截图待补充）。
+- [x] 前端安全加固：API/本地 JSON 字符串进入 `innerHTML` 前统一 HTML/attribute escaping，CSV 导出增加公式注入防护，战术板 JSON 导入增加 schema sanitizer、对象/帧数量上限和导入大小限制。
 
 ### 前端长期功能和后端配套
 
@@ -174,6 +176,8 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 报告页接入 `data/reports/model_runs/` 或等价 model-run registry，展示输入 hash、随机种子、参数、指标和误差案例。
 - 当前已接入 model-run registry 的 `run_id`、`input_hash`、Spearman/Pearson 等基础指标；随机种子、参数和误差案例仍待补齐。
 - [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
+- [ ] 给前端补浏览器级安全回归测试：恶意球员名/队名/报告 run_id/战术板标题不得执行 HTML 或脚本，CSV 导出不得触发表格公式。
+- [ ] 如果静态前端未来超出本机展示范围，FastAPI/静态服务器需补 CSP、可配置 CORS 和只读部署说明。
 
 验收：
 
@@ -181,6 +185,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - `uv run pytest`
 - `uv run streamlit run src/scoutfootball/app/streamlit_app.py`
 - `node --check frontend/app.js`
+- `node --check frontend/tactical-board.js`
 - `python3 -m http.server 8600 --directory frontend`
 - 三个 Streamlit 核心页面、Streamlit 总览页、Streamlit 球探队列页、Streamlit 动作价值样本页和静态 Liquid Glass 工作台已完成；截图、更多 API 指标和世界杯页的真实产物联调待补充。
 
@@ -204,6 +209,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 支持选择、拖拽、复制、删除、锁定、图层顺序、撤销/重做、缩放、适配屏幕和键盘快捷键。
 - [x] 定义本地 JSON 工程 schema：`board_id`、`title`、`sport`、`pitch_type`、`objects`、`layers`、`frames`、`version`、`created_at`、`updated_at`、`source_attribution`。
 - [x] 将工程保存为浏览器本地存储 + 可下载 JSON；后端持久化先不做，避免把前端原型误写成正式数据产品。
+- [x] JSON 工程导入/读取/保存已走 schema sanitizer：限制对象数、帧数、文本长度、导入文件大小、坐标范围和对象类型，避免把任意本地 JSON 直接渲染到页面。
 
 ### 第二切片：战术演示和动画时间轴
 
@@ -219,7 +225,8 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 支持 PDF 导出：多帧战术卡、帧备注、对象图例、数据来源说明。
 - [ ] 支持 WebM 动画导出：优先用 `canvas.captureStream` + `MediaRecorder`；导出失败时给出清晰降级提示。
 - [ ] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。
-- [ ] 支持 JSON 工程导入/导出，版本不兼容时走迁移或只读打开。
+- [x] 支持 JSON 工程基础导入/导出，并在导入时清洗 schema。
+- [ ] 版本不兼容时走迁移或只读打开，避免旧工程静默丢字段。
 - [ ] 后续 FastAPI read-only endpoint 可设计为 `/tactical-boards`、`/tactical-boards/{id}`、`/tactical-boards/{id}/exports`，但第一阶段不急于实现写入 API。
 - [ ] 战术板可嵌入报告页：把 board snapshot、动画导出路径、source attribution 和 coaching notes 纳入报告预览。
 

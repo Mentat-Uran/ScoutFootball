@@ -2,6 +2,20 @@
 
 > 2026-06-05 优化器修复后的评估结果
 
+## 2026-06-10 前端安全边界修复
+
+### 已直接处理
+
+1. **本地/API 字符串直接进入 `innerHTML`**：`frontend/app.js` 新增 `escapeHtml()`、`escapeAttr()` 和 `sanitizeCssPercent()`，球员、球队、报告、球探队列、动作价值、世界杯样例和战术板工程列表等渲染点已统一转义。
+2. **CSV 导出公式注入风险**：球员 CSV 导出新增 `csvCell()`，对 `= + - @ tab CR` 开头的单元格加前缀并按 CSV 规则转义引号。
+3. **战术板 JSON 导入边界不足**：`frontend/tactical-board.js` 新增 `sanitizeProject()`，限制导入大小、对象数、帧数、文本长度、坐标范围、颜色/样式字段和对象类型；localStorage 读取、保存和导入都先走 sanitizer。
+
+### 仍未解决，必须保留
+
+1. **缺少浏览器级安全回归测试**：还需要 fixture 覆盖恶意球员名、球队名、run_id、战术板标题和 CSV 导出，验证页面不执行 HTML/script。
+2. **静态前端暂无 CSP/部署安全头**：当前前端定位仍是本机静态工作台；如果要对外部署，需要补 CSP、可配置 CORS、只读静态资源策略和部署文档。
+3. **战术板版本迁移未实现**：当前导入会清洗为当前 schema；旧版本工程的字段迁移和只读打开策略仍待补。
+
 ## 修复内容
 
 1. **Pearson=0.0 bug** — `gpu_server.py` 中用 `spearmanr()` 第二返回值当 Pearson，实际是 p-value。已改用 `evaluate_params()` 中的 `pearsonr()`。
