@@ -69,6 +69,34 @@ const TacticalRenderer = {
         this.resize();
         this.bindEvents();
         this.render();
+
+        // Make canvas focusable for keyboard navigation
+        if (!this.canvas.hasAttribute("tabindex")) {
+            this.canvas.setAttribute("tabindex", "0");
+        }
+    },
+
+    /* ── Accessibility: announce object to screen readers ─────────── */
+    _announceObject(obj, action) {
+        if (!obj) return;
+        var label = obj.type || "object";
+        if (obj.type === "player") {
+            label = "Player" + (obj.label ? " " + obj.label : "") + (obj.number ? " #" + obj.number : "") + " (" + (obj.team || "home") + ")";
+        } else if (obj.type === "ball") {
+            label = "Ball";
+        } else if (obj.type === "arrow") {
+            label = "Arrow (" + (obj.style || "solid") + ")";
+        } else if (obj.type === "zone") {
+            label = "Zone" + (obj.label ? ": " + obj.label : "");
+        } else if (obj.type === "text") {
+            label = "Text: " + (obj.text || "").slice(0, 40);
+        }
+        var msg = label + (action ? " " + action : "");
+        // Use aria-live region if available
+        var live = document.getElementById("tactical-a11y-live");
+        if (live) {
+            live.textContent = msg;
+        }
     },
 
     resize() {
@@ -202,8 +230,51 @@ const TacticalRenderer = {
             this.drawSelection(this.selectedObject);
         }
 
+        // Draw team color legend (accessibility: text labels alongside color indicators)
+        this._drawTeamLegend();
+
         // Update timeline UI
         this.updateTimeline();
+    },
+
+    /* ── Team color legend ──────────────────────────────────────────── */
+    _drawTeamLegend() {
+        if (!this.project) return;
+        var ctx = this.ctx;
+        var hasHome = this.project.objects.some(function(o) { return o.type === "player" && o.team === "home"; });
+        var hasAway = this.project.objects.some(function(o) { return o.type === "player" && o.team === "away"; });
+        if (!hasHome && !hasAway) return;
+
+        var w = this.canvas.width / (window.devicePixelRatio || 1);
+        var x = w - 90;
+        var y = 10;
+        var lineH = 16;
+
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(x - 4, y - 2, 86, (hasHome && hasAway ? 2 : 1) * lineH + 8);
+
+        ctx.font = "bold 11px Inter, sans-serif";
+        ctx.textBaseline = "middle";
+
+        if (hasHome) {
+            ctx.fillStyle = "#7ca8ff";
+            ctx.beginPath();
+            ctx.arc(x + 6, y + lineH / 2 + 2, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.textAlign = "left";
+            ctx.fillText("Home", x + 16, y + lineH / 2 + 2);
+            y += lineH;
+        }
+        if (hasAway) {
+            ctx.fillStyle = "#ff6b7b";
+            ctx.beginPath();
+            ctx.arc(x + 6, y + lineH / 2 + 2, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.textAlign = "left";
+            ctx.fillText("Away", x + 16, y + lineH / 2 + 2);
+        }
     },
 
     drawPitch() {
@@ -601,6 +672,16 @@ const TacticalRenderer = {
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(Math.round(rating), bx, by);
+        }
+
+        // Accessibility: show team text label alongside color when focus ring active
+        if (this._focusRingActive && this.selectedObject && this.selectedObject.id === obj.id) {
+            ctx.fillStyle = "#fff";
+            ctx.font = `bold ${Math.max(9, r * 0.55)}px Inter, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            var teamLabel = (obj.team === "away") ? "AWAY" : "HOME";
+            ctx.fillText(teamLabel, pos.x, pos.y + r + 3);
         }
     },
 
@@ -1222,6 +1303,11 @@ const TacticalRenderer = {
     drawSelection(obj) {
         const ctx = this.ctx;
 
+        // Focus ring: thicker, more visible outline for keyboard navigation
+        var isFocus = !!this._focusRingActive;
+        var ringColor = isFocus ? "#00bcd4" : "#ffd700";
+        var ringWidth = isFocus ? 3 : 2;
+
         if (obj.type === "arrow" || obj.type === "path") {
             // Highlight arrow midpoint
             let start, end;
@@ -1235,8 +1321,8 @@ const TacticalRenderer = {
             const mx = (start.x + end.x) / 2;
             const my = (start.y + end.y) / 2;
             const r = 8;
-            ctx.strokeStyle = "#ffd700";
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = ringColor;
+            ctx.lineWidth = ringWidth;
             ctx.setLineDash([4, 4]);
             ctx.beginPath();
             ctx.arc(mx, my, r, 0, Math.PI * 2);
@@ -1246,8 +1332,8 @@ const TacticalRenderer = {
             const tl = this.toCanvas(obj.x, obj.y);
             const w = obj.width * this.scale;
             const h = obj.height * this.scale;
-            ctx.strokeStyle = "#ffd700";
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = ringColor;
+            ctx.lineWidth = ringWidth;
             ctx.setLineDash([4, 4]);
             ctx.strokeRect(tl.x - 3, tl.y - 3, w + 6, h + 6);
             ctx.setLineDash([]);
@@ -1255,8 +1341,8 @@ const TacticalRenderer = {
             const pos = this.toCanvas(obj.x, obj.y);
             const rx = obj.rx * this.scale + 4;
             const ry = obj.ry * this.scale + 4;
-            ctx.strokeStyle = "#ffd700";
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = ringColor;
+            ctx.lineWidth = ringWidth;
             ctx.setLineDash([4, 4]);
             ctx.beginPath();
             ctx.ellipse(pos.x, pos.y, rx, ry, 0, 0, Math.PI * 2);
@@ -1265,8 +1351,8 @@ const TacticalRenderer = {
         } else {
             const pos = this.toCanvas(obj.x, obj.y);
             const r = (obj.radius || 3) * this.scale + 4;
-            ctx.strokeStyle = "#ffd700";
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = ringColor;
+            ctx.lineWidth = ringWidth;
             ctx.setLineDash([4, 4]);
             ctx.beginPath();
             ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
@@ -1331,6 +1417,30 @@ const TacticalRenderer = {
             } else if (e.ctrlKey && e.key === "m") {
                 e.preventDefault();
                 this.mirrorSelected();
+            } else if (e.key === "Tab" && this.project && this.canvas && document.activeElement === this.canvas) {
+                // Tab cycles through objects on the canvas
+                e.preventDefault();
+                var objs = (this.project.objects || []).filter(function(o) { return o.visible !== false; });
+                if (objs.length === 0) return;
+                var idx = -1;
+                if (this.selectedObject) {
+                    idx = objs.findIndex(function(o) { return o.id === this.selectedObject.id; }.bind(this));
+                }
+                var next = e.shiftKey
+                    ? (idx <= 0 ? objs.length - 1 : idx - 1)
+                    : (idx + 1) % objs.length;
+                this.selectedObject = objs[next];
+                this._focusRingActive = true;
+                this.render();
+                this._announceObject(this.selectedObject);
+            } else if (e.key === "Enter" && this._focusRingActive && this.selectedObject) {
+                // Enter confirms selection of the focused object
+                e.preventDefault();
+                this._announceObject(this.selectedObject, "selected");
+            } else if (e.key === "Escape" && this._focusRingActive) {
+                this._focusRingActive = false;
+                this.selectedObject = null;
+                this.render();
             }
         };
         document.addEventListener("keydown", this._keydownHandler);

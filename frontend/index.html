@@ -419,6 +419,13 @@
                     </div>
                     <div id="model-runs-list" class="rank-list"></div>
                 </article>
+                <article class="liquid-panel table-panel" id="board-snapshots-panel">
+                    <div class="panel-head">
+                        <h3>Board Snapshots</h3>
+                        <span class="status-pill status-medium" id="board-snapshots-count">0</span>
+                    </div>
+                    <div id="board-snapshots-list" class="rank-list"></div>
+                </article>
             </section>
 
             <!-- Tactical Board -->
@@ -458,9 +465,9 @@
                                     <option value="both">Both Teams</option>
                                     <option value="transition">Transition</option>
                                 </select>
-                                <button class="text-button" id="tactical-load-home" type="button">主队阵型</button>
-                                <button class="text-button" id="tactical-load-away" type="button">客队阵型</button>
-                                <button class="text-button" id="tactical-clear" type="button">清空</button>
+                                <button class="text-button" id="tactical-load-home" type="button" aria-label="Load home team formation">主队阵型</button>
+                                <button class="text-button" id="tactical-load-away" type="button" aria-label="Load away team formation">客队阵型</button>
+                                <button class="text-button" id="tactical-clear" type="button" aria-label="Clear all objects from board">清空</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
                                 <select id="tactical-setpiece" class="glass-control">
@@ -474,7 +481,7 @@
                                     <option value="throwin-left">Throw-in (Left)</option>
                                     <option value="throwin-right">Throw-in (Right)</option>
                                 </select>
-                                <button class="text-button" id="tactical-load-setpiece" type="button">加载定位球</button>
+                                <button class="text-button" id="tactical-load-setpiece" type="button" aria-label="Load selected set piece">加载定位球</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
                                 <select id="tactical-training" class="glass-control">
@@ -484,7 +491,7 @@
                                     <option value="counter-attack">Counter Attack</option>
                                     <option value="possession">Possession Grid</option>
                                 </select>
-                                <button class="text-button" id="tactical-load-training" type="button">加载训练</button>
+                                <button class="text-button" id="tactical-load-training" type="button" aria-label="Load selected training drill">加载训练</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
                                 <select id="tactical-equipment" class="glass-control">
@@ -495,21 +502,21 @@
                                     <option value="ladder">Ladder</option>
                                     <option value="minigoal">Mini Goal</option>
                                 </select>
-                                <button class="text-button" id="tactical-place-equipment" type="button">放置器材</button>
-                                <button class="text-button" id="tactical-eraser" type="button" title="Eraser mode">✕ 橡皮</button>
+                                <button class="text-button" id="tactical-place-equipment" type="button" aria-label="Place selected equipment on board">放置器材</button>
+                                <button class="text-button" id="tactical-eraser" type="button" title="Eraser mode" aria-label="Toggle eraser mode">✕ 橡皮</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
-                                <button class="text-button active" id="tactical-tool-select" type="button" title="Select / Move">⌁ 选择</button>
-                                <button class="text-button" id="tactical-tool-arrow" type="button" title="Draw Arrow">⟷ 箭头</button>
-                                <button class="text-button" id="tactical-tool-zone" type="button" title="Draw Zone">▣ 区域</button>
-                                <button class="text-button" id="tactical-tool-text" type="button" title="Place Text">⊞ 文字</button>
-                                <button class="text-button" id="tactical-duplicate" type="button" title="Duplicate (Ctrl+D)">⊞ 复制</button>
-                                <button class="text-button" id="tactical-mirror" type="button" title="Mirror (Ctrl+M)">⟷ 镜像</button>
-                                <button class="text-button" id="tactical-mirror-home" type="button" title="Mirror all home">◇ 主队镜像</button>
-                                <button class="text-button" id="tactical-mirror-away" type="button" title="Mirror all away">◇ 客队镜像</button>
-                                <button class="text-button" id="tactical-toggle-ratings" type="button" title="Toggle player ratings">◆ 评分</button>
-                                <button class="text-button" id="tactical-presentation" type="button" title="Presentation mode (fullscreen)">◇ 演示</button>
-                                <button class="text-button" id="tactical-toggle-trails" type="button" title="Toggle animation trails">◇ 轨迹</button>
+                                <button class="text-button active" id="tactical-tool-select" type="button" title="Select / Move" aria-label="Select and move tool">⌁ 选择</button>
+                                <button class="text-button" id="tactical-tool-arrow" type="button" title="Draw Arrow" aria-label="Draw arrow tool">⟷ 箭头</button>
+                                <button class="text-button" id="tactical-tool-zone" type="button" title="Draw Zone" aria-label="Draw zone tool">▣ 区域</button>
+                                <button class="text-button" id="tactical-tool-text" type="button" title="Place Text" aria-label="Place text annotation tool">⊞ 文字</button>
+                                <button class="text-button" id="tactical-duplicate" type="button" title="Duplicate (Ctrl+D)" aria-label="Duplicate selected object">⊞ 复制</button>
+                                <button class="text-button" id="tactical-mirror" type="button" title="Mirror (Ctrl+M)" aria-label="Mirror selected object">⟷ 镜像</button>
+                                <button class="text-button" id="tactical-mirror-home" type="button" title="Mirror all home" aria-label="Mirror all home team players">◇ 主队镜像</button>
+                                <button class="text-button" id="tactical-mirror-away" type="button" title="Mirror all away" aria-label="Mirror all away team players">◇ 客队镜像</button>
+                                <button class="text-button" id="tactical-toggle-ratings" type="button" title="Toggle player ratings" aria-label="Toggle player rating display">◆ 评分</button>
+                                <button class="text-button" id="tactical-presentation" type="button" title="Presentation mode (fullscreen)" aria-label="Enter presentation mode">◇ 演示</button>
+                                <button class="text-button" id="tactical-toggle-trails" type="button" title="Toggle animation trails" aria-label="Toggle animation trail display">◇ 轨迹</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
                                 <span style="font-size:0.82rem;color:var(--text-muted);margin-right:0.3rem">事件标记:</span>
@@ -523,7 +530,7 @@
                                     <option value="third-man">3 Third Man</option>
                                     <option value="cover">\u25A3 Cover</option>
                                 </select>
-                                <button class="text-button" id="tactical-event-marker" type="button" title="Place event marker">\u25C8 标记</button>
+                                <button class="text-button" id="tactical-event-marker" type="button" title="Place event marker" aria-label="Place event marker on board">◈ 标记</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
                                 <span style="font-size:0.82rem;color:var(--text-muted);margin-right:0.3rem">动画模式:</span>
@@ -539,8 +546,8 @@
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
                                 <span style="font-size:0.82rem;color:var(--text-muted);margin-right:0.3rem">路径编辑:</span>
-                                <button class="text-button" id="tactical-add-path-point" type="button" title="Add path points to selected object">+ 路径点</button>
-                                <button class="text-button" id="tactical-clear-path-points" type="button" title="Clear path points">清空路径</button>
+                                <button class="text-button" id="tactical-add-path-point" type="button" title="Add path points to selected object" aria-label="Add path points to selected object">+ 路径点</button>
+                                <button class="text-button" id="tactical-clear-path-points" type="button" title="Clear path points" aria-label="Clear path points from selected object">清空路径</button>
                                 <select id="tactical-path-type" class="glass-control" style="font-size:0.82rem">
                                     <option value="linear">Linear</option>
                                     <option value="curved">Curved (Bezier)</option>
@@ -564,7 +571,19 @@
                             </div>
                         </div>
                         <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">
-                            <canvas id="tactical-canvas" style="width:100%;height:100%" role="img" aria-label="Tactical board canvas for football formations and annotations"></canvas>
+                            <canvas id="tactical-canvas" style="width:100%;height:100%" role="img" aria-label="Tactical board canvas for football formations and annotations. Use Tab to cycle objects, Enter to select, Escape to deselect."></canvas>
+                        </div>
+                        <div id="tactical-a11y-live" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
+                        <div id="tactical-export-preview" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);align-items:center;justify-content:center">
+                            <div style="background:var(--bg,#1a1a2e);border:1px solid var(--border,#333);border-radius:8px;padding:1.5rem;max-width:500px;width:90%">
+                                <h3 style="margin:0 0 0.5rem">Export Preview</h3>
+                                <p style="font-size:0.82rem;color:var(--text-muted);margin:0 0 0.5rem">The following attribution will be included in the export:</p>
+                                <pre id="tactical-export-attribution" style="background:var(--bg-alt,#111);padding:0.5rem;border-radius:4px;font-size:0.78rem;white-space:pre-wrap;word-break:break-all;color:var(--text,#ccc);max-height:200px;overflow-y:auto"></pre>
+                                <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
+                                    <button class="text-button" id="tactical-export-confirm" type="button" aria-label="Confirm export">Confirm Export</button>
+                                    <button class="text-button" id="tactical-export-cancel" type="button" aria-label="Cancel export">Cancel</button>
+                                </div>
+                            </div>
                         </div>
                     </article>
                     <article class="liquid-panel table-panel">
@@ -572,12 +591,12 @@
                             <h3>工程管理</h3>
                         </div>
                         <div class="filter-row" style="margin-bottom:1rem">
-                            <button class="text-button" id="tactical-save" type="button">保存</button>
-                            <button class="text-button" id="tactical-export" type="button">导出 JSON</button>
-                            <button class="text-button" id="tactical-import" type="button">导入 JSON</button>
-                            <button class="text-button" id="tactical-export-png" type="button">导出 PNG</button>
-                            <button class="text-button" id="tactical-export-webm" type="button">◆ 导出 WebM</button>
-                            <button class="text-button" id="tactical-export-print" type="button">▣ 打印</button>
+                            <button class="text-button" id="tactical-save" type="button" aria-label="Save current project">保存</button>
+                            <button class="text-button" id="tactical-export" type="button" aria-label="Export project as JSON file">导出 JSON</button>
+                            <button class="text-button" id="tactical-import" type="button" aria-label="Import project from JSON file">导入 JSON</button>
+                            <button class="text-button" id="tactical-export-png" type="button" aria-label="Export board as PNG image">导出 PNG</button>
+                            <button class="text-button" id="tactical-export-webm" type="button" aria-label="Export animation as WebM video">◆ 导出 WebM</button>
+                            <button class="text-button" id="tactical-export-print" type="button" aria-label="Print tactical board">▣ 打印</button>
                         </div>
                         <div class="filter-row" style="margin-bottom:0.5rem">
                             <label style="font-size:0.85rem;color:var(--text-muted)">
@@ -598,8 +617,8 @@
                             <h3>动画时间轴</h3>
                         </div>
                         <div class="filter-row" style="margin-bottom:0.5rem">
-                            <button class="text-button" id="tactical-add-frame" type="button">+ 关键帧</button>
-                            <button class="text-button" id="tactical-save-frame" type="button">保存当前帧</button>
+                            <button class="text-button" id="tactical-add-frame" type="button" aria-label="Add new keyframe">+ 关键帧</button>
+                            <button class="text-button" id="tactical-save-frame" type="button" aria-label="Save current frame state">保存当前帧</button>
                         </div>
                         <div id="tactical-frame-list" class="rank-list" style="margin-bottom:0.5rem"></div>
                         <div class="panel-head" style="margin-top:0.5rem">
@@ -607,11 +626,11 @@
                         </div>
                         <textarea id="tactical-coaching-notes" class="glass-control" style="width:100%;height:120px;resize:vertical;font-size:0.82rem;margin-bottom:0.5rem" placeholder="Select a formation or set-piece to load coaching points..."></textarea>
                         <div class="filter-row">
-                            <button class="text-button" id="tactical-prev-frame" type="button">◀ 上一帧</button>
-                            <button class="text-button" id="tactical-play" type="button">▶ 播放</button>
-                            <button class="text-button" id="tactical-stop" type="button">■ 停止</button>
-                            <button class="text-button" id="tactical-next-frame" type="button">下一帧 ▶</button>
-                            <button class="text-button" id="tactical-loop" type="button" title="Toggle loop">↻ 循环</button>
+                            <button class="text-button" id="tactical-prev-frame" type="button" aria-label="Go to previous frame">◀ 上一帧</button>
+                            <button class="text-button" id="tactical-play" type="button" aria-label="Play animation">▶ 播放</button>
+                            <button class="text-button" id="tactical-stop" type="button" aria-label="Stop animation">■ 停止</button>
+                            <button class="text-button" id="tactical-next-frame" type="button" aria-label="Go to next frame">下一帧 ▶</button>
+                            <button class="text-button" id="tactical-loop" type="button" title="Toggle loop" aria-label="Toggle animation loop">↻ 循环</button>
                         </div>
                         <div id="tactical-project-list" class="rank-list"></div>
                         <div style="margin-top:1rem">

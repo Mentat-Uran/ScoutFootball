@@ -11,7 +11,7 @@
 
 const TACTICAL_BOARD = {
     /* ── Schema version ────────────────────────────────────────────── */
-    SCHEMA_VERSION: "1.0.0",
+    SCHEMA_VERSION: "1.1.0",
     MAX_OBJECTS: 200,
     MAX_FRAMES: 60,
     MAX_TEXT_LENGTH: 120,
@@ -1243,9 +1243,154 @@ const TACTICAL_BOARD = {
             const safe = this.sanitizeProject(project);
             return safe ? this.migrateProject(safe) : null;
         } catch (e) {
-            console.warn("Failed to import tactical board project:", e);
+            const msg = e instanceof SyntaxError
+                ? "Corrupt file: invalid JSON. Please check the file is a valid tactical board export."
+                : "Failed to import tactical board project: " + (e.message || e);
+            console.warn(msg, e);
             return null;
         }
+    },
+
+    /* ── Migration history ───────────────────────────────────────────── */
+    MIGRATION_HISTORY: [
+        {
+            version: "1.1.0",
+            description: "Add animation path/timing fields to objects",
+            migrate(project) {
+                const addDefaults = (obj) => {
+                    if (!obj || typeof obj !== "object") return;
+                    if (obj.type === "player" || obj.type === "ball") {
+                        if (!Array.isArray(obj.pathPoints)) obj.pathPoints = [];
+                        if (typeof obj.pathType === "undefined") obj.pathType = "linear";
+                        if (typeof obj.easing === "undefined") obj.easing = "linear";
+                        if (typeof obj.delay_ms === "undefined") obj.delay_ms = 0;
+                        if (typeof obj.pause_ms === "undefined") obj.pause_ms = 0;
+                    }
+                };
+                if (Array.isArray(project.objects)) {
+                    project.objects.forEach(addDefaults);
+                }
+                if (Array.isArray(project.frames)) {
+                    for (const frame of project.frames) {
+                        if (Array.isArray(frame.objects)) {
+                            frame.objects.forEach(addDefaults);
+                        }
+                    }
+                }
+                if (typeof project.animationMode === "undefined") {
+                    project.animationMode = "timing";
+                }
+                if (typeof project.stepDuration === "undefined") {
+                    project.stepDuration = 1000;
+                }
+                return project;
+            },
+        },
+    ],
+
+    /* ── Validate project ──────────────────────────────────────────── */
+    validateProject(project) {
+        const errors = [];
+        if (!project || typeof project !== "object") {
+            errors.push("Project is not a valid object");
+            return { valid: false, errors };
+        }
+        if (!project.board_id || typeof project.board_id !== "string") {
+            errors.push("Missing or invalid board_id");
+        }
+        if (!project.title || typeof project.title !== "string") {
+            errors.push("Missing or invalid title");
+        }
+        if (!project.version || typeof project.version !== "string") {
+            errors.push("Missing or invalid version");
+        }
+        if (!Array.isArray(project.objects)) {
+            errors.push("Missing objects array");
+        } else if (project.objects.length > this.MAX_OBJECTS) {
+            errors.push("Too many objects: " + project.objects.length + " (max " + this.MAX_OBJECTS + ")");
+        }
+        if (!Array.isArray(project.frames)) {
+            errors.push("Missing frames array");
+        } else if (project.frames.length > this.MAX_FRAMES) {
+            errors.push("Too many frames: " + project.frames.length + " (max " + this.MAX_FRAMES + ")");
+        }
+        if (!Array.isArray(project.layers)) {
+            errors.push("Missing layers array");
+        }
+        if (!project.created_at || typeof project.created_at !== "string") {
+            errors.push("Missing or invalid created_at");
+        }
+        if (!project.updated_at || typeof project.updated_at !== "string") {
+            errors.push("Missing or invalid updated_at");
+        }
+        const validPitchTypes = ["11v11", "7v7", "5v5", "half-field", "training", "blank"];
+        if (project.pitch_type && !validPitchTypes.includes(project.pitch_type)) {
+            errors.push("Invalid pitch_type: " + project.pitch_type);
+        }
+        return { valid: errors.length === 0, errors };
+    },
+
+    /* ── Round-trip self-test ──────────────────────────────────────── */
+    roundTripTest() {
+        const checks = [];
+        try {
+            const proj = this.createProject("RT-Test");
+            proj.objects.push(this.createPlayer(50, 50, "home", "GK", 1));
+            proj.objects.push(this.createBall(50, 50));
+            proj.objects.push(this.createArrow(10, 10, 90, 90, "solid"));
+            this.addFrame(proj, "Frame 2", 2000);
+            this.saveFrame(proj, 1);
+
+            const json = this.exportJSON(proj);
+            checks.push(["export returns string", typeof json === "string" && json.length > 0]);
+
+            const imported = this.importJSON(json);
+            checks.push(["import returns object", !!imported]);
+
+            checks.push(["board_id matches", imported.board_id === proj.board_id]);
+            checks.push(["title matches", imported.title === proj.title]);
+            checks.push(["version matches", imported.version === proj.version]);
+            checks.push(["object count matches", imported.objects.length === proj.objects.length]);
+            checks.push(["frame count matches", imported.frames.length === proj.frames.length]);
+
+            const pPlayer = imported.objects.find(function(o) { return o.type === "player"; });
+            checks.push(["player has pathPoints", Array.isArray(pPlayer.pathPoints)]);
+            checks.push(["player has easing", typeof pPlayer.easing === "string"]);
+
+            const pBall = imported.objects.find(function(o) { return o.type === "ball"; });
+            checks.push(["ball has delay_ms", typeof pBall.delay_ms === "number"]);
+            checks.push(["animationMode preserved", imported.animationMode === proj.animationMode]);
+
+            var validation = this.validateProject(imported);
+            checks.push(["imported passes validation", validation.valid]);
+
+            var corrupt = this.importJSON("{not valid json");
+            checks.push(["corrupt JSON returns null", corrupt === null]);
+
+            var noId = this.importJSON('{"title":"test"}');
+            checks.push(["missing board_id returns null", noId === null]);
+        } catch (e) {
+            checks.push(["exception thrown", false]);
+        }
+
+        var failed = checks.filter(function(c) { return !c[1]; });
+        if (failed.length > 0) {
+            console.error("[roundTripTest] FAIL:", failed.map(function(c) { return c[0]; }).join(", "));
+            return false;
+        }
+        console.log("[roundTripTest] PASS -- all " + checks.length + " checks passed");
+        return true;
+    },
+
+    /* Compare semver strings: returns true if a < b */
+    _versionBefore(a, b) {
+        var pa = String(a).split(".").map(Number);
+        var pb = String(b).split(".").map(Number);
+        for (var i = 0; i < 3; i++) {
+            if ((pa[i] || 0) < (pb[i] || 0)) return true;
+            if ((pa[i] || 0) > (pb[i] || 0)) return false;
+        }
+        return false;
     },
 
     /* ── Animation / Keyframes ──────────────────────────────────────── */
@@ -1314,10 +1459,19 @@ const TACTICAL_BOARD = {
     migrateProject(project) {
         if (!project || typeof project !== "object") return null;
 
-        // Set version if missing
-        if (!project.version) {
-            project.version = this.SCHEMA_VERSION;
+        // Apply migrations sequentially based on project.version
+        var projectVersion = project.version || "1.0.0";
+        for (var mi = 0; mi < this.MIGRATION_HISTORY.length; mi++) {
+            var migration = this.MIGRATION_HISTORY[mi];
+            if (this._versionBefore(projectVersion, migration.version)) {
+                try {
+                    migration.migrate(project);
+                } catch (e) {
+                    console.warn("Migration to " + migration.version + " failed:", e);
+                }
+            }
         }
+        project.version = this.SCHEMA_VERSION;
 
         // Add missing layers
         if (!Array.isArray(project.layers) || project.layers.length === 0) {
@@ -1332,14 +1486,6 @@ const TACTICAL_BOARD = {
         // Add missing animationState
         if (!project.animationState || typeof project.animationState !== "object") {
             project.animationState = { playing: false, currentFrame: 0, loop: false };
-        }
-
-        // Add missing animation mode fields
-        if (!project.animationMode) {
-            project.animationMode = "timing";
-        }
-        if (!Number.isFinite(project.stepDuration)) {
-            project.stepDuration = 1000;
         }
 
         // Fix objects missing visible/locked defaults
@@ -1615,7 +1761,7 @@ const TACTICAL_BOARD = {
     const checks = [];
 
     // Version should be set
-    checks.push(["version set", migrated.version === "1.0.0"]);
+    checks.push(["version set", migrated.version === "1.1.0"]);
 
     // Layers should be added
     checks.push(["layers added", Array.isArray(migrated.layers) && migrated.layers.length >= 1]);
@@ -1648,6 +1794,20 @@ const TACTICAL_BOARD = {
 
     // Null input should return null
     checks.push(["null returns null", TACTICAL_BOARD.migrateProject(null) === null]);
+
+    // 1.1.0 migration: pathPoints, pathType, easing, delay_ms, pause_ms added
+    var mp = migrated.objects.find(function(o) { return o.type === "player"; });
+    checks.push(["player has pathPoints after migration", Array.isArray(mp.pathPoints)]);
+    checks.push(["player has pathType after migration", typeof mp.pathType === "string"]);
+    checks.push(["player has easing after migration", typeof mp.easing === "string"]);
+    checks.push(["player has delay_ms after migration", typeof mp.delay_ms === "number"]);
+    checks.push(["player has pause_ms after migration", typeof mp.pause_ms === "number"]);
+    checks.push(["project has animationMode", typeof migrated.animationMode === "string"]);
+    checks.push(["project has stepDuration", typeof migrated.stepDuration === "number"]);
+
+    // Validate migrated project
+    var vr = TACTICAL_BOARD.validateProject(migrated);
+    checks.push(["migrated project passes validation", vr.valid]);
 
     // Report results
     const failed = checks.filter(([, ok]) => !ok);
