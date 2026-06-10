@@ -104,10 +104,21 @@ loss =
 + 0.14 × tail_calibration_loss(title/relegation teams)
 + 0.08 × league_bias_loss
 + 0.05 × player_score_extreme_guardrail
++ w_truth × player_truth_anchor_loss
 + 0.04 × prior_regularization
 ```
 
 其中 `player_score_extreme_guardrail` 只约束球员评分离群，不能用来解决强队/弱队积分尾部误差；尾部误差由 calibrated points regression、distribution matching 和 tail calibration 负责；联赛整体高估/低估由 train-fitted league offset 和 `league_bias_loss` 负责。
+
+v1.3.2-dev 新增可选球员真值标签锚定：
+
+```text
+player_truth_anchor_loss =
+  0.55 × z_mse(player_rating, truth_label_value)
++ 0.45 × (1 - corr_soft_rank(player_rating, truth_label_value))
+```
+
+该项只在 `player_truth_labels.parquet` 能通过 `rating_feature_matrix.parquet` 解析到足够 `player_id -> player_name/season` 匹配时启用；默认阈值是 `--min-truth-labels 50`。当前本地真值标签表为空，因此该项在实际训练中自动跳过。它的目的不是替代球队积分监督，而是在有人工/身价/奖项标签后，把优化器从纯球队层代理信号拉回球员层真实影响力。
 
 ## 位置细分
 

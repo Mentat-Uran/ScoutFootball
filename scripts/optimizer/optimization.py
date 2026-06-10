@@ -74,10 +74,12 @@ def optimize(
     tail_calibration_weight: float = 0.08,
     league_bias_weight: float = 0.05,
     extreme_penalty_weight: float = 0.02,
+    truth_label_weight: float = 0.0,
     prior_strength: float = 0.01,
     dc_likelihood_weight: float = 0.08,
     dc_tensors: dict | None = None,
     dc_rho: float = -0.13,
+    truth_anchor: dict | None = None,
     init_scale: float = 0.35,
     patience: int = 80,
     warmup_steps: int = 20,
@@ -100,8 +102,18 @@ def optimize(
         f"points={points_regression_weight:.2f} dist={distribution_weight:.2f} "
         f"tail={tail_calibration_weight:.2f} league_bias={league_bias_weight:.2f} "
         f"dc_likelihood={dc_likelihood_weight:.2f} "
-        f"player_extreme={extreme_penalty_weight:.2f} prior={prior_strength:.2f}"
+        f"player_extreme={extreme_penalty_weight:.2f} "
+        f"truth_label={truth_label_weight:.2f} prior={prior_strength:.2f}"
     )
+    if truth_anchor and truth_anchor.get("enabled"):
+        print(
+            "  Truth anchors: "
+            f"matched={truth_anchor.get('n_matched', 0)} "
+            f"resolved={truth_anchor.get('n_labels', 0)}"
+        )
+    elif truth_label_weight > 0:
+        reason = truth_anchor.get("reason", "not built") if truth_anchor else "not built"
+        print(f"  Truth anchors disabled: {reason}")
     print(
         "  调度: "
         f"warmup={warmup_steps}, min_lr_ratio={min_lr_ratio:.2f}, grad_clip={grad_clip:.2f}"
@@ -171,10 +183,12 @@ def optimize(
                 tail_calibration_weight=tail_calibration_weight,
                 league_bias_weight=league_bias_weight,
                 extreme_penalty_weight=extreme_penalty_weight,
+                truth_label_weight=truth_label_weight,
                 prior_weight=prior_strength,
                 dc_likelihood_weight=dc_likelihood_weight,
                 dc_tensors=dc_tensors,
                 dc_rho=dc_rho,
+                truth_anchor=truth_anchor,
                 prior_params=prior_params,
                 return_components=True,
                 matched_group_idx_cache=matched_group_idx,

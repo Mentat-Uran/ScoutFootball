@@ -44,6 +44,7 @@ from optimizer.constants import (
     POSITIONS,
     apply_position_weight_caps,
 )
+from optimizer.cv import _print_metric_block, run_cross_validation, run_parameter_stability
 from optimizer.data import (
     _filter_by_seasons,
     build_dc_tensors,
@@ -56,9 +57,9 @@ from optimizer.data import (
     permutation_feature_importance,
     save_model_run,
 )
-from optimizer.cv import _print_metric_block, run_cross_validation, run_parameter_stability
 from optimizer.optimization import _get_default_params_tensor, optimize
 from optimizer.scoring import build_feature_tensors
+from optimizer.truth import build_truth_label_anchor
 
 
 def main():
@@ -90,6 +91,12 @@ def main():
                         help="训练集联赛平均积分残差惩罚在复合目标中的权重")
     parser.add_argument("--extreme-penalty-weight", type=float, default=0.02,
                         help="球员评分离群 guardrail 在复合目标中的权重")
+    parser.add_argument("--truth-label-weight", type=float, default=0.08,
+                        help="球员真值标签锚定损失权重；标签不足时自动禁用")
+    parser.add_argument("--min-truth-labels", type=int, default=50,
+                        help="启用球员真值标签锚定所需的最少训练集匹配标签数")
+    parser.add_argument("--disable-truth-label-anchor", action="store_true",
+                        help="禁用 player_truth_labels.parquet 的球员级监督锚定")
     parser.add_argument("--prior-weight", type=float, default=0.01,
                         help="锚定 v3 默认权重的正则强度")
     parser.add_argument("--dc-likelihood-weight", type=float, default=0.00,
@@ -255,6 +262,22 @@ def main():
     print(f"\n[4] 只在训练赛季优化 (pop={args.pop}, steps={args.steps}, lr={args.lr})...")
     t0 = time.time()
     train_feat = build_feature_tensors(train_df)
+    truth_anchor = None
+    if args.truth_label_weight > 0 and not args.disable_truth_label_anchor:
+        truth_anchor = build_truth_label_anchor(
+            data_dir,
+            train_df,
+            device,
+            min_labels=args.min_truth_labels,
+        )
+        if truth_anchor.get("enabled"):
+            print(
+                "  球员真值标签锚定: "
+                f"matched={truth_anchor.get('n_matched')} "
+                f"resolved={truth_anchor.get('n_labels')}"
+            )
+        else:
+            print(f"  球员真值标签锚定跳过: {truth_anchor.get('reason')}")
     best_params = optimize(
         train_feat, train_team_pts, device,
         n_steps=args.steps, lr=args.lr, pop_size=args.pop,
@@ -269,10 +292,12 @@ def main():
         tail_calibration_weight=args.tail_calibration_weight,
         league_bias_weight=args.league_bias_weight,
         extreme_penalty_weight=args.extreme_penalty_weight,
+        truth_label_weight=args.truth_label_weight if truth_anchor else 0.0,
         prior_strength=args.prior_weight,
         dc_likelihood_weight=args.dc_likelihood_weight,
         dc_tensors=dc_tensors,
         dc_rho=args.dc_rho,
+        truth_anchor=truth_anchor,
         init_scale=args.init_scale, patience=args.patience,
         warmup_steps=args.warmup_steps, min_lr_ratio=args.min_lr_ratio,
         grad_clip=args.grad_clip, seed=args.seed,

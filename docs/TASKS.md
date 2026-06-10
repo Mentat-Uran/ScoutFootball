@@ -1,6 +1,6 @@
 # 任务路线图
 
-当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。最新 v1.3 GPU 优化产物已生成（2026-06-09 23:05，本地 `optimized_params_meta.json`）：2526 holdout Spearman=0.737/Pearson=0.742（baseline 0.621/0.618），raw spread ratio=0.336，train-fitted global points spread ratio=0.985，points MAE=11.55，points bias=-6.47，team coverage=0.990。v1.3 解决了整体分布压缩，但暴露出联赛截距偏差：Serie A -16.6、Ligue 1 -11.3、La Liga -11.2、Premier League +5.8、Bundesliga +1.8。2026-06-09 已完成 v1.3.1-dev 代码级改进：新增训练集联赛残差 offset 和 league-bias loss；只读复算显示当前参数下 points MAE 可从 11.55 降到 9.44，但完整 GPU 重跑仍待执行。`EVALUATION.md`、`MODEL_CARD.md` 已更新。
+当前状态：Pipeline 端到端可运行，评分系统处于真实影响力标签和训练目标重构前的校准阶段。最新 v1.3 GPU 优化产物已生成（2026-06-09 23:05，本地 `optimized_params_meta.json`）：2526 holdout Spearman=0.737/Pearson=0.742（baseline 0.621/0.618），raw spread ratio=0.336，train-fitted global points spread ratio=0.985，points MAE=11.55，points bias=-6.47，team coverage=0.990。v1.3 解决了整体分布压缩，但暴露出联赛截距偏差：Serie A -16.6、Ligue 1 -11.3、La Liga -11.2、Premier League +5.8、Bundesliga +1.8。2026-06-09 已完成 v1.3.1-dev 代码级改进：新增训练集联赛残差 offset 和 league-bias loss；只读复算显示当前参数下 points MAE 可从 11.55 降到 9.44，但完整 GPU 重跑仍待执行。2026-06-10 已新增 v1.3.2-dev 代码入口：优化器支持可选 `player_truth_labels.parquet` 球员真值标签锚定损失，`scoutfootball train-rating-nn` 支持监督式 sklearn MLP 候选模型并写入 `data/models/player_rating_nn/`；当前真值标签表仍为空，因此 NN 路径会跳过，默认评分产物未被替换。
 
 本路线图吸收 `advise.md` 的建议，但只采纳适合 ScoutFootball 当前数据现实的部分：优先做展示增强、StatsBomb 事件动作价值、评分验证和模型评估，不把后续更新变成更多爬虫。
 
@@ -42,7 +42,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - xG+ / possession-level shot probability 作为远期研究方向。
 - StatsBomb 360、Metrica/open tracking、SoccerNet/video 作为远期空间/视频研究方向。
 - 战术板 MP4 导出、本地 ffmpeg、视频叠画、tracking 数据导入、3D/门后视角和实时协作放到战术板核心画布稳定之后。
-- 神经网络评分器只作为真实标签层完成后的候选模型；没有球员级标签、缺失字段标记和 baseline 对比前，不进入默认评分产物。
+- 神经网络评分器只作为真实标签层完成后的候选模型；当前只落地监督式 MLP 实验入口，没有球员级标签、缺失字段标记和 baseline 对比前，不进入默认评分产物。
 - Opta、Wyscout、SkillCorner、TRACAB 等商业或 tracking 数据源不进入近期计划。
 
 不采纳：
@@ -110,7 +110,9 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 完成 v1.3-dev 优化器目标函数重构：区分 raw team strength 与 calibrated season points，新增训练集拟合积分校准层、积分回归损失、1D 分布匹配损失、争冠/降级尾部校准损失；`--soft-rank-temperature` 已贯穿 Spearman/NDCG/位置一致性，NDCG 改为 soft discount 可微目标。
 - [x] 用 v1.3-dev 目标完整重跑 GPU optimizer，生成新的 `optimized_params.npy`、`optimized_params_meta.json`、`rating_holdout_predictions.parquet`、CV/stability/feature importance。结果：排序保持（Spearman 0.737），points spread 接近真实分布（0.985），但 points MAE 仍 11.55 且联赛截距偏差明显。
 - [x] 完成 v1.3.1-dev 代码改进：训练集联赛残差 offset（可通过 `--disable-league-calibration` 关闭）、`league_bias_weight` 训练损失、holdout predictions 输出 global points / league offset / final calibrated points。
+- [x] 完成 v1.3.2-dev 代码改进：新增 `--truth-label-weight`、`--min-truth-labels`、`--disable-truth-label-anchor`，通过 `rating_feature_matrix.parquet` 桥接 `player_id -> player_name/season` 后，把球员真值标签作为可选 z-score + rank anchor loss；标签为空或匹配少于阈值时自动禁用。
 - [ ] 用 v1.3.1-dev 目标完整重跑 GPU optimizer，重新生成 `optimized_params.npy`、`optimized_params_meta.json`、`rating_holdout_predictions.parquet`、CV/stability/feature importance，并复盘 Barcelona/Real Madrid/Burnley、Serie A/La Liga/Ligue 1 联赛截距偏差是否改善。
+- [ ] 有足够球员真值标签后，用 v1.3.2-dev 目标完整重跑 GPU optimizer，并把 truth-anchor 的 holdout 效果、位置内指标和误差案例写入 `EVALUATION.md`。
 - [x] 对 coverage 低于 0.90 的 league-season 禁止输出强排序结论，只允许作为低置信度诊断样本；该规则仍适用于五大联赛以外的 2526 division 和后续新增数据。
 - [x] 定义真实标签层级：Transfermarkt 手动导入、权威奖项、国际/俱乐部出场级别、专家分档、位置内人工校准集。
 - [x] 新增标签数据契约和校验脚本，输出 `data/gold/feature_store/player_truth_labels.parquet`。
@@ -278,9 +280,12 @@ player_rating =
 - [ ] VAEP 在 xT 稳定后再做，不抢先实现。
 - [ ] 明确各维度置信度：赛季统计、事件动作、xG/xA、联赛强度、位置映射。
 - [ ] 按位置输出进攻、防守、控球、推进、终结、可靠性解释。
-- [ ] 在真实标签层和特征缺失标记稳定后，新增浅层神经网络候选模型实验：数值特征 + 位置/联赛 embedding + dropout/weight decay，不直接替换当前评分器。
-- [ ] 神经网络训练目标使用多任务结构：球员标签排序/回归为主，球队赛季积分相关性为辅助，另加跨联赛校准、年龄趋势合理性和极端样本惩罚。
-- [ ] 神经网络产物写入 `data/models/player_rating_nn/`，保存 feature manifest、参数、随机种子、输入 hash、训练/holdout 指标和与 `player_ratings_optimized` 的对比。
+- [x] 新增第一版神经网络候选模型入口：`src/scoutfootball/models/player_rating_nn.py` 使用现有 scikit-learn MLPRegressor，读取 `rating_feature_matrix.parquet` 和 `player_truth_labels.parquet`，按赛季时间切分，并与 `player_ratings_optimized` baseline 对比。
+- [x] 新增 `scoutfootball train-rating-nn` 和 `scoutfootball train` 中的 `player_rating_nn` 候选状态输出；当前标签为空时写出 skipped metrics，不生成可用模型结论。
+- [x] 神经网络产物写入 `data/models/player_rating_nn/`，保存 metrics、predictions 和 model pickle；当前只是监督式候选入口，不替换当前评分器。
+- [ ] 有足够标签后升级浅层神经网络结构：数值特征 + 位置/联赛 embedding 或 one-hot 对照 + dropout/weight decay，不直接替换当前评分器。
+- [ ] 神经网络训练目标升级为多任务结构：球员标签排序/回归为主，球队赛季积分相关性为辅助，另加跨联赛校准、年龄趋势合理性和极端样本惩罚。
+- [ ] 补 NN feature manifest、输入 hash、依赖版本、随机种子、训练/holdout 指标和与 `player_ratings_optimized` 的同切分对比报告。
 - [ ] 建立评分回归测试，防止 CM/GK/出勤捷径再次主导 Top 100。
 - [ ] 输出 `ALGORITHM.md` 的实现对齐版本。
 

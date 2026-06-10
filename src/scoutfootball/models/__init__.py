@@ -8,6 +8,12 @@ from .match_prediction import (
     fit_independent_poisson,
     predict_match,
 )
+from .player_rating_nn import (
+    PlayerRatingNNConfig,
+    PlayerRatingNNResult,
+    train_player_rating_nn,
+    train_player_rating_nn_from_files,
+)
 from .value_fairness import (
     TimeSplitConfig,
     ValueFairnessResult,
@@ -18,6 +24,8 @@ from .value_fairness import (
 __all__ = [
     "IndependentPoissonModel",
     "MatchProbabilitySummary",
+    "PlayerRatingNNConfig",
+    "PlayerRatingNNResult",
     "PoissonPrediction",
     "TimeSplitConfig",
     "ValueFairnessResult",
@@ -26,4 +34,6 @@ __all__ = [
     "fit_independent_poisson",
     "fit_regressor",
     "predict_match",
+    "train_player_rating_nn",
+    "train_player_rating_nn_from_files",
 ]
