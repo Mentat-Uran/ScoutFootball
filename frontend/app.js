@@ -105,6 +105,29 @@ const i18n = {
         scout_new_badge: "新",
         scout_note_placeholder: "添加备注...",
         nav_license: "数据源",
+        nav_data: "数据",
+        data_kicker: "数据状态",
+        data_title: "数据源与覆盖",
+        data_sources_table: "数据源列表",
+        data_th_name: "名称",
+        data_th_rows: "行数",
+        data_th_updated: "最后更新",
+        data_th_type: "类型",
+        data_type_real: "真实",
+        data_type_proxy: "代理",
+        data_type_synthetic: "合成",
+        data_coverage_league: "联赛覆盖",
+        data_missing_warnings: "缺失数据警告",
+        data_no_missing: "无缺失数据",
+        data_source_real: "真实数据",
+        data_source_proxy: "代理数据",
+        data_source_synthetic: "合成数据",
+        confidence_gate: "置信门槛",
+        confidence_gate_desc: "覆盖率 > 0.90 = 高置信度",
+        coverage_league: "联赛覆盖",
+        rated_teams: "有评分球队",
+        total_teams: "总球队",
+        export_csv: "导出 CSV",
         license_kicker: "数据源许可",
         license_title: "Data Source Manifest",
         license_sources_label: "数据源",
@@ -244,6 +267,29 @@ const i18n = {
         scout_new_badge: "new",
         scout_note_placeholder: "Add note...",
         nav_license: "Sources",
+        nav_data: "Data",
+        data_kicker: "Data Status",
+        data_title: "Data Sources & Coverage",
+        data_sources_table: "Data Sources",
+        data_th_name: "Name",
+        data_th_rows: "Rows",
+        data_th_updated: "Last Updated",
+        data_th_type: "Type",
+        data_type_real: "Real",
+        data_type_proxy: "Proxy",
+        data_type_synthetic: "Synthetic",
+        data_coverage_league: "League Coverage",
+        data_missing_warnings: "Missing Data Warnings",
+        data_no_missing: "No missing data",
+        data_source_real: "Real data",
+        data_source_proxy: "Proxy data",
+        data_source_synthetic: "Synthetic data",
+        confidence_gate: "Confidence Gate",
+        confidence_gate_desc: "Coverage > 0.90 = high confidence",
+        coverage_league: "League Coverage",
+        rated_teams: "Rated Teams",
+        total_teams: "Total Teams",
+        export_csv: "Export CSV",
         license_kicker: "Data Source Licenses",
         license_title: "Data Source Manifest",
         license_sources_label: "Sources",
@@ -815,7 +861,7 @@ async function renderPlayerProfile() {
     const tacticalActionsEl = document.getElementById("player-tactical-actions");
     if (tacticalActionsEl) {
         const zT = appState.lang === 'zh';
-        tacticalActionsEl.innerHTML = `<button class="text-button" id="btn-send-tactical" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">\u25C6 ${zT ? '发送到战术板' : 'Send to tactical board'}</button>`;
+        tacticalActionsEl.innerHTML = `<button class="text-button" id="btn-send-tactical" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">\u25C6 ${zT ? '发送到战术板' : 'Send to tactical board'}</button> <button class="text-button" id="btn-export-csv" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">${zT ? '导出 CSV' : 'Export CSV'}</button>`;
         const sendBtn = document.getElementById("btn-send-tactical");
         if (sendBtn) {
             sendBtn.addEventListener("click", () => {
@@ -842,7 +888,43 @@ async function renderPlayerProfile() {
                 setView("tactical");
             });
         }
+        const csvBtn = document.getElementById("btn-export-csv");
+        if (csvBtn) {
+            csvBtn.addEventListener("click", () => {
+                exportPlayerProfileCSV(player, profile, detailScore, detailPosition, detailMinutes, detailMatches, detailConfidence, detailLeague);
+            });
+        }
     }
+}
+
+function exportPlayerProfileCSV(player, profile, detailScore, detailPosition, detailMinutes, detailMatches, detailConfidence, detailLeague) {
+    const radar = (profile && profile.radar) ? profile.radar : (player.radar || []);
+    const radarLabels = ["Attack", "Possession", "Defense", "Volume", "Overall"];
+    const header = [
+        "name", "team", "position", "rating", "confidence", "season",
+        "minutes", "matches", "league",
+        ...radarLabels.map(l => `radar_${l.toLowerCase()}`),
+    ];
+    const row = [
+        player.name,
+        player.team,
+        detailPosition,
+        detailScore,
+        detailConfidence,
+        player.season,
+        detailMinutes,
+        detailMatches,
+        detailLeague || "",
+        ...radar.map(v => v != null ? Math.round(v) : ""),
+    ];
+    const csv = [header, row].map(r => r.map(csvCell).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(player.name || "player").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_")}_profile.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
 }
 
 function getChart(id) {
@@ -1532,6 +1614,32 @@ function sortReviewQueue(queue, mode) {
     return arr;
 }
 
+function computeLeagueCoverage() {
+    const byLeagueSeason = {};
+    for (const p of players) {
+        const league = p.league || "";
+        const season = p.season || "";
+        if (!league) continue;
+        const key = `${league}|${season}`;
+        if (!byLeagueSeason[key]) byLeagueSeason[key] = { league, season, teams: new Set(), rated: 0 };
+        byLeagueSeason[key].teams.add(p.team);
+        if (p.rating > 0) byLeagueSeason[key].rated++;
+    }
+    // Group by league (aggregate seasons)
+    const byLeague = {};
+    for (const entry of Object.values(byLeagueSeason)) {
+        if (!byLeague[entry.league]) byLeague[entry.league] = { total: 0, rated: 0 };
+        byLeague[entry.league].total += entry.teams.size;
+        byLeague[entry.league].rated += entry.rated;
+    }
+    return Object.entries(byLeague).map(([league, data]) => ({
+        league,
+        rated: data.rated,
+        total: data.total,
+        coverage: data.total > 0 ? data.rated / data.total : 0,
+    })).sort((a, b) => a.league.localeCompare(b.league));
+}
+
 function renderOverview() {
     const health = artifactSummary.data_health || {};
     const healthItems = document.querySelectorAll("#data-health-list .health-item");
@@ -1574,6 +1682,67 @@ function renderOverview() {
                 `<li class="health-item"><span class="dot status-high"></span><span title="${escapeAttr(desc)}">${escapeHtml(key)}</span></li>`
             ).join("");
         }
+    }
+
+    // ── Confidence Gate Section ──
+    const gateSection = document.getElementById("confidence-gate-section");
+    if (gateSection) {
+        const pmCoverage = health.player_match_coverage || "";
+        const hasMatch = pmCoverage.includes("real");
+        const hasProxy = pmCoverage.includes("proxy");
+        const dsLabel = artifactSummary.data_source_label || "";
+
+        // Data source labels
+        const sourceLabels = [
+            { label: hasMatch ? t("data_type_real") : t("data_type_proxy"), cls: hasMatch ? "status-high" : "status-medium" },
+            { label: dsLabel || "local parquet", cls: "status-medium" },
+        ];
+
+        // License attribution summary
+        const licEntries = licenses ? Object.entries(licenses) : [];
+
+        // Coverage by league
+        const leagueCoverage = computeLeagueCoverage();
+
+        let html = '<div class="panel-head"><h3>' + escapeHtml(t("confidence_gate")) + '</h3>';
+        html += '<span class="status-pill status-medium">' + escapeHtml(t("confidence_gate_desc")) + '</span></div>';
+
+        // Data source labels row
+        html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.6rem">';
+        sourceLabels.forEach(s => {
+            html += `<span class="status-pill ${s.cls}">${escapeHtml(s.label)}</span>`;
+        });
+        html += '</div>';
+
+        // License attribution summary
+        if (licEntries.length > 0) {
+            html += '<p style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.3rem 0">' + escapeHtml(t("license_sources_label")) + '</p>';
+            html += '<div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.6rem">';
+            licEntries.forEach(([key]) => {
+                html += `<span class="status-pill status-medium">${escapeHtml(key)}</span>`;
+            });
+            html += '</div>';
+        }
+
+        // Coverage by league
+        if (leagueCoverage.length > 0) {
+            html += '<p style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.3rem 0">' + escapeHtml(t("coverage_league")) + '</p>';
+            html += '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0.2rem 0.6rem;font-size:0.78rem">';
+            leagueCoverage.forEach(lc => {
+                const pctColor = lc.coverage > 0.90 ? "status-high" : (lc.coverage >= 0.70 ? "status-medium" : "status-low");
+                const pctLabel = lc.coverage > 0.90 ? "HIGH" : (lc.coverage >= 0.70 ? "MED" : "LOW");
+                html += `<span>${escapeHtml(lc.league)}</span>`;
+                html += `<span>${escapeHtml(String(lc.rated))}/${escapeHtml(String(lc.total))}</span>`;
+                html += `<span class="status-pill ${pctColor}">${Math.round(lc.coverage * 100)}%</span>`;
+                html += `<span class="status-pill ${pctColor}">${pctLabel}</span>`;
+            });
+            html += '</div>';
+        }
+
+        // Link to license page
+        html += '<div style="margin-top:0.5rem"><a href="#" onclick="setView(\'license\');return false" style="color:var(--accent);font-size:0.78rem">' + escapeHtml(appState.lang === "zh" ? "查看完整数据源详情" : "View full data source details") + '</a></div>';
+
+        gateSection.innerHTML = html;
     }
 }
 
@@ -2016,6 +2185,122 @@ function renderLicense() {
     }
 }
 
+// ── Data Status Page ──────────────────────────────────────────────
+
+function _classifyArtifact(name) {
+    if (/statsbomb|events_all/.test(name)) return "real";
+    if (/truth_labels|oof/.test(name)) return "real";
+    if (/player_match|season_proxy/.test(name)) return "proxy";
+    if (/team_match/.test(name)) return "real";
+    if (/ratings/.test(name)) return "real";
+    return "synthetic";
+}
+
+function renderData() {
+    const artifacts = artifactSummary.artifacts || [];
+    const health = artifactSummary.data_health || {};
+    const licenses = artifactSummary.license_attribution || {};
+
+    // Data sources table
+    const sourcesTbody = document.getElementById("data-sources-table");
+    if (sourcesTbody) {
+        let totalRows = 0;
+        let sourceCount = 0;
+        const rows = artifacts.map(a => {
+            const rows = a.rows || 0;
+            totalRows += rows;
+            if (rows > 0) sourceCount++;
+            const srcType = _classifyArtifact(a.name || "");
+            const typeLabel = srcType === "real" ? t("data_type_real") : (srcType === "proxy" ? t("data_type_proxy") : t("data_type_synthetic"));
+            const typeCls = srcType === "real" ? "status-high" : (srcType === "proxy" ? "status-medium" : "status-low");
+            const modified = a.modified ? new Date(a.modified * 1000).toISOString().slice(0, 10) : "–";
+            return `<tr>
+                <td>${escapeHtml(a.name || "–")}</td>
+                <td>${rows.toLocaleString()}</td>
+                <td>${escapeHtml(modified)}</td>
+                <td><span class="status-pill ${typeCls}">${escapeHtml(typeLabel)}</span></td>
+            </tr>`;
+        }).join("");
+        sourcesTbody.innerHTML = rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">' + (appState.lang === "zh" ? "无数据" : "No data") + "</td></tr>";
+
+        // Update summary metrics
+        const totalEl = document.getElementById("data-total-rows");
+        if (totalEl) totalEl.textContent = totalRows.toLocaleString();
+        const countEl = document.getElementById("data-source-count");
+        if (countEl) countEl.textContent = String(sourceCount);
+    }
+
+    // Coverage by league-season
+    const coverageTbody = document.getElementById("data-coverage-table");
+    if (coverageTbody) {
+        const byLeagueSeason = {};
+        for (const p of players) {
+            const league = p.league || "";
+            const season = p.season || "";
+            if (!league) continue;
+            const key = `${league}|${season}`;
+            if (!byLeagueSeason[key]) byLeagueSeason[key] = { league, season, teams: new Set(), rated: 0, total: 0 };
+            byLeagueSeason[key].teams.add(p.team);
+            byLeagueSeason[key].total++;
+            if (p.rating > 0) byLeagueSeason[key].rated++;
+        }
+        // Compute per-unique-team coverage
+        const byLeagueSeasonAgg = {};
+        for (const p of players) {
+            const league = p.league || "";
+            const season = p.season || "";
+            if (!league) continue;
+            const key = `${league}|${season}`;
+            if (!byLeagueSeasonAgg[key]) byLeagueSeasonAgg[key] = { league, season, teams: new Set(), ratedTeams: new Set() };
+            byLeagueSeasonAgg[key].teams.add(p.team);
+            if (p.rating > 0) byLeagueSeasonAgg[key].ratedTeams.add(p.team);
+        }
+        const coverageRows = Object.values(byLeagueSeasonAgg).sort((a, b) => {
+            if (a.league !== b.league) return a.league.localeCompare(b.league);
+            return a.season.localeCompare(b.season);
+        }).map(entry => {
+            const total = entry.teams.size;
+            const rated = entry.ratedTeams.size;
+            const pct = total > 0 ? rated / total : 0;
+            const pctColor = pct > 0.90 ? "status-high" : (pct >= 0.70 ? "status-medium" : "status-low");
+            const pctLabel = pct > 0.90 ? "HIGH" : (pct >= 0.70 ? "MED" : "LOW");
+            return `<tr>
+                <td>${escapeHtml(entry.league)}</td>
+                <td>${escapeHtml(entry.season)}</td>
+                <td>${rated}</td>
+                <td>${total}</td>
+                <td><span class="status-pill ${pctColor}">${Math.round(pct * 100)}% ${pctLabel}</span></td>
+            </tr>`;
+        }).join("");
+        coverageTbody.innerHTML = coverageRows || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">' + (appState.lang === "zh" ? "无数据" : "No data") + "</td></tr>";
+    }
+
+    // Missing data warnings
+    const warningsEl = document.getElementById("data-missing-warnings");
+    if (warningsEl) {
+        const warnings = [];
+        if (!health.oof_available) warnings.push(appState.lang === "zh" ? "OOF 预测数据缺失" : "OOF prediction data missing");
+        if (!health.truth_labels_available) warnings.push(appState.lang === "zh" ? "真实标签数据缺失" : "Truth labels data missing");
+        if (!health.player_match_coverage) warnings.push(appState.lang === "zh" ? "球员比赛级覆盖不足" : "Player match-level coverage is thin");
+
+        // Check for leagues with low coverage
+        const leagueCov = computeLeagueCoverage();
+        for (const lc of leagueCov) {
+            if (lc.coverage < 0.70) {
+                warnings.push((appState.lang === "zh" ? "联赛 " : "League ") + escapeHtml(lc.league) + (appState.lang === "zh" ? " 覆盖率过低: " : " coverage too low: ") + Math.round(lc.coverage * 100) + "%");
+            }
+        }
+
+        if (warnings.length === 0) {
+            warningsEl.innerHTML = '<li class="health-item"><span class="dot status-high"></span><span>' + escapeHtml(t("data_no_missing")) + '</span></li>';
+        } else {
+            warningsEl.innerHTML = warnings.map(w =>
+                `<li class="health-item"><span class="dot status-low"></span><span>${w}</span></li>`
+            ).join("");
+        }
+    }
+}
+
 async function renderActiveView() {
     if (appState.view === "overview") renderOverview();
     if (appState.view === "players") renderPlayers();
@@ -2030,6 +2315,7 @@ async function renderActiveView() {
     if (appState.view === "wc_compare") renderWcCompare();
     if (appState.view === "wc_probability") renderWcProbability();
     if (appState.view === "license") renderLicense();
+    if (appState.view === "data") renderData();
     // Resize charts after layout paint to ensure correct dimensions
     requestAnimationFrame(() => {
         Object.values(appState.charts).forEach((chart) => {
@@ -2171,6 +2457,22 @@ function bindEvents() {
         renderWcCompare();
     });
 
+    // Pre-match plan button: create tactical project from match prediction
+    const prematchBtn = document.getElementById("btn-prematch-plan");
+    if (prematchBtn) {
+        prematchBtn.addEventListener("click", () => {
+            createPrematchPlan();
+        });
+    }
+
+    // WC team template button: create tactical project from WC squad
+    const wcTeamTemplateBtn = document.getElementById("btn-wc-team-template");
+    if (wcTeamTemplateBtn) {
+        wcTeamTemplateBtn.addEventListener("click", () => {
+            createWcTeamTemplate();
+        });
+    }
+
     // Tactical board event handlers
     const tacticalLoadHome = document.getElementById("tactical-load-home");
     if (tacticalLoadHome) {
@@ -2179,6 +2481,15 @@ function bindEvents() {
             if (typeof TacticalRenderer !== "undefined") {
                 TacticalRenderer.loadFormation(formation, "home");
                 tacticalProject = TacticalRenderer.getProject();
+                // Load coaching points into frame notes
+                if (typeof TACTICAL_BOARD !== "undefined") {
+                    const cp = TACTICAL_BOARD.getFormationCoachingPoints(formation);
+                    if (cp) {
+                        const notes = TACTICAL_BOARD.formatCoachingNotes(cp);
+                        TacticalRenderer.setCurrentFrameNotes(notes);
+                        updateCoachingNotesPanel();
+                    }
+                }
             }
         });
     }
@@ -2214,6 +2525,13 @@ function bindEvents() {
                     project.objects = objects;
                     TacticalRenderer.render();
                     tacticalProject = project;
+                    // Load coaching points into frame notes
+                    const cp = TACTICAL_BOARD.getSetPieceCoachingPoints(type);
+                    if (cp) {
+                        const notes = TACTICAL_BOARD.formatCoachingNotes(cp);
+                        TacticalRenderer.setCurrentFrameNotes(notes);
+                        updateCoachingNotesPanel();
+                    }
                 }
             }
         });
@@ -2231,6 +2549,13 @@ function bindEvents() {
                     project.objects = objects;
                     TacticalRenderer.render();
                     tacticalProject = project;
+                    // Load coaching points into frame notes
+                    const cp = TACTICAL_BOARD.getTrainingCoachingPoints(type);
+                    if (cp) {
+                        const notes = TACTICAL_BOARD.formatCoachingNotes(cp);
+                        TacticalRenderer.setCurrentFrameNotes(notes);
+                        updateCoachingNotesPanel();
+                    }
                 }
             }
         });
@@ -2542,6 +2867,18 @@ function bindEvents() {
                     TacticalRenderer._trailPositions.clear();
                 }
                 TacticalRenderer.render();
+            }
+        });
+    }
+
+    // Coaching notes textarea: sync notes to current frame
+    const coachingNotesEl = document.getElementById("tactical-coaching-notes");
+    if (coachingNotesEl) {
+        coachingNotesEl.addEventListener("input", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.setCurrentFrameNotes(coachingNotesEl.value);
+                tacticalProject = TacticalRenderer.getProject();
+                tacticalAutoSave();
             }
         });
     }
@@ -3227,6 +3564,141 @@ function renderTactical() {
 
     // Update project list
     renderTacticalProjectList();
+
+    // Update coaching notes panel for current frame
+    updateCoachingNotesPanel();
+}
+
+function updateCoachingNotesPanel() {
+    const notesEl = document.getElementById("tactical-coaching-notes");
+    if (!notesEl) return;
+    if (typeof TacticalRenderer !== "undefined") {
+        notesEl.value = TacticalRenderer.getCurrentFrameNotes();
+    }
+}
+
+function createPrematchPlan() {
+    if (typeof TACTICAL_BOARD === "undefined") return;
+    const match = selectedMatch();
+    if (!match) return;
+
+    // Create new tactical project
+    const project = TACTICAL_BOARD.createProject(match.home + " vs " + match.away + " pre-match");
+    project.pitch_type = "11v11";
+
+    // Load home team formation (default 4-3-3)
+    const homeObjs = TACTICAL_BOARD.generateFormation("4-3-3", "home");
+    // Load away team formation (mirrored)
+    const awayObjs = TACTICAL_BOARD.generateFormation("4-3-3", "away");
+    project.objects = [...homeObjs, ...awayObjs];
+
+    // Add prediction metadata as frame notes
+    const modelType = (typeof predictionMeta !== "undefined" && predictionMeta.model_type) || "Poisson";
+    const coverage = (typeof predictionMeta !== "undefined" && predictionMeta.num_teams)
+        ? predictionMeta.num_teams + " teams"
+        : "artifact pending";
+    const hwPct = Math.round((match.hw || 0) * 100);
+    const drawPct = Math.round((match.draw || 0) * 100);
+    const awPct = Math.round((match.aw || 0) * 100);
+
+    let notes = match.home + " vs " + match.away + " Pre-Match Plan\n";
+    notes += "Model: " + modelType + " | Coverage: " + coverage + "\n";
+    notes += "\n- Home win: " + hwPct + "% | Draw: " + drawPct + "% | Away win: " + awPct + "%";
+    notes += "\n- Expected goals: " + (match.xh || 0).toFixed(2) + " / " + (match.xa || 0).toFixed(2);
+    notes += "\n- Edit formations to plan your tactical approach";
+
+    if (project.frames && project.frames[0]) {
+        project.frames[0].notes = notes;
+    }
+
+    // Coaching points for the default formation
+    const cp = TACTICAL_BOARD.getFormationCoachingPoints("4-3-3");
+    if (cp) {
+        const cpNotes = TACTICAL_BOARD.formatCoachingNotes(cp);
+        if (project.frames && project.frames[0]) {
+            project.frames[0].notes = notes + "\n\n--- Coaching Points ---\n" + cpNotes;
+        }
+    }
+
+    // Save and switch to tactical view
+    TACTICAL_BOARD.saveProject(project);
+    tacticalProject = project;
+    setView("tactical");
+}
+
+function createWcTeamTemplate() {
+    if (typeof TACTICAL_BOARD === "undefined") return;
+    const team = appState.wcSquadTeam;
+    if (!team) return;
+
+    const rawSquad = wcGetSquad(team);
+    const squad = matchSquadWithRatings(rawSquad);
+
+    // Create project
+    const project = TACTICAL_BOARD.createProject(team + " World Cup template");
+    project.pitch_type = "11v11";
+
+    // Default formation: 4-3-3
+    const formationName = "4-3-3";
+    const formation = TACTICAL_BOARD.FORMATIONS[formationName];
+    if (!formation) return;
+
+    // Build position list from formation
+    const positionRoles = [
+        { role: "GK", items: formation.GK || [] },
+        { role: "CB", items: formation.CB || [] },
+        { role: "FB", items: formation.FB || [] },
+        { role: "DM", items: formation.DM || [] },
+        { role: "CM", items: formation.CM || [] },
+        { role: "AM", items: formation.AM || [] },
+        { role: "W",  items: formation.W || [] },
+        { role: "ST", items: formation.ST || [] },
+    ];
+
+    // Assign players from squad to positions
+    const objects = [];
+    let squadIdx = 0;
+    let num = 1;
+    for (const { role, items } of positionRoles) {
+        for (const pos of items) {
+            const player = squadIdx < squad.length ? squad[squadIdx] : null;
+            const label = player ? player.name : "";
+            objects.push(TACTICAL_BOARD.createPlayer(pos.x, pos.y, "home", label, num));
+            squadIdx++;
+            num++;
+        }
+    }
+
+    // Add ball at center
+    objects.push(TACTICAL_BOARD.createBall(50, 50));
+    project.objects = objects;
+
+    // Add coaching notes with squad info
+    const rated = squad.filter(p => p.hasRating);
+    const avgRating = rated.length > 0
+        ? (rated.reduce((s, p) => s + p.rating, 0) / rated.length).toFixed(2)
+        : "N/A";
+
+    let notes = team + " World Cup Template\n";
+    notes += "Formation: " + formationName + " | Squad: " + squad.length + " players\n";
+    notes += "Rated: " + rated.length + " | Avg rating: " + avgRating + "\n";
+    notes += "\n- Players assigned to formation positions from squad list";
+    notes += "\n- Edit player names and positions as needed";
+    notes += "\n- Add additional frames for set-piece plans";
+
+    if (project.frames && project.frames[0]) {
+        project.frames[0].notes = notes;
+    }
+
+    // Add formation coaching points
+    const cp = TACTICAL_BOARD.getFormationCoachingPoints(formationName);
+    if (cp && project.frames && project.frames[0]) {
+        project.frames[0].notes += "\n\n--- Coaching Points ---\n" + TACTICAL_BOARD.formatCoachingNotes(cp);
+    }
+
+    TACTICAL_BOARD.saveProject(project);
+    tacticalProject = project;
+    setView("tactical");
 }
 
 function renderTacticalProjectList() {
@@ -3340,6 +3812,7 @@ function renderTacticalFrameList() {
                 TacticalRenderer.goToFrame(idx);
                 tacticalProject = TacticalRenderer.getProject();
                 renderTacticalFrameList();
+                updateCoachingNotesPanel();
             }
         });
     });

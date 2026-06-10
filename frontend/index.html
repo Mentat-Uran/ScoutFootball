@@ -74,6 +74,10 @@
                     <span class="nav-icon">⊛</span>
                     <span data-i18n="nav_license">数据源</span>
                 </button>
+                <button class="nav-action" data-view="data" type="button">
+                    <span class="nav-icon">◉</span>
+                    <span data-i18n="nav_data">数据</span>
+                </button>
             </div>
 
             <div class="nav-footer">
@@ -151,6 +155,10 @@
                             <li class="health-item"><span class="dot status-medium"></span><span>FBref / Understat</span></li>
                         </ul>
                     </article>
+                </div>
+
+                <div id="confidence-gate-section" style="margin-bottom:var(--space)">
+                    <article class="liquid-panel compact-panel"></article>
                 </div>
 
                 <div class="grid-3">
@@ -296,6 +304,9 @@
                         </div>
                         <div id="score-chart" class="chart-box"></div>
                         <div id="match-calibration" style="padding:0.5rem 0.8rem"></div>
+                        <div style="padding:0.5rem 0.8rem">
+                            <button class="text-button" id="btn-prematch-plan" type="button" style="font-size:0.82rem;padding:0.4rem 0.8rem">\u25C6 Create pre-match plan</button>
+                        </div>
                     </article>
                 </div>
             </section>
@@ -518,6 +529,10 @@
                             <button class="text-button" id="tactical-save-frame" type="button">保存当前帧</button>
                         </div>
                         <div id="tactical-frame-list" class="rank-list" style="margin-bottom:0.5rem"></div>
+                        <div class="panel-head" style="margin-top:0.5rem">
+                            <h3>Coaching Notes</h3>
+                        </div>
+                        <textarea id="tactical-coaching-notes" class="glass-control" style="width:100%;height:120px;resize:vertical;font-size:0.82rem;margin-bottom:0.5rem" placeholder="Select a formation or set-piece to load coaching points..."></textarea>
                         <div class="filter-row">
                             <button class="text-button" id="tactical-prev-frame" type="button">◀ 上一帧</button>
                             <button class="text-button" id="tactical-play" type="button">▶ 播放</button>
@@ -608,6 +623,9 @@
                     <select id="wc-squad-team" class="glass-control"></select>
                 </div>
                 <div class="wc-summary-row" id="wc-squad-summary"></div>
+                <div style="margin-bottom:0.5rem">
+                    <button class="text-button" id="btn-wc-team-template" type="button" style="font-size:0.82rem;padding:0.35rem 0.7rem">\u25C6 Create team template</button>
+                </div>
                 <div class="layout-2">
                     <article class="liquid-panel table-panel">
                         <div class="panel-head">
@@ -779,6 +797,71 @@
                         <p><span id="license-repo-url">https://github.com/nousresearch/scoutfootball</span></p>
                         <p style="margin-top:0.4rem" id="license-last-updated"></p>
                     </div>
+                </article>
+            </section>
+
+            <!-- Data Status -->
+            <section class="view" id="view-data" aria-label="data">
+                <div class="wc-header">
+                    <article class="liquid-panel hero-panel compact">
+                        <div class="hero-copy">
+                            <p class="eyebrow" data-i18n="data_kicker">数据状态</p>
+                            <h2 data-i18n="data_title">数据源与覆盖</h2>
+                        </div>
+                        <div class="coverage-strip">
+                            <div>
+                                <span class="metric-value" id="data-total-rows">–</span>
+                                <span data-i18n="data_th_rows">行数</span>
+                            </div>
+                            <div>
+                                <span class="metric-value" id="data-source-count">–</span>
+                                <span data-i18n="license_sources_label">数据源</span>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+                <article class="liquid-panel table-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="data_sources_table">数据源列表</h3>
+                    </div>
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-i18n="data_th_name">名称</th>
+                                    <th data-i18n="data_th_rows">行数</th>
+                                    <th data-i18n="data_th_updated">最后更新</th>
+                                    <th data-i18n="data_th_type">类型</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-sources-table"></tbody>
+                        </table>
+                    </div>
+                </article>
+                <article class="liquid-panel table-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="data_coverage_league">联赛覆盖</h3>
+                    </div>
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-i18n="wc_league">联赛</th>
+                                    <th data-i18n="th_season">赛季</th>
+                                    <th data-i18n="rated_teams">有评分球队</th>
+                                    <th data-i18n="total_teams">总球队</th>
+                                    <th data-i18n="coverage">覆盖</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-coverage-table"></tbody>
+                        </table>
+                    </div>
+                </article>
+                <article class="liquid-panel compact-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="data_missing_warnings">缺失数据警告</h3>
+                    </div>
+                    <ul class="signal-list" id="data-missing-warnings"></ul>
                 </article>
             </section>
         </main>

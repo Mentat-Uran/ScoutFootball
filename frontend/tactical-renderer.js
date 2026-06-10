@@ -2338,7 +2338,48 @@ const TacticalRenderer = {
         const idx = this.animationState.currentFrame;
         const frame = this.project.frames[idx];
         const notes = frame ? (frame.notes || "") : "";
-        this._presentationNotesEl.textContent = notes;
-        this._presentationNotesEl.style.opacity = notes ? "1" : "0";
+        // Build HTML: coaching points get styled differently from plain notes
+        if (notes) {
+            const lines = notes.split("\n").filter(l => l.trim());
+            let html = "";
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.startsWith("- ")) {
+                    // Key point item
+                    html += '<div style="text-align:left;max-width:700px;margin:0 auto;padding:1px 0;font-size:14px;color:#c0c8d8">\u25CB ' + this._escapeNotesHtml(line.slice(2)) + '</div>';
+                } else if (i === 0) {
+                    // Title line
+                    html += '<div style="font-size:18px;font-weight:700;margin-bottom:4px;color:#fff">' + this._escapeNotesHtml(line) + '</div>';
+                } else {
+                    html += '<div style="font-size:14px;color:#b0b8c8;margin:2px 0">' + this._escapeNotesHtml(line) + '</div>';
+                }
+            }
+            this._presentationNotesEl.innerHTML = html;
+            this._presentationNotesEl.style.opacity = "1";
+        } else {
+            this._presentationNotesEl.textContent = "";
+            this._presentationNotesEl.style.opacity = "0";
+        }
+    },
+
+    _escapeNotesHtml(text) {
+        return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    },
+
+    /* ── Coaching Notes per frame ────────────────────────────────────── */
+    setCurrentFrameNotes(text) {
+        if (!this.project || !this.project.frames) return;
+        const idx = this.animationState.currentFrame;
+        const frame = this.project.frames[idx];
+        if (frame) {
+            frame.notes = String(text || "");
+        }
+    },
+
+    getCurrentFrameNotes() {
+        if (!this.project || !this.project.frames) return "";
+        const idx = this.animationState.currentFrame;
+        const frame = this.project.frames[idx];
+        return frame ? (frame.notes || "") : "";
     },
 };

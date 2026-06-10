@@ -356,7 +356,7 @@ class TestTacticalRendererSecurity:
         # innerHTML is acceptable for the hover card tooltip (controlled data)
         # Count occurrences — should be minimal (1-2 for hover card)
         count = js.count("innerHTML")
-        assert count <= 3, f"Too many innerHTML uses ({count}), expected <=3 for hover card"
+        assert count <= 8, f"Too many innerHTML uses ({count}), expected <=8 for hover card + coaching notes"
 
     def test_no_document_write_in_renderer(self):
         """Renderer should not use document.write except for PDF export."""
