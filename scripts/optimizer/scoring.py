@@ -254,47 +254,63 @@ def _build_team_aggregation_weights(df_reset: pd.DataFrame) -> np.ndarray:
 # Rating computation (PyTorch)
 # ---------------------------------------------------------------------------
 
+
+def _unpack_params(
+    params: torch.Tensor,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+    """Unpack the 77-parameter vector into named tensors.
+
+    Returns:
+        pw: position weights [N_POS, N_DIM] (softmax + capped)
+        aw: attack weights [N_POS, N_ATK] (softmax)
+        avail_sw: availability sub-weights [4] (softmax)
+        qual_sw: quality sub-weights [4] (softmax)
+        scalar: dict with league_log_scale, rel_starts_scale,
+                trend_weight, exp_weight
+    """
+    idx = 0
+    pw_raw = params[idx:idx + N_POS * N_DIM].reshape(N_POS, N_DIM)
+    pw = torch.softmax(pw_raw, dim=1)
+    pw = apply_position_weight_caps(pw)
+    idx += N_POS * N_DIM
+
+    aw_raw = params[idx:idx + N_POS * N_ATK].reshape(N_POS, N_ATK)
+    aw = torch.softmax(aw_raw, dim=1)
+    idx += N_POS * N_ATK
+
+    avail_sw = torch.softmax(params[idx:idx + 4], dim=0)
+    idx += 4
+
+    qual_sw = torch.softmax(params[idx:idx + 4], dim=0)
+    idx += 4
+
+    league_log_scale = params[idx]
+    idx += 1
+    _rel_min_scale = torch.sigmoid(params[idx])
+    rel_starts_scale = torch.sigmoid(params[idx + 1])
+    idx += 2
+    trend_weight = torch.sigmoid(params[idx]) * 10
+    idx += 1
+    exp_weight = torch.sigmoid(params[idx]) * 5
+
+    scalar = {
+        "league_log_scale": league_log_scale,
+        "rel_starts_scale": rel_starts_scale,
+        "trend_weight": trend_weight,
+        "exp_weight": exp_weight,
+    }
+    return pw, aw, avail_sw, qual_sw, scalar
+
+
 def compute_ratings_torch(
     feat: dict,
     params: torch.Tensor,
     device: torch.device,
 ) -> torch.Tensor:
     """向量化评分，无循环。"""
-    # Unpack parameters
-    idx = 0
-    # Position weights: 8×5
-    pw_raw = params[idx:idx + N_POS * N_DIM].reshape(N_POS, N_DIM)
-    pw = torch.softmax(pw_raw, dim=1)  # [8, 5]
-    # 77 个参数仍然参与训练，但位置维度不能完全自由漂移。只用球队积分做监督时，
-    # 优化器很容易把 CM/GK 的出勤或 quality 当成通用捷径；这里只封顶明显
-    # 不符合角色职责的维度，超出部分回流到该位置仍可使用的其他维度。
-    pw = apply_position_weight_caps(pw)
-    idx += N_POS * N_DIM
-
-    # Attack weights: 8×3
-    aw_raw = params[idx:idx + N_POS * N_ATK].reshape(N_POS, N_ATK)
-    aw = torch.softmax(aw_raw, dim=1)  # [8, 3]
-    idx += N_POS * N_ATK
-
-    # Availability sub-weights: 4
-    avail_sw = torch.softmax(params[idx:idx + 4], dim=0)
-    idx += 4
-
-    # Quality sub-weights: 4
-    qual_sw = torch.softmax(params[idx:idx + 4], dim=0)
-    idx += 4
-
-    # Scalar params
-    league_log_scale = params[idx]  # raw, retained as the league-curve shape control
-    idx += 1
-    _rel_min_scale = torch.sigmoid(params[idx])  # retained for 77-param compatibility
-    rel_starts_scale = torch.sigmoid(params[idx + 1])  # [0, 1] -> maps to [0.3, 0.7]
-    idx += 2
-    # Trend weight: how much to boost players who are improving
-    trend_weight = torch.sigmoid(params[idx]) * 10  # [0, 10] points bonus
-    idx += 1
-    # Experience weight: how much to boost multi-season players
-    exp_weight = torch.sigmoid(params[idx]) * 5  # [0, 5] points bonus
+    # Unpack parameters into named tensors
+    pw, aw, avail_sw, qual_sw, scalar = _unpack_params(params, device)
 
     # Gather position weights for each player
     pos_idx = feat["pos_idx"].to(device)
@@ -388,7 +404,7 @@ def compute_ratings_torch(
 
     # 首发率惩罚 (保持原有逻辑)
     sr = starts_t / torch.clamp(matches_t, min=1)
-    rel_starts_ref = 0.3 + rel_starts_scale * 0.4
+    rel_starts_ref = 0.3 + scalar["rel_starts_scale"] * 0.4
     start_rel = 0.85 + 0.15 * torch.clamp(sr / rel_starts_ref, max=1.0)
 
     # ── 高首发率伤病保护 ──
@@ -428,7 +444,7 @@ def compute_ratings_torch(
     coeff_values = [league_name_to_coeff.get(league, 80.0) for league in league_names_sorted]
     league_coeffs = torch.tensor(coeff_values, dtype=torch.float32, device=device)
     league_ratio = league_coeffs / torch.max(league_coeffs)
-    league_curve_exponent = 0.28 + 0.14 * torch.sigmoid(league_log_scale)
+    league_curve_exponent = 0.28 + 0.14 * torch.sigmoid(scalar["league_log_scale"])
     league_strength = torch.pow(league_ratio, league_curve_exponent)
 
     league_idx = feat["league_idx"].to(device)
@@ -436,11 +452,11 @@ def compute_ratings_torch(
 
     # ── Trend bonus ──
     trend_pct = feat["trend_pct"].to(device)
-    trend_bonus = (trend_pct - 50) / 50 * trend_weight  # centered at 0, range [-tw, +tw]
+    trend_bonus = (trend_pct - 50) / 50 * scalar["trend_weight"]  # centered at 0, range [-tw, +tw]
 
     # ── Experience bonus ──
     experience = feat["experience"].to(device)
-    exp_bonus = (experience - 0.5) / 0.5 * exp_weight  # centered at 0, range [0, ew]
+    exp_bonus = (experience - 0.5) / 0.5 * scalar["exp_weight"]  # centered at 0, range [0, ew]
 
     # ── Final score ──
     overall = base * reliability * player_league_coeff + trend_bonus + exp_bonus
