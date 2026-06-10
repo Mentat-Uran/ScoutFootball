@@ -66,6 +66,144 @@ const TACTICAL_BOARD = {
         },
     },
 
+    /* ── Set-piece presets ────────────────────────────────────────── */
+    SET_PIECE_PRESETS: {
+        "corner-left": {
+            label: "Corner (Left)",
+            taker: { x: 0, y: 0 },
+            attackers: [
+                { x: 88, y: 35 }, { x: 90, y: 50 }, { x: 88, y: 65 },
+                { x: 82, y: 40 }, { x: 82, y: 60 },
+            ],
+            defenders: [
+                { x: 92, y: 38 }, { x: 92, y: 50 }, { x: 92, y: 62 },
+                { x: 85, y: 45 }, { x: 85, y: 55 },
+            ],
+        },
+        "corner-right": {
+            label: "Corner (Right)",
+            taker: { x: 0, y: 100 },
+            attackers: [
+                { x: 88, y: 35 }, { x: 90, y: 50 }, { x: 88, y: 65 },
+                { x: 82, y: 40 }, { x: 82, y: 60 },
+            ],
+            defenders: [
+                { x: 92, y: 38 }, { x: 92, y: 50 }, { x: 92, y: 62 },
+                { x: 85, y: 45 }, { x: 85, y: 55 },
+            ],
+        },
+        "freekick-central": {
+            label: "Free Kick (Central)",
+            taker: { x: 72, y: 50 },
+            attackers: [
+                { x: 85, y: 42 }, { x: 85, y: 50 }, { x: 85, y: 58 },
+            ],
+            defenders: [
+                { x: 78, y: 38 }, { x: 78, y: 44 }, { x: 78, y: 50 },
+                { x: 78, y: 56 }, { x: 78, y: 62 },
+            ],
+            wall: [
+                { x: 76, y: 44 }, { x: 76, y: 50 }, { x: 76, y: 56 },
+            ],
+        },
+        "freekick-wide-left": {
+            label: "Free Kick (Wide Left)",
+            taker: { x: 70, y: 10 },
+            attackers: [
+                { x: 88, y: 40 }, { x: 90, y: 50 }, { x: 88, y: 60 },
+                { x: 82, y: 45 }, { x: 82, y: 55 },
+            ],
+            defenders: [
+                { x: 92, y: 40 }, { x: 92, y: 50 }, { x: 92, y: 60 },
+                { x: 86, y: 45 }, { x: 86, y: 55 },
+            ],
+        },
+        "freekick-wide-right": {
+            label: "Free Kick (Wide Right)",
+            taker: { x: 70, y: 90 },
+            attackers: [
+                { x: 88, y: 40 }, { x: 90, y: 50 }, { x: 88, y: 60 },
+                { x: 82, y: 45 }, { x: 82, y: 55 },
+            ],
+            defenders: [
+                { x: 92, y: 40 }, { x: 92, y: 50 }, { x: 92, y: 60 },
+                { x: 86, y: 45 }, { x: 86, y: 55 },
+            ],
+        },
+        "penalty": {
+            label: "Penalty",
+            taker: { x: 78, y: 50 },
+            attackers: [
+                { x: 72, y: 35 }, { x: 72, y: 50 }, { x: 72, y: 65 },
+            ],
+            defenders: [
+                { x: 95, y: 42 }, { x: 95, y: 50 }, { x: 95, y: 58 },
+                { x: 88, y: 45 }, { x: 88, y: 55 },
+            ],
+        },
+        "throwin-left": {
+            label: "Throw-in (Left)",
+            taker: { x: 50, y: 0 },
+            attackers: [
+                { x: 55, y: 20 }, { x: 60, y: 35 }, { x: 50, y: 45 },
+                { x: 65, y: 50 },
+            ],
+            defenders: [
+                { x: 55, y: 25 }, { x: 58, y: 40 }, { x: 52, y: 50 },
+            ],
+        },
+        "throwin-right": {
+            label: "Throw-in (Right)",
+            taker: { x: 50, y: 100 },
+            attackers: [
+                { x: 55, y: 80 }, { x: 60, y: 65 }, { x: 50, y: 55 },
+                { x: 65, y: 50 },
+            ],
+            defenders: [
+                { x: 55, y: 75 }, { x: 58, y: 60 }, { x: 52, y: 50 },
+            ],
+        },
+    },
+
+    generateSetPiece(type, team = "home") {
+        const preset = this.SET_PIECE_PRESETS[type];
+        if (!preset) return [];
+
+        const objects = [];
+        const mirror = team === "away";
+        const mx = (x) => mirror ? 100 - x : x;
+        const my = (y) => mirror ? 100 - y : y;
+
+        // Taker
+        if (preset.taker) {
+            objects.push(this.createPlayer(mx(preset.taker.x), my(preset.taker.y), team, "FB", 1));
+        }
+
+        // Attackers
+        let num = 2;
+        for (const pos of (preset.attackers || [])) {
+            objects.push(this.createPlayer(mx(pos.x), my(pos.y), team, "ST", num++));
+        }
+
+        // Wall (if exists, rendered as dashed zone)
+        if (preset.wall && preset.wall.length > 0) {
+            const xs = preset.wall.map((p) => p.x);
+            const ys = preset.wall.map((p) => p.y);
+            const zx = mirror ? 100 - Math.max(...xs) : Math.min(...xs);
+            const zy = Math.min(...ys);
+            const zw = Math.abs(xs[xs.length - 1] - xs[0]) || 3;
+            const zh = Math.abs(ys[ys.length - 1] - ys[0]) || 10;
+            objects.push(this.createZone(zx, zy, zw, zh, "Wall"));
+        }
+
+        // Ball at taker position or near set piece
+        const ballX = preset.taker ? mx(preset.taker.x) : 78;
+        const ballY = preset.taker ? my(preset.taker.y) : 50;
+        objects.push(this.createBall(ballX, ballY));
+
+        return objects;
+    },
+
     /* ── Default project template ──────────────────────────────────── */
     createProject(title = "Untitled") {
         const now = new Date().toISOString();

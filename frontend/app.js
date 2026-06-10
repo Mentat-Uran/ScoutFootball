@@ -434,10 +434,15 @@ const appState = {
     selectedPlayerKey: "",
     position: "ALL",
     season: "ALL",
+    league: "ALL",
     valueMode: "under",
     home: "Arsenal",
     away: "Barcelona",
     charts: {},
+    playerPage: 1,
+    playerPageSize: 50,
+    playerSortCol: "rating",
+    playerSortAsc: false,
 };
 
 function t(key) {
@@ -503,24 +508,39 @@ function filteredPlayers() {
     return players.filter((player) => {
         const matchesPosition = appState.position === "ALL" || player.position === appState.position;
         const matchesSeason = appState.season === "ALL" || player.season === appState.season;
+        const matchesLeague = appState.league === "ALL" || player.league === appState.league;
         const matchesQuery = !query || [player.name, player.team, player.position].join(" ").toLowerCase().includes(query);
-        return matchesPosition && matchesSeason && matchesQuery;
+        return matchesPosition && matchesSeason && matchesLeague && matchesQuery;
     });
 }
 
 function renderPlayers() {
-    const rows = filteredPlayers().sort((a, b) => b.rating - a.rating);
+    const sorted = filteredPlayers().sort((a, b) => {
+        const col = appState.playerSortCol;
+        const dir = appState.playerSortAsc ? 1 : -1;
+        if (col === "rating") return dir * (a.rating - b.rating);
+        const va = String(a[col] || "").toLowerCase();
+        const vb = String(b[col] || "").toLowerCase();
+        return dir * va.localeCompare(vb);
+    });
+    const total = sorted.length;
+    const pageSize = appState.playerPageSize;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    appState.playerPage = Math.min(appState.playerPage, totalPages);
+    const start = (appState.playerPage - 1) * pageSize;
+    const rows = sorted.slice(start, start + pageSize);
     const tbody = document.getElementById("player-table");
     if (players.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">Loading...</td></tr>';
         return;
     }
-    tbody.innerHTML = rows.map((player, index) => {
+    tbody.innerHTML = rows.map((player, i) => {
+        const index = start + i;
         const lowAppBadge = player.low_appearance
             ? `<span class="status-pill low-appearance" title="${appState.lang === 'zh' ? '出场不足20场，评分已扣减' : 'Under 20 matches, score penalized'}">${appState.lang === 'zh' ? '低出场' : 'LOW APP'}</span>`
             : '';
         return `
-        <tr class="${player.key === appState.selectedPlayerKey ? "selected" : ""}${player.low_appearance ? " low-appearance-row" : ""}" data-player-index="${index}" style="cursor:pointer">
+        <tr class="${player.key === appState.selectedPlayerKey ? "selected" : ""}${player.low_appearance ? " low-appearance-row" : ""}" data-player-key="${escapeAttr(player.key)}" style="cursor:pointer">
             <td>${index + 1}</td>
             <td>${escapeHtml(player.name)}${lowAppBadge}</td>
             <td>${escapeHtml(player.position)}</td>
@@ -531,12 +551,30 @@ function renderPlayers() {
         </tr>`;
     }).join("");
 
-    tbody.querySelectorAll("tr[data-player-index]").forEach((row) => {
+    tbody.querySelectorAll("tr[data-player-key]").forEach((row) => {
         row.addEventListener("click", () => {
-            appState.selectedPlayerKey = rows[Number(row.dataset.playerIndex)]?.key || "";
+            appState.selectedPlayerKey = row.dataset.playerKey;
             renderPlayers();
             renderPlayerProfile();
         });
+    });
+
+    // Pagination controls
+    const pageInfo = document.getElementById("player-page-info");
+    const pageNum = document.getElementById("player-page-num");
+    if (pageInfo) pageInfo.textContent = `${total} ${appState.lang === 'zh' ? '名球员' : 'players'}`;
+    if (pageNum) pageNum.textContent = `${appState.playerPage}/${totalPages}`;
+    const prevBtn = document.getElementById("player-prev-page");
+    const nextBtn = document.getElementById("player-next-page");
+    if (prevBtn) prevBtn.disabled = appState.playerPage <= 1;
+    if (nextBtn) nextBtn.disabled = appState.playerPage >= totalPages;
+
+    // Update sort indicators on headers
+    document.querySelectorAll("th[data-sort]").forEach((th) => {
+        const isActive = th.dataset.sort === appState.playerSortCol;
+        const arrow = isActive ? (appState.playerSortAsc ? " ▲" : " ▼") : "";
+        const baseText = th.getAttribute("data-i18n") ? t(th.getAttribute("data-i18n")) : th.textContent.replace(/[▲▼]/g, "").trim();
+        th.textContent = baseText + arrow;
     });
 
     if (!rows.some((player) => player.key === appState.selectedPlayerKey) && rows[0]) {
@@ -1301,12 +1339,41 @@ function bindEvents() {
     });
     document.getElementById("season-filter").addEventListener("change", (event) => {
         appState.season = event.target.value;
+        appState.playerPage = 1;
         renderPlayers();
+    });
+    document.getElementById("league-filter").addEventListener("change", (event) => {
+        appState.league = event.target.value;
+        appState.playerPage = 1;
+        renderPlayers();
+    });
+    // Pagination
+    document.getElementById("player-prev-page")?.addEventListener("click", () => {
+        if (appState.playerPage > 1) { appState.playerPage--; renderPlayers(); }
+    });
+    document.getElementById("player-next-page")?.addEventListener("click", () => {
+        appState.playerPage++;
+        renderPlayers();
+    });
+    // Column sorting
+    document.querySelectorAll("th[data-sort]").forEach((th) => {
+        th.addEventListener("click", () => {
+            const col = th.dataset.sort;
+            if (appState.playerSortCol === col) {
+                appState.playerSortAsc = !appState.playerSortAsc;
+            } else {
+                appState.playerSortCol = col;
+                appState.playerSortAsc = col === "name" || col === "position" || col === "team";
+            }
+            appState.playerPage = 1;
+            renderPlayers();
+        });
     });
     let searchTimer = null;
     document.getElementById("global-search").addEventListener("input", () => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
+            appState.playerPage = 1;
             if (appState.view !== "players") setView("players");
             else renderPlayers();
         }, 300);
@@ -1380,6 +1447,23 @@ function bindEvents() {
             if (typeof TacticalRenderer !== "undefined") {
                 TacticalRenderer.clearBoard();
                 tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+    const tacticalLoadSetPiece = document.getElementById("tactical-load-setpiece");
+    if (tacticalLoadSetPiece) {
+        tacticalLoadSetPiece.addEventListener("click", () => {
+            const type = document.getElementById("tactical-setpiece").value;
+            if (!type) return;
+            if (typeof TacticalRenderer !== "undefined" && typeof TACTICAL_BOARD !== "undefined") {
+                const objects = TACTICAL_BOARD.generateSetPiece(type, "home");
+                if (objects.length > 0) {
+                    TacticalRenderer.clearBoard();
+                    const project = TacticalRenderer.getProject();
+                    project.objects = objects;
+                    TacticalRenderer.render();
+                    tacticalProject = project;
+                }
             }
         });
     }
@@ -2117,6 +2201,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const seasonSelect = document.getElementById("season-filter");
     seasonSelect.innerHTML = '<option value="ALL">ALL</option>' + seasons.map((s) => `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`).join("");
     seasonSelect.value = appState.season;
+
+    // Populate league filter dropdown
+    const leagues = [...new Set(players.map((p) => p.league).filter(Boolean))].sort();
+    const leagueSelect = document.getElementById("league-filter");
+    leagueSelect.innerHTML = '<option value="ALL">ALL</option>' + leagues.map((l) => `<option value="${escapeAttr(l)}">${escapeHtml(l)}</option>`).join("");
+    leagueSelect.value = appState.league;
 
     // Update team list for match prediction
     teamList = teams;

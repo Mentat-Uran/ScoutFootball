@@ -199,6 +199,9 @@
                                 <select id="season-filter" class="glass-control">
                                     <option value="ALL">ALL</option>
                                 </select>
+                                <select id="league-filter" class="glass-control">
+                                    <option value="ALL">ALL</option>
+                                </select>
                                 <button class="text-button" id="export-players" type="button" data-i18n="export">导出</button>
                             </div>
                         </div>
@@ -207,16 +210,24 @@
                                 <thead>
                                     <tr>
                                         <th data-i18n="th_rank">排名</th>
-                                        <th data-i18n="th_player">球员</th>
-                                        <th data-i18n="th_pos">位置</th>
-                                        <th data-i18n="th_team">球队</th>
-                                        <th data-i18n="th_season">赛季</th>
-                                        <th data-i18n="th_rating">评分</th>
+                                        <th data-sort="name" style="cursor:pointer" data-i18n="th_player">球员</th>
+                                        <th data-sort="position" style="cursor:pointer" data-i18n="th_pos">位置</th>
+                                        <th data-sort="team" style="cursor:pointer" data-i18n="th_team">球队</th>
+                                        <th data-sort="season" style="cursor:pointer" data-i18n="th_season">赛季</th>
+                                        <th data-sort="rating" style="cursor:pointer" data-i18n="th_rating">评分</th>
                                         <th data-i18n="th_conf">置信度</th>
                                     </tr>
                                 </thead>
                                 <tbody id="player-table"></tbody>
                             </table>
+                        </div>
+                        <div id="player-pagination" class="pagination-row" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:8px;">
+                            <span id="player-page-info" class="rank-meta"></span>
+                            <div style="display:flex;gap:4px;">
+                                <button class="text-button" id="player-prev-page" type="button">&#9664;</button>
+                                <span id="player-page-num" class="rank-meta"></span>
+                                <button class="text-button" id="player-next-page" type="button">&#9654;</button>
+                            </div>
                         </div>
                     </article>
                 </div>
@@ -393,6 +404,20 @@
                                 <button class="text-button" id="tactical-load-home" type="button">主队阵型</button>
                                 <button class="text-button" id="tactical-load-away" type="button">客队阵型</button>
                                 <button class="text-button" id="tactical-clear" type="button">清空</button>
+                            </div>
+                            <div class="filter-row" style="margin-top:0.25rem">
+                                <select id="tactical-setpiece" class="glass-control">
+                                    <option value="">Set Piece...</option>
+                                    <option value="corner-left">Corner (Left)</option>
+                                    <option value="corner-right">Corner (Right)</option>
+                                    <option value="freekick-central">Free Kick (Central)</option>
+                                    <option value="freekick-wide-left">Free Kick (Wide Left)</option>
+                                    <option value="freekick-wide-right">Free Kick (Wide Right)</option>
+                                    <option value="penalty">Penalty</option>
+                                    <option value="throwin-left">Throw-in (Left)</option>
+                                    <option value="throwin-right">Throw-in (Right)</option>
+                                </select>
+                                <button class="text-button" id="tactical-load-setpiece" type="button">加载定位球</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
                                 <button class="text-button active" id="tactical-tool-select" type="button" title="Select / Move">⌁ 选择</button>
