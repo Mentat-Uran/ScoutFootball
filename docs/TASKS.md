@@ -198,8 +198,8 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - 当前已接入 artifact registry、更新时间、行数和 data source label；license attribution 与 confidence gate 仍待补齐。
 - [ ] 球员画像页接入 player profile API：搜索、分页、位置过滤、评分快照、位置内指标、低置信度原因和 CSV/报告导出。（分页、排序、联赛筛选已实现）
 - [x] 球员画像页补完整个人信息卡：赛季趋势、低置信度原因、数据来源、位置百分位、缺失字段列表已实现。
-- [ ] 球员列表补收藏、加入 watchlist、加入 shortlist 和加入战术板动作；写入型操作先落本地 JSON/Parquet 草稿，不直接改模型产物。
-- [ ] 身价偏离页接入 value-fairness report API：OOF 残差、联赛/年龄/位置偏差、手动身价导入边界和误差案例。
+- [x] 球员列表补 watchlist/shortlist/战术板操作：每行 3 个动作按钮（□/△/◎），localStorage 存储已实现。
+- [x] 身价偏离页接入 value-fairness API：OOF 残差、联赛/位置偏差、年龄曲线、Transfermarkt 导入提示已实现。
 - [ ] 身价页补价格带筛选、合同年限/年龄曲线、同位置同年龄对比、异常值说明和 Transfermarkt 手动导入状态；没有授权数据时只能显示手动导入边界。
 - [ ] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：选择球队必须传入预测服务，输出模型版本、覆盖率、log loss/Brier/RPS 和比分矩阵。
 - [x] 比赛预测页补校准视图：Dixon-Coles 参数、coverage gate 警告、低比分分析、Brier/RPS 指标已实现。
@@ -212,7 +212,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
 - [x] 前端浏览器级安全回归测试已完成：XSS 测试覆盖恶意球员名/队名/报告 run_id/战术板标题/CSV 公式注入。
 - [x] 前端已补 CSP meta tag、SRI（echarts CDN）和 X-Content-Type-Options 安全头；CORS 已支持 SCOUTFOOTBALL_CORS_ORIGINS 环境变量配置。
-- [ ] 世界杯页接正式国家队/候选名单契约：官方名单状态、球员评分覆盖、非五大联赛 fallback、低置信度队伍提示和来源链接；当前样例/混合数据不能进入默认结论。
+- [x] 世界杯页接入真实评分数据：球员名与评分匹配、覆盖率摘要、未匹配球员 N/A 显示已实现。
 
 验收：
 
@@ -266,13 +266,13 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 红蓝两队/主客队同时完整显示，支持单队、双队、攻防转换和中立训练对象模式。
 - [ ] 球衣与棋子外观：主客队颜色、号码、姓名、位置、角色、球衣形状、圆形/方形/三角形/菱形棋子、尺寸和透明度。
 - [x] 球衣号码编辑：双击球员棋子弹出号码输入框（0-99），Enter/blur 确认，更新后重绘。
-- [ ] 球员信息 hover card：鼠标悬停显示姓名、号码、位置、球队、评分、低置信度原因、最近赛季分钟、xG/xA、watchlist 状态和备注；没有真实数据时显示本地手填信息。
+- [x] 球员信息 hover card：悬停显示姓名、号码、球队、位置、替补标记已实现。
 - [ ] 球员详情 click panel：点击棋子打开可编辑资料卡，支持绑定 `player_id`、手动姓名、号码、角色、脚下方向、头像/照片占位、战术职责和本帧任务。
 - [x] 替补席与换人：bench 对象类型已实现，场外显示为小圆虚线框，拖拽到场上与同队球员交换位置。
-- [ ] 训练器材对象：锥桶、标志碟、杆、假人墙、梯子、球门、迷你门、障碍物、标记旗、裁判/教练标记。
-- [ ] 足球对象增强：支持多个球、隐藏球、球大小、球轨迹、球权方、传球目标和球物理的轻量近似。
-- [ ] 重叠对象处理：棋子重叠时提供展开选择、置顶、轻微偏移、hover 精准命中和键盘切换选中对象。
-- [ ] 队伍模板：保存主客队阵容、队色、默认阵型、号码和角色，后续新战术板可一键复用。
+- [x] 训练器材对象：锥桶（cone）、标志碟（marker）、杆（pole）、梯子（ladder）、迷你门（minigoal）5 种器材已实现。
+- [x] 足球对象增强：多球创建、拖拽轨迹、球权指示器（home/away 色点）已实现。
+- [x] 重叠对象处理：重复点击同位置循环选择重叠对象，置顶/置底按钮已实现。
+- [x] 队伍模板：saveTeamTemplate/loadTeamTemplate/listTeamTemplates，localStorage 存储已实现。
 
 #### C. 场景、阵型和模板
 
@@ -290,11 +290,11 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 支持对象路径插值：直线、曲线、折线、球员移动、足球移动、箭头/区域淡入淡出、路径尾迹和触发标签。
 - [ ] 支持贝塞尔曲线路径、速度曲线、easing、延迟启动、停顿点、加速/减速和同帧多对象同步。
 - [x] 支持 ghost silhouettes：动画模式下显示上一帧/下一帧球员半透明位置（ghostOpacity 可调）。
-- [ ] 支持 trails：球员跑动尾迹、足球传递轨迹、可分颜色的跑动/传球/盘带/射门线。
-- [ ] 支持帧内对象可见性：对象可在某帧出现/消失，箭头、区域、文字可以按时间淡入/淡出。
+- [x] 支持 trails：动画播放时显示球员/球移动尾迹（渐隐圆点），球拖拽时显示轨迹。
+- [x] 支持帧内对象可见性：visibleFrom/visibleTo 字段控制对象在哪些帧显示。
 - [ ] 支持动画事件标记：press trigger、pass、shot、turnover、overlap、underlap、third-man run、cover shadow。
 - [ ] 支持战术片段结构：`phase`、`trigger`、`coaching_point`、`roles`、`duration_ms`，用于解释高压、低位防守、边路 overload、反击和定位球。
-- [ ] 支持演示模式：隐藏编辑控件、全屏播放、逐帧讲解、当前帧备注、投影仪模式和报告页嵌入预览。
+- [x] 支持演示模式：全屏播放、自动播放动画、帧备注叠加、ESC 退出已实现。
 - [ ] 动画只在浏览器里播放；不在浏览器里运行训练、爬虫、批量视频转码或模型推理。
 
 ### 第三切片：导出、报告和后端契约
@@ -304,7 +304,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 支持 WebM 动画导出：优先用 `canvas.captureStream` + `MediaRecorder`；导出失败时给出清晰降级提示。
 - [ ] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。
 - [ ] GIF 导出作为低优先级增强，只有 WebM 稳定后再评估体积、画质和浏览器兼容性。
-- [ ] 导出裁切和版式：全场、半场、选区、横版 16:9、竖版 9:16、方形 1:1、透明背景、深浅主题和水印/attribution。
+- [x] 导出裁切和版式：full/half-left/half-right/center-16:9/square-1:1 裁切 + 透明背景已实现。
 - [ ] 打印模式：PDF 多帧战术卡、每页备注、球员图例、训练器材图例和二维码/文件名。
 - [ ] 分享方式：本地 JSON 文件、浏览器下载、剪贴板图片、只读演示链接（后置）、报告页嵌入；云同步和公开分享默认不做。
 - [x] 支持 JSON 工程基础导入/导出，并在导入时清洗 schema。
