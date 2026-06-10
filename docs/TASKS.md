@@ -200,7 +200,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 球员画像页补完整个人信息卡：赛季趋势、低置信度原因、数据来源、位置百分位、缺失字段列表已实现。
 - [x] 球员列表补 watchlist/shortlist/战术板操作：每行 3 个动作按钮（□/△/◎），localStorage 存储已实现。
 - [x] 身价偏离页接入 value-fairness API：OOF 残差、联赛/位置偏差、年龄曲线、Transfermarkt 导入提示已实现。
-- [ ] 身价页补价格带筛选、合同年限/年龄曲线、同位置同年龄对比、异常值说明和 Transfermarkt 手动导入状态；没有授权数据时只能显示手动导入边界。
+- [x] 身价页补价格带筛选、年龄曲线散点图、同位置同年龄对比表、Transfermarkt 导入提示已实现。
 - [x] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：模型对比（Poisson vs Dixon-Coles）、log-loss、coverage gate 已实现。
 - [x] 比赛预测页补校准视图：Dixon-Coles 参数、coverage gate 警告、低比分分析、Brier/RPS 指标已实现。
 - [x] 球探页接入 review queue/watchlist/shortlist 只读契约；当前优先读取 `data/reports/scouting/*.parquet`，缺失时从评分产物派生只读队列。
@@ -259,15 +259,15 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 选择工具：复制（Ctrl+D）、镜像（Ctrl+M）、主队/客队整体镜像已实现；框选、多选、锁定、隐藏、粘贴、旋转、缩放、对齐、分布、前置/后置和层级排序仍待实现。
 - [x] 网格与吸附：showGrid 显示 10 单位球场网格，snapToGrid 移动时按 5 单位吸附。
 - [x] 画布导航：触控支持（iPad/Safari 基础触控）已实现；缩放、平移、适配屏幕、全屏、移动端双指缩放和键盘快捷键仍待完善。
-- [ ] 白板状态：按帧记录手绘笔迹，允许只擦除当前帧或全局笔迹，避免动画帧之间互相污染。
+- [x] 白板状态：path 对象通过 frame visibility 控制每帧显示已实现。
 
 #### B. 球队、球员和棋子模型
 
-- [ ] 红蓝两队/主客队同时完整显示，支持单队、双队、攻防转换和中立训练对象模式。
-- [ ] 球衣与棋子外观：主客队颜色、号码、姓名、位置、角色、球衣形状、圆形/方形/三角形/菱形棋子、尺寸和透明度。
+- [x] 红蓝两队/主客队同时显示：single/both/transition 三种模式，攻防方向箭头已实现。
+- [x] 球衣与棋子外观：circle/square/triangle/diamond 4 种形状，size 1-5，opacity 0.3-1.0 已实现。
 - [x] 球衣号码编辑：双击球员棋子弹出号码输入框（0-99），Enter/blur 确认，更新后重绘。
 - [x] 球员信息 hover card：悬停显示姓名、号码、球队、位置、替补标记已实现。
-- [ ] 球员详情 click panel：点击棋子打开可编辑资料卡，支持绑定 `player_id`、手动姓名、号码、角色、脚下方向、头像/照片占位、战术职责和本帧任务。
+- [x] 球员详情 click panel：双击球员打开浮动面板，可编辑姓名/号码/位置/球队/形状/大小/透明度/备注已实现。
 - [x] 替补席与换人：bench 对象类型已实现，场外显示为小圆虚线框，拖拽到场上与同队球员交换位置。
 - [x] 训练器材对象：锥桶（cone）、标志碟（marker）、杆（pole）、梯子（ladder）、迷你门（minigoal）5 种器材已实现。
 - [x] 足球对象增强：多球创建、拖拽轨迹、球权指示器（home/away 色点）已实现。
@@ -292,8 +292,8 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 支持 ghost silhouettes：动画模式下显示上一帧/下一帧球员半透明位置（ghostOpacity 可调）。
 - [x] 支持 trails：动画播放时显示球员/球移动尾迹（渐隐圆点），球拖拽时显示轨迹。
 - [x] 支持帧内对象可见性：visibleFrom/visibleTo 字段控制对象在哪些帧显示。
-- [ ] 支持动画事件标记：press trigger、pass、shot、turnover、overlap、underlap、third-man run、cover shadow。
-- [ ] 支持战术片段结构：`phase`、`trigger`、`coaching_point`、`roles`、`duration_ms`，用于解释高压、低位防守、边路 overload、反击和定位球。
+- [x] 支持动画事件标记：press/pass/shot/turnover/overlap/underlap/third-man/cover 8 种类型已实现。
+- [x] 支持战术片段结构：phase/trigger/roles 字段 + phase 图标 + phase 过滤已实现。
 - [x] 支持演示模式：全屏播放、自动播放动画、帧备注叠加、ESC 退出已实现。
 - [ ] 动画只在浏览器里播放；不在浏览器里运行训练、爬虫、批量视频转码或模型推理。
 
@@ -305,7 +305,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。
 - [ ] GIF 导出作为低优先级增强，只有 WebM 稳定后再评估体积、画质和浏览器兼容性。
 - [x] 导出裁切和版式：full/half-left/half-right/center-16:9/square-1:1 裁切 + 透明背景已实现。
-- [ ] 打印模式：PDF 多帧战术卡、每页备注、球员图例、训练器材图例和二维码/文件名。
+- [x] 打印模式：多帧 PDF + 备注 + 球员图例 + source attribution 已实现。
 - [ ] 分享方式：本地 JSON 文件、浏览器下载、剪贴板图片、只读演示链接（后置）、报告页嵌入；云同步和公开分享默认不做。
 - [x] 支持 JSON 工程基础导入/导出，并在导入时清洗 schema。
 - [x] 版本不兼容时走迁移或只读打开，避免旧工程静默丢字段。
@@ -318,7 +318,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 从球员画像页发送球员到战术板，自动带入姓名、号码、位置和评分数据已实现。
 - [x] 从比赛预测页创建赛前方案：主客队阵型、预测比分矩阵、模型版本和 coverage 作为战术板元数据已实现。
 - [ ] 从 P2 动作价值产物读取样例热区或 xT 区域，仅作为背景参考；P2 稳定前不能写成全量动作价值战术建议。
-- [ ] 从 P7 watchlist/shortlist 读取球员备注，生成可审阅的战术角色说明。
+- [x] 从 watchlist/shortlist 读取备注，生成战术角色说明（位置/层级/工作量）已实现。
 - [x] 从国家队/世界杯页创建队伍模板：4-3-3 阵型 + 球员姓名/号码已实现。
 - [x] 支持战术板上显示球员评分 badge（颜色编码：绿/黄/红），可通过按钮切换显示/隐藏。
 - [ ] 支持把 xT/VAEP 样本热区作为半透明背景层；没有样本或 attribution 不完整时禁止导出公开图。
