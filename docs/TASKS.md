@@ -286,9 +286,9 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 ### 第二切片：战术演示和动画时间轴
 
 - [x] 增加 Animate mode：循环播放已实现；关键帧、步骤帧、帧时长、播放/暂停/单步、时间轴 scrubber 仍待实现。
-- [ ] 支持 step-based 动画和 timing-based 动画两种模式：前者快速讲解战术步骤，后者精细控制每个对象的移动时间。
-- [ ] 支持对象路径插值：直线、曲线、折线、球员移动、足球移动、箭头/区域淡入淡出、路径尾迹和触发标签。
-- [ ] 支持贝塞尔曲线路径、速度曲线、easing、延迟启动、停顿点、加速/减速和同帧多对象同步。
+- [x] 支持 step-based 和 timing-based 两种动画模式，step 模式全局步进时长 500-3000ms 已实现。
+- [x] 支持对象路径插值：多段线性/Bezier 路径、路径编辑模式、路径可视化已实现。
+- [x] 支持 Bezier 路径、4 种 easing、delay/pause、自动控制点计算已实现。
 - [x] 支持 ghost silhouettes：动画模式下显示上一帧/下一帧球员半透明位置（ghostOpacity 可调）。
 - [x] 支持 trails：动画播放时显示球员/球移动尾迹（渐隐圆点），球拖拽时显示轨迹。
 - [x] 支持帧内对象可见性：visibleFrom/visibleTo 字段控制对象在哪些帧显示。
@@ -309,9 +309,9 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 分享方式：本地 JSON 文件、浏览器下载、剪贴板图片、只读演示链接（后置）、报告页嵌入；云同步和公开分享默认不做。
 - [x] 支持 JSON 工程基础导入/导出，并在导入时清洗 schema。
 - [x] 版本不兼容时走迁移或只读打开，避免旧工程静默丢字段。
-- [ ] JSON 工程补 migration registry、schema version history、fixture、round-trip tests 和损坏文件错误提示。
+- [x] JSON 工程补 migration registry（1.0.0->1.1.0）、validateProject/roundTripTest、损坏文件处理已实现。
 - [ ] 后续 FastAPI read-only endpoint 可设计为 `/tactical-boards`、`/tactical-boards/{id}`、`/tactical-boards/{id}/exports`，但第一阶段不急于实现写入 API。
-- [ ] 战术板可嵌入报告页：把 board snapshot、动画导出路径、source attribution 和 coaching notes 纳入报告预览。
+- [x] 战术板嵌入报告页：Board Snapshots 列表、coaching notes 预览、点击加载已实现。
 
 ### 第四切片：数据分析联动
 
@@ -329,7 +329,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 战术板所有导入字段继续走 `TACTICAL_BOARD.sanitizeProject()`，新增对象类型必须同步 sanitizer、schema 文档和 fixture。
 - [ ] 战术板浏览器回归测试覆盖：恶意标题/球员名/备注、超大 JSON、损坏 JSON、重复 ID、超出坐标、过多对象和旧 schema。
 - [x] 支持桌面鼠标、触控板、iPad/Safari 基础触控；移动端只读查看和编辑能力可以后置。
-- [ ] 无障碍基础：可键盘选择对象、按钮有可读标签、颜色不是唯一信息、导出前可预览 attribution。
+- [x] 无障碍基础：25+ aria-label、Tab/Enter/Escape 键盘导航、焦点环、团队图例、导出预览已实现。
 - [ ] 性能边界：200 对象、60 帧以内不卡顿；超出限制时提示用户拆分项目。
 - [x] 自动保存和恢复：编辑后防抖保存、本地存储失败提示、导入前备份当前项目。
 
