@@ -11,7 +11,12 @@ from .availability_diagnostic import (
     identify_availability_driven_players,
     save_availability_diagnostic,
 )
-from .backtests import PoissonBacktestResult, run_poisson_backtest
+from .backtests import (
+    DixonColesBacktestResult,
+    PoissonBacktestResult,
+    run_dixon_coles_backtest,
+    run_poisson_backtest,
+)
 from .calibration import CalibrationResult, brier_score, calibrate_probabilities_isotonic
 from .confidence import (
     COARSE_POSITION_GROUPS,
@@ -71,6 +76,7 @@ __all__ = [
     "ConfidenceAssessment",
     "ConfidenceLevel",
     "CoverageAssessment",
+    "DixonColesBacktestResult",
     "LabelConfidence",
     "LabelSource",
     "MIN_MINUTES_THRESHOLD",
@@ -107,6 +113,7 @@ __all__ = [
     "generate_availability_diagnostic",
     "generate_explanation",
     "identify_availability_driven_players",
+    "run_dixon_coles_backtest",
     "run_poisson_backtest",
     "run_pre_training_validation",
     "save_availability_diagnostic",

@@ -231,7 +231,9 @@ class TestAPI:
         from scoutfootball.api import get_prediction_summary
 
         result = get_prediction_summary()
-        assert "status" in result
+        assert "poisson" in result
+        assert "dixon_coles" in result
+        assert "available_models" in result
 
     def test_get_model_runs(self):
         from scoutfootball.api import get_model_runs

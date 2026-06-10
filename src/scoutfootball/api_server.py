@@ -10,6 +10,7 @@ from scoutfootball.api import (
     get_action_value_summary,
     get_artifacts_summary,
     get_match_prediction,
+    get_match_prediction_dc,
     get_model_runs,
     get_player_profile,
     get_player_ratings,
@@ -65,11 +66,15 @@ def create_app() -> FastAPI:
         return {"teams": list_teams()}
 
     @app.get("/prediction/{home_team}/{away_team}")
-    def prediction(home_team: str, away_team: str):
+    def prediction(home_team: str, away_team: str, model: str = "poisson"):
+        if model == "dixon_coles":
+            return get_match_prediction_dc(home_team, away_team)
         return get_match_prediction(home_team, away_team)
 
     @app.get("/predictions/{home_team}/{away_team}")
-    def predictions(home_team: str, away_team: str):
+    def predictions(home_team: str, away_team: str, model: str = "poisson"):
+        if model == "dixon_coles":
+            return get_match_prediction_dc(home_team, away_team)
         return get_match_prediction(home_team, away_team)
 
     @app.get("/predictions/meta")

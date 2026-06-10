@@ -156,3 +156,30 @@ def test_predict_match_dc_unknown_team_defaults_to_zero():
     prediction = predict_match_dc(model, "unknown_team", "t1")
     assert prediction.home_lambda > 0
     assert float(prediction.score_matrix.to_numpy().sum()) > 0.99
+
+
+def test_fit_dixon_coles_with_time_decay():
+    """Time decay should produce different parameters than unweighted fit."""
+    model_plain = fit_dixon_coles(_TEAM_MATCH)
+    model_decay = fit_dixon_coles(_TEAM_MATCH, half_life_days=30)
+
+    assert model_decay.half_life_days == 30
+    assert model_plain.half_life_days is None
+    # rho values should differ (decay weights change the likelihood surface)
+    assert model_decay.rho != model_plain.rho
+
+
+def test_run_dixon_coles_backtest_produces_metrics():
+    from scoutfootball.evaluation import (
+        DixonColesBacktestResult,
+        run_dixon_coles_backtest,
+    )
+
+    result = run_dixon_coles_backtest(
+        _TEAM_MATCH, TimeSplitConfig(n_splits=2, gap=0), max_goals=6,
+    )
+
+    assert isinstance(result, DixonColesBacktestResult)
+    assert len(result.predictions) > 0
+    assert set(result.metrics) == {"log_loss_exact", "brier_1x2", "rps_1x2"}
+    assert (result.predictions["exact_score_probability"] > 0).all()
