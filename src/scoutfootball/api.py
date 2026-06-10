@@ -900,6 +900,40 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
     return {"error": f"Run '{run_id}' not found", "available_runs": _get_run_ids()}
 
 
+def _player_list_to_csv(player_list: list[dict]) -> str:
+    """Convert a list of player dicts to CSV text."""
+    import csv
+    import io
+
+    if not player_list:
+        return ""
+    buf = io.StringIO()
+    fieldnames = list(player_list[0].keys())
+    writer = csv.DictWriter(buf, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in player_list:
+        writer.writerow(row)
+    return buf.getvalue()
+
+
+def _confidence_reason(minutes: float, matches_count: int, pool_size: int) -> str:
+    """Return a human-readable explanation for the confidence level."""
+    reasons = []
+    if minutes < 450:
+        reasons.append("very few minutes (<450)")
+    elif minutes < 900:
+        reasons.append("limited minutes (<900)")
+    if matches_count < 10:
+        reasons.append("few matches (<10)")
+    elif matches_count < 20:
+        reasons.append("below 20 matches")
+    if pool_size < 10:
+        reasons.append("small position pool (<10)")
+    if not reasons:
+        return "adequate minutes, matches, and peer pool"
+    return "; ".join(reasons)
+
+
 def _build_position_explanation(
     row: Any,
     pos_pool: Any,
@@ -1004,8 +1038,20 @@ def _build_position_explanation(
     return dims
 
 
-def get_player_profile(player_name: str, season: str | None = None) -> dict:
-    """Return detailed player profile with radar dimensions."""
+def get_player_profile(
+    player_name: str,
+    season: str | None = None,
+    position_group: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    fmt: str = "json",
+) -> dict:
+    """Return detailed player profile with radar dimensions.
+
+    Supports fuzzy name matching, pagination, position/season filters,
+    rating snapshot history, xT integration, confidence explanation,
+    and CSV export.
+    """
     import pandas as pd
 
     df = load_player_ratings()
@@ -1014,10 +1060,51 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
     if "sub_position" in df.columns and "position_group" not in df.columns:
         df["position_group"] = df["sub_position"]
 
-    mask = df["player"] == player_name
+    # Fuzzy search: exact match first, then partial case-insensitive
+    exact_mask = df["player"] == player_name
+    if exact_mask.any():
+        mask = exact_mask
+    else:
+        mask = df["player"].str.contains(player_name, case=False, na=False)
+    if position_group:
+        mask = mask & (df["position_group"] == position_group)
     if season:
         mask = mask & (df["season"] == season)
     rows = df[mask]
+    total = int(rows.shape[0])
+
+    # If multiple players matched (fuzzy), return list with pagination
+    if not exact_mask.any() and total > 1:
+        unique_names = rows["player"].unique()
+        page_names = unique_names[offset : offset + limit]
+        page_rows = rows[rows["player"].isin(page_names)]
+        player_list = []
+        for pname in page_names:
+            pr = page_rows[page_rows["player"] == pname]
+            best = pr.loc[pr["optimized_score"].idxmax()] if not pr.empty else pr.iloc[0]
+            player_list.append(_clean_json_value({
+                "player": pname,
+                "found": True,
+                "team": best.get("team", ""),
+                "league": best.get("league", ""),
+                "season": best.get("season", ""),
+                "position_group": best.get("position_group", ""),
+                "optimized_score": round(float(best.get("optimized_score", 0) or 0), 1),
+                "minutes": round(float(best.get("minutes", 0) or 0)),
+            }))
+        # CSV export
+        if fmt == "csv" and player_list:
+            return _player_list_to_csv(player_list)
+        return _clean_json_value({
+            "player": player_name,
+            "found": True,
+            "fuzzy_match": True,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "players": player_list,
+        })
+
     if rows.empty:
         return {"player": player_name, "found": False}
 
@@ -1074,7 +1161,65 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
     low_appearance = bool(row.get("low_appearance", False))
     matches_count = int(row.get("matches", 0) or 0)
 
-    return _clean_json_value({
+    # xT integration from player_value_metrics
+    xt_summary: dict[str, Any] = {"available": False}
+    try:
+        vm = load_player_value_metrics()
+        if not vm.empty and "player_name" in vm.columns:
+            player_xt = vm[vm["player_name"].str.lower() == player_name.lower()]
+            if not player_xt.empty:
+                xt_row = player_xt.iloc[0]
+                xt_per_90 = xt_row.get("xT_per_90")
+                xt_total = xt_row.get("total_xt")
+                # Compute xT percentile within position
+                xt_pct = None
+                if "xT_per_90" in vm.columns and position:
+                    pos_names = df[df["position_group"] == position]["player"].unique()
+                    pos_xt = vm[vm["player_name"].isin(pos_names)]["xT_per_90"].dropna()
+                    if not pos_xt.empty and pd.notna(xt_per_90):
+                        xt_pct = round(float((pos_xt < xt_per_90).sum() / len(pos_xt) * 100), 1)
+                # xT contribution estimate
+                xt_contribution = None
+                if pd.notna(xt_per_90) and score > 0:
+                    xt_contribution = round(float(xt_per_90 / 0.3 * 10), 1)
+                xt_summary = {
+                    "available": True,
+                    "xT_per_90": round(float(xt_per_90), 4) if pd.notna(xt_per_90) else None,
+                    "xT_total": round(float(xt_total), 4) if pd.notna(xt_total) else None,
+                    "xT_percentile": xt_pct,
+                    "xT_contribution": xt_contribution,
+                    "coverage_note": "StatsBomb Open Data sample only",
+                }
+    except Exception:
+        xt_summary = {"available": False, "reason": "xT data not available for this player"}
+
+    # Confidence reason explanation
+    pool_size = len(pos_pool)
+    conf_reason = _confidence_reason(minutes, matches_count, pool_size)
+
+    # Build position explanation with xT
+    position_explanation = _build_position_explanation(
+        row, pos_pool, attack_score, defense, possession, minutes, score,
+    )
+    if xt_summary.get("available"):
+        _cov = xt_summary.get("coverage_note") or ""
+        _xt_conf = "LOW" if "StatsBomb" in _cov else "MEDIUM"
+        position_explanation["xT"] = {
+            "xT_per_90": xt_summary.get("xT_per_90"),
+            "percentile_rank": xt_summary.get("xT_percentile"),
+            "contribution": xt_summary.get("xT_contribution"),
+            "confidence": _xt_conf,
+        }
+    else:
+        position_explanation["xT"] = {
+            "xT_per_90": None,
+            "percentile_rank": None,
+            "contribution": None,
+            "confidence": "N/A",
+            "note": "xT data not available for this player",
+        }
+
+    result = _clean_json_value({
         "player": player_name,
         "found": True,
         "team": row.get("team", ""),
@@ -1086,16 +1231,20 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
         "matches": matches_count,
         "low_appearance": low_appearance,
         "confidence_level": str(row.get("confidence_level", "LOW")).upper(),
+        "confidence_reason": conf_reason,
         "npg_p90": round(npg, 3),
         "assists_p90": round(assists, 3),
         "defense_composite": round(defense, 2) if defense == defense else None,
         "possession_composite": round(possession, 2) if possession == possession else None,
         "radar": radar,
         "seasons": seasons,
-        "position_explanation": _build_position_explanation(
-            row, pos_pool, attack_score, defense, possession, minutes, score,
-        ),
+        "position_explanation": position_explanation,
+        "xt_summary": xt_summary,
     })
+    # CSV export
+    if fmt == "csv":
+        return _player_list_to_csv([result])
+    return result
 
 
 # ── World Cup endpoints ──────────────────────────────────────────────────

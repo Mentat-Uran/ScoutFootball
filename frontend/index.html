@@ -78,6 +78,10 @@
                     <span class="nav-icon">◉</span>
                     <span data-i18n="nav_data">数据</span>
                 </button>
+                <button class="nav-action" data-view="calibration" type="button">
+                    <span class="nav-icon">⊜</span>
+                    <span data-i18n="nav_calibration">校准</span>
+                </button>
             </div>
 
             <div class="nav-footer">
@@ -962,6 +966,34 @@
                     </div>
                     <ul class="signal-list" id="data-missing-warnings"></ul>
                 </article>
+            </section>
+
+            <!-- Calibration -->
+            <section class="view" id="view-calibration" aria-label="calibration">
+                <div class="layout-2">
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <div>
+                                <p class="eyebrow" data-i18n="calibration_kicker">Model calibration</p>
+                                <h2 data-i18n="calibration_title">Predicted vs Actual</h2>
+                            </div>
+                            <span class="status-pill status-medium" id="calibration-status">loading</span>
+                        </div>
+                        <div id="calibration-plot-chart" class="chart-box"></div>
+                        <div id="calibration-metrics" style="padding:0.5rem 0.8rem"></div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="calibration_low_score">Low-score bucket analysis</h3>
+                        </div>
+                        <div id="calibration-low-score" class="rank-list"></div>
+                        <div class="panel-head" style="margin-top:1rem">
+                            <h3 data-i18n="calibration_league">Per-league calibration</h3>
+                        </div>
+                        <div id="calibration-league" class="rank-list"></div>
+                        <div id="calibration-brier" style="padding:0.4rem 0.8rem"></div>
+                    </article>
+                </div>
             </section>
         </main>
     </div>
