@@ -225,7 +225,9 @@ def _poisson_log_pmf(k, lam, eps=1e-8):
     log_k_factorial = torch.where(
         k_int < 0.5,
         torch.zeros_like(k_int),
-        k_int * torch.log(k_int.clamp(min=eps)) - k_int + 0.5 * torch.log(2.0 * 3.14159265 * k_int.clamp(min=eps)),
+        k_int * torch.log(k_int.clamp(min=eps))
+        - k_int
+        + 0.5 * torch.log(2.0 * 3.14159265 * k_int.clamp(min=eps)),
     )
     return k_int * torch.log(lam_safe) - lam_safe - log_k_factorial
 

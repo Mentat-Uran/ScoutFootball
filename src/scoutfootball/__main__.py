@@ -124,7 +124,10 @@ def _cmd_action_value(args: argparse.Namespace) -> None:
     # Build player name mapping
     player_names = {}
     if "player_id" in events_df.columns and "player_name" in events_df.columns:
-        name_map = events_df.dropna(subset=["player_id", "player_name"]).drop_duplicates("player_id")
+        name_map = (
+            events_df.dropna(subset=["player_id", "player_name"])
+            .drop_duplicates("player_id")
+        )
         for _, row in name_map.iterrows():
             pid = str(int(float(row["player_id"])))
             player_names[pid] = row["player_name"]
@@ -143,7 +146,7 @@ def _cmd_action_value(args: argparse.Namespace) -> None:
     # Save
     save_player_action_value(result, output_path)
     print(f"  Saved {len(result)} players to {output_path}")
-    print(f"  Top players by composite score:")
+    print("  Top players by composite score:")
     for _, row in result.head(5).iterrows():
         name = row.get("player_name", row.get("player_id", "?"))
         score = row.get("composite_score", 0)
@@ -314,7 +317,10 @@ def _cmd_backtest(args: argparse.Namespace) -> None:
     # Dixon-Coles
     print("\n=== Dixon-Coles Backtest ===")
     dc_result = run_dixon_coles_backtest(team_match, split_cfg)
-    dc_result.predictions.to_parquet(out_dir / "dixon_coles_backtest_predictions.parquet", index=False)
+    dc_result.predictions.to_parquet(
+        out_dir / "dixon_coles_backtest_predictions.parquet",
+        index=False,
+    )
     dc_metrics = {
         "model": "dixon_coles", "n_splits": n_splits,
         "total_predictions": len(dc_result.predictions),
@@ -369,15 +375,33 @@ def main() -> None:
     nn_p.add_argument("--output-dir", type=str, default=None)
     sub.add_parser("validate", help="Run pre-training data validation")
 
-    av_p = sub.add_parser("action-value", help="Run action value pipeline (StatsBomb -> xT -> player metrics)")
-    av_p.add_argument("--events-path", type=str, default=None, help="Path to StatsBomb events Parquet")
-    av_p.add_argument("--output-path", type=str, default=None, help="Path to output player_value_metrics Parquet")
+    av_p = sub.add_parser(
+        "action-value",
+        help="Run action value pipeline (StatsBomb -> xT -> player metrics)",
+    )
+    av_p.add_argument(
+        "--events-path", type=str, default=None,
+        help="Path to StatsBomb events Parquet",
+    )
+    av_p.add_argument(
+        "--output-path", type=str, default=None,
+        help="Path to output player_value_metrics Parquet",
+    )
 
     sub.add_parser("export-ratings", help="Export ratings to DuckDB database")
 
-    bt_p = sub.add_parser("backtest", help="Run probability calibration backtest (Poisson vs Dixon-Coles)")
-    bt_p.add_argument("--n-splits", type=int, default=3, help="Number of time-series folds (default: 3)")
-    bt_p.add_argument("--output-dir", type=str, default=None, help="Output directory for backtest results")
+    bt_p = sub.add_parser(
+        "backtest",
+        help="Run probability calibration backtest (Poisson vs Dixon-Coles)",
+    )
+    bt_p.add_argument(
+        "--n-splits", type=int, default=3,
+        help="Number of time-series folds (default: 3)",
+    )
+    bt_p.add_argument(
+        "--output-dir", type=str, default=None,
+        help="Output directory for backtest results",
+    )
 
     serve_p = sub.add_parser("serve", help="Start FastAPI server")
     serve_p.add_argument("--host", default="0.0.0.0")

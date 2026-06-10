@@ -26,7 +26,12 @@ LABEL_SOURCE_EXPERT_TIER = "expert_tier"
 LABEL_SOURCE_AWARD = "award"
 LABEL_SOURCE_TRANSFERMARKT_VALUE = "transfermarkt_value"
 LABEL_SOURCE_MANUAL_CALIBRATION = "manual_calibration"
-VALID_LABEL_SOURCES = {LABEL_SOURCE_EXPERT_TIER, LABEL_SOURCE_AWARD, LABEL_SOURCE_TRANSFERMARKT_VALUE, LABEL_SOURCE_MANUAL_CALIBRATION}
+VALID_LABEL_SOURCES = {
+    LABEL_SOURCE_EXPERT_TIER,
+    LABEL_SOURCE_AWARD,
+    LABEL_SOURCE_TRANSFERMARKT_VALUE,
+    LABEL_SOURCE_MANUAL_CALIBRATION,
+}
 
 CONFIDENCE_HIGH = "high"
 CONFIDENCE_MEDIUM = "medium"
@@ -48,15 +53,24 @@ def validate_truth_labels(df: pd.DataFrame) -> list[str]:
     if "label_source" in df.columns:
         invalid = set(df["label_source"].unique()) - VALID_LABEL_SOURCES
         if invalid:
-            errors.append(f"Invalid label_source values: {sorted(invalid)}. Valid: {sorted(VALID_LABEL_SOURCES)}")
+            errors.append(
+                f"Invalid label_source values: {sorted(invalid)}."
+                f" Valid: {sorted(VALID_LABEL_SOURCES)}"
+            )
     if "label_confidence" in df.columns:
         invalid = set(df["label_confidence"].unique()) - VALID_CONFIDENCES
         if invalid:
-            errors.append(f"Invalid label_confidence values: {sorted(invalid)}. Valid: {sorted(VALID_CONFIDENCES)}")
+            errors.append(
+                f"Invalid label_confidence values: {sorted(invalid)}."
+                f" Valid: {sorted(VALID_CONFIDENCES)}"
+            )
     if all(col in df.columns for col in ["player_id", "season", "label_source"]):
         dupes = df.duplicated(subset=["player_id", "season", "label_source"], keep=False)
         if dupes.any():
-            errors.append(f"Found {int(dupes.sum())} duplicate player_id+season+label_source records")
+            errors.append(
+                f"Found {int(dupes.sum())} duplicate"
+                " player_id+season+label_source records"
+            )
     return errors
 
 # Paths
@@ -334,7 +348,13 @@ def main():
     expert_labels = build_expert_tier_labels(ratings)
     print(f"  Expert tier labels: {len(expert_labels)} rows")
     if not expert_labels.empty:
-        print(f"  Tier distribution:\n{expert_labels['label_value'].value_counts().sort_index().to_string()}")
+        tier_dist = (
+            expert_labels["label_value"]
+            .value_counts()
+            .sort_index()
+            .to_string()
+        )
+        print(f"  Tier distribution:\n{tier_dist}")
         all_frames.append(expert_labels)
 
     # 2. Award labels
@@ -346,7 +366,6 @@ def main():
 
     # 3. Transfermarkt labels (optional)
     print("\nChecking Transfermarkt data...")
-    import numpy as np  # noqa: needed inside build_transfermarkt_labels
     tm_labels = build_transfermarkt_labels()
     if tm_labels is not None and not tm_labels.empty:
         print(f"  Transfermarkt labels: {len(tm_labels)} rows")
@@ -373,7 +392,10 @@ def main():
 
     # Deduplicate: if same player_id+season+label_source, keep the one with higher label_value
     combined = combined.sort_values("label_value", ascending=False)
-    combined = combined.drop_duplicates(subset=["player_id", "season", "label_source"], keep="first")
+    combined = combined.drop_duplicates(
+        subset=["player_id", "season", "label_source"],
+        keep="first",
+    )
 
     # Validate
     print("\nValidating truth labels...")
