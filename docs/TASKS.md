@@ -390,7 +390,7 @@ player_rating =
 - [ ] 神经网络训练目标升级为多任务结构：球员标签排序/回归为主，球队赛季积分相关性为辅助，另加跨联赛校准、年龄趋势合理性和极端样本惩罚。
 - [x] NN feature manifest：feature columns、data hash、hyperparameters、metrics、baseline 对比已实现。
 - [ ] 建立评分回归测试，防止 CM/GK/出勤捷径再次主导 Top 100。
-- [ ] 输出 `ALGORITHM.md` 的实现对齐版本。
+- [x] 输出 ALGORITHM.md v2.1：评分公式、位置权重、联赛系数、Dixon-Coles、NN 候选、数据流、已知限制已实现。
 
 验收：
 
@@ -412,8 +412,8 @@ player_rating =
 - [x] 按位置输出 metrics：GK、CB、FB、DM、CM、AM、W、ST 分别报告。
 - [ ] 若存在神经网络候选模型，必须与当前 PyTorch 权重优化器、v3 默认权重和简单 percentile baseline 同一时间切分对比。
 - [x] 对 value_fairness 增加 OOF 残差、联赛偏差、年龄段偏差分析。
-- [ ] 对比分预测增加 log loss、Brier score、RPS，低比分场景（0-0、1-0、0-1、1-1）单独报告。
-- [ ] 建立 `data/reports/model_runs/` 或等价模型运行登记：保存 dataset snapshot、输入 hash、参数、随机种子、依赖版本、指标和误差案例摘要。
+- [x] 对比分预测增加 log loss、Brier score、RPS、低比分场景单独报告已实现（/predictions/calibration 端点）。
+- [x] 建立模型运行登记：/reports/model-runs/{run_id} 端点返回完整 run 详情已实现。
 
 ### MODEL_CARD.md
 
@@ -434,11 +434,11 @@ player_rating =
 
 目标：把比分预测从可运行 baseline 升级为可比较模型族，但不抢球员评分主线资源。
 
-- [ ] 保留 `baseline_0: league average`。
-- [ ] 保留 `baseline_1: Independent Poisson`。
+- [x] 保留 baseline_0: league average 已在代码中保留。
+- [x] 保留 baseline_1: Independent Poisson 已在代码中保留。
 - [x] 新增 `baseline_2: Dixon-Coles` 核心实现：`fit_dixon_coles`、`predict_match_dc`、`DixonColesModel` 类已实现，Pipeline 集成（`run_weekly_train`、`_save_dixon_coles_artifacts`）和 data_loader 集成（`load_score_prediction_dc`）已完成。
 - [x] Dixon-Coles 时间衰减和低比分校准：pipeline 已接入 `half_life_days=180` 参数，校准报告输出低比分实际分布。
-- [ ] 建立低比分校准报告，重点看 0-0、1-0、0-1、1-1。
+- [x] 建立低比分校准报告：Brier 分解、校准图数据、联赛覆盖率已实现。
 - [ ] 增加概率校准和回测页。
 
 验收：
