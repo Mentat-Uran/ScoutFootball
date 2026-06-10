@@ -7,12 +7,21 @@ import pandas as pd
 import torch
 
 from .constants import (
+    ATTACK_SCALE,
+    INJURY_MIN_CEILING,
+    INJURY_MIN_FLOOR,
+    INJURY_START_RATE_THRESHOLD,
     N_ATK,
     N_DIM,
     N_POS,
     POSITION_SLOT_CAPS,
     POSITION_SLOT_GROUPS,
-    POS_TO_IDX,
+    POSITIONS,
+    QUALITY_SCALE,
+    RELIABILITY_MIN_CEILING,
+    RELIABILITY_MIN_FLOOR,
+    RELIABILITY_MIN_THRESHOLD,
+    STANDARD_SEASON_MATCHES,
     TEAM_AGG_CAPPED_MINUTES_BLEND,
     TEAM_AGG_CORE_MINUTES,
     TEAM_AGG_CORE_SCALE,
@@ -293,7 +302,7 @@ def compute_ratings_torch(feat, params, device):
     # ── Availability ──
     min_share = torch.clamp(minutes / league_med, max=1.0) * 100
     start_rate_score = starts_t / torch.clamp(matches_t, min=1) * 100
-    avail_pct = torch.clamp(matches_t / 38, max=1.0) * 100
+    avail_pct = torch.clamp(matches_t / STANDARD_SEASON_MATCHES, max=1.0) * 100
     role_stab = torch.full_like(minutes, 50.0)
 
     availability = (min_share * avail_sw[0] + start_rate_score * avail_sw[1]
@@ -309,21 +318,8 @@ def compute_ratings_torch(feat, params, device):
     # 这里只压缩进攻维度本身，让高产前锋仍然靠真实进攻输出拿分，但避免进球/助攻
     # 单一维度把 Top 排名挤满。AM 只做轻微压缩，供未来位置映射修正后使用。
     attack_scale = torch.ones(N_POS, device=device)
-    w_idx = POS_TO_IDX.get("W", 1)
-    am_idx = POS_TO_IDX.get("AM", 2)
-    fb_idx = POS_TO_IDX.get("FB", 5)
-    # ST 不压缩 attack：前锋本应由进攻主导，quality cap 已防止 quality 绕路霸榜
-    attack_scale[w_idx] = 0.96
-    attack_scale[am_idx] = 0.97
-    # FB 进攻输出（助攻/传中）不应等同前场：FB 的进攻是附加值，不是核心职责
-    # 0.82 压缩让高助攻 FB 仍能获得进攻加分，但不会靠进攻维度霸榜
-    attack_scale[fb_idx] = 0.82
-    cm_idx = POS_TO_IDX.get("CM", 3)
-    dm_idx = POS_TO_IDX.get("DM", 4)
-    # FBref 粗位置会把部分边锋/前腰写成 MF。位置重判已处理明显样本；
-    # 剩余 CM 的进攻输出仍应作为中场附加价值，而不是等同前场核心产量。
-    attack_scale[cm_idx] = 0.92
-    attack_scale[dm_idx] = 0.82
+    for i, pos in enumerate(POSITIONS):
+        attack_scale[i] = ATTACK_SCALE.get(pos, 1.0)
 
     attack = (
         npg_pct * player_aw[:, 0]
@@ -360,8 +356,8 @@ def compute_ratings_torch(feat, params, device):
     # 影响力。ST 的 quality 已被 cap 限制在 0.30，不需要额外下调；
     # CM/DM 下调，避免优化器把中场 quality 当作低风险的统一捷径。
     quality_scale = torch.ones(N_POS, dtype=quality.dtype, device=device)
-    quality_scale[cm_idx] = 0.88
-    quality_scale[dm_idx] = 0.94
+    for i, pos in enumerate(POSITIONS):
+        quality_scale[i] = QUALITY_SCALE.get(pos, 1.0)
     quality = quality * quality_scale[pos_idx]
 
     # ── Base score ──
@@ -373,9 +369,9 @@ def compute_ratings_torch(feat, params, device):
     # 低分钟数样本仍然不可靠，但旧曲线把 500 分钟球员压到 0.3，容易把
     # 半季主力、冬窗转会和伤愈回归球员惩罚过重。这里改成更温和的线性爬坡：
     # <400 分钟保留 0.42 底分，400-1200 分钟快速恢复，>=1200 分钟视为满可信。
-    min_threshold = 400.0
-    min_ceiling = 1200.0
-    min_floor = 0.42
+    min_threshold = RELIABILITY_MIN_THRESHOLD
+    min_ceiling = RELIABILITY_MIN_CEILING
+    min_floor = RELIABILITY_MIN_FLOOR
     min_progress = torch.clamp(
         (minutes - min_threshold) / (min_ceiling - min_threshold),
         min=0.0,
@@ -392,9 +388,9 @@ def compute_ratings_torch(feat, params, device):
     # 首发率 >= 70% 的球员，低分钟数大概率是伤病/转会导致，不是替补刷分。
     # 对这类球员，分钟惩罚的底分从 0.42 提升到 0.72，爬坡终点从 1200 降到 900。
     # 这样一个首发率 90%、500 分钟的球员 reliability ≈ 0.85 而非 0.49。
-    high_start_mask = sr >= 0.70
-    injury_min_floor = 0.72
-    injury_min_ceiling = 900.0
+    high_start_mask = sr >= INJURY_START_RATE_THRESHOLD
+    injury_min_floor = INJURY_MIN_FLOOR
+    injury_min_ceiling = INJURY_MIN_CEILING
     injury_min_progress = torch.clamp(
         (minutes - min_threshold) / (injury_min_ceiling - min_threshold),
         min=0.0,
