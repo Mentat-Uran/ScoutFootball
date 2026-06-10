@@ -353,6 +353,160 @@ def get_prediction_summary() -> dict[str, Any]:
     })
 
 
+def get_prediction_calibration() -> dict[str, Any]:
+    """Return calibration metrics for match prediction models.
+
+    Compares Poisson vs Dixon-Coles side by side.
+    Includes low-score breakdown (0-0, 1-0, 0-1, 1-1) and league coverage.
+    """
+    settings = _settings()
+    model_root = settings.data_root / "models"
+    artifact_dir = model_root / "artifacts"
+
+    # --- DC calibration detail ---
+    dc_detail_path = artifact_dir / "dc_calibration_detail.parquet"
+    dc_metrics: dict[str, Any] = {"status": "not_available"}
+    dc_low_score: list[dict[str, Any]] = []
+    dc_calibration_plot: list[dict[str, Any]] = []
+    dc_league_coverage: list[dict[str, Any]] = []
+
+    if dc_detail_path.exists():
+        import numpy as np
+        import pandas as pd
+
+        try:
+            dc_df = pd.read_parquet(dc_detail_path)
+            if not dc_df.empty:
+                # Compute metrics from detail
+                clipped = dc_df["exact_score_probability"].clip(lower=1e-12)
+                log_loss = float(-(np.log(clipped)).mean())
+
+                probs_1x2 = dc_df.loc[
+                    :,
+                    ["home_win_probability", "draw_probability", "away_win_probability"],
+                ].to_numpy()
+                actual_map = {
+                    "home_win": [1.0, 0.0, 0.0],
+                    "draw": [0.0, 1.0, 0.0],
+                    "away_win": [0.0, 0.0, 1.0],
+                }
+                actual = np.vstack(dc_df["actual_outcome"].map(actual_map))
+                brier = float(np.mean(np.sum((probs_1x2 - actual) ** 2, axis=1)))
+
+                # RPS
+                probs_rps = dc_df.loc[
+                    :,
+                    ["away_win_probability", "draw_probability", "home_win_probability"],
+                ].to_numpy()
+                actual_rps = np.vstack(
+                    dc_df["actual_outcome"].map(
+                        {
+                            "away_win": [1.0, 0.0, 0.0],
+                            "draw": [0.0, 1.0, 0.0],
+                            "home_win": [0.0, 0.0, 1.0],
+                        },
+                    ),
+                )
+                cum_probs = np.cumsum(probs_rps, axis=1)
+                cum_actual = np.cumsum(actual_rps, axis=1)
+                rps = float(np.mean(np.sum((cum_probs - cum_actual) ** 2, axis=1) / 2.0))
+
+                dc_metrics = {
+                    "status": "ok",
+                    "log_loss_exact": round(log_loss, 4),
+                    "brier_1x2": round(brier, 4),
+                    "rps_1x2": round(rps, 4),
+                    "n_matches": len(dc_df),
+                }
+
+                # Low-score breakdown
+                for bucket in ["0-0", "1-0", "0-1", "1-1"]:
+                    group = dc_df[dc_df["score_bucket"] == bucket]
+                    n = len(group)
+                    actual_pct = n / len(dc_df) * 100.0 if len(dc_df) > 0 else 0.0
+                    mean_pred = (
+                        float(group["exact_score_probability"].mean()) * 100.0
+                        if n > 0 else 0.0
+                    )
+                    dc_low_score.append({
+                        "score_bucket": bucket,
+                        "n_matches": n,
+                        "actual_pct": round(actual_pct, 2),
+                        "mean_predicted_pct": round(mean_pred, 2),
+                        "calibration_error": round(abs(actual_pct - mean_pred), 2),
+                    })
+
+                # Calibration plot data (decile bins of predicted home-win)
+                bin_edges = np.linspace(0, 1, 11)
+                hw_probs = dc_df["home_win_probability"].to_numpy()
+                hw_actual = (dc_df["actual_outcome"] == "home_win").to_numpy().astype(float)
+                bin_idx = np.clip(np.digitize(hw_probs, bin_edges) - 1, 0, 9)
+                for b in range(10):
+                    mask = bin_idx == b
+                    if mask.sum() == 0:
+                        continue
+                    dc_calibration_plot.append({
+                        "bin_center": round(float((bin_edges[b] + bin_edges[b + 1]) / 2), 2),
+                        "n_matches": int(mask.sum()),
+                        "mean_predicted": round(float(hw_probs[mask].mean()), 4),
+                        "mean_actual": round(float(hw_actual[mask].mean()), 4),
+                    })
+
+                # League coverage
+                if "league" in dc_df.columns:
+                    for league, lg in dc_df.groupby("league", sort=True):
+                        n_lg = len(lg)
+                        if n_lg == 0:
+                            continue
+                        ll_lg = float(
+                            -(np.log(
+                                lg["exact_score_probability"].clip(lower=1e-12)
+                            )).mean()
+                        )
+                        probs_lg = lg.loc[
+                            :, ["home_win_probability", "draw_probability", "away_win_probability"]
+                        ].to_numpy()
+                        actual_lg = np.vstack(lg["actual_outcome"].map(actual_map))
+                        brier_lg = float(np.mean(np.sum((probs_lg - actual_lg) ** 2, axis=1)))
+                        dc_league_coverage.append({
+                            "league": str(league),
+                            "n_matches": n_lg,
+                            "mean_log_loss": round(ll_lg, 4),
+                            "mean_brier": round(brier_lg, 4),
+                        })
+
+        except Exception:
+            dc_metrics = {"status": "error"}
+
+    # --- Poisson calibration (from existing results parquet) ---
+    poisson_metrics: dict[str, Any] = {"status": "not_available"}
+    poisson_results_path = artifact_dir / "poisson_baseline_results.parquet"
+    if poisson_results_path.exists():
+        import pandas as pd
+
+        try:
+            pf = pd.read_parquet(poisson_results_path)
+            if not pf.empty:
+                row = pf.iloc[0].to_dict()
+                poisson_metrics = {
+                    "status": "ok",
+                    "log_loss_exact": _clean_json_value(row.get("log_loss_exact")),
+                    "brier_1x2": _clean_json_value(row.get("brier_1x2")),
+                    "rps_1x2": _clean_json_value(row.get("rps_1x2")),
+                    "n_matches": _clean_json_value(row.get("n_matches")),
+                }
+        except Exception:
+            poisson_metrics = {"status": "error"}
+
+    return _clean_json_value({
+        "dixon_coles": dc_metrics,
+        "poisson": poisson_metrics,
+        "low_score_breakdown": dc_low_score,
+        "calibration_plot": dc_calibration_plot,
+        "league_coverage": dc_league_coverage,
+    })
+
+
 def get_action_value_summary(limit: int = 20) -> dict[str, Any]:
     frame = load_player_value_metrics()
     if frame.empty:
@@ -645,6 +799,105 @@ def get_model_runs() -> dict:
             runs.append(meta)
 
     return _clean_json_value({"runs": runs, "count": len(runs)})
+
+
+def _get_run_ids() -> list[str]:
+    """Return list of available run IDs."""
+    settings = _settings()
+    runs_dir = settings.data_root / "models" / "runs"
+    if runs_dir.exists():
+        return sorted([d.name for d in runs_dir.iterdir() if d.is_dir()], reverse=True)
+    return []
+
+
+def get_model_run_detail(run_id: str) -> dict[str, Any]:
+    """Return full details for a single model run.
+
+    Includes run_id, timestamp, input_hash, params, metrics,
+    train/test split, feature importance, and data source attribution.
+    """
+    settings = _settings()
+    ds_label = data_source_label()
+    runs_dir = settings.data_root / "models" / "runs"
+
+    # Check the runs directory for the specific run
+    if runs_dir.exists():
+        run_dir = runs_dir / run_id
+        meta_path = run_dir / "meta.json"
+        if meta_path.exists():
+            meta = _read_json(meta_path)
+            meta["run_id"] = run_id
+            meta["updated_at"] = meta_path.stat().st_mtime
+            meta["data_source"] = ds_label
+
+            # Build reproduce command from stored args
+            run_args = meta.get("args", {})
+            meta["reproduce_command"] = _build_reproduce_command(run_id, run_args)
+
+            # Extract holdout metrics summary
+            _enrich_holdout_summary(meta)
+
+            # Load feature importance if available
+            importance_path = run_dir / "feature_importance.parquet"
+            if importance_path.exists():
+                import pandas as pd
+                try:
+                    fi_df = pd.read_parquet(importance_path)
+                    meta["feature_importance"] = _clean_json_value(
+                        fi_df.to_dict(orient="records"),
+                    )
+                except Exception:
+                    meta["feature_importance"] = []
+
+            # Load optimized params info
+            params_path = run_dir / "optimized_params.npy"
+            if params_path.exists():
+                import numpy as np
+                try:
+                    params = np.load(params_path)
+                    meta["params_summary"] = {
+                        "shape": list(params.shape),
+                        "mean": round(float(params.mean()), 6),
+                        "std": round(float(params.std()), 6),
+                        "min": round(float(params.min()), 6),
+                        "max": round(float(params.max()), 6),
+                    }
+                except Exception:
+                    pass
+
+            # Data source attribution
+            meta["data_attribution"] = {
+                "primary_source": ds_label,
+                "license_note": (
+                    "Player ratings derived from FBref/Understat data. "
+                    "Match results from Football-Data.co.uk. "
+                    "Event data from StatsBomb Open Data."
+                ),
+            }
+
+            return _clean_json_value(meta)
+
+    # Fallback: check optimized_params_meta.json
+    meta_path = settings.data_root / "gold" / "feature_store" / "optimized_params_meta.json"
+    if meta_path.exists() and run_id in ("latest", "latest-local"):
+        meta = _read_json(meta_path)
+        meta["run_id"] = "latest"
+        meta["updated_at"] = meta_path.stat().st_mtime
+        meta["data_source"] = ds_label
+        run_args = meta.get("args", {})
+        meta["reproduce_command"] = _build_reproduce_command("latest", run_args)
+        _enrich_holdout_summary(meta)
+        meta["data_attribution"] = {
+            "primary_source": ds_label,
+            "license_note": (
+                "Player ratings derived from FBref/Understat data. "
+                "Match results from Football-Data.co.uk. "
+                "Event data from StatsBomb Open Data."
+            ),
+        }
+        return _clean_json_value(meta)
+
+    return {"error": f"Run '{run_id}' not found", "available_runs": _get_run_ids()}
 
 
 def _build_position_explanation(

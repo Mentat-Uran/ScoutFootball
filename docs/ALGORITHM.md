@@ -571,7 +571,171 @@ team_possession_context = percentile_score(team_possession or team_pass_volume)
 - Transfermarkt 不允许自动抓取，只能做本地 CSV/Parquet 手动或授权导入。
 - 不公开分发受限制的原始缓存。
 
+## 比赛预测模型
+
+### 独立泊松基线
+
+最简比赛预测模型，假设主队和客队进球独立服从泊松分布：
+
+```text
+home_lambda = league_home_rate × home_attack_strength × away_defense_strength
+away_lambda = league_away_rate × away_attack_strength × home_defense_strength
+
+P(home=i, away=j) = Poisson(i, home_lambda) × Poisson(j, away_lambda)
+```
+
+强度参数通过贝叶斯收缩估计：
+
+```text
+team_strength = (team_goals + smoothing × league_rate) / (team_matches + smoothing)
+```
+
+### Dixon-Coles 模型
+
+在独立泊松基础上，Dixon-Coles (1997) 引入 rho 参数修正低比分相关性：
+
+```text
+log(lambda_home) = log(mu) + alpha_home + beta_away + gamma
+log(lambda_away) = log(mu) + alpha_away + beta_home
+```
+
+其中 `mu` 为联赛场均进球，`alpha` 为攻击参数，`beta` 为防守参数，`gamma` 为主场优势。
+
+低比分修正函数 tau：
+
+```text
+tau(0,0) = 1 - lambda_home × lambda_away × rho
+tau(1,0) = 1 + lambda_home × rho
+tau(0,1) = 1 + lambda_away × rho
+tau(1,1) = 1 - rho
+tau(x,y) = 1  (其他比分)
+```
+
+rho 通常为负值（约 -0.13），表示低比分正相关。
+
+时间衰减权重（可选）：
+
+```text
+weight(match) = 0.5 ^ (days_since_most_recent / half_life_days)
+```
+
+通过 L-BFGS-B 最大似然估计参数，约束 rho ∈ [-1, 0]。
+
+### 校准评估
+
+比赛预测模型使用以下校准指标：
+
+| 指标 | 说明 |
+|---|---|
+| log_loss_exact | 精确比分对数损失 |
+| brier_1x2 | 胜平负 Brier 分数 |
+| rps_1x2 | 排序概率分数（Ranked Probability Score）|
+| brier_reliability | Brier 可靠性分解 - 校准误差 |
+| brier_resolution | Brier 分辨力 - 区分不同结果的能力 |
+| brier_uncertainty | Brier 不确定性 - 结果本身的不确定性 |
+
+低比分校准重点关注 Dixon-Coles tau 修正的四个桶：0-0、1-0、0-1、1-1。
+
+### Poisson vs Dixon-Coles 对比
+
+| 维度 | 独立泊松 | Dixon-Coles |
+|---|---|---|
+| 低比分精度 | 较差，低估 0-0 和 1-1 | 通过 rho 修正改善 |
+| 计算复杂度 | O(n) 闭式解 | 需要数值优化 |
+| 时间衰减 | 不支持 | 支持半衰期衰减 |
+| 参数数 | 2n + 2 | 2n + 3（含 rho）|
+| 适用场景 | 快速基线 | 正式预测 |
+
+## 神经网络候选模型
+
+球员评分优化器可选使用神经网络替代遗传算法：
+
+```text
+architecture: MLP(input_dim -> 128 -> 64 -> 32 -> 1)
+activation: ReLU + LayerNorm
+optimizer: AdamW
+loss: composite_objective (同上)
+regularization: L2 + dropout
+```
+
+NN 模型输入为 `rating_feature_matrix.parquet` 中的标准化特征向量，输出单个优化评分。
+
+训练使用时间序列分割验证，避免未来数据泄漏。NN 候选模型与遗传算法优化器并行运行，通过 holdout 指标（Spearman、Pearson、NDCG、校准 MAE）比较选择更优模型。
+
+## 真实标签集成
+
+真实标签（truth labels）通过 `player_truth_labels.parquet` 提供人工/身价/奖项级别的球员工影响力锚定：
+
+```text
+player_truth_anchor_loss =
+  0.55 × z_mse(player_rating, truth_label_value)
++ 0.45 × (1 - corr_soft_rank(player_rating, truth_label_value))
+```
+
+集成条件：
+- 需要通过 `rating_feature_matrix.parquet` 解析到 player_id → player_name/season 匹配
+- 默认阈值：`--min-truth-labels 50`
+- 当标签表为空时自动跳过
+
+目的：在有人工/身价/奖项标签后，把优化器从纯球队层代理信号拉回球员层真实影响力。
+
+## 数据流
+
+```text
+原始数据层
+  FBref 标准表 ──────────┐
+  Football-Data ─────────┤
+  StatsBomb Open Data ───┤
+  Understat (可选) ──────┤
+  Transfermarkt (手动) ──┘
+         │
+         v
+特征工程层
+  player_match.parquet     (球员比赛级特征)
+  team_match.parquet       (球队比赛级特征)
+  team_features.parquet    (球队赛季特征)
+  player_truth_labels.parquet (真实标签)
+         │
+         v
+评分优化层
+  optimize_ratings_gpu.py  (遗传算法/NN 优化)
+  rating_feature_matrix.parquet (特征矩阵)
+  optimized_params.npy     (优化参数)
+         │
+         v
+产物层
+  player_ratings_optimized.parquet (最终评分)
+  optimized_params_meta.json (元数据)
+  models/runs/<run_id>/   (模型运行注册)
+         │
+         v
+预测层
+  fit_independent_poisson() → Poisson 基线
+  fit_dixon_coles()         → Dixon-Coles 模型
+  predict_match() / predict_match_dc()
+  dc_calibration_detail.parquet (校准报告)
+         │
+         v
+服务层
+  api.py (FastAPI 服务)
+  api_server.py (路由定义)
+  frontend/ (前端展示)
+```
+
+## 已知局限
+
+1. **数据覆盖不均衡**：全量球员层只能稳定计算出勤和基础进攻；防守、控球、xT、xG 和门将评分只能在 StatsBomb 样本或后续新增数据上启用。
+2. **位置映射粗糙**：FBref 标准表只有粗位置字符串（FW/MF/DF/GK），无法稳定区分 ST/W/AM/CM/DM/FB/CB，需要事件或阵型位置补充。
+3. **门将评分不足**：当前数据只有 StatsBomb 样本中的 Goal Keeper 事件和 FBref 标准表的 GK 粗位置，不足以严肃评估门将。
+4. **缺少 xG/xA**：全量 FBref 标准表没有 xG、xA、npxG 字段，进攻和效率质量只能使用进球/助攻 fallback。
+5. **防守数据缺失**：全量 FBref 标准表没有抢断、拦截、解围等防守行为字段，防守贡献分只能降级为位置中位数 50。
+6. **控球推进数据缺失**：没有传球、带球、渐进传球等字段，控球推进分只能降级为位置中位数 50。
+7. **真实标签为空**：当前本地真值标签表为空，球员真实标签锚定损失自动跳过。
+8. **比赛预测校准**：Dixon-Coles 模型在低比分区域（0-0、1-0、0-1、1-1）需要持续监控校准误差。
+9. **联赛覆盖有限**：比赛结果数据主要覆盖欧洲五大联赛，非五大联赛球队强度可能被低估。
+10. **Transfermarkt 限制**：不允许自动抓取，只能做本地手动导入，身价数据更新频率受限。
+
 ## 版本
 
-文档版本：v2.0
-最后更新：2026-06-04
+文档版本：v2.1
+最后更新：2026-06-11

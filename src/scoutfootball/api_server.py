@@ -13,9 +13,11 @@ from scoutfootball.api import (
     get_artifacts_summary,
     get_match_prediction,
     get_match_prediction_dc,
+    get_model_run_detail,
     get_model_runs,
     get_player_profile,
     get_player_ratings,
+    get_prediction_calibration,
     get_prediction_summary,
     get_ratings_meta,
     get_review_queue,
@@ -112,6 +114,10 @@ def create_app() -> FastAPI:
     def predictions_meta():
         return get_prediction_summary()
 
+    @app.get("/predictions/calibration")
+    def predictions_calibration():
+        return get_prediction_calibration()
+
     @app.get("/value-summary")
     def value_summary():
         return get_value_summary()
@@ -179,6 +185,10 @@ def create_app() -> FastAPI:
     @app.get("/reports/model-runs")
     def report_model_runs():
         return get_model_runs()
+
+    @app.get("/reports/model-runs/{run_id}")
+    def report_model_run_detail(run_id: str):
+        return get_model_run_detail(run_id)
 
     # ── World Cup endpoints ──────────────────────────────────────────────
 
