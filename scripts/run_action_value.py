@@ -3,7 +3,8 @@
 Usage:
     python scripts/run_action_value.py
     python scripts/run_action_value.py --events-path data/raw/statsbomb_open/events_all.parquet
-    python scripts/run_action_value.py --output-path data/gold/feature_store/player_value_metrics.parquet
+    python scripts/run_action_value.py \
+        --output-path data/gold/feature_store/player_value_metrics.parquet
 
 This pipeline is idempotent: running it multiple times produces the same output
 given the same input data.
@@ -21,11 +22,11 @@ import pandas as pd
 project_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(project_root / "src"))
 
-from scoutfootball.action_value.aggregate import (
+from scoutfootball.action_value.aggregate import (  # noqa: E402
     build_player_action_value,
     save_player_action_value,
 )
-from scoutfootball.action_value.spadl_adapter import convert_all_events
+from scoutfootball.action_value.spadl_adapter import convert_all_events  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,7 +35,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 DEFAULT_EVENTS_PATH = project_root / "data" / "raw" / "statsbomb_open" / "events_all.parquet"
-DEFAULT_OUTPUT_PATH = project_root / "data" / "gold" / "feature_store" / "player_value_metrics.parquet"
+DEFAULT_OUTPUT_PATH = (
+    project_root / "data" / "gold" / "feature_store"
+    / "player_value_metrics.parquet"
+)
 
 
 def run_action_value_pipeline(
@@ -76,7 +80,11 @@ def run_action_value_pipeline(
     # Step 2b: Build player name mapping from events
     player_names = {}
     if "player_id" in events_df.columns and "player_name" in events_df.columns:
-        name_map = events_df.dropna(subset=["player_id", "player_name"]).drop_duplicates("player_id")
+        name_map = (
+            events_df
+            .dropna(subset=["player_id", "player_name"])
+            .drop_duplicates("player_id")
+        )
         for _, row in name_map.iterrows():
             pid = str(int(float(row["player_id"])))
             player_names[pid] = row["player_name"]

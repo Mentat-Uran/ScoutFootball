@@ -19,7 +19,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def normalize_team_name(name: str) -> str:
     """Normalize team name using the project's canonical alias map."""
     from scoutfootball.entities.normalize import (
-        TEAM_NAME_ALIASES,
         normalize_team_name as _normalize,
     )
 
@@ -100,7 +99,10 @@ def convert_to_team_match(raw: pd.DataFrame) -> pd.DataFrame:
 
     n_teams = team_match["team_id"].nunique()
     n_matches = team_match["match_id"].nunique()
-    print(f"  Converted to team_match: {len(team_match)} rows, {n_matches} matches, {n_teams} teams")
+    print(
+        f"  Converted to team_match: {len(team_match)} rows,"
+        f" {n_matches} matches, {n_teams} teams"
+    )
     return team_match
 
 

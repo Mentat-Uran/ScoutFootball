@@ -523,10 +523,19 @@ def _enrich_holdout_summary(meta: dict[str, Any]) -> None:
     src = holdout if holdout else metrics
 
     # Find the optimized test metrics (most relevant for reporting)
-    opt_test = src.get("optimized_test", {})
-    base_test = src.get("baseline_test", {})
-    opt_train = src.get("optimized_train", {})
-    base_train = src.get("baseline_train", {})
+    # Metrics may be stored as JSON strings in meta.json
+    def _parse(m: Any) -> dict:
+        if isinstance(m, str):
+            try:
+                return json.loads(m)
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        return m if isinstance(m, dict) else {}
+
+    opt_test = _parse(src.get("optimized_test", {}))
+    base_test = _parse(src.get("baseline_test", {}))
+    opt_train = _parse(src.get("optimized_train", {}))
+    base_train = _parse(src.get("baseline_train", {}))
 
     def _pick(m: dict) -> dict:
         return {k: v for k, v in m.items() if k in (
@@ -541,7 +550,7 @@ def _enrich_holdout_summary(meta: dict[str, Any]) -> None:
     if opt_test:
         summary["optimized_test"] = _pick(opt_test)
     elif "optimized_test" in metrics:
-        summary["optimized_test"] = _pick(metrics["optimized_test"])
+        summary["optimized_test"] = _pick(_parse(metrics["optimized_test"]))
     if base_test:
         summary["baseline_test"] = _pick(base_test)
     if opt_train:
@@ -550,7 +559,7 @@ def _enrich_holdout_summary(meta: dict[str, Any]) -> None:
         summary["baseline_train"] = _pick(base_train)
 
     # Flat top-level aliases for simple frontend display
-    best = opt_test or metrics.get("optimized_test") or metrics
+    best = opt_test or _parse(metrics.get("optimized_test", {})) or metrics
     for key in ("spearman", "pearson", "rank_loss", "calibration_mae",
                 "n_players", "n_team_seasons", "team_coverage"):
         if key in best and key not in meta:

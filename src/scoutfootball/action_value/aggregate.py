@@ -93,7 +93,8 @@ def _aggregate_action_counts(actions: list[InternalAction]) -> pd.DataFrame:
         return pd.DataFrame()
 
     # Count by action type per player
-    type_counts = df.groupby(["player_id", "team_id", "match_id", "action_type"]).size().unstack(fill_value=0)
+    group_keys = ["player_id", "team_id", "match_id", "action_type"]
+    type_counts = df.groupby(group_keys).size().unstack(fill_value=0)
     type_counts.columns = [f"n_{c}" for c in type_counts.columns]
     type_counts = type_counts.reset_index()
 
@@ -247,10 +248,10 @@ def build_player_action_value(
     # Pass completion rate
     if "n_pass" in merged.columns and "n_success" in merged.columns:
         # Approximate: count successful passes from pass actions
-        pass_success = merged.get("n_pass", 0) - merged.get("n_failure", 0).clip(upper=merged.get("n_pass", 0))
         merged["pass_completion_rate"] = np.where(
             merged["n_pass"] > 0,
-            (merged["n_pass"] - merged["n_failure"].clip(upper=merged["n_pass"])) / merged["n_pass"],
+            (merged["n_pass"] - merged["n_failure"].clip(upper=merged["n_pass"]))
+            / merged["n_pass"],
             0.0,
         )
     else:
@@ -289,7 +290,9 @@ def build_player_action_value(
     ft_records = [{"player_id": a.player_id, "match_id": a.match_id} for a in final_third_actions]
     if ft_records:
         ft_df = pd.DataFrame(ft_records)
-        ft_counts = ft_df.groupby(["player_id", "match_id"]).size().reset_index(name="final_third_touches")
+        ft_counts = (
+            ft_df.groupby(["player_id", "match_id"]).size().reset_index(name="final_third_touches")
+        )
         merged = merged.merge(ft_counts, on=["player_id", "match_id"], how="left")
         merged["final_third_touches"] = merged["final_third_touches"].fillna(0)
     else:
@@ -303,7 +306,9 @@ def build_player_action_value(
     pa_records = [{"player_id": a.player_id, "match_id": a.match_id} for a in pa_actions]
     if pa_records:
         pa_df = pd.DataFrame(pa_records)
-        pa_counts = pa_df.groupby(["player_id", "match_id"]).size().reset_index(name="penalty_area_touches")
+        pa_counts = (
+            pa_df.groupby(["player_id", "match_id"]).size().reset_index(name="penalty_area_touches")
+        )
         merged = merged.merge(pa_counts, on=["player_id", "match_id"], how="left")
         merged["penalty_area_touches"] = merged["penalty_area_touches"].fillna(0)
     else:
@@ -318,7 +323,9 @@ def build_player_action_value(
     fp_records = [{"player_id": a.player_id, "match_id": a.match_id} for a in forward_passes]
     if fp_records:
         fp_df = pd.DataFrame(fp_records)
-        fp_counts = fp_df.groupby(["player_id", "match_id"]).size().reset_index(name="forward_passes")
+        fp_counts = (
+            fp_df.groupby(["player_id", "match_id"]).size().reset_index(name="forward_passes")
+        )
         merged = merged.merge(fp_counts, on=["player_id", "match_id"], how="left")
         merged["forward_passes"] = merged["forward_passes"].fillna(0)
     else:
@@ -389,7 +396,11 @@ def build_player_action_value(
     # Aggregate across matches for player-level summary
     player_agg = _aggregate_to_player_level(result)
 
-    logger.info("Built player action value: %d player-matches, %d unique players", len(result), len(player_agg))
+    logger.info(
+        "Built player action value: %d player-matches, %d unique players",
+        len(result),
+        len(player_agg),
+    )
     return player_agg
 
 
@@ -430,13 +441,20 @@ def _aggregate_to_player_level(df: pd.DataFrame) -> pd.DataFrame:
             # Weighted average by estimated_minutes
             weights = df["estimated_minutes"].fillna(0)
             values = df[col].fillna(0)
-            total_weight = df.groupby(["player_id", "team_id"])["estimated_minutes"].transform("sum")
             df["_weighted"] = values * weights
             weighted_sum = df.groupby(["player_id", "team_id"])["_weighted"].sum().reset_index()
             total_w = df.groupby(["player_id", "team_id"])["estimated_minutes"].sum().reset_index()
             merged = weighted_sum.merge(total_w, on=["player_id", "team_id"])
-            merged[col] = np.where(merged["estimated_minutes"] > 0, merged["_weighted"] / merged["estimated_minutes"], 0.0)
-            player = player.merge(merged[["player_id", "team_id", col]], on=["player_id", "team_id"], how="left")
+            merged[col] = np.where(
+                merged["estimated_minutes"] > 0,
+                merged["_weighted"] / merged["estimated_minutes"],
+                0.0,
+            )
+            player = player.merge(
+                merged[["player_id", "team_id", col]],
+                on=["player_id", "team_id"],
+                how="left",
+            )
             df.drop(columns=["_weighted"], inplace=True, errors="ignore")
 
     # Recompute composite score at player level
@@ -480,7 +498,11 @@ def _aggregate_to_player_level(df: pd.DataFrame) -> pd.DataFrame:
         "composite_score", "source", "source_attribution", "coverage_note",
     ]
     final_cols = [c for c in output_cols if c in player.columns]
-    result = player[final_cols].sort_values("composite_score", ascending=False).reset_index(drop=True)
+    result = (
+        player[final_cols]
+        .sort_values("composite_score", ascending=False)
+        .reset_index(drop=True)
+    )
 
     return result
 

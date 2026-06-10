@@ -24,7 +24,6 @@ from .constants import (
     refine_role_positions,
 )
 
-
 # ── 数据加载 ──────────────────────────────────────────────────────────────
 
 def load_data(data_dir: Path):
@@ -1077,7 +1076,8 @@ def build_dc_tensors(feat, matches_df, device):
 
     Args:
         feat: output of build_feature_tensors (contains ts_team_names, ts_leagues, ts_seasons)
-        matches_df: DataFrame with columns [home_team, away_team, home_goals, away_goals, season, league]
+        matches_df: DataFrame with columns [home_team, away_team, home_goals,
+            away_goals, season, league]
         device: torch device
 
     Returns:
