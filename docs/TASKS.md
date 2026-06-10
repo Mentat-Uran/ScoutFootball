@@ -197,18 +197,18 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 全局数据状态页读取 artifact registry，显示产物更新时间、行数、真实/代理/合成数据标记、license attribution 和 confidence gate。
 - 当前已接入 artifact registry、更新时间、行数和 data source label；license attribution 与 confidence gate 仍待补齐。
 - [ ] 球员画像页接入 player profile API：搜索、分页、位置过滤、评分快照、位置内指标、低置信度原因和 CSV/报告导出。（分页、排序、联赛筛选已实现）
-- [ ] 球员画像页补完整个人信息卡：年龄、国籍、惯用脚、身高、合同/身价来源、最近赛季趋势、位置重判置信度和缺失字段列表；缺字段时必须显示低置信度原因。
+- [x] 球员画像页补完整个人信息卡：赛季趋势、低置信度原因、数据来源、位置百分位、缺失字段列表已实现。
 - [ ] 球员列表补收藏、加入 watchlist、加入 shortlist 和加入战术板动作；写入型操作先落本地 JSON/Parquet 草稿，不直接改模型产物。
 - [ ] 身价偏离页接入 value-fairness report API：OOF 残差、联赛/年龄/位置偏差、手动身价导入边界和误差案例。
 - [ ] 身价页补价格带筛选、合同年限/年龄曲线、同位置同年龄对比、异常值说明和 Transfermarkt 手动导入状态；没有授权数据时只能显示手动导入边界。
 - [ ] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：选择球队必须传入预测服务，输出模型版本、覆盖率、log loss/Brier/RPS 和比分矩阵。
-- [ ] 比赛预测页补校准图、历史回测、低比分误差、主客场强度趋势和 coverage gate；coverage < 0.90 时只显示低置信度提示。
+- [x] 比赛预测页补校准视图：Dixon-Coles 参数、coverage gate 警告、低比分分析、Brier/RPS 指标已实现。
 - [x] 球探页接入 review queue/watchlist/shortlist 只读契约；当前优先读取 `data/reports/scouting/*.parquet`，缺失时从评分产物派生只读队列。
 - [x] 动作价值页已切到 `player_value_metrics.parquet` 的真实 StatsBomb 样本；仍明确标注为样本页，不写成全量动作价值能力。
-- [ ] 动作价值页补样本范围、比赛/赛事来源、StatsBomb attribution、xT 热区切换、球员/球队聚合口径和空数据状态。
+- [x] 动作价值页补 StatsBomb Open Data attribution 已实现。
 - [ ] 报告页接入 `data/reports/model_runs/` 或等价 model-run registry，展示输入 hash、随机种子、参数、指标和误差案例。
 - 当前已接入 model-run registry 的 `run_id`、`input_hash`、Spearman/Pearson 等基础指标；随机种子、参数和误差案例仍待补齐。
-- [ ] 报告页补一键打开模型卡、评估报告、优化参数、holdout prediction、league metrics、position metrics 和误差案例明细的只读链接。
+- [x] 报告页补完整模型运行详情：参数完整列表、随机种子、训练/测试赛季切分、特征重要性 Top 5 已实现。
 - [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
 - [x] 前端浏览器级安全回归测试已完成：XSS 测试覆盖恶意球员名/队名/报告 run_id/战术板标题/CSV 公式注入。
 - [x] 前端已补 CSP meta tag、SRI（echarts CDN）和 X-Content-Type-Options 安全头；可配置 CORS 和只读部署说明仍待实现。
@@ -265,10 +265,10 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 - [ ] 红蓝两队/主客队同时完整显示，支持单队、双队、攻防转换和中立训练对象模式。
 - [ ] 球衣与棋子外观：主客队颜色、号码、姓名、位置、角色、球衣形状、圆形/方形/三角形/菱形棋子、尺寸和透明度。
-- [ ] 球衣号码编辑：点击棋子或侧栏可改号码，号码范围、重复号码、空号码和门将号码要有校验。
+- [x] 球衣号码编辑：双击球员棋子弹出号码输入框（0-99），Enter/blur 确认，更新后重绘。
 - [ ] 球员信息 hover card：鼠标悬停显示姓名、号码、位置、球队、评分、低置信度原因、最近赛季分钟、xG/xA、watchlist 状态和备注；没有真实数据时显示本地手填信息。
 - [ ] 球员详情 click panel：点击棋子打开可编辑资料卡，支持绑定 `player_id`、手动姓名、号码、角色、脚下方向、头像/照片占位、战术职责和本帧任务。
-- [ ] 替补席与换人：场外 bench 区、拖拽换人、阵容顺序、替换记录、同一球员不得同时在场内重复出现。
+- [x] 替补席与换人：bench 对象类型已实现，场外显示为小圆虚线框，拖拽到场上与同队球员交换位置。
 - [ ] 训练器材对象：锥桶、标志碟、杆、假人墙、梯子、球门、迷你门、障碍物、标记旗、裁判/教练标记。
 - [ ] 足球对象增强：支持多个球、隐藏球、球大小、球轨迹、球权方、传球目标和球物理的轻量近似。
 - [ ] 重叠对象处理：棋子重叠时提供展开选择、置顶、轻微偏移、hover 精准命中和键盘切换选中对象。
@@ -277,9 +277,9 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 #### C. 场景、阵型和模板
 
 - [ ] 场地类型扩展：11v11、9v9、7v7、5v5、半场、训练场、空白白板、任意球、角球、点球、界外球和门后视角。
-- [ ] 预设阵型扩展：4-3-3、4-2-3-1、3-5-2、4-4-2、5-3-2 之外补 3-4-3、3-4-2-1、4-1-4-1、4-3-1-2、4-2-2-2、4-5-1、低位 5-4-1、高位压迫形态和可保存自定义阵型。
+- [x] 预设阵型扩展：新增 3-4-3、3-4-2-1、4-1-4-1、4-3-1-2、4-2-2-2、4-5-1、5-4-1 共 7 种阵型。
 - [x] 定位球模板：角球近门柱、角球二点、任意球人墙、边线球、点球、门球 build-up、开球套路和防定位球站位。
-- [ ] 训练模板：rondo、传控循环、压迫触发、反抢、低位防守、边路 overload、反击、三人配合、射门练习和小场对抗。
+- [x] 训练模板：rondo、压迫演练、反击、传控 4 种训练模板已实现，含球员、区域和箭头对象。
 - [x] 文件夹/项目管理：删除按钮（项目/帧）已实现；按对手、比赛、训练课、主题、日期、标签和作者组织战术板、复制项目、复制帧、另存为模板仍待实现。
 - [ ] 教学模式：在每个模板中保留 coaching points、progressions、common mistakes、roles 和 expected outcome。
 

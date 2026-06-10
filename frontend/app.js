@@ -630,6 +630,44 @@ async function renderPlayerProfile() {
         <div><span>${escapeHtml(t("th_pos"))}</span><strong>${escapeHtml(detailPosition)}</strong></div>
         <div><span>${escapeHtml(t("th_rating"))}</span><strong>${escapeHtml(detailScore)}</strong></div>
         <div><span>${appState.lang === "zh" ? "联赛" : "League"}</span><strong>${escapeHtml(detailLeague || "–")}</strong></div>
+        ${/* Season trend */ (() => {
+            const trend = profile ? (profile.season_trend || profile.rating_trend || null) : null;
+            if (!trend) return '';
+            const trendDir = typeof trend === 'string' ? trend : (trend > 0 ? 'up' : trend < 0 ? 'down' : 'stable');
+            const trendSym = trendDir === 'up' ? '\u25B2' : trendDir === 'down' ? '\u25BC' : '\u25CB';
+            const trendColor = trendDir === 'up' ? '#57d68d' : trendDir === 'down' ? '#ff6b6b' : 'var(--text-muted)';
+            const trendLabel = appState.lang === 'zh' ? '赛季趋势' : 'Season trend';
+            return `<div><span>${escapeHtml(trendLabel)}</span><strong style="color:${trendColor}">${trendSym} ${escapeHtml(trendDir)}</strong></div>`;
+        })()}
+        ${/* Confidence reason */ (() => {
+            const reason = profile ? (profile.confidence_reason || profile.confidence_detail || '') : '';
+            if (!reason) return '';
+            const label = appState.lang === 'zh' ? '置信原因' : 'Confidence reason';
+            return `<div><span>${escapeHtml(label)}</span><strong style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(reason)}</strong></div>`;
+        })()}
+        ${/* Data sources */ (() => {
+            const sources = profile ? (profile.data_sources || profile.sources || []) : [];
+            if (!sources || sources.length === 0) return '';
+            const label = appState.lang === 'zh' ? '数据来源' : 'Data sources';
+            return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(sources.join(', '))}</strong></div>`;
+        })()}
+        ${/* Position percentile */ (() => {
+            const pct = profile ? (profile.position_percentile ?? profile.percentile_rank ?? null) : null;
+            if (pct == null) return '';
+            const label = appState.lang === 'zh' ? '位置百分位' : 'Position percentile';
+            return `<div><span>${escapeHtml(label)}</span><strong>\u25C6 ${escapeHtml(String(Math.round(pct)))}pct</strong></div>`;
+        })()}
+        ${/* Missing fields */ (() => {
+            const missing = [];
+            if (profile && profile.has_defense === false) missing.push('defense');
+            if (profile && profile.has_possession === false) missing.push('possession');
+            if (profile && profile.has_shooting === false) missing.push('shooting');
+            if (profile && profile.has_passing === false) missing.push('passing');
+            if (profile && profile.has_gk === false) missing.push('gk');
+            if (missing.length === 0) return '';
+            const label = appState.lang === 'zh' ? '缺失字段' : 'Missing fields';
+            return `<div><span>${escapeHtml(label)}</span><strong style="color:#ff6b6b">\u25CB ${escapeHtml(missing.join(', '))}</strong></div>`;
+        })()}
     `;
     // Always remove existing warning before conditionally inserting new one
     const existing = document.getElementById("player-detail").nextElementSibling;
@@ -970,6 +1008,81 @@ async function renderMatches() {
         <div><span>train_rows</span><strong>${escapeHtml(predictionMeta.train_rows || "pending")}</strong></div>
     `;
     renderScoreMatrix(match);
+
+    // Calibration section below score matrix
+    const calibEl = document.getElementById('match-calibration');
+    if (calibEl) {
+        const rho = predictionMeta.dc_rho ?? predictionMeta.rho ?? null;
+        const homeAdv = predictionMeta.home_advantage ?? predictionMeta.home_adv ?? null;
+        const coverage = predictionMeta.coverage ?? predictionMeta.team_coverage ?? null;
+        const brier = predictionMeta.brier_score ?? predictionMeta.brier ?? null;
+        const rps = predictionMeta.rps ?? predictionMeta.ranked_probability_score ?? null;
+        const modelVer = predictionMeta.model_version || predictionMeta.version || '';
+        const modelType = predictionMeta.model_type || 'Poisson';
+        const lowScore = predictionMeta.low_score_analysis || predictionMeta.low_score || {};
+        const z = appState.lang === 'zh';
+
+        let calibHtml = '';
+
+        // Model info
+        calibHtml += `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem">`;
+        calibHtml += `\u25C6 ${z ? '模型' : 'Model'}: ${escapeHtml(modelType)}`;
+        if (modelVer) calibHtml += ` v${escapeHtml(modelVer)}`;
+        calibHtml += `</div>`;
+
+        // Dixon-Coles rho
+        if (rho != null) {
+            calibHtml += `<div style="font-size:0.75rem;margin-bottom:0.2rem">`;
+            calibHtml += `<span style="color:var(--text-muted)">Dixon-Coles \u03C1:</span> <strong>${escapeHtml(String(Number(rho).toFixed(4)))}</strong>`;
+            calibHtml += `</div>`;
+        }
+
+        // Home advantage
+        if (homeAdv != null) {
+            calibHtml += `<div style="font-size:0.75rem;margin-bottom:0.2rem">`;
+            calibHtml += `<span style="color:var(--text-muted)">${z ? '主场优势' : 'Home advantage'}:</span> <strong>${escapeHtml(String(Number(homeAdv).toFixed(4)))}</strong>`;
+            calibHtml += `</div>`;
+        }
+
+        // Coverage gate warning
+        if (coverage != null && Number(coverage) < 0.90) {
+            calibHtml += `<div style="font-size:0.78rem;color:#ff6b6b;margin:0.3rem 0;padding:0.25rem 0.4rem;background:rgba(255,107,107,.1);border-radius:4px">`;
+            calibHtml += `\u25B2 ${z ? '覆盖率低于90%，预测可能不可靠' : 'Coverage below 90% \u2014 predictions may be unreliable'} (${(Number(coverage) * 100).toFixed(1)}%)`;
+            calibHtml += `</div>`;
+        }
+
+        // Low-score analysis
+        const lowScoreKeys = ['0-0', '1-0', '0-1', '1-1'];
+        const hasLowScore = lowScoreKeys.some((k) => lowScore[k] != null || lowScore[k.replace('-', '_')] != null);
+        if (hasLowScore) {
+            calibHtml += `<p style="margin:0.5rem 0 0.2rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? '低比分分析' : 'Low-score analysis'}</p>`;
+            calibHtml += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.2rem 0.6rem;font-size:0.75rem">`;
+            calibHtml += `<div style="color:var(--text-muted)">${z ? '比分' : 'Score'}</div><div style="color:var(--text-muted)">${z ? '实际' : 'Actual'}</div><div style="color:var(--text-muted)">${z ? '预测' : 'Predicted'}</div>`;
+            for (const key of lowScoreKeys) {
+                const entry = lowScore[key] || lowScore[key.replace('-', '_')] || {};
+                const actual = entry.actual ?? entry.act ?? '–';
+                const predicted = entry.predicted ?? entry.pred ?? '–';
+                calibHtml += `<div>${escapeHtml(key)}</div>`;
+                calibHtml += `<div>${typeof actual === 'number' ? (actual * 100).toFixed(1) + '%' : escapeHtml(String(actual))}</div>`;
+                calibHtml += `<div>${typeof predicted === 'number' ? (predicted * 100).toFixed(1) + '%' : escapeHtml(String(predicted))}</div>`;
+            }
+            calibHtml += `</div>`;
+        }
+
+        // Brier / RPS
+        if (brier != null || rps != null) {
+            calibHtml += `<div style="margin-top:0.4rem;font-size:0.75rem">`;
+            if (brier != null) {
+                calibHtml += `<span style="color:var(--text-muted)">Brier:</span> <strong>${escapeHtml(String(Number(brier).toFixed(4)))}</strong> `;
+            }
+            if (rps != null) {
+                calibHtml += `<span style="color:var(--text-muted)">RPS:</span> <strong>${escapeHtml(String(Number(rps).toFixed(4)))}</strong>`;
+            }
+            calibHtml += `</div>`;
+        }
+
+        calibEl.innerHTML = calibHtml;
+    }
 }
 
 function poisson(lambda, k) {
@@ -1272,7 +1385,7 @@ function _renderMetricsBlock(title, m, decimals) {
 
 function _renderParamsGrid(args) {
     if (!args || Object.keys(args).length === 0) return "";
-    const entries = [
+    const knownEntries = [
         ["pop_size", "pop"],
         ["n_steps", "steps"],
         ["lr", "lr"],
@@ -1296,16 +1409,26 @@ function _renderParamsGrid(args) {
         ["league_calibration_prior_n", "cal prior"],
         ["league_calibration_cap", "cal cap"],
     ];
-    const cells = entries
+    const knownKeys = new Set(knownEntries.map(([k]) => k));
+    // Known params first
+    const cells = knownEntries
         .filter(([key]) => args[key] != null)
         .map(([key, label]) => {
             const v = args[key];
             const formatted = typeof v === "boolean" ? (v ? "on" : "off") : String(v);
             return `<div><span style="color:var(--text-muted)">${escapeHtml(label)}</span><br><span>${escapeHtml(formatted)}</span></div>`;
         });
-    if (cells.length === 0) return "";
-    return `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Parameters</p>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr));gap:0.2rem 0.5rem;font-size:0.75rem">${cells.join("")}</div>`;
+    // Remaining params not in known list (full parameter dump)
+    const extraCells = Object.entries(args)
+        .filter(([key]) => !knownKeys.has(key) && args[key] != null)
+        .map(([key, v]) => {
+            const formatted = typeof v === "boolean" ? (v ? "on" : "off") : String(v);
+            return `<div><span style="color:var(--text-muted)">${escapeHtml(key)}</span><br><span>${escapeHtml(formatted)}</span></div>`;
+        });
+    const allCells = [...cells, ...extraCells];
+    if (allCells.length === 0) return "";
+    return `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Parameters (${allCells.length})</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr));gap:0.2rem 0.5rem;font-size:0.75rem">${allCells.join("")}</div>`;
 }
 
 function _renderPositionMetrics(posMetrics) {
@@ -1449,7 +1572,50 @@ function renderReports() {
                 : "";
 
             // Assemble detail block (everything below the header)
-            const detailSections = [optTestHtml, baseTestHtml, optTrainHtml, baseTrainHtml, paramsHtml, posHtml, errorHtml, cmdHtml]
+            // Season split (train/test)
+            const trainSeasons = run.train_seasons || args.train_seasons || run.season_split?.train || null;
+            const testSeasons = run.test_seasons || args.test_seasons || run.season_split?.test || null;
+            let seasonSplitHtml = '';
+            if (trainSeasons || testSeasons) {
+                const z2 = appState.lang === 'zh';
+                seasonSplitHtml = `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z2 ? '训练/测试赛季' : 'Train/Test seasons'}</p>`;
+                seasonSplitHtml += `<div style="font-size:0.75rem;line-height:1.5">`;
+                if (trainSeasons) {
+                    const label = Array.isArray(trainSeasons) ? trainSeasons.join(', ') : String(trainSeasons);
+                    seasonSplitHtml += `<div><span style="color:var(--text-muted)">${z2 ? '训练' : 'Train'}:</span> ${escapeHtml(label)}</div>`;
+                }
+                if (testSeasons) {
+                    const label = Array.isArray(testSeasons) ? testSeasons.join(', ') : String(testSeasons);
+                    seasonSplitHtml += `<div><span style="color:var(--text-muted)">${z2 ? '测试' : 'Test'}:</span> ${escapeHtml(label)}</div>`;
+                }
+                seasonSplitHtml += `</div>`;
+            }
+
+            // Feature importance top 5
+            const featImp = run.feature_importance || run.feature_importances || args.feature_importance || null;
+            let featImpHtml = '';
+            if (featImp && typeof featImp === 'object') {
+                const entries = Array.isArray(featImp)
+                    ? featImp.slice(0, 5)
+                    : Object.entries(featImp)
+                        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                        .slice(0, 5)
+                        .map(([k, v]) => ({ name: k, importance: v }));
+                if (entries.length > 0) {
+                    const z3 = appState.lang === 'zh';
+                    featImpHtml = `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z3 ? '特征重要性 Top 5' : 'Feature importance Top 5'}</p>`;
+                    featImpHtml += `<div style="font-size:0.75rem;line-height:1.6">`;
+                    entries.forEach((e, i) => {
+                        const name = typeof e === 'object' ? (e.name || e.feature || Object.keys(e)[0] || `f${i}`) : String(e);
+                        const val = typeof e === 'object' ? (e.importance ?? e.value ?? Object.values(e)[0] ?? 0) : 0;
+                        const pct = typeof val === 'number' && val <= 1 && val >= 0 ? (val * 100).toFixed(1) + '%' : Number(val).toFixed(3);
+                        featImpHtml += `<div>\u25C6 ${escapeHtml(String(name))} <span style="color:var(--text-muted)">${escapeHtml(pct)}</span></div>`;
+                    });
+                    featImpHtml += `</div>`;
+                }
+            }
+
+            const detailSections = [optTestHtml, baseTestHtml, optTrainHtml, baseTrainHtml, seasonSplitHtml, paramsHtml, featImpHtml, posHtml, errorHtml, cmdHtml]
                 .filter(Boolean)
                 .join("<hr style=\"border:none;border-top:1px solid var(--border,#333);margin:0.35rem 0\">");
 
@@ -1491,6 +1657,12 @@ function renderActions() {
             </div>
         `).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No action value artifact</div>';
+
+    // StatsBomb Open Data attribution
+    const attrEl = document.getElementById('action-attribution');
+    if (attrEl) {
+        attrEl.innerHTML = `\u25C6 ${appState.lang === 'zh' ? '\u6570\u636E\u6765\u6E90' : 'Data source'}: StatsBomb Open Data | github.com/statsbomb/open-data`;
+    }
 
     if (!chart) return;
     const chartPlayers = players.filter((player) => player.player_name && player.xT_per_90 != null);
@@ -1746,6 +1918,23 @@ function bindEvents() {
             if (!type) return;
             if (typeof TacticalRenderer !== "undefined" && typeof TACTICAL_BOARD !== "undefined") {
                 const objects = TACTICAL_BOARD.generateSetPiece(type, "home");
+                if (objects.length > 0) {
+                    TacticalRenderer.clearBoard();
+                    const project = TacticalRenderer.getProject();
+                    project.objects = objects;
+                    TacticalRenderer.render();
+                    tacticalProject = project;
+                }
+            }
+        });
+    }
+    const tacticalLoadTraining = document.getElementById("tactical-load-training");
+    if (tacticalLoadTraining) {
+        tacticalLoadTraining.addEventListener("click", () => {
+            const type = document.getElementById("tactical-training").value;
+            if (!type) return;
+            if (typeof TacticalRenderer !== "undefined" && typeof TACTICAL_BOARD !== "undefined") {
+                const objects = TACTICAL_BOARD.generateTraining(type, "home");
                 if (objects.length > 0) {
                     TacticalRenderer.clearBoard();
                     const project = TacticalRenderer.getProject();

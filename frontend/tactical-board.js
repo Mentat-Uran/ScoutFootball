@@ -64,6 +64,200 @@ const TACTICAL_BOARD = {
             CM: [{ x: 45, y: 25 }, { x: 45, y: 50 }, { x: 45, y: 75 }],
             ST: [{ x: 75, y: 35 }, { x: 75, y: 65 }],
         },
+        "3-4-3": {
+            GK: [{ x: 5, y: 50 }],
+            CB: [{ x: 20, y: 25 }, { x: 20, y: 50 }, { x: 20, y: 75 }],
+            CM: [{ x: 45, y: 15 }, { x: 45, y: 50 }, { x: 45, y: 85 }],
+            W:  [{ x: 70, y: 15 }, { x: 70, y: 85 }],
+            ST: [{ x: 80, y: 50 }],
+        },
+        "3-4-2-1": {
+            GK: [{ x: 5, y: 50 }],
+            CB: [{ x: 20, y: 25 }, { x: 20, y: 50 }, { x: 20, y: 75 }],
+            FB: [{ x: 35, y: 10 }, { x: 35, y: 90 }],
+            CM: [{ x: 45, y: 35 }, { x: 45, y: 65 }],
+            AM: [{ x: 60, y: 35 }, { x: 60, y: 65 }],
+            ST: [{ x: 80, y: 50 }],
+        },
+        "4-1-4-1": {
+            GK: [{ x: 5, y: 50 }],
+            CB: [{ x: 20, y: 30 }, { x: 20, y: 70 }],
+            FB: [{ x: 20, y: 10 }, { x: 20, y: 90 }],
+            DM: [{ x: 35, y: 50 }],
+            CM: [{ x: 50, y: 25 }, { x: 50, y: 75 }],
+            W:  [{ x: 65, y: 15 }, { x: 65, y: 85 }],
+            ST: [{ x: 80, y: 50 }],
+        },
+        "4-3-1-2": {
+            GK: [{ x: 5, y: 50 }],
+            CB: [{ x: 20, y: 30 }, { x: 20, y: 70 }],
+            FB: [{ x: 20, y: 10 }, { x: 20, y: 90 }],
+            CM: [{ x: 40, y: 25 }, { x: 40, y: 50 }, { x: 40, y: 75 }],
+            AM: [{ x: 60, y: 50 }],
+            ST: [{ x: 80, y: 35 }, { x: 80, y: 65 }],
+        },
+        "4-2-2-2": {
+            GK: [{ x: 5, y: 50 }],
+            CB: [{ x: 20, y: 30 }, { x: 20, y: 70 }],
+            FB: [{ x: 20, y: 10 }, { x: 20, y: 90 }],
+            DM: [{ x: 35, y: 35 }, { x: 35, y: 65 }],
+            AM: [{ x: 55, y: 25 }, { x: 55, y: 75 }],
+            ST: [{ x: 80, y: 35 }, { x: 80, y: 65 }],
+        },
+        "4-5-1": {
+            GK: [{ x: 5, y: 50 }],
+            CB: [{ x: 20, y: 30 }, { x: 20, y: 70 }],
+            FB: [{ x: 20, y: 10 }, { x: 20, y: 90 }],
+            CM: [{ x: 40, y: 15 }, { x: 40, y: 35 }, { x: 40, y: 50 }, { x: 40, y: 65 }, { x: 40, y: 85 }],
+            ST: [{ x: 80, y: 50 }],
+        },
+        "5-4-1": {
+            GK: [{ x: 5, y: 50 }],
+            CB: [{ x: 18, y: 25 }, { x: 18, y: 50 }, { x: 18, y: 75 }],
+            FB: [{ x: 30, y: 10 }, { x: 30, y: 90 }],
+            CM: [{ x: 45, y: 25 }, { x: 45, y: 50 }, { x: 45, y: 75 }],
+            ST: [{ x: 80, y: 50 }],
+        },
+    },
+
+    /* ── Training presets ──────────────────────────────────────────── */
+    TRAINING_PRESETS: {
+        "rondo": {
+            label: "Rondo 4v2",
+            area: { x: 40, y: 40, w: 20, h: 20 },
+            attackers: [
+                { x: 40, y: 40 }, { x: 60, y: 40 },
+                { x: 40, y: 60 }, { x: 60, y: 60 },
+            ],
+            defenders: [
+                { x: 48, y: 48 }, { x: 52, y: 52 },
+            ],
+            arrows: [
+                { x1: 42, y1: 42, x2: 58, y2: 42, style: "pass" },
+                { x1: 58, y1: 42, x2: 58, y2: 58, style: "pass" },
+                { x1: 58, y1: 58, x2: 42, y2: 58, style: "pass" },
+                { x1: 42, y1: 58, x2: 42, y2: 42, style: "pass" },
+            ],
+        },
+        "pressing-drill": {
+            label: "Pressing Drill",
+            attackers: [
+                { x: 70, y: 25 }, { x: 70, y: 50 }, { x: 70, y: 75 },
+            ],
+            midfielders: [
+                { x: 50, y: 20 }, { x: 50, y: 40 }, { x: 50, y: 60 }, { x: 50, y: 80 },
+            ],
+            defenders: [
+                { x: 30, y: 25 }, { x: 30, y: 50 }, { x: 30, y: 75 },
+            ],
+            arrows: [
+                { x1: 70, y1: 50, x2: 55, y2: 50, style: "run" },
+                { x1: 50, y1: 40, x2: 55, y2: 45, style: "run" },
+                { x1: 50, y1: 60, x2: 55, y2: 55, style: "run" },
+            ],
+        },
+        "counter-attack": {
+            label: "Counter Attack",
+            defenders: [
+                { x: 15, y: 25 }, { x: 15, y: 50 }, { x: 15, y: 75 },
+                { x: 25, y: 15 }, { x: 25, y: 85 },
+            ],
+            midfielders: [
+                { x: 35, y: 35 }, { x: 35, y: 65 },
+            ],
+            attackers: [
+                { x: 55, y: 30 }, { x: 55, y: 70 },
+                { x: 70, y: 50 },
+            ],
+            arrows: [
+                { x1: 35, y1: 50, x2: 55, y2: 50, style: "pass" },
+                { x1: 55, y1: 50, x2: 75, y2: 50, style: "run" },
+                { x1: 55, y1: 30, x2: 75, y2: 40, style: "run" },
+                { x1: 55, y1: 70, x2: 75, y2: 60, style: "run" },
+            ],
+        },
+        "possession": {
+            label: "Possession Grid",
+            area: { x: 30, y: 25, w: 40, h: 50 },
+            teamA: [
+                { x: 35, y: 30 }, { x: 45, y: 35 }, { x: 55, y: 30 },
+                { x: 35, y: 50 }, { x: 55, y: 50 },
+                { x: 45, y: 60 },
+            ],
+            teamB: [
+                { x: 40, y: 40 }, { x: 50, y: 45 },
+            ],
+            circles: [
+                { x: 45, y: 45, r: 5 },
+            ],
+        },
+    },
+
+    generateTraining(type, team = "home") {
+        const preset = this.TRAINING_PRESETS[type];
+        if (!preset) return [];
+
+        const objects = [];
+
+        // Area zone
+        if (preset.area) {
+            objects.push(this.createZone(
+                preset.area.x, preset.area.y, preset.area.w, preset.area.h,
+                preset.label || type
+            ));
+        }
+
+        // Players
+        const playerGroups = ["attackers", "defenders", "midfielders", "teamA", "teamB"];
+        const oppTeam = team === "home" ? "away" : "home";
+        let num = 1;
+        for (const group of playerGroups) {
+            const players = preset[group];
+            if (!players) continue;
+            const isTeamA = (group === "attackers" || group === "midfielders" || group === "teamA");
+            const t = isTeamA ? team : oppTeam;
+            for (const pos of players) {
+                objects.push(this.createPlayer(pos.x, pos.y, t, "", num++));
+            }
+        }
+
+        // Arrows
+        if (preset.arrows) {
+            for (const a of preset.arrows) {
+                objects.push(this.createArrow(a.x1, a.y1, a.x2, a.y2, a.style || "solid"));
+            }
+        }
+
+        // Circles (e.g. possession grid)
+        if (preset.circles) {
+            for (const c of preset.circles) {
+                objects.push(this.createEllipse(
+                    c.x, c.y, c.r, c.r,
+                    "rgba(255,255,255,0.08)", "rgba(255,255,255,0.4)"
+                ));
+            }
+        }
+
+        // Ball at center
+        objects.push(this.createBall(50, 50));
+
+        return objects;
+    },
+
+    /* ── Bench player factory ─────────────────────────────────────── */
+    createBenchPlayer(x, y, team = "home", label = "", number = 0) {
+        return {
+            id: this._uuid(),
+            type: "bench",
+            x, y,
+            team,
+            label: this._safeString(label),
+            number: Math.round(this._clampNumber(number, 0, 99, 0)),
+            color: team === "home" ? "#7ca8ff" : "#ff6b7b",
+            radius: 2,
+            locked: false,
+            visible: true,
+        };
     },
 
     /* ── Set-piece presets ────────────────────────────────────────── */
@@ -399,7 +593,7 @@ const TACTICAL_BOARD = {
 
     _sanitizeObject(object) {
         if (!object || typeof object !== "object") return null;
-        const type = ["player", "ball", "arrow", "zone", "text", "path", "rect", "ellipse"].includes(object.type)
+        const type = ["player", "ball", "arrow", "zone", "text", "path", "rect", "ellipse", "bench"].includes(object.type)
             ? object.type
             : "player";
         const safe = {
@@ -451,7 +645,7 @@ const TACTICAL_BOARD = {
         safe.y = this._clampNumber(object.y, 0, 100, 50);
         safe.color = this._safeString(object.color, type === "player" ? "#7ca8ff" : "#ffffff").slice(0, 32);
         safe.radius = this._clampNumber(object.radius, 0.5, 8, type === "ball" ? 1.5 : 3);
-        if (type === "player") {
+        if (type === "player" || type === "bench") {
             safe.team = object.team === "away" ? "away" : "home";
             safe.label = this._safeString(object.label);
             safe.number = Math.round(this._clampNumber(object.number, 0, 99, 0));
@@ -707,7 +901,7 @@ const TACTICAL_BOARD = {
                 continue;
             }
             const interp = { ...toObj };
-            if (toObj.type === "player" || toObj.type === "ball" || toObj.type === "text") {
+            if (toObj.type === "player" || toObj.type === "ball" || toObj.type === "text" || toObj.type === "bench") {
                 interp.x = fromObj.x + (toObj.x - fromObj.x) * t;
                 interp.y = fromObj.y + (toObj.y - fromObj.y) * t;
             }
