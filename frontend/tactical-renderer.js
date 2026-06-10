@@ -148,6 +148,18 @@ const TacticalRenderer = {
     },
 
     drawPitch() {
+        const pt = (this.project && this.project.pitch_type) || "11v11";
+        switch (pt) {
+            case "half-field": this._drawHalfFieldPitch(); break;
+            case "training":   this._drawTrainingPitch(); break;
+            case "blank":      this._drawBlankCanvas(); break;
+            case "7v7":        this._draw7v7Pitch(); break;
+            case "5v5":        this._draw5v5Pitch(); break;
+            default:           this._drawFullPitch(); break;
+        }
+    },
+
+    _drawFullPitch() {
         const ctx = this.ctx;
         const tl = this.toCanvas(0, 0);
         const br = this.toCanvas(100, 100);
@@ -220,6 +232,235 @@ const TacticalRenderer = {
 
         const rg = this.toCanvas(100, goalY);
         ctx.fillRect(rg.x, rg.y, goalW * this.scale, goalH * this.scale);
+    },
+
+    _draw7v7Pitch() {
+        const ctx = this.ctx;
+        const tl = this.toCanvas(0, 0);
+        const br = this.toCanvas(100, 100);
+        const pw = br.x - tl.x;
+        const ph = br.y - tl.y;
+
+        ctx.fillStyle = "#1a472a";
+        ctx.fillRect(tl.x, tl.y, pw, ph);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(tl.x, tl.y, pw, ph);
+
+        // Center line
+        const center = this.toCanvas(50, 50);
+        ctx.beginPath();
+        ctx.moveTo(center.x, tl.y);
+        ctx.lineTo(center.x, br.y);
+        ctx.stroke();
+
+        // Center circle (smaller)
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 8 * this.scale, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Center dot
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Penalty areas (proportional for 7v7)
+        const paW = 13 / 105 * 100;
+        const paH = 32 / 68 * 100;
+        const paY = (100 - paH) / 2;
+
+        const lpa = this.toCanvas(0, paY);
+        ctx.strokeRect(lpa.x, lpa.y, paW * this.scale, paH * this.scale);
+
+        const rpa = this.toCanvas(100 - paW, paY);
+        ctx.strokeRect(rpa.x, rpa.y, paW * this.scale, paH * this.scale);
+
+        // Goal areas
+        const gaW = 4.5 / 105 * 100;
+        const gaH = 16 / 68 * 100;
+        const gaY = (100 - gaH) / 2;
+
+        const lga = this.toCanvas(0, gaY);
+        ctx.strokeRect(lga.x, lga.y, gaW * this.scale, gaH * this.scale);
+
+        const rga = this.toCanvas(100 - gaW, gaY);
+        ctx.strokeRect(rga.x, rga.y, gaW * this.scale, gaH * this.scale);
+
+        // Goals (smaller for 7v7)
+        const goalH = 5 / 68 * 100;
+        const goalY = (100 - goalH) / 2;
+        const goalW = 2;
+
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        const lg = this.toCanvas(-goalW, goalY);
+        ctx.fillRect(lg.x, lg.y, goalW * this.scale, goalH * this.scale);
+
+        const rg = this.toCanvas(100, goalY);
+        ctx.fillRect(rg.x, rg.y, goalW * this.scale, goalH * this.scale);
+    },
+
+    _draw5v5Pitch() {
+        const ctx = this.ctx;
+        const tl = this.toCanvas(0, 0);
+        const br = this.toCanvas(100, 100);
+        const pw = br.x - tl.x;
+        const ph = br.y - tl.y;
+
+        ctx.fillStyle = "#1a472a";
+        ctx.fillRect(tl.x, tl.y, pw, ph);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(tl.x, tl.y, pw, ph);
+
+        // Center line
+        const center = this.toCanvas(50, 50);
+        ctx.beginPath();
+        ctx.moveTo(center.x, tl.y);
+        ctx.lineTo(center.x, br.y);
+        ctx.stroke();
+
+        // Center circle (smaller)
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 6 * this.scale, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Penalty areas
+        const paW = 10 / 105 * 100;
+        const paH = 28 / 68 * 100;
+        const paY = (100 - paH) / 2;
+
+        const lpa = this.toCanvas(0, paY);
+        ctx.strokeRect(lpa.x, lpa.y, paW * this.scale, paH * this.scale);
+
+        const rpa = this.toCanvas(100 - paW, paY);
+        ctx.strokeRect(rpa.x, rpa.y, paW * this.scale, paH * this.scale);
+
+        // Goals (small futsal goals)
+        const goalH = 3 / 68 * 100;
+        const goalY = (100 - goalH) / 2;
+        const goalW = 2;
+
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        const lg = this.toCanvas(-goalW, goalY);
+        ctx.fillRect(lg.x, lg.y, goalW * this.scale, goalH * this.scale);
+
+        const rg = this.toCanvas(100, goalY);
+        ctx.fillRect(rg.x, rg.y, goalW * this.scale, goalH * this.scale);
+    },
+
+    _drawHalfFieldPitch() {
+        const ctx = this.ctx;
+        const tl = this.toCanvas(50, 0);
+        const br = this.toCanvas(100, 100);
+        const pw = br.x - tl.x;
+        const ph = br.y - tl.y;
+
+        // Grass
+        ctx.fillStyle = "#1a472a";
+        ctx.fillRect(tl.x, tl.y, pw, ph);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.lineWidth = 1.5;
+
+        // Border
+        ctx.strokeRect(tl.x, tl.y, pw, ph);
+
+        // Center line (at x=50)
+        ctx.beginPath();
+        ctx.moveTo(tl.x, tl.y);
+        ctx.lineTo(tl.x, br.y);
+        ctx.stroke();
+
+        // Center arc (semicircle)
+        const center = this.toCanvas(50, 50);
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 10 * this.scale, -Math.PI / 2, Math.PI / 2);
+        ctx.stroke();
+
+        // Center dot
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Penalty area (right side only)
+        const paW = 16.5 / 105 * 100;
+        const paH = 40.32 / 68 * 100;
+        const paY = (100 - paH) / 2;
+
+        const rpa = this.toCanvas(100 - paW, paY);
+        ctx.strokeRect(rpa.x, rpa.y, paW * this.scale, paH * this.scale);
+
+        // Penalty spot
+        const pSpot = this.toCanvas(100 - 11 / 105 * 100, 50);
+        ctx.beginPath();
+        ctx.arc(pSpot.x, pSpot.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Penalty arc
+        const paArcCenter = this.toCanvas(100 - 11 / 105 * 100, 50);
+        ctx.beginPath();
+        ctx.arc(paArcCenter.x, paArcCenter.y, 9.15 / 68 * 100 * this.scale, 0.7 * Math.PI, 1.3 * Math.PI);
+        ctx.stroke();
+
+        // Goal area (right side)
+        const gaW = 5.5 / 105 * 100;
+        const gaH = 18.32 / 68 * 100;
+        const gaY = (100 - gaH) / 2;
+
+        const rga = this.toCanvas(100 - gaW, gaY);
+        ctx.strokeRect(rga.x, rga.y, gaW * this.scale, gaH * this.scale);
+
+        // Goal (right side)
+        const goalH = 7.32 / 68 * 100;
+        const goalY = (100 - goalH) / 2;
+        const goalW = 2;
+
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        const rg = this.toCanvas(100, goalY);
+        ctx.fillRect(rg.x, rg.y, goalW * this.scale, goalH * this.scale);
+    },
+
+    _drawTrainingPitch() {
+        const ctx = this.ctx;
+        const tl = this.toCanvas(0, 0);
+        const br = this.toCanvas(100, 100);
+        const pw = br.x - tl.x;
+        const ph = br.y - tl.y;
+
+        // Grass
+        ctx.fillStyle = "#1a472a";
+        ctx.fillRect(tl.x, tl.y, pw, ph);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.lineWidth = 1.5;
+
+        // Border only
+        ctx.strokeRect(tl.x, tl.y, pw, ph);
+
+        // Center line
+        const center = this.toCanvas(50, 50);
+        ctx.beginPath();
+        ctx.moveTo(center.x, tl.y);
+        ctx.lineTo(center.x, br.y);
+        ctx.stroke();
+    },
+
+    _drawBlankCanvas() {
+        // White background, no pitch markings
+        const ctx = this.ctx;
+        const w = this.canvas.width / (window.devicePixelRatio || 1);
+        const h = this.canvas.height / (window.devicePixelRatio || 1);
+        ctx.fillStyle = "#0e1525";
+        ctx.fillRect(0, 0, w, h);
     },
 
     drawPlayer(obj) {
@@ -678,6 +919,12 @@ const TacticalRenderer = {
                 this.redo();
             } else if (e.key === "Delete" && this.selectedObject) {
                 this.deleteSelected();
+            } else if (e.ctrlKey && e.key === "d") {
+                e.preventDefault();
+                this.duplicateSelected();
+            } else if (e.ctrlKey && e.key === "m") {
+                e.preventDefault();
+                this.mirrorSelected();
             }
         };
         document.addEventListener("keydown", this._keydownHandler);
@@ -1181,6 +1428,79 @@ const TacticalRenderer = {
         this.pushUndo();
         this.project.objects = this.project.objects.filter((o) => o.id !== this.selectedObject.id);
         this.selectedObject = null;
+        this.render();
+        if (this.onChange) this.onChange();
+    },
+    /* ── Duplicate / Mirror ──────────────────────────────────────────── */
+    duplicateSelected() {
+        if (!this.selectedObject) return;
+        this.pushUndo();
+        const copy = JSON.parse(JSON.stringify(this.selectedObject));
+        // Generate new id
+        copy.id = (typeof crypto !== "undefined" && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : Date.now().toString(36) + Math.random().toString(36).slice(2);
+        // Offset 5 units to the right
+        if (copy.type === "arrow" || copy.type === "path") {
+            if (copy.type === "path" && copy.points) {
+                for (const p of copy.points) { p.x = Math.min(100, p.x + 5); }
+            } else {
+                copy.startX = Math.min(100, copy.startX + 5);
+                copy.endX = Math.min(100, copy.endX + 5);
+            }
+        } else if (copy.type === "zone" || copy.type === "rect") {
+            copy.x = Math.min(100, copy.x + 5);
+        } else if (copy.type === "ellipse") {
+            copy.x = Math.min(100, copy.x + 5);
+        } else {
+            copy.x = Math.min(100, copy.x + 5);
+        }
+        this.project.objects.push(copy);
+        this.selectedObject = copy;
+        this.render();
+        if (this.onChange) this.onChange();
+    },
+
+    mirrorSelected() {
+        if (!this.selectedObject) return;
+        this.pushUndo();
+        const obj = this.selectedObject;
+        if (obj.type === "arrow") {
+            obj.startX = 100 - obj.startX;
+            obj.endX = 100 - obj.endX;
+        } else if (obj.type === "path" && obj.points) {
+            for (const p of obj.points) { p.x = 100 - p.x; }
+        } else if (obj.type === "zone" || obj.type === "rect") {
+            obj.x = 100 - obj.x - obj.width;
+        } else if (obj.type === "ellipse") {
+            obj.x = 100 - obj.x;
+        } else {
+            obj.x = 100 - obj.x;
+        }
+        this.render();
+        if (this.onChange) this.onChange();
+    },
+
+    mirrorAllHome() {
+        if (!this.project) return;
+        this.pushUndo();
+        for (const obj of this.project.objects) {
+            if (obj.type === "player" && obj.team === "home") {
+                obj.x = 100 - obj.x;
+            }
+        }
+        this.render();
+        if (this.onChange) this.onChange();
+    },
+
+    mirrorAllAway() {
+        if (!this.project) return;
+        this.pushUndo();
+        for (const obj of this.project.objects) {
+            if (obj.type === "player" && obj.team === "away") {
+                obj.x = 100 - obj.x;
+            }
+        }
         this.render();
         if (this.onChange) this.onChange();
     },

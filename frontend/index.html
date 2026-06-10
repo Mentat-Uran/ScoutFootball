@@ -415,6 +415,14 @@
                                     <option value="4-5-1">4-5-1</option>
                                     <option value="5-4-1">5-4-1</option>
                                 </select>
+                                <select id="tactical-pitch-type" class="glass-control">
+                                    <option value="11v11">11v11</option>
+                                    <option value="7v7">7v7</option>
+                                    <option value="5v5">5v5</option>
+                                    <option value="half-field">Half Field</option>
+                                    <option value="training">Training</option>
+                                    <option value="blank">Blank</option>
+                                </select>
                                 <button class="text-button" id="tactical-load-home" type="button">主队阵型</button>
                                 <button class="text-button" id="tactical-load-away" type="button">客队阵型</button>
                                 <button class="text-button" id="tactical-clear" type="button">清空</button>
@@ -448,6 +456,10 @@
                                 <button class="text-button" id="tactical-tool-arrow" type="button" title="Draw Arrow">⟷ 箭头</button>
                                 <button class="text-button" id="tactical-tool-zone" type="button" title="Draw Zone">▣ 区域</button>
                                 <button class="text-button" id="tactical-tool-text" type="button" title="Place Text">⊞ 文字</button>
+                                <button class="text-button" id="tactical-duplicate" type="button" title="Duplicate (Ctrl+D)">⊞ 复制</button>
+                                <button class="text-button" id="tactical-mirror" type="button" title="Mirror (Ctrl+M)">⟷ 镜像</button>
+                                <button class="text-button" id="tactical-mirror-home" type="button" title="Mirror all home">◇ 主队镜像</button>
+                                <button class="text-button" id="tactical-mirror-away" type="button" title="Mirror all away">◇ 客队镜像</button>
                             </div>
                         </div>
                         <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">
@@ -486,6 +498,8 @@
                             <ul class="signal-list" style="font-size:0.85rem;color:var(--text-muted)">
                                 <li>Ctrl+Z 撤销</li>
                                 <li>Ctrl+Y 重做</li>
+                                <li>Ctrl+D 复制选中</li>
+                                <li>Ctrl+M 镜像选中</li>
                                 <li>Delete 删除选中</li>
                                 <li>拖拽移动球员/足球</li>
                             </ul>
