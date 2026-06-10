@@ -201,3 +201,171 @@ class TestSRI:
         idx = content.index("echarts")
         snippet = content[max(0, idx - 100) : idx + 200]
         assert "crossorigin=" in snippet
+
+
+# ===== 7. X-Content-Type-Options ============================================
+
+class TestSecurityHeaders:
+    def test_nosniff_in_index(self):
+        """X-Content-Type-Options mentioned in comments or meta tag."""
+        content = _read_index()
+        # Should reference nosniff either in meta or comment
+        assert "nosniff" in content.lower() or "X-Content-Type-Options" in content
+
+
+# ===== 8. Tactical board sanitizer coverage ==================================
+
+_TACTICAL_JS = os.path.join(_PROJECT_ROOT, "frontend", "tactical-board.js")
+
+
+def _read_tactical_js() -> str:
+    with open(_TACTICAL_JS, encoding="utf-8") as fh:
+        return fh.read()
+
+
+class TestTacticalBoardSanitizer:
+    def test_sanitize_project_limits_objects(self):
+        """sanitizeProject caps objects at MAX_OBJECTS."""
+        js = _read_tactical_js()
+        assert "MAX_OBJECTS" in js
+        assert ".slice(0, this.MAX_OBJECTS)" in js
+
+    def test_sanitize_project_limits_frames(self):
+        """sanitizeProject caps frames at MAX_FRAMES."""
+        js = _read_tactical_js()
+        assert "MAX_FRAMES" in js
+
+    def test_sanitize_project_limits_text_length(self):
+        """_safeString and sanitizeObject truncate text at MAX_TEXT_LENGTH."""
+        js = _read_tactical_js()
+        assert "MAX_TEXT_LENGTH" in js
+        assert "this.MAX_TEXT_LENGTH" in js
+
+    def test_sanitize_project_limits_import_size(self):
+        """importJSON rejects files larger than MAX_IMPORT_BYTES."""
+        js = _read_tactical_js()
+        assert "MAX_IMPORT_BYTES" in js
+        assert "Project file too large" in js
+
+    def test_sanitize_project_clamps_coordinates(self):
+        """_sanitizeObject clamps x/y to 0-100 range."""
+        js = _read_tactical_js()
+        assert "_clampNumber(object.x, 0, 100" in js
+        assert "_clampNumber(object.y, 0, 100" in js
+
+    def test_sanitize_project_validates_object_types(self):
+        """_sanitizeObject only allows known object types."""
+        js = _read_tactical_js()
+        assert '"player", "ball", "arrow", "zone", "text"' in js
+
+    def test_sanitize_project_strips_control_chars(self):
+        """_safeString removes control characters."""
+        js = _read_tactical_js()
+        assert "\\u0000-\\u001F" in js or "\\u0000" in js
+
+    def test_sanitize_project_strips_dangerous_id_chars(self):
+        """_safeId removes characters outside [a-zA-Z0-9._-]."""
+        js = _read_tactical_js()
+        assert "a-zA-Z0-9._-" in js
+
+    def test_sanitize_project_arrow_style_whitelist(self):
+        """Arrow style is whitelisted to solid/dashed/curved."""
+        js = _read_tactical_js()
+        assert '"solid", "dashed", "curved"' in js
+
+
+# ===== 9. App.js security helpers coverage ===================================
+
+_APP_JS = os.path.join(_PROJECT_ROOT, "frontend", "app.js")
+
+
+def _read_app_js() -> str:
+    with open(_APP_JS, encoding="utf-8") as fh:
+        return fh.read()
+
+
+class TestAppJsSecurityHelpers:
+    def test_escape_html_function_defined(self):
+        js = _read_app_js()
+        assert "function escapeHtml" in js
+
+    def test_escape_attr_function_defined(self):
+        js = _read_app_js()
+        assert "function escapeAttr" in js
+
+    def test_csv_cell_function_defined(self):
+        js = _read_app_js()
+        assert "function csvCell" in js
+
+    def test_sanitize_css_percent_function_defined(self):
+        js = _read_app_js()
+        assert "function sanitizeCssPercent" in js
+
+    def test_no_innerhtml_without_escape(self):
+        """Check that innerHTML assignments use escapeHtml or template literals with escaping."""
+        js = _read_app_js()
+        # Find all innerHTML = assignments
+        import re
+        inner_html_assigns = re.findall(r"\.innerHTML\s*=\s*([^;]+)", js)
+        # Most should reference escapeHtml, escapeAttr, or be safe patterns
+        unsafe = []
+        for assign in inner_html_assigns:
+            assign_stripped = assign.strip()
+            # Safe: uses escapeHtml, escapeAttr, or is a variable reference
+            # or uses join/map (which typically includes escaping)
+            # or is empty string
+            if any(safe in assign_stripped for safe in [
+                "escapeHtml", "escapeAttr", "join(", ".map(", '""',
+                "No saved", "No data", "No results",
+            ]):
+                continue
+            # Direct string literal without escaping is suspicious
+            if assign_stripped.startswith('"') or assign_stripped.startswith("'"):
+                # Simple literals are usually safe static text
+                if ("<script" not in assign_stripped.lower()
+                        and "onerror" not in assign_stripped.lower()):
+                    continue
+            # Template literals with ${} should use escapeHtml
+            if "`" in assign_stripped and "${" in assign_stripped:
+                if "escapeHtml" not in assign_stripped and "escapeAttr" not in assign_stripped:
+                    unsafe.append(assign_stripped[:80])
+        # This is a heuristic check — allow some false positives
+        # The key invariant is that dynamic user data goes through escapeHtml
+        assert len(unsafe) < 5, f"Potentially unsafe innerHTML: {unsafe[:3]}"
+
+
+# ===== 10. Tactical board renderer security ==================================
+
+_TACTICAL_RENDERER_JS = os.path.join(_PROJECT_ROOT, "frontend", "tactical-renderer.js")
+
+
+def _read_renderer_js() -> str:
+    with open(_TACTICAL_RENDERER_JS, encoding="utf-8") as fh:
+        return fh.read()
+
+
+class TestTacticalRendererSecurity:
+    def test_no_eval_in_renderer(self):
+        """Renderer should not use eval()."""
+        js = _read_renderer_js()
+        assert "eval(" not in js
+
+    def test_no_innerhtml_in_renderer(self):
+        """Canvas renderer should not use innerHTML except for hover card tooltip."""
+        js = _read_renderer_js()
+        # innerHTML is acceptable for the hover card tooltip (controlled data)
+        # Count occurrences — should be minimal (1-2 for hover card)
+        count = js.count("innerHTML")
+        assert count <= 3, f"Too many innerHTML uses ({count}), expected <=3 for hover card"
+
+    def test_no_document_write_in_renderer(self):
+        """Renderer should not use document.write except for PDF export."""
+        js = _read_renderer_js()
+        # document.write is acceptable for PDF export print window
+        count = js.count("document.write")
+        assert count <= 2, f"Too many document.write uses ({count}), expected <=2 for PDF export"
+
+    def test_coordinate_clamping(self):
+        """Mouse move handler clamps coordinates to 0-100."""
+        js = _read_renderer_js()
+        assert "Math.max(0, Math.min(100" in js

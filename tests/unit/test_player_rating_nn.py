@@ -113,17 +113,20 @@ def test_train_player_rating_nn_with_synthetic_labels_writes_artifacts(tmp_path:
     labels = _sample_truth_labels(features)
     baseline = _sample_baseline(features)
 
-    result = train_player_rating_nn(
-        features,
-        labels,
-        baseline_ratings=baseline,
-        config=PlayerRatingNNConfig(min_labels=20, max_iter=80, early_stopping=False),
-    )
-    write_player_rating_nn_artifacts(
-        result,
-        tmp_path,
-        config=PlayerRatingNNConfig(min_labels=20, max_iter=80, early_stopping=False),
-    )
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=Warning, module="sklearn")
+        result = train_player_rating_nn(
+            features,
+            labels,
+            baseline_ratings=baseline,
+            config=PlayerRatingNNConfig(min_labels=20, max_iter=300, early_stopping=False),
+        )
+        write_player_rating_nn_artifacts(
+            result,
+            tmp_path,
+            config=PlayerRatingNNConfig(min_labels=20, max_iter=300, early_stopping=False),
+        )
 
     assert result.trained is True
     assert result.metrics["test"]["n"] > 0

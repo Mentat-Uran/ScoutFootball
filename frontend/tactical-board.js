@@ -256,9 +256,48 @@ const TACTICAL_BOARD = {
             id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2),
             type: "arrow",
             startX, startY, endX, endY,
-            style,  // "solid" | "dashed" | "curved"
+            style,  // "solid" | "dashed" | "curved" | "dotted" | "run" | "pass" | "shot" | "dribble"
             color: "#ffffff",
             width: 2,
+            locked: false,
+            visible: true,
+        };
+    },
+
+    createPath(points, color = "#ffffff", width = 2) {
+        return {
+            id: this._uuid(),
+            type: "path",
+            points: Array.isArray(points) ? points.map(p => ({
+                x: this._clampNumber(p.x, 0, 100, 50),
+                y: this._clampNumber(p.y, 0, 100, 50),
+            })) : [],
+            color: this._safeString(color, "#ffffff").slice(0, 32),
+            width: this._clampNumber(width, 0.5, 10, 2),
+            locked: false,
+            visible: true,
+        };
+    },
+
+    createRect(x, y, width, height, fillColor = "rgba(255,255,255,0.15)", borderColor = "rgba(255,255,255,0.4)") {
+        return {
+            id: this._uuid(),
+            type: "rect",
+            x, y, width, height,
+            fillColor: this._safeString(fillColor, "rgba(255,255,255,0.15)").slice(0, 48),
+            borderColor: this._safeString(borderColor, "rgba(255,255,255,0.4)").slice(0, 48),
+            locked: false,
+            visible: true,
+        };
+    },
+
+    createEllipse(x, y, rx, ry, fillColor = "rgba(255,255,255,0.15)", borderColor = "rgba(255,255,255,0.4)") {
+        return {
+            id: this._uuid(),
+            type: "ellipse",
+            x, y, rx, ry,
+            fillColor: this._safeString(fillColor, "rgba(255,255,255,0.15)").slice(0, 48),
+            borderColor: this._safeString(borderColor, "rgba(255,255,255,0.4)").slice(0, 48),
             locked: false,
             visible: true,
         };
@@ -360,7 +399,7 @@ const TACTICAL_BOARD = {
 
     _sanitizeObject(object) {
         if (!object || typeof object !== "object") return null;
-        const type = ["player", "ball", "arrow", "zone", "text"].includes(object.type)
+        const type = ["player", "ball", "arrow", "zone", "text", "path", "rect", "ellipse"].includes(object.type)
             ? object.type
             : "player";
         const safe = {
@@ -374,9 +413,38 @@ const TACTICAL_BOARD = {
             safe.startY = this._clampNumber(object.startY, 0, 100, 50);
             safe.endX = this._clampNumber(object.endX, 0, 100, 55);
             safe.endY = this._clampNumber(object.endY, 0, 100, 55);
-            safe.style = ["solid", "dashed", "curved"].includes(object.style) ? object.style : "solid";
+            safe.style = ["solid", "dashed", "curved", "dotted", "run", "pass", "shot", "dribble"].includes(object.style) ? object.style : "solid";
             safe.color = this._safeString(object.color, "#ffffff").slice(0, 32);
             safe.width = this._clampNumber(object.width, 0.5, 8, 2);
+            return safe;
+        }
+        if (type === "path") {
+            safe.points = Array.isArray(object.points)
+                ? object.points.slice(0, 1000).map(p => ({
+                    x: this._clampNumber(p.x, 0, 100, 50),
+                    y: this._clampNumber(p.y, 0, 100, 50),
+                }))
+                : [];
+            safe.color = this._safeString(object.color, "#ffffff").slice(0, 32);
+            safe.width = this._clampNumber(object.width, 0.5, 10, 2);
+            return safe;
+        }
+        if (type === "rect") {
+            safe.x = this._clampNumber(object.x, 0, 100, 50);
+            safe.y = this._clampNumber(object.y, 0, 100, 50);
+            safe.width = this._clampNumber(object.width, 1, 100, 20);
+            safe.height = this._clampNumber(object.height, 1, 100, 20);
+            safe.fillColor = this._safeString(object.fillColor, "rgba(255,255,255,0.15)").slice(0, 48);
+            safe.borderColor = this._safeString(object.borderColor, "rgba(255,255,255,0.4)").slice(0, 48);
+            return safe;
+        }
+        if (type === "ellipse") {
+            safe.x = this._clampNumber(object.x, 0, 100, 50);
+            safe.y = this._clampNumber(object.y, 0, 100, 50);
+            safe.rx = this._clampNumber(object.rx, 1, 50, 10);
+            safe.ry = this._clampNumber(object.ry, 1, 50, 10);
+            safe.fillColor = this._safeString(object.fillColor, "rgba(255,255,255,0.15)").slice(0, 48);
+            safe.borderColor = this._safeString(object.borderColor, "rgba(255,255,255,0.4)").slice(0, 48);
             return safe;
         }
         safe.x = this._clampNumber(object.x, 0, 100, 50);

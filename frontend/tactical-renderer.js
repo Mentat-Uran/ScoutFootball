@@ -25,9 +25,15 @@ const TacticalRenderer = {
     scale: 1,
     offsetX: 0,
     offsetY: 0,
-    drawingMode: null,    // null | 'arrow' | 'zone'
+    drawingMode: null,    // null | 'arrow' | 'zone' | 'text'
     drawStart: null,      // {x, y} start point for drawing
     drawPreview: null,    // preview object during drawing
+    showGrid: false,
+    snapToGrid: false,
+    ghostOpacity: 0.2,
+    _penPoints: [],       // points collected during pen drawing
+    _hoverCardEl: null,   // DOM element for player hover card
+    _timelineEl: null,    // DOM element for timeline scrubber
 
     /* ── Initialize ─────────────────────────────────────────────────── */
     init(canvasId, project) {
@@ -46,6 +52,9 @@ const TacticalRenderer = {
         this.drawPreview = null;
         this._keydownHandler = null;
         this._isRecording = false;
+        this._penPoints = [];
+        this._initHoverCard();
+        this._initTimeline();
 
         this.resize();
         this.bindEvents();
@@ -102,6 +111,12 @@ const TacticalRenderer = {
         // Draw pitch
         this.drawPitch();
 
+        // Draw grid overlay
+        if (this.showGrid) this.drawGrid();
+
+        // Draw ghost silhouettes (previous/next frame positions in animation mode)
+        this._drawGhosts();
+
         // Draw objects
         for (const obj of this.project.objects) {
             if (!obj.visible) continue;
@@ -111,6 +126,9 @@ const TacticalRenderer = {
                 case "arrow":  this.drawArrow(obj); break;
                 case "zone":   this.drawZone(obj); break;
                 case "text":   this.drawText(obj); break;
+                case "path":   this.drawPath(obj); break;
+                case "rect":   this.drawRect(obj); break;
+                case "ellipse": this.drawEllipse(obj); break;
             }
         }
 
@@ -123,6 +141,9 @@ const TacticalRenderer = {
         if (this.selectedObject) {
             this.drawSelection(this.selectedObject);
         }
+
+        // Update timeline UI
+        this.updateTimeline();
     },
 
     drawPitch() {
@@ -248,8 +269,38 @@ const TacticalRenderer = {
         const end = this.toCanvas(obj.endX, obj.endY);
 
         ctx.strokeStyle = obj.color;
-        ctx.lineWidth = obj.width;
-        ctx.setLineDash(obj.style === "dashed" ? [8, 4] : []);
+        ctx.lineWidth = obj.width || 2;
+
+        // Set line dash pattern based on style
+        switch (obj.style) {
+            case "dashed":
+                ctx.setLineDash([8, 4]);
+                break;
+            case "dotted":
+                ctx.setLineDash([2, 4]);
+                break;
+            case "run":
+                // Wavy dashed for runs
+                ctx.setLineDash([6, 3, 2, 3]);
+                break;
+            case "pass":
+                // Solid thin
+                ctx.setLineDash([]);
+                ctx.lineWidth = Math.max(1, (obj.width || 2) * 0.7);
+                break;
+            case "shot":
+                // Thick solid
+                ctx.setLineDash([]);
+                ctx.lineWidth = (obj.width || 2) * 1.8;
+                break;
+            case "dribble":
+                // Small dots
+                ctx.setLineDash([1.5, 5]);
+                break;
+            default: // solid, curved
+                ctx.setLineDash([]);
+                break;
+        }
 
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
@@ -321,6 +372,128 @@ const TacticalRenderer = {
         ctx.fillText(obj.text || obj.label || "", pos.x, pos.y);
     },
 
+    /* ── Grid ──────────────────────────────────────────────────────── */
+    drawGrid() {
+        const ctx = this.ctx;
+        const tl = this.toCanvas(0, 0);
+        const br = this.toCanvas(100, 100);
+        ctx.strokeStyle = "rgba(255,255,255,0.1)";
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([2, 4]);
+        for (let i = 0; i <= 100; i += 10) {
+            const p1 = this.toCanvas(i, 0);
+            const p2 = this.toCanvas(i, 100);
+            ctx.beginPath();
+            ctx.moveTo(p1.x, tl.y);
+            ctx.lineTo(p2.x, br.y);
+            ctx.stroke();
+            const p3 = this.toCanvas(0, i);
+            const p4 = this.toCanvas(100, i);
+            ctx.beginPath();
+            ctx.moveTo(tl.x, p3.y);
+            ctx.lineTo(br.x, p4.y);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+    },
+
+    /* ── Path (free drawing) ───────────────────────────────────────── */
+    drawPath(obj) {
+        if (!obj.points || obj.points.length < 2) return;
+        const ctx = this.ctx;
+        ctx.strokeStyle = obj.color || "#ffffff";
+        ctx.lineWidth = obj.width || 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.setLineDash([]);
+        const start = this.toCanvas(obj.points[0].x, obj.points[0].y);
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        for (let i = 1; i < obj.points.length; i++) {
+            const p = this.toCanvas(obj.points[i].x, obj.points[i].y);
+            ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+        ctx.lineCap = "butt";
+        ctx.lineJoin = "miter";
+    },
+
+    /* ── Rectangle ─────────────────────────────────────────────────── */
+    drawRect(obj) {
+        const ctx = this.ctx;
+        const tl = this.toCanvas(obj.x, obj.y);
+        const w = obj.width * this.scale;
+        const h = obj.height * this.scale;
+        if (obj.fillColor) {
+            ctx.fillStyle = obj.fillColor;
+            ctx.fillRect(tl.x, tl.y, w, h);
+        }
+        if (obj.borderColor) {
+            ctx.strokeStyle = obj.borderColor;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(tl.x, tl.y, w, h);
+        }
+    },
+
+    /* ── Ellipse ───────────────────────────────────────────────────── */
+    drawEllipse(obj) {
+        const ctx = this.ctx;
+        const pos = this.toCanvas(obj.x, obj.y);
+        const rx = obj.rx * this.scale;
+        const ry = obj.ry * this.scale;
+        ctx.beginPath();
+        ctx.ellipse(pos.x, pos.y, rx, ry, 0, 0, Math.PI * 2);
+        if (obj.fillColor) {
+            ctx.fillStyle = obj.fillColor;
+            ctx.fill();
+        }
+        if (obj.borderColor) {
+            ctx.strokeStyle = obj.borderColor;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+    },
+
+    /* ── Ghost Silhouettes ─────────────────────────────────────────── */
+    _drawGhosts() {
+        if (!this.project || !this.project.frames || this.project.frames.length < 2) return;
+        if (this.animationState.isPlaying) return;
+        const frames = this.project.frames;
+        const idx = this.animationState.currentFrame;
+        const ctx = this.ctx;
+        const opacity = this.ghostOpacity || 0.2;
+        // Previous frame
+        if (idx > 0 && frames[idx - 1] && frames[idx - 1].objects) {
+            for (const obj of frames[idx - 1].objects) {
+                if (obj.type === "player" && obj.visible) {
+                    const pos = this.toCanvas(obj.x, obj.y);
+                    const r = obj.radius * this.scale;
+                    ctx.globalAlpha = opacity;
+                    ctx.fillStyle = obj.color;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+            }
+        }
+        // Next frame
+        if (idx < frames.length - 1 && frames[idx + 1] && frames[idx + 1].objects) {
+            for (const obj of frames[idx + 1].objects) {
+                if (obj.type === "player" && obj.visible) {
+                    const pos = this.toCanvas(obj.x, obj.y);
+                    const r = obj.radius * this.scale;
+                    ctx.globalAlpha = opacity * 0.6;
+                    ctx.fillStyle = obj.color;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+            }
+        }
+    },
+
     _drawPreviewObject(preview) {
         const ctx = this.ctx;
         ctx.setLineDash([6, 4]);
@@ -350,6 +523,22 @@ const TacticalRenderer = {
             ctx.fillStyle = "rgba(255,255,255,0.1)";
             ctx.fillRect(tl.x, tl.y, w, h);
             ctx.strokeRect(tl.x, tl.y, w, h);
+        } else if (preview.type === "rect") {
+            const tl = this.toCanvas(preview.x, preview.y);
+            const w = preview.width * this.scale;
+            const h = preview.height * this.scale;
+            ctx.fillStyle = "rgba(255,255,255,0.1)";
+            ctx.fillRect(tl.x, tl.y, w, h);
+            ctx.strokeRect(tl.x, tl.y, w, h);
+        } else if (preview.type === "ellipse") {
+            const pos = this.toCanvas(preview.x, preview.y);
+            const rx = preview.rx * this.scale;
+            const ry = preview.ry * this.scale;
+            ctx.beginPath();
+            ctx.ellipse(pos.x, pos.y, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255,255,255,0.1)";
+            ctx.fill();
+            ctx.stroke();
         }
 
         ctx.setLineDash([]);
@@ -358,10 +547,16 @@ const TacticalRenderer = {
     drawSelection(obj) {
         const ctx = this.ctx;
 
-        if (obj.type === "arrow") {
+        if (obj.type === "arrow" || obj.type === "path") {
             // Highlight arrow midpoint
-            const start = this.toCanvas(obj.startX, obj.startY);
-            const end = this.toCanvas(obj.endX, obj.endY);
+            let start, end;
+            if (obj.type === "path" && obj.points && obj.points.length >= 2) {
+                start = this.toCanvas(obj.points[0].x, obj.points[0].y);
+                end = this.toCanvas(obj.points[obj.points.length - 1].x, obj.points[obj.points.length - 1].y);
+            } else {
+                start = this.toCanvas(obj.startX, obj.startY);
+                end = this.toCanvas(obj.endX, obj.endY);
+            }
             const mx = (start.x + end.x) / 2;
             const my = (start.y + end.y) / 2;
             const r = 8;
@@ -372,7 +567,7 @@ const TacticalRenderer = {
             ctx.arc(mx, my, r, 0, Math.PI * 2);
             ctx.stroke();
             ctx.setLineDash([]);
-        } else if (obj.type === "zone") {
+        } else if (obj.type === "zone" || obj.type === "rect") {
             const tl = this.toCanvas(obj.x, obj.y);
             const w = obj.width * this.scale;
             const h = obj.height * this.scale;
@@ -380,6 +575,17 @@ const TacticalRenderer = {
             ctx.lineWidth = 2;
             ctx.setLineDash([4, 4]);
             ctx.strokeRect(tl.x - 3, tl.y - 3, w + 6, h + 6);
+            ctx.setLineDash([]);
+        } else if (obj.type === "ellipse") {
+            const pos = this.toCanvas(obj.x, obj.y);
+            const rx = obj.rx * this.scale + 4;
+            const ry = obj.ry * this.scale + 4;
+            ctx.strokeStyle = "#ffd700";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.ellipse(pos.x, pos.y, rx, ry, 0, 0, Math.PI * 2);
+            ctx.stroke();
             ctx.setLineDash([]);
         } else {
             const pos = this.toCanvas(obj.x, obj.y);
@@ -401,7 +607,10 @@ const TacticalRenderer = {
         this.canvas.addEventListener("mousedown", (e) => this.onMouseDown(e));
         this.canvas.addEventListener("mousemove", (e) => this.onMouseMove(e));
         this.canvas.addEventListener("mouseup", (e) => this.onMouseUp(e));
-        this.canvas.addEventListener("mouseleave", (e) => this.onMouseUp(e));
+        this.canvas.addEventListener("mouseleave", (e) => {
+            this.onMouseUp(e);
+            if (this._hoverCardEl) this._hoverCardEl.style.display = "none";
+        });
 
         // Touch support
         this.canvas.addEventListener("touchstart", (e) => {
@@ -450,13 +659,91 @@ const TacticalRenderer = {
         const rect = this.canvas.getBoundingClientRect();
         const cx = e.clientX - rect.left;
         const cy = e.clientY - rect.top;
-        const { x, y } = this.fromCanvas(cx, cy);
+        let { x, y } = this.fromCanvas(cx, cy);
+
+        // Snap to grid
+        if (this.snapToGrid) { x = Math.round(x / 5) * 5; y = Math.round(y / 5) * 5; }
 
         // Drawing mode: start drawing arrow or zone
-        if (this.drawingMode === "arrow" || this.drawingMode === "zone") {
+        if (this.drawingMode === "arrow" || this.drawingMode === "zone" || this.drawingMode === "rect" || this.drawingMode === "ellipse") {
             this.drawStart = { x, y };
             this.selectedObject = null;
             this.render();
+            return;
+        }
+
+        // Pen mode: start collecting points
+        if (this.drawingMode === "pen") {
+            this._penPoints = [{ x, y }];
+            this.selectedObject = null;
+            this.render();
+            return;
+        }
+
+        // Eraser mode: remove object under cursor
+        if (this.drawingMode === "eraser") {
+            for (const obj of [...this.project.objects].reverse()) {
+                if (!obj.visible || obj.locked) continue;
+                if (obj.type === "player" || obj.type === "ball") {
+                    const dx = x - obj.x, dy = y - obj.y;
+                    if (dx * dx + dy * dy < (obj.radius + 2) * (obj.radius + 2)) {
+                        this.pushUndo();
+                        this.project.objects = this.project.objects.filter(o => o.id !== obj.id);
+                        this.render();
+                        if (this.onChange) this.onChange();
+                        return;
+                    }
+                } else if (obj.type === "arrow" || obj.type === "path") {
+                    const pts = obj.type === "path" ? obj.points : null;
+                    if (pts) {
+                        for (const p of pts) {
+                            const dx = x - p.x, dy = y - p.y;
+                            if (dx * dx + dy * dy < 25) {
+                                this.pushUndo();
+                                this.project.objects = this.project.objects.filter(o => o.id !== obj.id);
+                                this.render();
+                                if (this.onChange) this.onChange();
+                                return;
+                            }
+                        }
+                    }
+                    const dist = this._pointToSegmentDist(x, y, obj.startX, obj.startY, obj.endX, obj.endY);
+                    if (dist < 3) {
+                        this.pushUndo();
+                        this.project.objects = this.project.objects.filter(o => o.id !== obj.id);
+                        this.render();
+                        if (this.onChange) this.onChange();
+                        return;
+                    }
+                } else if (obj.type === "zone" || obj.type === "rect") {
+                    if (x >= obj.x && x <= obj.x + obj.width && y >= obj.y && y <= obj.y + obj.height) {
+                        this.pushUndo();
+                        this.project.objects = this.project.objects.filter(o => o.id !== obj.id);
+                        this.render();
+                        if (this.onChange) this.onChange();
+                        return;
+                    }
+                } else if (obj.type === "ellipse") {
+                    const dx = (x - obj.x) / obj.rx, dy = (y - obj.y) / obj.ry;
+                    if (dx * dx + dy * dy <= 1) {
+                        this.pushUndo();
+                        this.project.objects = this.project.objects.filter(o => o.id !== obj.id);
+                        this.render();
+                        if (this.onChange) this.onChange();
+                        return;
+                    }
+                } else if (obj.type === "text") {
+                    const pos = this.toCanvas(obj.x, obj.y);
+                    const fontSize = (obj.fontSize || 12) * this.scale;
+                    if (cx >= pos.x - fontSize * 3 && cx <= pos.x + fontSize * 3 && cy >= pos.y - fontSize && cy <= pos.y + fontSize) {
+                        this.pushUndo();
+                        this.project.objects = this.project.objects.filter(o => o.id !== obj.id);
+                        this.render();
+                        if (this.onChange) this.onChange();
+                        return;
+                    }
+                }
+            }
             return;
         }
 
@@ -483,12 +770,18 @@ const TacticalRenderer = {
                     found = obj;
                     break;
                 }
-            } else if (obj.type === "arrow") {
+            } else if (obj.type === "arrow" || obj.type === "path") {
                 // Hit test: distance from point to line segment < 3 units
-                const dist = this._pointToSegmentDist(x, y, obj.startX, obj.startY, obj.endX, obj.endY);
-                if (dist < 3) {
-                    found = obj;
-                    break;
+                if (obj.type === "path" && obj.points && obj.points.length >= 2) {
+                    let hit = false;
+                    for (let i = 0; i < obj.points.length - 1; i++) {
+                        const dist = this._pointToSegmentDist(x, y, obj.points[i].x, obj.points[i].y, obj.points[i+1].x, obj.points[i+1].y);
+                        if (dist < 3) { hit = true; break; }
+                    }
+                    if (hit) { found = obj; break; }
+                } else if (obj.type === "arrow") {
+                    const dist = this._pointToSegmentDist(x, y, obj.startX, obj.startY, obj.endX, obj.endY);
+                    if (dist < 3) { found = obj; break; }
                 }
             } else if (obj.type === "zone") {
                 // Hit test: point inside rectangle bounds
@@ -497,16 +790,23 @@ const TacticalRenderer = {
                     found = obj;
                     break;
                 }
+            } else if (obj.type === "rect") {
+                if (x >= obj.x && x <= obj.x + obj.width && y >= obj.y && y <= obj.y + obj.height) {
+                    found = obj; break;
+                }
+            } else if (obj.type === "ellipse") {
+                const dx = (x - obj.x) / obj.rx, dy = (y - obj.y) / obj.ry;
+                if (dx * dx + dy * dy <= 1) { found = obj; break; }
             }
         }
 
         this.selectedObject = found;
         if (found) {
             this.isDragging = true;
-            if (found.type === "arrow") {
+            if (found.type === "arrow" || found.type === "path") {
                 this.dragOffset = {
-                    x: x - found.startX,
-                    y: y - found.startY,
+                    x: found.type === "path" && found.points && found.points.length > 0 ? x - found.points[0].x : x - (found.startX || 0),
+                    y: found.type === "path" && found.points && found.points.length > 0 ? y - found.points[0].y : y - (found.startY || 0),
                 };
             } else {
                 this.dragOffset = { x: x - found.x, y: y - found.y };
@@ -520,7 +820,36 @@ const TacticalRenderer = {
         const rect = this.canvas.getBoundingClientRect();
         const cx = e.clientX - rect.left;
         const cy = e.clientY - rect.top;
-        const { x, y } = this.fromCanvas(cx, cy);
+        let { x, y } = this.fromCanvas(cx, cy);
+
+        // Snap to grid
+        if (this.snapToGrid && (this.isDragging || this.drawStart || this._penPoints.length > 0)) {
+            x = Math.round(x / 5) * 5;
+            y = Math.round(y / 5) * 5;
+        }
+
+        // Pen mode: collect points
+        if (this.drawingMode === "pen" && this._penPoints.length > 0) {
+            this._penPoints.push({ x, y });
+            this.render();
+            // Draw the live pen stroke
+            const ctx = this.ctx;
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            const s = this.toCanvas(this._penPoints[0].x, this._penPoints[0].y);
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            for (let i = 1; i < this._penPoints.length; i++) {
+                const p = this.toCanvas(this._penPoints[i].x, this._penPoints[i].y);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+            ctx.lineCap = "butt";
+            ctx.lineJoin = "miter";
+            return;
+        }
 
         // Drawing mode: update preview
         if (this.drawStart) {
@@ -542,14 +871,47 @@ const TacticalRenderer = {
                     x: zx, y: zy,
                     width: zw, height: zh,
                 };
+            } else if (this.drawingMode === "rect") {
+                const rx = Math.min(this.drawStart.x, x);
+                const ry = Math.min(this.drawStart.y, y);
+                const rw = Math.abs(x - this.drawStart.x);
+                const rh = Math.abs(y - this.drawStart.y);
+                this.drawPreview = {
+                    type: "rect",
+                    x: rx, y: ry,
+                    width: rw, height: rh,
+                };
+            } else if (this.drawingMode === "ellipse") {
+                const ecx = (this.drawStart.x + x) / 2;
+                const ecy = (this.drawStart.y + y) / 2;
+                const erx = Math.abs(x - this.drawStart.x) / 2;
+                const ery = Math.abs(y - this.drawStart.y) / 2;
+                this.drawPreview = {
+                    type: "ellipse",
+                    x: ecx, y: ecy,
+                    rx: erx, ry: ery,
+                };
             }
             this.render();
             return;
         }
 
+        // Hover card: show player info on hover
+        this._updateHoverCard(cx, cy, x, y);
+
         if (!this.isDragging || !this.selectedObject) return;
 
-        if (this.selectedObject.type === "arrow") {
+        if (this.selectedObject.type === "path" && this.selectedObject.points) {
+            // Move all path points
+            const newX = Math.max(0, Math.min(100, x - this.dragOffset.x));
+            const newY = Math.max(0, Math.min(100, y - this.dragOffset.y));
+            const dx = newX - this.selectedObject.points[0].x;
+            const dy = newY - this.selectedObject.points[0].y;
+            for (const p of this.selectedObject.points) {
+                p.x = Math.max(0, Math.min(100, p.x + dx));
+                p.y = Math.max(0, Math.min(100, p.y + dy));
+            }
+        } else if (this.selectedObject.type === "arrow") {
             // Move entire arrow
             const newStartX = Math.max(0, Math.min(100, x - this.dragOffset.x));
             const newStartY = Math.max(0, Math.min(100, y - this.dragOffset.y));
@@ -568,6 +930,19 @@ const TacticalRenderer = {
 
     onMouseUp() {
         if (!this.project) return;
+
+        // Pen mode: finalize path object
+        if (this.drawingMode === "pen" && this._penPoints.length >= 2) {
+            this.pushUndo();
+            const pathObj = TACTICAL_BOARD.createPath(this._penPoints);
+            this.project.objects.push(pathObj);
+            this._penPoints = [];
+            this.render();
+            if (this.onChange) this.onChange();
+            return;
+        }
+        this._penPoints = [];
+
         // Drawing mode: create the drawn object
         if (this.drawStart && this.drawPreview) {
             this.pushUndo();
@@ -584,6 +959,18 @@ const TacticalRenderer = {
                     this.drawPreview.width, this.drawPreview.height
                 );
                 this.project.objects.push(zone);
+            } else if (this.drawingMode === "rect") {
+                const rect = TACTICAL_BOARD.createRect(
+                    this.drawPreview.x, this.drawPreview.y,
+                    this.drawPreview.width, this.drawPreview.height
+                );
+                this.project.objects.push(rect);
+            } else if (this.drawingMode === "ellipse") {
+                const ell = TACTICAL_BOARD.createEllipse(
+                    this.drawPreview.x, this.drawPreview.y,
+                    this.drawPreview.rx, this.drawPreview.ry
+                );
+                this.project.objects.push(ell);
             }
             this.drawStart = null;
             this.drawPreview = null;
@@ -598,10 +985,13 @@ const TacticalRenderer = {
         this.drawingMode = mode; // null | 'arrow' | 'zone' | 'text'
         this.drawStart = null;
         this.drawPreview = null;
+        this._penPoints = [];
         // Update cursor
         if (this.canvas) {
             if (mode === "text") this.canvas.style.cursor = "text";
-            else if (mode === "arrow" || mode === "zone") this.canvas.style.cursor = "crosshair";
+            else if (mode === "arrow" || mode === "zone" || mode === "rect" || mode === "ellipse") this.canvas.style.cursor = "crosshair";
+            else if (mode === "pen") this.canvas.style.cursor = "crosshair";
+            else if (mode === "eraser") this.canvas.style.cursor = "pointer";
             else this.canvas.style.cursor = "default";
         }
         this.render();
@@ -756,6 +1146,7 @@ const TacticalRenderer = {
         if (index < 0 || index >= this.project.frames.length) return;
         this.animationState.currentFrame = index;
         TACTICAL_BOARD.loadFrame(this.project, index, this);
+        this.updateTimeline();
     },
 
     nextFrame() {
@@ -773,6 +1164,130 @@ const TacticalRenderer = {
     toggleLoop() {
         this.animationState.loop = !this.animationState.loop;
         return this.animationState.loop;
+    },
+
+    /* ── Hover Card ──────────────────────────────────────────────────── */
+    _initHoverCard() {
+        if (this._hoverCardEl && this._hoverCardEl.parentNode) return;
+        const el = document.createElement("div");
+        el.style.cssText = "position:fixed;display:none;z-index:9999;pointer-events:none;" +
+            "background:rgba(20,24,36,0.92);backdrop-filter:blur(12px);border:1px solid rgba(124,168,255,0.3);" +
+            "border-radius:8px;padding:8px 12px;color:#e0e6f0;font:12px/1.4 Inter,sans-serif;" +
+            "box-shadow:0 4px 20px rgba(0,0,0,0.4);min-width:120px;max-width:220px;";
+        document.body.appendChild(el);
+        this._hoverCardEl = el;
+    },
+
+    _updateHoverCard(cx, cy, nx, ny) {
+        if (!this._hoverCardEl || !this.project) { return; }
+        let hovered = null;
+        for (const obj of [...this.project.objects].reverse()) {
+            if (!obj.visible) continue;
+            if (obj.type === "player") {
+                const dx = nx - obj.x, dy = ny - obj.y;
+                if (dx * dx + dy * dy < (obj.radius + 2) * (obj.radius + 2)) { hovered = obj; break; }
+            }
+        }
+        if (hovered) {
+            const team = hovered.team === "away" ? "\u5BA2\u573A" : "\u4E3B\u573A";
+            const num = hovered.number ? `#${hovered.number}` : "";
+            const label = hovered.label || "";
+            this._hoverCardEl.innerHTML = `<div style="font-weight:600;margin-bottom:2px">\u25CB ${label} ${num}</div>` +
+                `<div style="opacity:0.7;font-size:11px">\u7403\u961F: ${team}</div>` +
+                `<div style="opacity:0.7;font-size:11px">\u4F4D\u7F6E: (${hovered.x.toFixed(0)}, ${hovered.y.toFixed(0)})</div>`;
+            const rect = this.canvas.getBoundingClientRect();
+            this._hoverCardEl.style.display = "block";
+            this._hoverCardEl.style.left = (rect.left + cx + 16) + "px";
+            this._hoverCardEl.style.top = (rect.top + cy - 10) + "px";
+        } else {
+            this._hoverCardEl.style.display = "none";
+        }
+    },
+
+    /* ── Timeline UI ──────────────────────────────────────────────────── */
+    _initTimeline() {
+        if (!this.canvas || !this.canvas.parentElement) return;
+        const parent = this.canvas.parentElement;
+        if (this._timelineEl && this._timelineEl.parentNode) return;
+        const el = document.createElement("div");
+        el.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;" +
+            "background:rgba(20,24,36,0.85);backdrop-filter:blur(8px);border-top:1px solid rgba(255,255,255,0.08);" +
+            "font:12px/1 Inter,sans-serif;color:#c0c8d8;user-select:none;";
+        el.innerHTML =
+            '<button data-act="prev" style="background:none;border:none;color:inherit;cursor:pointer;font-size:16px" title="\u4E0A\u4E00\u5E27">\u25C1</button>' +
+            '<div style="flex:1;position:relative;height:20px;cursor:pointer" data-act="scrub">' +
+            '<div style="position:absolute;top:8px;left:0;right:0;height:3px;background:rgba(255,255,255,0.12);border-radius:2px"></div>' +
+            '<div data-el="progress" style="position:absolute;top:8px;left:0;height:3px;background:#7ca8ff;border-radius:2px;width:0%"></div>' +
+            '<div data-el="markers" style="position:absolute;top:0;left:0;right:0;height:20px"></div>' +
+            '<div data-el="indicator" style="position:absolute;top:3px;left:0;width:14px;height:14px;background:#7ca8ff;border-radius:50%;transform:translateX(-7px);box-shadow:0 0 6px rgba(124,168,255,0.6)"></div>' +
+            '</div>' +
+            '<button data-act="next" style="background:none;border:none;color:inherit;cursor:pointer;font-size:16px" title="\u4E0B\u4E00\u5E27">\u25B7</button>' +
+            '<span data-el="label" style="min-width:48px;text-align:center;font-size:11px;color:#8892a4">1 / 1</span>';
+        parent.appendChild(el);
+        this._timelineEl = el;
+        // Bind events
+        el.querySelector('[data-act="prev"]').addEventListener("click", () => this.prevFrame());
+        el.querySelector('[data-act="next"]').addEventListener("click", () => this.nextFrame());
+        el.querySelector('[data-act="scrub"]').addEventListener("click", (ev) => {
+            if (!this.project || !this.project.frames) return;
+            const scrubEl = el.querySelector('[data-act="scrub"]');
+            const r = scrubEl.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+            const idx = Math.min(this.project.frames.length - 1, Math.round(pct * (this.project.frames.length - 1)));
+            this.goToFrame(idx);
+            this.updateTimeline();
+        });
+    },
+
+    updateTimeline() {
+        if (!this._timelineEl || !this.project || !this.project.frames) return;
+        const frames = this.project.frames;
+        const idx = this.animationState.currentFrame;
+        const pct = frames.length > 1 ? (idx / (frames.length - 1)) * 100 : 0;
+        const progress = this._timelineEl.querySelector('[data-el="progress"]');
+        const indicator = this._timelineEl.querySelector('[data-el="indicator"]');
+        const label = this._timelineEl.querySelector('[data-el="label"]');
+        const markers = this._timelineEl.querySelector('[data-el="markers"]');
+        if (progress) progress.style.width = pct + "%";
+        if (indicator) indicator.style.left = pct + "%";
+        if (label) label.textContent = (idx + 1) + " / " + frames.length;
+        // Render frame markers
+        if (markers) {
+            markers.innerHTML = "";
+            for (let i = 0; i < frames.length; i++) {
+                const m = document.createElement("div");
+                const mp = frames.length > 1 ? (i / (frames.length - 1)) * 100 : 0;
+                m.style.cssText = `position:absolute;top:2px;left:${mp}%;width:6px;height:6px;transform:translateX(-3px);` +
+                    `background:${i === idx ? "#7ca8ff" : "rgba(255,255,255,0.25)"};border-radius:50%;cursor:pointer`;
+                m.title = frames[i].name || ("Frame " + (i + 1));
+                const fi = i;
+                m.addEventListener("click", (ev) => { ev.stopPropagation(); this.goToFrame(fi); this.updateTimeline(); });
+                markers.appendChild(m);
+            }
+        }
+    },
+
+    /* ── PDF Export ──────────────────────────────────────────────────── */
+    exportPDF() {
+        if (!this.canvas) return;
+        const savedSelection = this.selectedObject;
+        this.selectedObject = null;
+        this.render();
+        const dataUrl = this.canvas.toDataURL("image/png");
+        this.selectedObject = savedSelection;
+        this.render();
+        const w = window.open("", "_blank");
+        if (!w) { alert("\u25C6 \u8BF7\u5141\u8BB8\u5F39\u51FA\u7A97\u53E3\u4EE5\u5BFC\u51FAPDF"); return; }
+        w.document.write(
+            '<!DOCTYPE html><html><head><title>\u6218\u672F\u677F\u5BFC\u51FA</title>' +
+            '<style>@media print{body{margin:0}img{max-width:100%;height:auto}}body{margin:20px;text-align:center}</style>' +
+            '</head><body>' +
+            '<h2 style="font-family:Inter,sans-serif;color:#333">\u6218\u672F\u677F \u2014 Tactical Board</h2>' +
+            '<img src="' + dataUrl + '" style="max-width:100%;border:1px solid #ccc;border-radius:4px" />' +
+            '<script>setTimeout(function(){window.print()},500)<\/script>' +
+            '</body></html>'
+        );
+        w.document.close();
     },
 
     exportPNG(filename) {

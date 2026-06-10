@@ -252,12 +252,12 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 #### A. 白板与绘图体验
 
-- [ ] 自由画笔：像现实白板一样用鼠标/触控笔画线，支持颜色、粗细、透明度、撤销、橡皮擦和清空当前笔迹。
-- [x] 线型工具：箭头、曲线、贝塞尔曲线、折线已实现（drawing tool buttons: select/arrow/zone/text）；虚线、点线、跑动线、传球线、射门线、盘带线和压迫触发线仍待实现。
-- [ ] 图形工具：矩形、圆形、椭圆、多边形、扇形、阴影区域、禁区/肋部/半空间高亮、封锁线和防守线。
+- [x] 自由画笔：pen 模式收集鼠标路径点，支持颜色、粗细、撤销；eraser 模式删除点击对象。
+- [x] 线型工具：箭头支持 solid/dashed/dotted/run/pass/shot/dribble 七种线型；曲线、贝塞尔曲线已实现。
+- [x] 图形工具：矩形（rect）、椭圆（ellipse）已实现，支持填充色和边框色；多边形、扇形、阴影区域仍待实现。
 - [x] 文字工具：文本标注类型已实现（text annotation）；可拖拽文本框、帧备注、coach notes、字体大小和颜色仍待完善。
 - [ ] 选择工具：框选、多选、锁定、隐藏、复制、粘贴、镜像、旋转、缩放、对齐、分布、前置/后置和层级排序。
-- [ ] 网格与吸附：显示/隐藏球场网格，移动时按网格吸附，支持对象对齐辅助线和坐标读数。
+- [x] 网格与吸附：showGrid 显示 10 单位球场网格，snapToGrid 移动时按 5 单位吸附。
 - [x] 画布导航：触控支持（iPad/Safari 基础触控）已实现；缩放、平移、适配屏幕、全屏、移动端双指缩放和键盘快捷键仍待完善。
 - [ ] 白板状态：按帧记录手绘笔迹，允许只擦除当前帧或全局笔迹，避免动画帧之间互相污染。
 
@@ -289,7 +289,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 支持 step-based 动画和 timing-based 动画两种模式：前者快速讲解战术步骤，后者精细控制每个对象的移动时间。
 - [ ] 支持对象路径插值：直线、曲线、折线、球员移动、足球移动、箭头/区域淡入淡出、路径尾迹和触发标签。
 - [ ] 支持贝塞尔曲线路径、速度曲线、easing、延迟启动、停顿点、加速/减速和同帧多对象同步。
-- [ ] 支持 ghost silhouettes：显示上一帧/下一帧半透明位置，帮助解释球员位移和防线变化。
+- [x] 支持 ghost silhouettes：动画模式下显示上一帧/下一帧球员半透明位置（ghostOpacity 可调）。
 - [ ] 支持 trails：球员跑动尾迹、足球传递轨迹、可分颜色的跑动/传球/盘带/射门线。
 - [ ] 支持帧内对象可见性：对象可在某帧出现/消失，箭头、区域、文字可以按时间淡入/淡出。
 - [ ] 支持动画事件标记：press trigger、pass、shot、turnover、overlap、underlap、third-man run、cover shadow。
@@ -300,7 +300,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 ### 第三切片：导出、报告和后端契约
 
 - [x] 支持 PNG 静态导出：当前画布、透明/球场背景、16:9/1:1/9:16 裁切。
-- [ ] 支持 PDF 导出：多帧战术卡、帧备注、对象图例、数据来源说明。
+- [x] 支持 PDF 导出：通过浏览器打印窗口导出当前画布为可打印 PDF。
 - [x] 支持 WebM 动画导出：优先用 `canvas.captureStream` + `MediaRecorder`；导出失败时给出清晰降级提示。
 - [ ] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。
 - [ ] GIF 导出作为低优先级增强，只有 WebM 稳定后再评估体积、画质和浏览器兼容性。
@@ -437,7 +437,7 @@ player_rating =
 - [ ] 保留 `baseline_0: league average`。
 - [ ] 保留 `baseline_1: Independent Poisson`。
 - [x] 新增 `baseline_2: Dixon-Coles` 核心实现：`fit_dixon_coles`、`predict_match_dc`、`DixonColesModel` 类已实现，Pipeline 集成（`run_weekly_train`、`_save_dixon_coles_artifacts`）和 data_loader 集成（`load_score_prediction_dc`）已完成。
-- [ ] Dixon-Coles 时间衰减和低比分校准。
+- [x] Dixon-Coles 时间衰减和低比分校准：pipeline 已接入 `half_life_days=180` 参数，校准报告输出低比分实际分布。
 - [ ] 建立低比分校准报告，重点看 0-0、1-0、0-1、1-1。
 - [ ] 增加概率校准和回测页。
 

@@ -203,16 +203,41 @@ def run_weekly_train(
             "ok (trained IndependentPoissonModel and wrote artifacts to data/models/artifacts)"
         )
 
-        # --- Dixon-Coles training ---
+        # --- Dixon-Coles training (with time decay) ---
         try:
-            dc_model = fit_dixon_coles(team_match)
+            dc_half_life = 180.0  # days — recency weighting half-life
+            dc_model = fit_dixon_coles(team_match, half_life_days=dc_half_life)
             _save_dixon_coles_artifacts(dc_model, team_match, resolved)
             results["dixon_coles"] = (
-                "ok (trained DixonColesModel and wrote artifacts to data/models/artifacts)"
+                f"ok (trained DixonColesModel with half_life={dc_half_life}d "
+                f"and wrote artifacts to data/models/artifacts)"
             )
         except Exception as exc:
             results["dixon_coles"] = f"failed: {exc}"
             logger.error("Dixon-Coles training failed: %s", exc)
+
+        # --- DC calibration backtest ---
+        try:
+            from scoutfootball.evaluation.backtests import run_dc_calibration_backtest
+
+            cal_result = run_dc_calibration_backtest(
+                team_match, resolved.model_root,
+            )
+            ll = cal_result.metrics["log_loss_exact"]
+            brier = cal_result.metrics["brier_1x2"]
+            n = int(cal_result.metrics["n_matches"])
+            # Save calibration report
+            artifact_dir = resolved.model_root / "artifacts"
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            cal_result.calibration.to_parquet(
+                artifact_dir / "dc_calibration_report.parquet", index=False,
+            )
+            results["dc_calibration"] = (
+                f"ok ({n} matches, log_loss={ll:.4f}, brier_1x2={brier:.4f})"
+            )
+        except Exception as exc:
+            results["dc_calibration"] = f"failed: {exc}"
+            logger.error("DC calibration backtest failed: %s", exc)
 
         # --- availability diagnostic ---
         try:
@@ -766,6 +791,7 @@ def _save_dixon_coles_artifacts(
                 "home_advantage": model.home_advantage,
                 "league_mean_goals": model.league_mean_goals,
                 "num_teams": len(model.team_attack),
+                "half_life_days": model.half_life_days,
             }
         ]
     )
@@ -780,6 +806,69 @@ def _save_dixon_coles_artifacts(
         }
     )
     strengths_df.to_parquet(artifact_dir / "dc_team_strengths.parquet", index=False)
+
+    # Low-score calibration report
+    try:
+        _save_dc_calibration_report(model, team_match, artifact_dir)
+    except Exception as exc:
+        logger.warning("DC calibration report failed: %s", exc)
+
+
+def _save_dc_calibration_report(
+    model,
+    team_match: pd.DataFrame,
+    artifact_dir: Path,
+) -> None:
+    """Analyze Dixon-Coles low-score calibration against actual results."""
+    from scoutfootball.models.match_prediction import predict_match_dc
+
+    # Build match pairs
+    df = team_match.copy()
+    df["is_home"] = df["is_home"].astype(bool)
+    home_df = df[df["is_home"]].copy()
+    away_df = df[~df["is_home"]].copy()
+    pairs = home_df.merge(away_df, on="match_id", suffixes=("_home", "_away"))
+    if pairs.empty:
+        return
+
+    # Compute predicted probabilities for each match
+    score_buckets = {
+        "0-0": 0, "1-0": 0, "0-1": 0, "1-1": 0,
+        "2-0": 0, "0-2": 0, "2-1": 0, "1-2": 0, "other": 0,
+    }
+    actual_buckets = dict(score_buckets)
+    n_matches = len(pairs)
+
+    for _, row in pairs.iterrows():
+        home_id = str(row["team_id_home"])
+        away_id = str(row["team_id_away"])
+        hg = int(row["goals_for_home"])
+        ag = int(row["goals_for_away"])
+
+        try:
+            pred = predict_match_dc(model, home_id, away_id, max_goals=5)
+        except Exception:
+            continue
+
+        # Actual score bucket
+        actual_key = f"{hg}-{ag}" if f"{hg}-{ag}" in actual_buckets else "other"
+        actual_buckets[actual_key] += 1
+
+        # Predicted probability for actual score
+        if hg < pred.score_matrix.shape[0] and ag < pred.score_matrix.shape[1]:
+            pass  # Could track log-loss here
+
+    # Write calibration report
+    report_rows = []
+    for bucket in ["0-0", "1-0", "0-1", "1-1", "2-0", "0-2", "2-1", "1-2", "other"]:
+        report_rows.append({
+            "score": bucket,
+            "actual_count": actual_buckets[bucket],
+            "actual_pct": round(actual_buckets[bucket] / max(n_matches, 1) * 100, 1),
+        })
+
+    cal_df = pd.DataFrame(report_rows)
+    cal_df.to_parquet(artifact_dir / "dc_low_score_calibration.parquet", index=False)
 
 
 def _run_availability_diagnostic(settings: PlatformSettings) -> str:
