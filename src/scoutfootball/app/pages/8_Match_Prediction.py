@@ -427,6 +427,155 @@ if run_comparison and len(predictions) >= 2:
             )
             st.plotly_chart(fig_cmp, use_container_width=True)
 
+    # --- Score Distribution Comparison (grouped bar chart) ---
+    st.markdown("**比分概率分布对比**")
+
+    comparison_scores = [
+        (0, 0), (1, 0), (0, 1), (1, 1),
+        (2, 0), (0, 2), (2, 1), (1, 2), (2, 2),
+        (3, 0), (0, 3), (3, 1), (1, 3), (3, 2), (2, 3), (3, 3),
+    ]
+    score_labels = [f"{h}-{a}" for h, a in comparison_scores]
+
+    poisson_matrix = poisson_pred.score_matrix
+    dc_matrix = dc_pred.score_matrix
+
+    poisson_probs = []
+    dc_probs = []
+    for h, a in comparison_scores:
+        p_val = (
+            float(poisson_matrix.loc[h, a])
+            if h in poisson_matrix.index and a in poisson_matrix.columns
+            else 0.0
+        )
+        d_val = (
+            float(dc_matrix.loc[h, a])
+            if h in dc_matrix.index and a in dc_matrix.columns
+            else 0.0
+        )
+        poisson_probs.append(p_val)
+        dc_probs.append(d_val)
+
+    fig_score_cmp = go.Figure()
+    fig_score_cmp.add_trace(go.Bar(
+        x=score_labels,
+        y=poisson_probs,
+        name="Poisson",
+        marker_color="#3498db",
+        text=[f"{p:.3f}" for p in poisson_probs],
+        textposition="outside",
+        textfont=dict(size=9),
+    ))
+    fig_score_cmp.add_trace(go.Bar(
+        x=score_labels,
+        y=dc_probs,
+        name="Dixon-Coles",
+        marker_color="#e74c3c",
+        text=[f"{p:.3f}" for p in dc_probs],
+        textposition="outside",
+        textfont=dict(size=9),
+    ))
+    fig_score_cmp.update_layout(
+        barmode="group",
+        xaxis_title="比分 (主-客)",
+        yaxis_title="概率",
+        yaxis=dict(tickformat=".3f"),
+        height=400,
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    st.plotly_chart(fig_score_cmp, use_container_width=True)
+
+    # --- Model Difference Summary ---
+    st.markdown("**模型差异摘要**")
+
+    p_hw = poisson_pred.summary.home_win
+    p_dr = poisson_pred.summary.draw
+    p_aw = poisson_pred.summary.away_win
+    d_hw = dc_pred.summary.home_win
+    d_dr = dc_pred.summary.draw
+    d_aw = dc_pred.summary.away_win
+
+    diff_hw = abs(p_hw - d_hw)
+    diff_dr = abs(p_dr - d_dr)
+    diff_aw = abs(p_aw - d_aw)
+
+    if d_hw > p_hw:
+        hw_highlight = f"🔴 Dixon-Coles 给出更高主胜概率 (+{(d_hw - p_hw):.1%})"
+    elif p_hw > d_hw:
+        hw_highlight = f"🔵 Poisson 给出更高主胜概率 (+{(p_hw - d_hw):.1%})"
+    else:
+        hw_highlight = "两者主胜概率相同"
+
+    diff_data = {
+        "结果": ["主胜", "平局", "客胜"],
+        "Poisson": [f"{p_hw:.1%}", f"{p_dr:.1%}", f"{p_aw:.1%}"],
+        "Dixon-Coles": [f"{d_hw:.1%}", f"{d_dr:.1%}", f"{d_aw:.1%}"],
+        "绝对差异": [f"{diff_hw:.1%}", f"{diff_dr:.1%}", f"{diff_aw:.1%}"],
+    }
+    st.dataframe(pd.DataFrame(diff_data), use_container_width=True, hide_index=True)
+    st.info(hw_highlight)
+
+    # Rho impact: compare low-score probabilities
+    st.markdown("**Rho 影响：低比分概率调整**")
+
+    low_scores = [(0, 0), (1, 0), (0, 1), (1, 1)]
+    low_score_labels = [f"{h}-{a}" for h, a in low_scores]
+
+    rho_impact_rows = []
+    total_poisson_low = 0.0
+    total_dc_low = 0.0
+    for h, a in low_scores:
+        p_val = (
+            float(poisson_matrix.loc[h, a])
+            if h in poisson_matrix.index and a in poisson_matrix.columns
+            else 0.0
+        )
+        d_val = (
+            float(dc_matrix.loc[h, a])
+            if h in dc_matrix.index and a in dc_matrix.columns
+            else 0.0
+        )
+        total_poisson_low += p_val
+        total_dc_low += d_val
+        diff = d_val - p_val
+        pct_change = (diff / p_val * 100) if p_val > 0 else 0.0
+        rho_impact_rows.append({
+            "比分": f"{h}-{a}",
+            "Poisson": f"{p_val:.4f}",
+            "Dixon-Coles": f"{d_val:.4f}",
+            "差异": f"{diff:+.4f}",
+            "变化率": f"{pct_change:+.1f}%",
+        })
+
+    # Summary row
+    total_diff = total_dc_low - total_poisson_low
+    total_pct = (total_diff / total_poisson_low * 100) if total_poisson_low > 0 else 0.0
+    rho_impact_rows.append({
+        "比分": "合计 (0-0~1-1)",
+        "Poisson": f"{total_poisson_low:.4f}",
+        "Dixon-Coles": f"{total_dc_low:.4f}",
+        "差异": f"{total_diff:+.4f}",
+        "变化率": f"{total_pct:+.1f}%",
+    })
+
+    st.dataframe(pd.DataFrame(rho_impact_rows), use_container_width=True, hide_index=True)
+
+    rho_val = dc_model.rho if hasattr(dc_model, "rho") else 0.0
+    if total_diff > 0:
+        rho_note = (
+            f"rho = {rho_val:.4f}：Dixon-Coles 模型将低比分概率合计"
+            f"提高了 {total_pct:+.1f}%，体现了低比分之间的正相关性修正。"
+        )
+    elif total_diff < 0:
+        rho_note = (
+            f"rho = {rho_val:.4f}：Dixon-Coles 模型将低比分概率合计"
+            f"降低了 {abs(total_pct):.1f}%，体现了低比分之间的相关性修正。"
+        )
+    else:
+        rho_note = f"rho = {rho_val:.4f}：两个模型的低比分概率基本一致。"
+    st.caption(rho_note)
+
     # Top scores comparison
     st.markdown("**最可能比分对比 (Top 5)**")
     for pred, label in [(poisson_pred, "Poisson"), (dc_pred, "Dixon-Coles")]:

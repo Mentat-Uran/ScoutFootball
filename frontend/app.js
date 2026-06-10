@@ -1706,6 +1706,15 @@ function bindEvents() {
             }
         });
     }
+    const tacticalExportWebm = document.getElementById("tactical-export-webm");
+    if (tacticalExportWebm) {
+        tacticalExportWebm.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const title = tacticalProject?.title || "tactical-animation";
+                TacticalRenderer.exportWebM(`${title}.webm`);
+            }
+        });
+    }
 
     // Animation controls
     const tacticalAddFrame = document.getElementById("tactical-add-frame");

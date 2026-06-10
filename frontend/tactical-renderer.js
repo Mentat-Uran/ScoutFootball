@@ -782,4 +782,78 @@ const TacticalRenderer = {
         link.click();
         document.body.removeChild(link);
     },
+
+    /* ── WebM Animation Export ────────────────────────────────────────── */
+    exportWebM(filename) {
+        if (!this.canvas) return;
+
+        // Feature detection
+        if (typeof MediaRecorder === "undefined" || typeof this.canvas.captureStream !== "function") {
+            alert("\u25C6 WebM export is not supported in this browser.\n\nMediaRecorder or canvas.captureStream() is unavailable.\nPlease use a Chromium-based browser (Chrome, Edge, Brave).");
+            return;
+        }
+
+        if (!this.project || !this.project.frames || this.project.frames.length < 2) {
+            alert("\u25C6 No animation frames to export.\n\nPlease add at least two keyframes before exporting.");
+            return;
+        }
+
+        const mimeType = "video/webm";
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            alert("\u25C6 video/webm encoding is not supported in this browser.");
+            return;
+        }
+
+        // Save loop state and force single-play for recording
+        const savedLoop = this.animationState.loop;
+        this.animationState.loop = false;
+
+        // Set up MediaRecorder
+        const stream = this.canvas.captureStream(30);
+        const recorder = new MediaRecorder(stream, { mimeType });
+        const chunks = [];
+
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = () => {
+            // Restore loop state
+            this.animationState.loop = savedLoop;
+
+            // Build blob and trigger download
+            const blob = new Blob(chunks, { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.download = filename || "tactical-animation.webm";
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        };
+
+        // Save the original _animate so we can restore after recording
+        const self = this;
+        const originalAnimate = this._animate.bind(this);
+
+        // Override _animate to detect when animation finishes (non-loop)
+        this._animate = function () {
+            originalAnimate();
+            // When the animation ends naturally (isPlaying becomes false),
+            // stop the recorder. This fires only on the final frame transition.
+            if (!self.animationState.isPlaying && recorder.state === "recording") {
+                recorder.stop();
+            }
+        };
+
+        // Start recording, then play
+        recorder.start();
+        this.play();
+
+        // Restore original _animate after recording stops
+        recorder.addEventListener("stop", () => {
+            this._animate = originalAnimate;
+        });
+    },
 };
