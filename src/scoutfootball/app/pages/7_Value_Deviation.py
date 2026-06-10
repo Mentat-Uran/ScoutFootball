@@ -430,8 +430,12 @@ with st.sidebar:
     # Age band filter
     age_col = "age"
     if age_col in oof.columns:
-        age_min = int(oof[age_col].min())
-        age_max = int(oof[age_col].max())
+        age_vals = oof[age_col].dropna()
+        if age_vals.empty:
+            st.info('No valid age data available.')
+            st.stop()
+        age_min = int(age_vals.min())
+        age_max = int(age_vals.max())
         age_range = st.slider("Age Range", age_min, age_max, (age_min, age_max), key="vd_age")
     else:
         age_range = None

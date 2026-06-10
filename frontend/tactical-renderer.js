@@ -44,6 +44,8 @@ const TacticalRenderer = {
         this.drawingMode = null;
         this.drawStart = null;
         this.drawPreview = null;
+        this._keydownHandler = null;
+        this._isRecording = false;
 
         this.resize();
         this.bindEvents();
@@ -240,6 +242,7 @@ const TacticalRenderer = {
     },
 
     drawArrow(obj) {
+        if (obj.startX === obj.endX && obj.startY === obj.endY) return;
         const ctx = this.ctx;
         const start = this.toCanvas(obj.startX, obj.startY);
         const end = this.toCanvas(obj.endX, obj.endY);
@@ -425,7 +428,10 @@ const TacticalRenderer = {
         }, { passive: false });
 
         // Keyboard shortcuts
-        document.addEventListener("keydown", (e) => {
+        if (this._keydownHandler) {
+            document.removeEventListener("keydown", this._keydownHandler);
+        }
+        this._keydownHandler = (e) => {
             if (e.ctrlKey && e.key === "z") {
                 e.preventDefault();
                 this.undo();
@@ -435,10 +441,12 @@ const TacticalRenderer = {
             } else if (e.key === "Delete" && this.selectedObject) {
                 this.deleteSelected();
             }
-        });
+        };
+        document.addEventListener("keydown", this._keydownHandler);
     },
 
     onMouseDown(e) {
+        if (!this.project) return;
         const rect = this.canvas.getBoundingClientRect();
         const cx = e.clientX - rect.left;
         const cy = e.clientY - rect.top;
@@ -559,6 +567,7 @@ const TacticalRenderer = {
     },
 
     onMouseUp() {
+        if (!this.project) return;
         // Drawing mode: create the drawn object
         if (this.drawStart && this.drawPreview) {
             this.pushUndo();
@@ -696,6 +705,7 @@ const TacticalRenderer = {
 
     _animate() {
         if (!this.animationState.isPlaying) return;
+        if (!this.project || !this.project.frames) { this.animationState.isPlaying = false; return; }
 
         const frames = this.project.frames;
         const elapsed = performance.now() - this.animationState.startTime;
@@ -834,6 +844,8 @@ const TacticalRenderer = {
         };
 
         // Save the original _animate so we can restore after recording
+        if (this._isRecording) return;
+        this._isRecording = true;
         const self = this;
         const originalAnimate = this._animate.bind(this);
 
@@ -854,6 +866,7 @@ const TacticalRenderer = {
         // Restore original _animate after recording stops
         recorder.addEventListener("stop", () => {
             this._animate = originalAnimate;
+            this._isRecording = false;
         });
     },
 };

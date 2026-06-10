@@ -39,6 +39,7 @@ with col_b:
 
 if name_a == name_b:
     st.info("Select two different players for comparison.")
+    st.stop()
 
 mask_a = df["player_name"] == name_a
 row_a = df.loc[mask_a].iloc[-1] if mask_a.any() else None
