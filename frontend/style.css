@@ -333,6 +333,102 @@ body.light-mode .mesh-bg {
     min-height: 20px;
 }
 
+.status-pending {
+    color: var(--warn);
+    background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+
+.status-reviewing {
+    color: var(--blue);
+    background: color-mix(in srgb, var(--blue) 14%, transparent);
+}
+
+.status-approved {
+    color: var(--good);
+    background: color-mix(in srgb, var(--good) 14%, transparent);
+}
+
+.status-rejected {
+    color: var(--bad);
+    background: color-mix(in srgb, var(--bad) 14%, transparent);
+}
+
+.scout-sort-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.scout-sort-btn {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.scout-sort-btn.active {
+    color: var(--text-primary);
+    border-color: var(--glass-border-strong);
+    background: var(--glass-bg-strong);
+}
+
+.scout-sort-btn:hover {
+    background: var(--glass-bg-hover);
+}
+
+.scout-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    padding: 0 5px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    background: var(--bad);
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.scout-note-input {
+    width: 100%;
+    margin-top: 6px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    resize: vertical;
+    min-height: 22px;
+    font-family: inherit;
+}
+
+.scout-note-input::placeholder {
+    color: var(--text-soft);
+}
+
+.scout-note-display {
+    margin-top: 4px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    line-height: 1.3;
+}
+
+.rank-item-extra,
+.watch-card-extra {
+    grid-column: 1 / -1;
+}
+
 .low-appearance-row {
     opacity: 0.75;
 }
