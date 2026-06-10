@@ -69,6 +69,11 @@
                     <span class="nav-icon">⊞</span>
                     <span data-i18n="nav_wc_probability">出线</span>
                 </button>
+                <div class="nav-divider"></div>
+                <button class="nav-action" data-view="license" type="button">
+                    <span class="nav-icon">⊛</span>
+                    <span data-i18n="nav_license">数据源</span>
+                </button>
             </div>
 
             <div class="nav-footer">
@@ -668,6 +673,64 @@
                             </thead>
                             <tbody id="wc-prob-table"></tbody>
                         </table>
+                    </div>
+                </article>
+            </section>
+
+            <!-- License & Data Sources -->
+            <section class="view" id="view-license" aria-label="license">
+                <div class="wc-header">
+                    <article class="liquid-panel hero-panel compact">
+                        <div class="hero-copy">
+                            <p class="eyebrow" data-i18n="license_kicker">数据源许可</p>
+                            <h2 data-i18n="license_title">Data Source Manifest</h2>
+                        </div>
+                        <div class="coverage-strip">
+                            <div>
+                                <span class="metric-value">⊛</span>
+                                <span data-i18n="license_sources_label">数据源</span>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+                <article class="liquid-panel table-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="license_table_title">数据源列表</h3>
+                        <span class="status-pill status-medium" id="license-updated">–</span>
+                    </div>
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-i18n="license_th_source">数据源</th>
+                                    <th data-i18n="license_th_license">许可证</th>
+                                    <th data-i18n="license_th_attribution">署名要求</th>
+                                    <th data-i18n="license_th_url">URL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="license-table-body">
+                                <tr><td colspan="4" style="text-align:center;color:var(--text-muted)">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+                <article class="liquid-panel compact-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="license_attribution_notice">StatsBomb 署名声明</h3>
+                        <span class="status-pill status-high">◆ Required</span>
+                    </div>
+                    <div style="padding:0.8rem 1rem;font-size:0.85rem;line-height:1.6;color:var(--text-muted)" id="license-statsbomb-notice">
+                        <p>◆ StatsBomb Open Data: Charts derived from StatsBomb data must display the StatsBomb attribution mark on all public-facing visualizations.</p>
+                        <p style="margin-top:0.4rem">Data is free for research use. Commercial use requires separate licensing from StatsBomb.</p>
+                    </div>
+                </article>
+                <article class="liquid-panel compact-panel">
+                    <div class="panel-head">
+                        <h3>Repository</h3>
+                    </div>
+                    <div style="padding:0.8rem 1rem;font-size:0.85rem;color:var(--text-muted)">
+                        <p><span id="license-repo-url">https://github.com/nousresearch/scoutfootball</span></p>
+                        <p style="margin-top:0.4rem" id="license-last-updated"></p>
                     </div>
                 </article>
             </section>

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +31,20 @@ from scoutfootball.api import (
     list_teams,
 )
 
+_DEFAULT_CORS_ORIGINS = [
+    "http://localhost:8600",
+    "http://127.0.0.1:8600",
+    "http://localhost:8000",
+]
+
+
+def _cors_origins() -> list[str]:
+    """Read allowed CORS origins from SCOUTFOOTBALL_CORS_ORIGINS env var."""
+    raw = os.environ.get("SCOUTFOOTBALL_CORS_ORIGINS", "")
+    if raw.strip():
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return _DEFAULT_CORS_ORIGINS
+
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -37,10 +53,10 @@ def create_app() -> FastAPI:
         description="Local-first football data research platform API",
     )
 
-    # Allow frontend to call API from different origin
+    # Configurable CORS — set SCOUTFOOTBALL_CORS_ORIGINS env var for production
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_cors_origins(),
         allow_methods=["GET"],
         allow_headers=["*"],
     )
@@ -60,6 +76,17 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health():
         return health_check()
+
+    @app.get("/license")
+    def license_info():
+        artifacts = get_artifacts_summary()
+        artifact_list = artifacts.get("artifacts", [])
+        updated = artifact_list[0].get("modified") if artifact_list else None
+        return {
+            "license_attribution": artifacts.get("license_attribution", {}),
+            "data_source_label": artifacts.get("data_source_label", ""),
+            "updated_at": updated,
+        }
 
     @app.get("/players")
     def players():

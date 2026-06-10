@@ -107,7 +107,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 9. P7：球探决策与人工校准层，把真实标签、低置信度样本、误差案例和战术备注纳入 review queue、watchlist、shortlist。
 10. P8：空间/视频/离球研究层，StatsBomb 360、Metrica/open tracking、xG+、off-ball value、强化学习只作为远期方向。
 
-除战术板外，当前规划必须继续保留这些缺口：真实球员标签仍为空、v1.3.1-dev 完整 GPU 重跑和误差复盘未做、世界杯页仍是样例/混合数据、前端 player/value/prediction/report 只读契约还不完整、动作价值仍是 StatsBomb 样本、license manifest 与 data source attribution 未闭环、球探人工标注回灌未实现、概率校准仍未完成、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
+除战术板外，当前规划必须继续保留这些缺口：真实球员标签仍为空、v1.3.1-dev 完整 GPU 重跑和误差复盘未做、世界杯页仍是样例/混合数据、前端 player/value/prediction/report 只读契约还不完整、动作价值仍是 StatsBomb 样本、球探人工标注回灌未实现、概率校准仍未完成、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
 
 ## 开发原则
 
