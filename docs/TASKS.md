@@ -57,9 +57,27 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 ## 调研参考
 
 - 开源项目：[`socceraction`](https://socceraction.readthedocs.io/en/stable/index.html)、[`StatsBomb Open Data`](https://github.com/statsbomb/open-data)、[`mplsoccer`](https://mplsoccer.readthedocs.io/)、[`kloppy`](https://kloppy.pysport.org/)、[`floodlight`](https://floodlight.readthedocs.io/en/latest/)、[`Common Data Format`](https://www.cdf.football/)。
-- 战术板案例：[`Tactico`](https://tactico.pro/) 的浏览器战术板和动画导出、[`DrawTactics`](https://drawtactics.com/animated-tactics-board) 的路径动画/时间轴/WebM 导出、[`TacticSlate`](https://tacticslate.com/football-tactic-board) 的离线优先战术板和 WebM 导出、[`JLA Tactics Board`](https://jlatacticsboard.com/) 的 MP4/PNG 与实时协作、[`Metrica Tactical Boards`](https://www.metrica-sports.com/help-center/tactical-boards) 的战术板到视频时间线/叠画工作流、[`TacticalBoards`](https://tacticalboards.com/) 的训练计划和动画导出。
+- 战术板案例：[`Tactico`](https://tactico.pro/) 的浏览器战术板、阵型/定位球预设和 MP4/WebM/GIF 导出；[`DrawTactics`](https://drawtactics.com/animated-tactics-board) 的路径动画、时间轴、easing 和 WebM 30fps 导出；[`TacticSlate`](https://tacticslate.com/football-tactic-board) 的离线优先、球员名/号码/角色、ghost silhouettes、PNG/PDF/WebM 和 2D/3D；[`Coach Tactic Board`](https://apps.apple.com/us/app/coach-tactic-board-soccer/id834813357) 与 [`Soccer Tactic Board`](https://play.google.com/store/apps/details?id=com.jenda.footballboard) 的自由画笔、训练器材、球员资料、文件夹和导入/导出；[`Metrica Tactical Boards`](https://www.metrica-sports.com/help-center/tactical-boards) 的球员 ID、区域、轨迹、门后视角、timeline slide 和 telestration 工作流；[`FC Tactix`](https://teloframe.com/features/tactics-board)、[`TacticalPad`](https://www.tacticalpad.com/en-us/new/index.php) 与 [`TacticalBoards`](https://tacticalboards.com/) 的 2D/3D、协作、导出和训练计划能力。
 - 学术主线：[`VAEP`](https://arxiv.org/abs/1802.07127)、[`xT vs VAEP`](https://tomdecroos.github.io/reports/xt_vs_vaep.pdf)、[`PlayeRank`](https://arxiv.org/abs/1802.04987)、[`combined player rating`](https://link.springer.com/article/10.1186/s40537-026-01369-w)、[`xG finishing bias`](https://arxiv.org/abs/2401.09940)、[`Dixon-Coles`](https://research-information.bris.ac.uk/en/publications/modelling-association-football-scores-and-inefficiencies-in-the-f/)。
 - 架构结论：近中期以 StatsBomb -> internal actions -> xT -> VAEP 和真实球员标签为主线；跨供应商 schema、tracking/video、xG+、off-ball value 和强化学习只作为 P6 之后的扩展，不抢 P0-P4。
+
+## 当前不足总览（不含电子战术板）
+
+以下条目是当前项目除 P1.5 电子战术板以外仍存在的功能不足、数据缺口和验证缺口，后续迭代不能只盯战术板：
+
+- **评分真实标签缺口**：`player_truth_labels.parquet` 仍为空，truth-anchor optimizer 和 `scoutfootball train-rating-nn` 只能验证 skipped 路径，不能产出可用球员级监督模型。
+- **评分校准仍未闭环**：v1.3.1-dev 的 train-fitted league residual offset 和 league-bias loss 代码已写入，但完整 GPU 重跑、CV、稳定性、feature importance 和 Barcelona/Real Madrid/Burnley 等误差复盘仍待执行。
+- **强队/降级队偏差仍需复盘**：当前模型仍记录强队系统性低估和降级队高估，不能只用整体 Spearman/Pearson 宣称球员真实水平已解决。
+- **世界杯模块仍是混合/样例视图**：世界杯赛程、名单、对比和出线页还没有全量官方阵容、更多联赛评分覆盖、国家队阵容 API 和低覆盖分层说明，不能写成完整真实后端能力。
+- **前端 API 联调不完整**：球员页还缺搜索、分页、完整 player profile 指标、报告导出；身价页还缺 value-fairness OOF report 细分；比赛预测页还缺统一 prediction service、模型版本、Brier/log loss/RPS 和校准状态。
+- **报告页信息不足**：model-run registry 当前只展示基础指标，仍缺完整参数、随机种子、依赖版本、输入 hash、误差案例摘要和可复现命令。
+- **动作价值仍是样本能力**：`player_value_metrics.parquet` 只代表 StatsBomb 事件价值样本；P2 产物尚未完成全量 internal actions/xT/VAEP 管线、socceraction 依赖评估和公开图表 attribution。
+- **数据合规和 license manifest 不完整**：所有本地 Parquet/报告/导出物仍需要统一记录来源、许可、可公开展示边界、更新时间和 StatsBomb Open Data 引用要求。
+- **安全和部署边界未闭环**：前端已做 escaping/sanitizer，但还缺浏览器级 XSS/CSV 回归测试、CSP、安全头、可配置 CORS 和非本机部署说明。
+- **球探工作流还是只读雏形**：watchlist/shortlist/review queue 只读契约已存在，但人工标注、审阅状态流转、真实标签回灌、watchlist diff 和导出报告仍待实现。
+- **比分预测仍是 baseline**：Independent Poisson 可用，但 Dixon-Coles、时间衰减、低比分校准、概率校准回测和模型对比页仍未实现。
+- **跨供应商标准化仍停留在规划**：internal event/tracking schema、DATA_CONTRACTS、kloppy/floodlight/CDF 对照、schema validation fixture 和空数据行为测试仍待补。
+- **空间/视频/离球研究没有进入默认能力**：StatsBomb 360、Metrica/open tracking、space control、off-ball value、xG+、GCN/Transformer/RL 都只能在有合规样例、baseline 和模型卡后启动。
 
 ## 已完成
 
@@ -169,15 +187,22 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 全局数据状态页读取 artifact registry，显示产物更新时间、行数、真实/代理/合成数据标记、license attribution 和 confidence gate。
 - 当前已接入 artifact registry、更新时间、行数和 data source label；license attribution 与 confidence gate 仍待补齐。
 - [ ] 球员画像页接入 player profile API：搜索、分页、位置过滤、评分快照、位置内指标、低置信度原因和 CSV/报告导出。
+- [ ] 球员画像页补完整个人信息卡：年龄、国籍、惯用脚、身高、合同/身价来源、最近赛季趋势、位置重判置信度和缺失字段列表；缺字段时必须显示低置信度原因。
+- [ ] 球员列表补收藏、加入 watchlist、加入 shortlist 和加入战术板动作；写入型操作先落本地 JSON/Parquet 草稿，不直接改模型产物。
 - [ ] 身价偏离页接入 value-fairness report API：OOF 残差、联赛/年龄/位置偏差、手动身价导入边界和误差案例。
+- [ ] 身价页补价格带筛选、合同年限/年龄曲线、同位置同年龄对比、异常值说明和 Transfermarkt 手动导入状态；没有授权数据时只能显示手动导入边界。
 - [ ] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：选择球队必须传入预测服务，输出模型版本、覆盖率、log loss/Brier/RPS 和比分矩阵。
+- [ ] 比赛预测页补校准图、历史回测、低比分误差、主客场强度趋势和 coverage gate；coverage < 0.90 时只显示低置信度提示。
 - [x] 球探页接入 review queue/watchlist/shortlist 只读契约；当前优先读取 `data/reports/scouting/*.parquet`，缺失时从评分产物派生只读队列。
 - [x] 动作价值页已切到 `player_value_metrics.parquet` 的真实 StatsBomb 样本；仍明确标注为样本页，不写成全量动作价值能力。
+- [ ] 动作价值页补样本范围、比赛/赛事来源、StatsBomb attribution、xT 热区切换、球员/球队聚合口径和空数据状态。
 - [ ] 报告页接入 `data/reports/model_runs/` 或等价 model-run registry，展示输入 hash、随机种子、参数、指标和误差案例。
 - 当前已接入 model-run registry 的 `run_id`、`input_hash`、Spearman/Pearson 等基础指标；随机种子、参数和误差案例仍待补齐。
+- [ ] 报告页补一键打开模型卡、评估报告、优化参数、holdout prediction、league metrics、position metrics 和误差案例明细的只读链接。
 - [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
 - [ ] 给前端补浏览器级安全回归测试：恶意球员名/队名/报告 run_id/战术板标题不得执行 HTML 或脚本，CSV 导出不得触发表格公式。
 - [ ] 如果静态前端未来超出本机展示范围，FastAPI/静态服务器需补 CSP、可配置 CORS 和只读部署说明。
+- [ ] 世界杯页接正式国家队/候选名单契约：官方名单状态、球员评分覆盖、非五大联赛 fallback、低置信度队伍提示和来源链接；当前样例/混合数据不能进入默认结论。
 
 验收：
 
@@ -195,10 +220,12 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 ### 调研结论
 
-- Tactico、TacticalBoards 等产品把战术板和训练计划放在同一工作流，核心是阵型、球员拖拽、动画和面向球队的分享。
-- DrawTactics、TacticSlate 类产品强调路径动画、时间轴、曲线跑动、步骤式或时间式动画，以及 WebM/视频导出。
-- JLA Tactics Board 把 MP4/PNG 导出和实时协作作为进阶能力；实时协作对本项目不是第一阶段重点。
-- Metrica Tactical Boards 和 Coach Paint 类工作流更偏视频分析/叠画，可作为后续视频 telestration 参考，但不应在当前阶段引入重型视频处理。
+- Tactico 把战术板放进完整教练工作流：100+ 阵型、定位球预设、关键帧动画、球物理、MP4/WebM/GIF 导出、球员评价、训练课日历、实时协作、语音和回放链接。
+- DrawTactics 强调路径动画：先放阵型和球，再画球员/足球运动路径，支持直线/贝塞尔曲线、step-based 和 timing-based 两种动画模式、时间轴 scrubber、7 种 easing、WebM 30fps 和自定义裁切。
+- TacticSlate 强调离线优先和演示：球员名/号码/角色/队色、箭头/曲线/虚线/highlight/connectors、逐帧 duration、ghost silhouettes、IndexedDB autosave、JSON 备份、PNG/PDF/WebM，以及 2D/3D 切换。
+- Coach Tactic Board/Soccer Tactic Board 类移动端产品覆盖现实白板常用能力：多线型画笔、自由笔、文字、矩形/区域、训练器材、全场/半场/任意球/角球/点球场景、球员名/号码/位置/照片、拖拽换人、文件夹、PDF/图片导出、横竖屏和导入/导出。
+- Metrica Tactical Boards 更偏视频分析/叠画：给球员加 ID、区域和轨迹、动画球员移动、门后视角定位球，把战术板作为 timeline slide，并可和 Field Radar、telestration、tracking 工作流结合。
+- FC Tactix/TacticalPad 类专业工具提示远期上限：2D/3D 同步视图、多人协作、live presence、PNG/GIF/MP4 导出、session planning、跨设备和多运动支持；这些只作为远期参考，不能抢当前本地轻量切片。
 
 ### 第一切片：本地战术板画布
 
@@ -211,12 +238,53 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 将工程保存为浏览器本地存储 + 可下载 JSON；后端持久化先不做，避免把前端原型误写成正式数据产品。
 - [x] JSON 工程导入/读取/保存已走 schema sanitizer：限制对象数、帧数、文本长度、导入文件大小、坐标范围和对象类型，避免把任意本地 JSON 直接渲染到页面。
 
+### 对标功能池（待实现，不代表当前能力）
+
+#### A. 白板与绘图体验
+
+- [ ] 自由画笔：像现实白板一样用鼠标/触控笔画线，支持颜色、粗细、透明度、撤销、橡皮擦和清空当前笔迹。
+- [ ] 线型工具：直线、箭头、双箭头、虚线、点线、曲线、贝塞尔曲线、折线、跑动线、传球线、射门线、盘带线和压迫触发线。
+- [ ] 图形工具：矩形、圆形、椭圆、多边形、扇形、阴影区域、禁区/肋部/半空间高亮、封锁线和防守线。
+- [ ] 文字工具：可拖拽文本框、标签、编号、帧备注、coach notes、字体大小和颜色。
+- [ ] 选择工具：框选、多选、锁定、隐藏、复制、粘贴、镜像、旋转、缩放、对齐、分布、前置/后置和层级排序。
+- [ ] 网格与吸附：显示/隐藏球场网格，移动时按网格吸附，支持对象对齐辅助线和坐标读数。
+- [ ] 画布导航：缩放、平移、适配屏幕、全屏、移动端双指缩放、触控和键盘快捷键。
+- [ ] 白板状态：按帧记录手绘笔迹，允许只擦除当前帧或全局笔迹，避免动画帧之间互相污染。
+
+#### B. 球队、球员和棋子模型
+
+- [ ] 红蓝两队/主客队同时完整显示，支持单队、双队、攻防转换和中立训练对象模式。
+- [ ] 球衣与棋子外观：主客队颜色、号码、姓名、位置、角色、球衣形状、圆形/方形/三角形/菱形棋子、尺寸和透明度。
+- [ ] 球衣号码编辑：点击棋子或侧栏可改号码，号码范围、重复号码、空号码和门将号码要有校验。
+- [ ] 球员信息 hover card：鼠标悬停显示姓名、号码、位置、球队、评分、低置信度原因、最近赛季分钟、xG/xA、watchlist 状态和备注；没有真实数据时显示本地手填信息。
+- [ ] 球员详情 click panel：点击棋子打开可编辑资料卡，支持绑定 `player_id`、手动姓名、号码、角色、脚下方向、头像/照片占位、战术职责和本帧任务。
+- [ ] 替补席与换人：场外 bench 区、拖拽换人、阵容顺序、替换记录、同一球员不得同时在场内重复出现。
+- [ ] 训练器材对象：锥桶、标志碟、杆、假人墙、梯子、球门、迷你门、障碍物、标记旗、裁判/教练标记。
+- [ ] 足球对象增强：支持多个球、隐藏球、球大小、球轨迹、球权方、传球目标和球物理的轻量近似。
+- [ ] 重叠对象处理：棋子重叠时提供展开选择、置顶、轻微偏移、hover 精准命中和键盘切换选中对象。
+- [ ] 队伍模板：保存主客队阵容、队色、默认阵型、号码和角色，后续新战术板可一键复用。
+
+#### C. 场景、阵型和模板
+
+- [ ] 场地类型扩展：11v11、9v9、7v7、5v5、半场、训练场、空白白板、任意球、角球、点球、界外球和门后视角。
+- [ ] 预设阵型扩展：4-3-3、4-2-3-1、3-5-2、4-4-2、5-3-2 之外补 3-4-3、3-4-2-1、4-1-4-1、4-3-1-2、4-2-2-2、4-5-1、低位 5-4-1、高位压迫形态和可保存自定义阵型。
+- [ ] 定位球模板：角球近门柱、角球二点、任意球人墙、边线球、点球、门球 build-up、开球套路和防定位球站位。
+- [ ] 训练模板：rondo、传控循环、压迫触发、反抢、低位防守、边路 overload、反击、三人配合、射门练习和小场对抗。
+- [ ] 文件夹/项目管理：按对手、比赛、训练课、主题、日期、标签和作者组织战术板；支持复制项目、复制帧、另存为模板。
+- [ ] 教学模式：在每个模板中保留 coaching points、progressions、common mistakes、roles 和 expected outcome。
+
 ### 第二切片：战术演示和动画时间轴
 
 - [ ] 增加 Animate mode：关键帧、步骤帧、帧时长、播放/暂停/单步、时间轴 scrubber、循环播放。
+- [ ] 支持 step-based 动画和 timing-based 动画两种模式：前者快速讲解战术步骤，后者精细控制每个对象的移动时间。
 - [ ] 支持对象路径插值：直线、曲线、折线、球员移动、足球移动、箭头/区域淡入淡出、路径尾迹和触发标签。
+- [ ] 支持贝塞尔曲线路径、速度曲线、easing、延迟启动、停顿点、加速/减速和同帧多对象同步。
+- [ ] 支持 ghost silhouettes：显示上一帧/下一帧半透明位置，帮助解释球员位移和防线变化。
+- [ ] 支持 trails：球员跑动尾迹、足球传递轨迹、可分颜色的跑动/传球/盘带/射门线。
+- [ ] 支持帧内对象可见性：对象可在某帧出现/消失，箭头、区域、文字可以按时间淡入/淡出。
+- [ ] 支持动画事件标记：press trigger、pass、shot、turnover、overlap、underlap、third-man run、cover shadow。
 - [ ] 支持战术片段结构：`phase`、`trigger`、`coaching_point`、`roles`、`duration_ms`，用于解释高压、低位防守、边路 overload、反击和定位球。
-- [ ] 支持演示模式：隐藏编辑控件、全屏播放、逐帧讲解、当前帧备注和报告页嵌入预览。
+- [ ] 支持演示模式：隐藏编辑控件、全屏播放、逐帧讲解、当前帧备注、投影仪模式和报告页嵌入预览。
 - [ ] 动画只在浏览器里播放；不在浏览器里运行训练、爬虫、批量视频转码或模型推理。
 
 ### 第三切片：导出、报告和后端契约
@@ -225,8 +293,13 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 支持 PDF 导出：多帧战术卡、帧备注、对象图例、数据来源说明。
 - [ ] 支持 WebM 动画导出：优先用 `canvas.captureStream` + `MediaRecorder`；导出失败时给出清晰降级提示。
 - [ ] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。
+- [ ] GIF 导出作为低优先级增强，只有 WebM 稳定后再评估体积、画质和浏览器兼容性。
+- [ ] 导出裁切和版式：全场、半场、选区、横版 16:9、竖版 9:16、方形 1:1、透明背景、深浅主题和水印/attribution。
+- [ ] 打印模式：PDF 多帧战术卡、每页备注、球员图例、训练器材图例和二维码/文件名。
+- [ ] 分享方式：本地 JSON 文件、浏览器下载、剪贴板图片、只读演示链接（后置）、报告页嵌入；云同步和公开分享默认不做。
 - [x] 支持 JSON 工程基础导入/导出，并在导入时清洗 schema。
 - [ ] 版本不兼容时走迁移或只读打开，避免旧工程静默丢字段。
+- [ ] JSON 工程补 migration registry、schema version history、fixture、round-trip tests 和损坏文件错误提示。
 - [ ] 后续 FastAPI read-only endpoint 可设计为 `/tactical-boards`、`/tactical-boards/{id}`、`/tactical-boards/{id}/exports`，但第一阶段不急于实现写入 API。
 - [ ] 战术板可嵌入报告页：把 board snapshot、动画导出路径、source attribution 和 coaching notes 纳入报告预览。
 
@@ -236,13 +309,26 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 从比赛预测页创建赛前方案：主客队阵型、预测比分矩阵、模型版本和 coverage 警示作为战术板元数据。
 - [ ] 从 P2 动作价值产物读取样例热区或 xT 区域，仅作为背景参考；P2 稳定前不能写成全量动作价值战术建议。
 - [ ] 从 P7 watchlist/shortlist 读取球员备注，生成可审阅的战术角色说明。
+- [ ] 从国家队/世界杯页创建队伍模板：只读带入球员姓名、号码、俱乐部、评分覆盖和低置信度标记。
+- [ ] 支持战术板上显示球员评分 badge、位置内 percentile、低置信度图标和数据更新时间，但必须允许关闭，避免战术讲解被评分噪声污染。
+- [ ] 支持把 xT/VAEP 样本热区作为半透明背景层；没有样本或 attribution 不完整时禁止导出公开图。
 - [ ] 公开导出物如果包含 StatsBomb Open Data 或其他衍生数据，必须带 data source attribution。
+
+### 第五切片：质量、安全和兼容性
+
+- [ ] 战术板所有导入字段继续走 `TACTICAL_BOARD.sanitizeProject()`，新增对象类型必须同步 sanitizer、schema 文档和 fixture。
+- [ ] 战术板浏览器回归测试覆盖：恶意标题/球员名/备注、超大 JSON、损坏 JSON、重复 ID、超出坐标、过多对象和旧 schema。
+- [ ] 支持桌面鼠标、触控板、iPad/Safari 基础触控和移动端只读查看；移动端编辑能力可以后置。
+- [ ] 无障碍基础：可键盘选择对象、按钮有可读标签、颜色不是唯一信息、导出前可预览 attribution。
+- [ ] 性能边界：200 对象、60 帧以内不卡顿；超出限制时提示用户拆分项目。
+- [ ] 自动保存和恢复：编辑后防抖保存、本地存储失败提示、导入前备份当前项目。
 
 验收：
 
 - `node --check frontend/app.js`
+- `node --check frontend/tactical-board.js`
 - `python3 -m http.server 8600 --directory frontend`
-- 手动验证桌面和移动宽度下：对象不溢出、文本不重叠、画布非空、拖拽/撤销/播放/导出可用。
+- 手动验证桌面和移动宽度下：对象不溢出、文本不重叠、画布非空、拖拽/撤销/播放/导出可用，红蓝两队、号码修改、hover 信息卡和自由画笔至少完成一个稳定切片。
 - JSON 工程 round-trip：创建 -> 导出 -> 重新导入 -> 对象、帧、备注一致。
 - PNG 和 WebM 导出至少在本机浏览器通过；MP4 没有 ffmpeg 时必须优雅降级。
 - README、TASKS、AGENTS 同步说明该功能是否已实现，不得把未接入后端的 mock 数据写成正式能力。
