@@ -2286,7 +2286,11 @@ function bindEvents() {
         tacticalExportPng.addEventListener("click", () => {
             if (typeof TacticalRenderer !== "undefined") {
                 const title = tacticalProject?.title || "tactical-board";
-                TacticalRenderer.exportPNG(`${title}.png`);
+                const cropSelect = document.getElementById("tactical-crop-mode");
+                const transparentCb = document.getElementById("tactical-transparent-bg");
+                const crop = cropSelect ? cropSelect.value : "full";
+                const transparent = transparentCb ? transparentCb.checked : false;
+                TacticalRenderer.exportPNG(`${title}.png`, { crop, transparent });
             }
         });
     }
@@ -2523,6 +2527,21 @@ function bindEvents() {
         tacticalPresentation.addEventListener("click", () => {
             if (typeof TacticalRenderer !== "undefined") {
                 TacticalRenderer.togglePresentation();
+            }
+        });
+    }
+
+    // Animation trails toggle
+    const tacticalToggleTrails = document.getElementById("tactical-toggle-trails");
+    if (tacticalToggleTrails) {
+        tacticalToggleTrails.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.showTrails = !TacticalRenderer.showTrails;
+                tacticalToggleTrails.classList.toggle("active", TacticalRenderer.showTrails);
+                if (!TacticalRenderer.showTrails) {
+                    TacticalRenderer._trailPositions.clear();
+                }
+                TacticalRenderer.render();
             }
         });
     }

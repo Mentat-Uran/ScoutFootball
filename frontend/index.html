@@ -477,6 +477,7 @@
                                 <button class="text-button" id="tactical-mirror-away" type="button" title="Mirror all away">◇ 客队镜像</button>
                                 <button class="text-button" id="tactical-toggle-ratings" type="button" title="Toggle player ratings">◆ 评分</button>
                                 <button class="text-button" id="tactical-presentation" type="button" title="Presentation mode (fullscreen)">◇ 演示</button>
+                                <button class="text-button" id="tactical-toggle-trails" type="button" title="Toggle animation trails">◇ 轨迹</button>
                             </div>
                         </div>
                         <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">
@@ -493,6 +494,21 @@
                             <button class="text-button" id="tactical-import" type="button">导入 JSON</button>
                             <button class="text-button" id="tactical-export-png" type="button">导出 PNG</button>
                             <button class="text-button" id="tactical-export-webm" type="button">◆ 导出 WebM</button>
+                        </div>
+                        <div class="filter-row" style="margin-bottom:0.5rem">
+                            <label style="font-size:0.85rem;color:var(--text-muted)">
+                                裁剪:
+                                <select id="tactical-crop-mode" class="glass-control">
+                                    <option value="full">完整</option>
+                                    <option value="half-left">左半场</option>
+                                    <option value="half-right">右半场</option>
+                                    <option value="center-16:9">16:9 居中</option>
+                                    <option value="square-1:1">1:1 方形</option>
+                                </select>
+                            </label>
+                            <label style="font-size:0.85rem;color:var(--text-muted)">
+                                <input type="checkbox" id="tactical-transparent-bg"> 透明背景
+                            </label>
                         </div>
                         <div class="panel-head" style="margin-top:1rem">
                             <h3>动画时间轴</h3>
