@@ -16,7 +16,7 @@ from scoutfootball.features.player_rolling import build_player_rolling_features
 from scoutfootball.features.rating_matrix import build_rating_feature_matrix, write_feature_manifest
 from scoutfootball.features.team_match import build_team_match_features
 from scoutfootball.features.team_rolling import build_team_rolling_features
-from scoutfootball.models.match_prediction import fit_independent_poisson
+from scoutfootball.models.match_prediction import fit_dixon_coles, fit_independent_poisson
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,17 @@ def run_weekly_train(
         results["match_prediction"] = (
             "ok (trained IndependentPoissonModel and wrote artifacts to data/models/artifacts)"
         )
+
+        # --- Dixon-Coles training ---
+        try:
+            dc_model = fit_dixon_coles(team_match)
+            _save_dixon_coles_artifacts(dc_model, team_match, resolved)
+            results["dixon_coles"] = (
+                "ok (trained DixonColesModel and wrote artifacts to data/models/artifacts)"
+            )
+        except Exception as exc:
+            results["dixon_coles"] = f"failed: {exc}"
+            logger.error("Dixon-Coles training failed: %s", exc)
 
         # --- availability diagnostic ---
         try:
@@ -736,6 +747,39 @@ def _save_poisson_artifacts(
         }
     )
     strengths_df.to_parquet(artifact_dir / "team_strengths.parquet", index=False)
+
+
+def _save_dixon_coles_artifacts(
+    model,
+    team_match: pd.DataFrame,
+    settings: PlatformSettings,
+) -> None:
+    artifact_dir = settings.model_root / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    results_df = pd.DataFrame(
+        [
+            {
+                "model_type": "dixon_coles",
+                "num_matches": model.num_matches,
+                "rho": model.rho,
+                "home_advantage": model.home_advantage,
+                "league_mean_goals": model.league_mean_goals,
+                "num_teams": len(model.team_attack),
+            }
+        ]
+    )
+    results_df.to_parquet(artifact_dir / "dixon_coles_results.parquet", index=False)
+
+    team_ids = sorted(model.team_attack)
+    strengths_df = pd.DataFrame(
+        {
+            "team_id": team_ids,
+            "attack_strength": [model.team_attack[t] for t in team_ids],
+            "defense_strength": [model.team_defense[t] for t in team_ids],
+        }
+    )
+    strengths_df.to_parquet(artifact_dir / "dc_team_strengths.parquet", index=False)
 
 
 def _run_availability_diagnostic(settings: PlatformSettings) -> str:

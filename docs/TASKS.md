@@ -73,7 +73,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - **报告页信息不足**：model-run registry 当前只展示基础指标，仍缺完整参数、随机种子、依赖版本、输入 hash、误差案例摘要和可复现命令。
 - **动作价值仍是样本能力**：`player_value_metrics.parquet` 只代表 StatsBomb 事件价值样本；P2 产物尚未完成全量 internal actions/xT/VAEP 管线、socceraction 依赖评估和公开图表 attribution。
 - **数据合规和 license manifest 不完整**：所有本地 Parquet/报告/导出物仍需要统一记录来源、许可、可公开展示边界、更新时间和 StatsBomb Open Data 引用要求。
-- **安全和部署边界未闭环**：前端已做 escaping/sanitizer，但还缺浏览器级 XSS/CSV 回归测试、CSP、安全头、可配置 CORS 和非本机部署说明。
+- **安全和部署边界未闭环**：前端已做 escaping/sanitizer、CSP meta tag、SRI（echarts CDN）、X-Content-Type-Options 安全头；浏览器级 XSS/CSV 回归测试、可配置 CORS 和非本机部署说明仍待实现。
 - **球探工作流还是只读雏形**：watchlist/shortlist/review queue 只读契约已存在，但人工标注、审阅状态流转、真实标签回灌、watchlist diff 和导出报告仍待实现。
 - **比分预测仍是 baseline**：Independent Poisson 可用，但 Dixon-Coles、时间衰减、低比分校准、概率校准回测和模型对比页仍未实现。
 - **跨供应商标准化仍停留在规划**：internal event/tracking schema、DATA_CONTRACTS、kloppy/floodlight/CDF 对照、schema validation fixture 和空数据行为测试仍待补。
@@ -113,6 +113,9 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 评估报告新增 team coverage：按 league-season 输出目标球队数、评分侧球队数、匹配球队数和覆盖率，避免把 2526 数据缺口误判成模型错误。
 - [x] 重新生成 `player_ratings_optimized.parquet`。
 - [x] 将 `advise.md` 融入未来架构和实施策略文档。
+- [x] Dixon-Coles 比分预测核心实现：`fit_dixon_coles`、`predict_match_dc`、`DixonColesModel` 类，Pipeline 集成和 data_loader 集成。
+- [x] 战术板增强：drawing tool buttons（select/arrow/zone/text）、文本标注类型、曲线箭头渲染、触控支持（iPad/Safari）、循环动画、项目/帧删除按钮。
+- [x] 前端安全加固：CSP meta tag、SRI（echarts CDN）、X-Content-Type-Options 安全头。
 
 ## P0：评分系统真实影响力校准
 
@@ -201,7 +204,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 报告页补一键打开模型卡、评估报告、优化参数、holdout prediction、league metrics、position metrics 和误差案例明细的只读链接。
 - [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
 - [ ] 给前端补浏览器级安全回归测试：恶意球员名/队名/报告 run_id/战术板标题不得执行 HTML 或脚本，CSV 导出不得触发表格公式。
-- [ ] 如果静态前端未来超出本机展示范围，FastAPI/静态服务器需补 CSP、可配置 CORS 和只读部署说明。
+- [x] 前端已补 CSP meta tag、SRI（echarts CDN）和 X-Content-Type-Options 安全头；可配置 CORS 和只读部署说明仍待实现。
 - [ ] 世界杯页接正式国家队/候选名单契约：官方名单状态、球员评分覆盖、非五大联赛 fallback、低置信度队伍提示和来源链接；当前样例/混合数据不能进入默认结论。
 
 验收：
@@ -243,12 +246,12 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 #### A. 白板与绘图体验
 
 - [ ] 自由画笔：像现实白板一样用鼠标/触控笔画线，支持颜色、粗细、透明度、撤销、橡皮擦和清空当前笔迹。
-- [ ] 线型工具：直线、箭头、双箭头、虚线、点线、曲线、贝塞尔曲线、折线、跑动线、传球线、射门线、盘带线和压迫触发线。
+- [x] 线型工具：箭头、曲线、贝塞尔曲线、折线已实现（drawing tool buttons: select/arrow/zone/text）；虚线、点线、跑动线、传球线、射门线、盘带线和压迫触发线仍待实现。
 - [ ] 图形工具：矩形、圆形、椭圆、多边形、扇形、阴影区域、禁区/肋部/半空间高亮、封锁线和防守线。
-- [ ] 文字工具：可拖拽文本框、标签、编号、帧备注、coach notes、字体大小和颜色。
+- [x] 文字工具：文本标注类型已实现（text annotation）；可拖拽文本框、帧备注、coach notes、字体大小和颜色仍待完善。
 - [ ] 选择工具：框选、多选、锁定、隐藏、复制、粘贴、镜像、旋转、缩放、对齐、分布、前置/后置和层级排序。
 - [ ] 网格与吸附：显示/隐藏球场网格，移动时按网格吸附，支持对象对齐辅助线和坐标读数。
-- [ ] 画布导航：缩放、平移、适配屏幕、全屏、移动端双指缩放、触控和键盘快捷键。
+- [x] 画布导航：触控支持（iPad/Safari 基础触控）已实现；缩放、平移、适配屏幕、全屏、移动端双指缩放和键盘快捷键仍待完善。
 - [ ] 白板状态：按帧记录手绘笔迹，允许只擦除当前帧或全局笔迹，避免动画帧之间互相污染。
 
 #### B. 球队、球员和棋子模型
@@ -270,12 +273,12 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 预设阵型扩展：4-3-3、4-2-3-1、3-5-2、4-4-2、5-3-2 之外补 3-4-3、3-4-2-1、4-1-4-1、4-3-1-2、4-2-2-2、4-5-1、低位 5-4-1、高位压迫形态和可保存自定义阵型。
 - [ ] 定位球模板：角球近门柱、角球二点、任意球人墙、边线球、点球、门球 build-up、开球套路和防定位球站位。
 - [ ] 训练模板：rondo、传控循环、压迫触发、反抢、低位防守、边路 overload、反击、三人配合、射门练习和小场对抗。
-- [ ] 文件夹/项目管理：按对手、比赛、训练课、主题、日期、标签和作者组织战术板；支持复制项目、复制帧、另存为模板。
+- [x] 文件夹/项目管理：删除按钮（项目/帧）已实现；按对手、比赛、训练课、主题、日期、标签和作者组织战术板、复制项目、复制帧、另存为模板仍待实现。
 - [ ] 教学模式：在每个模板中保留 coaching points、progressions、common mistakes、roles 和 expected outcome。
 
 ### 第二切片：战术演示和动画时间轴
 
-- [ ] 增加 Animate mode：关键帧、步骤帧、帧时长、播放/暂停/单步、时间轴 scrubber、循环播放。
+- [x] 增加 Animate mode：循环播放已实现；关键帧、步骤帧、帧时长、播放/暂停/单步、时间轴 scrubber 仍待实现。
 - [ ] 支持 step-based 动画和 timing-based 动画两种模式：前者快速讲解战术步骤，后者精细控制每个对象的移动时间。
 - [ ] 支持对象路径插值：直线、曲线、折线、球员移动、足球移动、箭头/区域淡入淡出、路径尾迹和触发标签。
 - [ ] 支持贝塞尔曲线路径、速度曲线、easing、延迟启动、停顿点、加速/减速和同帧多对象同步。
@@ -318,7 +321,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 - [ ] 战术板所有导入字段继续走 `TACTICAL_BOARD.sanitizeProject()`，新增对象类型必须同步 sanitizer、schema 文档和 fixture。
 - [ ] 战术板浏览器回归测试覆盖：恶意标题/球员名/备注、超大 JSON、损坏 JSON、重复 ID、超出坐标、过多对象和旧 schema。
-- [ ] 支持桌面鼠标、触控板、iPad/Safari 基础触控和移动端只读查看；移动端编辑能力可以后置。
+- [x] 支持桌面鼠标、触控板、iPad/Safari 基础触控；移动端只读查看和编辑能力可以后置。
 - [ ] 无障碍基础：可键盘选择对象、按钮有可读标签、颜色不是唯一信息、导出前可预览 attribution。
 - [ ] 性能边界：200 对象、60 帧以内不卡顿；超出限制时提示用户拆分项目。
 - [ ] 自动保存和恢复：编辑后防抖保存、本地存储失败提示、导入前备份当前项目。
@@ -426,7 +429,8 @@ player_rating =
 
 - [ ] 保留 `baseline_0: league average`。
 - [ ] 保留 `baseline_1: Independent Poisson`。
-- [ ] 新增 `baseline_2: Dixon-Coles + time decay`。
+- [x] 新增 `baseline_2: Dixon-Coles` 核心实现：`fit_dixon_coles`、`predict_match_dc`、`DixonColesModel` 类已实现，Pipeline 集成（`run_weekly_train`、`_save_dixon_coles_artifacts`）和 data_loader 集成（`load_score_prediction_dc`）已完成。
+- [ ] Dixon-Coles 时间衰减和低比分校准。
 - [ ] 建立低比分校准报告，重点看 0-0、1-0、0-1、1-1。
 - [ ] 增加概率校准和回测页。
 

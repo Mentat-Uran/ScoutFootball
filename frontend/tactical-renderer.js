@@ -4,9 +4,12 @@
    Handles:
    - Pitch drawing (grass, lines, circles)
    - Player/ball rendering
-   - Arrow drawing
+   - Arrow drawing (solid, dashed, curved)
    - Zone rendering
+   - Text annotations
    - Drag & drop interaction
+   - Arrow/zone drawing modes
+   - Touch event support
    - Undo/redo stack
 */
 
@@ -22,6 +25,9 @@ const TacticalRenderer = {
     scale: 1,
     offsetX: 0,
     offsetY: 0,
+    drawingMode: null,    // null | 'arrow' | 'zone'
+    drawStart: null,      // {x, y} start point for drawing
+    drawPreview: null,    // preview object during drawing
 
     /* ── Initialize ─────────────────────────────────────────────────── */
     init(canvasId, project) {
@@ -34,6 +40,9 @@ const TacticalRenderer = {
         this.project = project;
         this.undoStack = [];
         this.redoStack = [];
+        this.drawingMode = null;
+        this.drawStart = null;
+        this.drawPreview = null;
 
         this.resize();
         this.bindEvents();
@@ -98,7 +107,13 @@ const TacticalRenderer = {
                 case "ball":   this.drawBall(obj); break;
                 case "arrow":  this.drawArrow(obj); break;
                 case "zone":   this.drawZone(obj); break;
+                case "text":   this.drawText(obj); break;
             }
+        }
+
+        // Draw preview during drawing mode
+        if (this.drawPreview) {
+            this._drawPreviewObject(this.drawPreview);
         }
 
         // Draw selection highlight
@@ -234,17 +249,35 @@ const TacticalRenderer = {
 
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
-        ctx.lineTo(end.x, end.y);
+
+        let endAngle;
+        if (obj.style === "curved") {
+            // Control point perpendicular to midpoint, offset by 30% of line length
+            const mx = (start.x + end.x) / 2;
+            const my = (start.y + end.y) / 2;
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const offset = len * 0.3;
+            // Perpendicular direction (rotate 90 degrees)
+            const px = -dy / len * offset;
+            const py = dx / len * offset;
+            ctx.quadraticCurveTo(mx + px, my + py, end.x, end.y);
+            // Tangent at t=1 of quadratic bezier: direction from control point to end
+            endAngle = Math.atan2(end.y - (my + py), end.x - (mx + px));
+        } else {
+            ctx.lineTo(end.x, end.y);
+            endAngle = Math.atan2(end.y - start.y, end.x - start.x);
+        }
         ctx.stroke();
 
         // Arrowhead
-        const angle = Math.atan2(end.y - start.y, end.x - start.x);
         const headLen = 12;
         ctx.beginPath();
         ctx.moveTo(end.x, end.y);
-        ctx.lineTo(end.x - headLen * Math.cos(angle - Math.PI / 6), end.y - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(end.x - headLen * Math.cos(endAngle - Math.PI / 6), end.y - headLen * Math.sin(endAngle - Math.PI / 6));
         ctx.moveTo(end.x, end.y);
-        ctx.lineTo(end.x - headLen * Math.cos(angle + Math.PI / 6), end.y - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.lineTo(end.x - headLen * Math.cos(endAngle + Math.PI / 6), end.y - headLen * Math.sin(endAngle + Math.PI / 6));
         ctx.stroke();
 
         ctx.setLineDash([]);
@@ -272,18 +305,89 @@ const TacticalRenderer = {
         }
     },
 
-    drawSelection(obj) {
+    drawText(obj) {
         const ctx = this.ctx;
         const pos = this.toCanvas(obj.x, obj.y);
-        const r = (obj.radius || 3) * this.scale + 4;
+        const fontSize = (obj.fontSize || 12) * this.scale;
 
-        ctx.strokeStyle = "#ffd700";
+        ctx.fillStyle = obj.color || "#ffffff";
+        ctx.font = `${fontSize}px Inter, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(obj.text || obj.label || "", pos.x, pos.y);
+    },
+
+    _drawPreviewObject(preview) {
+        const ctx = this.ctx;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = "rgba(255,255,255,0.7)";
         ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-        ctx.stroke();
+
+        if (preview.type === "arrow") {
+            const start = this.toCanvas(preview.startX, preview.startY);
+            const end = this.toCanvas(preview.endX, preview.endY);
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            ctx.lineTo(end.x, end.y);
+            ctx.stroke();
+            // Arrowhead
+            const angle = Math.atan2(end.y - start.y, end.x - start.x);
+            const headLen = 10;
+            ctx.beginPath();
+            ctx.moveTo(end.x, end.y);
+            ctx.lineTo(end.x - headLen * Math.cos(angle - Math.PI / 6), end.y - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(end.x, end.y);
+            ctx.lineTo(end.x - headLen * Math.cos(angle + Math.PI / 6), end.y - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.stroke();
+        } else if (preview.type === "zone") {
+            const tl = this.toCanvas(preview.x, preview.y);
+            const w = preview.width * this.scale;
+            const h = preview.height * this.scale;
+            ctx.fillStyle = "rgba(255,255,255,0.1)";
+            ctx.fillRect(tl.x, tl.y, w, h);
+            ctx.strokeRect(tl.x, tl.y, w, h);
+        }
+
         ctx.setLineDash([]);
+    },
+
+    drawSelection(obj) {
+        const ctx = this.ctx;
+
+        if (obj.type === "arrow") {
+            // Highlight arrow midpoint
+            const start = this.toCanvas(obj.startX, obj.startY);
+            const end = this.toCanvas(obj.endX, obj.endY);
+            const mx = (start.x + end.x) / 2;
+            const my = (start.y + end.y) / 2;
+            const r = 8;
+            ctx.strokeStyle = "#ffd700";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.arc(mx, my, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        } else if (obj.type === "zone") {
+            const tl = this.toCanvas(obj.x, obj.y);
+            const w = obj.width * this.scale;
+            const h = obj.height * this.scale;
+            ctx.strokeStyle = "#ffd700";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(tl.x - 3, tl.y - 3, w + 6, h + 6);
+            ctx.setLineDash([]);
+        } else {
+            const pos = this.toCanvas(obj.x, obj.y);
+            const r = (obj.radius || 3) * this.scale + 4;
+            ctx.strokeStyle = "#ffd700";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
     },
 
     /* ── Event handling ──────────────────────────────────────────────── */
@@ -292,8 +396,32 @@ const TacticalRenderer = {
 
         this.canvas.addEventListener("mousedown", (e) => this.onMouseDown(e));
         this.canvas.addEventListener("mousemove", (e) => this.onMouseMove(e));
-        this.canvas.addEventListener("mouseup", () => this.onMouseUp());
-        this.canvas.addEventListener("mouseleave", () => this.onMouseUp());
+        this.canvas.addEventListener("mouseup", (e) => this.onMouseUp(e));
+        this.canvas.addEventListener("mouseleave", (e) => this.onMouseUp(e));
+
+        // Touch support
+        this.canvas.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                const touch = e.touches[0];
+                this.onMouseDown({ clientX: touch.clientX, clientY: touch.clientY });
+            }
+        }, { passive: false });
+        this.canvas.addEventListener("touchmove", (e) => {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                const touch = e.touches[0];
+                this.onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+            }
+        }, { passive: false });
+        this.canvas.addEventListener("touchend", (e) => {
+            e.preventDefault();
+            this.onMouseUp();
+        }, { passive: false });
+        this.canvas.addEventListener("touchcancel", (e) => {
+            e.preventDefault();
+            this.onMouseUp();
+        }, { passive: false });
 
         // Keyboard shortcuts
         document.addEventListener("keydown", (e) => {
@@ -315,6 +443,26 @@ const TacticalRenderer = {
         const cy = e.clientY - rect.top;
         const { x, y } = this.fromCanvas(cx, cy);
 
+        // Drawing mode: start drawing arrow or zone
+        if (this.drawingMode === "arrow" || this.drawingMode === "zone") {
+            this.drawStart = { x, y };
+            this.selectedObject = null;
+            this.render();
+            return;
+        }
+
+        // Text mode: prompt and place text
+        if (this.drawingMode === "text") {
+            const text = prompt("Enter annotation text:");
+            if (text && text.trim()) {
+                this.pushUndo();
+                const textObj = TACTICAL_BOARD.createText(x, y, text.trim());
+                this.project.objects.push(textObj);
+                this.render();
+            }
+            return;
+        }
+
         // Find object under cursor
         let found = null;
         for (const obj of [...this.project.objects].reverse()) {
@@ -326,33 +474,139 @@ const TacticalRenderer = {
                     found = obj;
                     break;
                 }
+            } else if (obj.type === "arrow") {
+                // Hit test: distance from point to line segment < 3 units
+                const dist = this._pointToSegmentDist(x, y, obj.startX, obj.startY, obj.endX, obj.endY);
+                if (dist < 3) {
+                    found = obj;
+                    break;
+                }
+            } else if (obj.type === "zone") {
+                // Hit test: point inside rectangle bounds
+                if (x >= obj.x && x <= obj.x + obj.width &&
+                    y >= obj.y && y <= obj.y + obj.height) {
+                    found = obj;
+                    break;
+                }
             }
         }
 
         this.selectedObject = found;
         if (found) {
             this.isDragging = true;
-            this.dragOffset = { x: x - found.x, y: y - found.y };
+            if (found.type === "arrow") {
+                this.dragOffset = {
+                    x: x - found.startX,
+                    y: y - found.startY,
+                };
+            } else {
+                this.dragOffset = { x: x - found.x, y: y - found.y };
+            }
             this.pushUndo();
         }
         this.render();
     },
 
     onMouseMove(e) {
-        if (!this.isDragging || !this.selectedObject) return;
-
         const rect = this.canvas.getBoundingClientRect();
         const cx = e.clientX - rect.left;
         const cy = e.clientY - rect.top;
         const { x, y } = this.fromCanvas(cx, cy);
 
-        this.selectedObject.x = Math.max(0, Math.min(100, x - this.dragOffset.x));
-        this.selectedObject.y = Math.max(0, Math.min(100, y - this.dragOffset.y));
+        // Drawing mode: update preview
+        if (this.drawStart) {
+            if (this.drawingMode === "arrow") {
+                this.drawPreview = {
+                    type: "arrow",
+                    startX: this.drawStart.x,
+                    startY: this.drawStart.y,
+                    endX: x,
+                    endY: y,
+                };
+            } else if (this.drawingMode === "zone") {
+                const zx = Math.min(this.drawStart.x, x);
+                const zy = Math.min(this.drawStart.y, y);
+                const zw = Math.abs(x - this.drawStart.x);
+                const zh = Math.abs(y - this.drawStart.y);
+                this.drawPreview = {
+                    type: "zone",
+                    x: zx, y: zy,
+                    width: zw, height: zh,
+                };
+            }
+            this.render();
+            return;
+        }
+
+        if (!this.isDragging || !this.selectedObject) return;
+
+        if (this.selectedObject.type === "arrow") {
+            // Move entire arrow
+            const newStartX = Math.max(0, Math.min(100, x - this.dragOffset.x));
+            const newStartY = Math.max(0, Math.min(100, y - this.dragOffset.y));
+            const dx = newStartX - this.selectedObject.startX;
+            const dy = newStartY - this.selectedObject.startY;
+            this.selectedObject.startX = newStartX;
+            this.selectedObject.startY = newStartY;
+            this.selectedObject.endX = Math.max(0, Math.min(100, this.selectedObject.endX + dx));
+            this.selectedObject.endY = Math.max(0, Math.min(100, this.selectedObject.endY + dy));
+        } else {
+            this.selectedObject.x = Math.max(0, Math.min(100, x - this.dragOffset.x));
+            this.selectedObject.y = Math.max(0, Math.min(100, y - this.dragOffset.y));
+        }
         this.render();
     },
 
     onMouseUp() {
+        // Drawing mode: create the drawn object
+        if (this.drawStart && this.drawPreview) {
+            this.pushUndo();
+            if (this.drawingMode === "arrow") {
+                const arrow = TACTICAL_BOARD.createArrow(
+                    this.drawPreview.startX, this.drawPreview.startY,
+                    this.drawPreview.endX, this.drawPreview.endY,
+                    "solid"
+                );
+                this.project.objects.push(arrow);
+            } else if (this.drawingMode === "zone") {
+                const zone = TACTICAL_BOARD.createZone(
+                    this.drawPreview.x, this.drawPreview.y,
+                    this.drawPreview.width, this.drawPreview.height
+                );
+                this.project.objects.push(zone);
+            }
+            this.drawStart = null;
+            this.drawPreview = null;
+            this.render();
+        }
         this.isDragging = false;
+    },
+
+    /* ── Drawing mode ────────────────────────────────────────────────── */
+    setDrawingMode(mode) {
+        this.drawingMode = mode; // null | 'arrow' | 'zone' | 'text'
+        this.drawStart = null;
+        this.drawPreview = null;
+        // Update cursor
+        if (this.canvas) {
+            if (mode === "text") this.canvas.style.cursor = "text";
+            else if (mode === "arrow" || mode === "zone") this.canvas.style.cursor = "crosshair";
+            else this.canvas.style.cursor = "default";
+        }
+        this.render();
+    },
+
+    /* ── Hit testing helpers ─────────────────────────────────────────── */
+    _pointToSegmentDist(px, py, ax, ay, bx, by) {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) return Math.sqrt((px - ax) * (px - ax) + (py - ay) * (py - ay));
+        let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const projX = ax + t * dx;
+        const projY = ay + t * dy;
+        return Math.sqrt((px - projX) * (px - projX) + (py - projY) * (py - projY));
     },
 
     /* ── Undo/Redo ──────────────────────────────────────────────────── */
@@ -414,6 +668,7 @@ const TacticalRenderer = {
         currentFrame: 0,
         animationId: null,
         startTime: 0,
+        loop: false,
     },
 
     play() {
@@ -471,7 +726,12 @@ const TacticalRenderer = {
         // Check if animation is complete
         const totalAnimDuration = frames.reduce((sum, f) => sum + (f.duration_ms || 3000), 0);
         if (elapsed >= totalAnimDuration) {
-            this.animationState.isPlaying = false;
+            if (this.animationState.loop) {
+                this.animationState.startTime = performance.now();
+                this.animationState.animationId = requestAnimationFrame(() => this._animate());
+            } else {
+                this.animationState.isPlaying = false;
+            }
             return;
         }
 
@@ -495,5 +755,10 @@ const TacticalRenderer = {
         if (!this.project || !this.project.frames) return;
         const prev = (this.animationState.currentFrame - 1 + this.project.frames.length) % this.project.frames.length;
         this.goToFrame(prev);
+    },
+
+    toggleLoop() {
+        this.animationState.loop = !this.animationState.loop;
+        return this.animationState.loop;
     },
 };
