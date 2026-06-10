@@ -159,8 +159,27 @@ def create_app() -> FastAPI:
         return get_player_profile(player_name, season=season)
 
     @app.get("/players/{player_name}")
-    def player_detail(player_name: str, season: str | None = None):
-        return get_player_profile(player_name, season=season)
+    def player_detail(
+        player_name: str,
+        season: str | None = None,
+        position_group: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        format: str = "json",
+    ):
+        from fastapi.responses import PlainTextResponse
+
+        result = get_player_profile(
+            player_name,
+            season=season,
+            position_group=position_group,
+            limit=limit,
+            offset=offset,
+            fmt=format,
+        )
+        if format == "csv" and isinstance(result, str):
+            return PlainTextResponse(result, media_type="text/csv")
+        return result
 
     @app.get("/artifacts")
     def artifacts():

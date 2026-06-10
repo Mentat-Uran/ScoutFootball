@@ -170,6 +170,19 @@ const i18n = {
         watchlist_notes_label: "观察备注",
         generate_tactical_role: "生成战术角色",
         tactical_role_label: "战术角色分析",
+        nav_calibration: "校准",
+        calibration_kicker: "模型校准",
+        calibration_title: "预测 vs 实际",
+        calibration_plot: "校准图",
+        calibration_brier: "Brier 分解",
+        calibration_low_score: "低分桶分析",
+        calibration_league: "联赛校准",
+        xT_label: "xT 每90分钟",
+        xT_percentile: "xT 百分位",
+        xT_contribution: "xT 贡献",
+        xT_not_available: "xT 数据不可用",
+        confidence_reason_label: "置信原因",
+        rating_snapshot: "评分快照",
     },
     en: {
         nav_overview: "Overview",
@@ -342,6 +355,19 @@ const i18n = {
         watchlist_notes_label: "Watchlist Notes",
         generate_tactical_role: "Generate Tactical Role",
         tactical_role_label: "Tactical Role Analysis",
+        nav_calibration: "Calibration",
+        calibration_kicker: "Model calibration",
+        calibration_title: "Predicted vs Actual",
+        calibration_plot: "Calibration plot",
+        calibration_brier: "Brier decomposition",
+        calibration_low_score: "Low-score bucket analysis",
+        calibration_league: "Per-league calibration",
+        xT_label: "xT per 90",
+        xT_percentile: "xT percentile",
+        xT_contribution: "xT contribution",
+        xT_not_available: "xT data not available",
+        confidence_reason_label: "Confidence reason",
+        rating_snapshot: "Rating snapshot",
     },
 };
 
@@ -830,8 +856,29 @@ async function renderPlayerProfile() {
         ${/* Confidence reason */ (() => {
             const reason = profile ? (profile.confidence_reason || profile.confidence_detail || '') : '';
             if (!reason) return '';
-            const label = appState.lang === 'zh' ? '置信原因' : 'Confidence reason';
+            const label = t('confidence_reason_label');
             return `<div><span>${escapeHtml(label)}</span><strong style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(reason)}</strong></div>`;
+        })()}
+        ${/* xT summary */ (() => {
+            const xt = profile ? profile.xt_summary : null;
+            if (!xt || !xt.available) {
+                const label = t('xT_not_available');
+                return `<div><span>${escapeHtml(t('xT_label'))}</span><strong style="color:var(--text-muted);font-size:0.82rem">N/A - ${escapeHtml(label)}</strong></div>`;
+            }
+            const parts = [];
+            if (xt.xT_per_90 != null) parts.push(`${escapeHtml(t('xT_label'))}: ${escapeHtml(String(xt.xT_per_90))}`);
+            if (xt.xT_percentile != null) parts.push(`${escapeHtml(t('xT_percentile'))}: ${escapeHtml(String(xt.xT_percentile))}pct`);
+            if (xt.xT_contribution != null) parts.push(`${escapeHtml(t('xT_contribution'))}: ${escapeHtml(String(xt.xT_contribution))}`);
+            if (parts.length === 0) return '';
+            const note = xt.coverage_note ? ` (${escapeHtml(xt.coverage_note)})` : '';
+            return `<div><span>${escapeHtml(t('xT_label'))}</span><strong style="font-size:0.82rem">${parts.join(' | ')}${note}</strong></div>`;
+        })()}
+        ${/* Rating snapshot history */ (() => {
+            const seasons = profile ? (profile.seasons || []) : [];
+            if (seasons.length < 2) return '';
+            const label = t('rating_snapshot');
+            const dots = seasons.map(s => `${escapeHtml(String(s.season))}: ${escapeHtml(String(s.optimized_score))}`).join(', ');
+            return `<div><span>${escapeHtml(label)}</span><strong style="font-size:0.82rem;color:var(--text-muted)">${dots}</strong></div>`;
         })()}
         ${/* Data sources */ (() => {
             const sources = profile ? (profile.data_sources || profile.sources || []) : [];
@@ -2536,12 +2583,125 @@ async function renderActiveView() {
     if (appState.view === "wc_probability") renderWcProbability();
     if (appState.view === "license") renderLicense();
     if (appState.view === "data") renderData();
+    if (appState.view === "calibration") renderCalibration();
     // Resize charts after layout paint to ensure correct dimensions
     requestAnimationFrame(() => {
         Object.values(appState.charts).forEach((chart) => {
             try { chart.resize(); } catch(e) { /* ignore disposed charts */ }
         });
     });
+}
+
+async function renderCalibration() {
+    const statusPill = document.getElementById("calibration-status");
+    try {
+        const resp = await fetch(`${API_BASE}/predictions/calibration`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        // Status
+        const dcStatus = data.dixon_coles ? data.dixon_coles.status : "not_available";
+        if (statusPill) {
+            statusPill.textContent = dcStatus === "ok" ? "DC: OK" : dcStatus;
+            statusPill.className = `status-pill ${dcStatus === "ok" ? "status-high" : "status-medium"}`;
+        }
+
+        // Metrics summary
+        const metricsEl = document.getElementById("calibration-metrics");
+        if (metricsEl) {
+            const dc = data.dixon_coles || {};
+            const poisson = data.poisson || {};
+            const zT = appState.lang === "zh";
+            let html = '<div class="detail-grid">';
+            if (dc.status === "ok") {
+                html += `<div><span>${zT ? "DC 对数损失" : "DC Log Loss"}</span><strong>${escapeHtml(String(dc.log_loss_exact))}</strong></div>`;
+                html += `<div><span>${zT ? "DC Brier" : "DC Brier 1x2"}</span><strong>${escapeHtml(String(dc.brier_1x2))}</strong></div>`;
+                html += `<div><span>${zT ? "DC RPS" : "DC RPS"}</span><strong>${escapeHtml(String(dc.rps_1x2))}</strong></div>`;
+                html += `<div><span>${zT ? "DC 场次" : "DC matches"}</span><strong>${escapeHtml(String(dc.n_matches))}</strong></div>`;
+            }
+            if (poisson.status === "ok") {
+                html += `<div><span>${zT ? "Poisson 对数损失" : "Poisson Log Loss"}</span><strong>${escapeHtml(String(poisson.log_loss_exact || "–"))}</strong></div>`;
+                html += `<div><span>${zT ? "Poisson Brier" : "Poisson Brier"}</span><strong>${escapeHtml(String(poisson.brier_1x2 || "–"))}</strong></div>`;
+            }
+            html += '</div>';
+            metricsEl.innerHTML = html;
+        }
+
+        // Calibration plot (predicted vs actual home-win)
+        const calPlot = data.calibration_plot || [];
+        const chartEl = document.getElementById("calibration-plot-chart");
+        if (chartEl && calPlot.length > 0 && typeof echarts !== "undefined") {
+            const chart = getChart("calibration-plot-chart");
+            chart.setOption({
+                tooltip: { trigger: "axis" },
+                xAxis: { type: "value", name: "Predicted", min: 0, max: 1 },
+                yAxis: { type: "value", name: "Actual", min: 0, max: 1 },
+                series: [
+                    { type: "line", data: [[0, 0], [1, 1]], lineStyle: { type: "dashed", color: "#888" }, symbol: "none", silent: true },
+                    {
+                        type: "scatter",
+                        data: calPlot.map(p => [p.mean_predicted, p.mean_actual]),
+                        symbolSize: calPlot.map(p => Math.max(8, Math.sqrt(p.n_matches) * 3)),
+                        itemStyle: { color: "#4a90d9" },
+                        label: { show: false },
+                    },
+                ],
+                grid: { left: 50, right: 20, top: 30, bottom: 40 },
+            });
+        }
+
+        // Low score breakdown
+        const lowScoreEl = document.getElementById("calibration-low-score");
+        if (lowScoreEl) {
+            const buckets = data.low_score_breakdown || [];
+            if (buckets.length === 0) {
+                lowScoreEl.innerHTML = `<div style="padding:0.5rem;color:var(--text-muted)">${escapeHtml(appState.lang === "zh" ? "无数据" : "No data")}</div>`;
+            } else {
+                lowScoreEl.innerHTML = buckets.map(b =>
+                    `<div class="rank-item" style="display:flex;justify-content:space-between;padding:4px 8px;font-size:0.82rem">
+                        <span>${escapeHtml(b.score_bucket)}</span>
+                        <span>${escapeHtml(String(b.n_matches))} ${escapeHtml(appState.lang === "zh" ? "场" : "matches")}</span>
+                        <span>${escapeHtml(appState.lang === "zh" ? "实际" : "Actual")}: ${escapeHtml(String(b.actual_pct))}%</span>
+                        <span>${escapeHtml(appState.lang === "zh" ? "预测" : "Pred")}: ${escapeHtml(String(b.mean_predicted_pct))}%</span>
+                        <span style="color:${b.calibration_error > 5 ? '#ff6b6b' : '#57d68d'}">${escapeHtml(String(b.calibration_error))}% err</span>
+                    </div>`
+                ).join("");
+            }
+        }
+
+        // Per-league calibration
+        const leagueEl = document.getElementById("calibration-league");
+        if (leagueEl) {
+            const leagues = data.league_coverage || [];
+            if (leagues.length === 0) {
+                leagueEl.innerHTML = `<div style="padding:0.5rem;color:var(--text-muted)">${escapeHtml(appState.lang === "zh" ? "无数据" : "No data")}</div>`;
+            } else {
+                leagueEl.innerHTML = leagues.map(l =>
+                    `<div class="rank-item" style="display:flex;justify-content:space-between;padding:4px 8px;font-size:0.82rem">
+                        <span>${escapeHtml(l.league)}</span>
+                        <span>${escapeHtml(String(l.n_matches))} ${escapeHtml(appState.lang === "zh" ? "场" : "matches")}</span>
+                        <span>${escapeHtml(appState.lang === "zh" ? "对数损失" : "LogLoss")}: ${escapeHtml(String(l.mean_log_loss))}</span>
+                        <span>Brier: ${escapeHtml(String(l.mean_brier))}</span>
+                    </div>`
+                ).join("");
+            }
+        }
+
+        // Brier decomposition
+        const brierEl = document.getElementById("calibration-brier");
+        if (brierEl && data.dixon_coles && data.dixon_coles.status === "ok") {
+            const dc = data.dixon_coles;
+            brierEl.innerHTML = `<p style="font-size:0.72rem;color:var(--text-muted);margin:0.3rem 0">
+                Brier 1x2: ${escapeHtml(String(dc.brier_1x2))} | RPS: ${escapeHtml(String(dc.rps_1x2))} | n=${escapeHtml(String(dc.n_matches))}
+            </p>`;
+        }
+    } catch (err) {
+        if (statusPill) {
+            statusPill.textContent = "error";
+            statusPill.className = "status-pill status-low";
+        }
+        console.warn("Failed to fetch calibration:", err);
+    }
 }
 
 function exportPlayers() {

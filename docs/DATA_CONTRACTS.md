@@ -1,118 +1,435 @@
 # Data Contracts
 
-ScoutFootball 内部数据产物的 schema 契约。
+This document defines the schema contracts for all data artifacts in
+ScoutFootball. Changes to these schemas require updating this document,
+the downstream consumers, and the validation tests.
 
-## 比赛预测产物
+---
 
-### poisson_baseline_results.parquet
-训练好的 Independent Poisson 模型元数据。
+## 1. StatsBomb Events Schema
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| model_type | string | `"independent_poisson"` |
-| train_rows | int | 训练用比赛行数 |
-| league_home_rate | float | 联赛主场进球率 |
-| league_away_rate | float | 联赛客场进球率 |
-| num_teams | int | 球队数 |
-| smoothing | float | 平滑系数 |
+**File**: `data/raw/statsbomb_open/events_all.parquet`
+**Source**: StatsBomb Open Data (free for research, must attribute)
+**Coverage**: Sample only (3 matches, ~12K events). NOT full league coverage.
 
-### dixon_coles_results.parquet
-训练好的 Dixon-Coles 模型元数据。
+| Column | Type | Description |
+|---|---|---|
+| match_id | str | StatsBomb match identifier |
+| event_id | int | Unique event identifier within match |
+| index | int | Event sequence index |
+| period | int | 1=1st half, 2=2nd half, etc. |
+| timestamp | str | Time within match (HH:MM:SS.mmm) |
+| minute | int | Minute of event |
+| second | int | Second within minute |
+| possession | int | Possession sequence number |
+| duration | float | Duration of event in seconds |
+| type_id | int | StatsBomb event type ID |
+| event_type | str | Event type name (Pass, Shot, Carry, etc.) |
+| possession_team_id | int | Team in possession |
+| possession_team_name | str | Team name in possession |
+| team_id | int | Team performing action |
+| team_name | str | Team name |
+| player_id | int | StatsBomb player ID |
+| player_name | str | Player name |
+| location | list[float] | [x, y] start location (120x80 pitch) |
+| pass_end_location | list[float] | [x, y] pass end location |
+| carry_end_location | list[float] | [x, y] carry end location |
+| shot_end_location | list[float] | [x, y] shot end location |
+| shot_statsbomb_xg | float | StatsBomb xG for shot |
+| pass_recipient_id | int | Pass recipient player ID |
+| pass_recipient_name | str | Pass recipient name |
+| pass_length | float | Pass length in yards |
+| pass_angle | float | Pass angle in radians |
+| pass_outcome_id | int | Pass outcome ID (null=complete) |
+| pass_outcome_name | str | Pass outcome name |
+| shot_outcome_id | int | Shot outcome ID |
+| shot_outcome_name | str | Shot outcome name |
+| ... | ... | Additional qualifier columns |
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| model_type | string | `"dixon_coles"` |
-| num_matches | int | 训练用比赛数 |
-| rho | float | 低比分相关系数 (通常 -0.3 ~ 0) |
-| home_advantage | float | 主场优势参数 |
-| league_mean_goals | float | 联赛场均进球 |
-| num_teams | int | 球队数 |
-| half_life_days | float or null | 时间衰减半衰期 (null = 无衰减) |
+**Coordinate system**: StatsBomb uses 120x80 (x: 0=own goal, 120=opponent goal).
 
-### team_strengths.parquet
-Poisson 模型的球队攻防强度参数。
+---
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| team_id | string | 球队标识 |
-| home_attack_strength | float | 主场进攻强度 (1.0 = 联赛平均) |
-| away_attack_strength | float | 客场进攻强度 |
-| home_defense_strength | float | 主场防守强度 |
-| away_defense_strength | float | 客场防守强度 |
+## 2. Internal Actions Schema
 
-### dc_team_strengths.parquet
-Dixon-Coles 模型的球队攻防参数。
+**Defined in**: `src/scoutfootball/action_value/schema.py`
+**Coordinate system**: 0-100 normalized (x: left-to-right, y: bottom-to-top)
+**Direction**: Always attack-to-defense (left-to-right after normalization)
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| team_id | string | 球队标识 |
-| attack | float | 进攻参数 (0 = 联赛平均) |
-| defense | float | 防守参数 (0 = 联赛平均) |
+| Field | Type | Description |
+|---|---|---|
+| action_id | int | Unique ID within match |
+| provider_action_id | str | Original action ID from source |
+| match_id | str | Match identifier |
+| team_id | str | Team identifier |
+| player_id | str | Player identifier |
+| period | int | 1=1st half, 2=2nd half |
+| minute | int | Minute of action |
+| second | int | Second within minute |
+| action_type | ActionType | Standardized type (SPADL-compatible) |
+| result | ActionResult | Outcome: success/failure/unknown |
+| start_x | float | Start x coordinate (0-100) |
+| start_y | float | Start y coordinate (0-100) |
+| end_x | float | End x coordinate (0-100) |
+| end_y | float | End y coordinate (0-100) |
+| body_part | str | Body part used |
+| qualifier | dict | Additional metadata |
+| source | str | Data provider name |
+| source_coverage | str | Coverage flag: full/partial/sample |
 
-## 球员评分产物
+**ActionTypes**: pass, dribble, shot, freeze, take_on, clearance,
+interception, tackle, block, goalkeeper, receipt, carry, unknown
 
-### player_ratings_optimized.parquet
-GPU 优化器产出的球员评分。
+**ActionResults**: success, failure, unknown
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| player_id | string | 球员标识 |
-| player_name | string | 球员姓名 |
-| team_name | string | 球队名 |
-| position_group | string | 位置组 (GK/CB/FB/DM/CM/AM/W/ST) |
-| rating | float | 综合评分 (0-100) |
-| season | string | 赛季 |
-| league | string | 联赛 |
-| minutes_played | int | 出场分钟数 |
-| confidence | string | 置信度 (HIGH/MEDIUM/LOW) |
+---
 
-### rating_feature_matrix.parquet
-评分特征矩阵，含缺失字段标记和覆盖率。
+## 3. SPADL Mapping
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| player_id | string | 球员标识 |
-| player_name | string | 球员姓名 |
-| position_group | string | 位置组 |
-| season | string | 赛季 |
-| league | string | 联赛 |
-| minutes_played | int | 出场分钟数 |
-| goals | int | 进球数 |
-| assists | int | 助攻数 |
-| npg_p90 | float or null | 每90分钟非点球进球 |
-| assists_p90 | float or null | 每90分钟助攻 |
-| has_defense | bool | 是否有防守数据 |
-| has_possession | bool | 是否有控球数据 |
-| coverage | float | 数据覆盖率 (0-1) |
+StatsBomb events are converted to InternalAction via
+`src/scoutfootball/action_value/spadl_adapter.py`.
 
-## 球探队列产物
+| StatsBomb Type | InternalAction Type |
+|---|---|
+| Pass | pass |
+| Carry | carry |
+| Shot | shot |
+| Dribble | dribble |
+| Ball Receipt* | receipt |
+| Clearance | clearance |
+| Interception | interception |
+| Duel | tackle |
+| Block | block |
+| Goalkeeper | goalkeeper |
+| Take On | take_on |
+| Ball Recovery | clearance |
+| Miscontrol | failure (pass) |
+| Foul Committed | freeze |
 
-### review_queue.parquet
-低置信度球员复核队列。
+Coordinate transformation: `x_internal = x_statsbomb / 120 * 100`
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| player_id | string | 球员标识 |
-| player_name | string | 球员姓名 |
-| reason | string | 低置信度原因 |
-| priority | string | 优先级 (high/medium/low) |
-| created_at | datetime | 创建时间 |
+---
 
-### watchlist.parquet / shortlist.parquet
-球探关注列表和候选名单。Schema 同 review_queue。
+## 4. player_ratings_optimized.parquet
 
-## API 响应契约
+**File**: `data/gold/feature_store/player_ratings_optimized.parquet`
+**Rows**: ~30,000 (all seasons, all leagues)
+**Source**: Rating optimizer GPU pipeline
 
-### GET /predictions/{home}/{away}?model=poisson|dixon_coles
-比赛预测 API。返回精确比分矩阵、期望进球和市场概率。
+| Column | Type | Description |
+|---|---|---|
+| player | str | Player name |
+| team | str | Club team name |
+| league | str | League name (Premier League, La Liga, etc.) |
+| season | str | Season code (e.g., "2425") |
+| source_position | str | Raw position string from source |
+| sub_position | str | Mapped position group (GK/CB/FB/DM/CM/AM/W/ST) |
+| pos_idx | int | Position index (0-7) |
+| position_source | str | Position mapping source |
+| position_confidence | str | Position mapping confidence (low/medium/high) |
+| matches | float | Number of matches played |
+| starts | float | Number of starts |
+| minutes | float | Total minutes played |
+| npg_p90 | float | Non-penalty goals per 90 minutes |
+| assists_p90 | float | Assists per 90 minutes |
+| g_a_volume | float | Total goals + assists |
+| tackles_p90 | float | Tackles per 90 |
+| interceptions_p90 | float | Interceptions per 90 |
+| crosses_p90 | float | Crosses per 90 |
+| fouls_drawn_p90 | float | Fouls drawn per 90 |
+| fouls_p90 | float | Fouls committed per 90 |
+| defense_composite | float | Defense composite score (0-100) |
+| possession_composite | float | Possession composite score (0-100) |
+| season_rank | int | Rank within season |
+| npg_trend | float | Attack trend metric |
+| def_trend | float | Defense trend metric |
+| pos_trend | float | Possession trend metric |
+| experience_factor | float | Experience adjustment factor |
+| low_appearance | bool | True if <20 matches (penalized) |
+| optimized_score | float | Final optimized rating (0-100) |
+| same_position_score | float | Rating within same position group (0-100) |
 
-### GET /predictions/meta
-返回 Poisson 和 Dixon-Coles 模型状态及可用模型列表。
+---
 
+## 5. rating_feature_matrix.parquet
+
+**File**: `data/gold/feature_store/rating_feature_matrix.parquet`
+**Purpose**: Input features for the rating optimizer
+
+| Column | Type | Description |
+|---|---|---|
+| player_id | str | Player identifier |
+| season_id | str | Season identifier |
+| goals | int | Goals scored |
+| assists | int | Assists |
+| shots | int | Total shots |
+| shots_on_target | int | Shots on target |
+| minutes_played | int | Total minutes |
+| starts | int | Number of starts |
+| npxg | float | Non-penalty expected goals |
+| xa | float | Expected assists |
+| available_flag | bool | Data availability flag |
+| tackles | int | Tackles made |
+| passes | int | Passes attempted |
+| xT_added | float | Expected threat added |
+| player_name | str | Player name |
+| team_id | str | Team identifier |
+| team_name | str | Team name |
+| competition_id | str | Competition identifier |
+| position_group | str | Mapped position group |
+| defense_missing | bool | Defense data missing flag |
+| possession_missing | bool | Possession data missing flag |
+| xT_VAEP_missing | bool | xT/VAEP data missing flag |
+| goalkeeper_missing | bool | GK data missing flag |
+| finishing_raw | float | Raw finishing metric |
+| finishing_shrunk | float | Shrunk finishing metric |
+| statsbomb_open_source_covered | bool | StatsBomb coverage flag |
+| fbref_source_covered | bool | FBref coverage flag |
+| has_expected_metrics | bool | xG/xA data available |
+| has_ball_value_data | bool | Ball value data available |
+
+---
+
+## 6. player_truth_labels.parquet
+
+**File**: `data/gold/feature_store/player_truth_labels.parquet`
+**Purpose**: Ground truth labels for rating validation
+
+| Column | Type | Description |
+|---|---|---|
+| player_id | str | Player identifier |
+| season | str | Season code |
+| label_source | str | Source of truth label |
+| label_confidence | str | Confidence in label (low/medium/high) |
+| label_value | float | Label value |
+| as_of_date | str | Date label was assigned |
+| position_scope | str | Position scope for label |
+| manual_review_flag | bool | Requires manual review |
+
+**Status**: Schema exists; data rows are currently empty.
+
+---
+
+## 7. team_match.parquet
+
+**File**: `data/gold/feature_store/team_match.parquet`
+**Rows**: ~10,000
+**Source**: Football-Data.co.uk match results
+
+| Column | Type | Description |
+|---|---|---|
+| match_id | str | Match identifier |
+| match_date | str | Match date (YYYY-MM-DD) |
+| competition_id | str | Competition identifier |
+| season_id | str | Season identifier |
+| team_id | str | Team identifier |
+| team_name | str | Team name |
+| opponent_team_id | str | Opponent identifier |
+| opponent_team_name | str | Opponent name |
+| is_home | bool | Home team flag |
+| goals_for | int | Goals scored |
+| goals_against | int | Goals conceded |
+| goal_diff | int | Goal difference |
+| result_points | int | Points earned (3/1/0) |
+| shots | int | Shots taken |
+| has_shots_data | bool | Shot data available flag |
+| shots_on_target | int | Shots on target |
+| has_shots_on_target_data | bool | SOT data available flag |
+| xg | float | Expected goals for |
+| xg_against | float | Expected goals against |
+| has_xg_data | bool | xG data available flag |
+| rest_days | int | Days since last match |
+| elo_pre | float | ELO rating before match |
+| opponent_elo_pre | float | Opponent ELO before match |
+| elo_diff | float | ELO difference |
+
+---
+
+## 8. player_value_metrics.parquet
+
+**File**: `data/gold/feature_store/player_value_metrics.parquet`
+**Source**: StatsBomb Open Data sample only
+**Coverage**: ~10 sample players from 3 matches
+
+| Column | Type | Description |
+|---|---|---|
+| player_id | str | Player identifier |
+| player_name | str | Player name |
+| team_id | str | Team identifier |
+| estimated_minutes | float | Estimated playing time |
+| n_matches | int | Number of matches |
+| shots | int | Total shots |
+| shots_per_90 | float | Shots per 90 minutes |
+| xG_total | float | Total expected goals |
+| xG_per_90 | float | xG per 90 minutes |
+| goals | int | Actual goals |
+| goals_per_90 | float | Goals per 90 |
+| finishing_delta | float | Goals minus xG |
+| passes_per_90 | float | Passes per 90 |
+| pass_completion_rate | float | Pass completion rate |
+| forward_pass_rate | float | Forward pass rate |
+| total_xt | float | Total xT accumulated |
+| xT_per_90 | float | xT per 90 minutes |
+| tackles_per_90 | float | Tackles per 90 |
+| interceptions_per_90 | float | Interceptions per 90 |
+| blocks_per_90 | float | Blocks per 90 |
+| duel_win_rate | float | Duel win rate |
+| duels_per_90 | float | Duels per 90 |
+| touches_per_90 | float | Touches per 90 |
+| progressive_carries_per_90 | float | Progressive carries per 90 |
+| final_third_touches_per_90 | float | Final third touches per 90 |
+| penalty_area_touches_per_90 | float | Penalty area touches per 90 |
+| composite_score | float | Composite action value score |
+| source | str | Data source |
+| source_attribution | str | Attribution text |
+| coverage_note | str | Coverage limitation note |
+
+---
+
+## 9. API Endpoint Contracts
+
+### GET /health
+Returns server health status.
+
+**Response**: `{ status, data_source, version }`
+
+### GET /ratings
+Returns player ratings with optional filters.
+
+**Query params**: `position`, `league`, `team`, `season`, `limit`
+**Response**: `{ count, players: [...] }`
+
+### GET /players/{player_name}
+Returns detailed player profile with fuzzy search support.
+
+**Query params**:
+- `season` (str, optional): Filter by season
+- `position_group` (str, optional): Filter by position group
+- `limit` (int, default=50): Pagination limit for fuzzy matches
+- `offset` (int, default=0): Pagination offset for fuzzy matches
+- `format` (str, default="json"): Response format ("json" or "csv")
+
+**Response** (exact match):
 ```json
 {
-  "poisson": { "model_type": "...", "league_home_rate": 1.5, ... },
-  "dixon_coles": { "status": "ok" | "not_available", ... },
-  "available_models": ["poisson", "dixon_coles"]
+  "player": "string",
+  "found": true,
+  "team": "string",
+  "league": "string",
+  "season": "string",
+  "position_group": "string",
+  "optimized_score": 85.0,
+  "minutes": 2500,
+  "matches": 30,
+  "low_appearance": false,
+  "confidence_level": "HIGH",
+  "confidence_reason": "adequate minutes, matches, and peer pool",
+  "npg_p90": 0.5,
+  "assists_p90": 0.3,
+  "defense_composite": 45.0,
+  "possession_composite": 60.0,
+  "radar": [80.0, 60.0, 45.0, 92.0, 85.0],
+  "seasons": [
+    { "season": "2425", "team": "...", "league": "...",
+      "position_group": "...", "optimized_score": 85.0, "minutes": 2500 }
+  ],
+  "position_explanation": {
+    "attack": { "raw_score", "percentile_rank", "contribution", "confidence" },
+    "defense": { "raw_score", "percentile_rank", "contribution", "confidence" },
+    "possession": { "raw_score", "percentile_rank", "contribution", "confidence" },
+    "availability": { "raw_score", "percentile_rank", "contribution", "confidence" },
+    "quality": { "raw_score", "percentile_rank", "contribution", "confidence" },
+    "xT": {
+      "xT_per_90": 0.5,
+      "percentile_rank": 80.0,
+      "contribution": 16.7,
+      "confidence": "LOW"
+    }
+  },
+  "xt_summary": {
+    "available": true,
+    "xT_per_90": 0.5,
+    "xT_total": 12.5,
+    "xT_percentile": 80.0,
+    "xT_contribution": 16.7,
+    "coverage_note": "StatsBomb Open Data sample only"
+  }
 }
 ```
+
+**Response** (fuzzy match, multiple players):
+```json
+{
+  "player": "search_term",
+  "found": true,
+  "fuzzy_match": true,
+  "total": 15,
+  "offset": 0,
+  "limit": 50,
+  "players": [
+    { "player", "found", "team", "league", "season",
+      "position_group", "optimized_score", "minutes" }
+  ]
+}
+```
+
+### GET /predictions/calibration
+Returns calibration metrics for match prediction models.
+
+**Response**:
+```json
+{
+  "dixon_coles": {
+    "status": "ok",
+    "log_loss_exact": 2.1,
+    "brier_1x2": 0.55,
+    "rps_1x2": 0.22,
+    "n_matches": 1000
+  },
+  "poisson": { "status", "log_loss_exact", "brier_1x2", "rps_1x2", "n_matches" },
+  "low_score_breakdown": [
+    { "score_bucket": "0-0", "n_matches": 100,
+      "actual_pct": 10.0, "mean_predicted_pct": 8.0, "calibration_error": 2.0 }
+  ],
+  "calibration_plot": [
+    { "bin_center": 0.15, "n_matches": 200,
+      "mean_predicted": 0.14, "mean_actual": 0.16 }
+  ],
+  "league_coverage": [
+    { "league": "Premier League", "n_matches": 380,
+      "mean_log_loss": 2.1, "mean_brier": 0.55 }
+  ]
+}
+```
+
+### GET /predictions/{home_team}/{away_team}
+Match prediction between two teams.
+
+**Query params**: `model` ("poisson" or "dixon_coles")
+**Response**: `{ home_team, away_team, model_type, home_lambda, away_lambda, home_win, draw, away_win, over_2_5, btts_yes }`
+
+### GET /ratings/meta
+Model metadata and league metrics.
+
+### GET /artifacts
+Artifact counts and data health summary.
+
+### GET /action-values
+Player action value summary from StatsBomb sample.
+
+**Query params**: `limit` (default=20)
+
+### GET /review-queue
+Low-confidence players for review.
+
+### GET /watchlist, /shortlist
+Scouting watchlist and shortlist.
+
+### GET /model-runs
+Model run registry with holdout metrics.
+
+### GET /reports/model-runs/{run_id}
+Full details for a single model run.
+
+### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
+World Cup data endpoints.
