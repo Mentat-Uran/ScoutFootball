@@ -1052,3 +1052,39 @@ tbody button {
         height: 330px;
     }
 }
+
+/* Action buttons in player table */
+.actions-cell {
+    white-space: nowrap;
+    text-align: center;
+}
+
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--glass-border, rgba(255,255,255,.12));
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted, rgba(255,255,255,.45));
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin: 0 2px;
+    transition: all 0.15s ease;
+    padding: 0;
+    line-height: 1;
+}
+
+.action-btn:hover {
+    background: var(--glass-bg-hover, rgba(255,255,255,.08));
+    color: var(--text, #e0e0e0);
+    border-color: var(--accent, #7ca8ff);
+}
+
+.action-btn.active {
+    background: var(--accent, #7ca8ff);
+    color: #fff;
+    border-color: var(--accent, #7ca8ff);
+}

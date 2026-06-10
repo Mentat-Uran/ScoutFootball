@@ -222,6 +222,7 @@
                                         <th data-sort="season" style="cursor:pointer" data-i18n="th_season">赛季</th>
                                         <th data-sort="rating" style="cursor:pointer" data-i18n="th_rating">评分</th>
                                         <th data-i18n="th_conf">置信度</th>
+                                        <th data-i18n="th_actions">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="player-table"></tbody>
@@ -260,6 +261,7 @@
                             </div>
                         </div>
                         <div id="value-list" class="rank-list"></div>
+                        <div id="value-fairness" style="padding:0 0.8rem"></div>
                     </article>
                 </div>
             </section>
@@ -453,6 +455,18 @@
                                 <button class="text-button" id="tactical-load-training" type="button">加载训练</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
+                                <select id="tactical-equipment" class="glass-control">
+                                    <option value="">Equipment...</option>
+                                    <option value="cone">Cone</option>
+                                    <option value="marker">Marker</option>
+                                    <option value="pole">Pole</option>
+                                    <option value="ladder">Ladder</option>
+                                    <option value="minigoal">Mini Goal</option>
+                                </select>
+                                <button class="text-button" id="tactical-place-equipment" type="button">放置器材</button>
+                                <button class="text-button" id="tactical-eraser" type="button" title="Eraser mode">✕ 橡皮</button>
+                            </div>
+                            <div class="filter-row" style="margin-top:0.25rem">
                                 <button class="text-button active" id="tactical-tool-select" type="button" title="Select / Move">⌁ 选择</button>
                                 <button class="text-button" id="tactical-tool-arrow" type="button" title="Draw Arrow">⟷ 箭头</button>
                                 <button class="text-button" id="tactical-tool-zone" type="button" title="Draw Zone">▣ 区域</button>
@@ -462,6 +476,7 @@
                                 <button class="text-button" id="tactical-mirror-home" type="button" title="Mirror all home">◇ 主队镜像</button>
                                 <button class="text-button" id="tactical-mirror-away" type="button" title="Mirror all away">◇ 客队镜像</button>
                                 <button class="text-button" id="tactical-toggle-ratings" type="button" title="Toggle player ratings">◆ 评分</button>
+                                <button class="text-button" id="tactical-presentation" type="button" title="Presentation mode (fullscreen)">◇ 演示</button>
                             </div>
                         </div>
                         <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">

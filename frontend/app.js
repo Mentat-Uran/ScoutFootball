@@ -126,6 +126,17 @@ const i18n = {
         test_seasons: "测试赛季",
         dependency_versions: "依赖版本",
         toggle_ratings: "切换评分",
+        th_actions: "操作",
+        action_watchlist: "观察",
+        action_shortlist: "候选",
+        action_tactical: "战术",
+        value_fairness: "身价公平性",
+        oof_residual_label: "OOF 残差",
+        league_bias_label: "联赛偏差",
+        position_bias_label: "位置偏差",
+        age_curve_label: "年龄曲线",
+        transfermarkt_notice: "Transfermarkt 数据需手动导入，当前为估算值",
+        value_no_fairness: "暂无身价公平性数据",
     },
     en: {
         nav_overview: "Overview",
@@ -254,6 +265,17 @@ const i18n = {
         test_seasons: "Test seasons",
         dependency_versions: "Dependency versions",
         toggle_ratings: "Toggle ratings",
+        th_actions: "Actions",
+        action_watchlist: "Watch",
+        action_shortlist: "Short",
+        action_tactical: "Tactical",
+        value_fairness: "Value Fairness",
+        oof_residual_label: "OOF Residual",
+        league_bias_label: "League Bias",
+        position_bias_label: "Position Bias",
+        age_curve_label: "Age Curve",
+        transfermarkt_notice: "Transfermarkt data requires manual import, estimates shown",
+        value_no_fairness: "No value fairness data available",
     },
 };
 
@@ -615,7 +637,7 @@ function renderPlayers() {
     const rows = sorted.slice(start, start + pageSize);
     const tbody = document.getElementById("player-table");
     if (players.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Loading...</td></tr>';
         return;
     }
     tbody.innerHTML = rows.map((player, i) => {
@@ -632,6 +654,11 @@ function renderPlayers() {
             <td>${escapeHtml(player.season)}</td>
             <td>${player.rating.toFixed(1)}</td>
             <td><span class="status-pill ${confidenceClass(player.confidence)}">${escapeHtml(player.confidence)}</span></td>
+            <td class="actions-cell">
+                <button class="action-btn${isInPlayerWatchlist(player.key) ? ' active' : ''}" data-action-watch="${escapeAttr(player.key)}" title="${escapeHtml(t('action_watchlist'))}" type="button">\u25A1</button>
+                <button class="action-btn${isInPlayerShortlist(player.key) ? ' active' : ''}" data-action-short="${escapeAttr(player.key)}" title="${escapeHtml(t('action_shortlist'))}" type="button">\u25B3</button>
+                <button class="action-btn" data-action-tactical="${escapeAttr(player.key)}" title="${escapeHtml(t('action_tactical'))}" type="button">\u25CE</button>
+            </td>
         </tr>`;
     }).join("");
 
@@ -640,6 +667,34 @@ function renderPlayers() {
             appState.selectedPlayerKey = row.dataset.playerKey;
             renderPlayers();
             renderPlayerProfile();
+        });
+    });
+
+    // Action button handlers
+    tbody.querySelectorAll("[data-action-watch]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const playerKey = btn.dataset.actionWatch;
+            const player = players.find((p) => p.key === playerKey);
+            if (player) togglePlayerWatchlist(player);
+            renderPlayers();
+        });
+    });
+    tbody.querySelectorAll("[data-action-short]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const playerKey = btn.dataset.actionShort;
+            const player = players.find((p) => p.key === playerKey);
+            if (player) togglePlayerShortlist(player);
+            renderPlayers();
+        });
+    });
+    tbody.querySelectorAll("[data-action-tactical]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const playerKey = btn.dataset.actionTactical;
+            const player = players.find((p) => p.key === playerKey);
+            if (player) sendToTacticalBoard(player);
         });
     });
 
@@ -948,7 +1003,57 @@ function renderValue() {
         }
     }
 
-    document.getElementById("value-list").innerHTML = sorted.slice(0, 50).map((player) => {
+    // Value fairness metrics from API
+    const valueListEl = document.getElementById("value-list");
+    const fairnessEl = document.getElementById("value-fairness");
+    const metrics = valueSummaryMeta.metrics || {};
+    const sampleCount = valueSummaryMeta.sample_count || 0;
+
+    if (fairnessEl) {
+        let fhtml = '';
+        if (sampleCount > 0 && Object.keys(metrics).length > 0) {
+            // Show real fairness data from API
+            const z = appState.lang === 'zh';
+            fhtml += '<div class="wc-metric-row" style="display:flex;flex-wrap:wrap;gap:0.8rem;padding:0.5rem 0">';
+            if (metrics.oof_residual != null || metrics.mae != null) {
+                const val = metrics.oof_residual ?? metrics.mae;
+                fhtml += `<div class="wc-metric"><span class="metric-value">${Number(val).toFixed(3)}</span><span>${escapeHtml(t('oof_residual_label'))}</span></div>`;
+            }
+            if (metrics.league_bias != null) {
+                fhtml += `<div class="wc-metric"><span class="metric-value">${Number(metrics.league_bias).toFixed(3)}</span><span>${escapeHtml(t('league_bias_label'))}</span></div>`;
+            }
+            if (metrics.position_bias != null) {
+                fhtml += `<div class="wc-metric"><span class="metric-value">${Number(metrics.position_bias).toFixed(3)}</span><span>${escapeHtml(t('position_bias_label'))}</span></div>`;
+            }
+            if (metrics.age_curve_coeff != null || metrics.age_curve != null) {
+                const val = metrics.age_curve_coeff ?? metrics.age_curve;
+                fhtml += `<div class="wc-metric"><span class="metric-value">${Number(val).toFixed(3)}</span><span>${escapeHtml(t('age_curve_label'))}</span></div>`;
+            }
+            if (sampleCount) {
+                fhtml += `<div class="wc-metric"><span class="metric-value">${sampleCount}</span><span>samples</span></div>`;
+            }
+            fhtml += '</div>';
+            // Additional metrics in grid
+            const skipKeys = new Set(['oof_residual','mae','league_bias','position_bias','age_curve_coeff','age_curve']);
+            const extraMetrics = Object.entries(metrics).filter(([k]) => !skipKeys.has(k) && metrics[k] != null);
+            if (extraMetrics.length > 0) {
+                fhtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(7rem,1fr));gap:0.2rem 0.6rem;font-size:0.78rem;padding:0.3rem 0">';
+                for (const [k, v] of extraMetrics) {
+                    const display = typeof v === 'number' ? v.toFixed(4) : String(v);
+                    fhtml += `<div><span style="color:var(--text-muted)">${escapeHtml(k)}</span><br><strong>${escapeHtml(display)}</strong></div>`;
+                }
+                fhtml += '</div>';
+            }
+        } else {
+            // No real data: show Transfermarkt notice
+            const z = appState.lang === 'zh';
+            fhtml += `<div style="font-size:0.82rem;color:var(--text-muted);padding:0.5rem 0">\u25B2 ${escapeHtml(t('transfermarkt_notice'))}</div>`;
+            fhtml += `<div style="font-size:0.78rem;color:var(--text-muted);padding:0.2rem 0">${escapeHtml(t('value_no_fairness'))}</div>`;
+        }
+        fairnessEl.innerHTML = fhtml;
+    }
+
+    valueListEl.innerHTML = sorted.slice(0, 50).map((player) => {
         const valM = (player.actualValue / 1e6).toFixed(1);
         return `
         <div class="rank-item">
@@ -2369,6 +2474,55 @@ function bindEvents() {
                 TacticalRenderer.showRatings = !TacticalRenderer.showRatings;
                 tacticalToggleRatings.classList.toggle("active", TacticalRenderer.showRatings);
                 TacticalRenderer.render();
+            }
+        });
+    }
+
+    // Equipment placement handler
+    const tacticalPlaceEquipment = document.getElementById("tactical-place-equipment");
+    if (tacticalPlaceEquipment) {
+        tacticalPlaceEquipment.addEventListener("click", () => {
+            const equipmentType = document.getElementById("tactical-equipment").value;
+            if (!equipmentType) return;
+            if (typeof TacticalRenderer !== "undefined" && typeof TACTICAL_BOARD !== "undefined") {
+                const project = TacticalRenderer.getProject();
+                let obj = null;
+                switch (equipmentType) {
+                    case "cone": obj = TACTICAL_BOARD.createCone(50, 50); break;
+                    case "marker": obj = TACTICAL_BOARD.createMarker(50, 50); break;
+                    case "pole": obj = TACTICAL_BOARD.createPole(50, 50); break;
+                    case "ladder": obj = TACTICAL_BOARD.createLadder(50, 50); break;
+                    case "minigoal": obj = TACTICAL_BOARD.createMiniGoal(50, 50); break;
+                }
+                if (obj) {
+                    project.objects.push(obj);
+                    TacticalRenderer.selectedObject = obj;
+                    TacticalRenderer.render();
+                    tacticalProject = project;
+                }
+            }
+        });
+    }
+
+    // Eraser tool button
+    const tacticalEraser = document.getElementById("tactical-eraser");
+    if (tacticalEraser) {
+        tacticalEraser.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const isEraser = TacticalRenderer.drawingMode === "eraser";
+                TacticalRenderer.setDrawingMode(isEraser ? null : "eraser");
+                tacticalEraser.classList.toggle("active", !isEraser);
+                setActiveTool(isEraser ? "tactical-tool-select" : null);
+            }
+        });
+    }
+
+    // Presentation mode button
+    const tacticalPresentation = document.getElementById("tactical-presentation");
+    if (tacticalPresentation) {
+        tacticalPresentation.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.togglePresentation();
             }
         });
     }
