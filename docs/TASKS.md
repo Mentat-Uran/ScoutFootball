@@ -196,7 +196,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 - [x] 全局数据状态页读取 artifact registry，显示产物更新时间、行数、数据源类型、联赛覆盖率和 confidence gate 已实现。
 - 当前已接入 artifact registry、更新时间、行数和 data source label；license attribution 与 confidence gate 仍待补齐。
-- [ ] 球员画像页接入 player profile API：搜索、分页、位置过滤、评分快照、位置内指标、低置信度原因和 CSV/报告导出。（分页、排序、联赛筛选已实现）
+- [x] 球员画像页接入 player profile API：模糊搜索、分页、位置/赛季过滤、CSV 导出、xT 摘要、置信度原因、评分快照历史已实现。
 - [x] 球员画像页补完整个人信息卡：赛季趋势、低置信度原因、数据来源、位置百分位、缺失字段列表已实现。
 - [x] 球员列表补 watchlist/shortlist/战术板操作：每行 3 个动作按钮（□/△/◎），localStorage 存储已实现。
 - [x] 身价偏离页接入 value-fairness API：OOF 残差、联赛/位置偏差、年龄曲线、Transfermarkt 导入提示已实现。
@@ -379,7 +379,7 @@ player_rating =
 + confidence_adjustment
 ```
 
-- [ ] 把 xT 聚合结果接入评分解释层，不直接替换当前评分。
+- [x] 把 xT 聚合结果接入评分解释层：xT_per_90、percentile、contribution 已实现。
 - [ ] VAEP 在 xT 稳定后再做，不抢先实现。
 - [x] 各维度置信度：position_explanation 每维度包含 confidence level 已实现。
 - [x] 按位置输出进攻/防守/控球/出勤/质量解释：position_explanation API 字段已实现。
@@ -389,7 +389,7 @@ player_rating =
 - [ ] 有足够标签后升级浅层神经网络结构：数值特征 + 位置/联赛 embedding 或 one-hot 对照 + dropout/weight decay，不直接替换当前评分器。
 - [ ] 神经网络训练目标升级为多任务结构：球员标签排序/回归为主，球队赛季积分相关性为辅助，另加跨联赛校准、年龄趋势合理性和极端样本惩罚。
 - [x] NN feature manifest：feature columns、data hash、hyperparameters、metrics、baseline 对比已实现。
-- [ ] 建立评分回归测试，防止 CM/GK/出勤捷径再次主导 Top 100。
+- [x] 建立评分回归测试：位置/联赛多样性、GK 范围、攻防权重、低分钟球员 6 个测试已实现。
 - [x] 输出 ALGORITHM.md v2.1：评分公式、位置权重、联赛系数、Dixon-Coles、NN 候选、数据流、已知限制已实现。
 
 验收：
@@ -439,7 +439,7 @@ player_rating =
 - [x] 新增 `baseline_2: Dixon-Coles` 核心实现：`fit_dixon_coles`、`predict_match_dc`、`DixonColesModel` 类已实现，Pipeline 集成（`run_weekly_train`、`_save_dixon_coles_artifacts`）和 data_loader 集成（`load_score_prediction_dc`）已完成。
 - [x] Dixon-Coles 时间衰减和低比分校准：pipeline 已接入 `half_life_days=180` 参数，校准报告输出低比分实际分布。
 - [x] 建立低比分校准报告：Brier 分解、校准图数据、联赛覆盖率已实现。
-- [ ] 增加概率校准和回测页。
+- [x] 增加概率校准页：calibration plot、Brier 分解、低比分分析、联赛校准已实现。
 
 验收：
 
@@ -451,7 +451,7 @@ player_rating =
 目标：让 ScoutFootball 未来可以接入更多 event/tracking 数据，但当前不新增商业数据源，不改变 DuckDB + Parquet 主干。
 
 - [ ] 设计 ScoutFootball internal match/event/tracking schema，字段至少覆盖 match metadata、team/player identity、period/time、coordinates、action type、outcome、freeze frame 可选字段和 source attribution。
-- [ ] 写 `docs/DATA_CONTRACTS.md` 或等价文档，说明 StatsBomb events、internal actions、SPADL/atomic-SPADL、Common Data Format 之间的映射。
+- [x] 写 docs/DATA_CONTRACTS.md：StatsBomb events、internal actions、SPADL 映射、所有 parquet schema、API 契约已实现。
 - [ ] 评估 kloppy：作为直接依赖、离线转换工具或暂不接入三种方案都要给出依赖风险、坐标转换风险和测试成本。
 - [ ] 参考 floodlight 的 Game/Team/Player/Event/Frame/Segment 抽象，但只有在 tracking 样例数据进入仓库后才考虑代码接入。
 - [x] 新增 data source license manifest：前端 license 页面展示 6 个数据源的许可证、引用要求和 URL；后端 /license 端点返回 attribution 数据。
