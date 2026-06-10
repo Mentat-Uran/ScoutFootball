@@ -2706,6 +2706,18 @@ function bindEvents() {
         });
     }
 
+    // Display mode selector
+    const tacticalDisplayMode = document.getElementById("tactical-display-mode");
+    if (tacticalDisplayMode) {
+        tacticalDisplayMode.addEventListener("change", (e) => {
+            if (tacticalProject && typeof TacticalRenderer !== "undefined") {
+                tacticalProject.displayMode = e.target.value;
+                TacticalRenderer.render();
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+
     // Duplicate / Mirror buttons
     const tacticalDuplicate = document.getElementById("tactical-duplicate");
     if (tacticalDuplicate) {
@@ -3560,6 +3572,12 @@ function renderTactical() {
     const pitchTypeEl = document.getElementById("tactical-pitch-type");
     if (pitchTypeEl && tacticalProject.pitch_type) {
         pitchTypeEl.value = tacticalProject.pitch_type;
+    }
+
+    // Sync display mode selector
+    const displayModeEl = document.getElementById("tactical-display-mode");
+    if (displayModeEl) {
+        displayModeEl.value = tacticalProject.displayMode || "single";
     }
 
     // Update project list

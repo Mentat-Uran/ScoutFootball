@@ -738,6 +738,7 @@ const TACTICAL_BOARD = {
             title,
             sport: "football",
             pitch_type: "11v11",
+            displayMode: "single",
             objects: [],
             layers: [{ id: "default", name: "Layer 1", visible: true, locked: false }],
             frames: [{ id: "frame-0", name: "Frame 1", objects: [], duration_ms: 3000 }],
@@ -762,6 +763,12 @@ const TACTICAL_BOARD = {
             radius: 3,
             locked: false,
             visible: true,
+            appearance: {
+                shape: "circle",  // "circle" | "square" | "triangle" | "diamond"
+                size: 3,          // 1-5 scale (maps to radius)
+                opacity: 1.0,     // 0.3-1.0
+            },
+            notes: "",
         };
     },
 
@@ -878,6 +885,34 @@ const TACTICAL_BOARD = {
         };
     },
 
+    /* ── Event Marker types ─────────────────────────────────────────── */
+    EVENT_MARKER_TYPES: ["press", "pass", "shot", "turnover", "overlap", "underlap", "third-man", "cover"],
+
+    /* ── Phase types ────────────────────────────────────────────────── */
+    PHASE_TYPES: ["buildup", "pressing", "defense", "counter", "set-piece"],
+
+    PHASE_ICONS: {
+        "buildup": "\u25CE",
+        "pressing": "\u25CB",
+        "defense": "\u25A3",
+        "counter": "\u25B6",
+        "set-piece": "\u25C7",
+    },
+
+    /* ── Event Marker factory ───────────────────────────────────────── */
+    createEventMarker(x, y, markerType = "press", label = "") {
+        const validType = this.EVENT_MARKER_TYPES.includes(markerType) ? markerType : "press";
+        return {
+            id: this._uuid(),
+            type: "event-marker",
+            x, y,
+            markerType: validType,
+            label: this._safeString(label).slice(0, 60),
+            locked: false,
+            visible: true,
+        };
+    },
+
     /* ── Formation generator ────────────────────────────────────────── */
     generateFormation(formationName, team = "home", offsetX = 0) {
         const formation = this.FORMATIONS[formationName];
@@ -939,7 +974,7 @@ const TACTICAL_BOARD = {
 
     _sanitizeObject(object) {
         if (!object || typeof object !== "object") return null;
-        const type = ["player", "ball", "arrow", "zone", "text", "path", "rect", "ellipse", "bench", "cone", "marker", "pole", "ladder", "minigoal"].includes(object.type)
+        const type = ["player", "ball", "arrow", "zone", "text", "path", "rect", "ellipse", "bench", "cone", "marker", "pole", "ladder", "minigoal", "event-marker"].includes(object.type)
             ? object.type
             : "player";
         const safe = {
@@ -1000,6 +1035,18 @@ const TACTICAL_BOARD = {
             safe.team = object.team === "away" ? "away" : "home";
             safe.label = this._safeString(object.label);
             safe.number = Math.round(this._clampNumber(object.number, 0, 99, 0));
+            if (type === "player") {
+                const validShapes = ["circle", "square", "triangle", "diamond"];
+                const srcApp = object.appearance && typeof object.appearance === "object" ? object.appearance : {};
+                safe.appearance = {
+                    shape: validShapes.includes(srcApp.shape) ? srcApp.shape : "circle",
+                    size: Math.round(this._clampNumber(srcApp.size, 1, 5, 3)),
+                    opacity: this._clampNumber(srcApp.opacity, 0.3, 1.0, 1.0),
+                };
+                safe.notes = this._safeString(object.notes).slice(0, 500);
+                // Sync radius with appearance.size so drawing stays consistent
+                safe.radius = safe.appearance.size;
+            }
         }
         if (type === "zone") {
             safe.width = this._clampNumber(object.width, 1, 100, 20);
@@ -1030,6 +1077,12 @@ const TACTICAL_BOARD = {
             safe.height = this._clampNumber(object.height, 2, 20, 5);
             safe.color = this._safeString(object.color, "rgba(255,255,255,0.6)").slice(0, 48);
         }
+        if (type === "event-marker") {
+            safe.x = this._clampNumber(object.x, 0, 100, 50);
+            safe.y = this._clampNumber(object.y, 0, 100, 50);
+            safe.markerType = this.EVENT_MARKER_TYPES.includes(object.markerType) ? object.markerType : "press";
+            safe.label = this._safeString(object.label).slice(0, 60);
+        }
         return safe;
     },
 
@@ -1048,6 +1101,17 @@ const TACTICAL_BOARD = {
                 objects: Array.isArray(frame?.objects)
                     ? frame.objects.slice(0, this.MAX_OBJECTS).map((item) => this._sanitizeObject(item)).filter(Boolean)
                     : [],
+                eventMarkers: Array.isArray(frame?.eventMarkers)
+                    ? frame.eventMarkers.slice(0, 50).map((m) => ({
+                        type: ["press","pass","shot","turnover","overlap","underlap","third-man","cover"].includes(m?.type) ? m.type : "press",
+                        x: this._clampNumber(m?.x, 0, 100, 50),
+                        y: this._clampNumber(m?.y, 0, 100, 50),
+                        label: this._safeString(m?.label).slice(0, 60),
+                    }))
+                    : [],
+                phase: this.PHASE_TYPES.includes(frame?.phase) ? frame.phase : "",
+                trigger: this._safeString(frame?.trigger).slice(0, 200),
+                roles: this._safeString(frame?.roles).slice(0, 200),
             }))
             : [{ id: "frame-0", name: "Frame 1", objects: [], duration_ms: 3000, notes: "" }];
         return {
@@ -1055,6 +1119,7 @@ const TACTICAL_BOARD = {
             title: this._safeString(project.title, "Untitled"),
             sport: "football",
             pitch_type: ["11v11", "7v7", "5v5", "half-field", "training", "blank"].includes(project.pitch_type) ? project.pitch_type : "11v11",
+            displayMode: ["single", "both", "transition"].includes(project.displayMode) ? project.displayMode : "single",
             objects,
             layers: [{ id: "default", name: "Layer 1", visible: true, locked: false }],
             frames,
@@ -1108,6 +1173,8 @@ const TACTICAL_BOARD = {
                             board_id: safeProject.board_id,
                             title: safeProject.title,
                             updated_at: safeProject.updated_at,
+                            object_count: (safeProject.objects || []).length,
+                            frame_count: (safeProject.frames || []).length,
                         });
                     }
                 } catch { /* skip corrupt entries */ }
@@ -1154,6 +1221,10 @@ const TACTICAL_BOARD = {
             objects: [],       // snapshot of objects at this frame
             duration_ms: durationMs,
             notes: "",
+            eventMarkers: [],
+            phase: "",
+            trigger: "",
+            roles: "",
         };
     },
 
@@ -1252,6 +1323,19 @@ const TACTICAL_BOARD = {
                     frame.objects = frame.objects
                         .map((obj) => this._sanitizeObject(obj))
                         .filter(Boolean);
+                }
+                // Add missing fragment metadata to old frames
+                if (frame && !Array.isArray(frame.eventMarkers)) {
+                    frame.eventMarkers = [];
+                }
+                if (frame && typeof frame.phase === "undefined") {
+                    frame.phase = "";
+                }
+                if (frame && typeof frame.trigger === "undefined") {
+                    frame.trigger = "";
+                }
+                if (frame && typeof frame.roles === "undefined") {
+                    frame.roles = "";
                 }
             }
         }
