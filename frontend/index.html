@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:">
     <title>ScoutFootball Analyst Console</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js" integrity="sha384-pPi0zxBAoDu6+JXW/C68UZLvBUUtU+7zonhif43rqj7pxsGyqyqzcian2Rj37Rss" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -392,6 +394,12 @@
                                 <button class="text-button" id="tactical-load-away" type="button">客队阵型</button>
                                 <button class="text-button" id="tactical-clear" type="button">清空</button>
                             </div>
+                            <div class="filter-row" style="margin-top:0.25rem">
+                                <button class="text-button active" id="tactical-tool-select" type="button" title="Select / Move">⌁ 选择</button>
+                                <button class="text-button" id="tactical-tool-arrow" type="button" title="Draw Arrow">⟷ 箭头</button>
+                                <button class="text-button" id="tactical-tool-zone" type="button" title="Draw Zone">▣ 区域</button>
+                                <button class="text-button" id="tactical-tool-text" type="button" title="Place Text">⊞ 文字</button>
+                            </div>
                         </div>
                         <div id="tactical-canvas-container" style="width:100%;height:calc(100dvh - 250px);min-height:400px">
                             <canvas id="tactical-canvas" style="width:100%;height:100%"></canvas>
@@ -419,6 +427,7 @@
                             <button class="text-button" id="tactical-play" type="button">▶ 播放</button>
                             <button class="text-button" id="tactical-stop" type="button">■ 停止</button>
                             <button class="text-button" id="tactical-next-frame" type="button">下一帧 ▶</button>
+                            <button class="text-button" id="tactical-loop" type="button" title="Toggle loop">↻ 循环</button>
                         </div>
                         <div id="tactical-project-list" class="rank-list"></div>
                         <div style="margin-top:1rem">

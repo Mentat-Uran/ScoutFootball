@@ -25,7 +25,10 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。所有导航图标统一使用几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。总览、球员画像、身价、比赛预测、球探、动作价值和报告页已改为读取 FastAPI 本地产物；身价页 API 无数据时显示 DEMO 标记；顶部栏有 API 连接状态指示器（OK/OFFLINE）；`fetchRatings()` 按位置分组计算客户端 radar 百分位，球员列表加载后即有真实 radar 数据；API/本地 JSON 字符串进入 HTML 前已统一转义，CSV 导出有公式注入防护；世界杯页仍含样例/混合数据，不能写成全量真实后端。
 - `data_loader.py` 已加固：DuckDB 读取异常时正确 fallback 到 Parquet；新增 `_safe_read_parquet` 辅助函数，corrupt Parquet 文件不会导致 500；6 个数据加载函数已改用安全读取。
 - `api.py` 已加固：`_clean_json_value` 支持 numpy.int64/float64/bool_ 和 inf；`get_match_prediction` 捕获所有异常类型；内联 NaN 清理代码已合并到 `_clean_json_value`。
-- 电子战术板 P1.5 第一切片已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。动画时间轴、PNG/PDF/WebM 导出、报告嵌入、版本迁移、MP4、视频叠画和 tracking 导入仍未实现，不能写成现有能力。
+- 电子战术板 P1.5 已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。新增：绘图工具（自由画笔/线条/矩形/椭圆）、文字注释、曲线箭头、触摸手势支持、循环动画、对象删除按钮。动画时间轴、PNG/PDF/WebM 导出、报告嵌入、版本迁移、MP4、视频叠画和 tracking 导入仍未实现，不能写成现有能力。
+- Dixon-Coles 比分预测模型已实现：`fit_dixon_coles()` 已接入 pipeline 和 `data_loader.py`，7 个单元测试覆盖参数拟合与预测。
+- 前端安全加固：`index.html` 增加 CSP meta tag、echarts CDN 加 SRI integrity、HTTP 响应增加 `X-Content-Type-Options: nosniff`。
+- 测试 warnings 清理：`conftest.py` 新增 matplotlib backend fixture 避免 GUI 警告，`pyproject.toml` 增加 `filterwarnings` 配置。
 
 新增适配器（已实现，部分需特定环境运行）：
 - SofaScore、SoFIFA、WhoScored、Capology：需要 Chrome + Selenium，建议在 Windows GPU 服务器运行。
@@ -88,16 +91,16 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
    - 随后引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为球员真实影响力标签，并补齐特征矩阵、缺失字段标记和神经网络准入门槛。
 2. P1：展示增强和可解释产品层，优先接入 mplsoccer。核心交付：球员雷达/排名页、身价偏离榜、比赛预测页 3 个可截图 Streamlit 页面，README 加 3–5 张截图和 demo 复现说明。
    - 同步维护 `frontend/` Liquid Glass 静态工作台；保持其 UI 风格，但后续必须用 FastAPI/Parquet 契约替换 mock 数据。
-3. P1.5：电子战术板、战术演示和动画导出。第一切片已完成本地画布/JSON；后续要按 `docs/TASKS.md` 的对标功能池推进，包括自由画笔、球衣号码、红蓝双队、hover 球员信息、训练器材、模板、关键帧/步骤式动画、演示播放、PNG/PDF/WebM 导出；MP4/GIF、视频叠画、tracking 导入、2D/3D 同步和实时协作后置。
+3. P1.5：电子战术板、战术演示和动画导出。画布/JSON/绘图工具/文字注释/曲线箭头/触摸支持/循环动画/删除按钮已落地；后续要按 `docs/TASKS.md` 的对标功能池推进，包括关键帧/步骤式动画、演示播放、PNG/PDF/WebM 导出；MP4/GIF、视频叠画、tracking 导入、2D/3D 同步和实时协作后置。
 4. P2：StatsBomb 事件动作价值层，先 xT，后 VAEP。
 5. P3：评分模型重构，把 action value 作为增强维度接入；真实标签层稳定后，神经网络只能先作为候选模型与当前优化器同口径对比。
 6. P4：模型评估文档和模型卡。补 `docs/EVALUATION.md`（Spearman、时间切分、baseline、误差案例）和 `docs/MODEL_CARD.md`（数据源、标签定义、适用边界、偏差、不可用场景）。
-7. P5：Dixon-Coles 比分预测升级。
+7. P5：Dixon-Coles 比分预测升级（`fit_dixon_coles` 已实现基础版，待接入校准和 time decay）。
 8. P6：跨供应商标准化和开放格式层，先做 schema、license manifest 和转换实验，不改变当前 pipeline。
 9. P7：球探决策与人工校准层，把真实标签、低置信度样本、误差案例和战术备注纳入 review queue、watchlist、shortlist。
 10. P8：空间/视频/离球研究层，StatsBomb 360、Metrica/open tracking、xG+、off-ball value、强化学习只作为远期方向。
 
-除战术板外，当前规划必须继续保留这些缺口：真实球员标签仍为空、v1.3.1-dev 完整 GPU 重跑和误差复盘未做、世界杯页仍是样例/混合数据、前端 player/value/prediction/report 只读契约还不完整、动作价值仍是 StatsBomb 样本、license manifest 与 data source attribution 未闭环、前端安全回归/CSP/CORS 未补、球探人工标注回灌未实现、Dixon-Coles 和概率校准仍未实现、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
+除战术板外，当前规划必须继续保留这些缺口：真实球员标签仍为空、v1.3.1-dev 完整 GPU 重跑和误差复盘未做、世界杯页仍是样例/混合数据、前端 player/value/prediction/report 只读契约还不完整、动作价值仍是 StatsBomb 样本、license manifest 与 data source attribution 未闭环、球探人工标注回灌未实现、概率校准仍未完成、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
 
 ## 开发原则
 

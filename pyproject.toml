@@ -42,6 +42,10 @@ where = ["src"]
 addopts = "-q"
 pythonpath = ["src"]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:Mean of empty slice:RuntimeWarning",
+    "ignore:.*set_tight_layout.*:PendingDeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100

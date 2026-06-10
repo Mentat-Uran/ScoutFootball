@@ -1,12 +1,14 @@
 """Models package for supervised and probabilistic baselines."""
 
 from .match_prediction import (
+    DixonColesModel,
     IndependentPoissonModel,
     MatchProbabilitySummary,
     PoissonPrediction,
-    fit_dixon_coles_placeholder,
+    fit_dixon_coles,
     fit_independent_poisson,
     predict_match,
+    predict_match_dc,
 )
 from .player_rating_nn import (
     PlayerRatingNNConfig,
@@ -22,6 +24,7 @@ from .value_fairness import (
 )
 
 __all__ = [
+    "DixonColesModel",
     "IndependentPoissonModel",
     "MatchProbabilitySummary",
     "PlayerRatingNNConfig",
@@ -30,10 +33,11 @@ __all__ = [
     "TimeSplitConfig",
     "ValueFairnessResult",
     "classify_fairness",
-    "fit_dixon_coles_placeholder",
+    "fit_dixon_coles",
     "fit_independent_poisson",
     "fit_regressor",
     "predict_match",
+    "predict_match_dc",
     "train_player_rating_nn",
     "train_player_rating_nn_from_files",
 ]

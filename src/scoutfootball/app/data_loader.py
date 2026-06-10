@@ -314,11 +314,57 @@ def _resolve_team_id(name: str, team_ids: list[str]) -> str | None:
     return None
 
 
+def load_score_prediction_dc(home_team: str | None = None, away_team: str | None = None):
+    """Predict a match using the Dixon-Coles model.
+
+    Loads team_match data, fits the DC model, and returns predict_match_dc output.
+    Falls back to the Poisson-based ``load_score_prediction`` when DC artifacts
+    are unavailable.
+    """
+    if _parquet_exists("models/artifacts/dixon_coles_results.parquet"):
+        from scoutfootball.models.match_prediction import (
+            fit_dixon_coles,
+            predict_match_dc,
+        )
+
+        team_match = load_team_match()
+        try:
+            model = fit_dixon_coles(team_match)
+        except Exception:
+            logger.warning("Dixon-Coles fit failed; falling back to Poisson", exc_info=True)
+            return load_score_prediction(home_team, away_team)
+
+        team_id_series = team_match.get("team_id", pd.Series(dtype="string"))
+        team_ids = [
+            team_id
+            for team_id in team_id_series.dropna().astype(str).unique()
+        ]
+        if len(team_ids) >= 2:
+            resolved_home = _resolve_team_id(home_team, team_ids) if home_team else team_ids[0]
+            resolved_away = _resolve_team_id(away_team, team_ids) if away_team else team_ids[1]
+            if resolved_home is None:
+                raise ValueError(
+                    f"Home team '{home_team}' not found. "
+                    f"Available: {', '.join(sorted(team_ids)[:15])}..."
+                )
+            if resolved_away is None:
+                raise ValueError(
+                    f"Away team '{away_team}' not found. "
+                    f"Available: {', '.join(sorted(team_ids)[:15])}..."
+                )
+            return predict_match_dc(model, resolved_home, resolved_away)
+        logger.warning("Only %d team_ids found; need >= 2 for prediction", len(team_ids))
+
+    # DC artifacts missing — fall back to Poisson path
+    return load_score_prediction(home_team, away_team)
+
+
 def data_source_label() -> str:
     """Return a granular label describing the data source state."""
     has_player_match = _parquet_exists("gold/feature_store/player_match.parquet")
     has_oof = _parquet_exists("models/oof_predictions/value_fairness_oof.parquet")
     has_poisson = _parquet_exists("models/artifacts/poisson_baseline_results.parquet")
+    has_dc = _parquet_exists("models/artifacts/dixon_coles_results.parquet")
 
     if not has_player_match:
         return "Demo data (synthetic)"
@@ -343,6 +389,8 @@ def data_source_label() -> str:
     parts = [detail]
     if has_oof:
         parts.append("value_fairness OOF")
-    if has_poisson:
+    if has_dc:
+        parts.append("Dixon-Coles model")
+    elif has_poisson:
         parts.append("Poisson model")
     return " | ".join(parts)

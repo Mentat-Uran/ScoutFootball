@@ -1487,6 +1487,66 @@ function bindEvents() {
         });
     }
 
+    // Drawing tool buttons
+    const toolButtons = ["tactical-tool-select", "tactical-tool-arrow", "tactical-tool-zone", "tactical-tool-text"];
+    function setActiveTool(activeId) {
+        toolButtons.forEach((id) => {
+            const btn = document.getElementById(id);
+            if (btn) btn.classList.toggle("active", id === activeId);
+        });
+    }
+
+    const tacticalToolSelect = document.getElementById("tactical-tool-select");
+    if (tacticalToolSelect) {
+        tacticalToolSelect.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.setDrawingMode(null);
+            }
+            setActiveTool("tactical-tool-select");
+        });
+    }
+
+    const tacticalToolArrow = document.getElementById("tactical-tool-arrow");
+    if (tacticalToolArrow) {
+        tacticalToolArrow.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.setDrawingMode("arrow");
+            }
+            setActiveTool("tactical-tool-arrow");
+        });
+    }
+
+    const tacticalToolZone = document.getElementById("tactical-tool-zone");
+    if (tacticalToolZone) {
+        tacticalToolZone.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.setDrawingMode("zone");
+            }
+            setActiveTool("tactical-tool-zone");
+        });
+    }
+
+    const tacticalToolText = document.getElementById("tactical-tool-text");
+    if (tacticalToolText) {
+        tacticalToolText.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.setDrawingMode("text");
+            }
+            setActiveTool("tactical-tool-text");
+        });
+    }
+
+    // Loop toggle
+    const tacticalLoop = document.getElementById("tactical-loop");
+    if (tacticalLoop) {
+        tacticalLoop.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.toggleLoop();
+                tacticalLoop.classList.toggle("active", TacticalRenderer.animationState.loop);
+            }
+        });
+    }
+
     window.addEventListener("resize", () => {
         Object.values(appState.charts).forEach((chart) => {
             try { chart.resize(); } catch { /* ignore disposed chart */ }
@@ -1942,11 +2002,12 @@ function renderTacticalProjectList() {
     const projects = TACTICAL_BOARD.listProjects();
     list.innerHTML = projects.length > 0
         ? projects.map((p) => `
-            <div class="rank-item" style="cursor:pointer" data-board-id="${escapeAttr(p.board_id)}">
+            <div class="rank-item" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between" data-board-id="${escapeAttr(p.board_id)}">
                 <div>
                     <strong>${escapeHtml(p.title || "Untitled")}</strong>
                     <span class="rank-meta">${escapeHtml(p.updated_at ? new Date(p.updated_at).toLocaleDateString() : "")}</span>
                 </div>
+                <button class="text-button" data-delete-board="${escapeAttr(p.board_id)}" title="Delete project" style="color:var(--danger,#e74c3c);font-size:0.85rem;padding:0.2rem 0.4rem">✕</button>
             </div>
         `).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No saved projects</div>';
@@ -1961,6 +2022,15 @@ function renderTacticalProjectList() {
             }
         });
     });
+
+    // Delete buttons
+    list.querySelectorAll("[data-delete-board]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            TACTICAL_BOARD.deleteProject(btn.dataset.deleteBoard);
+            renderTacticalProjectList();
+        });
+    });
 }
 
 function renderTacticalFrameList() {
@@ -1972,11 +2042,12 @@ function renderTacticalFrameList() {
         : 0;
 
     list.innerHTML = tacticalProject.frames.map((frame, i) => `
-        <div class="rank-item" style="cursor:pointer;${i === currentFrame ? 'background:var(--glass-bg-hover)' : ''}" data-frame-index="${i}">
+        <div class="rank-item" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;${i === currentFrame ? 'background:var(--glass-bg-hover)' : ''}" data-frame-index="${i}">
             <div>
                 <strong>${escapeHtml(frame.name || `Frame ${i + 1}`)}</strong>
                 <span class="rank-meta">${escapeHtml(frame.duration_ms || 3000)}ms · ${escapeHtml((frame.objects || []).length)} objects</span>
             </div>
+            <button class="text-button" data-delete-frame="${i}" title="Delete frame" style="color:var(--danger,#e74c3c);font-size:0.85rem;padding:0.2rem 0.4rem">✕</button>
         </div>
     `).join("");
 
@@ -1985,6 +2056,19 @@ function renderTacticalFrameList() {
             const idx = parseInt(el.dataset.frameIndex, 10);
             if (typeof TacticalRenderer !== "undefined") {
                 TacticalRenderer.goToFrame(idx);
+                tacticalProject = TacticalRenderer.getProject();
+                renderTacticalFrameList();
+            }
+        });
+    });
+
+    // Delete frame buttons
+    list.querySelectorAll("[data-delete-frame]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.deleteFrame, 10);
+            if (tacticalProject && typeof TacticalRenderer !== "undefined") {
+                TACTICAL_BOARD.removeFrame(tacticalProject, idx);
                 tacticalProject = TacticalRenderer.getProject();
                 renderTacticalFrameList();
             }

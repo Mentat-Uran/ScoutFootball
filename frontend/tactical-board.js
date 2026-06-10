@@ -77,6 +77,7 @@ const TACTICAL_BOARD = {
             objects: [],
             layers: [{ id: "default", name: "Layer 1", visible: true, locked: false }],
             frames: [{ id: "frame-0", name: "Frame 1", objects: [], duration_ms: 3000 }],
+            animationState: { playing: false, currentFrame: 0, loop: false },
             version: this.SCHEMA_VERSION,
             created_at: now,
             updated_at: now,
@@ -138,6 +139,28 @@ const TACTICAL_BOARD = {
         };
     },
 
+    createText(x, y, text, options = {}) {
+        return {
+            id: this._uuid(),
+            type: "text",
+            x, y,
+            text: this._safeString(text).slice(0, this.MAX_TEXT_LENGTH),
+            fontSize: this._clampNumber(options.fontSize, 8, 36, 14),
+            color: this._safeString(options.color, "#ffffff").slice(0, 32),
+            locked: false,
+            visible: true,
+        };
+    },
+
+    createLayer(name) {
+        return {
+            id: this._uuid(),
+            name: this._safeString(name, "Untitled Layer"),
+            visible: true,
+            locked: false,
+        };
+    },
+
     /* ── Formation generator ────────────────────────────────────────── */
     generateFormation(formationName, team = "home", offsetX = 0) {
         const formation = this.FORMATIONS[formationName];
@@ -180,6 +203,12 @@ const TACTICAL_BOARD = {
         return text.replace(/[\u0000-\u001F\u007F]/g, "");
     },
 
+    _uuid() {
+        return crypto.randomUUID
+            ? crypto.randomUUID()
+            : Date.now().toString(36) + Math.random().toString(36).slice(2);
+    },
+
     _safeId(value, fallback = "") {
         const text = this._safeString(value, fallback || Date.now().toString(36));
         return text.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || Date.now().toString(36);
@@ -193,7 +222,7 @@ const TACTICAL_BOARD = {
 
     _sanitizeObject(object) {
         if (!object || typeof object !== "object") return null;
-        const type = ["player", "ball", "arrow", "zone"].includes(object.type)
+        const type = ["player", "ball", "arrow", "zone", "text"].includes(object.type)
             ? object.type
             : "player";
         const safe = {
@@ -226,6 +255,10 @@ const TACTICAL_BOARD = {
             safe.height = this._clampNumber(object.height, 1, 100, 20);
             safe.label = this._safeString(object.label);
             safe.borderColor = this._safeString(object.borderColor, "rgba(255,255,255,0.4)").slice(0, 48);
+        }
+        if (type === "text") {
+            safe.text = this._safeString(object.text).slice(0, this.MAX_TEXT_LENGTH);
+            safe.fontSize = this._clampNumber(object.fontSize, 8, 36, 14);
         }
         return safe;
     },
@@ -381,6 +414,15 @@ const TACTICAL_BOARD = {
         project.frames.splice(frameIndex, 1);
     },
 
+    toggleLoop(project) {
+        if (!project) return false;
+        if (!project.animationState) {
+            project.animationState = { playing: false, currentFrame: 0, loop: false };
+        }
+        project.animationState.loop = !project.animationState.loop;
+        return project.animationState.loop;
+    },
+
     /* ── Animation Playback ─────────────────────────────────────────── */
     interpolateObjects(fromObjs, toObjs, t) {
         // Linear interpolation between two object sets
@@ -392,7 +434,7 @@ const TACTICAL_BOARD = {
                 continue;
             }
             const interp = { ...toObj };
-            if (toObj.type === "player" || toObj.type === "ball") {
+            if (toObj.type === "player" || toObj.type === "ball" || toObj.type === "text") {
                 interp.x = fromObj.x + (toObj.x - fromObj.x) * t;
                 interp.y = fromObj.y + (toObj.y - fromObj.y) * t;
             }
