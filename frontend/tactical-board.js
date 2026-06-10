@@ -684,7 +684,7 @@ const TACTICAL_BOARD = {
             board_id: this._safeId(project.board_id),
             title: this._safeString(project.title, "Untitled"),
             sport: "football",
-            pitch_type: project.pitch_type === "7v7" ? "7v7" : "11v11",
+            pitch_type: ["11v11", "7v7", "5v5", "half-field", "training", "blank"].includes(project.pitch_type) ? project.pitch_type : "11v11",
             objects,
             layers: [{ id: "default", name: "Layer 1", visible: true, locked: false }],
             frames,

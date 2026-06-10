@@ -2149,6 +2149,55 @@ function bindEvents() {
             if (btn) btn.classList.toggle("active", id === activeId);
         });
     }
+    // Pitch type selector
+    const tacticalPitchType = document.getElementById("tactical-pitch-type");
+    if (tacticalPitchType) {
+        tacticalPitchType.addEventListener("change", (e) => {
+            if (tacticalProject && typeof TacticalRenderer !== "undefined") {
+                tacticalProject.pitch_type = e.target.value;
+                TacticalRenderer.render();
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+
+    // Duplicate / Mirror buttons
+    const tacticalDuplicate = document.getElementById("tactical-duplicate");
+    if (tacticalDuplicate) {
+        tacticalDuplicate.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.duplicateSelected();
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+    const tacticalMirror = document.getElementById("tactical-mirror");
+    if (tacticalMirror) {
+        tacticalMirror.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.mirrorSelected();
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+    const tacticalMirrorHome = document.getElementById("tactical-mirror-home");
+    if (tacticalMirrorHome) {
+        tacticalMirrorHome.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.mirrorAllHome();
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
+    const tacticalMirrorAway = document.getElementById("tactical-mirror-away");
+    if (tacticalMirrorAway) {
+        tacticalMirrorAway.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.mirrorAllAway();
+                tacticalProject = TacticalRenderer.getProject();
+            }
+        });
+    }
 
     const tacticalToolSelect = document.getElementById("tactical-tool-select");
     if (tacticalToolSelect) {
@@ -2700,6 +2749,12 @@ function renderTactical() {
     if (typeof TacticalRenderer !== "undefined") {
         TacticalRenderer.init("tactical-canvas", tacticalProject);
         TacticalRenderer.onChange = tacticalAutoSave;
+    }
+
+    // Sync pitch type selector with current project
+    const pitchTypeEl = document.getElementById("tactical-pitch-type");
+    if (pitchTypeEl && tacticalProject.pitch_type) {
+        pitchTypeEl.value = tacticalProject.pitch_type;
     }
 
     // Update project list
