@@ -211,7 +211,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 报告页补完整模型运行详情：参数完整列表、随机种子、训练/测试赛季切分、特征重要性 Top 5 已实现。
 - [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
 - [x] 前端浏览器级安全回归测试已完成：XSS 测试覆盖恶意球员名/队名/报告 run_id/战术板标题/CSV 公式注入。
-- [x] 前端已补 CSP meta tag、SRI（echarts CDN）和 X-Content-Type-Options 安全头；可配置 CORS 和只读部署说明仍待实现。
+- [x] 前端已补 CSP meta tag、SRI（echarts CDN）和 X-Content-Type-Options 安全头；CORS 已支持 SCOUTFOOTBALL_CORS_ORIGINS 环境变量配置。
 - [ ] 世界杯页接正式国家队/候选名单契约：官方名单状态、球员评分覆盖、非五大联赛 fallback、低置信度队伍提示和来源链接；当前样例/混合数据不能进入默认结论。
 
 验收：
@@ -454,7 +454,7 @@ player_rating =
 - [ ] 写 `docs/DATA_CONTRACTS.md` 或等价文档，说明 StatsBomb events、internal actions、SPADL/atomic-SPADL、Common Data Format 之间的映射。
 - [ ] 评估 kloppy：作为直接依赖、离线转换工具或暂不接入三种方案都要给出依赖风险、坐标转换风险和测试成本。
 - [ ] 参考 floodlight 的 Game/Team/Player/Event/Frame/Segment 抽象，但只有在 tracking 样例数据进入仓库后才考虑代码接入。
-- [ ] 新增 data source license manifest，记录每个本地数据产物的来源、许可/引用要求、可公开展示边界和更新时间。
+- [x] 新增 data source license manifest：前端 license 页面展示 6 个数据源的许可证、引用要求和 URL；后端 /license 端点返回 attribution 数据。
 - [ ] 所有 event/tracking schema 变更必须有 fixture、schema validation 和空数据行为测试。
 
 验收：

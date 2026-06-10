@@ -104,6 +104,16 @@ const i18n = {
         status_rejected: "已拒绝",
         scout_new_badge: "新",
         scout_note_placeholder: "添加备注...",
+        nav_license: "数据源",
+        license_kicker: "数据源许可",
+        license_title: "Data Source Manifest",
+        license_sources_label: "数据源",
+        license_table_title: "数据源列表",
+        license_th_source: "数据源",
+        license_th_license: "许可证",
+        license_th_attribution: "署名要求",
+        license_th_url: "URL",
+        license_attribution_notice: "StatsBomb 署名声明",
     },
     en: {
         nav_overview: "Overview",
@@ -210,6 +220,16 @@ const i18n = {
         status_rejected: "Rejected",
         scout_new_badge: "new",
         scout_note_placeholder: "Add note...",
+        nav_license: "Sources",
+        license_kicker: "Data Source Licenses",
+        license_title: "Data Source Manifest",
+        license_sources_label: "Sources",
+        license_table_title: "Data Source List",
+        license_th_source: "Source",
+        license_th_license: "License",
+        license_th_attribution: "Attribution",
+        license_th_url: "URL",
+        license_attribution_notice: "StatsBomb Attribution Notice",
     },
 };
 
@@ -437,6 +457,28 @@ async function fetchActionValues() {
     } catch (err) {
         console.warn("Failed to fetch action values:", err);
         return { status: "no_data", players: [], metrics: {} };
+    }
+}
+
+let licenseData = { license_attribution: {}, data_source_label: "", updated_at: null };
+
+const LICENSE_SOURCES = [
+    { key: "statsbomb", name: "StatsBomb Open Data", license: "MIT / CC-BY-SA 4.0", attribution: "\u25C6 Required on public charts", url: "https://github.com/statsbomb/open-data" },
+    { key: "football_data", name: "Football-Data.co.uk", license: "Free (non-commercial)", attribution: "Attribution appreciated", url: "https://www.football-data.co.uk" },
+    { key: "fbref", name: "FBref", license: "Restricted (personal research)", attribution: "No redistribution", url: "https://fbref.com" },
+    { key: "understat", name: "Understat", license: "Public", attribution: "Attribution appreciated", url: "https://understat.com" },
+    { key: "club_elo", name: "Club Elo", license: "Public", attribution: "Attribution appreciated", url: "https://clubelo.com" },
+    { key: "transfermarkt", name: "Transfermarkt", license: "Manual import only", attribution: "No automated scraping", url: "https://www.transfermarkt.com" },
+];
+
+async function fetchLicense() {
+    try {
+        const resp = await fetch(`${API_BASE}/license`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (err) {
+        console.warn("Failed to fetch license info:", err);
+        return { license_attribution: {}, data_source_label: "", updated_at: null };
     }
 }
 
@@ -1727,6 +1769,37 @@ function refreshAllChartColors() {
     });
 }
 
+function renderLicense() {
+    const tbody = document.getElementById("license-table-body");
+    if (!tbody) return;
+
+    const attribution = licenseData.license_attribution || {};
+    const rows = LICENSE_SOURCES.map((src) => {
+        const desc = attribution[src.key] || "";
+        return `<tr>
+            <td>${escapeHtml(src.name)}</td>
+            <td>${escapeHtml(src.license)}</td>
+            <td>${escapeHtml(desc || src.attribution)}</td>
+            <td><a href="${escapeAttr(src.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${escapeHtml(src.url)}</a></td>
+        </tr>`;
+    }).join("");
+    tbody.innerHTML = rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">' + (appState.lang === "zh" ? "无数据" : "No data") + "</td></tr>";
+
+    const updatedPill = document.getElementById("license-updated");
+    if (updatedPill) {
+        updatedPill.textContent = licenseData.updated_at
+            ? escapeHtml(String(licenseData.updated_at))
+            : (appState.lang === "zh" ? "无时间戳" : "No timestamp");
+    }
+
+    const updatedText = document.getElementById("license-last-updated");
+    if (updatedText) {
+        updatedText.textContent = licenseData.updated_at
+            ? (appState.lang === "zh" ? "最后更新: " : "Last updated: ") + escapeHtml(String(licenseData.updated_at))
+            : "";
+    }
+}
+
 async function renderActiveView() {
     if (appState.view === "overview") renderOverview();
     if (appState.view === "players") renderPlayers();
@@ -1740,6 +1813,7 @@ async function renderActiveView() {
     if (appState.view === "wc_squads") renderWcSquads();
     if (appState.view === "wc_compare") renderWcCompare();
     if (appState.view === "wc_probability") renderWcProbability();
+    if (appState.view === "license") renderLicense();
     // Resize charts after layout paint to ensure correct dimensions
     requestAnimationFrame(() => {
         Object.values(appState.charts).forEach((chart) => {
@@ -2801,7 +2875,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadScoutShortlistNotes();
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, runs, watchlistRows, shortlistRows, actionValues] = await Promise.all([
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, runs, watchlistRows, shortlistRows, actionValues, licenseResp] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
         fetchArtifacts(),
@@ -2813,6 +2887,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fetchWatchlist(),
         fetchShortlist(),
         fetchActionValues(),
+        fetchLicense(),
     ]);
 
     players = ratingsData;
@@ -2825,6 +2900,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     watchlistData = watchlistRows;
     shortlistData = shortlistRows;
     actionValueSummary = actionValues;
+    licenseData = licenseResp;
     if (players.length > 0) {
         appState.selectedPlayerKey = players[0].key;
     }
