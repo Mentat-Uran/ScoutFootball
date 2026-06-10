@@ -761,4 +761,22 @@ const TacticalRenderer = {
         this.animationState.loop = !this.animationState.loop;
         return this.animationState.loop;
     },
+
+    exportPNG(filename) {
+        if (!this.canvas) return;
+        // Temporarily remove selection highlight for clean export
+        const savedSelection = this.selectedObject;
+        this.selectedObject = null;
+        this.render();
+        const dataUrl = this.canvas.toDataURL("image/png");
+        this.selectedObject = savedSelection;
+        this.render();
+
+        const link = document.createElement("a");
+        link.download = filename || "tactical-board.png";
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    },
 };
