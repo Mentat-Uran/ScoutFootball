@@ -435,8 +435,12 @@ def write_player_rating_nn_artifacts(
     output_dir: Path,
     *,
     config: PlayerRatingNNConfig,
+    feature_matrix: pd.DataFrame | None = None,
+    baseline_metrics: dict[str, Any] | None = None,
 ) -> None:
     """Persist player-rating NN artifacts and provenance."""
+    import hashlib
+
     output_dir.mkdir(parents=True, exist_ok=True)
     metrics_payload = {
         "trained": result.trained,
@@ -454,6 +458,47 @@ def write_player_rating_nn_artifacts(
         with open(output_dir / "model.pkl", "wb") as f:
             pickle.dump(result.model, f)
 
+    # Save feature manifest
+    manifest: dict[str, Any] = {
+        "feature_columns": result.feature_columns,
+        "category_columns": result.category_columns,
+        "config": asdict(config),
+    }
+    # Training data hash
+    if feature_matrix is not None and not feature_matrix.empty:
+        data_bytes = feature_matrix.to_csv(index=False).encode("utf-8")
+        manifest["training_data_hash"] = hashlib.sha256(data_bytes).hexdigest()
+    else:
+        manifest["training_data_hash"] = None
+    # Training/test split info
+    if result.metrics:
+        manifest["train_seasons"] = result.metrics.get("train_seasons", [])
+        manifest["test_seasons"] = result.metrics.get("test_seasons", [])
+        manifest["n_labels"] = result.metrics.get("n_labels", 0)
+    # Hyperparameters
+    manifest["hyperparameters"] = {
+        "hidden_layer_sizes": list(config.hidden_layer_sizes),
+        "alpha": config.alpha,
+        "learning_rate_init": config.learning_rate_init,
+        "max_iter": config.max_iter,
+        "random_state": config.random_state,
+        "early_stopping": config.early_stopping,
+    }
+    # Metrics (train + test)
+    if result.metrics:
+        manifest["train_metrics"] = result.metrics.get("train", {})
+        manifest["test_metrics"] = result.metrics.get("test", {})
+    # Comparison with optimizer baseline
+    if result.metrics:
+        manifest["optimizer_baseline_test"] = result.metrics.get(
+            "optimizer_baseline_test", {},
+        )
+        manifest["median_baseline_test"] = result.metrics.get(
+            "median_baseline_test", {},
+        )
+    with open(output_dir / "feature_manifest.json", "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
 
 def train_player_rating_nn_from_files(
     *,
@@ -468,6 +513,7 @@ def train_player_rating_nn_from_files(
     labels_path = resolved.gold_root / "feature_store" / "player_truth_labels.parquet"
     baseline_path = resolved.gold_root / "feature_store" / "player_ratings_optimized.parquet"
 
+    feature_matrix: pd.DataFrame | None = None
     if not feature_path.exists():
         result = PlayerRatingNNResult(
             trained=False,
@@ -497,9 +543,11 @@ def train_player_rating_nn_from_files(
             config=cfg,
         )
 
+    # Pass feature_matrix for hash in manifest
     write_player_rating_nn_artifacts(
         result,
         output_dir or resolved.model_root / "player_rating_nn",
         config=cfg,
+        feature_matrix=feature_matrix,
     )
     return result

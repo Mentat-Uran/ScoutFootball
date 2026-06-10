@@ -362,6 +362,10 @@
                             <span class="status-pill status-medium" id="action-status-pill">loading</span>
                         </div>
                         <div id="action-chart" class="chart-box"></div>
+                        <div id="action-heatmap-controls" style="padding:0.4rem 0.8rem;display:flex;gap:0.5rem;align-items:center">
+                            <button class="text-button" id="btn-xt-heatmap-tactical" type="button" style="font-size:0.82rem;padding:0.35rem 0.7rem">◇ Show on Tactical Board</button>
+                            <span id="xt-heatmap-status" style="font-size:0.72rem;color:var(--text-muted)"></span>
+                        </div>
                     </article>
                     <article class="liquid-panel table-panel">
                         <div class="panel-head">
@@ -517,6 +521,9 @@
                                 <button class="text-button" id="tactical-toggle-ratings" type="button" title="Toggle player ratings" aria-label="Toggle player rating display">◆ 评分</button>
                                 <button class="text-button" id="tactical-presentation" type="button" title="Presentation mode (fullscreen)" aria-label="Enter presentation mode">◇ 演示</button>
                                 <button class="text-button" id="tactical-toggle-trails" type="button" title="Toggle animation trails" aria-label="Toggle animation trail display">◇ 轨迹</button>
+                                <button class="text-button" id="tactical-simplify" type="button" title="Simplify: remove hidden objects and empty frames" aria-label="Simplify project">◇ 简化</button>
+                                <button class="text-button" id="tactical-toggle-heatmap" type="button" title="Toggle xT heatmap overlay" aria-label="Toggle xT heatmap overlay">◇ xT热图</button>
+                                <button class="text-button" id="tactical-toggle-debug" type="button" title="Toggle debug mode (FPS counter)" aria-label="Toggle debug mode">◇ 调试</button>
                             </div>
                             <div class="filter-row" style="margin-top:0.25rem">
                                 <span style="font-size:0.82rem;color:var(--text-muted);margin-right:0.3rem">事件标记:</span>

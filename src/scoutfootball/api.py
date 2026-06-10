@@ -647,6 +647,110 @@ def get_model_runs() -> dict:
     return _clean_json_value({"runs": runs, "count": len(runs)})
 
 
+def _build_position_explanation(
+    row: Any,
+    pos_pool: Any,
+    attack_score: float,
+    defense: float,
+    possession: float,
+    minutes: float,
+    score: float,
+) -> dict[str, Any]:
+    """Build position-wise explanation for each rating dimension."""
+    import pandas as _pd
+
+    def _pct_rank(value: float, pool: Any, col: str) -> float:
+        clean = _pd.to_numeric(pool[col], errors="coerce").dropna()
+        if clean.empty or value != value:
+            return 50.0
+        return float((clean < value).sum() / len(clean) * 100)
+
+    def _confidence_label(minutes_val: float, pool_size: int) -> str:
+        if minutes_val >= 2700 and pool_size >= 20:
+            return "HIGH"
+        if minutes_val >= 900 and pool_size >= 10:
+            return "MEDIUM"
+        return "LOW"
+
+    dims: dict[str, Any] = {}
+    pool_size = len(pos_pool)
+    conf = _confidence_label(minutes, pool_size)
+
+    # Attack
+    attack_col = "npg_p90" if "npg_p90" in pos_pool.columns else "optimized_score"
+    attack_pct = _pct_rank(attack_score, pos_pool, attack_col)
+    # Adjust: add assists percentile
+    if "assists_p90" in pos_pool.columns:
+        assists_vals = _pd.to_numeric(
+            pos_pool["assists_p90"], errors="coerce",
+        ).fillna(0)
+        player_assists = float(row.get("assists_p90", 0) or 0)
+        assists_pct = float(
+            (assists_vals < player_assists).sum()
+            / max(len(assists_vals), 1) * 100
+        )
+        attack_pct = (attack_pct + assists_pct) / 2
+    dims["attack"] = {
+        "raw_score": round(attack_score, 3),
+        "percentile_rank": round(attack_pct, 1),
+        "contribution": round(attack_pct * 0.30, 1),
+        "confidence": conf,
+    }
+
+    # Defense
+    if "defense_composite" in pos_pool.columns:
+        defense_pct = _pct_rank(
+            defense, pos_pool, "defense_composite",
+        )
+    else:
+        defense_pct = 50.0
+    dims["defense"] = {
+        "raw_score": round(defense, 2) if defense == defense else None,
+        "percentile_rank": round(defense_pct, 1),
+        "contribution": round(defense_pct * 0.20, 1),
+        "confidence": conf,
+    }
+
+    # Possession
+    if "possession_composite" in pos_pool.columns:
+        poss_pct = _pct_rank(
+            possession, pos_pool, "possession_composite",
+        )
+    else:
+        poss_pct = 50.0
+    dims["possession"] = {
+        "raw_score": round(possession, 2) if possession == possession else None,
+        "percentile_rank": round(poss_pct, 1),
+        "contribution": round(poss_pct * 0.20, 1),
+        "confidence": conf,
+    }
+
+    # Availability
+    avail_pct = min(100.0, minutes / 2700 * 100)
+    dims["availability"] = {
+        "raw_score": round(minutes),
+        "percentile_rank": round(min(100.0, avail_pct), 1),
+        "contribution": round(avail_pct * 0.10, 1),
+        "confidence": conf,
+    }
+
+    # Quality (overall score percentile)
+    if "optimized_score" in pos_pool.columns:
+        quality_pct = _pct_rank(
+            score, pos_pool, "optimized_score",
+        )
+    else:
+        quality_pct = 50.0
+    dims["quality"] = {
+        "raw_score": round(score, 1),
+        "percentile_rank": round(quality_pct, 1),
+        "contribution": round(quality_pct * 0.20, 1),
+        "confidence": conf,
+    }
+
+    return dims
+
+
 def get_player_profile(player_name: str, season: str | None = None) -> dict:
     """Return detailed player profile with radar dimensions."""
     import pandas as pd
@@ -735,6 +839,9 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
         "possession_composite": round(possession, 2) if possession == possession else None,
         "radar": radar,
         "seasons": seasons,
+        "position_explanation": _build_position_explanation(
+            row, pos_pool, attack_score, defense, possession, minutes, score,
+        ),
     })
 
 

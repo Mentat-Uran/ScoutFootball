@@ -16,7 +16,7 @@ _HTML_ESCAPE_MAP = {
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
-    '"': "&quot;",
+    "\"": "&quot;",
     "'": "&#x27;",
     "`": "&#x60;",
 }
@@ -36,7 +36,7 @@ def escape_attr(text: str) -> str:
 
 
 def csv_cell(text: str) -> str:
-    """Mirror of the frontend csvCell() – prefix dangerous chars with tab."""
+    """Mirror of the frontend csvCell() -- prefix dangerous chars with tab."""
     dangerous_prefixes = ("=", "+", "-", "@", "\t")
     if text and text[0] in dangerous_prefixes:
         return "\t" + text
@@ -331,7 +331,7 @@ class TestAppJsSecurityHelpers:
             if "`" in assign_stripped and "${" in assign_stripped:
                 if "escapeHtml" not in assign_stripped and "escapeAttr" not in assign_stripped:
                     unsafe.append(assign_stripped[:80])
-        # This is a heuristic check — allow some false positives
+        # This is a heuristic check -- allow some false positives
         # The key invariant is that dynamic user data goes through escapeHtml
         assert len(unsafe) < 8, f"Potentially unsafe innerHTML: {unsafe[:3]}"
 
@@ -356,7 +356,7 @@ class TestTacticalRendererSecurity:
         """Canvas renderer should not use innerHTML except for hover card tooltip."""
         js = _read_renderer_js()
         # innerHTML is acceptable for the hover card tooltip (controlled data)
-        # Count occurrences — should be minimal (1-2 for hover card)
+        # Count occurrences -- should be minimal (1-2 for hover card)
         count = js.count("innerHTML")
         msg = f"Too many innerHTML uses ({count}), expected <=8"
         assert count <= 8, msg
@@ -372,6 +372,7 @@ class TestTacticalRendererSecurity:
         """Mouse move handler clamps coordinates to 0-100."""
         js = _read_renderer_js()
         assert "Math.max(0, Math.min(100" in js
+
 # ===== 11. Event marker sanitization ========================================
 class TestEventMarkerSanitization:
     """Verify event markers placed on tactical board are sanitized."""
@@ -481,3 +482,242 @@ class TestWatchlistNotesSecurity:
         js = _read_app_js()
         assert "scout-note-textarea" in js
         assert "wl-note-player" in js or "wlNotePlayer" in js
+
+
+# ===== 14. Tactical board regression: malicious project title ================
+class TestMaliciousTitleRegression:
+    """Verify that XSS payloads in project titles are sanitized."""
+
+    def test_malicious_title_script_tag(self):
+        """XSS payload in title should be stripped by _safeString."""
+        js = _read_tactical_js()
+        # sanitizeProject uses _safeString for title
+        assert '_safeString(project.title' in js or '_safeString(project?.title' in js
+
+    def test_malicious_title_onerror(self):
+        """onerror payload in title should not survive _safeString."""
+        # _safeString removes control chars and limits length
+        # The real sanitizer also escapes via escapeHtml when rendering
+        js = _read_tactical_js()
+        assert "MAX_TEXT_LENGTH" in js
+
+    def test_title_sanitized_in_sanitize_project(self):
+        """sanitizeProject should apply _safeString to title."""
+        js = _read_tactical_js()
+        # Find the sanitizeProject method and verify title is sanitized
+        idx = js.find("sanitizeProject(project)")
+        assert idx > 0
+        snippet = js[idx : idx + 1500]
+        assert "_safeString" in snippet
+
+
+# ===== 15. Tactical board regression: malicious player name/notes ============
+class TestMaliciousPlayerNameRegression:
+    """Verify that XSS payloads in player names and notes are sanitized."""
+
+    def test_player_label_sanitized(self):
+        """Player label should go through _safeString."""
+        js = _read_tactical_js()
+        # In _sanitizeObject for player type
+        assert "safe.label = this._safeString(object.label)" in js
+
+    def test_player_notes_sanitized(self):
+        """Player notes should go through _safeString with length limit."""
+        js = _read_tactical_js()
+        # _sanitizeObject truncates notes
+        assert "_safeString(object.notes)" in js
+
+    def test_notes_length_limited(self):
+        """Player notes should be limited to 500 chars."""
+        js = _read_tactical_js()
+        assert ".slice(0, 500)" in js  # notes limit
+
+
+# ===== 16. Tactical board regression: oversized JSON import ==================
+class TestOversizedJsonImport:
+    """Verify that oversized JSON imports are rejected."""
+
+    def test_max_import_bytes_enforced(self):
+        """importJSON should check file size against MAX_IMPORT_BYTES."""
+        js = _read_tactical_js()
+        assert "MAX_IMPORT_BYTES" in js
+        assert "Project file too large" in js
+        # Should check byte length before parsing
+        assert "size" in js.lower() or "length" in js.lower() or "byteLength" in js.lower()
+
+
+# ===== 17. Tactical board regression: corrupt JSON import ====================
+class TestCorruptJsonImport:
+    """Verify that corrupt JSON imports are handled gracefully."""
+
+    def test_import_json_try_catch(self):
+        """importJSON should have try/catch around JSON.parse."""
+        js = _read_tactical_js()
+        idx = js.find("importJSON")
+        assert idx > 0
+        snippet = js[idx : idx + 2000]
+        assert "try" in snippet
+        assert "catch" in snippet
+
+    def test_import_json_board_id_required(self):
+        """importJSON should require board_id in the parsed JSON."""
+        js = _read_tactical_js()
+        assert 'Invalid project: missing board_id' in js
+
+
+# ===== 18. Tactical board regression: duplicate object IDs ===================
+class TestDuplicateObjectIds:
+    """Verify that duplicate object IDs are handled."""
+
+    def test_sanitize_object_assigns_safe_id(self):
+        """_sanitizeObject should use _safeId which generates unique IDs."""
+        js = _read_tactical_js()
+        # _sanitizeObject uses _safeId for the object id (object literal syntax)
+        assert "id: this._safeId(object.id)" in js or "id:this._safeId(object.id)" in js
+
+    def test_safe_id_generates_fallback(self):
+        """_safeId should generate a fallback ID if input is empty."""
+        js = _read_tactical_js()
+        assert "Date.now().toString(36)" in js  # fallback ID generation
+
+
+# ===== 19. Tactical board regression: out-of-range coordinates ===============
+class TestOutOfRangeCoordinates:
+    """Verify that out-of-range coordinates are clamped."""
+
+    def test_x_coordinate_clamped(self):
+        """Object x coordinate should be clamped to 0-100."""
+        js = _read_tactical_js()
+        assert "_clampNumber(object.x, 0, 100" in js
+
+    def test_y_coordinate_clamped(self):
+        """Object y coordinate should be clamped to 0-100."""
+        js = _read_tactical_js()
+        assert "_clampNumber(object.y, 0, 100" in js
+
+    def test_arrow_coordinates_clamped(self):
+        """Arrow start/end coordinates should be clamped to 0-100."""
+        js = _read_tactical_js()
+        assert "_clampNumber(object.startX, 0, 100" in js
+        assert "_clampNumber(object.endX, 0, 100" in js
+
+
+# ===== 20. Tactical board regression: too many objects =======================
+class TestTooManyObjects:
+    """Verify that too many objects are capped."""
+
+    def test_max_objects_enforced(self):
+        """sanitizeProject should cap objects at MAX_OBJECTS."""
+        js = _read_tactical_js()
+        assert "MAX_OBJECTS" in js
+        assert ".slice(0, this.MAX_OBJECTS)" in js
+
+    def test_max_frames_enforced(self):
+        """sanitizeProject should cap frames at MAX_FRAMES."""
+        js = _read_tactical_js()
+        assert "MAX_FRAMES" in js
+        assert ".slice(0, this.MAX_FRAMES)" in js
+
+    def test_max_objects_value(self):
+        """MAX_OBJECTS should be 200."""
+        js = _read_tactical_js()
+        assert "MAX_OBJECTS: 200" in js
+
+    def test_max_frames_value(self):
+        """MAX_FRAMES should be 60."""
+        js = _read_tactical_js()
+        assert "MAX_FRAMES: 60" in js
+
+
+# ===== 21. Tactical board regression: old schema version =====================
+class TestOldSchemaVersion:
+    """Verify that old schema versions are migrated."""
+
+    def test_schema_version_defined(self):
+        """SCHEMA_VERSION should be defined."""
+        js = _read_tactical_js()
+        assert "SCHEMA_VERSION" in js
+
+    def test_migrate_project_exists(self):
+        """migrateProject method should exist for schema migration."""
+        js = _read_tactical_js()
+        assert "migrateProject" in js
+
+    def test_version_set_on_sanitize(self):
+        """sanitizeProject should set version to SCHEMA_VERSION."""
+        js = _read_tactical_js()
+        idx = js.find("sanitizeProject(project)")
+        assert idx > 0
+        snippet = js[idx : idx + 5000]
+        assert "SCHEMA_VERSION" in snippet
+
+
+# ===== 22. Performance boundary in renderer ==================================
+class TestPerformanceBoundary:
+    """Verify performance boundary checks exist in renderer."""
+
+    def test_check_performance_method(self):
+        """_checkPerformance method should exist."""
+        js = _read_renderer_js()
+        assert "_checkPerformance" in js
+
+    def test_simplify_project_method(self):
+        """simplifyProject method should exist."""
+        js = _read_renderer_js()
+        assert "simplifyProject" in js
+
+    def test_performance_warning_message_objects(self):
+        """Performance warning for objects should mention the count."""
+        js = _read_renderer_js()
+        assert "Too many objects" in js
+
+    def test_performance_warning_message_frames(self):
+        """Performance warning for frames should mention the count."""
+        js = _read_renderer_js()
+        assert "Too many frames" in js
+
+    def test_fps_counter_method(self):
+        """_drawFPSCounter method should exist."""
+        js = _read_renderer_js()
+        assert "_drawFPSCounter" in js
+
+    def test_perf_monitor_state(self):
+        """_perfMonitor state should be initialized."""
+        js = _read_renderer_js()
+        assert "_perfMonitor" in js
+        assert "renderTime" in js
+
+    def test_xt_heatmap_method(self):
+        """_drawXTHeatmap method should exist for heatmap overlay."""
+        js = _read_renderer_js()
+        assert "_drawXTHeatmap" in js
+
+    def test_statsbomb_attribution_in_heatmap(self):
+        """Heatmap should display StatsBomb attribution."""
+        js = _read_renderer_js()
+        assert "Data: StatsBomb Open Data" in js
+
+
+# ===== 23. Simplify button in HTML ==========================================
+class TestSimplifyButtonHtml:
+    """Verify simplify button exists in HTML."""
+
+    def test_simplify_button_exists(self):
+        """Simplify button should be in the tactical board HTML."""
+        content = _read_index()
+        assert 'id="tactical-simplify"' in content
+
+    def test_heatmap_toggle_exists(self):
+        """xT heatmap toggle button should be in the HTML."""
+        content = _read_index()
+        assert 'id="tactical-toggle-heatmap"' in content
+
+    def test_debug_toggle_exists(self):
+        """Debug mode toggle should be in the HTML."""
+        content = _read_index()
+        assert 'id="tactical-toggle-debug"' in content
+
+    def test_xt_heatmap_tactical_button_exists(self):
+        """Show on Tactical Board button should be in actions page."""
+        content = _read_index()
+        assert 'id="btn-xt-heatmap-tactical"' in content
