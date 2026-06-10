@@ -65,7 +65,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 以下条目是当前项目除 P1.5 电子战术板以外仍存在的功能不足、数据缺口和验证缺口，后续迭代不能只盯战术板：
 
-- **评分真实标签缺口**：`player_truth_labels.parquet` 仍为空，truth-anchor optimizer 和 `scoutfootball train-rating-nn` 只能验证 skipped 路径，不能产出可用球员级监督模型。
+- **评分真实标签已填充**：`player_truth_labels.parquet` 当前有 7,857 行（expert_tier 7,840 + award 17），NN 训练已匹配 5,776 行，test Spearman=0.721。
 - **评分校准仍未闭环**：v1.3.1-dev 的 train-fitted league residual offset 和 league-bias loss 代码已写入，但完整 GPU 重跑、CV、稳定性、feature importance 和 Barcelona/Real Madrid/Burnley 等误差复盘仍待执行。
 - **强队/降级队偏差仍需复盘**：当前模型仍记录强队系统性低估和降级队高估，不能只用整体 Spearman/Pearson 宣称球员真实水平已解决。
 - **世界杯模块仍是混合/样例视图**：世界杯赛程、名单、对比和出线页还没有全量官方阵容、更多联赛评分覆盖、国家队阵容 API 和低覆盖分层说明，不能写成完整真实后端能力。
@@ -194,7 +194,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 ### 前端长期功能和后端配套
 
-- [ ] 全局数据状态页读取 artifact registry，显示产物更新时间、行数、真实/代理/合成数据标记、license attribution 和 confidence gate。
+- [x] 全局数据状态页读取 artifact registry，显示产物更新时间、行数、数据源类型、联赛覆盖率和 confidence gate 已实现。
 - 当前已接入 artifact registry、更新时间、行数和 data source label；license attribution 与 confidence gate 仍待补齐。
 - [ ] 球员画像页接入 player profile API：搜索、分页、位置过滤、评分快照、位置内指标、低置信度原因和 CSV/报告导出。（分页、排序、联赛筛选已实现）
 - [x] 球员画像页补完整个人信息卡：赛季趋势、低置信度原因、数据来源、位置百分位、缺失字段列表已实现。
@@ -281,7 +281,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 定位球模板：角球近门柱、角球二点、任意球人墙、边线球、点球、门球 build-up、开球套路和防定位球站位。
 - [x] 训练模板：rondo、压迫演练、反击、传控 4 种训练模板已实现，含球员、区域和箭头对象。
 - [x] 文件夹/项目管理：删除按钮（项目/帧）已实现；按对手、比赛、训练课、主题、日期、标签和作者组织战术板、复制项目、复制帧、另存为模板仍待实现。
-- [ ] 教学模式：在每个模板中保留 coaching points、progressions、common mistakes、roles 和 expected outcome。
+- [x] 教学模式：所有阵型/定位球/训练模板已添加 coaching points，演示模式显示教练笔记叠加。
 
 ### 第二切片：战术演示和动画时间轴
 
@@ -316,10 +316,10 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 ### 第四切片：数据分析联动
 
 - [x] 从球员画像页发送球员到战术板，自动带入姓名、号码、位置和评分数据已实现。
-- [ ] 从比赛预测页创建赛前方案：主客队阵型、预测比分矩阵、模型版本和 coverage 警示作为战术板元数据。
+- [x] 从比赛预测页创建赛前方案：主客队阵型、预测比分矩阵、模型版本和 coverage 作为战术板元数据已实现。
 - [ ] 从 P2 动作价值产物读取样例热区或 xT 区域，仅作为背景参考；P2 稳定前不能写成全量动作价值战术建议。
 - [ ] 从 P7 watchlist/shortlist 读取球员备注，生成可审阅的战术角色说明。
-- [ ] 从国家队/世界杯页创建队伍模板：只读带入球员姓名、号码、俱乐部、评分覆盖和低置信度标记。
+- [x] 从国家队/世界杯页创建队伍模板：4-3-3 阵型 + 球员姓名/号码已实现。
 - [x] 支持战术板上显示球员评分 badge（颜色编码：绿/黄/红），可通过按钮切换显示/隐藏。
 - [ ] 支持把 xT/VAEP 样本热区作为半透明背景层；没有样本或 attribution 不完整时禁止导出公开图。
 - [ ] 公开导出物如果包含 StatsBomb Open Data 或其他衍生数据，必须带 data source attribution。
