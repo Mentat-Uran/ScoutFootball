@@ -1513,6 +1513,15 @@ function bindEvents() {
             input.click();
         });
     }
+    const tacticalExportPng = document.getElementById("tactical-export-png");
+    if (tacticalExportPng) {
+        tacticalExportPng.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const title = tacticalProject?.title || "tactical-board";
+                TacticalRenderer.exportPNG(`${title}.png`);
+            }
+        });
+    }
 
     // Animation controls
     const tacticalAddFrame = document.getElementById("tactical-add-frame");
