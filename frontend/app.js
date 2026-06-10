@@ -2186,6 +2186,51 @@ function renderReports() {
             </div>`;
         }).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No model runs found</div>';
+
+    // Board Snapshots section
+    var snapshotsList = document.getElementById("board-snapshots-list");
+    var snapshotsCount = document.getElementById("board-snapshots-count");
+    if (snapshotsList && typeof TACTICAL_BOARD !== "undefined") {
+        var projects = TACTICAL_BOARD.listProjects();
+        if (snapshotsCount) snapshotsCount.textContent = String(projects.length);
+        snapshotsList.innerHTML = projects.length > 0
+            ? projects.map(function(p) {
+                var date = p.updated_at ? new Date(p.updated_at).toLocaleDateString() : "";
+                var notes = "";
+                try {
+                    var full = TACTICAL_BOARD.loadProject(p.board_id);
+                    if (full) {
+                        var cp = full.coaching_points || (full.frames && full.frames[0] && full.frames[0].notes);
+                        if (typeof cp === "string") notes = cp.slice(0, 80);
+                        else if (cp && cp.title) notes = cp.title + (cp.description ? ": " + cp.description.slice(0, 50) : "");
+                    }
+                } catch (ex) { /* ignore */ }
+                return '<div class="rank-item" data-load-board="' + escapeAttr(p.board_id) + '" style="cursor:pointer">' +
+                    '<div>' +
+                        '<strong style="font-size:0.85rem">' + escapeHtml(p.title || "Untitled") + '</strong>' +
+                        '<span class="rank-meta">' + (p.object_count || 0) + ' objects, ' + (p.frame_count || 0) + ' frames' + (date ? ' \u00b7 ' + date : '') + '</span>' +
+                        (notes ? '<span class="rank-meta" style="display:block;font-style:italic;opacity:0.7">' + escapeHtml(notes) + '</span>' : '') +
+                    '</div>' +
+                    '<span class="status-pill status-medium">Board</span>' +
+                '</div>';
+            }).join("")
+            : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No board snapshots saved</div>';
+
+        // Click handler: switch to tactical view and load project
+        snapshotsList.querySelectorAll("[data-load-board]").forEach(function(el) {
+            el.addEventListener("click", function() {
+                var boardId = this.getAttribute("data-load-board");
+                if (boardId && typeof switchView === "function") {
+                    switchView("tactical");
+                    var proj = TACTICAL_BOARD.loadProject(boardId);
+                    if (proj && typeof TacticalRenderer !== "undefined") {
+                        TacticalRenderer.project = proj;
+                        TacticalRenderer.render();
+                    }
+                }
+            });
+        });
+    }
 }
 
 function renderActions() {
@@ -2701,16 +2746,54 @@ function bindEvents() {
     if (tacticalExport) {
         tacticalExport.addEventListener("click", () => {
             if (tacticalProject) {
-                const json = TACTICAL_BOARD.exportJSON(tacticalProject);
-                const blob = new Blob([json], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `tactical-board-${tacticalProject.board_id}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
+                // Show export preview with attribution
+                const previewEl = document.getElementById("tactical-export-preview");
+                const attrEl = document.getElementById("tactical-export-attribution");
+                if (previewEl && attrEl) {
+                    const attribution = [
+                        "Title: " + (tacticalProject.title || "Untitled"),
+                        "Source: " + (tacticalProject.source_attribution || "ScoutFootball tactical board"),
+                        "Version: " + (tacticalProject.version || TACTICAL_BOARD.SCHEMA_VERSION),
+                        "Objects: " + (tacticalProject.objects || []).length,
+                        "Frames: " + (tacticalProject.frames || []).length,
+                        "Created: " + (tacticalProject.created_at || "unknown"),
+                        "Updated: " + (tacticalProject.updated_at || "unknown"),
+                        "",
+                        "No data leaves the browser. All projects are stored locally.",
+                    ].join("\n");
+                    attrEl.textContent = attribution;
+                    previewEl.style.display = "flex";
+                } else {
+                    // Fallback: direct export
+                    doTacticalExport(tacticalProject);
+                }
             }
         });
+    }
+    // Export preview confirm/cancel handlers
+    const exportConfirm = document.getElementById("tactical-export-confirm");
+    const exportCancel = document.getElementById("tactical-export-cancel");
+    const exportPreview = document.getElementById("tactical-export-preview");
+    if (exportConfirm) {
+        exportConfirm.addEventListener("click", () => {
+            if (exportPreview) exportPreview.style.display = "none";
+            if (tacticalProject) doTacticalExport(tacticalProject);
+        });
+    }
+    if (exportCancel) {
+        exportCancel.addEventListener("click", () => {
+            if (exportPreview) exportPreview.style.display = "none";
+        });
+    }
+    function doTacticalExport(project) {
+        const json = TACTICAL_BOARD.exportJSON(project);
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `tactical-board-${project.board_id}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
     }
     const tacticalImport = document.getElementById("tactical-import");
     if (tacticalImport) {
@@ -2727,6 +2810,8 @@ function bindEvents() {
                     if (project) {
                         tacticalProject = project;
                         renderTactical();
+                    } else {
+                        alert("Failed to import project. The file may be corrupt or not a valid tactical board export.");
                     }
                 };
                 reader.readAsText(file);
