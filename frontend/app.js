@@ -3023,6 +3023,124 @@ function bindEvents() {
         });
     }
 
+    // Animation mode toggle
+    const tacticalAnimMode = document.getElementById("tactical-animation-mode");
+    const stepDurationLabel = document.getElementById("tactical-step-duration-label");
+    if (tacticalAnimMode) {
+        tacticalAnimMode.addEventListener("change", (e) => {
+            if (tacticalProject) {
+                tacticalProject.animationMode = e.target.value;
+                if (stepDurationLabel) {
+                    stepDurationLabel.style.display = e.target.value === "step" ? "flex" : "none";
+                }
+                tacticalAutoSave();
+            }
+        });
+    }
+
+    // Step duration slider
+    const tacticalStepDuration = document.getElementById("tactical-step-duration");
+    const stepDurationValue = document.getElementById("tactical-step-duration-value");
+    if (tacticalStepDuration) {
+        tacticalStepDuration.addEventListener("input", (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (stepDurationValue) stepDurationValue.textContent = val + "ms";
+            if (tacticalProject) {
+                tacticalProject.stepDuration = val;
+                tacticalAutoSave();
+            }
+        });
+    }
+
+    // Path editing: add path point mode
+    const tacticalAddPathPoint = document.getElementById("tactical-add-path-point");
+    if (tacticalAddPathPoint) {
+        tacticalAddPathPoint.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const sel = TacticalRenderer.selectedObject;
+                if (sel && (sel.type === "player" || sel.type === "ball")) {
+                    const isActive = TacticalRenderer._pathEditMode && TacticalRenderer._pathEditObjectId === sel.id;
+                    TacticalRenderer.setPathEditMode(!isActive, isActive ? null : sel.id);
+                    tacticalAddPathPoint.classList.toggle("active", !isActive);
+                    tacticalAddPathPoint.textContent = isActive ? "+ 路径点" : "完成路径";
+                }
+            }
+        });
+    }
+
+    // Path editing: clear path points
+    const tacticalClearPathPoints = document.getElementById("tactical-clear-path-points");
+    if (tacticalClearPathPoints) {
+        tacticalClearPathPoints.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const sel = TacticalRenderer.selectedObject;
+                if (sel) {
+                    TacticalRenderer.clearPathPoints(sel.id);
+                    tacticalProject = TacticalRenderer.getProject();
+                    renderTacticalFrameList();
+                }
+            }
+        });
+    }
+
+    // Path type selector
+    const tacticalPathType = document.getElementById("tactical-path-type");
+    if (tacticalPathType) {
+        tacticalPathType.addEventListener("change", (e) => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const sel = TacticalRenderer.selectedObject;
+                if (sel) {
+                    TacticalRenderer.setObjectPathType(sel.id, e.target.value);
+                    tacticalProject = TacticalRenderer.getProject();
+                }
+            }
+        });
+    }
+
+    // Easing selector
+    const tacticalEasing = document.getElementById("tactical-easing");
+    if (tacticalEasing) {
+        tacticalEasing.addEventListener("change", (e) => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const sel = TacticalRenderer.selectedObject;
+                if (sel) {
+                    TacticalRenderer.setObjectEasing(sel.id, e.target.value);
+                    tacticalProject = TacticalRenderer.getProject();
+                }
+            }
+        });
+    }
+
+    // Delay input
+    const tacticalObjDelay = document.getElementById("tactical-obj-delay");
+    if (tacticalObjDelay) {
+        tacticalObjDelay.addEventListener("change", (e) => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const sel = TacticalRenderer.selectedObject;
+                if (sel) {
+                    TacticalRenderer.setObjectDelay(sel.id, parseInt(e.target.value, 10) || 0);
+                    tacticalProject = TacticalRenderer.getProject();
+                    renderTacticalFrameList();
+                }
+            }
+        });
+    }
+
+    // Pause input
+    const tacticalObjPause = document.getElementById("tactical-obj-pause");
+    if (tacticalObjPause) {
+        tacticalObjPause.addEventListener("change", (e) => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const sel = TacticalRenderer.selectedObject;
+                if (sel) {
+                    TacticalRenderer.setObjectPause(sel.id, parseInt(e.target.value, 10) || 0);
+                    tacticalProject = TacticalRenderer.getProject();
+                    renderTacticalFrameList();
+                }
+            }
+        });
+    }
+
     // Reports: expand/collapse run details
     document.addEventListener("click", (e) => {
         const toggleBtn = e.target.closest("[data-toggle-run]");
@@ -3723,6 +3841,34 @@ function tacticalAutoSave() {
     }, 2000);
 }
 
+function syncObjectPropertyUI(obj) {
+    const pathTypeEl = document.getElementById("tactical-path-type");
+    const easingEl = document.getElementById("tactical-easing");
+    const delayEl = document.getElementById("tactical-obj-delay");
+    const pauseEl = document.getElementById("tactical-obj-pause");
+    const addPathBtn = document.getElementById("tactical-add-path-point");
+
+    if (obj && (obj.type === "player" || obj.type === "ball")) {
+        if (pathTypeEl) pathTypeEl.value = obj.pathType || "linear";
+        if (easingEl) easingEl.value = obj.easing || "linear";
+        if (delayEl) delayEl.value = obj.delay_ms || 0;
+        if (pauseEl) pauseEl.value = obj.pause_ms || 0;
+        if (addPathBtn) {
+            addPathBtn.textContent = "+ 路径点";
+            addPathBtn.classList.remove("active");
+        }
+        // Exit path edit mode on new selection
+        if (typeof TacticalRenderer !== "undefined") {
+            TacticalRenderer.setPathEditMode(false, null);
+        }
+    } else {
+        if (pathTypeEl) pathTypeEl.value = "linear";
+        if (easingEl) easingEl.value = "linear";
+        if (delayEl) delayEl.value = 0;
+        if (pauseEl) pauseEl.value = 0;
+    }
+}
+
 function renderTactical() {
     if (!tacticalProject) {
         tacticalProject = TACTICAL_BOARD.createProject("ScoutFootball 战术板");
@@ -3733,6 +3879,7 @@ function renderTactical() {
     if (typeof TacticalRenderer !== "undefined") {
         TacticalRenderer.init("tactical-canvas", tacticalProject);
         TacticalRenderer.onChange = tacticalAutoSave;
+        TacticalRenderer.onSelectionChange = (obj) => syncObjectPropertyUI(obj);
     }
 
     // Sync pitch type selector with current project
@@ -3745,6 +3892,22 @@ function renderTactical() {
     const displayModeEl = document.getElementById("tactical-display-mode");
     if (displayModeEl) {
         displayModeEl.value = tacticalProject.displayMode || "single";
+    }
+
+    // Sync animation mode selector
+    const animModeEl = document.getElementById("tactical-animation-mode");
+    if (animModeEl) {
+        animModeEl.value = tacticalProject.animationMode || "timing";
+        const stepLabel = document.getElementById("tactical-step-duration-label");
+        if (stepLabel) {
+            stepLabel.style.display = (tacticalProject.animationMode === "step") ? "flex" : "none";
+        }
+    }
+    const stepDurEl = document.getElementById("tactical-step-duration");
+    if (stepDurEl) {
+        stepDurEl.value = tacticalProject.stepDuration || 1000;
+        const stepVal = document.getElementById("tactical-step-duration-value");
+        if (stepVal) stepVal.textContent = (tacticalProject.stepDuration || 1000) + "ms";
     }
 
     // Update project list

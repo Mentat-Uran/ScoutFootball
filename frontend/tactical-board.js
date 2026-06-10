@@ -743,6 +743,8 @@ const TACTICAL_BOARD = {
             layers: [{ id: "default", name: "Layer 1", visible: true, locked: false }],
             frames: [{ id: "frame-0", name: "Frame 1", objects: [], duration_ms: 3000 }],
             animationState: { playing: false, currentFrame: 0, loop: false },
+            animationMode: "timing",
+            stepDuration: 1000,
             version: this.SCHEMA_VERSION,
             created_at: now,
             updated_at: now,
@@ -769,6 +771,11 @@ const TACTICAL_BOARD = {
                 opacity: 1.0,     // 0.3-1.0
             },
             notes: "",
+            pathPoints: [],      // [{x, y}] intermediate path points
+            pathType: "linear",  // "linear" | "curved"
+            easing: "linear",    // "linear" | "ease-in" | "ease-out" | "ease-in-out"
+            delay_ms: 0,         // delay before object starts moving
+            pause_ms: 0,         // pause at each path point
         };
     },
 
@@ -784,6 +791,11 @@ const TACTICAL_BOARD = {
             visibleFrom: 0,
             visibleTo: Infinity,
             possession: null, // "home" | "away" | null
+            pathPoints: [],
+            pathType: "linear",
+            easing: "linear",
+            delay_ms: 0,
+            pause_ms: 0,
         };
     },
 
@@ -1030,6 +1042,16 @@ const TACTICAL_BOARD = {
         safe.radius = this._clampNumber(object.radius, 0.5, 8, type === "ball" ? 1.5 : 3);
         if (type === "ball") {
             safe.possession = (object.possession === "home" || object.possession === "away") ? object.possession : null;
+            safe.pathPoints = Array.isArray(object.pathPoints)
+                ? object.pathPoints.slice(0, 50).map(p => ({
+                    x: this._clampNumber(p.x, 0, 100, 50),
+                    y: this._clampNumber(p.y, 0, 100, 50),
+                }))
+                : [];
+            safe.pathType = ["linear", "curved"].includes(object.pathType) ? object.pathType : "linear";
+            safe.easing = ["linear", "ease-in", "ease-out", "ease-in-out"].includes(object.easing) ? object.easing : "linear";
+            safe.delay_ms = Math.round(this._clampNumber(object.delay_ms, 0, 10000, 0));
+            safe.pause_ms = Math.round(this._clampNumber(object.pause_ms, 0, 10000, 0));
         }
         if (type === "player" || type === "bench") {
             safe.team = object.team === "away" ? "away" : "home";
@@ -1046,6 +1068,17 @@ const TACTICAL_BOARD = {
                 safe.notes = this._safeString(object.notes).slice(0, 500);
                 // Sync radius with appearance.size so drawing stays consistent
                 safe.radius = safe.appearance.size;
+                // Path and timing fields
+                safe.pathPoints = Array.isArray(object.pathPoints)
+                    ? object.pathPoints.slice(0, 50).map(p => ({
+                        x: this._clampNumber(p.x, 0, 100, 50),
+                        y: this._clampNumber(p.y, 0, 100, 50),
+                    }))
+                    : [];
+                safe.pathType = ["linear", "curved"].includes(object.pathType) ? object.pathType : "linear";
+                safe.easing = ["linear", "ease-in", "ease-out", "ease-in-out"].includes(object.easing) ? object.easing : "linear";
+                safe.delay_ms = Math.round(this._clampNumber(object.delay_ms, 0, 10000, 0));
+                safe.pause_ms = Math.round(this._clampNumber(object.pause_ms, 0, 10000, 0));
             }
         }
         if (type === "zone") {
@@ -1123,6 +1156,8 @@ const TACTICAL_BOARD = {
             objects,
             layers: [{ id: "default", name: "Layer 1", visible: true, locked: false }],
             frames,
+            animationMode: ["timing", "step"].includes(project.animationMode) ? project.animationMode : "timing",
+            stepDuration: Math.round(this._clampNumber(project.stepDuration, 250, 10000, 1000)),
             version: this.SCHEMA_VERSION,
             created_at: this._safeString(project.created_at, now),
             updated_at: this._safeString(project.updated_at, now),
@@ -1299,6 +1334,14 @@ const TACTICAL_BOARD = {
             project.animationState = { playing: false, currentFrame: 0, loop: false };
         }
 
+        // Add missing animation mode fields
+        if (!project.animationMode) {
+            project.animationMode = "timing";
+        }
+        if (!Number.isFinite(project.stepDuration)) {
+            project.stepDuration = 1000;
+        }
+
         // Fix objects missing visible/locked defaults
         if (Array.isArray(project.objects)) {
             for (const obj of project.objects) {
@@ -1344,9 +1387,123 @@ const TACTICAL_BOARD = {
     },
 
     /* ── Animation Playback ─────────────────────────────────────────── */
-    interpolateObjects(fromObjs, toObjs, t) {
+
+    /* Easing functions: input t in [0,1], output eased t */
+    _applyEasing(t, easing) {
+        if (!easing || easing === "linear") return t;
+        switch (easing) {
+            case "ease-in":
+                return t * t;
+            case "ease-out":
+                return t * (2 - t);
+            case "ease-in-out":
+                return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            default:
+                return t;
+        }
+    },
+
+    /* Quadratic bezier evaluation: P(t) = (1-t)^2*P0 + 2*(1-t)*t*CP + t^2*P1 */
+    _quadraticBezier(p0, cp, p1, t) {
+        const mt = 1 - t;
+        return {
+            x: mt * mt * p0.x + 2 * mt * t * cp.x + t * t * p1.x,
+            y: mt * mt * p0.y + 2 * mt * t * cp.y + t * t * p1.y,
+        };
+    },
+
+    /* Calculate auto control point: perpendicular offset from midpoint */
+    _autoControlPoint(p0, p1) {
+        const mx = (p0.x + p1.x) / 2;
+        const my = (p0.y + p1.y) / 2;
+        const dx = p1.x - p0.x;
+        const dy = p1.y - p0.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.001) return { x: mx, y: my };
+        const offset = len * 0.3;
+        // Perpendicular direction
+        return {
+            x: mx + (-dy / len) * offset,
+            y: my + (dx / len) * offset,
+        };
+    },
+
+    /* Interpolate along a path of points using bezier or linear segments */
+    _interpolatePath(pathPoints, fromPos, toPos, t, pathType) {
+        // Build full point sequence: from -> pathPoints -> to
+        const allPoints = [
+            { x: fromPos.x, y: fromPos.y },
+            ...pathPoints.map(p => ({ x: p.x, y: p.y })),
+            { x: toPos.x, y: toPos.y },
+        ];
+
+        if (allPoints.length < 2) return toPos;
+        if (allPoints.length === 2) {
+            // Simple linear
+            return {
+                x: allPoints[0].x + (allPoints[1].x - allPoints[0].x) * t,
+                y: allPoints[0].y + (allPoints[1].y - allPoints[0].y) * t,
+            };
+        }
+
+        if (pathType === "curved") {
+            // Use piecewise quadratic bezier through all points
+            // For N segments, distribute t across segments
+            const segments = allPoints.length - 1;
+            const segT = t * segments;
+            const segIdx = Math.min(Math.floor(segT), segments - 1);
+            const localT = segT - segIdx;
+
+            const p0 = allPoints[segIdx];
+            const p1 = allPoints[segIdx + 1];
+            const cp = this._autoControlPoint(p0, p1);
+            return this._quadraticBezier(p0, cp, p1, localT);
+        }
+
+        // Linear path through all points
+        const segments = allPoints.length - 1;
+        const segT = t * segments;
+        const segIdx = Math.min(Math.floor(segT), segments - 1);
+        const localT = segT - segIdx;
+
+        const p0 = allPoints[segIdx];
+        const p1 = allPoints[segIdx + 1];
+        return {
+            x: p0.x + (p1.x - p0.x) * localT,
+            y: p0.y + (p1.y - p0.y) * localT,
+        };
+    },
+
+    /* Calculate delay-adjusted t for an object within a frame duration */
+    _delayAdjustedT(t, obj, frameDuration) {
+        const delay = obj.delay_ms || 0;
+        const pause = obj.pause_ms || 0;
+
+        if (delay > 0 && frameDuration > 0) {
+            const delayFraction = delay / frameDuration;
+            if (t < delayFraction) return 0;
+            t = (t - delayFraction) / (1 - delayFraction);
+        }
+
+        if (pause > 0 && frameDuration > 0) {
+            const pauseFraction = pause / frameDuration;
+            // Apply pause in the middle of the movement
+            const pauseStart = 0.5 - pauseFraction / 2;
+            const pauseEnd = 0.5 + pauseFraction / 2;
+            if (t >= pauseStart && t <= pauseEnd) {
+                return 0.5;
+            } else if (t > pauseEnd) {
+                t = 0.5 + (t - pauseEnd) / (1 - pauseEnd) * 0.5;
+            } else {
+                t = t / pauseStart * 0.5;
+            }
+        }
+
+        return Math.max(0, Math.min(1, t));
+    },
+
+    interpolateObjects(fromObjs, toObjs, t, frameDuration) {
         if (!fromObjs || !toObjs) return toObjs || fromObjs || [];
-        // Linear interpolation between two object sets
         const result = [];
         for (const toObj of toObjs) {
             const fromObj = fromObjs.find((o) => o.id === toObj.id);
@@ -1356,8 +1513,28 @@ const TACTICAL_BOARD = {
             }
             const interp = { ...toObj };
             if (toObj.type === "player" || toObj.type === "ball" || toObj.type === "text" || toObj.type === "bench" || toObj.type === "cone" || toObj.type === "marker" || toObj.type === "pole") {
-                interp.x = fromObj.x + (toObj.x - fromObj.x) * t;
-                interp.y = fromObj.y + (toObj.y - fromObj.y) * t;
+                // Apply delay/pause adjustment
+                let localT = this._delayAdjustedT(t, toObj, frameDuration || 3000);
+                // Apply easing
+                localT = this._applyEasing(localT, toObj.easing);
+
+                const pathPoints = toObj.pathPoints || fromObj.pathPoints || [];
+                if (pathPoints.length > 0) {
+                    // Path interpolation
+                    const pos = this._interpolatePath(
+                        pathPoints,
+                        { x: fromObj.x, y: fromObj.y },
+                        { x: toObj.x, y: toObj.y },
+                        localT,
+                        toObj.pathType || "linear"
+                    );
+                    interp.x = pos.x;
+                    interp.y = pos.y;
+                } else {
+                    // Standard linear interpolation
+                    interp.x = fromObj.x + (toObj.x - fromObj.x) * localT;
+                    interp.y = fromObj.y + (toObj.y - fromObj.y) * localT;
+                }
             }
             result.push(interp);
         }

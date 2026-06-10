@@ -42,6 +42,8 @@ const TacticalRenderer = {
     showTrails: false,           // show animation trails
     _trailPositions: new Map(),  // objectId -> [{x,y}...] trail positions during animation
     _ballDragTrail: [],          // last N positions during ball drag
+    _pathEditMode: false,        // path point editing mode
+    _pathEditObjectId: null,     // object id being path-edited
 
     /* ── Initialize ─────────────────────────────────────────────────── */
     init(canvasId, project) {
@@ -186,6 +188,9 @@ const TacticalRenderer = {
         if (dMode === "transition") {
             this._drawTransitionArrows();
         }
+
+        // Draw path indicators for objects with pathPoints
+        this._drawObjectPaths();
 
         // Draw preview during drawing mode
         if (this.drawPreview) {
@@ -1094,6 +1099,76 @@ const TacticalRenderer = {
         }
     },
 
+    /* ── Object Path Visualization ──────────────────────────────────── */
+    _drawObjectPaths() {
+        if (!this.project || !this.project.objects) return;
+        const ctx = this.ctx;
+        const frames = this.project.frames;
+        if (!frames || frames.length < 2) return;
+        const curIdx = this.animationState.currentFrame || 0;
+        const nextIdx = (curIdx + 1) % frames.length;
+        const curFrame = frames[curIdx];
+        const nextFrame = frames[nextIdx];
+        if (!curFrame || !nextFrame) return;
+
+        for (const toObj of (nextFrame.objects || [])) {
+            if (!toObj.pathPoints || toObj.pathPoints.length === 0) continue;
+            const fromObj = (curFrame.objects || []).find(o => o.id === toObj.id);
+            if (!fromObj) continue;
+
+            // Build full path: from -> pathPoints -> to
+            const allPoints = [
+                { x: fromObj.x, y: fromObj.y },
+                ...toObj.pathPoints.map(p => ({ x: p.x, y: p.y })),
+                { x: toObj.x, y: toObj.y },
+            ];
+            if (allPoints.length < 2) continue;
+
+            // Draw the path
+            ctx.save();
+            ctx.strokeStyle = "rgba(255,255,100,0.35)";
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            const sp = this.toCanvas(allPoints[0].x, allPoints[0].y);
+            ctx.moveTo(sp.x, sp.y);
+
+            if (toObj.pathType === "curved" && allPoints.length > 2) {
+                // Draw piecewise bezier
+                for (let i = 0; i < allPoints.length - 1; i++) {
+                    const p0 = allPoints[i];
+                    const p1 = allPoints[i + 1];
+                    const cp = TACTICAL_BOARD._autoControlPoint(p0, p1);
+                    const cpC = this.toCanvas(cp.x, cp.y);
+                    const p1C = this.toCanvas(p1.x, p1.y);
+                    ctx.quadraticCurveTo(cpC.x, cpC.y, p1C.x, p1C.y);
+                }
+            } else {
+                // Draw linear segments
+                for (let i = 1; i < allPoints.length; i++) {
+                    const p = this.toCanvas(allPoints[i].x, allPoints[i].y);
+                    ctx.lineTo(p.x, p.y);
+                }
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw path point markers
+            for (let i = 1; i < allPoints.length - 1; i++) {
+                const pp = this.toCanvas(allPoints[i].x, allPoints[i].y);
+                ctx.beginPath();
+                ctx.arc(pp.x, pp.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255,255,100,0.6)";
+                ctx.fill();
+                ctx.strokeStyle = "rgba(255,255,100,0.8)";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+    },
+
     _drawPreviewObject(preview) {
         const ctx = this.ctx;
         ctx.setLineDash([6, 4]);
@@ -1387,6 +1462,18 @@ const TacticalRenderer = {
             return;
         }
 
+        // Path edit mode: add path point to selected object
+        if (this._pathEditMode && this._pathEditObjectId) {
+            const targetObj = this.project.objects.find(o => o.id === this._pathEditObjectId);
+            if (targetObj && (targetObj.type === "player" || targetObj.type === "ball")) {
+                if (!targetObj.pathPoints) targetObj.pathPoints = [];
+                targetObj.pathPoints.push({ x, y });
+                this.render();
+                if (this.onChange) this.onChange();
+            }
+            return;
+        }
+
         // Find all objects under cursor (for overlap cycling)
         const hits = [];
         for (const obj of [...this.project.objects].reverse()) {
@@ -1441,6 +1528,8 @@ const TacticalRenderer = {
         }
 
         this.selectedObject = found;
+        // Notify selection change for UI sync
+        if (this.onSelectionChange) this.onSelectionChange(found);
         if (found) {
             this.isDragging = true;
             // Track bench drag start for swap logic
@@ -2029,7 +2118,62 @@ const TacticalRenderer = {
         this.pushUndo();
         this.project.objects = [];
         this.selectedObject = null;
+        this._pathEditMode = false;
+        this._pathEditObjectId = null;
         this.render();
+    },
+
+    /* Path editing methods */
+    setPathEditMode(enabled, objectId) {
+        this._pathEditMode = !!enabled;
+        this._pathEditObjectId = enabled ? objectId : null;
+    },
+
+    clearPathPoints(objectId) {
+        if (!this.project) return;
+        const obj = this.project.objects.find(o => o.id === objectId);
+        if (obj && obj.pathPoints) {
+            obj.pathPoints = [];
+            this.render();
+            if (this.onChange) this.onChange();
+        }
+    },
+
+    setObjectPathType(objectId, pathType) {
+        if (!this.project) return;
+        const obj = this.project.objects.find(o => o.id === objectId);
+        if (obj) {
+            obj.pathType = pathType;
+            this.render();
+            if (this.onChange) this.onChange();
+        }
+    },
+
+    setObjectEasing(objectId, easing) {
+        if (!this.project) return;
+        const obj = this.project.objects.find(o => o.id === objectId);
+        if (obj) {
+            obj.easing = easing;
+            if (this.onChange) this.onChange();
+        }
+    },
+
+    setObjectDelay(objectId, delayMs) {
+        if (!this.project) return;
+        const obj = this.project.objects.find(o => o.id === objectId);
+        if (obj) {
+            obj.delay_ms = Math.max(0, Math.round(delayMs || 0));
+            if (this.onChange) this.onChange();
+        }
+    },
+
+    setObjectPause(objectId, pauseMs) {
+        if (!this.project) return;
+        const obj = this.project.objects.find(o => o.id === objectId);
+        if (obj) {
+            obj.pause_ms = Math.max(0, Math.round(pauseMs || 0));
+            if (this.onChange) this.onChange();
+        }
     },
 
     getProject() {
@@ -2074,6 +2218,8 @@ const TacticalRenderer = {
 
         const frames = this.project.frames;
         const elapsed = performance.now() - this.animationState.startTime;
+        const animMode = (this.project && this.project.animationMode) || "timing";
+        const stepDur = (this.project && this.project.stepDuration) || 1000;
 
         // Find current frame based on elapsed time
         let totalDuration = 0;
@@ -2082,7 +2228,7 @@ const TacticalRenderer = {
         let frameElapsed = 0;
 
         for (let i = 0; i < frames.length; i++) {
-            const dur = frames[i].duration_ms || 3000;
+            const dur = (animMode === "step") ? stepDur : (frames[i].duration_ms || 3000);
             if (elapsed < totalDuration + dur) {
                 fromFrame = i;
                 toFrame = (i + 1) % frames.length;
@@ -2092,13 +2238,13 @@ const TacticalRenderer = {
             totalDuration += dur;
         }
 
-        const fromDur = frames[fromFrame].duration_ms || 3000;
+        const fromDur = (animMode === "step") ? stepDur : (frames[fromFrame].duration_ms || 3000);
         const t = Math.min(1, frameElapsed / fromDur);
 
-        // Interpolate
+        // Interpolate (pass frameDuration for delay/pause calculations)
         const fromObjs = frames[fromFrame].objects || [];
         const toObjs = frames[toFrame].objects || [];
-        this.project.objects = TACTICAL_BOARD.interpolateObjects(fromObjs, toObjs, t);
+        this.project.objects = TACTICAL_BOARD.interpolateObjects(fromObjs, toObjs, t, fromDur);
         // Collect trail positions for animation trails
         this._collectTrailPositions();
         this.render();
@@ -2110,7 +2256,12 @@ const TacticalRenderer = {
         }
 
         // Check if animation is complete
-        const totalAnimDuration = frames.reduce((sum, f) => sum + (f.duration_ms || 3000), 0);
+        let totalAnimDuration;
+        if (animMode === "step") {
+            totalAnimDuration = frames.length * stepDur;
+        } else {
+            totalAnimDuration = frames.reduce((sum, f) => sum + (f.duration_ms || 3000), 0);
+        }
         if (elapsed >= totalAnimDuration) {
             if (this.animationState.loop) {
                 this.animationState.startTime = performance.now();
@@ -2234,8 +2385,10 @@ const TacticalRenderer = {
         const markers = this._timelineEl.querySelector('[data-el="markers"]');
         if (progress) progress.style.width = pct + "%";
         if (indicator) indicator.style.left = pct + "%";
-        if (label) label.textContent = (idx + 1) + " / " + frames.length;
-        // Render frame markers
+        const animMode = (this.project && this.project.animationMode) || "timing";
+        const modeLabel = animMode === "step" ? " [step]" : "";
+        if (label) label.textContent = (idx + 1) + " / " + frames.length + modeLabel;
+        // Render frame markers with delay/pause indicators
         if (markers) {
             markers.innerHTML = "";
             for (let i = 0; i < frames.length; i++) {
@@ -2247,6 +2400,21 @@ const TacticalRenderer = {
                 const fi = i;
                 m.addEventListener("click", (ev) => { ev.stopPropagation(); this.goToFrame(fi); this.updateTimeline(); });
                 markers.appendChild(m);
+
+                // Show delay/pause indicators for objects in this frame
+                const frameObjs = frames[i].objects || [];
+                let hasDelay = false, hasPause = false;
+                for (const obj of frameObjs) {
+                    if (obj.delay_ms > 0) hasDelay = true;
+                    if (obj.pause_ms > 0) hasPause = true;
+                }
+                if (hasDelay || hasPause) {
+                    const ind = document.createElement("div");
+                    ind.style.cssText = `position:absolute;top:12px;left:${mp}%;transform:translateX(-3px);font-size:8px;line-height:1;color:rgba(255,200,100,0.7)`;
+                    ind.textContent = (hasDelay ? "d" : "") + (hasPause ? "p" : "");
+                    ind.title = (hasDelay ? "Has delay " : "") + (hasPause ? "Has pause" : "");
+                    markers.appendChild(ind);
+                }
             }
         }
     },
