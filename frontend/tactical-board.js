@@ -556,6 +556,13 @@ const TACTICAL_BOARD = {
         project.frames.splice(frameIndex, 1);
     },
 
+    renameProject(project, newTitle) {
+        if (!project || typeof project !== "object") return;
+        const sanitized = this._safeString(newTitle, "Untitled").trim() || "Untitled";
+        project.title = sanitized;
+        project.updated_at = new Date().toISOString();
+    },
+
     toggleLoop(project) {
         if (!project) return false;
         if (!project.animationState) {

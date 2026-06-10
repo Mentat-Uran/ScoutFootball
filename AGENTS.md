@@ -25,10 +25,17 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。所有导航图标统一使用几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。总览、球员画像、身价、比赛预测、球探、动作价值和报告页已改为读取 FastAPI 本地产物；身价页 API 无数据时显示 DEMO 标记；顶部栏有 API 连接状态指示器（OK/OFFLINE）；`fetchRatings()` 按位置分组计算客户端 radar 百分位，球员列表加载后即有真实 radar 数据；API/本地 JSON 字符串进入 HTML 前已统一转义，CSV 导出有公式注入防护；世界杯页仍含样例/混合数据，不能写成全量真实后端。
 - `data_loader.py` 已加固：DuckDB 读取异常时正确 fallback 到 Parquet；新增 `_safe_read_parquet` 辅助函数，corrupt Parquet 文件不会导致 500；6 个数据加载函数已改用安全读取。
 - `api.py` 已加固：`_clean_json_value` 支持 numpy.int64/float64/bool_ 和 inf；`get_match_prediction` 捕获所有异常类型；内联 NaN 清理代码已合并到 `_clean_json_value`。
-- 电子战术板 P1.5 已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。新增：绘图工具（自由画笔/线条/矩形/椭圆）、文字注释、曲线箭头、触摸手势支持、循环动画、对象删除按钮。动画时间轴、PNG/PDF/WebM 导出、报告嵌入、版本迁移、MP4、视频叠画和 tracking 导入仍未实现，不能写成现有能力。
+- 电子战术板 P1.5 已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。新增：绘图工具（自由画笔/线条/矩形/椭圆）、文字注释、曲线箭头、触摸手势支持、循环动画、对象删除按钮。动画时间轴、PDF 导出、报告嵌入、MP4、视频叠画和 tracking 导入仍未实现，不能写成现有能力。PNG 静态导出、WebM 动画导出和版本迁移已实现。
 - Dixon-Coles 比分预测模型已实现：`fit_dixon_coles()` 已接入 pipeline 和 `data_loader.py`，7 个单元测试覆盖参数拟合与预测。
-- 前端安全加固：`index.html` 增加 CSP meta tag、echarts CDN 加 SRI integrity、HTTP 响应增加 `X-Content-Type-Options: nosniff`。
+- 前端安全加固：`index.html` 增加 CSP meta tag、echarts CDN 加 SRI integrity、HTTP 响应增加 `X-Content-Type-Options: nosniff`；浏览器级 XSS/CSV 回归测试已完成。
 - 测试 warnings 清理：`conftest.py` 新增 matplotlib backend fixture 避免 GUI 警告，`pyproject.toml` 增加 `filterwarnings` 配置。
+- Bug 修复：22 个 bug 已修复（2 critical、9 warning、11 minor），测试总数 425。
+- 身价偏离分析：value-fairness OOF 残差、联赛/位置偏差、年龄散点分析已实现。
+- 球探队列增强：审阅状态流转（review_status）、watchlist diff、shortlist notes 已落地。
+- 球员对比百分位表：同位置 percentile 对比表已实现。
+- WebM 动画导出：`canvas.captureStream` + `MediaRecorder` 已实现，失败时有降级提示。
+- 定位球模板：角球近门柱、角球二点、任意球人墙、边线球、点球、门球 build-up 等模板已实现。
+- 球员列表增强：分页、排序、联赛筛选已实现。
 
 新增适配器（已实现，部分需特定环境运行）：
 - SofaScore、SoFIFA、WhoScored、Capology：需要 Chrome + Selenium，建议在 Windows GPU 服务器运行。
