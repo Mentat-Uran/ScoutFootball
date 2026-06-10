@@ -33,6 +33,16 @@ const TACTICAL_BOARD = {
             CM: [{ x: 40, y: 25 }, { x: 40, y: 50 }, { x: 40, y: 75 }],
             W:  [{ x: 70, y: 15 }, { x: 70, y: 85 }],
             ST: [{ x: 80, y: 50 }],
+            coaching_points: {
+                title: "4-3-3 Attacking",
+                description: "Wide forwards provide natural width while the midfield triangle controls the central zones.",
+                key_points: [
+                    "Press high when the ball goes to opposition fullbacks",
+                    "Wingers tuck in without the ball to form a 4-5-1 defensive block",
+                    "Single pivot drops between CBs during build-up play",
+                    "Fullbacks overlap when wingers cut inside to shoot"
+                ]
+            },
         },
         "4-2-3-1": {
             GK: [{ x: 5, y: 50 }],
@@ -41,6 +51,16 @@ const TACTICAL_BOARD = {
             DM: [{ x: 35, y: 35 }, { x: 35, y: 65 }],
             AM: [{ x: 55, y: 25 }, { x: 55, y: 50 }, { x: 55, y: 75 }],
             ST: [{ x: 75, y: 50 }],
+            coaching_points: {
+                title: "4-2-3-1 Balanced",
+                description: "Double pivot provides defensive stability while the #10 links midfield to attack.",
+                key_points: [
+                    "Two holding midfielders screen the back four and win second balls",
+                    "The #10 finds pockets between opposition midfield and defense",
+                    "Wide AMs track back to form a 4-4-2 defensive shape",
+                    "Lone striker presses the opposition center-backs to force long balls"
+                ]
+            },
         },
         "3-5-2": {
             GK: [{ x: 5, y: 50 }],
@@ -48,6 +68,16 @@ const TACTICAL_BOARD = {
             FB: [{ x: 35, y: 10 }, { x: 35, y: 90 }],
             CM: [{ x: 45, y: 30 }, { x: 45, y: 50 }, { x: 45, y: 70 }],
             ST: [{ x: 75, y: 35 }, { x: 75, y: 65 }],
+            coaching_points: {
+                title: "3-5-2 Midfield Control",
+                description: "Three center-backs with wing-backs provide both defensive solidity and attacking width.",
+                key_points: [
+                    "Wing-backs must cover the entire flank -- fitness is critical",
+                    "Three CBs allow one to step into midfield with the ball",
+                    "Central midfield trio controls possession and tempo",
+                    "Two strikers can split wide to create space for midfield runners"
+                ]
+            },
         },
         "4-4-2": {
             GK: [{ x: 5, y: 50 }],
@@ -56,6 +86,16 @@ const TACTICAL_BOARD = {
             CM: [{ x: 40, y: 25 }, { x: 40, y: 75 }],
             W:  [{ x: 40, y: 10 }, { x: 40, y: 90 }],
             ST: [{ x: 75, y: 35 }, { x: 75, y: 65 }],
+            coaching_points: {
+                title: "4-4-2 Classic",
+                description: "Flat midfield four with a strike partnership. Simple structure, high work rate required.",
+                key_points: [
+                    "Midfield four must stay compact horizontally -- max 30m between wingers",
+                    "One striker presses, the other drops to screen the opposition pivot",
+                    "Wingers track back to form a flat defensive line of six",
+                    "Direct play to the front two or through fullback overlaps"
+                ]
+            },
         },
         "5-3-2": {
             GK: [{ x: 5, y: 50 }],
@@ -63,6 +103,16 @@ const TACTICAL_BOARD = {
             FB: [{ x: 30, y: 10 }, { x: 30, y: 90 }],
             CM: [{ x: 45, y: 25 }, { x: 45, y: 50 }, { x: 45, y: 75 }],
             ST: [{ x: 75, y: 35 }, { x: 75, y: 65 }],
+            coaching_points: {
+                title: "5-3-2 Defensive",
+                description: "Five at the back with compact midfield. Absorb pressure and hit on the counter.",
+                key_points: [
+                    "Back five stays deep -- no more than 35m from own goal",
+                    "Wing-backs provide the only width in transition moments",
+                    "Midfield three win second balls and play quick forward passes",
+                    "Two strikers stay high to stretch opposition and counter-attack"
+                ]
+            },
         },
         "3-4-3": {
             GK: [{ x: 5, y: 50 }],
@@ -70,6 +120,16 @@ const TACTICAL_BOARD = {
             CM: [{ x: 45, y: 15 }, { x: 45, y: 50 }, { x: 45, y: 85 }],
             W:  [{ x: 70, y: 15 }, { x: 70, y: 85 }],
             ST: [{ x: 80, y: 50 }],
+            coaching_points: {
+                title: "3-4-3 Attacking Width",
+                description: "Three forwards with wide midfielders. High risk, high reward formation.",
+                key_points: [
+                    "High defensive line is mandatory to compress space",
+                    "Wide midfielders must be two-way players -- attack and defend",
+                    "Three CBs cover the width, with the central CB sweeping",
+                    "Front three press aggressively to win the ball high up the pitch"
+                ]
+            },
         },
         "3-4-2-1": {
             GK: [{ x: 5, y: 50 }],
@@ -78,6 +138,16 @@ const TACTICAL_BOARD = {
             CM: [{ x: 45, y: 35 }, { x: 45, y: 65 }],
             AM: [{ x: 60, y: 35 }, { x: 60, y: 65 }],
             ST: [{ x: 80, y: 50 }],
+            coaching_points: {
+                title: "3-4-2-1 Narrow Diamond",
+                description: "Two attacking midfielders behind the striker create central overloads.",
+                key_points: [
+                    "Two #10s operate in half-spaces to overload the center",
+                    "Wing-backs provide all width -- must be elite crossers",
+                    "Central midfield pair wins the ball and feeds the #10s",
+                    "Striker holds the ball up and brings others into play"
+                ]
+            },
         },
         "4-1-4-1": {
             GK: [{ x: 5, y: 50 }],
@@ -87,6 +157,16 @@ const TACTICAL_BOARD = {
             CM: [{ x: 50, y: 25 }, { x: 50, y: 75 }],
             W:  [{ x: 65, y: 15 }, { x: 65, y: 85 }],
             ST: [{ x: 80, y: 50 }],
+            coaching_points: {
+                title: "4-1-4-1 Pivot Shield",
+                description: "Single defensive midfielder screens the back four while wide players provide attacking threat.",
+                key_points: [
+                    "The lone pivot must have excellent positional awareness",
+                    "Two CMs push forward to support the attack in the final third",
+                    "Wingers stay wide to stretch the opposition back line",
+                    "Striker drops deep to link play when needed"
+                ]
+            },
         },
         "4-3-1-2": {
             GK: [{ x: 5, y: 50 }],
@@ -95,6 +175,16 @@ const TACTICAL_BOARD = {
             CM: [{ x: 40, y: 25 }, { x: 40, y: 50 }, { x: 40, y: 75 }],
             AM: [{ x: 60, y: 50 }],
             ST: [{ x: 80, y: 35 }, { x: 80, y: 65 }],
+            coaching_points: {
+                title: "4-3-1-2 Diamond",
+                description: "Central diamond with two strikers. Dominates the middle but relies on fullbacks for width.",
+                key_points: [
+                    "Fullbacks provide all width -- must be attack-minded",
+                    "The #10 at the tip of the diamond is the creative hub",
+                    "Two strikers press the center-backs and create space for the #10",
+                    "Three CMs behind the #10 control tempo and recycle possession"
+                ]
+            },
         },
         "4-2-2-2": {
             GK: [{ x: 5, y: 50 }],
@@ -103,6 +193,16 @@ const TACTICAL_BOARD = {
             DM: [{ x: 35, y: 35 }, { x: 35, y: 65 }],
             AM: [{ x: 55, y: 25 }, { x: 55, y: 75 }],
             ST: [{ x: 80, y: 35 }, { x: 80, y: 65 }],
+            coaching_points: {
+                title: "4-2-2-2 Box Midfield",
+                description: "Compact box midfield with two strikers. Strong in transition and pressing.",
+                key_points: [
+                    "Double pivot wins second balls and feeds the attacking midfielders",
+                    "Two AMs operate in half-spaces between opposition lines",
+                    "Two strikers press high and stretch the back line vertically",
+                    "Fullbacks overlap to provide crosses -- no natural wingers"
+                ]
+            },
         },
         "4-5-1": {
             GK: [{ x: 5, y: 50 }],
@@ -110,6 +210,16 @@ const TACTICAL_BOARD = {
             FB: [{ x: 20, y: 10 }, { x: 20, y: 90 }],
             CM: [{ x: 40, y: 15 }, { x: 40, y: 35 }, { x: 40, y: 50 }, { x: 40, y: 65 }, { x: 40, y: 85 }],
             ST: [{ x: 80, y: 50 }],
+            coaching_points: {
+                title: "4-5-1 Low Block",
+                description: "Five across midfield with a deep defensive shape. Designed to absorb and counter.",
+                key_points: [
+                    "Five-man midfield creates a wall in front of the defense",
+                    "Lone striker stays high to hold the ball and wait for support",
+                    "Wide midfielders double up with fullbacks to defend the flanks",
+                    "Quick vertical passes to the striker on turnovers"
+                ]
+            },
         },
         "5-4-1": {
             GK: [{ x: 5, y: 50 }],
@@ -117,6 +227,16 @@ const TACTICAL_BOARD = {
             FB: [{ x: 30, y: 10 }, { x: 30, y: 90 }],
             CM: [{ x: 45, y: 25 }, { x: 45, y: 50 }, { x: 45, y: 75 }],
             ST: [{ x: 80, y: 50 }],
+            coaching_points: {
+                title: "5-4-1 Ultra Defensive",
+                description: "Five defenders and a flat four midfield. Maximum protection with one outlet.",
+                key_points: [
+                    "Back five sits very deep -- minimal space behind the defense",
+                    "Four midfielders narrow the central channel and force play wide",
+                    "Lone striker presses the center-backs to delay build-up",
+                    "Set pieces and long balls are the primary attacking outlets"
+                ]
+            },
         },
     },
 
@@ -124,6 +244,16 @@ const TACTICAL_BOARD = {
     TRAINING_PRESETS: {
         "rondo": {
             label: "Rondo 4v2",
+            coaching_points: {
+                title: "Rondo 4v2",
+                description: "Possession-based warm-up drill. Four attackers keep the ball while two defenders try to win it.",
+                key_points: [
+                    "One-touch or two-touch limit to increase difficulty",
+                    "Attackers must create passing angles by moving off the ball",
+                    "Defenders press as a pair -- communication is key",
+                    "Switch defenders every 60 seconds to maintain intensity"
+                ]
+            },
             area: { x: 40, y: 40, w: 20, h: 20 },
             attackers: [
                 { x: 40, y: 40 }, { x: 60, y: 40 },
@@ -141,6 +271,16 @@ const TACTICAL_BOARD = {
         },
         "pressing-drill": {
             label: "Pressing Drill",
+            coaching_points: {
+                title: "Pressing Drill",
+                description: "Coordinated pressing exercise. Players learn to press in groups and cover passing lanes.",
+                key_points: [
+                    "First presser closes the ball carrier at speed",
+                    "Second presser covers the nearest passing option",
+                    "Remaining players squeeze space and cut passing lanes",
+                    "Communication triggers: 'press', 'cover', 'squeeze'"
+                ]
+            },
             attackers: [
                 { x: 70, y: 25 }, { x: 70, y: 50 }, { x: 70, y: 75 },
             ],
@@ -158,6 +298,16 @@ const TACTICAL_BOARD = {
         },
         "counter-attack": {
             label: "Counter Attack",
+            coaching_points: {
+                title: "Counter Attack Drill",
+                description: "Fast transition exercise. Players practice breaking quickly from defense to attack.",
+                key_points: [
+                    "First pass after winning the ball must be forward and vertical",
+                    "Wide players sprint into channels to stretch the defense",
+                    "Support runners arrive late to pick up second balls",
+                    "Finish the attack within 8 seconds of winning possession"
+                ]
+            },
             defenders: [
                 { x: 15, y: 25 }, { x: 15, y: 50 }, { x: 15, y: 75 },
                 { x: 25, y: 15 }, { x: 25, y: 85 },
@@ -178,6 +328,16 @@ const TACTICAL_BOARD = {
         },
         "possession": {
             label: "Possession Grid",
+            coaching_points: {
+                title: "Possession Grid",
+                description: "Small-sided possession game. Numerical superiority for the attacking team.",
+                key_points: [
+                    "Keep the ball moving -- no player holds it for more than 3 touches",
+                    "Create triangles around the ball at all times",
+                    "Defenders win the ball and try to play through the gates",
+                    "Rotate positions every 2 minutes to develop versatility"
+                ]
+            },
             area: { x: 30, y: 25, w: 40, h: 50 },
             teamA: [
                 { x: 35, y: 30 }, { x: 45, y: 35 }, { x: 55, y: 30 },
@@ -191,6 +351,35 @@ const TACTICAL_BOARD = {
                 { x: 45, y: 45, r: 5 },
             ],
         },
+    },
+
+    /* ── Coaching Points helpers ────────────────────────────────────── */
+    getFormationCoachingPoints(formationName) {
+        const formation = this.FORMATIONS[formationName];
+        return formation && formation.coaching_points ? formation.coaching_points : null;
+    },
+
+    getSetPieceCoachingPoints(type) {
+        const preset = this.SET_PIECE_PRESETS[type];
+        return preset && preset.coaching_points ? preset.coaching_points : null;
+    },
+
+    getTrainingCoachingPoints(type) {
+        const preset = this.TRAINING_PRESETS[type];
+        return preset && preset.coaching_points ? preset.coaching_points : null;
+    },
+
+    formatCoachingNotes(cp) {
+        if (!cp) return "";
+        let notes = cp.title || "";
+        if (cp.description) notes += "\n" + cp.description;
+        if (Array.isArray(cp.key_points) && cp.key_points.length > 0) {
+            notes += "\n";
+            for (const kp of cp.key_points) {
+                notes += "\n- " + kp;
+            }
+        }
+        return notes;
     },
 
     generateTraining(type, team = "home") {
@@ -327,6 +516,16 @@ const TACTICAL_BOARD = {
     SET_PIECE_PRESETS: {
         "corner-left": {
             label: "Corner (Left)",
+            coaching_points: {
+                title: "Corner Kick (Left Side)",
+                description: "In-swinging delivery from the left. Attackers target near post and far post zones.",
+                key_points: [
+                    "Taker delivers an in-swinging ball to the near post area",
+                    "First runner attacks the near post with a flick-on",
+                    "Second runner arrives at the far post for the knockdown",
+                    "Defenders mark man-to-man with one player on the post"
+                ]
+            },
             taker: { x: 0, y: 0 },
             attackers: [
                 { x: 88, y: 35 }, { x: 90, y: 50 }, { x: 88, y: 65 },
@@ -339,6 +538,16 @@ const TACTICAL_BOARD = {
         },
         "corner-right": {
             label: "Corner (Right)",
+            coaching_points: {
+                title: "Corner Kick (Right Side)",
+                description: "Out-swinging delivery from the right. Attackers aim for the six-yard box.",
+                key_points: [
+                    "Taker delivers an out-swinging ball towards the penalty spot",
+                    "Runners time their movement to arrive as the ball crosses",
+                    "One attacker screens the goalkeeper to block the view",
+                    "Set a decoy run to pull defenders out of position"
+                ]
+            },
             taker: { x: 0, y: 100 },
             attackers: [
                 { x: 88, y: 35 }, { x: 90, y: 50 }, { x: 88, y: 65 },
@@ -351,6 +560,16 @@ const TACTICAL_BOARD = {
         },
         "freekick-central": {
             label: "Free Kick (Central)",
+            coaching_points: {
+                title: "Free Kick (Central)",
+                description: "Direct shot or combination play from a central position 20-30m from goal.",
+                key_points: [
+                    "Wall must jump and turn -- goalkeeper covers the low shot",
+                    "Taker can go over the wall or play a short combination",
+                    "Runners make dummy runs to create confusion in the wall gap",
+                    "If the ball is passed short, the receiver must shoot first time"
+                ]
+            },
             taker: { x: 72, y: 50 },
             attackers: [
                 { x: 85, y: 42 }, { x: 85, y: 50 }, { x: 85, y: 58 },
@@ -365,6 +584,16 @@ const TACTICAL_BOARD = {
         },
         "freekick-wide-left": {
             label: "Free Kick (Wide Left)",
+            coaching_points: {
+                title: "Free Kick (Wide Left)",
+                description: "Crossing opportunity from the left channel. Attackers target specific zones in the box.",
+                key_points: [
+                    "Taker delivers to the back post where the tallest attacker runs",
+                    "Near post runner makes a decoy run to pull the defense forward",
+                    "Edge-of-box player picks up any clearance for a shot",
+                    "Two players stay back to prevent a counter-attack"
+                ]
+            },
             taker: { x: 70, y: 10 },
             attackers: [
                 { x: 88, y: 40 }, { x: 90, y: 50 }, { x: 88, y: 60 },
@@ -377,6 +606,16 @@ const TACTICAL_BOARD = {
         },
         "freekick-wide-right": {
             label: "Free Kick (Wide Right)",
+            coaching_points: {
+                title: "Free Kick (Wide Right)",
+                description: "Crossing opportunity from the right channel. Near post and far post runners required.",
+                key_points: [
+                    "In-swinging delivery from the right targets the six-yard box",
+                    "One runner attacks the near post for a flick-on header",
+                    "Second runner arrives at the back post for the finish",
+                    "Set a block on the nearest defender to free up the runner"
+                ]
+            },
             taker: { x: 70, y: 90 },
             attackers: [
                 { x: 88, y: 40 }, { x: 90, y: 50 }, { x: 88, y: 60 },
@@ -389,6 +628,16 @@ const TACTICAL_BOARD = {
         },
         "penalty": {
             label: "Penalty",
+            coaching_points: {
+                title: "Penalty Kick",
+                description: "One-on-one from 12 yards. Technique and composure under pressure.",
+                key_points: [
+                    "Pick a side and commit -- do not change your mind mid-run",
+                    "Place the ball low and to the corner for highest conversion",
+                    "Goalkeeper research: know the taker's preferred side",
+                    "Rebound runners position at the edge of the box"
+                ]
+            },
             taker: { x: 78, y: 50 },
             attackers: [
                 { x: 72, y: 35 }, { x: 72, y: 50 }, { x: 72, y: 65 },
@@ -400,6 +649,16 @@ const TACTICAL_BOARD = {
         },
         "throwin-left": {
             label: "Throw-in (Left)",
+            coaching_points: {
+                title: "Throw-in (Left Side)",
+                description: "Long throw or short option from the left flank. Maintain possession or create a chance.",
+                key_points: [
+                    "Short throw to the nearest player maintains possession",
+                    "Long throw into the box is a set-piece opportunity",
+                    "Players must make space with a body feint before receiving",
+                    "If under pressure, throw back to the goalkeeper to reset"
+                ]
+            },
             taker: { x: 50, y: 0 },
             attackers: [
                 { x: 55, y: 20 }, { x: 60, y: 35 }, { x: 50, y: 45 },
@@ -411,6 +670,16 @@ const TACTICAL_BOARD = {
         },
         "throwin-right": {
             label: "Throw-in (Right)",
+            coaching_points: {
+                title: "Throw-in (Right Side)",
+                description: "Throw-in from the right flank. Focus on quick throw-ins to catch the opposition off guard.",
+                key_points: [
+                    "Quick throw-in before the defense sets up can create chances",
+                    "Target the player making a run behind the fullback",
+                    "If no forward option is available, recycle to the center-back",
+                    "Second player peels away to offer a safe short option"
+                ]
+            },
             taker: { x: 50, y: 100 },
             attackers: [
                 { x: 55, y: 80 }, { x: 60, y: 65 }, { x: 50, y: 55 },
