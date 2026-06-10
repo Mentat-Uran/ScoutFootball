@@ -494,7 +494,6 @@ def main():
         importance = permutation_feature_importance(
             best_params, test_df, test_team_pts, train_df, device,
             n_repeats=args.importance_repeats, calibration_bins=args.calibration_bins,
-            points_calibrator=optimized_points_calibrator,
         )
         for _, row in importance.iterrows():
             print(f"  {row['feature']:<20s} drop={row['spearman_drop_mean']:+.4f}")
