@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from scoutfootball.models import TimeSplitConfig
 from scoutfootball.models.match_prediction import (
+    DixonColesModel,
     fit_dixon_coles,
     fit_independent_poisson,
     predict_match,
@@ -228,6 +230,189 @@ def _outcome_label(home_goals: int, away_goals: int) -> str:
     if home_goals < away_goals:
         return "away_win"
     return "draw"
+
+
+@dataclass(frozen=True)
+class DCCalibrationResult:
+    """Calibration metrics for the Dixon-Coles model by score bucket."""
+
+    predictions: pd.DataFrame
+    calibration: pd.DataFrame
+    metrics: dict[str, float]
+
+
+def run_dc_calibration_backtest(
+    team_match_df: pd.DataFrame,
+    model_root: Path,
+    *,
+    max_goals: int = 10,
+) -> DCCalibrationResult:
+    """Evaluate DC calibration against held-out or full data.
+
+    Loads the saved Dixon-Coles artifacts, predicts every match in
+    *team_match_df*, and returns predicted-vs-actual frequency per
+    score bucket together with overall log-loss and Brier metrics.
+
+    Parameters
+    ----------
+    team_match_df : DataFrame with columns: team_id, is_home, goals_for,
+        goals_against, match_id, match_date.
+    model_root : Path to the model root directory (e.g. data/models).
+        Must contain artifacts/dixon_coles_results.parquet and
+        artifacts/dc_team_strengths.parquet.
+    max_goals : Maximum goal count for the score matrix.
+
+    Returns
+    -------
+    DCCalibrationResult with predictions, calibration DataFrame, and metrics.
+    """
+    model = _load_dc_artifacts(model_root)
+    fixtures = _build_fixture_frame(team_match_df)
+
+    prediction_rows: list[dict] = []
+    for _, fixture in fixtures.iterrows():
+        home_id = str(fixture["home_team_id"])
+        away_id = str(fixture["away_team_id"])
+        try:
+            prediction = predict_match_dc(model, home_id, away_id, max_goals=max_goals)
+        except Exception:
+            continue
+
+        hg = int(fixture["home_goals"])
+        ag = int(fixture["away_goals"])
+
+        if hg >= prediction.score_matrix.shape[0] or ag >= prediction.score_matrix.shape[1]:
+            continue
+
+        exact_prob = float(prediction.score_matrix.loc[hg, ag])
+        outcome_label = _outcome_label(hg, ag)
+        score_bucket = f"{hg}-{ag}"
+
+        prediction_rows.append(
+            {
+                "match_id": fixture["match_id"],
+                "match_date": fixture["match_date"],
+                "home_team_id": home_id,
+                "away_team_id": away_id,
+                "home_goals": hg,
+                "away_goals": ag,
+                "score_bucket": score_bucket,
+                "exact_score_probability": exact_prob,
+                "home_win_probability": prediction.summary.home_win,
+                "draw_probability": prediction.summary.draw,
+                "away_win_probability": prediction.summary.away_win,
+                "actual_outcome": outcome_label,
+                "home_lambda": prediction.home_lambda,
+                "away_lambda": prediction.away_lambda,
+            },
+        )
+
+    if not prediction_rows:
+        raise ValueError("DC calibration backtest produced no predictions")
+
+    predictions = pd.DataFrame.from_records(prediction_rows)
+
+    # --- Overall metrics ---
+    metrics: dict[str, float] = {
+        "log_loss_exact": float(_exact_score_log_loss(predictions)),
+        "brier_1x2": float(_brier_1x2(predictions)),
+        "rps_1x2": float(_ranked_probability_score(predictions)),
+        "n_matches": float(len(predictions)),
+    }
+
+    # --- Per-score-bucket calibration ---
+    calibration = _compute_score_bucket_calibration(predictions)
+
+    return DCCalibrationResult(
+        predictions=predictions,
+        calibration=calibration,
+        metrics=metrics,
+    )
+
+
+def _load_dc_artifacts(model_root: Path) -> DixonColesModel:
+    """Reconstruct a DixonColesModel from saved parquet artifacts."""
+    artifact_dir = Path(model_root) / "artifacts"
+    results_path = artifact_dir / "dixon_coles_results.parquet"
+    strengths_path = artifact_dir / "dc_team_strengths.parquet"
+
+    if not results_path.exists():
+        raise FileNotFoundError(f"Missing DC results artifact: {results_path}")
+    if not strengths_path.exists():
+        raise FileNotFoundError(f"Missing DC strengths artifact: {strengths_path}")
+
+    results_df = pd.read_parquet(results_path)
+    strengths_df = pd.read_parquet(strengths_path)
+
+    row = results_df.iloc[0]
+    team_attack = dict(
+        zip(strengths_df["team_id"].astype(str), strengths_df["attack_strength"], strict=False),
+    )
+    team_defense = dict(
+        zip(strengths_df["team_id"].astype(str), strengths_df["defense_strength"], strict=False),
+    )
+
+    hld = row.get("half_life_days")
+    return DixonColesModel(
+        team_attack=team_attack,
+        team_defense=team_defense,
+        home_advantage=float(row["home_advantage"]),
+        rho=float(row["rho"]),
+        league_mean_goals=float(row["league_mean_goals"]),
+        num_matches=int(row["num_matches"]),
+        half_life_days=float(hld) if pd.notna(hld) else None,
+    )
+
+
+def _compute_score_bucket_calibration(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Compute predicted vs actual frequency for each score bucket.
+
+    Returns a DataFrame with columns:
+      score_bucket, n_matches, actual_pct, mean_predicted_pct,
+      calibration_error, log_loss_bucket
+    """
+    # Cap buckets: individual scores 0-0 through 3-3, everything else is "other"
+    common_buckets = [
+        "0-0", "1-0", "0-1", "1-1",
+        "2-0", "0-2", "2-1", "1-2",
+        "3-0", "0-3", "3-1", "1-3", "2-2", "3-2", "2-3", "3-3",
+    ]
+
+    preds = predictions.copy()
+    preds["bucket"] = preds["score_bucket"].where(
+        preds["score_bucket"].isin(common_buckets), other="other",
+    )
+
+    bucket_rows: list[dict] = []
+    total = len(preds)
+
+    for bucket, group in preds.groupby("bucket", sort=False):
+        n = len(group)
+        actual_pct = n / total * 100.0
+        mean_predicted_pct = float(group["exact_score_probability"].mean()) * 100.0
+        calibration_error = abs(actual_pct - mean_predicted_pct)
+        clipped_probs = group["exact_score_probability"].clip(lower=1e-12)
+        log_loss_bucket = float(-(np.log(clipped_probs)).mean())
+
+        bucket_rows.append(
+            {
+                "score_bucket": bucket,
+                "n_matches": n,
+                "actual_pct": round(actual_pct, 2),
+                "mean_predicted_pct": round(mean_predicted_pct, 2),
+                "calibration_error": round(calibration_error, 2),
+                "log_loss_bucket": round(log_loss_bucket, 4),
+            },
+        )
+
+    cal_df = pd.DataFrame(bucket_rows)
+    # Sort: common buckets first in order, then "other"
+    bucket_order = {b: i for i, b in enumerate(common_buckets)}
+    bucket_order["other"] = len(common_buckets)
+    cal_df["_sort"] = cal_df["score_bucket"].map(bucket_order).fillna(len(common_buckets))
+    cal_df = cal_df.sort_values("_sort").drop(columns=["_sort"]).reset_index(drop=True)
+
+    return cal_df
 
 
 def run_dixon_coles_backtest(
