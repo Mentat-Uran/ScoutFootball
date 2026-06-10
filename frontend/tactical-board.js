@@ -260,6 +260,69 @@ const TACTICAL_BOARD = {
         };
     },
 
+    /* ── Training equipment factories ─────────────────────────────── */
+    createCone(x, y, color = "#ff9800") {
+        return {
+            id: this._uuid(),
+            type: "cone",
+            x, y,
+            color: this._safeString(color, "#ff9800").slice(0, 32),
+            radius: 1.5,
+            locked: false,
+            visible: true,
+        };
+    },
+
+    createMarker(x, y, color = "#4caf50") {
+        return {
+            id: this._uuid(),
+            type: "marker",
+            x, y,
+            color: this._safeString(color, "#4caf50").slice(0, 32),
+            radius: 1.5,
+            locked: false,
+            visible: true,
+        };
+    },
+
+    createPole(x, y, height = 6, color = "#ffeb3b") {
+        return {
+            id: this._uuid(),
+            type: "pole",
+            x, y,
+            height: this._clampNumber(height, 2, 20, 6),
+            color: this._safeString(color, "#ffeb3b").slice(0, 32),
+            locked: false,
+            visible: true,
+        };
+    },
+
+    createLadder(x, y, width = 10, height = 8) {
+        return {
+            id: this._uuid(),
+            type: "ladder",
+            x, y,
+            width: this._clampNumber(width, 2, 30, 10),
+            height: this._clampNumber(height, 2, 20, 8),
+            color: "#ffffff",
+            locked: false,
+            visible: true,
+        };
+    },
+
+    createMiniGoal(x, y, width = 8, height = 5) {
+        return {
+            id: this._uuid(),
+            type: "minigoal",
+            x, y,
+            width: this._clampNumber(width, 2, 30, 8),
+            height: this._clampNumber(height, 2, 20, 5),
+            color: "rgba(255,255,255,0.6)",
+            locked: false,
+            visible: true,
+        };
+    },
+
     /* ── Set-piece presets ────────────────────────────────────────── */
     SET_PIECE_PRESETS: {
         "corner-left": {
@@ -593,7 +656,7 @@ const TACTICAL_BOARD = {
 
     _sanitizeObject(object) {
         if (!object || typeof object !== "object") return null;
-        const type = ["player", "ball", "arrow", "zone", "text", "path", "rect", "ellipse", "bench"].includes(object.type)
+        const type = ["player", "ball", "arrow", "zone", "text", "path", "rect", "ellipse", "bench", "cone", "marker", "pole", "ladder", "minigoal"].includes(object.type)
             ? object.type
             : "player";
         const safe = {
@@ -659,6 +722,25 @@ const TACTICAL_BOARD = {
         if (type === "text") {
             safe.text = this._safeString(object.text).slice(0, this.MAX_TEXT_LENGTH);
             safe.fontSize = this._clampNumber(object.fontSize, 8, 36, 14);
+        }
+        if (type === "cone" || type === "marker") {
+            safe.color = this._safeString(object.color, type === "cone" ? "#ff9800" : "#4caf50").slice(0, 32);
+            safe.radius = this._clampNumber(object.radius, 0.5, 5, 1.5);
+        }
+        if (type === "pole") {
+            safe.height = this._clampNumber(object.height, 2, 20, 6);
+            safe.color = this._safeString(object.color, "#ffeb3b").slice(0, 32);
+            safe.width = 0.3;
+        }
+        if (type === "ladder") {
+            safe.width = this._clampNumber(object.width, 2, 30, 10);
+            safe.height = this._clampNumber(object.height, 2, 20, 8);
+            safe.color = this._safeString(object.color, "#ffffff").slice(0, 32);
+        }
+        if (type === "minigoal") {
+            safe.width = this._clampNumber(object.width, 2, 30, 8);
+            safe.height = this._clampNumber(object.height, 2, 20, 5);
+            safe.color = this._safeString(object.color, "rgba(255,255,255,0.6)").slice(0, 48);
         }
         return safe;
     },
@@ -901,13 +983,64 @@ const TACTICAL_BOARD = {
                 continue;
             }
             const interp = { ...toObj };
-            if (toObj.type === "player" || toObj.type === "ball" || toObj.type === "text" || toObj.type === "bench") {
+            if (toObj.type === "player" || toObj.type === "ball" || toObj.type === "text" || toObj.type === "bench" || toObj.type === "cone" || toObj.type === "marker" || toObj.type === "pole") {
                 interp.x = fromObj.x + (toObj.x - fromObj.x) * t;
                 interp.y = fromObj.y + (toObj.y - fromObj.y) * t;
             }
             result.push(interp);
         }
         return result;
+    },
+
+    /* ── Team Templates ─────────────────────────────────────────────── */
+    saveTeamTemplate(name, team = "home") {
+        if (!name || typeof name !== "string") return false;
+        const safeName = this._safeString(name).replace(/[^a-zA-Z0-9._\-\s]/g, "").slice(0, 60).trim();
+        if (!safeName) return false;
+        try {
+            const players = [];
+            /* We accept either a project object or rely on caller to pass objects */
+            const src = (typeof team === "object" && Array.isArray(team.objects)) ? team.objects : [];
+            for (const obj of src) {
+                if (obj.type === "player" && obj.team === (typeof team === "string" ? team : "home")) {
+                    players.push({ x: obj.x, y: obj.y, label: obj.label, number: obj.number, team: obj.team });
+                }
+            }
+            const template = { name: safeName, team: typeof team === "string" ? team : "home", players, created: Date.now() };
+            localStorage.setItem(`tactical-team-template-${safeName}`, JSON.stringify(template));
+            return true;
+        } catch { return false; }
+    },
+
+    loadTeamTemplate(name, team = "home") {
+        if (!name) return [];
+        const safeName = this._safeString(name).replace(/[^a-zA-Z0-9._\-\s]/g, "").slice(0, 60).trim();
+        try {
+            const data = localStorage.getItem(`tactical-team-template-${safeName}`);
+            if (!data) return [];
+            const template = JSON.parse(data);
+            if (!Array.isArray(template.players)) return [];
+            return template.players.map((p, i) => this.createPlayer(p.x, p.y, team, p.label || "", p.number || i + 1));
+        } catch { return []; }
+    },
+
+    listTeamTemplates() {
+        const templates = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("tactical-team-template-")) {
+                try {
+                    const data = JSON.parse(localStorage.getItem(key));
+                    templates.push({ name: data.name, team: data.team, playerCount: (data.players || []).length, created: data.created });
+                } catch { /* skip */ }
+            }
+        }
+        return templates.sort((a, b) => (b.created || 0) - (a.created || 0));
+    },
+
+    deleteTeamTemplate(name) {
+        const safeName = this._safeString(name).replace(/[^a-zA-Z0-9._\-\s]/g, "").slice(0, 60).trim();
+        try { localStorage.removeItem(`tactical-team-template-${safeName}`); return true; } catch { return false; }
     },
 };
 

@@ -114,6 +114,18 @@ const i18n = {
         license_th_attribution: "署名要求",
         license_th_url: "URL",
         license_attribution_notice: "StatsBomb 署名声明",
+        model_version: "模型版本",
+        model_comparison: "模型对比",
+        coverage_warning: "▲ 覆盖率低于90%",
+        log_loss: "对数损失",
+        send_to_tactical: "发送到战术板",
+        expand_details: "展开详情",
+        collapse_details: "收起详情",
+        copy_command: "复制命令",
+        train_seasons: "训练赛季",
+        test_seasons: "测试赛季",
+        dependency_versions: "依赖版本",
+        toggle_ratings: "切换评分",
     },
     en: {
         nav_overview: "Overview",
@@ -230,6 +242,18 @@ const i18n = {
         license_th_attribution: "Attribution",
         license_th_url: "URL",
         license_attribution_notice: "StatsBomb Attribution Notice",
+        model_version: "Model version",
+        model_comparison: "Model comparison",
+        coverage_warning: "▲ coverage below 90%",
+        log_loss: "Log loss",
+        send_to_tactical: "Send to tactical board",
+        expand_details: "Expand details",
+        collapse_details: "Collapse details",
+        copy_command: "Copy command",
+        train_seasons: "Train seasons",
+        test_seasons: "Test seasons",
+        dependency_versions: "Dependency versions",
+        toggle_ratings: "Toggle ratings",
     },
 };
 
@@ -731,6 +755,39 @@ async function renderPlayerProfile() {
         badge.textContent = confidence;
         badge.className = `status-pill ${confidenceClass(confidence)}`;
     }
+
+    // Send to tactical board button
+    const tacticalActionsEl = document.getElementById("player-tactical-actions");
+    if (tacticalActionsEl) {
+        const zT = appState.lang === 'zh';
+        tacticalActionsEl.innerHTML = `<button class="text-button" id="btn-send-tactical" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">\u25C6 ${zT ? '发送到战术板' : 'Send to tactical board'}</button>`;
+        const sendBtn = document.getElementById("btn-send-tactical");
+        if (sendBtn) {
+            sendBtn.addEventListener("click", () => {
+                // Create or get tactical project
+                if (!tacticalProject) {
+                    tacticalProject = TACTICAL_BOARD.createProject("ScoutFootball \u6218\u672f\u677f");
+                }
+                // Add player to tactical board
+                const playerObj = {
+                    type: "player",
+                    x: 50,
+                    y: 50,
+                    radius: 3,
+                    color: "#4a90d9",
+                    label: escapeHtml(player.name),
+                    number: String(Math.round(detailScore || player.rating || 0)),
+                    rating: detailScore || player.rating || null,
+                    team: player.team || "",
+                    position: detailPosition || player.position || "",
+                };
+                tacticalProject.objects = tacticalProject.objects || [];
+                tacticalProject.objects.push(playerObj);
+                // Switch to tactical view
+                setView("tactical");
+            });
+        }
+    }
 }
 
 function getChart(id) {
@@ -1119,6 +1176,35 @@ async function renderMatches() {
             }
             if (rps != null) {
                 calibHtml += `<span style="color:var(--text-muted)">RPS:</span> <strong>${escapeHtml(String(Number(rps).toFixed(4)))}</strong>`;
+            }
+            calibHtml += `</div>`;
+        }
+
+        // Log-loss
+        const logLoss = predictionMeta.log_loss ?? predictionMeta.logloss ?? null;
+        if (logLoss != null) {
+            calibHtml += `<div style="margin-top:0.3rem;font-size:0.75rem">`;
+            calibHtml += `<span style="color:var(--text-muted)">${z ? '对数损失' : 'Log loss'}:</span> <strong>${escapeHtml(String(Number(logLoss).toFixed(4)))}</strong>`;
+            calibHtml += `</div>`;
+        }
+
+        // Model comparison section (Poisson vs Dixon-Coles side by side)
+        const poissonPred = predictionMeta.poisson_prediction ?? predictionMeta.poisson_pred ?? null;
+        const dcPred = predictionMeta.dixon_coles_prediction ?? predictionMeta.dc_pred ?? null;
+        if (poissonPred && dcPred) {
+            calibHtml += `<p style="margin:0.5rem 0 0.2rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? '模型对比' : 'Model comparison'}</p>`;
+            calibHtml += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.2rem 0.6rem;font-size:0.75rem">`;
+            calibHtml += `<div style="color:var(--text-muted)">${z ? '结果' : 'Outcome'}</div>`;
+            calibHtml += `<div style="color:var(--text-muted)">Poisson</div>`;
+            calibHtml += `<div style="color:var(--text-muted)">Dixon-Coles</div>`;
+            const outcomes = ['home', 'draw', 'away'];
+            const labels = [z ? '主胜' : 'Home', z ? '平局' : 'Draw', z ? '客胜' : 'Away'];
+            for (let i = 0; i < outcomes.length; i++) {
+                const pVal = poissonPred[outcomes[i]] ?? poissonPred[i] ?? null;
+                const dcVal = dcPred[outcomes[i]] ?? dcPred[i] ?? null;
+                calibHtml += `<div>${escapeHtml(labels[i])}</div>`;
+                calibHtml += `<div>${pVal != null ? (Number(pVal) * 100).toFixed(1) + '%' : '–'}</div>`;
+                calibHtml += `<div>${dcVal != null ? (Number(dcVal) * 100).toFixed(1) + '%' : '–'}</div>`;
             }
             calibHtml += `</div>`;
         }
@@ -1661,15 +1747,40 @@ function renderReports() {
                 .filter(Boolean)
                 .join("<hr style=\"border:none;border-top:1px solid var(--border,#333);margin:0.35rem 0\">");
 
+            // Dependency versions
+            const depVersions = run.dependency_versions || run.dependencies || args.dependency_versions || null;
+            let depHtml = '';
+            if (depVersions && typeof depVersions === 'object') {
+                const z4 = appState.lang === 'zh';
+                depHtml = `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z4 ? '依赖版本' : 'Dependency versions'}</p>`;
+                depHtml += `<div style="font-size:0.75rem;line-height:1.5">`;
+                for (const [k, v] of Object.entries(depVersions)) {
+                    depHtml += `<div><span style="color:var(--text-muted)">${escapeHtml(k)}:</span> ${escapeHtml(String(v))}</div>`;
+                }
+                depHtml += `</div>`;
+            }
+
+            // Reproduce command for copy button
+            const copyBtn = cmd
+                ? `<button class="text-button" data-copy-cmd="${escapeAttr(cmd)}" style="font-size:0.72rem;padding:0.15rem 0.4rem;margin-left:0.3rem" title="${z ? '复制命令' : 'Copy command'}">\u25C6 ${z ? '复制' : 'Copy'}</button>`
+                : '';
+
+            const fullDetailSections = [depHtml, detailSections].filter(Boolean)
+                .join("<hr style=\"border:none;border-top:1px solid var(--border,#333);margin:0.35rem 0\">");
+
+            const runIdx = run.run_id || `run_${Math.random().toString(36).slice(2, 8)}`;
+
             return `
             <div style="padding:0.6rem 0.8rem;border-bottom:1px solid var(--border,#333)">
                 <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
                     <strong style="font-size:0.85rem">${escapeHtml(run.run_id || "run")}</strong>
                     <span class="status-pill ${statusClass}">${statusText}</span>
                     ${spearman != null ? `<span style="font-size:0.78rem;color:var(--text-muted)">sp ${Number(spearman).toFixed(3)} / pr ${_fmtMetric(pearson)}</span>` : ""}
+                    ${copyBtn}
+                    ${fullDetailSections ? `<button class="text-button" data-toggle-run="${escapeAttr(runIdx)}" style="font-size:0.72rem;padding:0.15rem 0.4rem;margin-left:auto">\u25B6 ${z ? '展开详情' : 'Expand'}</button>` : ""}
                 </div>
                 <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;line-height:1.6">${detailParts.join(" · ")}</div>
-                ${detailSections ? `<div style="margin-top:0.35rem">${detailSections}</div>` : ""}
+                ${fullDetailSections ? `<div class="run-details-collapsed" data-run-details="${escapeAttr(runIdx)}" style="display:none;margin-top:0.35rem">${fullDetailSections}</div>` : ""}
             </div>`;
         }).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No model runs found</div>';
@@ -2250,6 +2361,48 @@ function bindEvents() {
         });
     }
 
+    // Tactical: toggle player ratings
+    const tacticalToggleRatings = document.getElementById("tactical-toggle-ratings");
+    if (tacticalToggleRatings) {
+        tacticalToggleRatings.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.showRatings = !TacticalRenderer.showRatings;
+                tacticalToggleRatings.classList.toggle("active", TacticalRenderer.showRatings);
+                TacticalRenderer.render();
+            }
+        });
+    }
+
+    // Reports: expand/collapse run details
+    document.addEventListener("click", (e) => {
+        const toggleBtn = e.target.closest("[data-toggle-run]");
+        if (toggleBtn) {
+            const runId = toggleBtn.dataset.toggleRun;
+            const detailsEl = document.querySelector(`[data-run-details="${runId}"]`);
+            if (detailsEl) {
+                const isHidden = detailsEl.style.display === "none";
+                detailsEl.style.display = isHidden ? "block" : "none";
+                toggleBtn.textContent = isHidden
+                    ? (appState.lang === "zh" ? "\u25BC \u6536\u8d77\u8be6\u60c5" : "\u25BC Collapse")
+                    : (appState.lang === "zh" ? "\u25B6 \u5c55\u5f00\u8be6\u60c5" : "\u25B6 Expand");
+            }
+        }
+    });
+
+    // Reports: copy run command
+    document.addEventListener("click", (e) => {
+        const copyBtn = e.target.closest("[data-copy-cmd]");
+        if (copyBtn) {
+            const cmd = copyBtn.dataset.copyCmd;
+            if (cmd && navigator.clipboard) {
+                navigator.clipboard.writeText(cmd).then(() => {
+                    const orig = copyBtn.textContent;
+                    copyBtn.textContent = "\u2713 Copied";
+                    setTimeout(() => { copyBtn.textContent = orig; }, 1500);
+                }).catch(() => {});
+            }
+        }
+    });
 
     // Scouting: status badge click to cycle
     document.addEventListener("click", (e) => {
@@ -2327,6 +2480,102 @@ let wcApiData = {
     squadCache: {},     // team -> from /world-cup/squads/{team}
     predictions: null,  // from /world-cup/predictions
     apiOnline: false,
+};
+
+/* ── Demo squad data (fallback when WC API is offline) ──────────────── */
+const WC_DEMO_SQUADS = {
+    "Argentina": [
+        {name:"Lionel Messi",position:"AM",club:"Inter Miami",league:"MLS"},
+        {name:"Julian Alvarez",position:"ST",club:"Atletico Madrid",league:"La Liga"},
+        {name:"Lautaro Martinez",position:"ST",club:"Inter Milan",league:"Serie A"},
+        {name:"Rodrigo De Paul",position:"CM",club:"Atletico Madrid",league:"La Liga"},
+        {name:"Enzo Fernandez",position:"CM",club:"Chelsea",league:"Premier League"},
+        {name:"Alexis Mac Allister",position:"CM",club:"Liverpool",league:"Premier League"},
+        {name:"Emiliano Martinez",position:"GK",club:"Aston Villa",league:"Premier League"},
+        {name:"Cristian Romero",position:"CB",club:"Tottenham",league:"Premier League"},
+        {name:"Nahuel Molina",position:"FB",club:"Atletico Madrid",league:"La Liga"},
+        {name:"Leandro Paredes",position:"DM",club:"Roma",league:"Serie A"},
+        {name:"Paulo Dybala",position:"AM",club:"Roma",league:"Serie A"},
+    ],
+    "Brazil": [
+        {name:"Vinicius Junior",position:"W",club:"Real Madrid",league:"La Liga"},
+        {name:"Rodrygo",position:"W",club:"Real Madrid",league:"La Liga"},
+        {name:"Raphinha",position:"W",club:"Barcelona",league:"La Liga"},
+        {name:"Bruno Guimaraes",position:"CM",club:"Newcastle",league:"Premier League"},
+        {name:"Marquinhos",position:"CB",club:"PSG",league:"Ligue 1"},
+        {name:"Alisson",position:"GK",club:"Liverpool",league:"Premier League"},
+        {name:"Gabriel Magalhaes",position:"CB",club:"Arsenal",league:"Premier League"},
+        {name:"Endrick",position:"ST",club:"Real Madrid",league:"La Liga"},
+        {name:"Casemiro",position:"DM",club:"Manchester United",league:"Premier League"},
+    ],
+    "France": [
+        {name:"Kylian Mbappe",position:"W",club:"Real Madrid",league:"La Liga"},
+        {name:"Ousmane Dembele",position:"W",club:"PSG",league:"Ligue 1"},
+        {name:"Antoine Griezmann",position:"AM",club:"Atletico Madrid",league:"La Liga"},
+        {name:"Aurelien Tchouameni",position:"DM",club:"Real Madrid",league:"La Liga"},
+        {name:"Eduardo Camavinga",position:"CM",club:"Real Madrid",league:"La Liga"},
+        {name:"William Saliba",position:"CB",club:"Arsenal",league:"Premier League"},
+        {name:"Theo Hernandez",position:"FB",club:"AC Milan",league:"Serie A"},
+        {name:"Mike Maignan",position:"GK",club:"AC Milan",league:"Serie A"},
+        {name:"Jules Kounde",position:"CB",club:"Barcelona",league:"La Liga"},
+    ],
+    "England": [
+        {name:"Jude Bellingham",position:"AM",club:"Real Madrid",league:"La Liga"},
+        {name:"Bukayo Saka",position:"W",club:"Arsenal",league:"Premier League"},
+        {name:"Phil Foden",position:"W",club:"Man City",league:"Premier League"},
+        {name:"Declan Rice",position:"DM",club:"Arsenal",league:"Premier League"},
+        {name:"Cole Palmer",position:"AM",club:"Chelsea",league:"Premier League"},
+        {name:"Harry Kane",position:"ST",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Trent Alexander-Arnold",position:"FB",club:"Liverpool",league:"Premier League"},
+        {name:"Marc Guehi",position:"CB",club:"Crystal Palace",league:"Premier League"},
+        {name:"Jordan Pickford",position:"GK",club:"Everton",league:"Premier League"},
+    ],
+    "Germany": [
+        {name:"Florian Wirtz",position:"AM",club:"Leverkusen",league:"Bundesliga"},
+        {name:"Jamal Musiala",position:"AM",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Leroy Sane",position:"W",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Joshua Kimmich",position:"DM",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Antonio Rudiger",position:"CB",club:"Real Madrid",league:"La Liga"},
+        {name:"Kai Havertz",position:"ST",club:"Arsenal",league:"Premier League"},
+        {name:"Toni Kroos",position:"CM",club:"Real Madrid",league:"La Liga"},
+    ],
+    "Spain": [
+        {name:"Lamine Yamal",position:"W",club:"Barcelona",league:"La Liga"},
+        {name:"Pedri",position:"CM",club:"Barcelona",league:"La Liga"},
+        {name:"Rodri",position:"DM",club:"Man City",league:"Premier League"},
+        {name:"Gavi",position:"CM",club:"Barcelona",league:"La Liga"},
+        {name:"Nico Williams",position:"W",club:"Athletic Bilbao",league:"La Liga"},
+        {name:"Dani Olmo",position:"AM",club:"Barcelona",league:"La Liga"},
+        {name:"Alvaro Morata",position:"ST",club:"AC Milan",league:"Serie A"},
+    ],
+    "Portugal": [
+        {name:"Cristiano Ronaldo",position:"ST",club:"Al Nassr",league:"Saudi Pro League"},
+        {name:"Bruno Fernandes",position:"AM",club:"Manchester United",league:"Premier League"},
+        {name:"Bernardo Silva",position:"W",club:"Man City",league:"Premier League"},
+        {name:"Rafael Leao",position:"W",club:"AC Milan",league:"Serie A"},
+        {name:"Ruben Dias",position:"CB",club:"Man City",league:"Premier League"},
+        {name:"Diogo Jota",position:"W",club:"Liverpool",league:"Premier League"},
+        {name:"Vitinha",position:"CM",club:"PSG",league:"Ligue 1"},
+    ],
+    "Netherlands": [
+        {name:"Xavi Simons",position:"AM",club:"RB Leipzig",league:"Bundesliga"},
+        {name:"Virgil van Dijk",position:"CB",club:"Liverpool",league:"Premier League"},
+        {name:"Frenkie de Jong",position:"CM",club:"Barcelona",league:"La Liga"},
+        {name:"Cody Gakpo",position:"W",club:"Liverpool",league:"Premier League"},
+        {name:"Matthijs de Ligt",position:"CB",club:"Bayern Munich",league:"Bundesliga"},
+        {name:"Denzel Dumfries",position:"FB",club:"Inter Milan",league:"Serie A"},
+    ],
+    "Belgium": [
+        {name:"Kevin De Bruyne",position:"AM",club:"Man City",league:"Premier League"},
+        {name:"Romelu Lukaku",position:"ST",club:"Napoli",league:"Serie A"},
+        {name:"Jeremy Doku",position:"W",club:"Man City",league:"Premier League"},
+        {name:"Amadou Onana",position:"DM",club:"Aston Villa",league:"Premier League"},
+    ],
+    "Croatia": [
+        {name:"Luka Modric",position:"CM",club:"Real Madrid",league:"La Liga"},
+        {name:"Josko Gvardiol",position:"CB",club:"Man City",league:"Premier League"},
+        {name:"Marcelo Brozovic",position:"DM",club:"Al Nassr",league:"Saudi Pro League"},
+    ],
 };
 
 async function fetchWcGroups() {
@@ -2410,7 +2659,37 @@ function wcGetSquad(team) {
             confidence: p.rating_confidence ? p.rating_confidence.toUpperCase() : "NONE",
         }));
     }
+    // Fallback to demo data when API is offline
+    const demo = WC_DEMO_SQUADS[team];
+    if (demo) {
+        return demo.map((p) => ({...p, hasRating: false, rating: 0, confidence: "NONE"}));
+    }
     return [];
+}
+
+/* Match squad player names against the global ratings (players) array */
+function matchSquadWithRatings(squad) {
+    if (!players || players.length === 0) return squad;
+    const ratingMap = {};
+    for (const p of players) {
+        const key = (p.name || "").toLowerCase();
+        if (key) ratingMap[key] = p;
+    }
+    return squad.map((sp) => {
+        if (sp.hasRating) return sp;
+        const key = (sp.name || "").toLowerCase();
+        const match = ratingMap[key];
+        if (match) {
+            return {
+                ...sp,
+                hasRating: true,
+                rating: match.rating,
+                confidence: match.confidence || "LOW",
+                position: sp.position || match.position,
+            };
+        }
+        return sp;
+    });
 }
 
 // Compute team strength from API data or fallback
@@ -2530,10 +2809,12 @@ function renderWcSchedule() {
 
 function renderWcSquads() {
     const team = appState.wcSquadTeam;
-    const squad = wcGetSquad(team);
+    const rawSquad = wcGetSquad(team);
+    // Enrich squad with real ratings from /ratings API data
+    const squad = matchSquadWithRatings(rawSquad);
     const rated = squad.filter((p) => p.hasRating);
     const big5 = squad.filter((p) => WC_BIG5.has(p.league));
-    const avgRating = rated.length > 0 ? (rated.reduce((s, p) => s + p.rating, 0) / rated.length).toFixed(2) : "—";
+    const avgRating = rated.length > 0 ? (rated.reduce((s, p) => s + p.rating, 0) / rated.length).toFixed(2) : "\u2014";
     const group = wcTeamGroup(team);
 
     // Show DEMO badge if API offline
@@ -2554,25 +2835,39 @@ function renderWcSquads() {
         }
     }
 
+    // Coverage summary: X/Y players have ratings
+    const coverageLabel = appState.lang === "zh"
+        ? `${rated.length}/${squad.length} \u7403\u5458\u6709\u8bc4\u5206`
+        : `${rated.length}/${squad.length} players rated`;
+
     document.getElementById("wc-squad-summary").innerHTML = `
         <div class="wc-metric"><span class="metric-value">${squad.length}</span><span>${escapeHtml(t("wc_squad_size"))}</span></div>
         <div class="wc-metric"><span class="metric-value">${rated.length}</span><span>${escapeHtml(t("wc_rated"))}</span></div>
         <div class="wc-metric"><span class="metric-value">${big5.length}</span><span>${escapeHtml(t("wc_big5"))}</span></div>
         <div class="wc-metric"><span class="metric-value">${escapeHtml(avgRating)}</span><span>${escapeHtml(t("wc_avg_rating"))}</span></div>
         <div class="wc-metric"><span class="metric-value">${escapeHtml(group)}</span><span>${escapeHtml(t("wc_group_col"))}</span></div>
+        <div class="wc-metric"><span class="metric-value">${escapeHtml(coverageLabel)}</span><span>\u25CE ${escapeHtml(t("coverage"))}</span></div>
     `;
 
     const tbody = document.getElementById("wc-squad-table");
-    tbody.innerHTML = squad.map((p) => `<tr>
-        <td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.position)}</td><td>${escapeHtml(p.club)}</td><td>${escapeHtml(p.league)}</td>
-        <td>${p.hasRating ? p.rating.toFixed(2) : "—"}</td>
-        <td><span class="status-pill ${p.hasRating ? (p.confidence === "HIGH" ? "status-high" : "status-medium") : "status-low"}">${escapeHtml(p.hasRating ? p.confidence : t("wc_no_data"))}</span></td>
-    </tr>`).join("");
+    tbody.innerHTML = squad.map((p) => {
+        const confClass = p.hasRating
+            ? (p.confidence === "HIGH" ? "status-high" : "status-medium")
+            : "status-low";
+        const confText = p.hasRating ? p.confidence : (appState.lang === "zh" ? "\u65E0\u6570\u636E" : "N/A");
+        const ratingText = p.hasRating ? p.rating.toFixed(2) : "\u2014";
+        const posText = p.position || "\u2014";
+        return `<tr>
+            <td>${escapeHtml(p.name)}</td><td>${escapeHtml(posText)}</td><td>${escapeHtml(p.club)}</td><td>${escapeHtml(p.league)}</td>
+            <td>${escapeHtml(ratingText)}</td>
+            <td><span class="status-pill ${confClass}">${escapeHtml(confText)}</span></td>
+        </tr>`;
+    }).join("");
 
     // Rating distribution chart
     const chart = getChart("wc-squad-chart");
     if (!chart) return;
-    const chartData = rated.sort((a, b) => b.rating - a.rating);
+    const chartData = [...rated].sort((a, b) => b.rating - a.rating);
     chart.setOption({
         animation: false,
         grid: {left: 80, right: 20, top: 20, bottom: 40},
@@ -2583,7 +2878,7 @@ function renderWcSquads() {
     chart.resize();
 
     if (squad.length > 0 && rated.length / squad.length < 0.5) {
-        document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">▲ ${escapeHtml(t("wc_low_coverage"))}</div>`;
+        document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">\u25B2 ${escapeHtml(t("wc_low_coverage"))}</div>`;
     }
 }
 
@@ -3035,6 +3330,8 @@ const SCOUT_QUEUE_KEY = "scout-queue-statuses";
 const SCOUT_NOTES_KEY = "scout-shortlist-notes";
 const SCOUT_LASTVISIT_KEY = "scout-watchlist-lastvisit";
 const SCOUT_SNAPSHOT_KEY = "scout-watchlist-snapshot";
+const PLAYER_WATCHLIST_KEY = "sf-player-watchlist";
+const PLAYER_SHORTLIST_KEY = "sf-player-shortlist";
 const STATUS_CYCLE = ["pending", "reviewing", "approved", "rejected"];
 const STATUS_ICONS = { pending: "\u25CB", reviewing: "\u25B2", approved: "\u2713", rejected: "\u2717" };
 
@@ -3042,6 +3339,72 @@ let scoutQueueStatuses = {};
 let scoutShortlistNotes = {};
 let scoutSortMode = "priority";
 let watchlistDiffCount = 0;
+
+/* ── Player Watchlist / Shortlist (localStorage) ─────────────────── */
+function getPlayerWatchlist() {
+    try { return JSON.parse(localStorage.getItem(PLAYER_WATCHLIST_KEY)) || []; } catch { return []; }
+}
+function savePlayerWatchlist(list) {
+    try { localStorage.setItem(PLAYER_WATCHLIST_KEY, JSON.stringify(list)); } catch {}
+}
+function getPlayerShortlist() {
+    try { return JSON.parse(localStorage.getItem(PLAYER_SHORTLIST_KEY)) || []; } catch { return []; }
+}
+function savePlayerShortlist(list) {
+    try { localStorage.setItem(PLAYER_SHORTLIST_KEY, JSON.stringify(list)); } catch {}
+}
+function isInPlayerWatchlist(playerKey) {
+    return getPlayerWatchlist().some((p) => p.key === playerKey);
+}
+function isInPlayerShortlist(playerKey) {
+    return getPlayerShortlist().some((p) => p.key === playerKey);
+}
+function togglePlayerWatchlist(player) {
+    const list = getPlayerWatchlist();
+    const idx = list.findIndex((p) => p.key === player.key);
+    if (idx >= 0) {
+        list.splice(idx, 1);
+    } else {
+        list.push({ key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating });
+    }
+    savePlayerWatchlist(list);
+    return idx < 0; // true if added
+}
+function togglePlayerShortlist(player) {
+    const list = getPlayerShortlist();
+    const idx = list.findIndex((p) => p.key === player.key);
+    if (idx >= 0) {
+        list.splice(idx, 1);
+    } else {
+        list.push({ key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating });
+    }
+    savePlayerShortlist(list);
+    return idx < 0;
+}
+function sendToTacticalBoard(player) {
+    if (!tacticalProject) {
+        tacticalProject = typeof TACTICAL_BOARD !== "undefined"
+            ? TACTICAL_BOARD.createProject("ScoutFootball \u6218\u672f\u677f")
+            : { title: "ScoutFootball \u6218\u672f\u677f", objects: [] };
+    }
+    // Add player marker to tactical project
+    const marker = {
+        type: "player_marker",
+        id: "pm_" + Date.now(),
+        label: player.name,
+        position: player.position,
+        rating: player.rating,
+        team: player.team,
+        x: 50 + Math.random() * 30 - 15,
+        y: 50 + Math.random() * 30 - 15,
+    };
+    if (!tacticalProject.objects) tacticalProject.objects = [];
+    tacticalProject.objects.push(marker);
+    if (typeof TACTICAL_BOARD !== "undefined" && TACTICAL_BOARD.saveProject) {
+        TACTICAL_BOARD.saveProject(tacticalProject);
+    }
+    setView("tactical");
+}
 
 function loadScoutQueueStatuses() {
     try { scoutQueueStatuses = JSON.parse(localStorage.getItem(SCOUT_QUEUE_KEY)) || {}; } catch { scoutQueueStatuses = {}; }

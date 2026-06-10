@@ -31,9 +31,13 @@ const TacticalRenderer = {
     showGrid: false,
     snapToGrid: false,
     ghostOpacity: 0.2,
+    showRatings: false,
     _penPoints: [],       // points collected during pen drawing
     _hoverCardEl: null,   // DOM element for player hover card
     _timelineEl: null,    // DOM element for timeline scrubber
+    _overlapIndex: 0,     // index for cycling through overlapping objects
+    _lastClickPos: null,  // last click position for overlap detection
+    _presentationMode: false, // presentation mode flag
 
     /* ── Initialize ─────────────────────────────────────────────────── */
     init(canvasId, project) {
@@ -130,6 +134,11 @@ const TacticalRenderer = {
                 case "rect":   this.drawRect(obj); break;
                 case "ellipse": this.drawEllipse(obj); break;
                 case "bench":  this.drawBench(obj); break;
+                case "cone":   this.drawCone(obj); break;
+                case "marker": this.drawMarker(obj); break;
+                case "pole":   this.drawPole(obj); break;
+                case "ladder": this.drawLadder(obj); break;
+                case "minigoal": this.drawMiniGoal(obj); break;
             }
         }
 
@@ -487,6 +496,27 @@ const TacticalRenderer = {
             ctx.textBaseline = "middle";
             ctx.fillText(obj.number || obj.label, pos.x, pos.y);
         }
+
+        // Rating badge
+        if (this.showRatings && obj.rating != null) {
+            const rating = Number(obj.rating);
+            const badgeR = Math.max(7, r * 0.45);
+            const bx = pos.x + r * 0.7;
+            const by = pos.y - r * 0.7;
+            const badgeColor = rating > 70 ? "#57d68d" : rating >= 50 ? "#f0c040" : "#ff6b6b";
+            ctx.fillStyle = badgeColor;
+            ctx.beginPath();
+            ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(0,0,0,0.4)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.fillStyle = "#000";
+            ctx.font = `bold ${Math.max(7, badgeR * 0.9)}px Inter, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(Math.round(rating), bx, by);
+        }
     },
 
     drawBench(obj) {
@@ -719,6 +749,110 @@ const TacticalRenderer = {
         if (obj.borderColor) {
             ctx.strokeStyle = obj.borderColor;
             ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+    },
+
+    /* ── Training Equipment Drawing ────────────────────────────────── */
+    drawCone(obj) {
+        const ctx = this.ctx;
+        const pos = this.toCanvas(obj.x, obj.y);
+        const r = (obj.radius || 1.5) * this.scale;
+        // Triangle (cone shape)
+        ctx.fillStyle = obj.color || "#ff9800";
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y - r);
+        ctx.lineTo(pos.x - r * 0.87, pos.y + r * 0.5);
+        ctx.lineTo(pos.x + r * 0.87, pos.y + r * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.3)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    },
+
+    drawMarker(obj) {
+        const ctx = this.ctx;
+        const pos = this.toCanvas(obj.x, obj.y);
+        const r = (obj.radius || 1.5) * this.scale;
+        // Diamond shape
+        ctx.fillStyle = obj.color || "#4caf50";
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y - r);
+        ctx.lineTo(pos.x + r, pos.y);
+        ctx.lineTo(pos.x, pos.y + r);
+        ctx.lineTo(pos.x - r, pos.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.3)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    },
+
+    drawPole(obj) {
+        const ctx = this.ctx;
+        const pos = this.toCanvas(obj.x, obj.y);
+        const h = (obj.height || 6) * this.scale;
+        const w = 0.3 * this.scale;
+        // Thin vertical line
+        ctx.fillStyle = obj.color || "#ffeb3b";
+        ctx.fillRect(pos.x - w / 2, pos.y - h / 2, w, h);
+        // Small circle at top
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y - h / 2, w * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    drawLadder(obj) {
+        const ctx = this.ctx;
+        const tl = this.toCanvas(obj.x, obj.y);
+        const w = (obj.width || 10) * this.scale;
+        const h = (obj.height || 8) * this.scale;
+        ctx.strokeStyle = obj.color || "#ffffff";
+        ctx.lineWidth = 1.5;
+        // Outer frame
+        ctx.strokeRect(tl.x, tl.y, w, h);
+        // Horizontal rungs (4 divisions)
+        const rungs = 4;
+        for (let i = 1; i < rungs; i++) {
+            const ry = tl.y + (h / rungs) * i;
+            ctx.beginPath();
+            ctx.moveTo(tl.x, ry);
+            ctx.lineTo(tl.x + w, ry);
+            ctx.stroke();
+        }
+    },
+
+    drawMiniGoal(obj) {
+        const ctx = this.ctx;
+        const tl = this.toCanvas(obj.x, obj.y);
+        const w = (obj.width || 8) * this.scale;
+        const h = (obj.height || 5) * this.scale;
+        // Goal frame (three sides, open bottom)
+        ctx.strokeStyle = obj.color || "rgba(255,255,255,0.6)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(tl.x, tl.y + h);
+        ctx.lineTo(tl.x, tl.y);
+        ctx.lineTo(tl.x + w, tl.y);
+        ctx.lineTo(tl.x + w, tl.y + h);
+        ctx.stroke();
+        // Net lines
+        ctx.strokeStyle = "rgba(255,255,255,0.15)";
+        ctx.lineWidth = 0.5;
+        const netDiv = 4;
+        for (let i = 1; i < netDiv; i++) {
+            const nx = tl.x + (w / netDiv) * i;
+            ctx.beginPath();
+            ctx.moveTo(nx, tl.y);
+            ctx.lineTo(nx, tl.y + h);
+            ctx.stroke();
+        }
+        for (let i = 1; i < netDiv; i++) {
+            const ny = tl.y + (h / netDiv) * i;
+            ctx.beginPath();
+            ctx.moveTo(tl.x, ny);
+            ctx.lineTo(tl.x + w, ny);
             ctx.stroke();
         }
     },
@@ -960,7 +1094,7 @@ const TacticalRenderer = {
         if (this.drawingMode === "eraser") {
             for (const obj of [...this.project.objects].reverse()) {
                 if (!obj.visible || obj.locked) continue;
-                if (obj.type === "player" || obj.type === "ball" || obj.type === "bench") {
+                if (obj.type === "player" || obj.type === "ball" || obj.type === "bench" || obj.type === "cone" || obj.type === "marker") {
                     const dx = x - obj.x, dy = y - obj.y;
                     if (dx * dx + dy * dy < (obj.radius + 2) * (obj.radius + 2)) {
                         this.pushUndo();
@@ -991,8 +1125,17 @@ const TacticalRenderer = {
                         if (this.onChange) this.onChange();
                         return;
                     }
-                } else if (obj.type === "zone" || obj.type === "rect") {
+                } else if (obj.type === "zone" || obj.type === "rect" || obj.type === "ladder" || obj.type === "minigoal") {
                     if (x >= obj.x && x <= obj.x + obj.width && y >= obj.y && y <= obj.y + obj.height) {
+                        this.pushUndo();
+                        this.project.objects = this.project.objects.filter(o => o.id !== obj.id);
+                        this.render();
+                        if (this.onChange) this.onChange();
+                        return;
+                    }
+                } else if (obj.type === "pole") {
+                    const hw = 0.5, hh = (obj.height || 6) / 2;
+                    if (x >= obj.x - hw && x <= obj.x + hw && y >= obj.y - hh && y <= obj.y + hh) {
                         this.pushUndo();
                         this.project.objects = this.project.objects.filter(o => o.id !== obj.id);
                         this.render();
@@ -1035,45 +1178,57 @@ const TacticalRenderer = {
             return;
         }
 
-        // Find object under cursor
-        let found = null;
+        // Find all objects under cursor (for overlap cycling)
+        const hits = [];
         for (const obj of [...this.project.objects].reverse()) {
             if (!obj.visible || obj.locked) continue;
-            if (obj.type === "player" || obj.type === "ball" || obj.type === "bench") {
+            if (obj.type === "player" || obj.type === "ball" || obj.type === "bench" || obj.type === "cone" || obj.type === "marker") {
                 const dx = x - obj.x;
                 const dy = y - obj.y;
                 if (dx * dx + dy * dy < (obj.radius + 2) * (obj.radius + 2)) {
-                    found = obj;
-                    break;
+                    hits.push(obj);
                 }
             } else if (obj.type === "arrow" || obj.type === "path") {
-                // Hit test: distance from point to line segment < 3 units
                 if (obj.type === "path" && obj.points && obj.points.length >= 2) {
                     let hit = false;
                     for (let i = 0; i < obj.points.length - 1; i++) {
                         const dist = this._pointToSegmentDist(x, y, obj.points[i].x, obj.points[i].y, obj.points[i+1].x, obj.points[i+1].y);
                         if (dist < 3) { hit = true; break; }
                     }
-                    if (hit) { found = obj; break; }
+                    if (hit) hits.push(obj);
                 } else if (obj.type === "arrow") {
                     const dist = this._pointToSegmentDist(x, y, obj.startX, obj.startY, obj.endX, obj.endY);
-                    if (dist < 3) { found = obj; break; }
+                    if (dist < 3) hits.push(obj);
                 }
-            } else if (obj.type === "zone") {
-                // Hit test: point inside rectangle bounds
-                if (x >= obj.x && x <= obj.x + obj.width &&
-                    y >= obj.y && y <= obj.y + obj.height) {
-                    found = obj;
-                    break;
-                }
-            } else if (obj.type === "rect") {
+            } else if (obj.type === "zone" || obj.type === "rect" || obj.type === "ladder" || obj.type === "minigoal") {
                 if (x >= obj.x && x <= obj.x + obj.width && y >= obj.y && y <= obj.y + obj.height) {
-                    found = obj; break;
+                    hits.push(obj);
+                }
+            } else if (obj.type === "pole") {
+                const hw = 0.5, hh = (obj.height || 6) / 2;
+                if (x >= obj.x - hw && x <= obj.x + hw && y >= obj.y - hh && y <= obj.y + hh) {
+                    hits.push(obj);
                 }
             } else if (obj.type === "ellipse") {
                 const dx = (x - obj.x) / obj.rx, dy = (y - obj.y) / obj.ry;
-                if (dx * dx + dy * dy <= 1) { found = obj; break; }
+                if (dx * dx + dy * dy <= 1) hits.push(obj);
             }
+        }
+
+        // Overlap cycling: if clicking same position, cycle through hits
+        let found = null;
+        if (hits.length > 0) {
+            const clickKey = Math.round(x * 10) + "," + Math.round(y * 10);
+            if (this._lastClickPos === clickKey && hits.length > 1) {
+                this._overlapIndex = (this._overlapIndex + 1) % hits.length;
+            } else {
+                this._overlapIndex = 0;
+            }
+            this._lastClickPos = clickKey;
+            found = hits[this._overlapIndex];
+        } else {
+            this._lastClickPos = null;
+            this._overlapIndex = 0;
         }
 
         this.selectedObject = found;
