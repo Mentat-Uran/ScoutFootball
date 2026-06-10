@@ -21,6 +21,18 @@ from scoutfootball.app.data_loader import (
     load_team_match,
 )
 from scoutfootball.evaluation.scouting_queue import build_scouting_queues
+from scoutfootball.worldcup.data import (
+    BIG5_LEAGUES,
+    GROUPS,
+    HOSTS,
+    compute_group_predictions,
+    compute_team_strengths,
+    enrich_squad_with_ratings,
+    enrich_squads_with_ratings,
+    generate_group_stage_matches,
+    get_squad,
+    get_team_group,
+)
 
 
 @dataclass(frozen=True)
@@ -714,4 +726,189 @@ def get_player_profile(player_name: str, season: str | None = None) -> dict:
         "possession_composite": round(possession, 2) if possession == possession else None,
         "radar": radar,
         "seasons": seasons,
+    })
+
+
+# ── World Cup endpoints ──────────────────────────────────────────────────
+
+
+def get_wc_groups() -> dict:
+    """Return World Cup group data with team strength ratings."""
+    ratings_df = load_player_ratings()
+    enriched = enrich_squads_with_ratings(ratings_df)
+    strengths = compute_team_strengths(enriched_squads=enriched)
+
+    groups_data = []
+    for letter, teams in GROUPS.items():
+        group_teams = []
+        for team in teams:
+            squad = enriched.get(team, [])
+            rated = [p for p in squad if p.has_rating]
+            big5_count = sum(1 for p in squad if p.club_league in BIG5_LEAGUES)
+            avg_rating = (
+                round(sum(p.rating for p in rated) / len(rated), 2)
+                if rated else None
+            )
+            group_teams.append({
+                "team": team,
+                "is_host": team in HOSTS,
+                "strength": round(strengths.get(team, 0), 3),
+                "rated_players": len(rated),
+                "total_players": len(squad),
+                "big5_players": big5_count,
+                "avg_rating": avg_rating,
+            })
+        groups_data.append({
+            "group": letter,
+            "teams": group_teams,
+        })
+
+    return _clean_json_value({
+        "status": "ok",
+        "source_attribution": (
+            "Ratings derived from FBref/Understat data "
+            "via ScoutFootball optimizer"
+        ),
+        "disclaimer": (
+            "Squad ratings are from domestic league performance, "
+            "not national team matches. Non-Big5 league players "
+            "may lack rating data."
+        ),
+        "groups": groups_data,
+    })
+
+
+def get_wc_schedule(
+    group: str | None = None,
+    matchday: int | None = None,
+) -> dict:
+    """Return World Cup group stage schedule."""
+    matches = generate_group_stage_matches()
+
+    match_dicts = []
+    for m in matches:
+        if group and m.group != group:
+            continue
+        if matchday and m.matchday != matchday:
+            continue
+        match_dicts.append({
+            "matchday": m.matchday,
+            "date": m.date,
+            "time_et": m.time_et,
+            "home": m.home,
+            "away": m.away,
+            "venue": m.venue,
+            "city": m.city,
+            "group": m.group,
+            "stage": m.stage,
+        })
+
+    return _clean_json_value({
+        "status": "ok",
+        "count": len(match_dicts),
+        "source_attribution": (
+            "Schedule generated from official FIFA fixture pattern; "
+            "dates/venues are approximate"
+        ),
+        "matches": match_dicts,
+    })
+
+
+def get_wc_squad(team: str) -> dict:
+    """Return a specific team's World Cup squad with player ratings."""
+    ratings_df = load_player_ratings()
+    squad = get_squad(team)
+    squad = enrich_squad_with_ratings(squad, ratings_df)
+
+    group = get_team_group(team)
+    rated = [p for p in squad if p.has_rating]
+    big5_count = sum(1 for p in squad if p.club_league in BIG5_LEAGUES)
+    avg_rating = (
+        round(sum(p.rating for p in rated) / len(rated), 2)
+        if rated else None
+    )
+
+    players = []
+    for p in squad:
+        players.append({
+            "name": p.name,
+            "position": p.position,
+            "club": p.club,
+            "club_league": p.club_league,
+            "has_rating": p.has_rating,
+            "rating": round(p.rating, 2) if p.rating is not None else None,
+            "rating_confidence": p.rating_confidence,
+        })
+
+    # Sort: rated players first, then by rating desc
+    players.sort(key=lambda p: (not p["has_rating"], -(p["rating"] or 0)))
+
+    return _clean_json_value({
+        "status": "ok",
+        "team": team,
+        "group": group,
+        "is_host": team in HOSTS,
+        "total_players": len(squad),
+        "rated_players": len(rated),
+        "big5_players": big5_count,
+        "avg_rating": avg_rating,
+        "source_attribution": (
+            "Ratings derived from FBref/Understat data "
+            "via ScoutFootball optimizer"
+        ),
+        "disclaimer": (
+            "Squad rosters are placeholder lists; official 26-man "
+            "squads not yet announced. Ratings from domestic league "
+            "performance only."
+        ),
+        "players": players,
+    })
+
+
+def get_wc_predictions() -> dict:
+    """Return World Cup group stage predictions based on team strengths."""
+    ratings_df = load_player_ratings()
+    enriched = enrich_squads_with_ratings(ratings_df)
+    strengths = compute_team_strengths(enriched_squads=enriched)
+    group_preds = compute_group_predictions(strengths)
+
+    # Build 48-team ranking
+    ranked = sorted(strengths.items(), key=lambda x: x[1], reverse=True)
+    ranking = []
+    for rank, (team, strength) in enumerate(ranked, 1):
+        group = get_team_group(team)
+        squad = enriched.get(team, [])
+        rated = [p for p in squad if p.has_rating]
+        ranking.append({
+            "rank": rank,
+            "team": team,
+            "group": group,
+            "strength": round(strength, 3),
+            "rated_players": len(rated),
+        })
+
+    # Best 3rd-place predictions
+    third_place = []
+    for gp in group_preds:
+        teams = gp["teams"]
+        if len(teams) >= 3:
+            third = teams[2]
+            third["group"] = gp["group"]
+            third_place.append(third)
+    third_place.sort(key=lambda x: x["strength"], reverse=True)
+
+    return _clean_json_value({
+        "status": "ok",
+        "source_attribution": (
+            "Predictions based on squad ratings from "
+            "FBref/Understat data and Opta public priors"
+        ),
+        "disclaimer": (
+            "Probabilities are rough estimates from a simplified "
+            "strength-ratio model. Non-Big5 league team strengths "
+            "may be underestimated. Not a real match prediction."
+        ),
+        "groups": group_preds,
+        "ranking": ranking,
+        "best_third_place": third_place[:8],
     })

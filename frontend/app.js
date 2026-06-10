@@ -1693,16 +1693,19 @@ function bindEvents() {
     // World Cup events
     document.getElementById("wc-group-filter").addEventListener("change", () => renderWcSchedule());
     document.getElementById("wc-matchday-filter").addEventListener("change", () => renderWcSchedule());
-    document.getElementById("wc-squad-team").addEventListener("change", (e) => {
+    document.getElementById("wc-squad-team").addEventListener("change", async (e) => {
         appState.wcSquadTeam = e.target.value;
+        await fetchWcSquad(e.target.value);
         renderWcSquads();
     });
-    document.getElementById("wc-compare-a").addEventListener("change", (e) => {
+    document.getElementById("wc-compare-a").addEventListener("change", async (e) => {
         appState.wcCompareA = e.target.value;
+        await fetchWcSquad(e.target.value);
         renderWcCompare();
     });
-    document.getElementById("wc-compare-b").addEventListener("change", (e) => {
+    document.getElementById("wc-compare-b").addEventListener("change", async (e) => {
         appState.wcCompareB = e.target.value;
+        await fetchWcSquad(e.target.value);
         renderWcCompare();
     });
 
@@ -1986,6 +1989,7 @@ function bindEvents() {
 
 // ── World Cup Data ───────────────────────────────────────────────────────
 
+// Static group structure (official FIFA draw — not from API)
 const WC_GROUPS = {
     A: ["Mexico", "South Africa", "South Korea", "Czech Republic"],
     B: ["Canada", "Bosnia and Herzegovina", "Qatar", "Switzerland"],
@@ -2004,168 +2008,70 @@ const WC_GROUPS = {
 const WC_HOSTS = ["United States", "Canada", "Mexico"];
 const WC_BIG5 = new Set(["Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1"]);
 
-const WC_WIN_PROB = {
-    Spain: 0.161, France: 0.128, Brazil: 0.112, England: 0.098,
-    Argentina: 0.087, Germany: 0.072, Portugal: 0.065,
-    Netherlands: 0.054, Uruguay: 0.038, Belgium: 0.032,
+// API-driven World Cup data cache
+let wcApiData = {
+    groups: null,       // from /world-cup/groups
+    schedule: null,     // from /world-cup/schedule
+    squadCache: {},     // team -> from /world-cup/squads/{team}
+    predictions: null,  // from /world-cup/predictions
+    apiOnline: false,
 };
 
-// Simplified squads (key players)
-const WC_SQUADS = {
-    Argentina: [
-        {name:"Lionel Messi",position:"AM",club:"Inter Miami",league:"MLS"},
-        {name:"Julian Alvarez",position:"ST",club:"Atletico Madrid",league:"La Liga"},
-        {name:"Lautaro Martinez",position:"ST",club:"Inter Milan",league:"Serie A"},
-        {name:"Rodrigo De Paul",position:"CM",club:"Atletico Madrid",league:"La Liga"},
-        {name:"Enzo Fernandez",position:"CM",club:"Chelsea",league:"Premier League"},
-        {name:"Alexis Mac Allister",position:"CM",club:"Liverpool",league:"Premier League"},
-        {name:"Emiliano Martinez",position:"GK",club:"Aston Villa",league:"Premier League"},
-        {name:"Cristian Romero",position:"CB",club:"Tottenham",league:"Premier League"},
-        {name:"Nahuel Molina",position:"FB",club:"Atletico Madrid",league:"La Liga"},
-        {name:"Paulo Dybala",position:"AM",club:"Roma",league:"Serie A"},
-    ],
-    Brazil: [
-        {name:"Vinicius Junior",position:"W",club:"Real Madrid",league:"La Liga"},
-        {name:"Rodrygo",position:"W",club:"Real Madrid",league:"La Liga"},
-        {name:"Raphinha",position:"W",club:"Barcelona",league:"La Liga"},
-        {name:"Bruno Guimaraes",position:"CM",club:"Newcastle",league:"Premier League"},
-        {name:"Casemiro",position:"DM",club:"Manchester United",league:"Premier League"},
-        {name:"Marquinhos",position:"CB",club:"PSG",league:"Ligue 1"},
-        {name:"Alisson",position:"GK",club:"Liverpool",league:"Premier League"},
-        {name:"Endrick",position:"ST",club:"Real Madrid",league:"La Liga"},
-        {name:"Eder Militao",position:"CB",club:"Real Madrid",league:"La Liga"},
-    ],
-    France: [
-        {name:"Kylian Mbappe",position:"ST",club:"Real Madrid",league:"La Liga"},
-        {name:"Ousmane Dembele",position:"W",club:"PSG",league:"Ligue 1"},
-        {name:"Antoine Griezmann",position:"AM",club:"Atletico Madrid",league:"La Liga"},
-        {name:"Aurelien Tchouameni",position:"DM",club:"Real Madrid",league:"La Liga"},
-        {name:"Eduardo Camavinga",position:"CM",club:"Real Madrid",league:"La Liga"},
-        {name:"Mike Maignan",position:"GK",club:"AC Milan",league:"Serie A"},
-        {name:"Theo Hernandez",position:"FB",club:"AC Milan",league:"Serie A"},
-        {name:"William Saliba",position:"CB",club:"Arsenal",league:"Premier League"},
-        {name:"Jules Kounde",position:"FB",club:"Barcelona",league:"La Liga"},
-    ],
-    England: [
-        {name:"Harry Kane",position:"ST",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Jude Bellingham",position:"AM",club:"Real Madrid",league:"La Liga"},
-        {name:"Phil Foden",position:"W",club:"Manchester City",league:"Premier League"},
-        {name:"Bukayo Saka",position:"W",club:"Arsenal",league:"Premier League"},
-        {name:"Declan Rice",position:"DM",club:"Arsenal",league:"Premier League"},
-        {name:"Jordan Pickford",position:"GK",club:"Everton",league:"Premier League"},
-        {name:"John Stones",position:"CB",club:"Manchester City",league:"Premier League"},
-        {name:"Cole Palmer",position:"AM",club:"Chelsea",league:"Premier League"},
-        {name:"Trent Alexander-Arnold",position:"FB",club:"Real Madrid",league:"La Liga"},
-    ],
-    Germany: [
-        {name:"Jamal Musiala",position:"AM",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Florian Wirtz",position:"AM",club:"Bayer Leverkusen",league:"Bundesliga"},
-        {name:"Joshua Kimmich",position:"DM",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Manuel Neuer",position:"GK",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Antonio Rudiger",position:"CB",club:"Real Madrid",league:"La Liga"},
-        {name:"Kai Havertz",position:"ST",club:"Arsenal",league:"Premier League"},
-        {name:"Leroy Sane",position:"W",club:"Bayern Munich",league:"Bundesliga"},
-    ],
-    Spain: [
-        {name:"Lamine Yamal",position:"W",club:"Barcelona",league:"La Liga"},
-        {name:"Pedri",position:"CM",club:"Barcelona",league:"La Liga"},
-        {name:"Rodri",position:"DM",club:"Manchester City",league:"Premier League"},
-        {name:"Dani Olmo",position:"AM",club:"Barcelona",league:"La Liga"},
-        {name:"Ferran Torres",position:"W",club:"Barcelona",league:"La Liga"},
-        {name:"Nico Williams",position:"W",club:"Athletic Bilbao",league:"La Liga"},
-        {name:"Gavi",position:"CM",club:"Barcelona",league:"La Liga"},
-    ],
-    Portugal: [
-        {name:"Cristiano Ronaldo",position:"ST",club:"Al-Nassr",league:"SPL"},
-        {name:"Bruno Fernandes",position:"AM",club:"Manchester United",league:"Premier League"},
-        {name:"Bernardo Silva",position:"W",club:"Manchester City",league:"Premier League"},
-        {name:"Ruben Dias",position:"CB",club:"Manchester City",league:"Premier League"},
-        {name:"Diogo Jota",position:"ST",club:"Liverpool",league:"Premier League"},
-        {name:"Rafael Leao",position:"W",club:"AC Milan",league:"Serie A"},
-        {name:"Vitinha",position:"CM",club:"PSG",league:"Ligue 1"},
-    ],
-    Netherlands: [
-        {name:"Virgil van Dijk",position:"CB",club:"Liverpool",league:"Premier League"},
-        {name:"Frenkie de Jong",position:"CM",club:"Barcelona",league:"La Liga"},
-        {name:"Cody Gakpo",position:"W",club:"Liverpool",league:"Premier League"},
-        {name:"Xavi Simons",position:"AM",club:"RB Leipzig",league:"Bundesliga"},
-        {name:"Denzel Dumfries",position:"FB",club:"Inter Milan",league:"Serie A"},
-    ],
-    Uruguay: [
-        {name:"Darwin Nunez",position:"ST",club:"Liverpool",league:"Premier League"},
-        {name:"Federico Valverde",position:"CM",club:"Real Madrid",league:"La Liga"},
-        {name:"Ronald Araujo",position:"CB",club:"Barcelona",league:"La Liga"},
-    ],
-    Croatia: [
-        {name:"Luka Modric",position:"CM",club:"Real Madrid",league:"La Liga"},
-        {name:"Mateo Kovacic",position:"CM",club:"Manchester City",league:"Premier League"},
-        {name:"Joško Gvardiol",position:"CB",club:"Manchester City",league:"Premier League"},
-    ],
-    Belgium: [
-        {name:"Kevin De Bruyne",position:"AM",club:"Manchester City",league:"Premier League"},
-        {name:"Romelu Lukaku",position:"ST",club:"Napoli",league:"Serie A"},
-        {name:"Thibaut Courtois",position:"GK",club:"Real Madrid",league:"La Liga"},
-    ],
-    "United States": [
-        {name:"Christian Pulisic",position:"W",club:"AC Milan",league:"Serie A"},
-        {name:"Weston McKennie",position:"CM",club:"Juventus",league:"Serie A"},
-        {name:"Giovanni Reyna",position:"AM",club:"Borussia Dortmund",league:"Bundesliga"},
-        {name:"Antonee Robinson",position:"FB",club:"Fulham",league:"Premier League"},
-        {name:"Yunus Musah",position:"CM",club:"AC Milan",league:"Serie A"},
-    ],
-    Mexico: [
-        {name:"Santiago Gimenez",position:"ST",club:"Feyenoord",league:"Eredivisie"},
-        {name:"Hirving Lozano",position:"W",club:"PSV",league:"Eredivisie"},
-        {name:"Edson Alvarez",position:"DM",club:"West Ham",league:"Premier League"},
-    ],
-    Canada: [
-        {name:"Alphonso Davies",position:"FB",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Jonathan David",position:"ST",club:"Lille",league:"Ligue 1"},
-    ],
-    Morocco: [
-        {name:"Achraf Hakimi",position:"FB",club:"PSG",league:"Ligue 1"},
-    ],
-    Switzerland: [
-        {name:"Granit Xhaka",position:"CM",club:"Bayer Leverkusen",league:"Bundesliga"},
-        {name:"Manuel Akanji",position:"CB",club:"Manchester City",league:"Premier League"},
-    ],
-    Turkey: [
-        {name:"Hakan Calhanoglu",position:"CM",club:"Inter Milan",league:"Serie A"},
-        {name:"Arda Guler",position:"AM",club:"Real Madrid",league:"La Liga"},
-    ],
-    Norway: [
-        {name:"Erling Haaland",position:"ST",club:"Manchester City",league:"Premier League"},
-        {name:"Martin Odegaard",position:"AM",club:"Arsenal",league:"Premier League"},
-    ],
-    Austria: [
-        {name:"David Alaba",position:"CB",club:"Real Madrid",league:"La Liga"},
-        {name:"Marcel Sabitzer",position:"CM",club:"Borussia Dortmund",league:"Bundesliga"},
-    ],
-    Colombia: [
-        {name:"Luis Diaz",position:"W",club:"Liverpool",league:"Premier League"},
-    ],
-    Ecuador: [
-        {name:"Moises Caicedo",position:"DM",club:"Chelsea",league:"Premier League"},
-    ],
-    Egypt: [
-        {name:"Mohamed Salah",position:"W",club:"Liverpool",league:"Premier League"},
-    ],
-    Iran: [
-        {name:"Mehdi Taremi",position:"ST",club:"Inter Milan",league:"Serie A"},
-    ],
-    Japan: [
-        {name:"Kaoru Mitoma",position:"W",club:"Brighton",league:"Premier League"},
-        {name:"Takefusa Kubo",position:"W",club:"Real Sociedad",league:"La Liga"},
-    ],
-    "South Korea": [
-        {name:"Son Heung-min",position:"W",club:"Tottenham",league:"Premier League"},
-        {name:"Lee Kang-in",position:"AM",club:"PSG",league:"Ligue 1"},
-    ],
-    Scotland: [
-        {name:"Andy Robertson",position:"FB",club:"Liverpool",league:"Premier League"},
-        {name:"Scott McTominay",position:"CM",club:"Napoli",league:"Serie A"},
-    ],
-};
+async function fetchWcGroups() {
+    try {
+        const resp = await fetch(`${API_BASE}/world-cup/groups`, { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) throw new Error("API error");
+        const data = await resp.json();
+        wcApiData.groups = data;
+        wcApiData.apiOnline = true;
+        return data;
+    } catch {
+        wcApiData.apiOnline = false;
+        return null;
+    }
+}
+
+async function fetchWcSchedule(group, matchday) {
+    try {
+        let url = `${API_BASE}/world-cup/schedule`;
+        const params = [];
+        if (group) params.push(`group=${encodeURIComponent(group)}`);
+        if (matchday) params.push(`matchday=${matchday}`);
+        if (params.length) url += "?" + params.join("&");
+        const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) throw new Error("API error");
+        const data = await resp.json();
+        wcApiData.schedule = data;
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchWcSquad(team) {
+    if (wcApiData.squadCache[team]) return wcApiData.squadCache[team];
+    try {
+        const resp = await fetch(`${API_BASE}/world-cup/squads/${encodeURIComponent(team)}`, { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) throw new Error("API error");
+        const data = await resp.json();
+        wcApiData.squadCache[team] = data;
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchWcPredictions() {
+    try {
+        const resp = await fetch(`${API_BASE}/world-cup/predictions`, { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) throw new Error("API error");
+        const data = await resp.json();
+        wcApiData.predictions = data;
+        return data;
+    } catch {
+        return null;
+    }
+}
 
 function wcAllTeams() {
     return Object.values(WC_GROUPS).flat();
@@ -2178,33 +2084,48 @@ function wcTeamGroup(team) {
     return "?";
 }
 
-// Enrich squad with ratings from the players array
-function wcEnrichSquad(team) {
-    const raw = WC_SQUADS[team] || [];
-    return raw.map((p) => {
-        const match = players.find((pl) =>
-            pl.name.toLowerCase().includes(p.name.split(" ").pop().toLowerCase())
-        );
-        return {
-            ...p,
-            hasRating: !!match,
-            rating: match ? match.rating : null,
-            confidence: match ? match.confidence : "NONE",
-        };
-    });
+// Get enriched squad data (from API cache, or fallback to empty)
+function wcGetSquad(team) {
+    const cached = wcApiData.squadCache[team];
+    if (cached && cached.players) {
+        return cached.players.map((p) => ({
+            name: p.name,
+            position: p.position,
+            club: p.club,
+            league: p.club_league,
+            hasRating: p.has_rating,
+            rating: p.rating,
+            confidence: p.rating_confidence ? p.rating_confidence.toUpperCase() : "NONE",
+        }));
+    }
+    return [];
 }
 
+// Compute team strength from API data or fallback
 function wcTeamStrength(team) {
-    const squad = wcEnrichSquad(team);
+    // Try from predictions API data
+    if (wcApiData.predictions && wcApiData.predictions.ranking) {
+        const entry = wcApiData.predictions.ranking.find((r) => r.team === team);
+        if (entry) return entry.strength;
+    }
+    // Try from groups API data
+    if (wcApiData.groups && wcApiData.groups.groups) {
+        for (const g of wcApiData.groups.groups) {
+            const t = g.teams.find((t) => t.team === team);
+            if (t) return t.strength;
+        }
+    }
+    // Fallback: compute from squad
+    const squad = wcGetSquad(team);
     const rated = squad.filter((p) => p.hasRating);
-    const ratingScore = rated.length > 0
-        ? Math.min(Math.max((rated.reduce((s, p) => s + p.rating, 0) / rated.length - 0.3) / 0.5, 0), 1)
-        : 0.2;
-    const optaScore = WC_WIN_PROB[team] || 0.01;
-    const optaNorm = Math.min(optaScore / 0.16, 1);
-    const big5Count = squad.filter((p) => WC_BIG5.has(p.league)).length;
-    const big5Score = Math.min(big5Count / 10, 1);
-    return 0.5 * ratingScore + 0.3 * optaNorm + 0.2 * big5Score;
+    if (rated.length > 0) {
+        const avg = rated.reduce((s, p) => s + p.rating, 0) / rated.length;
+        const ratingScore = Math.min(Math.max((avg - 30) / 70, 0), 1);
+        const big5Count = squad.filter((p) => WC_BIG5.has(p.league)).length;
+        const big5Score = Math.min(big5Count / 10, 1);
+        return 0.7 * ratingScore + 0.3 * big5Score;
+    }
+    return 0.2;
 }
 
 // ── World Cup Renderers ──────────────────────────────────────────────────
@@ -2213,40 +2134,72 @@ function renderWcSchedule() {
     const groupFilter = document.getElementById("wc-group-filter").value;
     const mdFilter = document.getElementById("wc-matchday-filter").value;
 
-    // Groups overview
+    // Groups overview — use API data if available
     const overview = document.getElementById("wc-groups-overview");
-    overview.innerHTML = Object.entries(WC_GROUPS).map(([letter, teams]) => {
-        const hostTag = (tm) => WC_HOSTS.includes(tm) ? " ★" : "";
-        return `<article class="liquid-panel compact-panel">
-            <h3>${escapeHtml(letter)}</h3>
-            <ul class="wc-group-list">${teams.map((tm, i) => `<li>${i + 1}. ${escapeHtml(tm)}${hostTag(tm)}</li>`).join("")}</ul>
-        </article>`;
-    }).join("");
+    if (wcApiData.groups && wcApiData.groups.groups) {
+        overview.innerHTML = wcApiData.groups.groups.map((g) => {
+            const hostTag = (tm) => tm.is_host ? " ★" : "";
+            return `<article class="liquid-panel compact-panel">
+                <h3>${escapeHtml(g.group)}</h3>
+                <ul class="wc-group-list">${g.teams.map((tm, i) => `<li>${i + 1}. ${escapeHtml(tm.team)}${hostTag(tm)}${tm.avg_rating ? ` <span style="color:var(--text-muted);font-size:0.8em">(${tm.avg_rating})</span>` : ""}</li>`).join("")}</ul>
+            </article>`;
+        }).join("");
+    } else {
+        overview.innerHTML = Object.entries(WC_GROUPS).map(([letter, teams]) => {
+            const hostTag = (tm) => WC_HOSTS.includes(tm) ? " ★" : "";
+            return `<article class="liquid-panel compact-panel">
+                <h3>${escapeHtml(letter)}</h3>
+                <ul class="wc-group-list">${teams.map((tm, i) => `<li>${i + 1}. ${escapeHtml(tm)}${hostTag(tm)}</li>`).join("")}</ul>
+            </article>`;
+        }).join("");
+    }
 
-    // Generate group stage matches
-    const matches = [];
-    const groupStartOffsets = {A:0,B:0,C:0,D:0,E:1,F:1,G:1,H:1,I:2,J:2,K:2,L:2};
-    const mdGaps = [0, 4, 8];
-    const groupVenues = {
-        A:["Estadio Azteca","Mexico City"],B:["BMO Field","Toronto"],
-        C:["SoFi Stadium","Los Angeles"],D:["AT&T Stadium","Arlington"],
-        E:["MetLife Stadium","New York"],F:["Lumen Field","Seattle"],
-        G:["Mercedes-Benz Stadium","Atlanta"],H:["Hard Rock Stadium","Miami"],
-        I:["Gillette Stadium","Boston"],J:["NRG Stadium","Houston"],
-        K:["Levi's Stadium","San Francisco"],L:["Lincoln Financial Field","Philadelphia"],
-    };
+    // Show DEMO badge if API offline
+    const scheduleTitle = document.getElementById("wc-schedule-title");
+    if (scheduleTitle) {
+        let indicator = scheduleTitle.querySelector(".data-source-indicator");
+        if (!indicator) {
+            indicator = document.createElement("span");
+            indicator.className = "status-pill data-source-indicator";
+            scheduleTitle.appendChild(indicator);
+        }
+        if (!wcApiData.apiOnline) {
+            indicator.textContent = "DEMO";
+            indicator.className = "status-pill status-low data-source-indicator";
+        } else {
+            indicator.textContent = "";
+            indicator.className = "status-pill data-source-indicator";
+        }
+    }
 
-    for (const [letter, teams] of Object.entries(WC_GROUPS)) {
-        const offset = groupStartOffsets[letter];
-        const [venue, city] = groupVenues[letter];
-        const [t1, t2, t3, t4] = teams;
-        for (let md = 0; md < 3; md++) {
-            const day = 11 + offset + mdGaps[md];
-            const dateStr = `2026-06-${String(day).padStart(2, "0")}`;
-            const pairings = md === 0 ? [[t1,t2],[t3,t4]] : md === 1 ? [[t1,t3],[t2,t4]] : [[t1,t4],[t2,t3]];
-            pairings.forEach(([home, away], gi) => {
-                matches.push({date: dateStr, time: gi === 0 ? "19:30" : "22:00", group: letter, home, away, venue, city, matchday: md + 1});
-            });
+    // Use API schedule if available, otherwise generate locally
+    let matches = [];
+    if (wcApiData.schedule && wcApiData.schedule.matches) {
+        matches = wcApiData.schedule.matches;
+    } else {
+        // Fallback: generate locally (same logic as before)
+        const groupStartOffsets = {A:0,B:0,C:0,D:0,E:1,F:1,G:1,H:1,I:2,J:2,K:2,L:2};
+        const mdGaps = [0, 4, 8];
+        const groupVenues = {
+            A:["Estadio Azteca","Mexico City"],B:["BMO Field","Toronto"],
+            C:["SoFi Stadium","Los Angeles"],D:["AT&T Stadium","Arlington"],
+            E:["MetLife Stadium","New York"],F:["Lumen Field","Seattle"],
+            G:["Mercedes-Benz Stadium","Atlanta"],H:["Hard Rock Stadium","Miami"],
+            I:["Gillette Stadium","Boston"],J:["NRG Stadium","Houston"],
+            K:["Levi's Stadium","San Francisco"],L:["Lincoln Financial Field","Philadelphia"],
+        };
+        for (const [letter, teams] of Object.entries(WC_GROUPS)) {
+            const offset = groupStartOffsets[letter];
+            const [venue, city] = groupVenues[letter];
+            const [t1, t2, t3, t4] = teams;
+            for (let md = 0; md < 3; md++) {
+                const day = 11 + offset + mdGaps[md];
+                const dateStr = `2026-06-${String(day).padStart(2, "0")}`;
+                const pairings = md === 0 ? [[t1,t2],[t3,t4]] : md === 1 ? [[t1,t3],[t2,t4]] : [[t1,t4],[t2,t3]];
+                pairings.forEach(([home, away], gi) => {
+                    matches.push({date: dateStr, time_et: gi === 0 ? "19:30" : "22:00", group: letter, home, away, venue, city, matchday: md + 1});
+                });
+            }
         }
     }
 
@@ -2258,18 +2211,36 @@ function renderWcSchedule() {
 
     const tbody = document.getElementById("wc-schedule-table");
     tbody.innerHTML = filtered.map((m) => `<tr>
-        <td>${escapeHtml(m.date)}</td><td>${escapeHtml(m.time)} ET</td><td>${escapeHtml(m.group)}</td>
+        <td>${escapeHtml(m.date)}</td><td>${escapeHtml(m.time_et || m.time)} ET</td><td>${escapeHtml(m.group)}</td>
         <td>${escapeHtml(m.home)}</td><td>${escapeHtml(m.away)}</td><td>${escapeHtml(m.venue)}, ${escapeHtml(m.city)}</td>
     </tr>`).join("");
 }
 
 function renderWcSquads() {
     const team = appState.wcSquadTeam;
-    const squad = wcEnrichSquad(team);
+    const squad = wcGetSquad(team);
     const rated = squad.filter((p) => p.hasRating);
     const big5 = squad.filter((p) => WC_BIG5.has(p.league));
     const avgRating = rated.length > 0 ? (rated.reduce((s, p) => s + p.rating, 0) / rated.length).toFixed(2) : "—";
     const group = wcTeamGroup(team);
+
+    // Show DEMO badge if API offline
+    const squadTitle = document.getElementById("wc-squad-title");
+    if (squadTitle) {
+        let indicator = squadTitle.querySelector(".data-source-indicator");
+        if (!indicator) {
+            indicator = document.createElement("span");
+            indicator.className = "status-pill data-source-indicator";
+            squadTitle.appendChild(indicator);
+        }
+        if (!wcApiData.apiOnline) {
+            indicator.textContent = "DEMO";
+            indicator.className = "status-pill status-low data-source-indicator";
+        } else {
+            indicator.textContent = "";
+            indicator.className = "status-pill data-source-indicator";
+        }
+    }
 
     document.getElementById("wc-squad-summary").innerHTML = `
         <div class="wc-metric"><span class="metric-value">${squad.length}</span><span>${escapeHtml(t("wc_squad_size"))}</span></div>
@@ -2307,8 +2278,8 @@ function renderWcSquads() {
 function renderWcCompare() {
     const teamA = appState.wcCompareA;
     const teamB = appState.wcCompareB;
-    const squadA = wcEnrichSquad(teamA);
-    const squadB = wcEnrichSquad(teamB);
+    const squadA = wcGetSquad(teamA);
+    const squadB = wcGetSquad(teamB);
     const ratedA = squadA.filter((p) => p.hasRating);
     const ratedB = squadB.filter((p) => p.hasRating);
 
@@ -2357,34 +2328,52 @@ function renderWcCompare() {
 }
 
 function renderWcProbability() {
-    const teams = wcAllTeams();
-    const strengths = {};
-    teams.forEach((t) => { strengths[t] = wcTeamStrength(t); });
-
-    // Group probability cards
-    const container = document.getElementById("wc-prob-groups");
-    container.innerHTML = Object.entries(WC_GROUPS).map(([letter, groupTeams]) => {
-        const teamStrs = groupTeams.map((t) => ({team: t, strength: strengths[t]}));
-        const total = teamStrs.reduce((s, x) => s + x.strength, 0);
-        const rows = teamStrs.sort((a, b) => b.strength - a.strength).map((x) => {
-            const p1 = x.strength / total;
-            const pct = Math.round(p1 * 100);
-            return `<div class="wc-prob-row"><span>${escapeHtml(x.team)}</span><div class="probability-track"><div class="probability-fill" style="width:${sanitizeCssPercent(pct)}%"></div></div><strong>${pct}%</strong></div>`;
+    // Use API predictions if available
+    if (wcApiData.predictions && wcApiData.predictions.groups) {
+        // Group probability cards from API
+        const container = document.getElementById("wc-prob-groups");
+        container.innerHTML = wcApiData.predictions.groups.map((g) => {
+            const rows = g.teams.map((x) => {
+                const pct = Math.round(x.p_advance * 100);
+                return `<div class="wc-prob-row"><span>${escapeHtml(x.team)}</span><div class="probability-track"><div class="probability-fill" style="width:${sanitizeCssPercent(pct)}%"></div></div><strong>${pct}%</strong></div>`;
+            }).join("");
+            return `<article class="liquid-panel compact-panel"><h3>${escapeHtml(g.group)}</h3>${rows}</article>`;
         }).join("");
-        return `<article class="liquid-panel compact-panel"><h3>${escapeHtml(letter)}</h3>${rows}</article>`;
-    }).join("");
 
-    // 48-team ranking
-    const ranked = teams.map((t) => ({team: t, strength: strengths[t], group: wcTeamGroup(t)}))
-        .sort((a, b) => b.strength - a.strength);
-    document.getElementById("wc-prob-table").innerHTML = ranked.map((x, i) => `<tr>
-        <td>${i + 1}</td><td>${escapeHtml(x.team)}</td><td>${escapeHtml(x.group)}</td><td>${x.strength.toFixed(3)}</td>
-    </tr>`).join("");
+        // 48-team ranking from API
+        const ranking = wcApiData.predictions.ranking || [];
+        document.getElementById("wc-prob-table").innerHTML = ranking.map((x) => `<tr>
+            <td>${x.rank}</td><td>${escapeHtml(x.team)}</td><td>${escapeHtml(x.group || "?")}</td><td>${x.strength.toFixed(3)}</td>
+        </tr>`).join("");
+    } else {
+        // Fallback: compute locally
+        const teams = wcAllTeams();
+        const strengths = {};
+        teams.forEach((t) => { strengths[t] = wcTeamStrength(t); });
+
+        const container = document.getElementById("wc-prob-groups");
+        container.innerHTML = Object.entries(WC_GROUPS).map(([letter, groupTeams]) => {
+            const teamStrs = groupTeams.map((t) => ({team: t, strength: strengths[t]}));
+            const total = teamStrs.reduce((s, x) => s + x.strength, 0);
+            const rows = teamStrs.sort((a, b) => b.strength - a.strength).map((x) => {
+                const p1 = x.strength / total;
+                const pct = Math.round(p1 * 100);
+                return `<div class="wc-prob-row"><span>${escapeHtml(x.team)}</span><div class="probability-track"><div class="probability-fill" style="width:${sanitizeCssPercent(pct)}%"></div></div><strong>${pct}%</strong></div>`;
+            }).join("");
+            return `<article class="liquid-panel compact-panel"><h3>${escapeHtml(letter)}</h3>${rows}</article>`;
+        }).join("");
+
+        const ranked = teams.map((t) => ({team: t, strength: strengths[t], group: wcTeamGroup(t)}))
+            .sort((a, b) => b.strength - a.strength);
+        document.getElementById("wc-prob-table").innerHTML = ranked.map((x, i) => `<tr>
+            <td>${i + 1}</td><td>${escapeHtml(x.team)}</td><td>${escapeHtml(x.group)}</td><td>${x.strength.toFixed(3)}</td>
+        </tr>`).join("");
+    }
 }
 
 // ── Init World Cup ───────────────────────────────────────────────────────
 
-function initWorldCup() {
+async function initWorldCup() {
     const teams = wcAllTeams();
     // Populate group filter
     const groupFilter = document.getElementById("wc-group-filter");
@@ -2404,6 +2393,25 @@ function initWorldCup() {
     selB.value = "France";
     appState.wcCompareA = "Argentina";
     appState.wcCompareB = "France";
+
+    // Fetch API data in background, then re-render
+    const [groupsData, scheduleData, predictionsData] = await Promise.all([
+        fetchWcGroups(),
+        fetchWcSchedule(),
+        fetchWcPredictions(),
+    ]);
+
+    // Pre-fetch squads for the initially selected teams
+    await Promise.all([
+        fetchWcSquad("Argentina"),
+        fetchWcSquad("France"),
+    ]);
+
+    // Re-render all WC views with API data
+    renderWcSchedule();
+    renderWcSquads();
+    renderWcCompare();
+    renderWcProbability();
 }
 
 /* ── Tactical Board ─────────────────────────────────────────────────── */

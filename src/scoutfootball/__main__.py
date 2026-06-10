@@ -90,6 +90,67 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     uvicorn.run(app, host=args.host, port=args.port)
 
 
+def _cmd_action_value(args: argparse.Namespace) -> None:
+    from scoutfootball.action_value.aggregate import (
+        build_player_action_value,
+        save_player_action_value,
+    )
+    from scoutfootball.action_value.spadl_adapter import convert_all_events
+
+    project_root = Path(__file__).resolve().parents[2]
+    events_path = Path(args.events_path) if args.events_path else (
+        project_root / "data" / "raw" / "statsbomb_open" / "events_all.parquet"
+    )
+    output_path = Path(args.output_path) if args.output_path else (
+        project_root / "data" / "gold" / "feature_store" / "player_value_metrics.parquet"
+    )
+
+    if not events_path.exists():
+        print(f"Error: Events file not found: {events_path}")
+        sys.exit(1)
+
+    # Load events for both conversion and shot/xG stats
+    events_df = pd.read_parquet(events_path)
+    print(f"  Loaded {len(events_df)} events from {events_path}")
+
+    # Convert to InternalActions
+    actions = convert_all_events(events_path)
+    print(f"  Converted to {len(actions)} internal actions")
+
+    if not actions:
+        print("Error: No actions converted from events.")
+        sys.exit(1)
+
+    # Build player name mapping
+    player_names = {}
+    if "player_id" in events_df.columns and "player_name" in events_df.columns:
+        name_map = events_df.dropna(subset=["player_id", "player_name"]).drop_duplicates("player_id")
+        for _, row in name_map.iterrows():
+            pid = str(int(float(row["player_id"])))
+            player_names[pid] = row["player_name"]
+
+    # Compute xT and aggregate
+    result = build_player_action_value(
+        actions=actions,
+        events_df=events_df,
+        player_names=player_names,
+    )
+
+    if result.empty:
+        print("Error: No player action values computed.")
+        sys.exit(1)
+
+    # Save
+    save_player_action_value(result, output_path)
+    print(f"  Saved {len(result)} players to {output_path}")
+    print(f"  Top players by composite score:")
+    for _, row in result.head(5).iterrows():
+        name = row.get("player_name", row.get("player_id", "?"))
+        score = row.get("composite_score", 0)
+        xt = row.get("total_xt", 0)
+        print(f"    {name}: composite={score:.1f}, total_xT={xt:.4f}")
+
+
 def _cmd_export_ratings(_args: argparse.Namespace) -> None:
     from scoutfootball.storage.duckdb_io import create_ratings_database
 
@@ -181,6 +242,104 @@ def _cmd_export_ratings(_args: argparse.Namespace) -> None:
     print(f"  team_coverage: {len(team_coverage)} rows")
 
 
+def _cmd_backtest(args: argparse.Namespace) -> None:
+    from scoutfootball.evaluation.backtests import (
+        run_dixon_coles_backtest,
+        run_poisson_backtest,
+    )
+    from scoutfootball.models import TimeSplitConfig
+
+    project_root = Path(__file__).resolve().parents[2]
+    raw_path = project_root / "data" / "raw" / "football_data" / "combined_results.parquet"
+    out_dir = Path(args.output_dir).resolve() if args.output_dir else (
+        project_root / "data" / "reports" / "calibration_backtest"
+    )
+
+    if not raw_path.exists():
+        print(f"Error: Football-Data file not found: {raw_path}")
+        sys.exit(1)
+
+    raw = pd.read_parquet(raw_path)
+    print(f"  Loaded {len(raw)} matches from {raw_path.name}")
+
+    # Convert to team_match format
+    from scoutfootball.entities.normalize import normalize_team_name
+
+    df = raw[["HomeTeam", "AwayTeam", "FTHG", "FTAG", "Date", "season", "league"]].copy()
+    df["match_date"] = pd.to_datetime(df["Date"], format="mixed", dayfirst=True, errors="coerce")
+    df = df.dropna(subset=["match_date"])
+    df["home_team"] = df["HomeTeam"].apply(normalize_team_name)
+    df["away_team"] = df["AwayTeam"].apply(normalize_team_name)
+    df = df.dropna(subset=["FTHG", "FTAG"])
+    df["FTHG"] = df["FTHG"].astype(int)
+    df["FTAG"] = df["FTAG"].astype(int)
+    df["match_id"] = (
+        df["home_team"] + "_v_" + df["away_team"] + "_" + df["match_date"].dt.strftime("%Y%m%d")
+    )
+
+    home_rows = pd.DataFrame({
+        "match_id": df["match_id"], "match_date": df["match_date"],
+        "team_id": df["home_team"], "is_home": True,
+        "goals_for": df["FTHG"], "goals_against": df["FTAG"],
+    })
+    away_rows = pd.DataFrame({
+        "match_id": df["match_id"], "match_date": df["match_date"],
+        "team_id": df["away_team"], "is_home": False,
+        "goals_for": df["FTAG"], "goals_against": df["FTHG"],
+    })
+    team_match = pd.concat([home_rows, away_rows], ignore_index=True)
+    team_match = team_match.sort_values(["match_date", "match_id"]).reset_index(drop=True)
+    print(f"  team_match: {len(team_match)} rows, {team_match['match_id'].nunique()} matches")
+
+    n_splits = args.n_splits
+    split_cfg = TimeSplitConfig(n_splits=n_splits, gap=0)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Poisson
+    print("\n=== Independent Poisson Backtest ===")
+    p_result = run_poisson_backtest(team_match, split_cfg)
+    p_result.predictions.to_parquet(out_dir / "poisson_backtest_predictions.parquet", index=False)
+    p_metrics = {
+        "model": "independent_poisson", "n_splits": n_splits,
+        "total_predictions": len(p_result.predictions),
+        "overall": p_result.metrics,
+        "folds": p_result.fold_metrics.to_dict(orient="records"),
+    }
+    with open(out_dir / "poisson_backtest_metrics.json", "w", encoding="utf-8") as f:
+        json.dump(p_metrics, f, indent=2, default=str, ensure_ascii=False)
+    print(f"  Log Loss: {p_result.metrics['log_loss_exact']:.4f}")
+    print(f"  Brier:    {p_result.metrics['brier_1x2']:.4f}")
+    print(f"  RPS:      {p_result.metrics['rps_1x2']:.4f}")
+
+    # Dixon-Coles
+    print("\n=== Dixon-Coles Backtest ===")
+    dc_result = run_dixon_coles_backtest(team_match, split_cfg)
+    dc_result.predictions.to_parquet(out_dir / "dixon_coles_backtest_predictions.parquet", index=False)
+    dc_metrics = {
+        "model": "dixon_coles", "n_splits": n_splits,
+        "total_predictions": len(dc_result.predictions),
+        "overall": dc_result.metrics,
+        "folds": dc_result.fold_metrics.to_dict(orient="records"),
+    }
+    with open(out_dir / "dixon_coles_backtest_metrics.json", "w", encoding="utf-8") as f:
+        json.dump(dc_metrics, f, indent=2, default=str, ensure_ascii=False)
+    print(f"  Log Loss: {dc_result.metrics['log_loss_exact']:.4f}")
+    print(f"  Brier:    {dc_result.metrics['brier_1x2']:.4f}")
+    print(f"  RPS:      {dc_result.metrics['rps_1x2']:.4f}")
+
+    # Comparison
+    print(f"\n{'Metric':<25} {'Poisson':>12} {'Dixon-Coles':>12} {'Delta':>10}")
+    print("-" * 60)
+    for m in ["log_loss_exact", "brier_1x2", "rps_1x2"]:
+        pv = p_result.metrics[m]
+        dv = dc_result.metrics[m]
+        delta = dv - pv
+        sign = "+" if delta > 0 else ""
+        print(f"  {m:<23} {pv:>12.4f} {dv:>12.4f} {sign}{delta:>9.4f}")
+
+    print(f"\nResults saved to {out_dir}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="scoutfootball",
@@ -210,7 +369,15 @@ def main() -> None:
     nn_p.add_argument("--output-dir", type=str, default=None)
     sub.add_parser("validate", help="Run pre-training data validation")
 
+    av_p = sub.add_parser("action-value", help="Run action value pipeline (StatsBomb -> xT -> player metrics)")
+    av_p.add_argument("--events-path", type=str, default=None, help="Path to StatsBomb events Parquet")
+    av_p.add_argument("--output-path", type=str, default=None, help="Path to output player_value_metrics Parquet")
+
     sub.add_parser("export-ratings", help="Export ratings to DuckDB database")
+
+    bt_p = sub.add_parser("backtest", help="Run probability calibration backtest (Poisson vs Dixon-Coles)")
+    bt_p.add_argument("--n-splits", type=int, default=3, help="Number of time-series folds (default: 3)")
+    bt_p.add_argument("--output-dir", type=str, default=None, help="Output directory for backtest results")
 
     serve_p = sub.add_parser("serve", help="Start FastAPI server")
     serve_p.add_argument("--host", default="0.0.0.0")
@@ -225,7 +392,9 @@ def main() -> None:
         "train": _cmd_train,
         "train-rating-nn": _cmd_train_rating_nn,
         "validate": _cmd_validate,
+        "action-value": _cmd_action_value,
         "export-ratings": _cmd_export_ratings,
+        "backtest": _cmd_backtest,
         "serve": _cmd_serve,
     }
 

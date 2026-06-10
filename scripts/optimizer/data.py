@@ -24,17 +24,12 @@ from .constants import (
     refine_role_positions,
 )
 
+
 # ── 数据加载 ──────────────────────────────────────────────────────────────
 
 def load_data(data_dir: Path):
     """加载 FBref 球员数据 (standard + misc + shooting) + Football-Data 球队积分。"""
-    fbref_path = data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet"
-    if not fbref_path.exists():
-        raise FileNotFoundError(
-            f"FBref 数据文件不存在: {fbref_path}\n"
-            "请先运行 'scoutfootball ingest --sources fbref' 或手动下载数据。"
-        )
-    fbref = pd.read_parquet(fbref_path)
+    fbref = pd.read_parquet(data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet")
 
     goals = fbref[("Performance", "Gls")].values.astype(np.float32)
     assists_col = fbref[("Performance", "Ast")].values.astype(np.float32)
@@ -234,7 +229,7 @@ def load_data(data_dir: Path):
     if understat_path.exists():
         print("  加载 Understat 数据...")
         understat = pd.read_parquet(understat_path)
-
+        
         # Normalize league names
         understat_league_map = {
             "EPL": "Premier League",
@@ -246,33 +241,33 @@ def load_data(data_dir: Path):
         understat["league"] = (
             understat["league"].map(understat_league_map).fillna(understat["league"])
         )
-
+        
         # Convert numeric columns
         for col in ["games", "time", "goals", "xG", "assists", "xA", "npxG", "shots", "key_passes"]:
             understat[col] = pd.to_numeric(understat[col], errors="coerce")
-
+        
         # Normalize season format: "201617" -> "1617"
         def _normalize_season(s):
             s = str(s)
             if len(s) == 6 and s.startswith("20"):
                 return s[2:]  # "201617" -> "1617"
             return s
-
+        
         understat["season"] = understat["season"].apply(_normalize_season)
-
+        
         # Calculate per-90 metrics
         safe_min_us = np.maximum(understat["time"].values.astype(np.float32), 1.0)
         understat["minutes"] = understat["time"].values.astype(np.float32)
         understat["matches"] = understat["games"].values.astype(np.float32)
         understat["starts"] = understat["games"].values.astype(np.float32)  # Approximate
-
+        
         # Position mapping
         understat_pos_details = understat["position"].apply(map_position_detailed)
         understat["sub_position"] = understat_pos_details.apply(lambda x: x[0])
         understat["pos_idx"] = understat["sub_position"].map(POS_TO_IDX).fillna(4).astype(int)
         understat["position_source"] = understat_pos_details.apply(lambda x: x[1])
         understat["position_confidence"] = understat_pos_details.apply(lambda x: x[2])
-
+        
         # Per-90 metrics
         understat["npg_p90"] = (
             (understat["goals"].values - understat["goals"].values * 0.1)
@@ -281,7 +276,7 @@ def load_data(data_dir: Path):
         )
         understat["assists_p90"] = understat["assists"].values / safe_min_us * 90
         understat["g_a_volume"] = understat["goals"].values + understat["assists"].values
-
+        
         # Select and rename columns
         understat_df = understat[[
             "player_name", "team_title", "league", "season", "position",
@@ -299,7 +294,7 @@ def load_data(data_dir: Path):
 
         # Normalize Understat team names to Football-Data canonical form
         understat_df["team"] = understat_df["team"].apply(normalize_team_name)
-
+        
         # Add missing columns with NaN (not 0) for defense/possession stats.
         # NaN rows are excluded from percentile ranking, so they get the
         # position median (50th percentile) instead of being forced to 0.
@@ -324,16 +319,16 @@ def load_data(data_dir: Path):
             "possession_composite",
         ]:
             understat_df[col] = np.nan
-
+        
         # Find seasons in Understat but not in FBref
         fbref_seasons = set(df["season"].unique())
         understat_only = understat_df[~understat_df["season"].isin(fbref_seasons)]
         print(f"    Understat 独有赛季: {sorted(understat_only['season'].unique())}")
-
+        
         # Combine: FBref takes priority for overlapping seasons
         df = pd.concat([df, understat_only], ignore_index=True, sort=False)
         print(f"    合并后: {len(df)} 行")
-
+        
         # Recompute per-90 and composite metrics for all rows.
         # Understat rows have NaN defense/possession — keep NaN so percentile
         # ranking assigns them the position median instead of 0.
@@ -362,12 +357,12 @@ def load_data(data_dir: Path):
             df["crosses_p90"] * 0.5 + df["fouls_drawn_p90"] * 0.5,
             np.nan,
         )
-
+        
         # Recompute trend and experience for all rows
         df = df.sort_values(["player", "season"])
         df["season_rank"] = df.groupby("player").cumcount()
         df["experience_factor"] = np.clip((df["season_rank"] + 1) / 3, 0.5, 1.0)
-
+        
         # Recompute trends
         past_avg = (
             df.groupby("player")[["npg_p90", "defense_composite", "possession_composite"]]
@@ -386,13 +381,7 @@ def load_data(data_dir: Path):
     df = refine_role_positions(df)
 
     # Team standings + match-level data (for Dixon-Coles)
-    fd_path = data_dir / "raw" / "football_data" / "combined_results.parquet"
-    if not fd_path.exists():
-        raise FileNotFoundError(
-            f"Football-Data 比赛数据不存在: {fd_path}\n"
-            "请先运行 'scoutfootball ingest --sources football_data'。"
-        )
-    fd = pd.read_parquet(fd_path)
+    fd = pd.read_parquet(data_dir / "raw" / "football_data" / "combined_results.parquet")
     standings_rows = []
     match_rows = []
     for _, row in fd.iterrows():
@@ -425,11 +414,9 @@ def load_data(data_dir: Path):
     matched_teams = player_teams & pts_teams
     unmatched_player = player_teams - pts_teams
     if unmatched_player:
-        # Only warn if a large fraction of teams with matches are unmatched
-        n_with_matches = len(pts_teams)
         print(
-            f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 球员侧球队有积分, "
-            f"积分侧 {n_with_matches} 队 (球员侧含无积分联赛球队)"
+            f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 球员侧球队匹配积分侧, "
+            f"未匹配: {sorted(unmatched_player)[:20]}"
         )
     else:
         print(f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 全部匹配")
@@ -944,7 +931,7 @@ def evaluate_params(
     points_calibrator: TeamPointsCalibrator | None = None,
 ):
     """Evaluate params on a slice without letting that slice define train statistics."""
-    # Local imports to avoid circular dependency
+    # Local imports to avoid circular dependency with evaluate module
     from .scoring import build_feature_tensors, compute_ratings_torch, compute_team_avg_ratings
 
     feat_eval = build_feature_tensors(eval_df, rank_reference_df=rank_reference_df)
@@ -1089,10 +1076,8 @@ def build_dc_tensors(feat, matches_df, device):
     used by the rating optimizer, so dc_likelihood loss can be computed.
 
     Args:
-        feat: output of build_feature_tensors
-            (contains ts_team_names, ts_leagues, ts_seasons)
-        matches_df: DataFrame with columns
-            [home_team, away_team, home_goals, away_goals, season, league]
+        feat: output of build_feature_tensors (contains ts_team_names, ts_leagues, ts_seasons)
+        matches_df: DataFrame with columns [home_team, away_team, home_goals, away_goals, season, league]
         device: torch device
 
     Returns:
@@ -1136,22 +1121,6 @@ def build_dc_tensors(feat, matches_df, device):
     }
 
 
-def _serialize_metrics(obj):
-    """Recursively convert metrics dict to JSON-safe types."""
-    if isinstance(obj, dict):
-        return {k: _serialize_metrics(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_serialize_metrics(v) for v in obj]
-    if isinstance(obj, (int, float, np.floating)):
-        f = float(obj)
-        if np.isnan(f) or np.isinf(f):
-            return 0.0
-        return f
-    if isinstance(obj, (np.integer,)):
-        return int(obj)
-    return str(obj) if obj is not None else None
-
-
 def save_model_run(
     params: np.ndarray,
     metrics: dict,
@@ -1182,7 +1151,10 @@ def save_model_run(
         "params_mean": float(params.mean()),
         "params_std": float(params.std()),
         "input_hash": feat_hash,
-        "metrics": _serialize_metrics(metrics),
+        "metrics": {
+            k: float(v) if isinstance(v, (int, float, np.floating)) else str(v)
+            for k, v in metrics.items()
+        },
     }
 
     if args is not None:
@@ -1202,12 +1174,8 @@ def save_model_run(
             "tail_calibration_weight": getattr(args, "tail_calibration_weight", None),
             "league_bias_weight": getattr(args, "league_bias_weight", None),
             "extreme_penalty_weight": getattr(args, "extreme_penalty_weight", None),
-            "truth_label_weight": getattr(args, "truth_label_weight", None),
-            "min_truth_labels": getattr(args, "min_truth_labels", None),
-            "disable_truth_label_anchor": getattr(args, "disable_truth_label_anchor", None),
             "prior_weight": getattr(args, "prior_weight", None),
             "dc_likelihood_weight": getattr(args, "dc_likelihood_weight", None),
-            "dc_rho": getattr(args, "dc_rho", None),
             "warmup_steps": getattr(args, "warmup_steps", None),
             "min_lr_ratio": getattr(args, "min_lr_ratio", None),
             "grad_clip": getattr(args, "grad_clip", None),

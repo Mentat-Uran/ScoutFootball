@@ -197,14 +197,9 @@ def main():
     print(f"  耗时: {time.time()-t0:.1f}s")
 
     # Build Dixon-Coles tensors (optional, for dc_likelihood loss)
+    # NOTE: built after time split so only train-season matches are included,
+    # ensuring dc_tensors indices align with train_feat team_avgs.
     dc_tensors = None
-    if args.dc_likelihood_weight > 0 and matches_df is not None:
-        train_feat_preview = build_feature_tensors(df)  # need ts_team_names for lookup
-        dc_tensors = build_dc_tensors(train_feat_preview, matches_df, device)
-        if dc_tensors:
-            print(f"  Dixon-Coles: {dc_tensors['n_matches']} 场比赛已映射")
-        else:
-            print("  Dixon-Coles: 无比赛可映射，dc_likelihood 已禁用")
 
     # Compute input hash for reproducibility
     feat_hash = compute_input_hash(data_dir)
@@ -262,6 +257,18 @@ def main():
     print(f"\n[4] 只在训练赛季优化 (pop={args.pop}, steps={args.steps}, lr={args.lr})...")
     t0 = time.time()
     train_feat = build_feature_tensors(train_df)
+
+    # Build DC tensors from train_feat (not full df) so indices align with team_avgs
+    if args.dc_likelihood_weight > 0 and matches_df is not None:
+        train_matches = matches_df[
+            matches_df["season"].astype(str).isin(holdout.train_seasons)
+        ].copy() if "season" in matches_df.columns else matches_df
+        dc_tensors = build_dc_tensors(train_feat, train_matches, device)
+        if dc_tensors:
+            print(f"  Dixon-Coles (train only): {dc_tensors['n_matches']} 场比赛已映射")
+        else:
+            print("  Dixon-Coles: 无训练赛季比赛可映射，dc_likelihood 已禁用")
+
     truth_anchor = None
     if args.truth_label_weight > 0 and not args.disable_truth_label_anchor:
         truth_anchor = build_truth_label_anchor(
