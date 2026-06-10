@@ -38,6 +38,7 @@ const TacticalRenderer = {
     _overlapIndex: 0,     // index for cycling through overlapping objects
     _lastClickPos: null,  // last click position for overlap detection
     _presentationMode: false, // presentation mode flag
+    _presentationNotesEl: null, // overlay for frame notes in presentation mode
 
     /* ── Initialize ─────────────────────────────────────────────────── */
     init(canvasId, project) {
@@ -1744,6 +1745,12 @@ const TacticalRenderer = {
         this.project.objects = TACTICAL_BOARD.interpolateObjects(fromObjs, toObjs, t);
         this.render();
 
+        // Update presentation notes overlay
+        if (this._presentationMode) {
+            this.animationState.currentFrame = fromFrame;
+            this._updatePresentationNotes();
+        }
+
         // Check if animation is complete
         const totalAnimDuration = frames.reduce((sum, f) => sum + (f.duration_ms || 3000), 0);
         if (elapsed >= totalAnimDuration) {
@@ -2002,5 +2009,129 @@ const TacticalRenderer = {
             this._animate = originalAnimate;
             this._isRecording = false;
         });
+    },
+
+    /* ── Presentation Mode ───────────────────────────────────────────── */
+    togglePresentation() {
+        if (this._presentationMode) {
+            this.exitPresentation();
+        } else {
+            this.enterPresentation();
+        }
+    },
+
+    enterPresentation() {
+        this._presentationMode = true;
+        const container = document.getElementById("tactical-canvas-container");
+        // Hide editing UI
+        const view = document.getElementById("view-tactical");
+        if (view) {
+            const panels = view.querySelectorAll(".table-panel, .filter-row");
+            panels.forEach((el) => { el.style.display = "none"; });
+            // Hide the left side panel entirely
+            const sidePanel = view.querySelector(".table-panel");
+            if (sidePanel) sidePanel.style.display = "none";
+        }
+        // Make canvas container full width
+        if (container) {
+            container.style.width = "100%";
+            container.style.height = "100dvh";
+            container.style.minHeight = "100dvh";
+        }
+        // Hide the layout-2 second column
+        if (view) {
+            const layout2 = view.querySelector(".layout-2");
+            if (layout2) {
+                layout2.style.display = "block";
+                layout2.style.gridTemplateColumns = "1fr";
+            }
+        }
+        // Request fullscreen on the container
+        if (container && container.requestFullscreen) {
+            container.requestFullscreen().catch(() => {});
+        }
+        // Create notes overlay
+        this._createPresentationNotes();
+        // Update notes for current frame
+        this._updatePresentationNotes();
+        // Auto-play if frames exist
+        if (this.project && this.project.frames && this.project.frames.length >= 2) {
+            this.animationState.loop = true;
+            this.play();
+        }
+        // Bind ESC handler
+        this._presentationEscHandler = (e) => {
+            if (e.key === "Escape") {
+                this.exitPresentation();
+            }
+        };
+        document.addEventListener("keydown", this._presentationEscHandler);
+        this.resize();
+    },
+
+    exitPresentation() {
+        this._presentationMode = false;
+        // Stop animation
+        this.stop();
+        // Restore editing UI
+        const view = document.getElementById("view-tactical");
+        if (view) {
+            const panels = view.querySelectorAll(".table-panel, .filter-row");
+            panels.forEach((el) => { el.style.display = ""; });
+            const layout2 = view.querySelector(".layout-2");
+            if (layout2) {
+                layout2.style.display = "";
+                layout2.style.gridTemplateColumns = "";
+            }
+        }
+        const container = document.getElementById("tactical-canvas-container");
+        if (container) {
+            container.style.width = "";
+            container.style.height = "";
+            container.style.minHeight = "";
+        }
+        // Remove notes overlay
+        this._removePresentationNotes();
+        // Unbind ESC handler
+        if (this._presentationEscHandler) {
+            document.removeEventListener("keydown", this._presentationEscHandler);
+            this._presentationEscHandler = null;
+        }
+        // Exit fullscreen
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        }
+        this.resize();
+    },
+
+    _createPresentationNotes() {
+        if (this._presentationNotesEl) return;
+        const container = document.getElementById("tactical-canvas-container");
+        if (!container) return;
+        const el = document.createElement("div");
+        el.id = "presentation-notes-overlay";
+        el.style.cssText = "position:absolute;bottom:0;left:0;right:0;padding:16px 24px;" +
+            "background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);color:#e0e6f0;" +
+            "font:16px/1.5 Inter,sans-serif;text-align:center;z-index:10;" +
+            "pointer-events:none;min-height:24px;transition:opacity 0.3s";
+        container.style.position = "relative";
+        container.appendChild(el);
+        this._presentationNotesEl = el;
+    },
+
+    _removePresentationNotes() {
+        if (this._presentationNotesEl && this._presentationNotesEl.parentNode) {
+            this._presentationNotesEl.parentNode.removeChild(this._presentationNotesEl);
+        }
+        this._presentationNotesEl = null;
+    },
+
+    _updatePresentationNotes() {
+        if (!this._presentationNotesEl || !this.project || !this.project.frames) return;
+        const idx = this.animationState.currentFrame;
+        const frame = this.project.frames[idx];
+        const notes = frame ? (frame.notes || "") : "";
+        this._presentationNotesEl.textContent = notes;
+        this._presentationNotesEl.style.opacity = notes ? "1" : "0";
     },
 };
