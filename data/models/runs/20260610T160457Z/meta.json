@@ -1,0 +1,41 @@
+{
+  "timestamp": "20260610T160457Z",
+  "params_shape": [
+    77
+  ],
+  "params_mean": 0.013391205109655857,
+  "params_std": 0.9590661525726318,
+  "input_hash": "d63c404cd1cf16cf",
+  "metrics": {
+    "baseline_train": "{'n_team_seasons': 289, 'spearman': 0.3843984548241807, 'pearson': 0.37833636757945843, 'rank_loss': 0.6156015451758192, 'z_mse': 1.2433272648410831, 'calibration_mae': 15.239281138875253, 'raw_pred_range': 28.08751678466797, 'actual_points_range': 83.0, 'raw_spread_ratio': 0.30318607535692654, 'points_mae': 14.028520346479661, 'points_rmse': 17.60984801120492, 'points_bias': 0.016397947472328537, 'points_spread_ratio': 0.8814244375716911, 'split': 'train', 'n_players': 13782, 'target_team_seasons': 290, 'rated_team_seasons': 1279, 'team_coverage': 0.996551724137931, 'n_excluded_na_teams': 0}",
+    "baseline_test": "{'n_team_seasons': 95, 'spearman': 0.6206356321674747, 'pearson': 0.6179894390972844, 'rank_loss': 0.37936436783252525, 'z_mse': 0.7640211218054316, 'calibration_mae': 10.393351800554015, 'raw_pred_range': 17.859054565429688, 'actual_points_range': 77.0, 'raw_spread_ratio': 0.265180098689745, 'points_mae': 9.314868488564594, 'points_rmse': 11.735234427449303, 'points_bias': -4.3032506972748905, 'points_spread_ratio': 0.7271448536592099, 'split': 'test', 'n_players': 3245, 'target_team_seasons': 96, 'rated_team_seasons': 191, 'team_coverage': 0.9895833333333334, 'n_excluded_na_teams': 0}",
+    "optimized_train": "{'n_team_seasons': 289, 'spearman': 0.664469315096378, 'pearson': 0.658358267656033, 'rank_loss': 0.33553068490362203, 'z_mse': 0.683283464687934, 'calibration_mae': 8.800181990158165, 'raw_pred_range': 29.9036865234375, 'actual_points_range': 83.0, 'raw_spread_ratio': 0.31478790310210836, 'points_mae': 10.106784846643949, 'points_rmse': 12.768890880465984, 'points_bias': 0.007567247662703124, 'points_spread_ratio': 0.9214939781403919, 'split': 'train', 'n_players': 13782, 'target_team_seasons': 290, 'rated_team_seasons': 1279, 'team_coverage': 0.996551724137931, 'n_excluded_na_teams': 0}",
+    "optimized_test": "{'n_team_seasons': 95, 'spearman': 0.7079014679212033, 'pearson': 0.7123696144091923, 'rank_loss': 0.29209853207879666, 'z_mse': 0.5752607711816159, 'calibration_mae': 8.088642659279778, 'raw_pred_range': 22.568843841552734, 'actual_points_range': 77.0, 'raw_spread_ratio': 0.31553540689212306, 'points_mae': 11.117608663510405, 'points_rmse': 13.515345043587786, 'points_bias': -8.956664603265885, 'points_spread_ratio': 0.8966253628273644, 'split': 'test', 'n_players': 3245, 'target_team_seasons': 96, 'rated_team_seasons': 191, 'team_coverage': 0.9895833333333334, 'n_excluded_na_teams': 0}",
+    "overfit_rank_loss_gap": -0.043432152824825376
+  },
+  "args": {
+    "pop_size": 8,
+    "n_steps": 120,
+    "lr": 0.035,
+    "patience": 25,
+    "seed": 42,
+    "spearman_weight": 0.3,
+    "ndcg_weight": 0.12,
+    "position_consistency_weight": 0.1,
+    "points_regression_weight": 0.2,
+    "distribution_weight": 0.05,
+    "quantile_weight": 0.08,
+    "range_penalty_weight": 0.1,
+    "tail_calibration_weight": 0.08,
+    "league_bias_weight": 0.05,
+    "extreme_penalty_weight": 0.02,
+    "prior_weight": 0.01,
+    "dc_likelihood_weight": 0.08,
+    "warmup_steps": 8,
+    "min_lr_ratio": 0.08,
+    "grad_clip": 5.0,
+    "league_calibration_prior_n": 60.0,
+    "league_calibration_cap": 8.0,
+    "disable_league_calibration": false
+  }
+}
