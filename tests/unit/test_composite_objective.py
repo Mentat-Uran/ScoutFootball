@@ -1,6 +1,4 @@
 """Unit tests for composite objective functions in optimize_ratings_gpu.py."""
-
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -18,12 +16,13 @@ def _load_optimizer_module():
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
     # Import optimizer submodules
-    import optimizer.constants as _c
-    import optimizer.scoring as _s
-    import optimizer.losses as _l
-    import optimizer.optimization as _o
     # Build a namespace with all needed symbols
     import types
+
+    import optimizer.constants as _c
+    import optimizer.losses as _l
+    import optimizer.optimization as _o
+    import optimizer.scoring as _s
     mod = types.SimpleNamespace()
     mod.POSITIONS = _c.POSITIONS
     mod.POS_TO_IDX = _c.POS_TO_IDX
@@ -34,6 +33,7 @@ def _load_optimizer_module():
     mod.ndcg_loss = _l.ndcg_loss
     mod.objective_torch = _l.objective_torch
     mod.position_consistency_loss = _l.position_consistency_loss
+    mod.truth_label_anchor_loss = _l.truth_label_anchor_loss
     return mod
 
 
@@ -47,6 +47,7 @@ extreme_penalty = _mod.extreme_penalty
 ndcg_loss = _mod.ndcg_loss
 objective_torch = _mod.objective_torch
 position_consistency_loss = _mod.position_consistency_loss
+truth_label_anchor_loss = _mod.truth_label_anchor_loss
 
 
 def _make_synthetic_feat(n_players=40, device="cpu"):
@@ -132,10 +133,8 @@ class TestExtremePenalty:
         assert ratings.grad is not None, "Gradient should flow"
 
     def test_zero_for_non_extreme(self):
-        # All values within 1 sigma -> no penalty
-        ratings = torch.randn(1000)
-        ratings = (ratings - ratings.mean()) / (ratings.std() + 1e-8)  # z-scores
-        ratings = ratings * 0.5  # well within sigma=3
+        # Deterministic values well within sigma=3.
+        ratings = torch.linspace(-0.5, 0.5, 1000)
         penalty = extreme_penalty(ratings, sigma=3.0)
         assert penalty.item() == pytest.approx(0.0, abs=1e-3)
 
@@ -342,3 +341,57 @@ class TestCompositeObjective:
 
         loss = objective_torch(feat, empty_team_pts, params, device)
         assert loss.item() == 1.0, "Should return fallback loss of 1.0"
+
+    def test_truth_label_anchor_loss_flows_gradient(self):
+        feat, team_pts, _df = _make_synthetic_feat()
+        device = torch.device("cpu")
+        params = _get_default_params_tensor(device).clone().detach().requires_grad_(True)
+        ratings = compute_ratings_torch(feat, params, device)
+        truth_anchor = {
+            "enabled": True,
+            "row_idx": torch.arange(12, dtype=torch.long),
+            "label_value": torch.linspace(40.0, 90.0, 12),
+            "label_weight": torch.ones(12),
+        }
+
+        loss = truth_label_anchor_loss(ratings, truth_anchor)
+
+        assert loss.dim() == 0
+        assert loss.requires_grad
+        loss.backward()
+        assert params.grad is not None
+
+    def test_objective_accepts_truth_label_anchor_component(self):
+        feat, team_pts, _df = _make_synthetic_feat()
+        device = torch.device("cpu")
+        params = _get_default_params_tensor(device).clone().detach().requires_grad_(True)
+        truth_anchor = {
+            "enabled": True,
+            "row_idx": torch.arange(12, dtype=torch.long),
+            "label_value": torch.linspace(40.0, 90.0, 12),
+            "label_weight": torch.ones(12),
+        }
+
+        loss, components = objective_torch(
+            feat,
+            team_pts,
+            params,
+            device,
+            spearman_weight=0.0,
+            ndcg_weight=0.0,
+            position_consistency_weight=0.0,
+            points_regression_weight=0.0,
+            distribution_weight=0.0,
+            quantile_weight=0.0,
+            range_penalty_weight=0.0,
+            tail_calibration_weight=0.0,
+            league_bias_weight=0.0,
+            extreme_penalty_weight=0.0,
+            truth_label_weight=1.0,
+            prior_weight=0.0,
+            truth_anchor=truth_anchor,
+            return_components=True,
+        )
+
+        assert loss.dim() == 0
+        assert components["truth_label"] > 0.0

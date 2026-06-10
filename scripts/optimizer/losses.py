@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 
 # 来自 constants.py 的依赖
-from .constants import POSITION_CORE_METRICS, POS_TO_IDX
+from .constants import POS_TO_IDX, POSITION_CORE_METRICS
 
 # 来自 scoring.py 的依赖
 from .scoring import (
@@ -17,7 +17,6 @@ from .scoring import (
     compute_ratings_torch,
     compute_team_avg_ratings_torch,
 )
-
 
 # ── 基础排名/相关性工具 ─────────────────────────────────────────────────
 
@@ -78,20 +77,20 @@ def calibrate_points_torch(pred_strength, actual_points, eps=1e-6):
     ones = torch.ones_like(x1)
 
     # Design matrix [1, x, x^2]
-    X = torch.stack([ones, x1, x2], dim=1)  # (n, 3)
+    design = torch.stack([ones, x1, x2], dim=1)  # (n, 3)
     y = actual_detached.unsqueeze(1)  # (n, 1)
 
     # Normal equations: (X^T X) beta = X^T y
-    XtX = X.T @ X + eps * torch.eye(3, device=X.device)  # regularization
-    Xty = X.T @ y
+    xtx = design.T @ design + eps * torch.eye(3, device=design.device)  # regularization
+    xty = design.T @ y
     try:
-        beta = torch.linalg.solve(XtX, Xty).squeeze(1)  # (3,)
+        beta = torch.linalg.solve(xtx, xty).squeeze(1)  # (3,)
     except Exception:
         # Fallback to linear
         beta = torch.stack([
             actual_detached.mean(),
             actual_detached.std(),
-            torch.tensor(0.0, device=X.device),
+            torch.tensor(0.0, device=design.device),
         ])
 
     c, b, a = beta[0], beta[1], beta[2]
@@ -454,6 +453,36 @@ def extreme_penalty(ratings, sigma=3.0):
     return penalty
 
 
+def truth_label_anchor_loss(ratings, truth_anchor, temperature=4.0):
+    """Align player ratings with supervised player-level truth labels when available."""
+    if not truth_anchor or not truth_anchor.get("enabled"):
+        return torch.tensor(0.0, dtype=ratings.dtype, device=ratings.device)
+
+    row_idx = truth_anchor["row_idx"].to(ratings.device)
+    label_value = truth_anchor["label_value"].to(ratings.device)
+    label_weight = truth_anchor["label_weight"].to(ratings.device).clamp_min(0.05)
+    if int(row_idx.numel()) < 5:
+        return torch.tensor(0.0, dtype=ratings.dtype, device=ratings.device)
+
+    pred = ratings.index_select(0, row_idx)
+    if pred.std(unbiased=False) < 1e-8 or label_value.std(unbiased=False) < 1e-8:
+        return torch.tensor(0.0, dtype=ratings.dtype, device=ratings.device)
+
+    weights = label_weight / label_weight.sum().clamp_min(1e-8)
+    pred_z = (pred - pred.mean()) / pred.std(unbiased=False).clamp_min(1e-8)
+    label_z = (label_value - label_value.mean()) / label_value.std(unbiased=False).clamp_min(1e-8)
+    z_mse = torch.sum(weights * (pred_z - label_z.detach()) ** 2)
+
+    _, soft_sp, pr = differentiable_rank_loss(
+        pred,
+        label_value,
+        spearman_weight=0.65,
+        temperature=temperature,
+    )
+    corr_loss = 1.0 - (0.65 * soft_sp + 0.35 * pr)
+    return 0.55 * z_mse + 0.45 * corr_loss
+
+
 # ── 主目标函数 ──────────────────────────────────────────────────────────
 
 
@@ -473,10 +502,12 @@ def objective_torch(
     tail_calibration_weight=0.08,
     league_bias_weight=0.05,
     extreme_penalty_weight=0.02,
+    truth_label_weight=0.0,
     prior_weight=0.01,
     dc_likelihood_weight=0.08,
     dc_tensors=None,
     dc_rho=-0.13,
+    truth_anchor=None,
     prior_params=None,
     verbose=False,
     return_components=False,
@@ -535,7 +566,14 @@ def objective_torch(
     # 6. Player-score guardrail. This is not the team-points tail loss.
     ext_pen = extreme_penalty(ratings)
 
-    # 6. Prior regularization
+    # 7. Optional player-level supervised anchor.
+    truth_loss = truth_label_anchor_loss(
+        ratings,
+        truth_anchor,
+        temperature=soft_rank_temperature,
+    )
+
+    # 8. Prior regularization
     if prior_params is not None:
         prior_reg = ((params - prior_params) ** 2).mean()
     else:
@@ -553,6 +591,7 @@ def objective_torch(
         + league_bias_weight * lg_bias_loss
         + dc_likelihood_weight * dc_loss
         + extreme_penalty_weight * ext_pen
+        + truth_label_weight * truth_loss
         + prior_weight * prior_reg
     )
 
@@ -565,6 +604,7 @@ def objective_torch(
             f"league_bias={lg_bias_loss.item():.4f} "
             f"dc={dc_loss.item():.4f} "
             f"ext={ext_pen.item():.4f} "
+            f"truth={truth_loss.item():.4f} "
             f"prior={prior_reg.item():.4f} total={total.item():.4f}"
         )
 
@@ -581,6 +621,7 @@ def objective_torch(
             "league_bias": float(lg_bias_loss.detach().cpu()),
             "dc_likelihood": float(dc_loss.detach().cpu()),
             "extreme": float(ext_pen.detach().cpu()),
+            "truth_label": float(truth_loss.detach().cpu()),
             "prior": float(prior_reg.detach().cpu()),
             "soft_spearman": float(soft_sp.detach().cpu()),
             "soft_pearson": float(pr.detach().cpu()),

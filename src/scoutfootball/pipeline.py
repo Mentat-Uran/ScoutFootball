@@ -178,6 +178,13 @@ def run_weekly_train(
             results["value_fairness"] = f"failed: {exc}"
             logger.error("Value fairness training failed: %s", exc)
 
+        # --- supervised player-rating NN candidate ---
+        try:
+            results["player_rating_nn"] = _train_player_rating_nn_candidate(resolved)
+        except Exception as exc:
+            results["player_rating_nn"] = f"failed: {exc}"
+            logger.error("Player rating NN training failed: %s", exc)
+
         team_match_path = resolved.gold_root / "feature_store" / "team_match.parquet"
         if not team_match_path.exists():
             results["match_prediction"] = (
@@ -741,6 +748,21 @@ def _run_availability_diagnostic(settings: PlatformSettings) -> str:
     report = generate_availability_diagnostic(settings=settings)
     output_dir = settings.model_root / "availability_diagnostic"
     return save_availability_diagnostic(report, output_dir)
+
+
+def _train_player_rating_nn_candidate(settings: PlatformSettings) -> str:
+    """Train or explicitly skip the supervised player-rating NN candidate."""
+    from scoutfootball.models.player_rating_nn import (
+        PlayerRatingNNConfig,
+        train_player_rating_nn_from_files,
+    )
+
+    result = train_player_rating_nn_from_files(
+        settings=settings,
+        config=PlayerRatingNNConfig(min_labels=200),
+        output_dir=settings.model_root / "player_rating_nn",
+    )
+    return result.status
 
 
 def _train_value_fairness(settings: PlatformSettings) -> str:

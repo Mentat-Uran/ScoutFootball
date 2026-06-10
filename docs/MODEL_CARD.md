@@ -4,7 +4,7 @@
 
 ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，覆盖 Big 5 联赛（英超、西甲、德甲、意甲、法甲）2016/17–2025/26 赛季。模型将球员能力拆解为出勤可靠性、进攻贡献、防守贡献、控球推进、效率质量等维度，按位置组分配不同权重，经联赛强度和球队环境修正后输出最终评分。
 
-**当前版本：v1.3.1-dev（联赛校准目标代码已更新，完整 GPU 重跑待执行；不可用于正式球探决策）**
+**当前版本：v1.3.2-dev（联赛校准 + 球员真值标签锚定代码已更新，完整 GPU 重跑待执行；NN 候选入口已实现但因本地真值标签为空而跳过；不可用于正式球探决策）**
 
 ## 数据源
 
@@ -22,8 +22,11 @@ ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，
 - 排序目标：Spearman/Pearson soft rank + soft NDCG@20。
 - 球员解释目标：位置内核心指标一致性 + v3 prior 正则 + 球员评分离群 guardrail。
 - 积分校准目标：训练集拟合的单调 affine 校准层，把 raw team strength 映射为 season points，并优化积分回归、1D 分布匹配、争冠/降级尾部球队误差和联赛平均残差。
+- 球员真值锚定目标（v1.3.2-dev）：当 `player_truth_labels.parquet` 能解析到足够球员赛季标签时，加入球员评分与真值标签的 z-score 距离和 soft-rank 一致性损失。
 
 **标签局限**：无球员级真实标签，球队积分 ≠ 球员影响力，强队系统性低估，降级队系统性高估。
+
+**神经网络候选边界**：`scoutfootball train-rating-nn` 已提供监督式 sklearn MLP 候选模型，读取 `rating_feature_matrix.parquet` + `player_truth_labels.parquet` 并与 `player_ratings_optimized` baseline 对比。当前本地 `player_truth_labels.parquet` 为空，命令输出 skipped 状态，不生成可用 NN 评分结论，也不替换默认评分产物。
 
 **校准边界**：积分校准层只能在训练赛季拟合，holdout/test 必须复用训练集 `slope/intercept` 和训练集联赛 residual offset；不能用测试集实际积分重新拟合。
 
@@ -78,6 +81,13 @@ Test Spearman: mean=0.716, std=0.001
 不可用于：单场评分、转会决策、青训评估、伤病预测、合同谈判、跨联赛精确排名、战术适配评估。
 
 ## 版本历史
+
+### v1.3.2-dev（2026-06-10）
+
+- 优化器新增可选 `player_truth_anchor_loss`：通过 `rating_feature_matrix.parquet` 桥接 `player_id -> player_name/season`，再用 z-score + soft-rank 目标锚定球员真值标签。
+- 新增 CLI 参数：`--truth-label-weight`、`--min-truth-labels`、`--disable-truth-label-anchor`；标签为空或匹配不足时自动禁用。
+- 新增 `src/scoutfootball/models/player_rating_nn.py` 和 `scoutfootball train-rating-nn`：监督式 sklearn MLP 候选模型，按赛季时间切分，输出 metrics/predictions/model 到 `data/models/player_rating_nn/`。
+- 当前真值标签表为空，NN 候选和 truth-anchor 都只完成代码入口与 skip 行为验证；完整训练和模型卡指标待标签层补齐后执行。
 
 ### v1.3.1-dev（2026-06-09）
 

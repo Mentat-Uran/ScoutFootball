@@ -32,8 +32,9 @@ The focus right now: upgrading the rating system into an interpretable, evaluabl
 - **Pipeline:** End-to-end `ingest` -> `build-features` -> `train`.
 - **Data Validation:** `scoutfootball validate` checks data integrity before training.
 - **Local Data Layer:** DuckDB + Parquet, organized into raw/silver/gold/models/reports/logs.
-- **Player Ratings:** PyTorch optimizer with composite objective (Spearman + soft NDCG@20 + position consistency + train-fitted points/league calibration + distribution/tail/league-bias losses + player-score guardrails), holdout evaluation, availability caps, quality caps, robust team pooling, coverage reports, and model run registry.
-- **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet` — transfermarkt value, awards, expert tiers, manual calibration.
+- **Player Ratings:** PyTorch optimizer with composite objective (Spearman + soft NDCG@20 + position consistency + train-fitted points/league calibration + distribution/tail/league-bias losses + player-score guardrails + optional player truth-label anchor), holdout evaluation, availability caps, quality caps, robust team pooling, coverage reports, and model run registry.
+- **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet` — transfermarkt value, awards, expert tiers, manual calibration. The current local truth-label table is still empty, so supervised player-level training paths skip by design.
+- **Neural Rating Candidate:** `scoutfootball train-rating-nn` trains a supervised sklearn MLP candidate from `rating_feature_matrix.parquet` + `player_truth_labels.parquet` and writes artifacts to `data/models/player_rating_nn/`; it does not replace `player_ratings_optimized.parquet` unless it beats the current optimizer on the same holdout and baseline checks.
 - **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `docs/MODEL_CARD.md`.
 - **Match Prediction:** Independent Poisson baseline with score probability matrices.
 - **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages. Liquid Glass static frontend with 7 analysis views (Overview, Players, Value, Matches, Scouting, Action Values, Reports) and 4 World Cup views (Schedule, Squads, Compare, Probability). FastAPI read-only backend for artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, and model runs. `mplsoccer` powers pitch plots, pizza charts, and shot maps. A browser-based electronic tactical board is planned, not implemented yet.
@@ -86,6 +87,9 @@ uv sync
 PYTHONPATH=src uv run python -m scoutfootball ingest
 PYTHONPATH=src uv run python -m scoutfootball build-features
 PYTHONPATH=src uv run python -m scoutfootball train
+
+# Optional supervised NN candidate; skips until player_truth_labels has enough rows
+PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 ```
 
 ### World Cup Readiness
@@ -114,7 +118,7 @@ Initial scope stays lightweight: local JSON projects, normalized pitch coordinat
 | **Football-Data** | 68,953 raw CSV rows | 10 seasons, 20 divisions |
 | **Understat** | 31,902 player-season rows | 10 seasons, 6 leagues |
 | **StatsBomb Open Data** | 126 matches / 11,871 events | Public match & event sample |
-| **Ratings** | 27,254 rows | Optimized player ratings |
+| **Ratings** | 30,483 rows | Optimized player ratings |
 | **Feature Matrix** | 8,141 rows | With missing-field flags and position-median fallback |
 
 ### Architecture
@@ -186,8 +190,9 @@ ScoutFootball 是本地优先的足球分析平台，把公开数据、手动导
 - **研发流水线:** `ingest` -> `build-features` -> `train`。
 - **数据验证:** `scoutfootball validate` 检查训练前数据一致性。
 - **本地数据层:** DuckDB + Parquet，按 raw/silver/gold/models/reports/logs 分层。
-- **球员评分:** PyTorch 权重优化器，组合目标（Spearman + soft NDCG@20 + 位置内一致性 + 训练集积分/联赛校准 + 分布/尾部/联赛偏差损失 + 球员评分 guardrail），holdout 评估、availability cap、quality cap、稳健球队聚合、覆盖率过滤和模型运行登记。
-- **真实标签契约:** `player_truth_labels.parquet` schema 与校验，支持历史身价、奖项、专家分档、人工校准。
+- **球员评分:** PyTorch 权重优化器，组合目标（Spearman + soft NDCG@20 + 位置内一致性 + 训练集积分/联赛校准 + 分布/尾部/联赛偏差损失 + 球员评分 guardrail + 可选球员真值标签锚定），holdout 评估、availability cap、quality cap、稳健球队聚合、覆盖率过滤和模型运行登记。
+- **真实标签契约:** `player_truth_labels.parquet` schema 与校验，支持历史身价、奖项、专家分档、人工校准。当前本地真值标签表仍为空，因此监督式球员层训练路径会按设计跳过。
+- **神经网络候选模型:** `scoutfootball train-rating-nn` 使用 `rating_feature_matrix.parquet` + `player_truth_labels.parquet` 训练监督式 sklearn MLP 候选模型，并写入 `data/models/player_rating_nn/`；除非同切分下优于当前优化器和 baseline，否则不替换 `player_ratings_optimized.parquet`。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界和已知偏差。
 - **比分预测:** Independent Poisson baseline，含比分概率矩阵。
 - **产品与可视化:** 15 页 Streamlit 工作台（含产物总览页、球探队列页和动作价值样本页）。Liquid Glass 静态前端含 7 个分析视图（总览、球员、身价、预测、球探、动作价值、报告）和 4 个世界杯视图（赛程、名单、对比、出线）。面向 artifact、球员画像、评分快照、预测、复核队列、watchlist、shortlist、动作价值样本和模型运行的 FastAPI 只读入口。集成 mplsoccer 绘制球员雷达、pizza chart、shot map。低覆盖和样本不足有醒目提示。电子战术板已纳入规划，尚未实现。
@@ -240,6 +245,9 @@ uv sync
 PYTHONPATH=src uv run python -m scoutfootball ingest
 PYTHONPATH=src uv run python -m scoutfootball build-features
 PYTHONPATH=src uv run python -m scoutfootball train
+
+# 可选监督式 NN 候选；player_truth_labels 行数不足时会跳过
+PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 ```
 
 ### 世界杯准备度
@@ -268,7 +276,7 @@ PYTHONPATH=src uv run python -m scoutfootball train
 | **Football-Data** | 原始 CSV 68,953 行 | 10 赛季，20 个联赛/级别 |
 | **Understat** | 31,902 行 | 10 赛季球员统计 |
 | **StatsBomb Open Data** | 126 场 / 11,871 事件 | 公开比赛与事件样本 |
-| **评分** | 27,254 行 | 优化后球员评分 |
+| **评分** | 30,483 行 | 优化后球员评分 |
 | **特征矩阵** | 8,141 行 | 含缺失字段标记与位置中位数兜底 |
 
 ### 顶层架构

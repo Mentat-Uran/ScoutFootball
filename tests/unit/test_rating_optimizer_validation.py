@@ -1,4 +1,3 @@
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -12,11 +11,12 @@ def _load_optimizer_module():
     scripts_dir = str(repo_root / "scripts")
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
+    import types
+
     import optimizer.constants as _c
-    import optimizer.scoring as _s
     import optimizer.data as _d
     import optimizer.optimization as _o
-    import types
+    import optimizer.scoring as _s
     mod = types.SimpleNamespace()
     # constants
     mod.POSITIONS = _c.POSITIONS

@@ -51,6 +51,25 @@ def _cmd_train(_args: argparse.Namespace) -> None:
         print(f"  {model}: {status}")
 
 
+def _cmd_train_rating_nn(args: argparse.Namespace) -> None:
+    from scoutfootball.models.player_rating_nn import (
+        PlayerRatingNNConfig,
+        train_player_rating_nn_from_files,
+    )
+
+    result = train_player_rating_nn_from_files(
+        config=PlayerRatingNNConfig(
+            min_labels=args.min_labels,
+            max_iter=args.max_iter,
+            random_state=args.seed,
+        ),
+        output_dir=Path(args.output_dir).resolve() if args.output_dir else None,
+    )
+    print(result.status)
+    if result.metrics:
+        print(json.dumps(result.metrics, indent=2, ensure_ascii=False))
+
+
 def _cmd_validate(_args: argparse.Namespace) -> None:
     from scoutfootball.evaluation.validation import run_pre_training_validation
 
@@ -181,6 +200,14 @@ def main() -> None:
 
     sub.add_parser("build-features", help="Build feature store from raw data")
     sub.add_parser("train", help="Run weekly model training")
+    nn_p = sub.add_parser(
+        "train-rating-nn",
+        help="Train supervised player-rating neural-network candidate",
+    )
+    nn_p.add_argument("--min-labels", type=int, default=200)
+    nn_p.add_argument("--max-iter", type=int, default=300)
+    nn_p.add_argument("--seed", type=int, default=42)
+    nn_p.add_argument("--output-dir", type=str, default=None)
     sub.add_parser("validate", help="Run pre-training data validation")
 
     sub.add_parser("export-ratings", help="Export ratings to DuckDB database")
@@ -196,6 +223,7 @@ def main() -> None:
         "ingest": _cmd_ingest,
         "build-features": _cmd_build_features,
         "train": _cmd_train,
+        "train-rating-nn": _cmd_train_rating_nn,
         "validate": _cmd_validate,
         "export-ratings": _cmd_export_ratings,
         "serve": _cmd_serve,

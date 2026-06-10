@@ -1,6 +1,6 @@
 # EVALUATION.md — 评分系统评估报告
 
-最新计算口径：v1.3 GPU 重跑（2026-06-09 23:05，本地 `data/models/runs/20260609T145045Z/meta.json`）。v1.3.1-dev 已新增训练集联赛 residual offset 和 `league_bias_weight`，只读复算显示当前参数 holdout points MAE 可从 11.55 降到 9.44，但完整 optimizer 重跑仍待执行。
+最新计算口径：v1.3 GPU 重跑（2026-06-09 23:05，本地 `data/models/runs/20260609T145045Z/meta.json`）。v1.3.1-dev 已新增训练集联赛 residual offset 和 `league_bias_weight`，只读复算显示当前参数 holdout points MAE 可从 11.55 降到 9.44，但完整 optimizer 重跑仍待执行。v1.3.2-dev 已新增可选球员真值标签锚定损失和监督式 NN 候选入口；当前 `player_truth_labels.parquet` 为空，所以尚无可报告的球员级监督指标。
 
 ## 数据切分
 
@@ -45,6 +45,7 @@
 | 争冠/降级尾部校准 | 0.14 | 顶端和底端球队误差 |
 | 联赛平均残差惩罚 | 0.08 | v1.3.1-dev 新增，完整重跑待执行 |
 | 球员评分离群 guardrail | 0.05 | 防止球员评分异常离群 |
+| 球员真值标签锚定 | 0.08（启用时） | v1.3.2-dev 新增；当前标签为空，训练时跳过 |
 | 先验正则 | 0.04 | 参数平滑 |
 
 ## 核心指标
@@ -189,9 +190,15 @@ Bundesliga 仍有 1 队未匹配；RFPL（俄超）33 队在评分侧但无 Foot
 |---|---|---|---|---|
 | 20260609T133831Z | GPU | 0.740 | 0.938 | alias 修复后首次有效 2526 holdout |
 
+## 神经网络候选状态
+
+`scoutfootball train-rating-nn` 已实现监督式 sklearn MLP 候选模型，训练输入为 `rating_feature_matrix.parquet` 和 `player_truth_labels.parquet`，并与 `player_ratings_optimized` baseline 同切分对比。2026-06-10 本地 smoke run 结果为 `skipped: 0 resolved labels, need at least 10`；因此当前没有 NN holdout 指标，也不能把 NN 写成默认评分能力。
+
 ## 待完成
 
 - [ ] 重跑 GPU 优化器（alias 修复后）验证 Bundesliga coverage 提升
+- [ ] 有足够 `player_truth_labels.parquet` 后，重跑 v1.3.2-dev truth-anchor optimizer 并报告球员级 holdout 指标
+- [ ] 有足够 `player_truth_labels.parquet` 后，训练 `player_rating_nn`，并与当前优化器、v3 默认权重和简单 percentile baseline 同切分对比
 - [ ] 补充位置内指标的数值报告
 - [ ] 补充跨位置总榜指标
 - [ ] 补充 value_fairness OOF 残差分析
