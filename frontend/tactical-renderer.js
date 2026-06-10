@@ -39,6 +39,9 @@ const TacticalRenderer = {
     _lastClickPos: null,  // last click position for overlap detection
     _presentationMode: false, // presentation mode flag
     _presentationNotesEl: null, // overlay for frame notes in presentation mode
+    showTrails: false,           // show animation trails
+    _trailPositions: new Map(),  // objectId -> [{x,y}...] trail positions during animation
+    _ballDragTrail: [],          // last N positions during ball drag
 
     /* ── Initialize ─────────────────────────────────────────────────── */
     init(canvasId, project) {
@@ -122,9 +125,24 @@ const TacticalRenderer = {
         // Draw ghost silhouettes (previous/next frame positions in animation mode)
         this._drawGhosts();
 
-        // Draw objects
+        // Draw animation trails (behind objects)
+        if (this.showTrails && this.animationState.isPlaying) {
+            this._drawTrails();
+        }
+
+        // Draw ball drag trail (when dragging a ball)
+        if (this._ballDragTrail.length > 0) {
+            this._drawBallDragTrail();
+        }
+
+        // Draw objects (with frame visibility check)
+        const currentFrame = this.animationState.currentFrame || 0;
         for (const obj of this.project.objects) {
             if (!obj.visible) continue;
+            // Frame visibility: object only renders when currentFrame is within [visibleFrom, visibleTo]
+            const vf = Number.isFinite(obj.visibleFrom) ? obj.visibleFrom : 0;
+            const vt = Number.isFinite(obj.visibleTo) ? obj.visibleTo : Infinity;
+            if (currentFrame < vf || currentFrame > vt) continue;
             switch (obj.type) {
                 case "player": this.drawPlayer(obj); break;
                 case "ball":   this.drawBall(obj); break;
@@ -560,6 +578,20 @@ const TacticalRenderer = {
         ctx.strokeStyle = "rgba(0,0,0,0.3)";
         ctx.lineWidth = 1;
         ctx.stroke();
+
+        // Possession indicator: small colored dot next to ball
+        if (obj.possession === "home" || obj.possession === "away") {
+            const dotR = r * 0.4;
+            const dotOffset = r + dotR + 2;
+            const dotColor = obj.possession === "home" ? "#7ca8ff" : "#ff6b7b";
+            ctx.fillStyle = dotColor;
+            ctx.beginPath();
+            ctx.arc(pos.x + dotOffset, pos.y - dotOffset, dotR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(0,0,0,0.4)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
     },
 
     drawArrow(obj) {
@@ -895,6 +927,66 @@ const TacticalRenderer = {
                     ctx.globalAlpha = 1;
                 }
             }
+        }
+    },
+
+    /* ── Animation Trails ──────────────────────────────────────────── */
+    _drawTrails() {
+        if (!this._trailPositions || this._trailPositions.size === 0) return;
+        const ctx = this.ctx;
+        const maxTrail = 10;
+        for (const [objId, positions] of this._trailPositions) {
+            if (!positions || positions.length < 2) continue;
+            // Find the object to get its color
+            const obj = this.project.objects.find((o) => o.id === objId);
+            if (!obj) continue;
+            const baseColor = obj.color || "#ffffff";
+            const isBall = obj.type === "ball";
+            const r = (isBall ? obj.radius * 0.6 : obj.radius * 0.5) * this.scale;
+
+            for (let i = 0; i < positions.length; i++) {
+                const pct = (i + 1) / (maxTrail + 1); // 0..1 opacity
+                const alpha = pct * 0.5; // fading from 0.05 to 0.5
+                const pos = this.toCanvas(positions[i].x, positions[i].y);
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = baseColor;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, r * pct, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+    },
+
+    _drawBallDragTrail() {
+        if (!this._ballDragTrail || this._ballDragTrail.length < 2) return;
+        const ctx = this.ctx;
+        const maxLen = 3;
+        const trail = this._ballDragTrail.slice(-maxLen);
+        for (let i = 0; i < trail.length; i++) {
+            const pct = (i + 1) / (maxLen + 1);
+            const alpha = pct * 0.35;
+            const pos = this.toCanvas(trail[i].x, trail[i].y);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 2 * this.scale * pct, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+    },
+
+    _collectTrailPositions() {
+        if (!this.showTrails || !this.project || !this.project.objects) return;
+        const maxTrail = 10;
+        for (const obj of this.project.objects) {
+            if (obj.type !== "player" && obj.type !== "ball") continue;
+            if (!this._trailPositions.has(obj.id)) {
+                this._trailPositions.set(obj.id, []);
+            }
+            const arr = this._trailPositions.get(obj.id);
+            arr.push({ x: obj.x, y: obj.y });
+            if (arr.length > maxTrail) arr.shift();
         }
     },
 
@@ -1339,6 +1431,12 @@ const TacticalRenderer = {
 
         if (!this.isDragging || !this.selectedObject) return;
 
+        // Track ball drag trail
+        if (this.selectedObject.type === "ball") {
+            this._ballDragTrail.push({ x: this.selectedObject.x, y: this.selectedObject.y });
+            if (this._ballDragTrail.length > 3) this._ballDragTrail.shift();
+        }
+
         if (this.selectedObject.type === "path" && this.selectedObject.points) {
             // Move all path points
             const newX = Math.max(0, Math.min(100, x - this.dragOffset.x));
@@ -1457,6 +1555,7 @@ const TacticalRenderer = {
         this._benchDragStart = null;
 
         this.isDragging = false;
+        this._ballDragTrail = [];
         if (this.onChange) this.onChange();
     },
 
@@ -1706,6 +1805,8 @@ const TacticalRenderer = {
             cancelAnimationFrame(this.animationState.animationId);
             this.animationState.animationId = null;
         }
+        // Clear trail positions
+        this._trailPositions.clear();
         // Restore current frame
         if (this.project && this.project.frames) {
             TACTICAL_BOARD.loadFrame(this.project, this.animationState.currentFrame, this);
@@ -1743,6 +1844,8 @@ const TacticalRenderer = {
         const fromObjs = frames[fromFrame].objects || [];
         const toObjs = frames[toFrame].objects || [];
         this.project.objects = TACTICAL_BOARD.interpolateObjects(fromObjs, toObjs, t);
+        // Collect trail positions for animation trails
+        this._collectTrailPositions();
         this.render();
 
         // Update presentation notes overlay
@@ -1916,13 +2019,117 @@ const TacticalRenderer = {
         w.document.close();
     },
 
-    exportPNG(filename) {
+    exportPNG(filename, options) {
         if (!this.canvas) return;
+        const opts = options || {};
+        const crop = opts.crop || "full";
+        const transparent = !!opts.transparent;
+
         // Temporarily remove selection highlight for clean export
         const savedSelection = this.selectedObject;
         this.selectedObject = null;
-        this.render();
-        const dataUrl = this.canvas.toDataURL("image/png");
+
+        let dataUrl;
+
+        if (crop === "full" && !transparent) {
+            // Simple case: render as-is
+            this.render();
+            dataUrl = this.canvas.toDataURL("image/png");
+        } else {
+            // Determine crop region in normalized coordinates (0-100 pitch space)
+            let cropX1 = 0, cropY1 = 0, cropX2 = 100, cropY2 = 100;
+            if (crop === "half-left") {
+                cropX1 = -5; cropX2 = 50;
+            } else if (crop === "half-right") {
+                cropX1 = 50; cropX2 = 105;
+            } else if (crop === "center-16:9") {
+                // Center crop to 16:9 aspect ratio
+                const pitchW = 110; // total canvas units (100 + 5 padding each side)
+                const pitchH = 78;
+                const targetRatio = 16 / 9;
+                const currentRatio = pitchW / pitchH;
+                if (currentRatio > targetRatio) {
+                    // Too wide, crop width
+                    const newW = pitchH * targetRatio;
+                    const pad = (pitchW - newW) / 2;
+                    cropX1 = pad - 5;
+                    cropX2 = 105 - (pad - 5);
+                } else {
+                    // Too tall, crop height
+                    const newH = pitchW / targetRatio;
+                    const pad = (pitchH - newH) / 2;
+                    cropY1 = pad - 5;
+                    cropY2 = 105 - (pad - 5);
+                }
+            } else if (crop === "square-1:1") {
+                // Square crop centered
+                const pitchW = 110;
+                const pitchH = 78;
+                if (pitchW > pitchH) {
+                    const pad = (pitchW - pitchH) / 2;
+                    cropX1 = pad - 5;
+                    cropX2 = 105 - (pad - 5);
+                } else {
+                    const pad = (pitchH - pitchW) / 2;
+                    cropY1 = pad - 5;
+                    cropY2 = 105 - (pad - 5);
+                }
+            }
+
+            // Convert crop region to canvas pixels
+            const tl = this.toCanvas(cropX1, cropY1);
+            const br = this.toCanvas(cropX2, cropY2);
+            const cropW = Math.round(br.x - tl.x);
+            const cropH = Math.round(br.y - tl.y);
+            const dpr = window.devicePixelRatio || 1;
+
+            // Render (with or without background)
+            if (transparent) {
+                // Clear canvas fully (no pitch drawing)
+                const w = this.canvas.width / dpr;
+                const h = this.canvas.height / dpr;
+                this.ctx.clearRect(0, 0, w, h);
+                // Draw objects only (no pitch, no grid)
+                for (const obj of this.project.objects) {
+                    if (!obj.visible) continue;
+                    const cf = this.animationState.currentFrame || 0;
+                    const vf = Number.isFinite(obj.visibleFrom) ? obj.visibleFrom : 0;
+                    const vt = Number.isFinite(obj.visibleTo) ? obj.visibleTo : Infinity;
+                    if (cf < vf || cf > vt) continue;
+                    switch (obj.type) {
+                        case "player": this.drawPlayer(obj); break;
+                        case "ball":   this.drawBall(obj); break;
+                        case "arrow":  this.drawArrow(obj); break;
+                        case "zone":   this.drawZone(obj); break;
+                        case "text":   this.drawText(obj); break;
+                        case "path":   this.drawPath(obj); break;
+                        case "rect":   this.drawRect(obj); break;
+                        case "ellipse": this.drawEllipse(obj); break;
+                        case "bench":  this.drawBench(obj); break;
+                        case "cone":   this.drawCone(obj); break;
+                        case "marker": this.drawMarker(obj); break;
+                        case "pole":   this.drawPole(obj); break;
+                        case "ladder": this.drawLadder(obj); break;
+                        case "minigoal": this.drawMiniGoal(obj); break;
+                    }
+                }
+            } else {
+                this.render();
+            }
+
+            // Create offscreen canvas for cropping
+            const offscreen = document.createElement("canvas");
+            offscreen.width = cropW * dpr;
+            offscreen.height = cropH * dpr;
+            const offCtx = offscreen.getContext("2d");
+            offCtx.drawImage(
+                this.canvas,
+                tl.x * dpr, tl.y * dpr, cropW * dpr, cropH * dpr,
+                0, 0, cropW * dpr, cropH * dpr
+            );
+            dataUrl = offscreen.toDataURL("image/png");
+        }
+
         this.selectedObject = savedSelection;
         this.render();
 

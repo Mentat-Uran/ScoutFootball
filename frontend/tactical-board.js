@@ -505,7 +505,21 @@ const TACTICAL_BOARD = {
             radius: 1.5,
             locked: false,
             visible: true,
+            visibleFrom: 0,
+            visibleTo: Infinity,
+            possession: null, // "home" | "away" | null
         };
+    },
+
+    createMultipleBalls(count) {
+        const balls = [];
+        const c = Math.max(1, Math.min(20, Math.round(count || 1)));
+        for (let i = 0; i < c; i++) {
+            const bx = 10 + Math.random() * 80;
+            const by = 10 + Math.random() * 80;
+            balls.push(this.createBall(bx, by));
+        }
+        return balls;
     },
 
     createArrow(startX, startY, endX, endY, style = "solid") {
@@ -664,6 +678,8 @@ const TACTICAL_BOARD = {
             type,
             locked: !!object.locked,
             visible: object.visible !== false,
+            visibleFrom: Number.isFinite(object.visibleFrom) ? object.visibleFrom : 0,
+            visibleTo: Number.isFinite(object.visibleTo) ? object.visibleTo : Infinity,
         };
         if (type === "arrow") {
             safe.startX = this._clampNumber(object.startX, 0, 100, 50);
@@ -708,6 +724,9 @@ const TACTICAL_BOARD = {
         safe.y = this._clampNumber(object.y, 0, 100, 50);
         safe.color = this._safeString(object.color, type === "player" ? "#7ca8ff" : "#ffffff").slice(0, 32);
         safe.radius = this._clampNumber(object.radius, 0.5, 8, type === "ball" ? 1.5 : 3);
+        if (type === "ball") {
+            safe.possession = (object.possession === "home" || object.possession === "away") ? object.possession : null;
+        }
         if (type === "player" || type === "bench") {
             safe.team = object.team === "away" ? "away" : "home";
             safe.label = this._safeString(object.label);
