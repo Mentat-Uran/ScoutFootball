@@ -17,6 +17,7 @@ from scoutfootball.app.data_loader import (
     load_player_ratings,
     load_player_value_metrics,
     load_score_prediction,
+    load_score_prediction_dc,
     load_team_match,
 )
 from scoutfootball.evaluation.scouting_queue import build_scouting_queues
@@ -135,6 +136,7 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
     return {
         "home_team": home_team,
         "away_team": away_team,
+        "model_type": "poisson",
         "home_lambda": prediction.home_lambda,
         "away_lambda": prediction.away_lambda,
         "home_win": prediction.summary.home_win,
@@ -143,6 +145,52 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
         "over_2_5": prediction.summary.over_2_5,
         "btts_yes": prediction.summary.btts_yes,
     }
+
+
+def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
+    """Predict a match using the Dixon-Coles model.
+
+    Returns the same structure as get_match_prediction but with model_type='dixon_coles'
+    and includes rho / home_advantage when available.
+    Falls back gracefully when DC artifacts are missing.
+    """
+    try:
+        prediction = load_score_prediction_dc(home_team, away_team)
+    except Exception as exc:
+        return {"error": str(exc)}
+    if isinstance(prediction, dict):
+        prediction["model_type"] = prediction.get("model_type", "dixon_coles")
+        return prediction
+    result = {
+        "home_team": home_team,
+        "away_team": away_team,
+        "model_type": "dixon_coles",
+        "home_lambda": prediction.home_lambda,
+        "away_lambda": prediction.away_lambda,
+        "home_win": prediction.summary.home_win,
+        "draw": prediction.summary.draw,
+        "away_win": prediction.summary.away_win,
+        "over_2_5": prediction.summary.over_2_5,
+        "btts_yes": prediction.summary.btts_yes,
+    }
+    # Try to enrich with DC-specific parameters (rho, home_advantage)
+    try:
+        dc_path = (
+            _settings().data_root / "models" / "artifacts" / "dixon_coles_results.parquet"
+        )
+        if dc_path.exists():
+            import pandas as pd
+
+            dc_df = pd.read_parquet(dc_path)
+            if not dc_df.empty:
+                dc_row = dc_df.iloc[0].to_dict()
+                if "rho" in dc_row:
+                    result["rho"] = _clean_json_value(dc_row["rho"])
+                if "home_advantage" in dc_row:
+                    result["home_advantage"] = _clean_json_value(dc_row["home_advantage"])
+    except Exception:
+        pass  # enrichment is optional
+    return result
 
 
 def get_value_summary() -> dict:
@@ -253,20 +301,44 @@ def get_prediction_summary() -> dict[str, Any]:
         / "artifacts"
         / "poisson_baseline_results.parquet"
     )
-    if not artifact_path.exists():
-        return {"status": "no_data"}
+    poisson_info: dict[str, Any] = {"status": "no_data"}
+    if artifact_path.exists():
+        import pandas as pd
 
-    import pandas as pd
+        try:
+            frame = pd.read_parquet(artifact_path)
+            if not frame.empty:
+                poisson_info = frame.iloc[0].to_dict()
+                poisson_info["status"] = "ok"
+        except Exception:
+            pass
 
-    try:
-        frame = pd.read_parquet(artifact_path)
-    except Exception:
-        return {"status": "no_data"}
-    if frame.empty:
-        return {"status": "no_data"}
-    row = frame.iloc[0].to_dict()
-    row["status"] = "ok"
-    return _clean_json_value(row)
+    # Dixon-Coles artifact info
+    dc_path = (
+        _settings().data_root
+        / "models"
+        / "artifacts"
+        / "dixon_coles_results.parquet"
+    )
+    dc_info: dict[str, Any] = {"status": "not_available"}
+    if dc_path.exists():
+        import pandas as pd
+
+        try:
+            dc_frame = pd.read_parquet(dc_path)
+            if not dc_frame.empty:
+                dc_info = dc_frame.iloc[0].to_dict()
+                dc_info["status"] = "ok"
+        except Exception:
+            dc_info["status"] = "error"
+
+    return _clean_json_value({
+        "poisson": poisson_info,
+        "dixon_coles": dc_info,
+        "available_models": (
+            ["poisson"] + (["dixon_coles"] if dc_info.get("status") == "ok" else [])
+        ),
+    })
 
 
 def get_action_value_summary(limit: int = 20) -> dict[str, Any]:

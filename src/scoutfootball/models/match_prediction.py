@@ -40,6 +40,7 @@ class DixonColesModel:
     rho: float
     league_mean_goals: float
     num_matches: int
+    half_life_days: float | None = None
 
 
 @dataclass(frozen=True)
@@ -177,6 +178,7 @@ def fit_dixon_coles(
     team_match_df: pd.DataFrame,
     *,
     maxiter: int = 500,
+    half_life_days: float | None = None,
 ) -> DixonColesModel:
     """Fit a Dixon-Coles (1997) model via maximum likelihood estimation.
 
@@ -184,6 +186,8 @@ def fit_dixon_coles(
     ----------
     team_match_df : DataFrame with columns: team_id, is_home, goals_for, goals_against
     maxiter : Maximum optimizer iterations.
+    half_life_days : If set, apply exponential time decay weighting. Each match
+        is weighted by 0.5 ** (days_since_most_recent / half_life_days).
 
     Returns
     -------
@@ -212,6 +216,14 @@ def fit_dixon_coles(
     )
     if matches_merged.empty:
         raise ValueError("No complete home-away match pairs found")
+
+    # Compute time decay weights if requested
+    decay_weights = np.ones(len(matches_merged))
+    if half_life_days is not None and "match_date_home" in matches_merged.columns:
+        dates = pd.to_datetime(matches_merged["match_date_home"], errors="coerce")
+        most_recent = dates.max()
+        days_since = (most_recent - dates).dt.days.to_numpy(dtype=float)
+        decay_weights = 0.5 ** (days_since / half_life_days)
 
     teams = sorted(df["team_id"].dropna().astype(str).unique())
     n_teams = len(teams)
@@ -255,7 +267,7 @@ def fit_dixon_coles(
         # Dixon-Coles tau correction for low scores
         ll += _dc_log_tau(hg, ag, lam_home, lam_away, rho)
 
-        return -float(np.sum(ll))
+        return -float(np.sum(ll * decay_weights))
 
     # Initial guess: small random perturbation around zero
     rng = np.random.default_rng(42)
@@ -300,6 +312,7 @@ def fit_dixon_coles(
         rho=float(rho),
         league_mean_goals=league_mean,
         num_matches=len(hg),
+        half_life_days=half_life_days,
     )
 
 

@@ -1,4 +1,8 @@
-"""Match Prediction page: upcoming matches, probabilities, and score distribution."""
+"""Match Prediction page: upcoming matches, probabilities, and score distribution.
+
+Supports both Independent Poisson and Dixon-Coles models with a model selector
+and a side-by-side comparison view.
+"""
 
 # ruff: noqa: E402
 
@@ -15,17 +19,39 @@ SRC_ROOT = Path(__file__).resolve().parents[3]
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from scoutfootball.app.data_loader import load_team_match
+from scoutfootball.app.data_loader import _parquet_exists, load_team_match
 from scoutfootball.evaluation.coverage_confidence import (
     classify_confidence,
     display_confidence_badge,
 )
-from scoutfootball.models.match_prediction import fit_independent_poisson, predict_match
+from scoutfootball.models.match_prediction import (
+    DixonColesModel,
+    IndependentPoissonModel,
+    fit_dixon_coles,
+    fit_independent_poisson,
+    predict_match,
+    predict_match_dc,
+)
 
 st.header("比赛预测")
 
 team_df = load_team_match()
 is_synthetic = team_df.get("is_synthetic", pd.Series(dtype=bool)).any()
+
+# --- Model selector ---
+dc_available = _parquet_exists("models/artifacts/dixon_coles_results.parquet")
+
+model_options = ["Poisson"]
+if dc_available:
+    model_options.append("Dixon-Coles")
+    model_options.append("对比 (两者)")
+
+selected_model = st.radio(
+    "预测模型",
+    model_options,
+    index=0,
+    horizontal=True,
+)
 
 # --- League filter ---
 league_col = None
@@ -61,12 +87,19 @@ selected_match = st.selectbox("选择对阵", match_options, index=0)
 home_name = selected_match.split(" vs ")[0]
 away_name = selected_match.split(" vs ")[1]
 
-# --- Fit model ---
-try:
-    model = fit_independent_poisson(filtered_df)
-except ValueError as exc:
-    st.error(f"模型拟合失败：{exc}")
-    st.stop()
+
+# ---------------------------------------------------------------------------
+# Model fitting helpers (cached per model type + filtered_df identity)
+# ---------------------------------------------------------------------------
+@st.cache_resource(show_spinner=False)
+def _fit_poisson_model(_df: pd.DataFrame) -> IndependentPoissonModel:
+    return fit_independent_poisson(_df)
+
+
+@st.cache_resource(show_spinner=False)
+def _fit_dc_model(_df: pd.DataFrame) -> DixonColesModel:
+    return fit_dixon_coles(_df)
+
 
 # Resolve team_id from team_name
 team_id_map: dict[str, str] = {}
@@ -80,8 +113,80 @@ else:
 home_id = team_id_map.get(home_name, home_name)
 away_id = team_id_map.get(away_name, away_name)
 
-# Check team coverage in model
-available_teams = set(model.home_attack_strength.keys()) | set(model.away_attack_strength.keys())
+# ---------------------------------------------------------------------------
+# Helper: fit + predict + validate for a given model type
+# ---------------------------------------------------------------------------
+from scoutfootball.models.match_prediction import PoissonPrediction  # noqa: E402
+
+
+def _run_prediction(
+    model_type: str,
+    df: pd.DataFrame,
+    h_id: str,
+    a_id: str,
+) -> tuple[IndependentPoissonModel | DixonColesModel, PoissonPrediction, set[str]]:
+    """Fit the requested model, predict, and return (model, prediction, available_teams).
+
+    Raises ValueError on fit failure or missing teams.
+    """
+    if model_type == "Dixon-Coles":
+        dc_model = _fit_dc_model(df)
+        available = set(dc_model.team_attack.keys()) | set(dc_model.team_defense.keys())
+        pred = predict_match_dc(dc_model, h_id, a_id)
+        return dc_model, pred, available
+    else:
+        poisson_model = _fit_poisson_model(df)
+        available = set(poisson_model.home_attack_strength.keys()) | set(
+            poisson_model.away_attack_strength.keys()
+        )
+        pred = predict_match(poisson_model, h_id, a_id)
+        return poisson_model, pred, available
+
+
+# ---------------------------------------------------------------------------
+# Run primary model(s)
+# ---------------------------------------------------------------------------
+run_comparison = selected_model == "对比 (两者)"
+
+predictions: dict[
+    str, tuple[IndependentPoissonModel | DixonColesModel, PoissonPrediction, set[str]]
+] = {}
+errors: dict[str, str] = {}
+
+model_types_to_run: list[str] = []
+if selected_model == "Poisson" or run_comparison:
+    model_types_to_run.append("Poisson")
+if (selected_model == "Dixon-Coles" or run_comparison) and dc_available:
+    model_types_to_run.append("Dixon-Coles")
+
+for mtype in model_types_to_run:
+    try:
+        predictions[mtype] = _run_prediction(mtype, filtered_df, home_id, away_id)
+    except ValueError as exc:
+        errors[mtype] = str(exc)
+
+# If the primary (non-comparison) model failed, show error and stop
+if not run_comparison:
+    primary = model_types_to_run[0]
+    if primary in errors:
+        st.error(f"{primary} 模型拟合失败：{errors[primary]}")
+        st.stop()
+    model_obj, prediction, available_teams = predictions[primary]
+else:
+    # In comparison mode, at least one must succeed
+    if not predictions:
+        for m, e in errors.items():
+            st.error(f"{m} 模型拟合失败：{e}")
+        st.stop()
+    # Default to the first available for the main display
+    first_type = model_types_to_run[0]
+    if first_type in predictions:
+        model_obj, prediction, available_teams = predictions[first_type]
+    else:
+        first_type = model_types_to_run[1]
+        model_obj, prediction, available_teams = predictions[first_type]
+
+# Validate teams in primary model
 home_in_model = home_id in available_teams
 away_in_model = away_id in available_teams
 
@@ -94,8 +199,22 @@ if not home_in_model or not away_in_model:
     st.error(f"以下球队不在模型中：{', '.join(missing)}。请选择其他球队。")
     st.stop()
 
-# --- Predict ---
-prediction = predict_match(model, home_id, away_id)
+# --- Model metadata ---
+if not run_comparison:
+    st.subheader("模型参数")
+    if isinstance(model_obj, DixonColesModel):
+        m1, m2, m3 = st.columns(3)
+        m1.metric("模型", "Dixon-Coles")
+        m2.metric("rho (低分修正)", f"{model_obj.rho:.4f}")
+        m3.metric("主场优势", f"{model_obj.home_advantage:.4f}")
+        c1, c2 = st.columns(2)
+        c1.metric("联赛场均进球", f"{model_obj.league_mean_goals:.2f}")
+        c2.metric("训练比赛数", f"{model_obj.num_matches}")
+    else:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("模型", "Independent Poisson")
+        m2.metric("联赛主场进球率", f"{model_obj.league_home_rate:.3f}")
+        m3.metric("联赛客场进球率", f"{model_obj.league_away_rate:.3f}")
 
 # --- Win/Draw/Loss probability bars ---
 st.subheader("胜平负概率")
@@ -197,6 +316,131 @@ c1, c2, c3 = st.columns(3)
 c1.metric("大 2.5 球", f"{prediction.summary.over_2_5:.1%}")
 c2.metric("小 2.5 球", f"{prediction.summary.under_2_5:.1%}")
 c3.metric("双方进球", f"{prediction.summary.btts_yes:.1%}")
+
+# ===========================================================================
+# --- Comparison section (both models side by side) ---
+# ===========================================================================
+if run_comparison and len(predictions) >= 2:
+    st.divider()
+    st.subheader("📊 模型对比：Poisson vs Dixon-Coles")
+
+    poisson_pred = predictions["Poisson"][1]
+    dc_pred = predictions["Dixon-Coles"][1]
+    poisson_model: IndependentPoissonModel = predictions["Poisson"][0]  # type: ignore[assignment]
+    dc_model: DixonColesModel = predictions["Dixon-Coles"][0]  # type: ignore[assignment]
+
+    # Model parameters comparison
+    st.markdown("**模型参数**")
+    param_data = {
+        "参数": [
+            "模型类型",
+            "联赛场均进球",
+            "主场优势 (rho / home_adv)",
+            "训练比赛数",
+        ],
+        "Poisson": [
+            "Independent Poisson",
+            f"{poisson_model.league_home_rate:.3f} (主)"
+            f" / {poisson_model.league_away_rate:.3f} (客)",
+            f"league_home_rate = {poisson_model.league_home_rate:.4f}",
+            "—",
+        ],
+        "Dixon-Coles": [
+            "Dixon-Coles",
+            f"{dc_model.league_mean_goals:.3f}",
+            f"rho = {dc_model.rho:.4f}, home_adv = {dc_model.home_advantage:.4f}",
+            f"{dc_model.num_matches}",
+        ],
+    }
+    st.dataframe(pd.DataFrame(param_data), use_container_width=True, hide_index=True)
+
+    # Win/Draw/Loss comparison
+    st.markdown("**胜平负概率对比**")
+    wdl_data = {
+        "结果": ["主胜", "平局", "客胜"],
+        "Poisson": [
+            f"{poisson_pred.summary.home_win:.1%}",
+            f"{poisson_pred.summary.draw:.1%}",
+            f"{poisson_pred.summary.away_win:.1%}",
+        ],
+        "Dixon-Coles": [
+            f"{dc_pred.summary.home_win:.1%}",
+            f"{dc_pred.summary.draw:.1%}",
+            f"{dc_pred.summary.away_win:.1%}",
+        ],
+    }
+    st.dataframe(pd.DataFrame(wdl_data), use_container_width=True, hide_index=True)
+
+    # Expected goals comparison
+    st.markdown("**期望进球对比**")
+    xg_data = {
+        "球队": [f"{home_name} (主)", f"{away_name} (客)"],
+        "Poisson": [f"{poisson_pred.home_lambda:.2f}", f"{poisson_pred.away_lambda:.2f}"],
+        "Dixon-Coles": [f"{dc_pred.home_lambda:.2f}", f"{dc_pred.away_lambda:.2f}"],
+    }
+    st.dataframe(pd.DataFrame(xg_data), use_container_width=True, hide_index=True)
+
+    # Market probabilities comparison
+    st.markdown("**市场概率对比**")
+    market_data = {
+        "市场": ["大 2.5 球", "小 2.5 球", "双方进球"],
+        "Poisson": [
+            f"{poisson_pred.summary.over_2_5:.1%}",
+            f"{poisson_pred.summary.under_2_5:.1%}",
+            f"{poisson_pred.summary.btts_yes:.1%}",
+        ],
+        "Dixon-Coles": [
+            f"{dc_pred.summary.over_2_5:.1%}",
+            f"{dc_pred.summary.under_2_5:.1%}",
+            f"{dc_pred.summary.btts_yes:.1%}",
+        ],
+    }
+    st.dataframe(pd.DataFrame(market_data), use_container_width=True, hide_index=True)
+
+    # Side-by-side heatmaps
+    st.markdown("**比分分布热力图对比**")
+    col_p, col_dc = st.columns(2)
+
+    for col, pred, label in [
+        (col_p, poisson_pred, "Poisson"),
+        (col_dc, dc_pred, "Dixon-Coles"),
+    ]:
+        with col:
+            st.caption(label)
+            sm = pred.score_matrix
+            sub_sm = sm.loc[sm.index.isin(range(6)), sm.columns.isin(range(6))]
+            fig_cmp = go.Figure(
+                go.Heatmap(
+                    z=sub_sm.values,
+                    x=[str(c) for c in sub_sm.columns],
+                    y=[str(i) for i in sub_sm.index],
+                    colorscale="Blues",
+                    text=[[f"{v:.3f}" for v in row] for row in sub_sm.values],
+                    texttemplate="%{text}",
+                    hovertemplate="主队 %{y} - 客队 %{x}: %{z:.4f}<extra></extra>",
+                )
+            )
+            fig_cmp.update_layout(
+                xaxis_title=f"{away_name} 进球",
+                yaxis_title=f"{home_name} 进球",
+                height=400,
+            )
+            st.plotly_chart(fig_cmp, use_container_width=True)
+
+    # Top scores comparison
+    st.markdown("**最可能比分对比 (Top 5)**")
+    for pred, label in [(poisson_pred, "Poisson"), (dc_pred, "Dixon-Coles")]:
+        sp: list[tuple[str, float]] = []
+        m = pred.score_matrix
+        for i in m.index:
+            for j in m.columns:
+                sp.append((f"{i} - {j}", float(m.loc[i, j])))
+        sp.sort(key=lambda x: x[1], reverse=True)
+        top5 = sp[:5]
+        top5_df = pd.DataFrame(top5, columns=["比分", "概率"])
+        top5_df["概率"] = top5_df["概率"].map(lambda p: f"{p:.2%}")
+        st.caption(label)
+        st.dataframe(top5_df, use_container_width=True, hide_index=True)
 
 # --- Model confidence ---
 st.subheader("模型置信度")
