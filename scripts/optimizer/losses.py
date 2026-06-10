@@ -480,11 +480,23 @@ def objective_torch(
     prior_params=None,
     verbose=False,
     return_components=False,
+    matched_group_idx_cache=None,
+    actual_t_cache=None,
 ):
     """Composite objective with ranking, calibrated points, distribution and guardrails."""
     ratings = compute_ratings_torch(feat, params, device)
     team_avgs = compute_team_avg_ratings_torch(feat, ratings, device)
-    matched_group_idx, actual_t = build_team_target_tensors(feat, team_pts_df, device)
+
+    # Cache matched_group_idx and actual_t across calls (they depend only on
+    # feat + team_pts_df, not on params). The optimizer passes pre-computed
+    # caches to avoid rebuilding the same tensors every training step.
+    if matched_group_idx_cache is not None and actual_t_cache is not None:
+        matched_group_idx = matched_group_idx_cache
+        actual_t = actual_t_cache
+    else:
+        matched_group_idx, actual_t = build_team_target_tensors(
+            feat, team_pts_df, device,
+        )
 
     if len(matched_group_idx) < 10:
         dummy = torch.tensor(1.0, device=device, requires_grad=True)

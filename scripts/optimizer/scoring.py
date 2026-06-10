@@ -37,7 +37,10 @@ from .constants import (
 # Feature tensor construction
 # ---------------------------------------------------------------------------
 
-def build_feature_tensors(df, rank_reference_df=None):
+def build_feature_tensors(
+    df: pd.DataFrame,
+    rank_reference_df: pd.DataFrame | None = None,
+) -> dict:
     """预计算所有特征张量，包括防守和控球维度。
 
     rank_reference_df 用于把验证/测试集映射到训练集分布，避免用测试集整体分布
@@ -251,7 +254,11 @@ def _build_team_aggregation_weights(df_reset: pd.DataFrame) -> np.ndarray:
 # Rating computation (PyTorch)
 # ---------------------------------------------------------------------------
 
-def compute_ratings_torch(feat, params, device):
+def compute_ratings_torch(
+    feat: dict,
+    params: torch.Tensor,
+    device: torch.device,
+) -> torch.Tensor:
     """向量化评分，无循环。"""
     # Unpack parameters
     idx = 0

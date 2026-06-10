@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 from scipy.stats import pearsonr, spearmanr
 
@@ -56,36 +57,36 @@ def cosine_lr_scale(
 
 
 def optimize(
-    feat,
-    team_pts,
-    device,
-    n_steps=500,
-    lr=0.035,
-    pop_size=32,
-    spearman_weight=0.30,
-    soft_rank_temperature=4.0,
-    ndcg_weight=0.12,
-    position_consistency_weight=0.10,
-    points_regression_weight=0.20,
-    distribution_weight=0.05,
-    quantile_weight=0.08,
-    range_penalty_weight=0.10,
-    tail_calibration_weight=0.08,
-    league_bias_weight=0.05,
-    extreme_penalty_weight=0.02,
-    prior_strength=0.01,
-    dc_likelihood_weight=0.08,
-    dc_tensors=None,
-    dc_rho=-0.13,
-    init_scale=0.35,
-    patience=80,
-    warmup_steps=20,
-    min_lr_ratio=0.08,
-    grad_clip=5.0,
-    seed=None,
-    enable_viz=True,
-    output_dir=None,
-):
+    feat: dict,
+    team_pts: pd.DataFrame,
+    device: torch.device,
+    n_steps: int = 500,
+    lr: float = 0.035,
+    pop_size: int = 32,
+    spearman_weight: float = 0.30,
+    soft_rank_temperature: float = 4.0,
+    ndcg_weight: float = 0.12,
+    position_consistency_weight: float = 0.10,
+    points_regression_weight: float = 0.20,
+    distribution_weight: float = 0.05,
+    quantile_weight: float = 0.08,
+    range_penalty_weight: float = 0.10,
+    tail_calibration_weight: float = 0.08,
+    league_bias_weight: float = 0.05,
+    extreme_penalty_weight: float = 0.02,
+    prior_strength: float = 0.01,
+    dc_likelihood_weight: float = 0.08,
+    dc_tensors: dict | None = None,
+    dc_rho: float = -0.13,
+    init_scale: float = 0.35,
+    patience: int = 80,
+    warmup_steps: int = 20,
+    min_lr_ratio: float = 0.08,
+    grad_clip: float = 5.0,
+    seed: int | None = None,
+    enable_viz: bool = True,
+    output_dir: Path | None = None,
+) -> torch.Tensor:
     """
     多起点并行优化。
     对 pop_size 组随机初始化的参数同时优化，取最优。
@@ -176,6 +177,8 @@ def optimize(
                 dc_rho=dc_rho,
                 prior_params=prior_params,
                 return_components=True,
+                matched_group_idx_cache=matched_group_idx,
+                actual_t_cache=actual_t,
             )
 
             total_loss.backward()
