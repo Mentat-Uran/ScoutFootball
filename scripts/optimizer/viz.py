@@ -79,11 +79,6 @@ COMPONENT_KEYS = [
     "dc_likelihood",   # 新增
 ]
 
-POSITION_COLORS = {
-    "ST": "#ef4444", "W": "#f97316", "AM": "#eab308", "CM": "#22c55e",
-    "DM": "#14b8a6", "FB": "#06b6d4", "CB": "#3b82f6", "GK": "#8b5cf6",
-}
-
 LEAGUE_COLORS = {
     "ENG-Premier League": "#3b82f6",
     "ESP-La Liga": "#f59e0b",

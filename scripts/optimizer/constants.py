@@ -785,14 +785,37 @@ def apply_position_weight_caps(weights: torch.Tensor) -> torch.Tensor:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def team_aggregation_config() -> dict[str, float]:
-    """Return the robust team-season aggregation settings for reports."""
-    return {
-        "minutes_cap": TEAM_AGG_MINUTES_CAP,
-        "core_minutes": TEAM_AGG_CORE_MINUTES,
-        "core_scale": TEAM_AGG_CORE_SCALE,
-        "capped_minutes_blend": TEAM_AGG_CAPPED_MINUTES_BLEND,
-        "core_rotation_blend": 1.0 - TEAM_AGG_CAPPED_MINUTES_BLEND,
-        "position_slot_groups": POSITION_SLOT_GROUPS,
-        "position_slot_caps": POSITION_SLOT_CAPS,
-    }
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Scoring reliability parameters
+# ═══════════════════════════════════════════════════════════════════════════
+
+RELIABILITY_MIN_THRESHOLD = 400.0
+RELIABILITY_MIN_CEILING = 1200.0
+RELIABILITY_MIN_FLOOR = 0.42
+
+INJURY_START_RATE_THRESHOLD = 0.70
+INJURY_MIN_FLOOR = 0.72
+INJURY_MIN_CEILING = 900.0
+
+ATTACK_SCALE = {
+    "ST": 1.00, "W": 0.96, "AM": 0.97, "CM": 0.92,
+    "DM": 0.82, "FB": 0.82, "CB": 1.00, "GK": 1.00,
+}
+
+QUALITY_SCALE = {
+    "ST": 1.00, "W": 1.00, "AM": 1.00, "CM": 0.88,
+    "DM": 0.94, "FB": 1.00, "CB": 1.00, "GK": 1.00,
+}
+
+UEFA_LEAGUE_COEFFS = {
+    "Premier League": 1.00,
+    "La Liga": 0.95,
+    "Bundesliga": 0.90,
+    "Serie A": 0.92,
+    "Ligue 1": 0.85,
+}
+
+STANDARD_SEASON_MATCHES = 38.0

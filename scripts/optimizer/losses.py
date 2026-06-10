@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 
 # 来自 constants.py 的依赖
-from .constants import POSITION_CORE_METRICS, POS_TO_IDX, normalize_team_name
+from .constants import POSITION_CORE_METRICS, POS_TO_IDX
 
 # 来自 scoring.py 的依赖
 from .scoring import (
@@ -209,53 +209,6 @@ def league_bias_loss(
 
 # ── Dixon-Coles 比分预测似然 ────────────────────────────────────────────
 
-
-def build_dc_match_tensors(matches_df, feat, device):
-    """Build match-level tensors for Dixon-Coles likelihood computation.
-
-    Matches team-season groups from feat with match results from Football-Data.
-    Only includes matches where both teams have a team-season group in feat.
-    """
-    # Build lookup: (normalized_team, league, season) -> group index
-    team_season_to_group = {}
-    for i, (team, league, season) in enumerate(
-        zip(feat["ts_team_names"], feat["ts_leagues"], feat["ts_seasons"]),
-    ):
-        key = (normalize_team_name(team), str(league), str(season))
-        team_season_to_group[key] = i
-
-    home_group_idx = []
-    away_group_idx = []
-    home_goals = []
-    away_goals = []
-
-    for _, row in matches_df.iterrows():
-        home_key = (
-            normalize_team_name(str(row["home_team"])),
-            str(row["league"]),
-            str(row["season"]),
-        )
-        away_key = (
-            normalize_team_name(str(row["away_team"])),
-            str(row["league"]),
-            str(row["season"]),
-        )
-        if home_key in team_season_to_group and away_key in team_season_to_group:
-            home_group_idx.append(team_season_to_group[home_key])
-            away_group_idx.append(team_season_to_group[away_key])
-            home_goals.append(float(row["home_goals"]))
-            away_goals.append(float(row["away_goals"]))
-
-    if not home_group_idx:
-        return None
-
-    return {
-        "home_group_idx": torch.tensor(home_group_idx, dtype=torch.long, device=device),
-        "away_group_idx": torch.tensor(away_group_idx, dtype=torch.long, device=device),
-        "home_goals": torch.tensor(home_goals, dtype=torch.float32, device=device),
-        "away_goals": torch.tensor(away_goals, dtype=torch.float32, device=device),
-        "n_matches": len(home_group_idx),
-    }
 
 
 def _poisson_log_pmf(k, lam, eps=1e-8):

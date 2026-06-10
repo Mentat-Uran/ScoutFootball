@@ -28,7 +28,13 @@ from .constants import (
 
 def load_data(data_dir: Path):
     """加载 FBref 球员数据 (standard + misc + shooting) + Football-Data 球队积分。"""
-    fbref = pd.read_parquet(data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet")
+    fbref_path = data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet"
+    if not fbref_path.exists():
+        raise FileNotFoundError(
+            f"FBref 数据文件不存在: {fbref_path}\n"
+            "请先运行 'scoutfootball ingest --sources fbref' 或手动下载数据。"
+        )
+    fbref = pd.read_parquet(fbref_path)
 
     goals = fbref[("Performance", "Gls")].values.astype(np.float32)
     assists_col = fbref[("Performance", "Ast")].values.astype(np.float32)
@@ -380,7 +386,13 @@ def load_data(data_dir: Path):
     df = refine_role_positions(df)
 
     # Team standings + match-level data (for Dixon-Coles)
-    fd = pd.read_parquet(data_dir / "raw" / "football_data" / "combined_results.parquet")
+    fd_path = data_dir / "raw" / "football_data" / "combined_results.parquet"
+    if not fd_path.exists():
+        raise FileNotFoundError(
+            f"Football-Data 比赛数据不存在: {fd_path}\n"
+            "请先运行 'scoutfootball ingest --sources football_data'。"
+        )
+    fd = pd.read_parquet(fd_path)
     standings_rows = []
     match_rows = []
     for _, row in fd.iterrows():
