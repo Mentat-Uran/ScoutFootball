@@ -20,6 +20,10 @@ from scoutfootball.api import (
     get_shortlist,
     get_value_summary,
     get_watchlist,
+    get_wc_groups,
+    get_wc_predictions,
+    get_wc_schedule,
+    get_wc_squad,
     health_check,
     list_players,
     list_teams,
@@ -148,6 +152,24 @@ def create_app() -> FastAPI:
     @app.get("/reports/model-runs")
     def report_model_runs():
         return get_model_runs()
+
+    # ── World Cup endpoints ──────────────────────────────────────────────
+
+    @app.get("/world-cup/groups")
+    def wc_groups():
+        return get_wc_groups()
+
+    @app.get("/world-cup/schedule")
+    def wc_schedule(group: str | None = None, matchday: int | None = None):
+        return get_wc_schedule(group=group, matchday=matchday)
+
+    @app.get("/world-cup/squads/{team}")
+    def wc_squad(team: str):
+        return get_wc_squad(team)
+
+    @app.get("/world-cup/predictions")
+    def wc_predictions():
+        return get_wc_predictions()
 
     # Serve frontend static files
     from pathlib import Path

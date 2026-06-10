@@ -117,14 +117,14 @@ def _get_result(row: pd.Series, action_type: ActionType) -> ActionResult:
     """Determine action result from the row."""
     # Check pass outcome
     if action_type == ActionType.PASS:
-        pass_outcome = row.get("pass_outcome")
+        pass_outcome = row.get("pass_outcome_name")
         if pd.isna(pass_outcome) or pass_outcome is None:
             return ActionResult.SUCCESS
         return ActionResult.FAILURE
 
     # Check shot outcome
     if action_type == ActionType.SHOT:
-        shot_outcome = row.get("shot_outcome")
+        shot_outcome = row.get("shot_outcome_name")
         if pd.isna(shot_outcome) or shot_outcome is None:
             return ActionResult.UNKNOWN
         if "Goal" in str(shot_outcome):
@@ -163,8 +163,17 @@ def convert_event_to_action(row: pd.Series, match_id: str) -> InternalAction | N
     result = _get_result(row, action_type)
 
     # Get identifiers
-    player_id = str(row.get("player_id", "")) if not pd.isna(row.get("player_id")) else ""
-    team_id = str(row.get("team_id", "")) if not pd.isna(row.get("team_id")) else ""
+    raw_player_id = row.get("player_id")
+    if pd.isna(raw_player_id) or raw_player_id is None:
+        player_id = ""
+    else:
+        player_id = str(int(float(raw_player_id)))
+
+    raw_team_id = row.get("team_id")
+    if pd.isna(raw_team_id) or raw_team_id is None:
+        team_id = ""
+    else:
+        team_id = str(int(float(raw_team_id)))
 
     # Get timing
     period = int(row.get("period", 1)) if not pd.isna(row.get("period")) else 1
@@ -214,7 +223,7 @@ def convert_all_events(events_path: Path) -> list[InternalAction]:
     all_actions = []
     if "match_id" in df.columns:
         for mid, group in df.groupby("match_id"):
-            actions = convert_match_events(group, str(mid))
+            actions = convert_match_events(group, str(int(mid)))
             all_actions.extend(actions)
     else:
         all_actions = convert_match_events(df, "unknown")

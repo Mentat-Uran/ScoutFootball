@@ -211,9 +211,23 @@ def league_bias_loss(
 
 
 def _poisson_log_pmf(k, lam, eps=1e-8):
-    """Log PMF of Poisson: log(P(X=k|λ)) = k*log(λ) - λ - log(k!)"""
+    """Log PMF of Poisson: log(P(X=k|λ)) = k*log(λ) - λ - log(k!)
+
+    Uses Stirling approximation for log(k!) to avoid CUDA lgamma issues
+    while keeping the computation fully differentiable on GPU.
+    For k >= 1: log(k!) ≈ k*log(k) - k + 0.5*log(2πk)
+    For k = 0:  log(0!) = 0
+    """
     lam_safe = lam.clamp(min=eps)
-    return k * torch.log(lam_safe) - lam_safe - torch.lgamma(k + 1.0)
+    k_int = k.round().clamp(min=0)
+    # Stirling approximation for log(k!)
+    # When k=0, log(k!) = 0; otherwise use k*log(k) - k + 0.5*log(2*pi*k)
+    log_k_factorial = torch.where(
+        k_int < 0.5,
+        torch.zeros_like(k_int),
+        k_int * torch.log(k_int.clamp(min=eps)) - k_int + 0.5 * torch.log(2.0 * 3.14159265 * k_int.clamp(min=eps)),
+    )
+    return k_int * torch.log(lam_safe) - lam_safe - log_k_factorial
 
 
 def _dixon_coles_log_tau(x, y, lam_home, lam_away, rho, eps=1e-8):
@@ -221,34 +235,39 @@ def _dixon_coles_log_tau(x, y, lam_home, lam_away, rho, eps=1e-8):
 
     τ corrects Poisson independence for outcomes (0,0), (1,0), (0,1), (1,1).
     Returns log(τ(x, y, λ, μ, ρ)); for scores > 1 returns 0 (log(1)).
+
+    Uses torch.where instead of masked_scatter to avoid CUDA device-side assert.
     """
-    log_tau = torch.zeros_like(lam_home)
+    x_int = x.round()
+    y_int = y.round()
 
     # (0, 0): τ = 1 - λ*μ*ρ
-    mask_00 = (x == 0) & (y == 0)
-    if mask_00.any():
-        val = 1.0 - lam_home[mask_00] * lam_away[mask_00] * rho
-        log_tau = log_tau.masked_scatter(mask_00, torch.log(val.clamp(min=eps)))
+    val_00 = 1.0 - lam_home * lam_away * rho
+    log_tau_00 = torch.log(val_00.clamp(min=eps))
 
     # (1, 0): τ = 1 + λ*ρ
-    mask_10 = (x == 1) & (y == 0)
-    if mask_10.any():
-        val = 1.0 + lam_home[mask_10] * rho
-        log_tau = log_tau.masked_scatter(mask_10, torch.log(val.clamp(min=eps)))
+    val_10 = 1.0 + lam_home * rho
+    log_tau_10 = torch.log(val_10.clamp(min=eps))
 
     # (0, 1): τ = 1 + μ*ρ
-    mask_01 = (x == 0) & (y == 1)
-    if mask_01.any():
-        val = 1.0 + lam_away[mask_01] * rho
-        log_tau = log_tau.masked_scatter(mask_01, torch.log(val.clamp(min=eps)))
+    val_01 = 1.0 + lam_away * rho
+    log_tau_01 = torch.log(val_01.clamp(min=eps))
 
     # (1, 1): τ = 1 - ρ
-    mask_11 = (x == 1) & (y == 1)
-    if mask_11.any():
-        n11 = int(mask_11.sum())
-        val = torch.full((n11,), 1.0 - rho, device=log_tau.device, dtype=log_tau.dtype)
-        log_tau = log_tau.masked_scatter(mask_11, torch.log(val.clamp(min=eps)))
+    val_11 = 1.0 - rho
+    log_tau_11 = torch.log(torch.full_like(lam_home, val_11).clamp(min=eps))
 
+    # Select based on score pattern
+    is_00 = (x_int < 0.5) & (y_int < 0.5)
+    is_10 = (x_int > 0.5) & (x_int < 1.5) & (y_int < 0.5)
+    is_01 = (x_int < 0.5) & (y_int > 0.5) & (y_int < 1.5)
+    is_11 = (x_int > 0.5) & (x_int < 1.5) & (y_int > 0.5) & (y_int < 1.5)
+
+    log_tau = torch.where(is_00, log_tau_00,
+                 torch.where(is_10, log_tau_10,
+                 torch.where(is_01, log_tau_01,
+                 torch.where(is_11, log_tau_11,
+                             torch.zeros_like(lam_home)))))
     return log_tau
 
 

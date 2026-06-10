@@ -108,13 +108,18 @@ HOSTS = ["United States", "Canada", "Mexico"]
 TOURNAMENT_START = "2026-06-11"
 TOURNAMENT_END = "2026-07-19"
 
-# Opta supercomputer predicted win probabilities (top 10, from public reports)
-WIN_PROBABILITY: dict[str, float] = {
+# Opta supercomputer predicted win probabilities (top 10, from public reports).
+# Kept as a reference prior; actual team strengths are now computed from
+# squad ratings via compute_team_strengths().
+OPTA_WIN_PROBABILITY: dict[str, float] = {
     "Spain": 0.161, "France": 0.128, "Brazil": 0.112,
     "England": 0.098, "Argentina": 0.087, "Germany": 0.072,
     "Portugal": 0.065, "Netherlands": 0.054, "Uruguay": 0.038,
     "Belgium": 0.032,
 }
+
+# Backward-compatible alias
+WIN_PROBABILITY = OPTA_WIN_PROBABILITY
 
 
 # ── Match schedule ────────────────────────────────────────────────────────
@@ -502,11 +507,11 @@ def is_big5_league(league_name: str) -> bool:
 
 def enrich_squad_with_ratings(
     squad: list[SquadPlayer],
-    ratings_df: pd.DataFrame,  # noqa: F821
+    ratings_df,  # pd.DataFrame
 ) -> list[SquadPlayer]:
     """Enrich squad players with ratings from the optimized ratings data.
 
-    Matches by player name (fuzzy) and club league.
+    Matches by player name (exact → case-insensitive → last-name substring).
     Sets has_rating, rating, and rating_confidence fields.
     """
     import pandas as pd
@@ -514,30 +519,46 @@ def enrich_squad_with_ratings(
     if ratings_df.empty:
         return squad
 
-    # Build lookup: player_name -> row
-    name_col = "player_name" if "player_name" in ratings_df.columns else None
-    if name_col is None:
+    # Determine the player name column
+    name_col = "player" if "player" in ratings_df.columns else "player_name"
+    if name_col not in ratings_df.columns:
         return squad
 
+    # Prefer the latest season (2526) for matching, but allow all seasons
+    season_col = "season" if "season" in ratings_df.columns else None
+
     for player in squad:
+        match = pd.DataFrame()
+
         # Try exact name match first
-        match = ratings_df[ratings_df[name_col] == player.name]
-        if match.empty:
+        exact = ratings_df[ratings_df[name_col] == player.name]
+        if not exact.empty:
+            match = exact
+        else:
             # Try case-insensitive match
-            match = ratings_df[
+            ci = ratings_df[
                 ratings_df[name_col].str.lower() == player.name.lower()
             ]
-        if match.empty:
-            # Try last name match (common for transliterated names)
-            last_name = player.name.split()[-1]
-            match = ratings_df[
-                ratings_df[name_col].str.lower().str.contains(
-                    last_name.lower(), na=False
-                )
-            ]
+            if not ci.empty:
+                match = ci
+            else:
+                # Try last name match (common for transliterated names)
+                last_name = player.name.split()[-1]
+                ln = ratings_df[
+                    ratings_df[name_col].str.lower().str.contains(
+                        last_name.lower(), na=False
+                    )
+                ]
+                if not ln.empty:
+                    match = ln
 
         if not match.empty:
-            row = match.iloc[0]
+            # Prefer 2526 season if available
+            if season_col and "2526" in match[season_col].values:
+                row = match[match[season_col] == "2526"].iloc[0]
+            else:
+                row = match.iloc[0]
+
             score = row.get("optimized_score")
             if pd.notna(score):
                 player.has_rating = True
@@ -550,3 +571,110 @@ def enrich_squad_with_ratings(
                     player.rating_confidence = "medium"
 
     return squad
+
+
+def enrich_squads_with_ratings(
+    ratings_df,  # pd.DataFrame
+) -> dict[str, list[SquadPlayer]]:
+    """Enrich all WC squads with ratings from player_ratings_optimized.parquet.
+
+    Returns a dict of team_name -> list[SquadPlayer] with rating data filled in.
+    """
+    result: dict[str, list[SquadPlayer]] = {}
+    for team_name in get_all_teams():
+        squad = get_squad(team_name)
+        result[team_name] = enrich_squad_with_ratings(squad, ratings_df)
+    return result
+
+
+def compute_team_strengths(
+    enriched_squads: dict[str, list[SquadPlayer]] | None = None,
+    ratings_df=None,  # pd.DataFrame | None
+) -> dict[str, float]:
+    """Compute a strength score for each World Cup team.
+
+    Combines:
+    1. Average rating of squad players with system ratings (weight: 0.5)
+    2. Opta win probability if available (weight: 0.3)
+    3. Number of Big5 players as a proxy (weight: 0.2)
+
+    Returns a dict of team -> strength score (0-1).
+    """
+    if enriched_squads is None:
+        if ratings_df is None:
+            from scoutfootball.app.data_loader import load_player_ratings
+            ratings_df = load_player_ratings()
+        enriched_squads = enrich_squads_with_ratings(ratings_df)
+
+    strengths: dict[str, float] = {}
+
+    for team_name, squad in enriched_squads.items():
+        rated = [p for p in squad if p.has_rating]
+
+        # Component 1: average rating (normalized to 0-1)
+        if rated:
+            avg_rating = sum(p.rating for p in rated) / len(rated)
+            rating_score = min(max((avg_rating - 30) / 70, 0), 1)
+        else:
+            rating_score = 0.2
+
+        # Component 2: Opta win probability (already 0-1)
+        opta_score = OPTA_WIN_PROBABILITY.get(team_name, 0.01)
+        opta_normalized = min(opta_score / 0.16, 1.0)
+
+        # Component 3: Big5 player count (proxy for squad quality)
+        big5_count = sum(1 for p in squad if p.club_league in BIG5_LEAGUES)
+        big5_score = min(big5_count / 10, 1.0)
+
+        strength = (
+            0.5 * rating_score
+            + 0.3 * opta_normalized
+            + 0.2 * big5_score
+        )
+        strengths[team_name] = strength
+
+    return strengths
+
+
+def compute_group_predictions(
+    team_strengths: dict[str, float],
+) -> list[dict]:
+    """Estimate group advancement probabilities for all groups.
+
+    Uses a simple strength-ratio model. Returns a list of group dicts,
+    each containing group letter, teams with their advancement probabilities.
+    """
+    results = []
+    for letter, teams in GROUPS.items():
+        team_strength_pairs = [
+            (t, team_strengths.get(t, 0.2)) for t in teams
+        ]
+        total = sum(s for _, s in team_strength_pairs)
+
+        group_teams = []
+        for team, strength in team_strength_pairs:
+            p1 = strength / total if total > 0 else 0.25
+            remaining_strength = total - strength
+            p2 = (
+                (remaining_strength / total)
+                * (strength / remaining_strength)
+                if remaining_strength > 0
+                else 0
+            )
+            p3 = max(1 - p1 - p2, 0)
+            group_teams.append({
+                "team": team,
+                "strength": round(strength, 3),
+                "p1st": round(p1, 3),
+                "p2nd": round(p2, 3),
+                "p3rd": round(p3, 3),
+                "p_advance": round(min(p1 + p2, 1.0), 3),
+            })
+
+        group_teams.sort(key=lambda x: x["strength"], reverse=True)
+        results.append({
+            "group": letter,
+            "teams": group_teams,
+        })
+
+    return results
