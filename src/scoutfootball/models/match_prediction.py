@@ -353,10 +353,13 @@ def predict_match_dc(
             tau = _dc_tau_scalar(i, j, home_lambda, away_lambda, rho)
             matrix[i, j] *= tau
 
-    # Renormalize
     total = matrix.sum()
     if total > 0:
         matrix /= total
+    else:
+        logger.warning(
+            "Score matrix sum is zero after tau correction; returning unnormalized matrix"
+        )
 
     score_matrix = pd.DataFrame(
         matrix,

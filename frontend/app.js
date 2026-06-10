@@ -940,9 +940,12 @@ function renderMatchSelectors() {
     away.value = appState.away;
 }
 
+let _matchRenderId = 0;
 async function renderMatches() {
+    const myId = ++_matchRenderId;
     // Fetch prediction from API
     currentPrediction = await fetchPrediction(appState.home, appState.away);
+    if (myId !== _matchRenderId) return; // stale
     const match = selectedMatch();
     const predictionCoverage = predictionMeta.status === "ok" && predictionMeta.num_teams
         ? `${predictionMeta.num_teams} teams`

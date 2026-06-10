@@ -261,7 +261,7 @@ def run_dixon_coles_backtest(
 
         try:
             model = fit_dixon_coles(train_team_match, half_life_days=half_life_days)
-        except (ValueError, RuntimeError):
+        except (ValueError, RuntimeError, OverflowError, ArithmeticError, FloatingPointError):
             # Skip fold if DC fitting fails (e.g., too few matches)
             continue
 

@@ -34,7 +34,7 @@ with col2:
     away_options = [t for t in team_names if t != home]
     away = st.selectbox("Away Team", away_options, index=0, key="away_team")
 
-prediction = load_score_prediction()
+prediction = load_score_prediction(home, away)
 
 summary_dict = {
     "home_win": prediction.summary.home_win,

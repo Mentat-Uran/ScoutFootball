@@ -552,6 +552,7 @@ const TACTICAL_BOARD = {
 
     removeFrame(project, frameIndex) {
         if (!project.frames || project.frames.length <= 1) return;
+        if (frameIndex < 0 || frameIndex >= project.frames.length) return;
         project.frames.splice(frameIndex, 1);
     },
 
@@ -621,6 +622,7 @@ const TACTICAL_BOARD = {
 
     /* ── Animation Playback ─────────────────────────────────────────── */
     interpolateObjects(fromObjs, toObjs, t) {
+        if (!fromObjs || !toObjs) return toObjs || fromObjs || [];
         // Linear interpolation between two object sets
         const result = [];
         for (const toObj of toObjs) {

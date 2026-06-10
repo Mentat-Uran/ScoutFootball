@@ -134,15 +134,15 @@ def load_player_ratings(
     Falls back to player_ratings_optimized.parquet, then demo data.
     """
     df = _load_all_player_ratings()
-    if position:
+    if position and "position_group" in df.columns:
         df = df[df["position_group"] == position]
-    if league:
+    if league and "league" in df.columns:
         df = df[df["league"] == league]
-    if team:
+    if team and "team" in df.columns:
         df = df[df["team"] == team]
-    if season:
+    if season and "season" in df.columns:
         df = df[df["season"] == season]
-    if min_score is not None:
+    if min_score is not None and "optimized_score" in df.columns:
         df = df[df["optimized_score"] >= min_score]
     return df.reset_index(drop=True)
 
