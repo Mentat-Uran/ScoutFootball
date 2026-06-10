@@ -1129,10 +1129,137 @@ function renderOverview() {
     }
 }
 
+function _fmtMetric(value, decimals) {
+    if (value == null) return "–";
+    return Number(value).toFixed(decimals != null ? decimals : 3);
+}
+
+function _metricColor(metricKey, value) {
+    if (value == null) return "var(--text-muted)";
+    const v = Number(value);
+    if (metricKey === "spearman" || metricKey === "pearson") {
+        if (v >= 0.7) return "var(--accent, #4caf50)";
+        if (v >= 0.5) return "var(--text, #ccc)";
+        return "var(--warn, #ff9800)";
+    }
+    return "var(--text, #ccc)";
+}
+
+function _renderMetricCell(label, value, decimals, metricKey) {
+    const formatted = _fmtMetric(value, decimals);
+    const color = _metricColor(metricKey, value);
+    return `<div><span style="color:var(--text-muted)">${escapeHtml(label)}</span><br><strong style="color:${color}">${escapeHtml(formatted)}</strong></div>`;
+}
+
+function _renderMetricsBlock(title, m, decimals) {
+    if (!m || Object.keys(m).length === 0) return "";
+    const d = decimals != null ? decimals : 3;
+    const cells = [
+        _renderMetricCell("Spearman", m.spearman, d, "spearman"),
+        _renderMetricCell("Pearson", m.pearson, d, "pearson"),
+        _renderMetricCell("Rank loss", m.rank_loss, d),
+        _renderMetricCell("Cal MAE", m.calibration_mae, 1),
+        _renderMetricCell("Pts MAE", m.points_mae, 1),
+        _renderMetricCell("Pts RMSE", m.points_rmse, 1),
+    ];
+    if (m.n_players != null) cells.push(_renderMetricCell("Players", m.n_players, 0));
+    if (m.n_team_seasons != null) cells.push(_renderMetricCell("Team-seas", m.n_team_seasons, 0));
+    return `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(title)}</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(6rem,1fr));gap:0.25rem 0.6rem;font-size:0.78rem">${cells.join("")}</div>`;
+}
+
+function _renderParamsGrid(args) {
+    if (!args || Object.keys(args).length === 0) return "";
+    const entries = [
+        ["pop_size", "pop"],
+        ["n_steps", "steps"],
+        ["lr", "lr"],
+        ["patience", "patience"],
+        ["warmup_steps", "warmup"],
+        ["grad_clip", "grad clip"],
+        ["min_lr_ratio", "min lr"],
+        ["spearman_weight", "sp wt"],
+        ["ndcg_weight", "ndcg wt"],
+        ["position_consistency_weight", "pos wt"],
+        ["points_regression_weight", "pts wt"],
+        ["distribution_weight", "dist wt"],
+        ["quantile_weight", "quant wt"],
+        ["range_penalty_weight", "range wt"],
+        ["tail_calibration_weight", "tail wt"],
+        ["league_bias_weight", "league wt"],
+        ["extreme_penalty_weight", "extreme wt"],
+        ["prior_weight", "prior wt"],
+        ["dc_likelihood_weight", "dc wt"],
+        ["dc_rho", "dc rho"],
+        ["league_calibration_prior_n", "cal prior"],
+        ["league_calibration_cap", "cal cap"],
+    ];
+    const cells = entries
+        .filter(([key]) => args[key] != null)
+        .map(([key, label]) => {
+            const v = args[key];
+            const formatted = typeof v === "boolean" ? (v ? "on" : "off") : String(v);
+            return `<div><span style="color:var(--text-muted)">${escapeHtml(label)}</span><br><span>${escapeHtml(formatted)}</span></div>`;
+        });
+    if (cells.length === 0) return "";
+    return `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Parameters</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr));gap:0.2rem 0.5rem;font-size:0.75rem">${cells.join("")}</div>`;
+}
+
+function _renderPositionMetrics(posMetrics) {
+    if (!posMetrics || Object.keys(posMetrics).length === 0) return "";
+    const rows = Object.entries(posMetrics).map(([pos, m]) => {
+        return `<tr>
+            <td style="padding:0.15rem 0.4rem;font-weight:600">${escapeHtml(pos)}</td>
+            <td style="padding:0.15rem 0.4rem">${_fmtMetric(m.spearman)}</td>
+            <td style="padding:0.15rem 0.4rem">${_fmtMetric(m.pearson)}</td>
+            <td style="padding:0.15rem 0.4rem">${m.n_players != null ? Math.round(m.n_players) : "–"}</td>
+        </tr>`;
+    });
+    return `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Position-wise</p>
+    <table style="font-size:0.75rem;width:100%;border-collapse:collapse">
+        <thead><tr style="color:var(--text-muted)">
+            <th style="text-align:left;padding:0.15rem 0.4rem">Pos</th>
+            <th style="text-align:left;padding:0.15rem 0.4rem">Spearman</th>
+            <th style="text-align:left;padding:0.15rem 0.4rem">Pearson</th>
+            <th style="text-align:left;padding:0.15rem 0.4rem">N</th>
+        </tr></thead>
+        <tbody>${rows.join("")}</tbody>
+    </table>`;
+}
+
+function _renderErrorCases(errorCases) {
+    if (!errorCases) return "";
+    const parts = [];
+    const over = errorCases.over_estimated || [];
+    const under = errorCases.under_estimated || [];
+    if (over.length > 0) {
+        const items = over.slice(0, 5).map((e) => {
+            const team = e.team || e.team_name || "?";
+            const residual = e.residual != null ? Number(e.residual).toFixed(1) : "";
+            return `${escapeHtml(team)}${residual ? " (+" + residual + ")" : ""}`;
+        }).join(", ");
+        parts.push(`<div><span style="color:var(--text-muted)">Over-estimated:</span> ${items}</div>`);
+    }
+    if (under.length > 0) {
+        const items = under.slice(0, 5).map((e) => {
+            const team = e.team || e.team_name || "?";
+            const residual = e.residual != null ? Number(e.residual).toFixed(1) : "";
+            return `${escapeHtml(team)}${residual ? " (" + residual + ")" : ""}`;
+        }).join(", ");
+        parts.push(`<div><span style="color:var(--text-muted)">Under-estimated:</span> ${items}</div>`);
+    }
+    if (parts.length === 0) return "";
+    return `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Error cases</p>
+    <div style="font-size:0.75rem;line-height:1.5">${parts.join("")}</div>`;
+}
+
 function renderReports() {
     const latestRun = (modelRuns.runs || [])[0] || {};
     const latestMetrics = latestRun.metrics || {};
-    const runSpearman = latestMetrics.spearman ?? latestRun.spearman;
+    const holdoutSummary = latestRun.holdout_summary || {};
+    const optTest = holdoutSummary.optimized_test || {};
+    const runSpearman = optTest.spearman ?? latestMetrics.spearman ?? latestRun.spearman;
     const runStatus = runSpearman != null ? `Spearman ${Number(runSpearman).toFixed(3)}` : "no metrics";
     document.getElementById("report-run-title").textContent = latestRun.run_id || "rating_optimizer_gpu";
     document.getElementById("report-run-status").textContent = runStatus;
@@ -1159,27 +1286,80 @@ function renderReports() {
         ? runs.map((run) => {
             const metrics = run.metrics || {};
             const args = run.args || {};
-            const spearman = metrics.spearman ?? run.spearman;
-            const pearson = metrics.pearson ?? run.pearson;
+            const hs = run.holdout_summary || {};
+            const optTest = hs.optimized_test || {};
+            const baseTest = hs.baseline_test || {};
+            const optTrain = hs.optimized_train || {};
+            const baseTrain = hs.baseline_train || {};
+            // Top-level flat aliases from enrichment
+            const spearman = optTest.spearman ?? metrics.spearman ?? run.spearman;
+            const pearson = optTest.pearson ?? metrics.pearson ?? run.pearson;
             const hash = run.input_hash || "n/a";
             const seed = args.seed ?? run.seed ?? "–";
-            const nPlayers = metrics.n_players ?? run.n_players ?? "–";
-            const nSteps = args.n_steps ?? run.steps ?? "–";
-            const metaParts = [
-                `hash ${hash}`,
-                `seed ${seed}`,
-                `players ${nPlayers}`,
-                `steps ${nSteps}`,
+            const nPlayers = optTest.n_players ?? metrics.n_players ?? run.n_players ?? "–";
+            const nTeamSeasons = optTest.n_team_seasons ?? metrics.n_team_seasons ?? run.n_team_seasons ?? "–";
+            const coverage = optTest.team_coverage ?? metrics.team_coverage ?? run.team_coverage;
+            const dataSource = run.data_source || "";
+            const overfitGap = hs.overfit_rank_loss_gap;
+
+            // Header status
+            const statusText = spearman != null ? "READY" : "N/A";
+            const statusClass = spearman != null ? "status-high" : "status-low";
+
+            // Details row
+            const detailParts = [
+                `<span style="color:var(--text-muted)">hash</span> ${escapeHtml(hash)}`,
+                `<span style="color:var(--text-muted)">seed</span> ${escapeHtml(String(seed))}`,
+                `<span style="color:var(--text-muted)">players</span> ${escapeHtml(String(nPlayers))}`,
+                `<span style="color:var(--text-muted)">team-seas</span> ${escapeHtml(String(nTeamSeasons))}`,
             ];
-            if (spearman != null) metaParts.push(`sp ${Number(spearman).toFixed(3)}`);
-            if (pearson != null) metaParts.push(`pr ${Number(pearson).toFixed(3)}`);
+            if (coverage != null) {
+                detailParts.push(`<span style="color:var(--text-muted)">coverage</span> ${(coverage * 100).toFixed(1)}%`);
+            }
+            if (overfitGap != null) {
+                detailParts.push(`<span style="color:var(--text-muted)">overfit gap</span> ${Number(overfitGap).toFixed(3)}`);
+            }
+            if (dataSource) {
+                detailParts.push(`<span style="color:var(--text-muted)">source</span> ${escapeHtml(dataSource)}`);
+            }
+
+            // Metrics blocks
+            const optTestHtml = _renderMetricsBlock("Optimized (test)", optTest);
+            const baseTestHtml = _renderMetricsBlock("Baseline (test)", baseTest);
+            const optTrainHtml = _renderMetricsBlock("Optimized (train)", optTrain);
+            const baseTrainHtml = _renderMetricsBlock("Baseline (train)", baseTrain);
+
+            // Parameters grid
+            const paramsHtml = _renderParamsGrid(args);
+
+            // Position-wise metrics
+            const posMetrics = run.position_metrics || run.position_metrics_by_group || {};
+            const posHtml = _renderPositionMetrics(posMetrics);
+
+            // Error cases
+            const errorHtml = _renderErrorCases(run.error_cases);
+
+            // Reproduce command
+            const cmd = run.reproduce_command || "";
+            const cmdHtml = cmd
+                ? `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Reproduce</p>
+                   <pre style="margin:0;padding:0.35rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.72rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace;color:var(--text,#ccc)">${escapeHtml(cmd)}</pre>`
+                : "";
+
+            // Assemble detail block (everything below the header)
+            const detailSections = [optTestHtml, baseTestHtml, optTrainHtml, baseTrainHtml, paramsHtml, posHtml, errorHtml, cmdHtml]
+                .filter(Boolean)
+                .join("<hr style=\"border:none;border-top:1px solid var(--border,#333);margin:0.35rem 0\">");
+
             return `
-            <div class="rank-item">
-                <div>
-                    <strong>${escapeHtml(run.run_id || "run")}</strong>
-                    <span class="rank-meta">${escapeHtml(metaParts.join(" · "))}</span>
+            <div style="padding:0.6rem 0.8rem;border-bottom:1px solid var(--border,#333)">
+                <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+                    <strong style="font-size:0.85rem">${escapeHtml(run.run_id || "run")}</strong>
+                    <span class="status-pill ${statusClass}">${statusText}</span>
+                    ${spearman != null ? `<span style="font-size:0.78rem;color:var(--text-muted)">sp ${Number(spearman).toFixed(3)} / pr ${_fmtMetric(pearson)}</span>` : ""}
                 </div>
-                <span class="status-pill ${spearman != null ? "status-high" : "status-low"}">${spearman != null ? "READY" : "N/A"}</span>
+                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;line-height:1.6">${detailParts.join(" · ")}</div>
+                ${detailSections ? `<div style="margin-top:0.35rem">${detailSections}</div>` : ""}
             </div>`;
         }).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No model runs found</div>';

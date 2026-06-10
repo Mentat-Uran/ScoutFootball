@@ -502,10 +502,94 @@ def get_shortlist(limit: int = 100) -> dict:
     return _queue_payload(queues.shortlist, limit=limit)
 
 
+def _enrich_holdout_summary(meta: dict[str, Any]) -> None:
+    """Extract a flat holdout summary from metrics for easy frontend display."""
+    metrics = meta.get("metrics", {})
+    holdout = meta.get("holdout", {})
+
+    # Source: prefer holdout dict, fallback to metrics dict
+    src = holdout if holdout else metrics
+
+    # Find the optimized test metrics (most relevant for reporting)
+    opt_test = src.get("optimized_test", {})
+    base_test = src.get("baseline_test", {})
+    opt_train = src.get("optimized_train", {})
+    base_train = src.get("baseline_train", {})
+
+    def _pick(m: dict) -> dict:
+        return {k: v for k, v in m.items() if k in (
+            "spearman", "pearson", "rank_loss", "z_mse", "calibration_mae",
+            "points_mae", "points_rmse", "points_bias",
+            "points_spread_ratio", "raw_spread_ratio",
+            "n_players", "n_team_seasons", "team_coverage",
+            "split",
+        )}
+
+    summary: dict[str, Any] = {}
+    if opt_test:
+        summary["optimized_test"] = _pick(opt_test)
+    elif "optimized_test" in metrics:
+        summary["optimized_test"] = _pick(metrics["optimized_test"])
+    if base_test:
+        summary["baseline_test"] = _pick(base_test)
+    if opt_train:
+        summary["optimized_train"] = _pick(opt_train)
+    if base_train:
+        summary["baseline_train"] = _pick(base_train)
+
+    # Flat top-level aliases for simple frontend display
+    best = opt_test or metrics.get("optimized_test") or metrics
+    for key in ("spearman", "pearson", "rank_loss", "calibration_mae",
+                "n_players", "n_team_seasons", "team_coverage"):
+        if key in best and key not in meta:
+            meta[key] = best[key]
+
+    # Overfit gap
+    if "overfit_rank_loss_gap" in src:
+        summary["overfit_rank_loss_gap"] = src["overfit_rank_loss_gap"]
+    elif "overfit_rank_loss_gap" in metrics:
+        summary["overfit_rank_loss_gap"] = metrics["overfit_rank_loss_gap"]
+
+    meta["holdout_summary"] = summary
+
+
+def _build_reproduce_command(run_id: str, args: dict[str, Any]) -> str:
+    """Build a reproduce command string from stored run args."""
+    parts = ["PYTHONPATH=src", "uv run python scripts/optimize_ratings_gpu.py"]
+    if args.get("seed") is not None:
+        parts.append(f"--seed {args['seed']}")
+    if args.get("pop_size") is not None:
+        parts.append(f"--pop {args['pop_size']}")
+    if args.get("n_steps") is not None:
+        parts.append(f"--steps {args['n_steps']}")
+    if args.get("lr") is not None:
+        parts.append(f"--lr {args['lr']}")
+    if args.get("patience") is not None:
+        parts.append(f"--patience {args['patience']}")
+    if args.get("spearman_weight") is not None:
+        parts.append(f"--spearman-weight {args['spearman_weight']}")
+    if args.get("ndcg_weight") is not None:
+        parts.append(f"--ndcg-weight {args['ndcg_weight']}")
+    if args.get("position_consistency_weight") is not None:
+        parts.append(f"--position-consistency-weight {args['position_consistency_weight']}")
+    if args.get("points_regression_weight") is not None:
+        parts.append(f"--points-regression-weight {args['points_regression_weight']}")
+    if args.get("warmup_steps") is not None:
+        parts.append(f"--warmup-steps {args['warmup_steps']}")
+    if args.get("grad_clip") is not None:
+        parts.append(f"--grad-clip {args['grad_clip']}")
+    if args.get("dc_likelihood_weight") is not None and args["dc_likelihood_weight"] > 0:
+        parts.append(f"--dc-likelihood-weight {args['dc_likelihood_weight']}")
+    if args.get("dc_rho") is not None:
+        parts.append(f"--dc-rho {args['dc_rho']}")
+    return " ".join(parts)
+
+
 def get_model_runs() -> dict:
     """Return model run registry from local artifacts."""
     settings = _settings()
     runs = []
+    ds_label = data_source_label()
 
     # Check data/models/runs/ directory
     runs_dir = settings.data_root / "models" / "runs"
@@ -516,6 +600,14 @@ def get_model_runs() -> dict:
                 meta = _read_json(meta_path)
                 meta["run_id"] = run_dir.name
                 meta["updated_at"] = meta_path.stat().st_mtime
+                meta["data_source"] = ds_label
+                # Build reproduce command from stored args
+                run_args = meta.get("args", {})
+                meta["reproduce_command"] = _build_reproduce_command(
+                    run_dir.name, run_args,
+                )
+                # Extract holdout metrics summary for easy frontend access
+                _enrich_holdout_summary(meta)
                 runs.append(meta)
 
     # Fallback: read optimized_params_meta.json
@@ -525,6 +617,10 @@ def get_model_runs() -> dict:
             meta = _read_json(meta_path)
             meta["run_id"] = "latest"
             meta["updated_at"] = meta_path.stat().st_mtime
+            meta["data_source"] = ds_label
+            run_args = meta.get("args", {})
+            meta["reproduce_command"] = _build_reproduce_command("latest", run_args)
+            _enrich_holdout_summary(meta)
             runs.append(meta)
 
     return _clean_json_value({"runs": runs, "count": len(runs)})
