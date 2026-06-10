@@ -95,6 +95,15 @@ const i18n = {
         wc_avg_rating: "均分",
         wc_no_data: "无数据",
         wc_low_coverage: "评分覆盖率低于50%，结论置信度较低",
+        sort_priority: "优先级",
+        sort_date: "日期",
+        sort_name: "姓名",
+        status_pending: "待处理",
+        status_reviewing: "审核中",
+        status_approved: "已通过",
+        status_rejected: "已拒绝",
+        scout_new_badge: "新",
+        scout_note_placeholder: "添加备注...",
     },
     en: {
         nav_overview: "Overview",
@@ -192,6 +201,15 @@ const i18n = {
         wc_avg_rating: "Avg",
         wc_no_data: "No data",
         wc_low_coverage: "Rating coverage below 50%, low confidence",
+        sort_priority: "Priority",
+        sort_date: "Date",
+        sort_name: "Name",
+        status_pending: "Pending",
+        status_reviewing: "Reviewing",
+        status_approved: "Approved",
+        status_rejected: "Rejected",
+        scout_new_badge: "new",
+        scout_note_placeholder: "Add note...",
     },
 };
 
@@ -1050,38 +1068,119 @@ async function fetchShortlist() {
 
 function renderScouting() {
     const queue = reviewQueue.length > 0 ? reviewQueue : [];
-    document.getElementById("review-list").innerHTML = queue.length > 0
-        ? queue.map((p) => `
-            <div class="rank-item">
-                <div>
-                    <strong>${escapeHtml(p.player_name || p.name)}</strong>
-                    <span class="rank-meta">${escapeHtml(p.team)} · ${escapeHtml(p.position_group || p.position || "")} · ${escapeHtml(p.minutes)}min · ${escapeHtml(p.reason_code || "")}</span>
-                </div>
-                <span class="status-pill ${confidenceClass((p.confidence_level || p.confidence || "LOW").toUpperCase())}">${escapeHtml((p.confidence_level || p.confidence || "LOW").toUpperCase())}</span>
-            </div>
-        `).join("")
-        : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No low-confidence players in queue</div>';
+    const sortedQueue = sortReviewQueue(queue, scoutSortMode);
 
-    document.getElementById("watchlist").innerHTML = watchlistData.length > 0 ? watchlistData.map((player) => `
+    // Sort bar
+    const sortModes = [
+        { key: "priority", label: t("sort_priority"), symbol: "\u25C6" },
+        { key: "date", label: t("sort_date"), symbol: "\u25BC" },
+        { key: "name", label: t("sort_name"), symbol: "\u25CE" },
+    ];
+    let sortBarHtml = '<div class="scout-sort-bar">';
+    for (const m of sortModes) {
+        const active = scoutSortMode === m.key ? " active" : "";
+        sortBarHtml += `<button class="scout-sort-btn${active}" data-scout-sort="${m.key}" type="button">${m.symbol} ${escapeHtml(m.label)}</button>`;
+    }
+    sortBarHtml += "</div>";
+
+    // Review queue
+    let reviewHtml = sortBarHtml;
+    if (sortedQueue.length > 0) {
+        for (const p of sortedQueue) {
+            const pKey = p.player_name || p.name || "";
+            const status = scoutQueueStatuses[pKey] || "pending";
+            const statusClass = "status-" + status;
+            const icon = STATUS_ICONS[status] || "\u25CB";
+            const conf = (p.confidence_level || p.confidence || "LOW").toUpperCase();
+            reviewHtml += `
+                <div class="rank-item">
+                    <div>
+                        <strong>${escapeHtml(pKey)}</strong>
+                        <span class="rank-meta">${escapeHtml(p.team)} \u00B7 ${escapeHtml(p.position_group || p.position || "")} \u00B7 ${escapeHtml(p.minutes)}min \u00B7 ${escapeHtml(p.reason_code || "")}</span>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center">
+                        <span class="status-pill status-clickable ${statusClass}" data-queue-status="${escapeAttr(pKey)}" title="${escapeHtml(t("status_" + status))}" style="cursor:pointer">${icon} ${escapeHtml(t("status_" + status))}</span>
+                        <span class="status-pill ${confidenceClass(conf)}">${escapeHtml(conf)}</span>
+                    </div>
+                </div>`;
+        }
+    } else {
+        reviewHtml += '<div style="color:var(--text-muted);text-align:center;padding:1rem">No low-confidence players in queue</div>';
+    }
+    document.getElementById("review-list").innerHTML = reviewHtml;
+
+    // Watchlist with diff badge
+    computeWatchlistDiff(watchlistData);
+    const wlBadge = watchlistDiffCount > 0 ? `<span class="scout-badge">${watchlistDiffCount} ${t("scout_new_badge")}</span>` : "";
+    const wlHeader = document.querySelector("#view-scouting .panel-head h3[data-i18n='watchlist']");
+    if (wlHeader) {
+        const existingBadge = wlHeader.querySelector(".scout-badge");
+        if (existingBadge) existingBadge.remove();
+        if (watchlistDiffCount > 0) {
+            const badge = document.createElement("span");
+            badge.className = "scout-badge";
+            badge.textContent = `${watchlistDiffCount} ${t("scout_new_badge")}`;
+            wlHeader.appendChild(badge);
+        }
+    }
+
+    document.getElementById("watchlist").innerHTML = watchlistData.length > 0 ? watchlistData.map((player) => {
+        const pName = player.player_name || player.name || "";
+        const conf = (player.confidence_level || player.confidence || "LOW").toUpperCase();
+        return `
         <div class="watch-card">
             <div>
-                <strong>${escapeHtml(player.player_name || player.name)}</strong>
-                <span class="rank-meta">${escapeHtml(player.team)} · ${escapeHtml(player.position_group || player.position || "")} · ${escapeHtml(player.reason_code || "")}</span>
+                <strong>${escapeHtml(pName)}</strong>
+                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
             </div>
-            <span class="status-pill ${confidenceClass((player.confidence_level || player.confidence || "LOW").toUpperCase())}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
-        </div>
-    `).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
+            <span class="status-pill ${confidenceClass(conf)}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
+        </div>`;
+    }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
 
+    // Save watchlist snapshot after rendering
+    saveWatchlistSnapshot(watchlistData);
+
+    // Shortlist with notes
     document.getElementById("shortlist-count").textContent = String(shortlistData.length);
-    document.getElementById("shortlist").innerHTML = shortlistData.length > 0 ? shortlistData.map((player) => `
+    document.getElementById("shortlist").innerHTML = shortlistData.length > 0 ? shortlistData.map((player) => {
+        const pName = player.player_name || player.name || "";
+        const conf = (player.confidence_level || player.confidence || "HIGH").toUpperCase();
+        const note = scoutShortlistNotes[pName] || "";
+        return `
         <div class="watch-card">
             <div>
-                <strong>${escapeHtml(player.player_name || player.name)}</strong>
-                <span class="rank-meta">${escapeHtml(player.team)} · ${escapeHtml(player.position_group || player.position || "")} · ${escapeHtml(player.reason_code || "")}</span>
+                <strong>${escapeHtml(pName)}</strong>
+                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
             </div>
-            <span class="status-pill ${confidenceClass((player.confidence_level || player.confidence || "HIGH").toUpperCase())}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
-        </div>
-    `).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
+            <span class="status-pill ${confidenceClass(conf)}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
+            <div class="watch-card-extra">
+                ${note ? `<div class="scout-note-display">\u25B8 ${escapeHtml(note)}</div>` : ""}
+                <input class="scout-note-input" type="text" data-note-player="${escapeAttr(pName)}" value="${escapeAttr(note)}" placeholder="${escapeAttr(t("scout_note_placeholder"))}" />
+            </div>
+        </div>`;
+    }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
+}
+
+function sortReviewQueue(queue, mode) {
+    const arr = [...queue];
+    if (mode === "priority") {
+        const confOrder = { "LOW": 0, "MEDIUM": 1, "HIGH": 2 };
+        arr.sort((a, b) => {
+            const sa = scoutQueueStatuses[a.player_name || a.name] || "pending";
+            const sb = scoutQueueStatuses[b.player_name || b.name] || "pending";
+            const siA = STATUS_CYCLE.indexOf(sa);
+            const siB = STATUS_CYCLE.indexOf(sb);
+            if (siA !== siB) return siA - siB;
+            const ca = confOrder[(a.confidence_level || a.confidence || "LOW").toUpperCase()] ?? 1;
+            const cb = confOrder[(b.confidence_level || b.confidence || "LOW").toUpperCase()] ?? 1;
+            return ca - cb;
+        });
+    } else if (mode === "name") {
+        arr.sort((a, b) => (a.player_name || a.name || "").localeCompare(b.player_name || b.name || ""));
+    } else if (mode === "date") {
+        arr.sort((a, b) => (b.minutes || 0) - (a.minutes || 0));
+    }
+    return arr;
 }
 
 function renderOverview() {
@@ -1833,6 +1932,48 @@ function bindEvents() {
         });
     }
 
+
+    // Scouting: status badge click to cycle
+    document.addEventListener("click", (e) => {
+        const statusEl = e.target.closest("[data-queue-status]");
+        if (statusEl) {
+            const pKey = statusEl.dataset.queueStatus;
+            cycleQueueStatus(pKey);
+            renderScouting();
+        }
+    });
+
+    // Scouting: sort toggle
+    document.addEventListener("click", (e) => {
+        const sortBtn = e.target.closest("[data-scout-sort]");
+        if (sortBtn) {
+            scoutSortMode = sortBtn.dataset.scoutSort;
+            renderScouting();
+        }
+    });
+
+    // Scouting: note input change
+    document.addEventListener("change", (e) => {
+        if (e.target.matches(".scout-note-input")) {
+            const pName = e.target.dataset.notePlayer;
+            if (pName != null) {
+                scoutShortlistNotes[pName] = e.target.value;
+                saveScoutShortlistNotes();
+            }
+        }
+    });
+
+    // Scouting: note input live update on keyup
+    document.addEventListener("keyup", (e) => {
+        if (e.target.matches(".scout-note-input")) {
+            const pName = e.target.dataset.notePlayer;
+            if (pName != null) {
+                scoutShortlistNotes[pName] = e.target.value;
+                saveScoutShortlistNotes();
+            }
+        }
+    });
+
     window.addEventListener("resize", () => {
         Object.values(appState.charts).forEach((chart) => {
             try { chart.resize(); } catch { /* ignore disposed chart */ }
@@ -2379,6 +2520,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     bindEvents();
     setView("overview");
 
+    // Load scouting localStorage state
+    loadScoutQueueStatuses();
+    loadScoutShortlistNotes();
+
     // Load real data from API in parallel
     const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, runs, watchlistRows, shortlistRows, actionValues] = await Promise.all([
         fetchRatings(),
@@ -2478,3 +2623,60 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 });
+
+const SCOUT_QUEUE_KEY = "scout-queue-statuses";
+const SCOUT_NOTES_KEY = "scout-shortlist-notes";
+const SCOUT_LASTVISIT_KEY = "scout-watchlist-lastvisit";
+const SCOUT_SNAPSHOT_KEY = "scout-watchlist-snapshot";
+const STATUS_CYCLE = ["pending", "reviewing", "approved", "rejected"];
+const STATUS_ICONS = { pending: "\u25CB", reviewing: "\u25B2", approved: "\u2713", rejected: "\u2717" };
+
+let scoutQueueStatuses = {};
+let scoutShortlistNotes = {};
+let scoutSortMode = "priority";
+let watchlistDiffCount = 0;
+
+function loadScoutQueueStatuses() {
+    try { scoutQueueStatuses = JSON.parse(localStorage.getItem(SCOUT_QUEUE_KEY)) || {}; } catch { scoutQueueStatuses = {}; }
+}
+
+function saveScoutQueueStatuses() {
+    try { localStorage.setItem(SCOUT_QUEUE_KEY, JSON.stringify(scoutQueueStatuses)); } catch {}
+}
+
+function loadScoutShortlistNotes() {
+    try { scoutShortlistNotes = JSON.parse(localStorage.getItem(SCOUT_NOTES_KEY)) || {}; } catch { scoutShortlistNotes = {}; }
+}
+
+function saveScoutShortlistNotes() {
+    try { localStorage.setItem(SCOUT_NOTES_KEY, JSON.stringify(scoutShortlistNotes)); } catch {}
+}
+
+function cycleQueueStatus(playerKey) {
+    const current = scoutQueueStatuses[playerKey] || "pending";
+    const idx = STATUS_CYCLE.indexOf(current);
+    scoutQueueStatuses[playerKey] = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    saveScoutQueueStatuses();
+}
+
+function computeWatchlistDiff(currentPlayers) {
+    try {
+        const lastVisit = parseInt(localStorage.getItem(SCOUT_LASTVISIT_KEY)) || 0;
+        const snapshot = JSON.parse(localStorage.getItem(SCOUT_SNAPSHOT_KEY)) || [];
+        const currentKeys = new Set(currentPlayers.map(p => p.player_name || p.name));
+        const snapshotKeys = new Set(snapshot);
+        let added = 0;
+        for (const k of currentKeys) { if (!snapshotKeys.has(k)) added++; }
+        watchlistDiffCount = added;
+    } catch {
+        watchlistDiffCount = 0;
+    }
+}
+
+function saveWatchlistSnapshot(currentPlayers) {
+    try {
+        const keys = currentPlayers.map(p => p.player_name || p.name);
+        localStorage.setItem(SCOUT_SNAPSHOT_KEY, JSON.stringify(keys));
+        localStorage.setItem(SCOUT_LASTVISIT_KEY, String(Date.now()));
+    } catch {}
+}
