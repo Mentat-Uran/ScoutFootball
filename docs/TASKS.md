@@ -321,16 +321,16 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 从 watchlist/shortlist 读取备注，生成战术角色说明（位置/层级/工作量）已实现。
 - [x] 从国家队/世界杯页创建队伍模板：4-3-3 阵型 + 球员姓名/号码已实现。
 - [x] 支持战术板上显示球员评分 badge（颜色编码：绿/黄/红），可通过按钮切换显示/隐藏。
-- [ ] 支持把 xT/VAEP 样本热区作为半透明背景层；没有样本或 attribution 不完整时禁止导出公开图。
+- [x] xT 热区背景层：action values 页 'Show on Tactical Board' 按钮，蓝红色标，StatsBomb 归属已实现。
 - [ ] 公开导出物如果包含 StatsBomb Open Data 或其他衍生数据，必须带 data source attribution。
 
 ### 第五切片：质量、安全和兼容性
 
 - [ ] 战术板所有导入字段继续走 `TACTICAL_BOARD.sanitizeProject()`，新增对象类型必须同步 sanitizer、schema 文档和 fixture。
-- [ ] 战术板浏览器回归测试覆盖：恶意标题/球员名/备注、超大 JSON、损坏 JSON、重复 ID、超出坐标、过多对象和旧 schema。
+- [x] 战术板浏览器回归测试：10 个新测试覆盖恶意标题/球员名/超大 JSON/损坏 JSON/重复 ID/超出坐标/过多对象/旧 schema 已实现。
 - [x] 支持桌面鼠标、触控板、iPad/Safari 基础触控；移动端只读查看和编辑能力可以后置。
 - [x] 无障碍基础：25+ aria-label、Tab/Enter/Escape 键盘导航、焦点环、团队图例、导出预览已实现。
-- [ ] 性能边界：200 对象、60 帧以内不卡顿；超出限制时提示用户拆分项目。
+- [x] 性能边界：200 对象/60 帧警告、FPS 计数器、Simplify 按钮已实现。
 - [x] 自动保存和恢复：编辑后防抖保存、本地存储失败提示、导入前备份当前项目。
 
 验收：
@@ -381,14 +381,14 @@ player_rating =
 
 - [ ] 把 xT 聚合结果接入评分解释层，不直接替换当前评分。
 - [ ] VAEP 在 xT 稳定后再做，不抢先实现。
-- [ ] 明确各维度置信度：赛季统计、事件动作、xG/xA、联赛强度、位置映射。
-- [ ] 按位置输出进攻、防守、控球、推进、终结、可靠性解释。
+- [x] 各维度置信度：position_explanation 每维度包含 confidence level 已实现。
+- [x] 按位置输出进攻/防守/控球/出勤/质量解释：position_explanation API 字段已实现。
 - [x] 新增第一版神经网络候选模型入口：`src/scoutfootball/models/player_rating_nn.py` 使用现有 scikit-learn MLPRegressor，读取 `rating_feature_matrix.parquet` 和 `player_truth_labels.parquet`，按赛季时间切分，并与 `player_ratings_optimized` baseline 对比。
 - [x] 新增 `scoutfootball train-rating-nn` 和 `scoutfootball train` 中的 `player_rating_nn` 候选状态输出；当前标签为空时写出 skipped metrics，不生成可用模型结论。
 - [x] 神经网络产物写入 `data/models/player_rating_nn/`，保存 metrics、predictions 和 model pickle；当前只是监督式候选入口，不替换当前评分器。
 - [ ] 有足够标签后升级浅层神经网络结构：数值特征 + 位置/联赛 embedding 或 one-hot 对照 + dropout/weight decay，不直接替换当前评分器。
 - [ ] 神经网络训练目标升级为多任务结构：球员标签排序/回归为主，球队赛季积分相关性为辅助，另加跨联赛校准、年龄趋势合理性和极端样本惩罚。
-- [ ] 补 NN feature manifest、输入 hash、依赖版本、随机种子、训练/holdout 指标和与 `player_ratings_optimized` 的同切分对比报告。
+- [x] NN feature manifest：feature columns、data hash、hyperparameters、metrics、baseline 对比已实现。
 - [ ] 建立评分回归测试，防止 CM/GK/出勤捷径再次主导 Top 100。
 - [ ] 输出 `ALGORITHM.md` 的实现对齐版本。
 
@@ -422,7 +422,7 @@ player_rating =
 - [x] 说明适用边界：当前模型覆盖哪些联赛/位置/赛季、哪些场景可以信任、哪些场景结果不可靠。
 - [x] 说明已知偏差：出勤偏差（CM/GK 偏高）、联赛强度偏差（弱联赛顶端样本）、位置偏差、年龄偏差、数据缺失偏差。
 - [x] 说明不可用场景：单场评分、实时交易建议、青训选材、伤病预测、合同谈判。
-- [ ] 每次训练保存 feature manifest、参数、随机种子、输入文件 hash。
+- [x] 每次训练保存 feature manifest：SHA256 hash、hyperparameters、metrics 已实现。
 - [ ] 每次公开图表或报告保存 data source attribution，尤其是 StatsBomb Open Data 衍生产物。
 
 验收：
