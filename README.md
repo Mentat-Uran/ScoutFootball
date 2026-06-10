@@ -104,11 +104,15 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 | Electronic tactical board | First local canvas/JSON slice available; animation timeline, PNG/PDF/WebM export, report embedding, and version migration remain P1.5 work |
 | Dixon-Coles with time decay | Planned (P5) |
 
+### Current Development Gaps
+
+Beyond the tactical board, the main unfinished areas are still player truth labels, full v1.3.1-dev GPU reruns and error reviews, World Cup squad/coverage APIs, richer player/value/prediction/report read-only contracts, action-value attribution and full xT/VAEP work, model-run reproducibility metadata, frontend security regression tests, CSP/CORS deployment hardening, scouting review writeback, Dixon-Coles calibration, and future event/tracking schema work.
+
 ### Electronic Tactical Board
 
 The first tactical-board slice is available as a local-first coaching and analysis workspace inside `frontend/`, aligned with products such as [Tactico](https://tactico.pro/), [DrawTactics](https://drawtactics.com/animated-tactics-board), [TacticSlate](https://tacticslate.com/football-tactic-board), [JLA Tactics Board](https://jlatacticsboard.com/), [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards), and [TacticalBoards](https://tacticalboards.com/). The current slice covers static local canvas work, normalized coordinates, basic objects, formation presets, local JSON projects, localStorage persistence, and schema-sanitized import/export.
 
-Remaining P1.5 scope stays lightweight: animation timeline, browser playback, PNG/PDF still export, WebM animation export via the browser, report embedding, version migration, and read-only fallback for incompatible projects. MP4 export through local ffmpeg, video telestration, tracking-data import, and 3D/behind-goal views are later extensions after the canvas model, data contract, and attribution rules are stable.
+Remaining P1.5 scope stays lightweight but broader than simple animation: red/blue teams, editable jersey numbers, player hover cards, whiteboard-style freehand drawing, eraser and line tools, training equipment, set-piece and drill templates, richer team/player project schema, animation timeline, browser playback, PNG/PDF still export, WebM animation export via the browser, report embedding, version migration, and read-only fallback for incompatible projects. MP4/GIF export, local ffmpeg, video telestration, tracking-data import, 2D/3D synced views, live collaboration, and behind-goal views are later extensions after the canvas model, data contract, and attribution rules are stable.
 
 ### Local Data Overview
 
@@ -262,11 +266,15 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 | 电子战术板 | 已有本地画布/JSON 第一切片；动画时间轴、PNG/PDF/WebM 导出、报告嵌入和版本迁移仍属 P1.5 |
 | Dixon-Coles + 时间衰减 | 计划中 (P5) |
 
+### 当前开发缺口
+
+除电子战术板外，当前未完成的主线仍包括：球员真实标签、v1.3.1-dev 完整 GPU 重跑和误差复盘、世界杯阵容/覆盖 API、球员/身价/预测/报告页的完整只读契约、动作价值 attribution 和完整 xT/VAEP、模型运行可复现元数据、前端安全回归测试、CSP/CORS 部署加固、球探审阅写回、Dixon-Coles 概率校准，以及后续 event/tracking schema。
+
 ### 电子战术板
 
 电子战术板第一切片已作为 `frontend/` 内的本地优先教练和分析工作台落地，参考 [Tactico](https://tactico.pro/)、[DrawTactics](https://drawtactics.com/animated-tactics-board)、[TacticSlate](https://tacticslate.com/football-tactic-board)、[JLA Tactics Board](https://jlatacticsboard.com/)、[Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards) 和 [TacticalBoards](https://tacticalboards.com/) 等案例。当前能力包括静态本地画布、标准化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。
 
-剩余 P1.5 仍保持轻量：动画时间轴、浏览器播放、PNG/PDF 静态导出、浏览器 WebM 动画导出、嵌入报告、版本迁移和不兼容工程只读打开。MP4 导出、本地 ffmpeg、视频叠画、tracking 数据导入、3D 和门后视角放到后续阶段，等画布模型、数据契约和引用边界稳定后再做。
+剩余 P1.5 仍保持轻量，但不只做动画：红蓝双队、可编辑球衣号码、球员 hover 信息卡、白板式自由画笔、橡皮擦和线型工具、训练器材、定位球/训练模板、更完整的球队/球员工程 schema、动画时间轴、浏览器播放、PNG/PDF 静态导出、浏览器 WebM 动画导出、嵌入报告、版本迁移和不兼容工程只读打开都应进入后续 backlog。MP4/GIF 导出、本地 ffmpeg、视频叠画、tracking 数据导入、2D/3D 同步视图、实时协作和门后视角放到后续阶段，等画布模型、数据契约和引用边界稳定后再做。
 
 ### 本地数据概览
 

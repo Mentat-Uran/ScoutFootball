@@ -77,7 +77,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - socceraction：SPADL/atomic-SPADL、xT、VAEP、Atomic-VAEP 的主要参考。
 - StatsBomb Open Data：事件层第一主源；公开展示衍生产物必须注明数据来源。
 - mplsoccer：足球专用可视化库，当前已接入。
-- 电子战术板案例：Tactico、DrawTactics、TacticSlate、JLA Tactics Board、Metrica Tactical Boards、TacticalBoards；共同特征是阵型/球员拖拽、箭头/区域/轨迹、关键帧或路径动画、演示播放和导出。
+- 电子战术板案例：Tactico、DrawTactics、TacticSlate、Coach Tactic Board、Soccer Tactic Board、Metrica Tactical Boards、FC Tactix、TacticalPad、TacticalBoards；共同特征是阵型/球员拖拽、红蓝双队、球衣号码/姓名/角色、hover 或点击球员信息、自由画笔/橡皮擦、箭头/区域/轨迹、训练器材、关键帧或路径动画、演示播放、PNG/PDF/WebM/MP4/GIF 导出、分享、文件夹/模板、2D/3D 或视频叠画工作流。
 - kloppy、floodlight、Common Data Format：只作为跨供应商 event/tracking schema 的远期参考。
 - VAEP、xT vs VAEP、PlayeRank、combined player rating、xG finishing bias 和 Dixon-Coles 论文：分别对应动作价值、模型比较、角色内评分、混合评分、终结能力 shrinkage 和比分预测 baseline。
 
@@ -88,7 +88,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
    - 随后引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为球员真实影响力标签，并补齐特征矩阵、缺失字段标记和神经网络准入门槛。
 2. P1：展示增强和可解释产品层，优先接入 mplsoccer。核心交付：球员雷达/排名页、身价偏离榜、比赛预测页 3 个可截图 Streamlit 页面，README 加 3–5 张截图和 demo 复现说明。
    - 同步维护 `frontend/` Liquid Glass 静态工作台；保持其 UI 风格，但后续必须用 FastAPI/Parquet 契约替换 mock 数据。
-3. P1.5：电子战术板、战术演示和动画导出。先做本地画布、JSON 工程、关键帧/步骤式动画、演示播放、PNG/PDF/WebM 导出；MP4、视频叠画、tracking 导入和实时协作后置。
+3. P1.5：电子战术板、战术演示和动画导出。第一切片已完成本地画布/JSON；后续要按 `docs/TASKS.md` 的对标功能池推进，包括自由画笔、球衣号码、红蓝双队、hover 球员信息、训练器材、模板、关键帧/步骤式动画、演示播放、PNG/PDF/WebM 导出；MP4/GIF、视频叠画、tracking 导入、2D/3D 同步和实时协作后置。
 4. P2：StatsBomb 事件动作价值层，先 xT，后 VAEP。
 5. P3：评分模型重构，把 action value 作为增强维度接入；真实标签层稳定后，神经网络只能先作为候选模型与当前优化器同口径对比。
 6. P4：模型评估文档和模型卡。补 `docs/EVALUATION.md`（Spearman、时间切分、baseline、误差案例）和 `docs/MODEL_CARD.md`（数据源、标签定义、适用边界、偏差、不可用场景）。
@@ -96,6 +96,8 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 8. P6：跨供应商标准化和开放格式层，先做 schema、license manifest 和转换实验，不改变当前 pipeline。
 9. P7：球探决策与人工校准层，把真实标签、低置信度样本、误差案例和战术备注纳入 review queue、watchlist、shortlist。
 10. P8：空间/视频/离球研究层，StatsBomb 360、Metrica/open tracking、xG+、off-ball value、强化学习只作为远期方向。
+
+除战术板外，当前规划必须继续保留这些缺口：真实球员标签仍为空、v1.3.1-dev 完整 GPU 重跑和误差复盘未做、世界杯页仍是样例/混合数据、前端 player/value/prediction/report 只读契约还不完整、动作价值仍是 StatsBomb 样本、license manifest 与 data source attribution 未闭环、前端安全回归/CSP/CORS 未补、球探人工标注回灌未实现、Dixon-Coles 和概率校准仍未实现、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
 
 ## 开发原则
 
