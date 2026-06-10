@@ -44,6 +44,16 @@ const TacticalRenderer = {
     _ballDragTrail: [],          // last N positions during ball drag
     _pathEditMode: false,        // path point editing mode
     _pathEditObjectId: null,     // object id being path-edited
+    _perfMonitor: {               // performance monitor state
+        renderTime: 0,
+        fps: 0,
+        frameCount: 0,
+        lastSecond: 0,
+        _frameTimes: [],
+    },
+    _debugMode: false,             // show FPS counter
+    _xtHeatmapData: null,          // xT heatmap data for overlay
+    _showXTHeatmap: false,         // toggle xT heatmap visibility
 
     /* ── Initialize ─────────────────────────────────────────────────── */
     init(canvasId, project) {
@@ -138,7 +148,7 @@ const TacticalRenderer = {
     /* ── Render ─────────────────────────────────────────────────────── */
     render() {
         if (!this.ctx || !this.project) return;
-
+        const perfStart = performance.now();
         const ctx = this.ctx;
         const w = this.canvas.width / (window.devicePixelRatio || 1);
         const h = this.canvas.height / (window.devicePixelRatio || 1);
@@ -148,6 +158,11 @@ const TacticalRenderer = {
 
         // Draw pitch
         this.drawPitch();
+
+        // Draw xT heatmap overlay (semi-transparent, on top of pitch)
+        if (this._showXTHeatmap && this._xtHeatmapData) {
+            this._drawXTHeatmap();
+        }
 
         // Draw grid overlay
         if (this.showGrid) this.drawGrid();
@@ -233,6 +248,16 @@ const TacticalRenderer = {
         // Draw team color legend (accessibility: text labels alongside color indicators)
         this._drawTeamLegend();
 
+        // Draw performance warnings (object/frame count)
+        this._drawPerformanceWarnings();
+
+        // Draw FPS counter in debug mode
+        if (this._debugMode) {
+            this._drawFPSCounter(perfStart);
+        }
+        // Track render time
+        this._perfMonitor.renderTime = performance.now() - perfStart;
+
         // Update timeline UI
         this.updateTimeline();
     },
@@ -275,6 +300,180 @@ const TacticalRenderer = {
             ctx.textAlign = "left";
             ctx.fillText("Away", x + 16, y + lineH / 2 + 2);
         }
+    },
+
+    /* ── Performance boundary warnings ──────────────────────────────── */
+    _checkPerformance() {
+        if (!this.project) return { objectCount: 0, frameCount: 0, warnings: [] };
+        const objectCount = (this.project.objects || []).length;
+        const frameCount = (this.project.frames || []).length;
+        const warnings = [];
+        if (objectCount > 200) {
+            warnings.push("Too many objects (" + objectCount + "). Consider splitting the project.");
+        }
+        if (frameCount > 60) {
+            warnings.push("Too many frames (" + frameCount + "). Consider splitting the animation.");
+        }
+        return { objectCount, frameCount, warnings };
+    },
+
+    _drawPerformanceWarnings() {
+        var check = this._checkPerformance();
+        if (check.warnings.length === 0) return;
+        var ctx = this.ctx;
+        var w = this.canvas.width / (window.devicePixelRatio || 1);
+        var y = 40;
+        ctx.save();
+        ctx.font = "bold 12px Inter, sans-serif";
+        ctx.textBaseline = "top";
+        for (var i = 0; i < check.warnings.length; i++) {
+            var msg = check.warnings[i];
+            var tw = ctx.measureText(msg).width + 16;
+            ctx.fillStyle = "rgba(255,80,80,0.85)";
+            ctx.fillRect((w - tw) / 2, y, tw, 22);
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "center";
+            ctx.fillText(msg, w / 2, y + 5);
+            y += 28;
+        }
+        ctx.restore();
+    },
+
+    /* ── FPS counter (debug mode) ───────────────────────────────────── */
+    _drawFPSCounter(perfStart) {
+        var now = performance.now();
+        var pm = this._perfMonitor;
+        pm._frameTimes.push(now);
+        // Keep only last 2 seconds of frame times
+        while (pm._frameTimes.length > 0 && pm._frameTimes[0] < now - 2000) {
+            pm._frameTimes.shift();
+        }
+        pm.fps = pm._frameTimes.length > 1
+            ? Math.round((pm._frameTimes.length - 1) / ((now - pm._frameTimes[0]) / 1000))
+            : 0;
+        var ctx = this.ctx;
+        ctx.save();
+        ctx.font = "bold 11px monospace";
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+        var txt = "FPS: " + pm.fps + "  Render: " + pm.renderTime.toFixed(1) + "ms";
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(8, 8, ctx.measureText(txt).width + 12, 18);
+        ctx.fillStyle = "#00ff88";
+        ctx.fillText(txt, 14, 11);
+        ctx.restore();
+    },
+
+    /* ── Simplify project ───────────────────────────────────────────── */
+    simplifyProject() {
+        if (!this.project) return;
+        // Remove hidden objects
+        this.project.objects = (this.project.objects || []).filter(function(o) { return o.visible !== false; });
+        // Remove empty frames (frames with no objects and no event markers)
+        if (Array.isArray(this.project.frames)) {
+            this.project.frames = this.project.frames.filter(function(f) {
+                return (f.objects && f.objects.length > 0) || (f.eventMarkers && f.eventMarkers.length > 0);
+            });
+            // Ensure at least one frame remains
+            if (this.project.frames.length === 0) {
+                this.project.frames = [{ id: "frame-0", name: "Frame 1", objects: [], duration_ms: 3000, notes: "" }];
+            }
+        }
+        this.render();
+    },
+
+    /* ── xT Heatmap overlay ─────────────────────────────────────────── */
+    setXTHeatmapData(data) {
+        this._xtHeatmapData = data;
+        this.render();
+    },
+
+    toggleXTHeatmap() {
+        this._showXTHeatmap = !this._showXTHeatmap;
+        this.render();
+        return this._showXTHeatmap;
+    },
+
+    _drawXTHeatmap() {
+        if (!this._xtHeatmapData || !this.ctx) return;
+        var ctx = this.ctx;
+        var data = this._xtHeatmapData;
+        // data is a 2D array: data[row][col] = xT value (12 cols x 8 rows typical)
+        var rows = data.length;
+        if (rows === 0) return;
+        var cols = data[0].length;
+        if (cols === 0) return;
+
+        // Find min/max for color scale
+        var minVal = Infinity, maxVal = -Infinity;
+        for (var r = 0; r < rows; r++) {
+            for (var c = 0; c < cols; c++) {
+                var v = data[r][c];
+                if (v < minVal) minVal = v;
+                if (v > maxVal) maxVal = v;
+            }
+        }
+        var range = maxVal - minVal || 1;
+
+        // Map grid cells to pitch coordinates (0-100)
+        var cellW = 100 / cols;
+        var cellH = 100 / rows;
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        for (var r = 0; r < rows; r++) {
+            for (var c = 0; c < cols; c++) {
+                var v = data[r][c];
+                var t = (v - minVal) / range; // 0..1
+                // Blue (low) to Red (high) color scale
+                var red = Math.round(t * 255);
+                var blue = Math.round((1 - t) * 255);
+                var green = Math.round(80 * (1 - Math.abs(t - 0.5) * 2));
+                ctx.fillStyle = "rgb(" + red + "," + green + "," + blue + ")";
+                var tl = this.toCanvas(c * cellW, r * cellH);
+                var br = this.toCanvas((c + 1) * cellW, (r + 1) * cellH);
+                ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+            }
+        }
+        ctx.restore();
+        // Draw color scale legend
+        this._drawHeatmapColorScale(minVal, maxVal);
+        // StatsBomb attribution
+        var w = this.canvas.width / (window.devicePixelRatio || 1);
+        ctx.save();
+        ctx.font = "10px Inter, sans-serif";
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "bottom";
+        ctx.fillText("Data: StatsBomb Open Data", w - 10, this.canvas.height / (window.devicePixelRatio || 1) - 8);
+        ctx.restore();
+    },
+
+    _drawHeatmapColorScale(minVal, maxVal) {
+        var ctx = this.ctx;
+        var w = this.canvas.width / (window.devicePixelRatio || 1);
+        var barX = w - 30;
+        var barY = 60;
+        var barW = 14;
+        var barH = 100;
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        for (var i = 0; i < barH; i++) {
+            var t = i / barH;
+            var red = Math.round(t * 255);
+            var blue = Math.round((1 - t) * 255);
+            var green = Math.round(80 * (1 - Math.abs(t - 0.5) * 2));
+            ctx.fillStyle = "rgb(" + red + "," + green + "," + blue + ")";
+            ctx.fillRect(barX, barY + i, barW, 1);
+        }
+        ctx.globalAlpha = 1;
+        ctx.font = "9px monospace";
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(maxVal.toFixed(2), barX + barW + 3, barY);
+        ctx.fillText(minVal.toFixed(2), barX + barW + 3, barY + barH - 10);
+        ctx.fillText("xT", barX + barW + 3, barY + barH / 2 - 4);
+        ctx.restore();
     },
 
     drawPitch() {

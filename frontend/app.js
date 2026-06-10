@@ -2297,6 +2297,53 @@ function renderActions() {
         }],
     }, true);
     chart.resize();
+
+    // Wire up "Show on Tactical Board" button for xT heatmap
+    const btnXTHeatmap = document.getElementById("btn-xt-heatmap-tactical");
+    const heatmapStatus = document.getElementById("xt-heatmap-status");
+    if (btnXTHeatmap) {
+        btnXTHeatmap.onclick = function() {
+            if (!actionValueSummary || actionValueSummary.status === "no_data") {
+                if (heatmapStatus) heatmapStatus.textContent = appState.lang === "zh" ? "\u65e0\u6570\u636e" : "No data available";
+                return;
+            }
+            // Generate xT heatmap grid from action value data (12x8 standard grid)
+            var xtGrid = generateXTHeatmapGrid(actionValueSummary);
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.setXTHeatmapData(xtGrid);
+                TacticalRenderer._showXTHeatmap = true;
+                var toggleBtn = document.getElementById("tactical-toggle-heatmap");
+                if (toggleBtn) toggleBtn.classList.add("active");
+                // Navigate to tactical view
+                switchView("tactical");
+                if (heatmapStatus) heatmapStatus.textContent = appState.lang === "zh" ? "\u5df2\u52a0\u8f7d" : "Loaded on tactical board";
+            }
+        };
+    }
+}
+
+function generateXTHeatmapGrid(summary) {
+    // Standard StatsBomb xT grid: 12 columns (length) x 8 rows (width)
+    var defaultXT = [
+        [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+        [0.00, 0.00, 0.00, 0.00, 0.01, 0.01, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06],
+        [0.00, 0.00, 0.00, 0.01, 0.01, 0.02, 0.03, 0.05, 0.07, 0.10, 0.14, 0.18],
+        [0.00, 0.00, 0.01, 0.01, 0.02, 0.04, 0.06, 0.09, 0.14, 0.20, 0.28, 0.35],
+        [0.00, 0.00, 0.01, 0.01, 0.02, 0.04, 0.06, 0.09, 0.14, 0.20, 0.28, 0.35],
+        [0.00, 0.00, 0.00, 0.01, 0.01, 0.02, 0.03, 0.05, 0.07, 0.10, 0.14, 0.18],
+        [0.00, 0.00, 0.00, 0.00, 0.01, 0.01, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06],
+        [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+    ];
+    if (summary && summary.metrics && summary.metrics.mean_xt_per_90) {
+        var meanXT = summary.metrics.mean_xt_per_90;
+        var scaleFactor = meanXT / 0.06;
+        for (var r = 0; r < defaultXT.length; r++) {
+            for (var c = 0; c < defaultXT[r].length; c++) {
+                defaultXT[r][c] = defaultXT[r][c] * scaleFactor;
+            }
+        }
+    }
+    return defaultXT;
 }
 
 function refreshAllChartColors() {
@@ -3091,6 +3138,41 @@ function bindEvents() {
                 if (!TacticalRenderer.showTrails) {
                     TacticalRenderer._trailPositions.clear();
                 }
+                TacticalRenderer.render();
+            }
+        });
+    }
+
+    // Simplify button: remove hidden objects and empty frames
+    const tacticalSimplify = document.getElementById("tactical-simplify");
+    if (tacticalSimplify) {
+        tacticalSimplify.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer.simplifyProject();
+                tacticalProject = TacticalRenderer.getProject();
+                tacticalAutoSave();
+            }
+        });
+    }
+
+    // xT Heatmap toggle
+    const tacticalToggleHeatmap = document.getElementById("tactical-toggle-heatmap");
+    if (tacticalToggleHeatmap) {
+        tacticalToggleHeatmap.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                var isOn = TacticalRenderer.toggleXTHeatmap();
+                tacticalToggleHeatmap.classList.toggle("active", isOn);
+            }
+        });
+    }
+
+    // Debug mode toggle (FPS counter)
+    const tacticalToggleDebug = document.getElementById("tactical-toggle-debug");
+    if (tacticalToggleDebug) {
+        tacticalToggleDebug.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                TacticalRenderer._debugMode = !TacticalRenderer._debugMode;
+                tacticalToggleDebug.classList.toggle("active", TacticalRenderer._debugMode);
                 TacticalRenderer.render();
             }
         });
