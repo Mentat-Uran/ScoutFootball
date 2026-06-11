@@ -121,8 +121,14 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 球员对比百分位表：同位置 percentile 对比表。
 - [x] 身价偏离分析：value-fairness OOF 残差、联赛/位置偏差、年龄散点分析。
 - [x] 球探队列增强：审阅状态流转（review_status）、watchlist diff、shortlist notes。
-- [x] Bug 修复：22 个 bug（2 critical、9 warning、11 minor），测试总数 425。
+- [x] Bug 修复：24 个 bug（4 critical、9 warning、11 minor），测试总数 601+。
 - [x] 前端安全加固：CSP meta tag、SRI（echarts CDN）、X-Content-Type-Options 安全头、浏览器级 XSS/CSV 回归测试。
+- [x] 前端 Data Status 页面字段名修复（`a.name` → `a.label`，`a.modified` → `a.updated_at`）。
+- [x] `/license` 端点字段名修复（`modified` → `updated_at`）。
+- [x] 新增 5 个测试文件（87 个测试）：action_value/schema、calibration、match_prediction、scouting_queue、cross_provider_schema。
+- [x] P6 跨供应商 schema 参考文档：SPADL 兼容性、kloppy/floodlight/CDF 评估已写入 DATA_CONTRACTS.md。
+- [x] P2 socceraction 依赖评估文档已写入 DATA_CONTRACTS.md。
+- [x] DATA_CONTRACTS.md 补充 `/license`、`/value-summary`、`/predictions/meta` 端点文档。
 
 ## P0：评分系统真实影响力校准
 
@@ -353,7 +359,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 输出 internal actions schema 文档，并说明它和 SPADL/atomic-SPADL、Common Data Format 的字段映射关系。
 - [x] 输出 `data/gold/feature_store/player_action_value.parquet`。
 - [x] 生成球员 xT 排行榜、球队 xT 热区图、球员传球/带球推进价值图。
-- [ ] 评估 socceraction 作为依赖的可维护性，优先复用其 SPADL/xT/VAEP 能力。
+- [x] 评估 socceraction 作为依赖的可维护性，优先复用其 SPADL/xT/VAEP 能力。（评估结果写入 DATA_CONTRACTS.md Section 11）
 - [ ] 明确 StatsBomb 数据引用要求：公开展示研究或图表时必须注明数据源。
 
 验收：
@@ -452,7 +458,7 @@ player_rating =
 
 - [ ] 设计 ScoutFootball internal match/event/tracking schema，字段至少覆盖 match metadata、team/player identity、period/time、coordinates、action type、outcome、freeze frame 可选字段和 source attribution。
 - [x] 写 docs/DATA_CONTRACTS.md：StatsBomb events、internal actions、SPADL 映射、所有 parquet schema、API 契约已实现。
-- [ ] 评估 kloppy：作为直接依赖、离线转换工具或暂不接入三种方案都要给出依赖风险、坐标转换风险和测试成本。
+- [x] 评估 kloppy：作为直接依赖、离线转换工具或暂不接入三种方案都要给出依赖风险、坐标转换风险和测试成本。（评估结果写入 DATA_CONTRACTS.md Section 10.2）
 - [ ] 参考 floodlight 的 Game/Team/Player/Event/Frame/Segment 抽象，但只有在 tracking 样例数据进入仓库后才考虑代码接入。
 - [x] 新增 data source license manifest：前端 license 页面展示 6 个数据源的许可证、引用要求和 URL；后端 /license 端点返回 attribution 数据。
 - [ ] 所有 event/tracking schema 变更必须有 fixture、schema validation 和空数据行为测试。

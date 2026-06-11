@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
     def license_info():
         artifacts = get_artifacts_summary()
         artifact_list = artifacts.get("artifacts", [])
-        updated = artifact_list[0].get("modified") if artifact_list else None
+        updated = artifact_list[0].get("updated_at") if artifact_list else None
         return {
             "license_attribution": artifacts.get("license_attribution", {}),
             "data_source_label": artifacts.get("data_source_label", ""),
