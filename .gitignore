@@ -49,11 +49,7 @@ data/gold/feature_store/training_report.html
 # data/models/**/* already handled above with !data/models/runs/** exception
 data/logs/**/*
 
-# StatsBomb cached JSON downloads (consolidated in events_all.parquet)
-data/raw/statsbomb_open/events/*.json
-data/raw/statsbomb_open/matches/*.json
-data/raw/statsbomb_open/matches/*/
-data/raw/statsbomb_open/lineups/*.json
-# Large parquet files (regenerate from JSON)
-data/raw/statsbomb_open/events_all.parquet
-data/raw/statsbomb_open/lineups_all.parquet
+# StatsBomb cached JSON downloads (consolidated in parquet)
+data/raw/statsbomb_open/events/
+data/raw/statsbomb_open/matches/
+data/raw/statsbomb_open/lineups/
