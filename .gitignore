@@ -54,3 +54,6 @@ data/raw/statsbomb_open/events/*.json
 data/raw/statsbomb_open/matches/*.json
 data/raw/statsbomb_open/matches/*/
 data/raw/statsbomb_open/lineups/*.json
+# Large parquet files (regenerate from JSON)
+data/raw/statsbomb_open/events_all.parquet
+data/raw/statsbomb_open/lineups_all.parquet
