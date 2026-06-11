@@ -3867,28 +3867,26 @@ const WC_DEMO_SQUADS = {};
 
 async function fetchWcTeams() {
     try {
-        const resp = await fetch(`${API_BASE}/worldcup/teams`, { signal: AbortSignal.timeout(5000) });
+        const resp = await fetch(`${API_BASE}/worldcup/teams`, { signal: AbortSignal.timeout(15000) });
         if (!resp.ok) throw new Error("API error");
         const data = await resp.json();
         wcApiData.teams = data;
         wcApiData.apiOnline = true;
         return data;
     } catch {
-        wcApiData.apiOnline = false;
         return null;
     }
 }
 
 async function fetchWcGroups() {
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/groups`, { signal: AbortSignal.timeout(5000) });
+        const resp = await fetch(`${API_BASE}/world-cup/groups`, { signal: AbortSignal.timeout(15000) });
         if (!resp.ok) throw new Error("API error");
         const data = await resp.json();
         wcApiData.groups = data;
         wcApiData.apiOnline = true;
         return data;
     } catch {
-        wcApiData.apiOnline = false;
         return null;
     }
 }
@@ -3900,7 +3898,7 @@ async function fetchWcSchedule(group, matchday) {
         if (group) params.push(`group=${encodeURIComponent(group)}`);
         if (matchday) params.push(`matchday=${matchday}`);
         if (params.length) url += "?" + params.join("&");
-        const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
         if (!resp.ok) throw new Error("API error");
         const data = await resp.json();
         wcApiData.schedule = data;
@@ -3913,7 +3911,7 @@ async function fetchWcSchedule(group, matchday) {
 async function fetchWcSquad(team) {
     if (wcApiData.squadCache[team]) return wcApiData.squadCache[team];
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/squads/${encodeURIComponent(team)}`, { signal: AbortSignal.timeout(5000) });
+        const resp = await fetch(`${API_BASE}/world-cup/squads/${encodeURIComponent(team)}`, { signal: AbortSignal.timeout(15000) });
         if (!resp.ok) throw new Error("API error");
         const data = await resp.json();
         wcApiData.squadCache[team] = data;
@@ -3925,7 +3923,7 @@ async function fetchWcSquad(team) {
 
 async function fetchWcPredictions() {
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/predictions`, { signal: AbortSignal.timeout(5000) });
+        const resp = await fetch(`${API_BASE}/world-cup/predictions`, { signal: AbortSignal.timeout(15000) });
         if (!resp.ok) throw new Error("API error");
         const data = await resp.json();
         wcApiData.predictions = data;
