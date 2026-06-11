@@ -1,28 +1,4 @@
 :root {
-    --bg-base: #050608;
-    --text-primary: #f7f8fb;
-    --text-muted: rgba(247, 248, 251, 0.62);
-    --text-soft: rgba(247, 248, 251, 0.42);
-    --glass-bg: rgba(255, 255, 255, 0.045);
-    --glass-bg-strong: rgba(255, 255, 255, 0.075);
-    --glass-bg-hover: rgba(255, 255, 255, 0.11);
-    --glass-border: rgba(255, 255, 255, 0.14);
-    --glass-border-strong: rgba(255, 255, 255, 0.25);
-    --glass-highlight: rgba(255, 255, 255, 0.22);
-    --glass-shadow: rgba(0, 0, 0, 0.36);
-    --accent: #d8dde7;
-    --good: #57d68d;
-    --warn: #f3bc62;
-    --bad: #ff6b7b;
-    --blue: #7ca8ff;
-    --radius-xl: 32px;
-    --radius-lg: 24px;
-    --radius-md: 16px;
-    --space: 24px;
-    color-scheme: dark;
-}
-
-body.light-mode {
     --bg-base: #eef1f5;
     --text-primary: #15171c;
     --text-muted: rgba(21, 23, 28, 0.62);
@@ -35,7 +11,31 @@ body.light-mode {
     --glass-highlight: rgba(255, 255, 255, 0.85);
     --glass-shadow: rgba(20, 30, 45, 0.08);
     --accent: #1d2430;
+    --good: #57d68d;
+    --warn: #f3bc62;
+    --bad: #ff6b7b;
+    --blue: #7ca8ff;
+    --radius-xl: 32px;
+    --radius-lg: 24px;
+    --radius-md: 16px;
+    --space: 24px;
     color-scheme: light;
+}
+
+body.dark-mode {
+    --bg-base: #050608;
+    --text-primary: #f7f8fb;
+    --text-muted: rgba(247, 248, 251, 0.62);
+    --text-soft: rgba(247, 248, 251, 0.42);
+    --glass-bg: rgba(255, 255, 255, 0.045);
+    --glass-bg-strong: rgba(255, 255, 255, 0.075);
+    --glass-bg-hover: rgba(255, 255, 255, 0.11);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-border-strong: rgba(255, 255, 255, 0.25);
+    --glass-highlight: rgba(255, 255, 255, 0.22);
+    --glass-shadow: rgba(0, 0, 0, 0.36);
+    --accent: #d8dde7;
+    color-scheme: dark;
 }
 
 * {
@@ -73,18 +73,18 @@ button {
     inset: 0;
     z-index: -1;
     background:
-        radial-gradient(circle at 12% 8%, rgba(130, 145, 170, 0.17), transparent 34%),
-        radial-gradient(circle at 84% 14%, rgba(70, 84, 110, 0.14), transparent 36%),
-        radial-gradient(circle at 45% 92%, rgba(120, 130, 150, 0.1), transparent 38%),
-        linear-gradient(135deg, #050608 0%, #111722 48%, #08090c 100%);
-}
-
-body.light-mode .mesh-bg {
-    background:
         radial-gradient(circle at 12% 8%, rgba(110, 145, 210, 0.2), transparent 34%),
         radial-gradient(circle at 84% 14%, rgba(150, 170, 205, 0.16), transparent 36%),
         radial-gradient(circle at 45% 92%, rgba(120, 145, 175, 0.12), transparent 38%),
         linear-gradient(135deg, #eef1f5 0%, #e5ebf2 52%, #f7f9fb 100%);
+}
+
+body.dark-mode .mesh-bg {
+    background:
+        radial-gradient(circle at 12% 8%, rgba(130, 145, 170, 0.17), transparent 34%),
+        radial-gradient(circle at 84% 14%, rgba(70, 84, 110, 0.14), transparent 36%),
+        radial-gradient(circle at 45% 92%, rgba(120, 130, 150, 0.1), transparent 38%),
+        linear-gradient(135deg, #050608 0%, #111722 48%, #08090c 100%);
 }
 
 .app-shell {

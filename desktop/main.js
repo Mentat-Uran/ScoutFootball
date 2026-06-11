@@ -262,7 +262,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
     },
-    backgroundColor: "#0a0a0f",
+    backgroundColor: "#eef1f5",
     show: false,
   });
 
