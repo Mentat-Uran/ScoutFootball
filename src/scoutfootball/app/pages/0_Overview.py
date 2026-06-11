@@ -15,7 +15,11 @@ SRC_ROOT = Path(__file__).resolve().parents[3]
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from scoutfootball.api import get_artifacts_summary, get_model_runs, get_prediction_summary
+from scoutfootball.api import (
+    get_artifacts_summary,
+    get_model_runs,
+    get_prediction_summary,
+)
 
 st.header("总览")
 
@@ -23,6 +27,7 @@ artifacts = get_artifacts_summary()
 prediction = get_prediction_summary()
 model_runs = get_model_runs()
 
+# --- Summary metrics ---
 metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
 metric_col1.metric("球员比赛行", f"{artifacts.get('player_match_rows', 0):,}")
 metric_col2.metric("球队比赛行", f"{artifacts.get('team_match_rows', 0):,}")
@@ -31,6 +36,7 @@ metric_col4.metric("事件样本", f"{artifacts.get('event_samples', 0):,}")
 
 st.caption(f"数据来源状态：{artifacts.get('data_source_label', 'unknown')}")
 
+# --- Data health ---
 health = artifacts.get("data_health", {})
 health_rows = [
     {
@@ -52,6 +58,12 @@ health_rows = [
 st.subheader("数据健康")
 st.dataframe(pd.DataFrame(health_rows), use_container_width=True, hide_index=True)
 
+# --- Confidence gate ---
+coverage_gate = health.get("confidence_gate", "")
+if coverage_gate:
+    st.info(f"置信门槛：{coverage_gate}")
+
+# --- Artifact registry ---
 artifact_rows = []
 for artifact in artifacts.get("artifacts", []):
     updated_at = artifact.get("updated_at")
@@ -67,14 +79,32 @@ for artifact in artifacts.get("artifacts", []):
 st.subheader("产物注册表")
 st.dataframe(pd.DataFrame(artifact_rows), use_container_width=True, hide_index=True)
 
+# --- Match prediction models ---
 if prediction.get("status") == "ok":
-    st.subheader("比赛预测基线")
+    st.subheader("比赛预测模型")
+
+    # Poisson
     pred_cols = st.columns(4)
-    pred_cols[0].metric("模型", str(prediction.get("model_type", "independent_poisson")))
+    pred_cols[0].metric("Poisson 模型", str(prediction.get("model_type", "independent_poisson")))
     pred_cols[1].metric("训练行数", f"{int(prediction.get('train_rows', 0)):,}")
     pred_cols[2].metric("球队数", f"{int(prediction.get('num_teams', 0)):,}")
     pred_cols[3].metric("平滑", str(prediction.get("smoothing", "—")))
 
+    # Dixon-Coles
+    dc = prediction.get("dixon_coles", {})
+    if dc.get("status") == "ok":
+        dc_cols = st.columns(4)
+        dc_cols[0].metric("Dixon-Coles", "可用")
+        dc_cols[1].metric("rho", f"{dc.get('rho', 0):.4f}")
+        dc_cols[2].metric("主场优势", f"{dc.get('home_advantage', 0):.4f}")
+        dc_cols[3].metric("训练场次", f"{int(dc.get('num_matches', 0)):,}")
+    else:
+        st.caption("Dixon-Coles：未可用")
+else:
+    st.subheader("比赛预测模型")
+    st.info("预测模型产物未发现。请先运行 `scoutfootball train`。")
+
+# --- Model runs ---
 run_rows = []
 for run in model_runs.get("runs", [])[:20]:
     metrics = run.get("metrics", {}) if isinstance(run.get("metrics"), dict) else {}
@@ -90,3 +120,26 @@ if run_rows:
     st.dataframe(pd.DataFrame(run_rows), use_container_width=True, hide_index=True)
 else:
     st.info("当前未发现模型运行登记。")
+
+# --- License attribution ---
+licenses = artifacts.get("license_attribution", {})
+if licenses:
+    st.subheader("数据源许可")
+    lic_rows = []
+    for key, desc in licenses.items():
+        if isinstance(desc, dict):
+            lic_rows.append({
+                "数据源": desc.get("name", key),
+                "许可证": desc.get("license", "—"),
+                "署名": "需要" if desc.get("attribution_required") else "不需要",
+                "URL": desc.get("url", "—"),
+            })
+        else:
+            lic_rows.append({"数据源": key, "许可证": str(desc), "署名": "—", "URL": "—"})
+    if lic_rows:
+        st.dataframe(pd.DataFrame(lic_rows), use_container_width=True, hide_index=True)
+
+# --- Available models ---
+available = prediction.get("available_models", [])
+if available:
+    st.caption(f"可用模型：{', '.join(available)}")
