@@ -985,11 +985,11 @@ function getChart(id) {
 }
 
 function chartTextColor() {
-    return document.body.classList.contains("light-mode") ? "rgba(21,23,28,.65)" : "rgba(247,248,251,.68)";
+    return document.body.classList.contains("dark-mode") ? "rgba(247,248,251,.68)" : "rgba(21,23,28,.65)";
 }
 
 function chartGridColor() {
-    return document.body.classList.contains("light-mode") ? "rgba(21,23,28,.12)" : "rgba(247,248,251,.13)";
+    return document.body.classList.contains("dark-mode") ? "rgba(247,248,251,.13)" : "rgba(21,23,28,.12)";
 }
 
 function renderRadar(player) {
@@ -2903,8 +2903,8 @@ function bindEvents() {
         card.addEventListener("click", () => setView(card.dataset.jump));
     });
     document.getElementById("theme-toggle").addEventListener("click", () => {
-        document.body.classList.toggle("light-mode");
-        document.getElementById("theme-toggle").textContent = document.body.classList.contains("light-mode") ? "☀" : "☾";
+        document.body.classList.toggle("dark-mode");
+        document.getElementById("theme-toggle").textContent = document.body.classList.contains("dark-mode") ? "☾" : "☀";
         refreshAllChartColors();
         renderActiveView();
     });
@@ -4328,6 +4328,19 @@ async function initWorldCup() {
     renderWcSquads();
     renderWcCompare();
     renderWcProbability();
+
+    // Update WC data status pills based on API availability
+    document.querySelectorAll(".wc-data-status").forEach((el) => {
+        if (wcApiData.apiOnline) {
+            el.textContent = "LIVE DATA";
+            el.className = "status-pill status-high wc-data-status";
+            el.style.fontSize = "0.65rem";
+        } else {
+            el.textContent = "API OFFLINE";
+            el.className = "status-pill status-low wc-data-status";
+            el.style.fontSize = "0.65rem";
+        }
+    });
 }
 
 /* ── Tactical Board ─────────────────────────────────────────────────── */
