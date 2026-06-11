@@ -50,11 +50,12 @@ def _minutes_to_confidence(minutes: float) -> str:
 
 
 def _safe_read_parquet(relative_path: str) -> pd.DataFrame | None:
-    """Read a Parquet file, returning None on any error."""
+    """Read a Parquet file via DuckDB (avoids pyarrow dependency), returning None on any error."""
     if not _parquet_exists(relative_path):
         return None
     try:
-        return pd.read_parquet(_parquet_path(relative_path))
+        import duckdb
+        return duckdb.read_parquet(str(_parquet_path(relative_path))).fetchdf()
     except Exception:
         logger.warning("Failed to read %s", relative_path, exc_info=True)
         return None
@@ -371,7 +372,9 @@ def data_source_label() -> str:
 
     # Check granularity of player_match
     try:
-        pm = pd.read_parquet(_parquet_path("gold/feature_store/player_match.parquet"))
+        import duckdb
+        pq_path = str(_parquet_path("gold/feature_store/player_match.parquet"))
+        pm = duckdb.read_parquet(pq_path).fetchdf()
         if "data_granularity" in pm.columns:
             match_count = (pm["data_granularity"] == "match").sum()
             proxy_count = (pm["data_granularity"] == "season_proxy").sum()

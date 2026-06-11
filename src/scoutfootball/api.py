@@ -35,6 +35,12 @@ from scoutfootball.worldcup.data import (
 )
 
 
+def _read_parquet(path: Path):
+    """Read a Parquet file via DuckDB (avoids pyarrow dependency)."""
+    import duckdb
+    return duckdb.read_parquet(str(path)).fetchdf()
+
+
 @dataclass(frozen=True)
 class HealthResponse:
     status: str
@@ -119,11 +125,16 @@ def health_check() -> HealthResponse:
 
 
 def list_players() -> PlayerListResponse:
-    df = load_player_match()
-    if "player_name" not in df.columns:
+    """Return all unique player names from the ratings dataset."""
+    df = load_player_ratings()
+    col = (
+        "player" if "player" in df.columns
+        else ("player_name" if "player_name" in df.columns else None)
+    )
+    if col is None:
         return PlayerListResponse(player_count=0, players=[])
-    names = sorted(df["player_name"].dropna().unique().tolist())
-    return PlayerListResponse(player_count=len(names), players=names[:100])
+    names = sorted(df[col].dropna().unique().tolist())
+    return PlayerListResponse(player_count=len(names), players=names)
 
 
 def list_teams() -> list[str]:
@@ -191,9 +202,9 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
             _settings().data_root / "models" / "artifacts" / "dixon_coles_results.parquet"
         )
         if dc_path.exists():
-            import pandas as pd
 
-            dc_df = pd.read_parquet(dc_path)
+
+            dc_df = _read_parquet(dc_path)
             if not dc_df.empty:
                 dc_row = dc_df.iloc[0].to_dict()
                 if "rho" in dc_row:
@@ -235,9 +246,9 @@ def get_value_summary() -> dict:
     results_path = _settings().data_root / "models" / "artifacts" / "value_fairness_results.parquet"
     if results_path.exists():
         try:
-            import pandas as pd
 
-            results_df = pd.read_parquet(results_path)
+
+            results_df = _read_parquet(results_path)
             if not results_df.empty:
                 metrics = _clean_json_value(results_df.iloc[0].to_dict())
         except Exception:
@@ -315,10 +326,10 @@ def get_prediction_summary() -> dict[str, Any]:
     )
     poisson_info: dict[str, Any] = {"status": "no_data"}
     if artifact_path.exists():
-        import pandas as pd
+
 
         try:
-            frame = pd.read_parquet(artifact_path)
+            frame = _read_parquet(artifact_path)
             if not frame.empty:
                 poisson_info = frame.iloc[0].to_dict()
                 poisson_info["status"] = "ok"
@@ -334,10 +345,10 @@ def get_prediction_summary() -> dict[str, Any]:
     )
     dc_info: dict[str, Any] = {"status": "not_available"}
     if dc_path.exists():
-        import pandas as pd
+
 
         try:
-            dc_frame = pd.read_parquet(dc_path)
+            dc_frame = _read_parquet(dc_path)
             if not dc_frame.empty:
                 dc_info = dc_frame.iloc[0].to_dict()
                 dc_info["status"] = "ok"
@@ -377,10 +388,10 @@ def get_prediction_calibration() -> dict[str, Any]:
 
     if dc_detail_path.exists():
         import numpy as np
-        import pandas as pd
+
 
         try:
-            dc_df = pd.read_parquet(dc_detail_path)
+            dc_df = _read_parquet(dc_detail_path)
             if not dc_df.empty:
                 # Compute metrics from detail
                 clipped = dc_df["exact_score_probability"].clip(lower=1e-12)
@@ -487,10 +498,10 @@ def get_prediction_calibration() -> dict[str, Any]:
     poisson_metrics: dict[str, Any] = {"status": "not_available"}
     poisson_results_path = artifact_dir / "poisson_baseline_results.parquet"
     if poisson_results_path.exists():
-        import pandas as pd
+
 
         try:
-            pf = pd.read_parquet(poisson_results_path)
+            pf = _read_parquet(poisson_results_path)
             if not pf.empty:
                 row = pf.iloc[0].to_dict()
                 poisson_metrics = {
@@ -561,8 +572,8 @@ def get_artifacts_summary() -> dict:
     events_path = settings.raw_root / "statsbomb_open" / "events_all.parquet"
     if events_path.exists():
         try:
-            import pandas as pd
-            events_count = len(pd.read_parquet(events_path))
+
+            events_count = len(_read_parquet(events_path))
         except Exception:
             events_count = 0
 
@@ -573,8 +584,8 @@ def get_artifacts_summary() -> dict:
     truth_path = settings.data_root / "gold" / "feature_store" / "player_truth_labels.parquet"
     if truth_path.exists():
         try:
-            import pandas as pd
-            truth_df = pd.read_parquet(truth_path)
+
+            truth_df = _read_parquet(truth_path)
             has_truth = len(truth_df) > 0
             truth_rows = len(truth_df)
         except Exception:
@@ -845,9 +856,9 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
             # Load feature importance if available
             importance_path = run_dir / "feature_importance.parquet"
             if importance_path.exists():
-                import pandas as pd
+    
                 try:
-                    fi_df = pd.read_parquet(importance_path)
+                    fi_df = _read_parquet(importance_path)
                     meta["feature_importance"] = _clean_json_value(
                         fi_df.to_dict(orient="records"),
                     )
