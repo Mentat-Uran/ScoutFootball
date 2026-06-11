@@ -45,7 +45,7 @@ uv run pip install pyinstaller --quiet 2>/dev/null || true
 
 # Build the backend executable
 cd "$DESKTOP_DIR"
-uv run pyinstaller \
+uv run python -m PyInstaller \
     --clean \
     --noconfirm \
     --distpath backend-dist \
@@ -71,6 +71,11 @@ cp "$PROJECT_DIR/frontend/tactical-board.js" frontend/
 cp "$PROJECT_DIR/frontend/tactical-renderer.js" frontend/
 echo "      Frontend copied."
 echo ""
+
+# Copy app icon to build/ (electron-builder + tray icon)
+mkdir -p build
+cp "$DESKTOP_DIR/icon.png" build/icon.png
+echo "      App icon copied to build/"
 
 # ── Step 3: Copy backend executable ────────────────────────────
 echo "[3/4] Setting up backend in Electron resources..."
