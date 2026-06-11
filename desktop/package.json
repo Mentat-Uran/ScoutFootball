@@ -7,10 +7,10 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:all": "electron-builder --mac --win"
+    "build": "electron-builder --mac --arm64",
+    "build:mac": "electron-builder --mac --arm64",
+    "build:win": "electron-builder --win --x64",
+    "build:all": "electron-builder --mac --arm64 --win --x64"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"
@@ -28,11 +28,13 @@
     "files": [
       "main.js",
       "preload.js",
-      "frontend/**/*",
-      "backend/**/*",
-      "!backend/server.py"
+      "frontend/**/*"
     ],
     "extraResources": [
+      {
+        "from": "backend-dist/scoutfootball-server/",
+        "to": "backend/"
+      },
       {
         "from": "../data/gold/feature_store/",
         "to": "data/gold/feature_store/"
@@ -56,20 +58,18 @@
     ],
     "mac": {
       "category": "public.app-category.sports",
-      "icon": "build/icon.icns",
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": ["arm64"]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": ["arm64"]
         }
       ]
     },
     "win": {
-      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
