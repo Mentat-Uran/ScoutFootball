@@ -16,7 +16,12 @@ from scoutfootball.features.player_rolling import build_player_rolling_features
 from scoutfootball.features.rating_matrix import build_rating_feature_matrix, write_feature_manifest
 from scoutfootball.features.team_match import build_team_match_features
 from scoutfootball.features.team_rolling import build_team_rolling_features
-from scoutfootball.models.match_prediction import fit_dixon_coles, fit_independent_poisson
+from scoutfootball.models.match_prediction import (
+    CalibrationReport,
+    calibrate_predictions,
+    fit_dixon_coles,
+    fit_independent_poisson,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,18 +137,23 @@ def run_build_features(
             results["rating_feature_matrix"] = f"failed: {exc}"
             logger.error("Rating feature matrix build failed: %s", exc)
 
-        # --- Truth labels empty template ---
+        # --- Truth labels: only create template if file does not exist ---
         try:
             from scoutfootball.evaluation.truth_labels import create_empty_truth_labels
 
-            truth_labels = create_empty_truth_labels()
             truth_labels_path = (
                 resolved.gold_root / "feature_store" / "player_truth_labels.parquet"
             )
-            truth_labels.to_parquet(truth_labels_path, index=False)
-            results["player_truth_labels"] = (
-                f"ok (empty template -> {truth_labels_path.name})"
-            )
+            if not truth_labels_path.exists():
+                truth_labels = create_empty_truth_labels()
+                truth_labels.to_parquet(truth_labels_path, index=False)
+                results["player_truth_labels"] = (
+                    f"ok (empty template -> {truth_labels_path.name})"
+                )
+            else:
+                results["player_truth_labels"] = (
+                    f"ok (existing -> {truth_labels_path.name})"
+                )
         except Exception as exc:
             results["player_truth_labels"] = f"failed: {exc}"
             logger.error("Truth labels template creation failed: %s", exc)
@@ -205,11 +215,11 @@ def run_weekly_train(
 
         # --- Dixon-Coles training (with time decay) ---
         try:
-            dc_half_life = 180.0  # days — recency weighting half-life
-            dc_model = fit_dixon_coles(team_match, half_life_days=dc_half_life)
+            dc_decay = 0.005  # Dixon-Coles (1997) paper recommended value
+            dc_model = fit_dixon_coles(team_match, decay=dc_decay)
             _save_dixon_coles_artifacts(dc_model, team_match, resolved)
             results["dixon_coles"] = (
-                f"ok (trained DixonColesModel with half_life={dc_half_life}d "
+                f"ok (trained DixonColesModel with decay={dc_decay} "
                 f"and wrote artifacts to data/models/artifacts)"
             )
         except Exception as exc:
@@ -238,6 +248,33 @@ def run_weekly_train(
         except Exception as exc:
             results["dc_calibration"] = f"failed: {exc}"
             logger.error("DC calibration backtest failed: %s", exc)
+
+        # --- DC probability calibration (isotonic) ---
+        try:
+            from scoutfootball.evaluation.backtests import run_dc_backtest_with_calibration
+
+            dc_cal_bt = run_dc_backtest_with_calibration(
+                team_match, decay=dc_decay, calibration_method="isotonic",
+            )
+            # Save calibration report to feature_store
+            cal_store_dir = resolved.gold_root / "feature_store"
+            cal_store_dir.mkdir(parents=True, exist_ok=True)
+            if dc_cal_bt.calibration.calibrated_predictions is not None:
+                dc_cal_bt.calibration.calibrated_predictions.to_parquet(
+                    cal_store_dir / "dc_calibration_report.parquet", index=False,
+                )
+            b_before = dc_cal_bt.metrics["brier_1x2_before"]
+            b_after = dc_cal_bt.metrics["brier_1x2_after"]
+            rps_before = dc_cal_bt.metrics["rps_before"]
+            rps_after = dc_cal_bt.metrics["rps_after"]
+            results["dc_prob_calibration"] = (
+                f"ok (Brier {b_before:.4f}->{b_after:.4f}, "
+                f"RPS {rps_before:.4f}->{rps_after:.4f}, "
+                f"n={dc_cal_bt.metrics['n_matches']})"
+            )
+        except Exception as exc:
+            results["dc_prob_calibration"] = f"failed: {exc}"
+            logger.error("DC probability calibration failed: %s", exc)
 
         # --- availability diagnostic ---
         try:
@@ -792,6 +829,7 @@ def _save_dixon_coles_artifacts(
                 "league_mean_goals": model.league_mean_goals,
                 "num_teams": len(model.team_attack),
                 "half_life_days": model.half_life_days,
+                "decay": model.decay,
             }
         ]
     )
