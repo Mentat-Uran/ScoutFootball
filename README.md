@@ -104,9 +104,28 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 | Electronic tactical board | First local canvas/JSON slice available; animation timeline, PNG/PDF/WebM export, report embedding, and version migration remain P1.5 work |
 | Dixon-Coles with time decay | Planned (P5) |
 
-### Current Development Gaps
+### Known Limitations (v1.0.0)
 
-Beyond the tactical board, the main unfinished areas are still player truth labels, full v1.3.1-dev GPU reruns and error reviews, World Cup squad/coverage APIs, richer player/value/prediction/report read-only contracts, action-value attribution and full xT/VAEP work, model-run reproducibility metadata, frontend security regression tests, CSP/CORS deployment hardening, scouting review writeback, Dixon-Coles calibration, and future event/tracking schema work.
+**Rating System:**
+- Player truth labels are empty; supervised training paths (NN candidate) skip by default
+- Rating system is in calibration phase; strong teams (Barcelona, Real Madrid) may be systematically undervalued
+- League intercept bias exists (Serie A -16.6, Ligue 1 -11.3)
+
+**Data Coverage:**
+- Action value metrics are StatsBomb sample only (3 matches, ~12K events), not full league coverage
+- FBref data limited to 5 seasons; coarse position mapping needs StatsBomb/formation data
+- World Cup views contain demo/sample data pending official squad rosters
+
+**Frontend:**
+- Frontend falls back to built-in demo data when API is unavailable (marked with DEMO badge)
+- Tactical board MP4 export requires ffmpeg installed on the system
+- GIF export not yet implemented
+
+**Not Included in v1.0:**
+- VAEP (planned for future after xT stabilization)
+- Spatial/video analysis (StatsBomb 360, tracking data)
+- Real-time collaboration on tactical board
+- Mobile-optimized tactical board editing
 
 ### Electronic Tactical Board
 
@@ -142,29 +161,39 @@ Remaining P1.5 scope stays lightweight but broader than simple animation: red/bl
 
 ### Quick Start
 
+**Prerequisites:** Python 3.11+ and [uv](https://docs.astral.sh/uv/) (fast Python package manager).
+
 ```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and install
+git clone https://github.com/Mentaturan/ScoutFootball_for_World_Cup.git
+cd ScoutFootball_for_World_Cup
 uv sync
 
-# Project info
-PYTHONPATH=src uv run python -m scoutfootball info
+# One-command demo (validates data, runs pipeline, starts servers)
+bash scripts/demo.sh
 
-# Run pipeline
-PYTHONPATH=src uv run python -m scoutfootball ingest
+# Or step by step:
+PYTHONPATH=src uv run python -m scoutfootball info      # Project info
+PYTHONPATH=src uv run python -m scoutfootball validate   # Validate data
+PYTHONPATH=src uv run python -m scoutfootball ingest     # Ingest data
 PYTHONPATH=src uv run python -m scoutfootball build-features
-PYTHONPATH=src uv run python -m scoutfootball train
+PYTHONPATH=src uv run python -m scoutfootball train      # Train ratings
 
-# Validate data
-PYTHONPATH=src uv run python -m scoutfootball validate
-
-# Streamlit dashboard
-uv run streamlit run src/scoutfootball/app/streamlit_app.py
-
-# FastAPI read-only backend
-PYTHONPATH=src uv run python -m scoutfootball serve
-
-# Liquid Glass frontend
-python3 -m http.server 8600 --directory frontend
+# Start web UI (two terminals)
+PYTHONPATH=src uv run python -m scoutfootball serve      # API on :8600
+python3 -m http.server 8601 --directory frontend         # Frontend on :8601
 ```
+
+Open http://localhost:8601 for the Liquid Glass frontend, or run Streamlit:
+
+```bash
+uv run streamlit run src/scoutfootball/app/streamlit_app.py
+```
+
+**First run note:** The pipeline will download and cache public data on first run. This requires an internet connection. Subsequent runs use local cache.
 
 ### Tech Stack & Compliance
 
@@ -266,9 +295,28 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 | 电子战术板 | 已有本地画布/JSON 第一切片；动画时间轴、PNG/PDF/WebM 导出、报告嵌入和版本迁移仍属 P1.5 |
 | Dixon-Coles + 时间衰减 | 计划中 (P5) |
 
-### 当前开发缺口
+### 已知限制（v1.0.0）
 
-除电子战术板外，当前未完成的主线仍包括：球员真实标签、v1.3.1-dev 完整 GPU 重跑和误差复盘、世界杯阵容/覆盖 API、球员/身价/预测/报告页的完整只读契约、动作价值 attribution 和完整 xT/VAEP、模型运行可复现元数据、前端安全回归测试、CSP/CORS 部署加固、球探审阅写回、Dixon-Coles 概率校准，以及后续 event/tracking schema。
+**评分系统：**
+- 球员真实标签为空；监督式训练路径（NN 候选）默认跳过
+- 评分系统处于校准阶段；强队（Barcelona、Real Madrid）可能被系统性低估
+- 联赛截距偏差存在（Serie A -16.6、Ligue 1 -11.3）
+
+**数据覆盖：**
+- 动作价值指标仅为 StatsBomb 样本（3 场比赛、~12K 事件），非全量联赛覆盖
+- FBref 数据限于 5 赛季；粗位置映射需要 StatsBomb/阵型数据
+- 世界杯视图包含 demo/样本数据，待官方阵容公布
+
+**前端：**
+- API 不可用时前端回退到内置 demo 数据（标记 DEMO 徽章）
+- 战术板 MP4 导出需要系统安装 ffmpeg
+- GIF 导出尚未实现
+
+**v1.0 未包含：**
+- VAEP（计划在 xT 稳定后实现）
+- 空间/视频分析（StatsBomb 360、tracking 数据）
+- 战术板实时协作
+- 移动端战术板编辑优化
 
 ### 电子战术板
 
@@ -304,29 +352,39 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 
 ### 快速开始
 
+**前置条件：** Python 3.11+ 和 [uv](https://docs.astral.sh/uv/)（快速 Python 包管理器）。
+
 ```bash
+# 安装 uv（如未安装）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 克隆并安装
+git clone https://github.com/Mentaturan/ScoutFootball_for_World_Cup.git
+cd ScoutFootball_for_World_Cup
 uv sync
 
-# 项目信息
-PYTHONPATH=src uv run python -m scoutfootball info
+# 一键演示（验证数据、运行流水线、启动服务器）
+bash scripts/demo.sh
 
-# 运行流水线
-PYTHONPATH=src uv run python -m scoutfootball ingest
+# 或分步执行：
+PYTHONPATH=src uv run python -m scoutfootball info      # 项目信息
+PYTHONPATH=src uv run python -m scoutfootball validate   # 数据验证
+PYTHONPATH=src uv run python -m scoutfootball ingest     # 数据采集
 PYTHONPATH=src uv run python -m scoutfootball build-features
-PYTHONPATH=src uv run python -m scoutfootball train
+PYTHONPATH=src uv run python -m scoutfootball train      # 训练评分
 
-# 数据验证
-PYTHONPATH=src uv run python -m scoutfootball validate
-
-# Streamlit 看板
-uv run streamlit run src/scoutfootball/app/streamlit_app.py
-
-# FastAPI 只读后端
-PYTHONPATH=src uv run python -m scoutfootball serve
-
-# Liquid Glass 前端
-python3 -m http.server 8600 --directory frontend
+# 启动 Web 界面（两个终端）
+PYTHONPATH=src uv run python -m scoutfootball serve      # API 在 :8600
+python3 -m http.server 8601 --directory frontend         # 前端在 :8601
 ```
+
+浏览器打开 http://localhost:8601 查看 Liquid Glass 前端，或运行 Streamlit：
+
+```bash
+uv run streamlit run src/scoutfootball/app/streamlit_app.py
+```
+
+**首次运行提示：** 流水线首次运行时会下载并缓存公开数据，需要网络连接。后续运行使用本地缓存。
 
 ### 技术栈与合规
 

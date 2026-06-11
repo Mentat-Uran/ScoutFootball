@@ -1,3 +1,4 @@
+const APP_VERSION = "1.0.0";
 const i18n = {
     zh: {
         nav_overview: "总览",
@@ -4711,12 +4712,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Check API connection status
     const apiPill = document.getElementById("top-api-pill");
+    let apiOnline = false;
     if (apiPill) {
         try {
             const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
             if (healthResp.ok) {
                 apiPill.textContent = "API OK";
                 apiPill.className = "status-pill status-high";
+                apiOnline = true;
             } else {
                 apiPill.textContent = "API ERR";
                 apiPill.className = "status-pill status-low";
@@ -4724,6 +4727,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch {
             apiPill.textContent = "OFFLINE";
             apiPill.className = "status-pill status-low";
+        }
+    }
+    // Show global DEMO banner when API is offline
+    if (!apiOnline) {
+        let demoBanner = document.getElementById("global-demo-banner");
+        if (!demoBanner) {
+            demoBanner = document.createElement("div");
+            demoBanner.id = "global-demo-banner";
+            demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff6b6b;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
+            const z = appState.lang === "zh";
+            demoBanner.textContent = z
+                ? "◆ API 离线 — 使用内置演示数据。启动后端：PYTHONPATH=src uv run python -m scoutfootball serve"
+                : "◆ API Offline — Using built-in demo data. Start backend: PYTHONPATH=src uv run python -m scoutfootball serve";
+            document.body.prepend(demoBanner);
         }
     }
 });
