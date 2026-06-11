@@ -331,3 +331,7 @@ def create_app() -> FastAPI:
         app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
     return app
+
+
+# Module-level app instance for uvicorn / PyInstaller
+app = create_app()
