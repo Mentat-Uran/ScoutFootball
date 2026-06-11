@@ -25,10 +25,10 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - mplsoccer 集成：`src/scoutfootball/viz/pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
 - 低置信度提示：分钟不足、数据缺失、位置重判不确定、联赛 coverage 低。
 - Streamlit 当前为 15 页工作台：总览、5 个分析页、3 个 P1 展示页、4 个世界杯页、1 个球探队列页和 1 个动作价值样本页；总览页已接入 artifact/model-run 读取，球探页已接入 review queue/watchlist/shortlist 读取，动作价值页已接入 `player_value_metrics.parquet` 样本。
-- `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。所有导航图标统一使用几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。总览、球员画像、身价、比赛预测、球探、动作价值和报告页已改为读取 FastAPI 本地产物；身价页 API 无数据时显示 DEMO 标记；顶部栏有 API 连接状态指示器（OK/OFFLINE）；`fetchRatings()` 按位置分组计算客户端 radar 百分位，球员列表加载后即有真实 radar 数据；API/本地 JSON 字符串进入 HTML 前已统一转义，CSV 导出有公式注入防护；世界杯页仍含样例/混合数据，不能写成全量真实后端。
+- `frontend/` 静态 Liquid Glass 前端已重构为 7 视图分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告。所有导航图标统一使用几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。Phase 3 已完成前端 mock→real 替换：6 个 mock 数据块已全部移除，所有页面改为读取 FastAPI 本地产物；世界杯 4 页面已接入真实数据（新增 `/worldcup/teams` 端点，读取 48 队 1,104 球员真实阵容）；球员对比增强：雷达图叠加 + 同位置百分位对比表；预测卡增强：比分矩阵热力图 + 校准指标（Brier/RPS）+ 胜平负概率条形图；身价页 API 无数据时显示 DEMO 标记；顶部栏有 API 连接状态指示器（OK/OFFLINE）；`fetchRatings()` 按位置分组计算客户端 radar 百分位，球员列表加载后即有真实 radar 数据；API/本地 JSON 字符串进入 HTML 前已统一转义，CSV 导出有公式注入防护。
 - `data_loader.py` 已加固：DuckDB 读取异常时正确 fallback 到 Parquet；新增 `_safe_read_parquet` 辅助函数，corrupt Parquet 文件不会导致 500；6 个数据加载函数已改用安全读取。
 - `api.py` 已加固：`_clean_json_value` 支持 numpy.int64/float64/bool_ 和 inf；`get_match_prediction` 捕获所有异常类型；内联 NaN 清理代码已合并到 `_clean_json_value`。
-- 电子战术板 P1.5 已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。新增：绘图工具（自由画笔/线条/矩形/椭圆）、文字注释、曲线箭头、触摸手势支持、循环动画、对象删除按钮。PNG 静态导出、WebM 动画导出、PDF 导出和版本迁移已实现。MP4 导出通过后端 ffmpeg 转换实现（`/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）。
+- 电子战术板 P1.5 已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。新增：绘图工具（自由画笔/线条/矩形/椭圆）、文字注释、曲线箭头、触摸手势支持、循环动画、对象删除按钮。PNG 静态导出、WebM 动画导出、PDF 导出和版本迁移已实现。MP4 导出通过后端 ffmpeg 转换实现（`/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）。GIF 导出已通过 gif.js 实现浏览器端生成。
 - 桌面应用已构建：`desktop/` 目录包含 Electron + PyInstaller 打包配置，macOS arm64 版本已验证可用（221MB .dmg）。前端打包进 app.asar，后端可执行文件放在 extraResources，数据文件随应用分发。自动更新通过 electron-updater + GitHub releases 实现。仅支持 arm64 芯片，不提供 Intel 版本。
 - Dixon-Coles 比分预测模型已实现：`fit_dixon_coles()` 已接入 pipeline 和 `data_loader.py`，7 个单元测试覆盖参数拟合与预测。校准已接入 time decay + isotonic 校准，Brier 0.632，RPS 0.220。
 - 前端安全加固：`index.html` 增加 CSP meta tag、echarts CDN 加 SRI integrity、HTTP 响应增加 `X-Content-Type-Options: nosniff`；浏览器级 XSS/CSV 回归测试已完成。
@@ -64,7 +64,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 球队积分相关性会偏向出勤、CM 和 GK，不能单独作为球员影响力标签。
 - 弱联赛顶端样本已被压低，但仍需真实身价、奖项、专家标签或人工分档校准跨联赛等级。
 - FBref 粗位置只能保守重判，仍需要 StatsBomb、阵型或人工位置增强。
-- `player_value_metrics.parquet` 只有 StatsBomb 事件价值样本，不能当作全量联赛动作价值；`player_truth_labels.parquet` 当前为 41,389 行（Transfermarkt 身价 33,532 + expert_tier 7,840 + award 17）；`player_action_value.parquet` 当前为 9,951 行（全量 xT）。
+- `player_value_metrics.parquet` 只有 StatsBomb 事件价值样本，不能当作全量联赛动作价值；`player_truth_labels.parquet` 当前为 41,389 行（Transfermarkt 身价 33,532 + expert_tier 7,840 + award 17）；`player_action_value.parquet` 当前为 15,062 行（全量 xT + VAEP 合并，含分页和 source attribution）。
 - 评估流程已增加 N/A 球队过滤：`build_matched_results()` 和 `build_team_target_tensors()` 自动剔除积分 NaN/inf 球队，`evaluate_params()` 报告剔除数量。
 - 评分模型卡 `docs/MODEL_CARD.md` 已输出，记录数据源、标签定义、适用边界、已知偏差和不可用场景。
 - 神经网络评分器只能作为真实标签层完成后的候选实验；`scoutfootball train-rating-nn` 当前已有 41,389 行标签数据可用，但仍需时间切分、baseline 对比和误差案例复盘后才能替换默认评分。
@@ -101,8 +101,8 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
    - 近期先重建 Football-Data 10 赛季合并 Parquet，再用新 availability cap 和稳健球队聚合重跑 GPU optimizer，并复盘 Everton/Stuttgart/Rennes/Napoli/Real Madrid/Arsenal/PSG 等误差案例。
    - 随后引入 Transfermarkt 手动导入、奖项、专家分档或人工校准集作为球员真实影响力标签，并补齐特征矩阵、缺失字段标记和神经网络准入门槛。
 2. P1：展示增强和可解释产品层，优先接入 mplsoccer。核心交付：球员雷达/排名页、身价偏离榜、比赛预测页 3 个可截图 Streamlit 页面，README 加 3–5 张截图和 demo 复现说明。
-   - 同步维护 `frontend/` Liquid Glass 静态工作台；保持其 UI 风格，但后续必须用 FastAPI/Parquet 契约替换 mock 数据。
-3. P1.5：电子战术板、战术演示和动画导出。画布/JSON/绘图工具/文字注释/曲线箭头/触摸支持/循环动画/删除按钮已落地；后续要按 `docs/TASKS.md` 的对标功能池推进，包括关键帧/步骤式动画、演示播放、PNG/PDF/WebM 导出；MP4/GIF、视频叠画、tracking 导入、2D/3D 同步和实时协作后置。
+   - `frontend/` Liquid Glass 静态工作台 Phase 3 已完成：mock 数据已全部替换为 FastAPI 契约调用，世界杯页已接入真实数据，球员对比/预测卡/动作价值已增强。
+3. P1.5：电子战术板、战术演示和动画导出。画布/JSON/绘图工具/文字注释/曲线箭头/触摸支持/循环动画/删除按钮已落地；GIF 导出已通过 gif.js 实现；后续要按 `docs/TASKS.md` 的对标功能池推进，包括关键帧/步骤式动画、演示播放、PNG/PDF/WebM 导出；MP4、视频叠画、tracking 导入、2D/3D 同步和实时协作后置。
 4. P2：StatsBomb 事件动作价值层，xT 和 VAEP 已实现。VAEP 6,771 行球员赛季数据，scores AUC=0.65，concedes AUC=0.88；xT/VAEP 特征已接入评分矩阵（missing rate 71.7%）。
 5. P3：评分模型重构，把 action value 作为增强维度接入；真实标签层稳定后，神经网络只能先作为候选模型与当前优化器同口径对比。
 6. P4：模型评估文档和模型卡。补 `docs/EVALUATION.md`（Spearman、时间切分、baseline、误差案例）和 `docs/MODEL_CARD.md`（数据源、标签定义、适用边界、偏差、不可用场景）。
@@ -111,7 +111,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 9. P7：球探决策与人工校准层，把真实标签、低置信度样本、误差案例和战术备注纳入 review queue、watchlist、shortlist。
 10. P8：空间/视频/离球研究层，StatsBomb 360、Metrica/open tracking、xG+、off-ball value、强化学习只作为远期方向。
 
-除战术板外，当前规划必须继续保留这些缺口：v1.3.1 重跑已完成但误差复盘仍需深化、世界杯页仍是样例/混合数据、前端 player/value/prediction/report 只读契约还不完整、球探人工标注回灌未实现、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
+除战术板外，当前规划必须继续保留这些缺口：v1.3.1 重跑已完成但误差复盘仍需深化、球探人工标注回灌未实现、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
 
 ## 开发原则
 
@@ -156,19 +156,19 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 新增足球专用图表时优先扩展 `src/scoutfootball/viz/`，不要把绘图逻辑堆进 Streamlit 页面。
 - `frontend/` 是静态产品壳：保留 `frontend/index.html`、`frontend/style.css`、`frontend/app.js` 的 Liquid Glass 风格，页面只做本地展示和轻量交互，不在浏览器中执行训练、爬取或重型数据处理。
 - `desktop/` 是桌面应用打包目录：`main.js`（Electron 主进程）、`preload.js`（IPC 桥）、`backend/server.py`（PyInstaller 入口）、`scoutfootball-server.spec`（PyInstaller 配置）、`package.json`（electron-builder 配置）。构建产物（`dist/`、`backend-dist/`、`backend-build/`、`frontend/`、`node_modules/`）不入 git，通过 `.gitignore` 排除。构建命令：`bash scripts/build-desktop.sh --mac`。
-- `frontend/` 当前 mock 数据只能用于产品形态验证；接真实数据时先补 FastAPI read-only endpoint 和本地 Parquet 契约，再改前端 fetch。
+- `frontend/` Phase 3 已完成 mock→real 替换；所有页面均读取 FastAPI 本地产物，不再依赖 mock 数据块。
 - `frontend/app.js` 中已有 `escapeHtml()`、`escapeAttr()`、`sanitizeCssPercent()` 和 `csvCell()`；新增 HTML 模板、attribute、style width 或 CSV 导出时优先复用这些 helper，不要把后端/本地字符串直接拼进 HTML。
-- 当前已落地的 FastAPI 只读契约子集：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/predictions/calibration`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`、`/tactical-board/capabilities`、`/tactical-board/export/mp4`；旧路由别名继续保留给现有页面兼容使用。
+- 当前已落地的 FastAPI 只读契约子集：`/artifacts`、`/players/{player_name}`（含位置内百分位 + 低置信度原因 + 3 赛季趋势）、`/ratings/snapshots`、`/predictions/{home}/{away}`（含比分矩阵热力图 + 校准指标 + 胜平负概率）、`/predictions/meta`、`/predictions/calibration`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`（15,062 行全量 + 分页 + source attribution）、`/worldcup/teams`（48 队真实阵容）、`/reports/model-runs`、`/tactical-board/capabilities`、`/tactical-board/export/mp4`；旧路由别名继续保留给现有页面兼容使用。
 - 新增电子战术板优先放在 `frontend/`：使用归一化球场坐标、本地 JSON 工程、对象/图层/帧 schema、关键帧或步骤式时间轴；第一阶段导出 PNG/PDF/WebM，MP4 只能作为检测到本地 ffmpeg 后的可选后端能力。
 - 电子战术板工程 schema 至少包含 `board_id`、`title`、`sport`、`pitch_type`、`objects`、`layers`、`frames`、`version`、`created_at`、`updated_at`、`source_attribution`。
 - 战术板导出文件优先写入 `data/reports/tactical_exports/`；如果只是浏览器本地下载，不要假装已进入模型/报告产物目录。
 - 前端长期视图和后端契约对应关系：
   - 总览：artifact registry、行数、产物更新时间、真实/代理/合成数据标记、license attribution。
-  - 球员：player profile API、评分快照、位置内指标、低置信度原因、导出。
+  - 球员：player profile API（含位置内百分位 + 低置信度原因 + 3 赛季趋势）、评分快照、雷达图叠加对比、百分位对比表、导出。
   - 身价：value-fairness OOF report、残差分层、手动身价导入边界。
-  - 比赛预测：统一 prediction service、模型版本、coverage、log loss/Brier/RPS、比分矩阵。
+  - 比赛预测：统一 prediction service、模型版本、coverage、log loss/Brier/RPS、比分矩阵热力图、校准指标、胜平负概率条形图。
   - 球探：review queue/watchlist/shortlist Parquet 契约，只读展示优先。
-  - 动作价值：P2 action_value 产物稳定前只展示样例，不声称全量能力。
+  - 动作价值：15,062 行全量 xT + VAEP 数据、分页、source attribution；前端已接入全量端点。
   - 报告：model-run registry、输入 hash、随机种子、参数、指标、误差案例。
   - 战术板：local board projects、board snapshot、animation export、coaching notes、source attribution；写入 API 后置，先支持本地 JSON 导入导出。
 - 新增评分特征矩阵模块使用 `src/scoutfootball/features/rating_matrix.py`。

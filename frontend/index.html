@@ -7,6 +7,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:8600 http://127.0.0.1:8600; img-src 'self' data:">
     <title>ScoutFootball Analyst Console</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js" integrity="sha384-pPi0zxBAoDu6+JXW/C68UZLvBUUtU+7zonhif43rqj7pxsGyqyqzcian2Rj37Rss" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js" integrity="sha384-4RMW82CWFobXY+HRHXe5go/V5acBhiIVGCT+2k7TEoxi7AiWKw8WoWb9qMU+FAFu" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -187,18 +188,28 @@
 
             <section class="view" id="view-players" aria-label="players">
                 <div class="layout-2">
-                    <article class="liquid-panel chart-panel">
-                        <div class="panel-head">
-                            <div>
-                                <p class="eyebrow" data-i18n="players_kicker">位置内画像</p>
-                                <h2 id="selected-player-name">Jude Bellingham</h2>
+                    <div style="display:flex;flex-direction:column;gap:1rem">
+                        <article class="liquid-panel chart-panel">
+                            <div class="panel-head">
+                                <div>
+                                    <p class="eyebrow" data-i18n="players_kicker">位置内画像</p>
+                                    <h2 id="selected-player-name">Jude Bellingham</h2>
+                                </div>
+                                <span id="player-confidence" class="status-pill status-high">HIGH</span>
                             </div>
-                            <span id="player-confidence" class="status-pill status-high">HIGH</span>
-                        </div>
-                        <div id="radar-chart" class="chart-box"></div>
-                        <div class="detail-grid" id="player-detail"></div>
-                        <div id="player-tactical-actions" style="margin-top:0.5rem"></div>
-                    </article>
+                            <div id="radar-chart" class="chart-box"></div>
+                            <div class="detail-grid" id="player-detail"></div>
+                            <div id="player-tactical-actions" style="margin-top:0.5rem"></div>
+                        </article>
+                        <article class="liquid-panel chart-panel">
+                            <div class="panel-head">
+                                <h3 data-i18n="compare_title">球员对比</h3>
+                            </div>
+                            <div id="compare-panel">
+                                <div style="text-align:center;color:var(--text-muted);padding:1.5rem 0;font-size:0.85rem">选择两名球员进行对比</div>
+                            </div>
+                        </article>
+                    </div>
 
                     <article class="liquid-panel table-panel">
                         <div class="panel-head">
@@ -312,6 +323,7 @@
                         </div>
                         <div id="match-probabilities" class="probability-stack"></div>
                         <div class="detail-grid" id="match-detail"></div>
+                        <div id="outcome-bar-chart" class="chart-box" style="height:200px;margin-top:0.5rem"></div>
                     </article>
                     <article class="liquid-panel chart-panel">
                         <div class="panel-head">
@@ -608,6 +620,7 @@
                             <button class="text-button" id="tactical-import" type="button" aria-label="Import project from JSON file">导入 JSON</button>
                             <button class="text-button" id="tactical-export-png" type="button" aria-label="Export board as PNG image">导出 PNG</button>
                             <button class="text-button" id="tactical-export-webm" type="button" aria-label="Export animation as WebM video">◆ 导出 WebM</button>
+                            <button class="text-button" id="tactical-export-gif" type="button" aria-label="Export animation as GIF image">◆ 导出 GIF</button>
                             <button class="text-button" id="tactical-export-mp4" type="button" aria-label="Export animation as MP4 video (requires ffmpeg)" style="opacity:0.5">◆ 导出 MP4</button>
                             <button class="text-button" id="tactical-export-print" type="button" aria-label="Print tactical board">▣ 打印</button>
                         </div>

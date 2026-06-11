@@ -30,6 +30,7 @@ from scoutfootball.api import (
     get_wc_predictions,
     get_wc_schedule,
     get_wc_squad,
+    get_wc_teams,
     health_check,
     list_players,
     list_teams,
@@ -231,6 +232,10 @@ def create_app() -> FastAPI:
     def wc_predictions():
         return get_wc_predictions()
 
+    @app.get("/worldcup/teams")
+    def wc_teams():
+        return get_wc_teams()
+
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")
     def tactical_board_capabilities():
@@ -245,7 +250,7 @@ def create_app() -> FastAPI:
                 "png": True,
                 "webm": True,  # MediaRecorder-based, browser-side
                 "mp4": ffmpeg_path is not None,
-                "gif": ffmpeg_path is not None,
+                "gif": True,  # gif.js-based, browser-side
                 "pdf": True,  # Browser print-based
             },
             "export_dir": str(
