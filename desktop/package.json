@@ -1,0 +1,97 @@
+{
+  "name": "scoutfootball",
+  "version": "1.0.0",
+  "description": "ScoutFootball — Local-first football analytics platform",
+  "main": "main.js",
+  "author": "Mentaturan",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.scoutfootball.desktop",
+    "productName": "ScoutFootball",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "frontend/**/*",
+      "backend/**/*",
+      "!backend/server.py"
+    ],
+    "extraResources": [
+      {
+        "from": "../data/gold/feature_store/",
+        "to": "data/gold/feature_store/"
+      },
+      {
+        "from": "../data/gold/scoutlab.duckdb",
+        "to": "data/gold/scoutlab.duckdb"
+      },
+      {
+        "from": "../data/models/",
+        "to": "data/models/"
+      },
+      {
+        "from": "../data/reports/",
+        "to": "data/reports/"
+      },
+      {
+        "from": "../data/raw/statsbomb_open/",
+        "to": "data/raw/statsbomb_open/"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.sports",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ScoutFootball"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Mentaturan",
+      "repo": "ScoutFootball_for_World_Cup"
+    }
+  }
+}
