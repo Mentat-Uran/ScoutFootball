@@ -121,14 +121,18 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 球员对比百分位表：同位置 percentile 对比表。
 - [x] 身价偏离分析：value-fairness OOF 残差、联赛/位置偏差、年龄散点分析。
 - [x] 球探队列增强：审阅状态流转（review_status）、watchlist diff、shortlist notes。
-- [x] Bug 修复：24 个 bug（4 critical、9 warning、11 minor），测试总数 601+。
+- [x] Bug 修复：26 个 bug（6 critical、9 warning、11 minor），测试总数 605+。
 - [x] 前端安全加固：CSP meta tag、SRI（echarts CDN）、X-Content-Type-Options 安全头、浏览器级 XSS/CSV 回归测试。
 - [x] 前端 Data Status 页面字段名修复（`a.name` → `a.label`，`a.modified` → `a.updated_at`）。
 - [x] `/license` 端点字段名修复（`modified` → `updated_at`）。
-- [x] 新增 5 个测试文件（87 个测试）：action_value/schema、calibration、match_prediction、scouting_queue、cross_provider_schema。
+- [x] `/predictions/meta` 端点添加顶层字段别名（`status`、`model_type`、`num_teams`、`train_rows`、`coverage`），修复前端 match 视图始终显示 "no artifact" 的 bug。
+- [x] 前端 match 视图 calibration 部分修复：从正确的嵌套对象读取 rho、home_advantage、coverage、brier、rps 等字段。
+- [x] 前端报告页增强：显示 Dixon-Coles 模型状态和 rho 参数。
+- [x] 新增 6 个测试文件（91 个测试）：action_value/schema、calibration、match_prediction、scouting_queue、cross_provider_schema、prediction_summary。
 - [x] P6 跨供应商 schema 参考文档：SPADL 兼容性、kloppy/floodlight/CDF 评估已写入 DATA_CONTRACTS.md。
 - [x] P2 socceraction 依赖评估文档已写入 DATA_CONTRACTS.md。
 - [x] DATA_CONTRACTS.md 补充 `/license`、`/value-summary`、`/predictions/meta` 端点文档。
+- [x] Streamlit 球探队列页增强：联赛/位置/置信度筛选、排序、CSV 导出、标签页分栏、置信度分布统计。
 
 ## P0：评分系统真实影响力校准
 
