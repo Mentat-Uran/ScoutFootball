@@ -29,12 +29,34 @@ function log(msg) {
   console.log(line.trim());
 }
 
-// ── Backend Management ─────────────────────────────────────────
+// ── Path Resolution ────────────────────────────────────────────
+function getBasePath() {
+  if (app.isPackaged) {
+    // In packaged app, resources are in extraResources
+    return process.resourcesPath;
+  }
+  return path.join(__dirname);
+}
+
+function getFrontendDir() {
+  // Frontend files are bundled in app.asar (via "files" in package.json)
+  // __dirname resolves correctly inside asar
+  const asarFrontend = path.join(__dirname, "frontend");
+  if (fs.existsSync(asarFrontend)) {
+    return asarFrontend;
+  }
+  // Fallback: check resources path
+  const resFrontend = path.join(process.resourcesPath, "frontend");
+  if (fs.existsSync(resFrontend)) {
+    return resFrontend;
+  }
+  // Dev mode fallback
+  return path.join(__dirname, "frontend");
+}
+
 function getBackendPath() {
-  // In production, the backend executable is in the resources folder
   const isDev = !app.isPackaged;
   if (isDev) {
-    // Development: use the Python script directly
     return {
       command: "python3",
       args: ["-m", "scoutfootball", "serve"],
@@ -43,7 +65,7 @@ function getBackendPath() {
     };
   }
 
-  // Production: use the bundled executable
+  // Production: backend executable is in extraResources/backend/
   const platform = process.platform;
   const ext = platform === "win32" ? ".exe" : "";
   const backendExe = path.join(process.resourcesPath, "backend", `scoutfootball-server${ext}`);
@@ -56,7 +78,7 @@ function getBackendPath() {
   return {
     command: backendExe,
     args: [],
-    cwd: path.join(process.resourcesPath),
+    cwd: process.resourcesPath,
     env: {
       ...process.env,
       SCOUTFOOTBALL_DATA_ROOT: path.join(process.resourcesPath, "data"),
@@ -64,6 +86,7 @@ function getBackendPath() {
   };
 }
 
+// ── Backend Management ─────────────────────────────────────────
 function startBackend() {
   const config = getBackendPath();
   if (!config) {
@@ -71,7 +94,9 @@ function startBackend() {
     return false;
   }
 
-  log(`Starting backend: ${config.command} ${config.args.join(" ")}`);
+  log(`Starting backend: ${config.command}`);
+  log(`Backend cwd: ${config.cwd}`);
+  log(`Backend data root: ${config.env.SCOUTFOOTBALL_DATA_ROOT || "default"}`);
 
   try {
     backendProcess = spawn(config.command, config.args, {
@@ -109,7 +134,6 @@ function stopBackend() {
   if (backendProcess) {
     log("Stopping backend...");
     backendProcess.kill("SIGTERM");
-    // Force kill after 5 seconds
     setTimeout(() => {
       if (backendProcess) {
         backendProcess.kill("SIGKILL");
@@ -158,20 +182,28 @@ async function waitForBackend(maxWaitMs = 15000) {
 let frontendServer = null;
 
 function startFrontendServer() {
-  const frontendDir = app.isPackaged
-    ? path.join(process.resourcesPath, "frontend")
-    : path.join(__dirname, "frontend");
+  const frontendDir = getFrontendDir();
+  log(`Frontend directory: ${frontendDir}`);
+  log(`Frontend exists: ${fs.existsSync(frontendDir)}`);
 
   if (!fs.existsSync(frontendDir)) {
     log(`Frontend directory not found: ${frontendDir}`);
     return false;
   }
 
-  const handler = (req, res) => {
-    let filePath = path.join(frontendDir, req.url === "/" ? "index.html" : req.url);
-    // Remove query strings
-    filePath = filePath.split("?")[0];
+  // List files in frontend dir for debugging
+  try {
+    const files = fs.readdirSync(frontendDir);
+    log(`Frontend files: ${files.join(", ")}`);
+  } catch (e) {
+    log(`Cannot list frontend dir: ${e.message}`);
+  }
 
+  const handler = (req, res) => {
+    let urlPath = req.url.split("?")[0];
+    if (urlPath === "/") urlPath = "/index.html";
+
+    const filePath = path.join(frontendDir, urlPath);
     const ext = path.extname(filePath);
     const mimeTypes = {
       ".html": "text/html",
@@ -225,21 +257,31 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     title: `ScoutFootball v${APP_VERSION}`,
-    icon: path.join(__dirname, "build", "icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
     },
     backgroundColor: "#0a0a0f",
-    show: false, // Show after ready
+    show: false,
   });
 
-  // Load the frontend
-  mainWindow.loadURL(`http://127.0.0.1:${FRONTEND_PORT}`);
+  const frontendUrl = `http://127.0.0.1:${FRONTEND_PORT}`;
+  log(`Loading frontend: ${frontendUrl}`);
+  mainWindow.loadURL(frontendUrl);
 
   mainWindow.once("ready-to-show", () => {
+    log("Window ready-to-show");
     mainWindow.show();
+  });
+
+  // Debug: log web contents events
+  mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDesc) => {
+    log(`Frontend load failed: ${errorCode} - ${errorDesc}`);
+  });
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    log("Frontend loaded successfully");
   });
 
   mainWindow.on("close", (e) => {
@@ -253,7 +295,6 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
@@ -263,23 +304,22 @@ function createWindow() {
 // ── System Tray ────────────────────────────────────────────────
 function createTray() {
   const iconPath = path.join(__dirname, "build", "icon.png");
+  let trayIcon;
   if (fs.existsSync(iconPath)) {
-    tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 }));
+    trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   } else {
-    tray = new Tray(nativeImage.createEmpty());
+    // Create a simple 16x16 icon
+    trayIcon = nativeImage.createEmpty();
   }
 
+  tray = new Tray(trayIcon);
+
   const contextMenu = Menu.buildFromTemplate([
-    {
-      label: `ScoutFootball v${APP_VERSION}`,
-      enabled: false,
-    },
+    { label: `ScoutFootball v${APP_VERSION}`, enabled: false },
     { type: "separator" },
     {
       label: "Show Window",
-      click: () => {
-        if (mainWindow) mainWindow.show();
-      },
+      click: () => { if (mainWindow) mainWindow.show(); },
     },
     {
       label: "Check for Updates...",
@@ -288,27 +328,20 @@ function createTray() {
     { type: "separator" },
     {
       label: "Quit",
-      click: () => {
-        isQuitting = true;
-        app.quit();
-      },
+      click: () => { isQuitting = true; app.quit(); },
     },
   ]);
 
   tray.setToolTip(`ScoutFootball v${APP_VERSION}`);
   tray.setContextMenu(contextMenu);
-  tray.on("click", () => {
-    if (mainWindow) mainWindow.show();
-  });
+  tray.on("click", () => { if (mainWindow) mainWindow.show(); });
 }
 
 // ── Auto Updater ───────────────────────────────────────────────
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
-autoUpdater.on("checking-for-update", () => {
-  log("Checking for updates...");
-});
+autoUpdater.on("checking-for-update", () => log("Checking for updates..."));
 
 autoUpdater.on("update-available", async (info) => {
   log(`Update available: ${info.version}`);
@@ -319,27 +352,19 @@ autoUpdater.on("update-available", async (info) => {
     message: `ScoutFootball v${info.version} is available.`,
     detail: `You are running v${APP_VERSION}.\n\nWould you like to download the update?`,
   });
-  if (result.response === 0) {
-    autoUpdater.downloadUpdate();
-  }
+  if (result.response === 0) autoUpdater.downloadUpdate();
 });
 
-autoUpdater.on("update-not-available", () => {
-  log("No update available");
-});
+autoUpdater.on("update-not-available", () => log("No update available"));
 
 autoUpdater.on("download-progress", (progress) => {
   log(`Download progress: ${Math.round(progress.percent)}%`);
-  if (mainWindow) {
-    mainWindow.setProgressBar(progress.percent / 100);
-  }
+  if (mainWindow) mainWindow.setProgressBar(progress.percent / 100);
 });
 
 autoUpdater.on("update-downloaded", async () => {
   log("Update downloaded");
-  if (mainWindow) {
-    mainWindow.setProgressBar(-1); // Remove progress bar
-  }
+  if (mainWindow) mainWindow.setProgressBar(-1);
   const result = await dialog.showMessageBox(mainWindow, {
     type: "info",
     buttons: ["Restart Now", "Later"],
@@ -353,15 +378,15 @@ autoUpdater.on("update-downloaded", async () => {
   }
 });
 
-autoUpdater.on("error", (err) => {
-  log(`Auto-updater error: ${err.message}`);
-});
+autoUpdater.on("error", (err) => log(`Auto-updater error: ${err.message}`));
 
 // ── App Lifecycle ──────────────────────────────────────────────
 app.on("ready", async () => {
   log(`ScoutFootball v${APP_VERSION} starting...`);
   log(`Platform: ${process.platform} ${process.arch}`);
   log(`App packaged: ${app.isPackaged}`);
+  log(`__dirname: ${__dirname}`);
+  log(`resourcesPath: ${process.resourcesPath}`);
 
   // Start backend
   const backendStarted = startBackend();
@@ -371,7 +396,10 @@ app.on("ready", async () => {
   }
 
   // Start frontend server
-  startFrontendServer();
+  const frontendStarted = startFrontendServer();
+  if (!frontendStarted) {
+    log("WARNING: Frontend server failed to start!");
+  }
 
   // Create window and tray
   createWindow();
@@ -379,8 +407,8 @@ app.on("ready", async () => {
 
   // Check for updates after window is shown
   setTimeout(() => {
-    autoUpdater.checkForUpdates();
-  }, 3000);
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 5000);
 });
 
 app.on("window-all-closed", () => {
@@ -391,9 +419,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  if (mainWindow) {
-    mainWindow.show();
-  }
+  if (mainWindow) mainWindow.show();
 });
 
 app.on("before-quit", () => {
@@ -402,7 +428,7 @@ app.on("before-quit", () => {
   stopFrontendServer();
 });
 
-// Prevent multiple instances
+// Single instance lock
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
