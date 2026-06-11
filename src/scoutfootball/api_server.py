@@ -38,6 +38,8 @@ from scoutfootball.api import (
 )
 
 _DEFAULT_CORS_ORIGINS = [
+    "https://scoutfootball.vercel.app",
+    "https://scoutfootball-for-world-cup.vercel.app",
     "http://localhost:8600",
     "http://127.0.0.1:8600",
     "http://localhost:8601",
@@ -65,7 +67,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins(),
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
 

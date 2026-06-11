@@ -404,7 +404,7 @@ async function fetchRatings(position, league) {
     const params = new URLSearchParams();
     if (position && position !== "ALL") params.set("position", position);
     if (league) params.set("league", league);
-    params.set("limit", "20000");
+    params.set("limit", "3000");
     try {
         const resp = await fetch(`${API_BASE}/ratings?${params}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
