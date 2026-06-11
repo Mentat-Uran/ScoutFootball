@@ -93,11 +93,6 @@
       "artifactName": "ScoutFootball-Setup-${version}-win-x64.${ext}",
       "unicode": true,
       "deleteAppDataOnUninstall": false
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "Mentaturan",
-      "repo": "ScoutFootball_for_World_Cup"
     }
   }
 }
