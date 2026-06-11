@@ -14,7 +14,17 @@ logger = logging.getLogger(__name__)
 
 # High-order field group definitions for missing-field detection.
 FIELD_GROUPS: dict[str, list[str]] = {
-    "defense": ["tackles", "interceptions", "clearances", "blocks"],
+    "defense": [
+        "tackles",
+        "interceptions",
+        "clearances",
+        "blocks",
+        "tackles_won",
+        "fouls_committed",
+        "fouls_drawn",
+        "crosses",
+        "own_goals",
+    ],
     "possession": ["touches", "dribbles", "dispossessed"],
     "xT_VAEP": ["xT_added", "vaep_value"],
     "goalkeeper": ["saves", "goals_conceded", "psxg"],
@@ -34,6 +44,12 @@ RATING_NUMERIC_COLUMNS: list[str] = [
     "tackles",
     "passes",
     "xT_added",
+    "tackles_won",
+    "interceptions",
+    "fouls_committed",
+    "fouls_drawn",
+    "crosses",
+    "own_goals",
 ]
 
 # Category columns to include in the rating matrix.
@@ -284,6 +300,19 @@ def build_rating_feature_matrix(
 
     matrix = pm.groupby(["player_id", "season_id"], as_index=False).agg(agg_dict)
 
+    # --- Merge FBref misc defensive stats ---
+    matrix = _merge_fbref_misc_defense(matrix)
+
+    # --- Re-evaluate defense_missing after misc merge ---
+    # The initial mark_missing_fields ran before misc data was available,
+    # so defense_missing may be True even though misc fields now have data.
+    defense_fields = FIELD_GROUPS.get("defense", [])
+    existing_defense = [f for f in defense_fields if f in matrix.columns]
+    if existing_defense:
+        matrix["defense_missing"] = matrix[existing_defense].isna().all(axis=1)
+    else:
+        matrix["defense_missing"] = True
+
     # --- Compute finishing shrinkage ---
     # raw_finishing = (goals - xG) / shots; shrunk = (shots/(shots+K)) * raw
     has_shots = (
@@ -376,6 +405,106 @@ def write_feature_manifest(
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
     logger.info("Feature manifest written to %s", manifest_path)
+
+
+# FBref misc column name mapping: (multi-index column) -> rating matrix field name
+_FBREF_MISC_FIELD_MAP: dict[tuple[str, str], str] = {
+    ("Performance", "TklW"): "tackles_won",
+    ("Performance", "Int"): "interceptions",
+    ("Performance", "Fls"): "fouls_committed",
+    ("Performance", "Fld"): "fouls_drawn",
+    ("Performance", "Crs"): "crosses",
+    ("Performance", "OG"): "own_goals",
+}
+
+
+def _merge_fbref_misc_defense(matrix: pd.DataFrame) -> pd.DataFrame:
+    """Merge FBref misc table defensive stats into the rating feature matrix.
+
+    Reads ``data/raw/fbref/player_misc_5seasons.parquet``, extracts the
+    mapped defensive fields, and merges them onto *matrix* using
+    player_name + season_id as keys.
+
+    If the misc file is missing or empty, the new columns are added as NaN.
+    """
+    from scoutfootball.config import PlatformSettings
+
+    resolved = PlatformSettings.from_root()
+    misc_path = resolved.raw_root / "fbref" / "player_misc_5seasons.parquet"
+
+    # Define the new columns to add
+    new_cols = list(_FBREF_MISC_FIELD_MAP.values())
+
+    if not misc_path.exists():
+        logger.warning("FBref misc file not found: %s — defense fields will be NaN", misc_path)
+        for col in new_cols:
+            matrix[col] = pd.NA
+        return matrix
+
+    try:
+        misc_raw = pd.read_parquet(misc_path)
+    except Exception:
+        logger.warning("Failed to read FBref misc file — defense fields will be NaN")
+        for col in new_cols:
+            matrix[col] = pd.NA
+        return matrix
+
+    if misc_raw.empty:
+        for col in new_cols:
+            matrix[col] = pd.NA
+        return matrix
+
+    # Reset MultiIndex to get flat columns
+    # misc_raw has both a MultiIndex (league, season, team, player) and
+    # a duplicate ('season', '') column, so reset_index() fails.
+    # Use index.to_frame() instead.
+    idx_df = misc_raw.index.to_frame(index=False)
+    # Drop the duplicate ('season', '') column from data before combining
+    data_cols = misc_raw.drop(
+        columns=[c for c in misc_raw.columns if c == ("season", "")],
+        errors="ignore",
+    )
+    misc_flat = pd.concat([idx_df, data_cols.reset_index(drop=True)], axis=1)
+
+    # Build a clean DataFrame with mapped fields
+    misc_clean = pd.DataFrame()
+    misc_clean["player_name"] = misc_flat["player"].astype(str).str.strip()
+    misc_clean["season_id"] = misc_flat["season"].astype(str).str.strip()
+    misc_clean["competition_id"] = misc_flat["league"].astype(str).str.strip()
+
+    for fbref_col, matrix_col in _FBREF_MISC_FIELD_MAP.items():
+        if fbref_col in misc_flat.columns:
+            misc_clean[matrix_col] = pd.to_numeric(misc_flat[fbref_col], errors="coerce")
+        else:
+            misc_clean[matrix_col] = pd.NA
+
+    # Aggregate to player-season level (sum across teams if a player transferred)
+    agg_fields = {col: "sum" for col in new_cols}
+    agg_fields["competition_id"] = "first"
+    misc_agg = misc_clean.groupby(["player_name", "season_id"], as_index=False).agg(agg_fields)
+
+    # Merge onto matrix
+    merge_keys = ["player_name", "season_id"]
+    # Use left join to keep all existing rows; new columns NaN where no match
+    matrix = matrix.merge(misc_agg, on=merge_keys, how="left", suffixes=("", "_misc"))
+
+    # If merge created duplicate columns (e.g. competition_id_misc), drop them
+    dup_cols = [c for c in matrix.columns if c.endswith("_misc")]
+    if dup_cols:
+        matrix = matrix.drop(columns=dup_cols)
+
+    # Ensure numeric dtype for new columns
+    for col in new_cols:
+        if col in matrix.columns:
+            matrix[col] = pd.to_numeric(matrix[col], errors="coerce")
+
+    matched = matrix["tackles_won"].notna().sum() if "tackles_won" in matrix.columns else 0
+    logger.info(
+        "FBref misc defense merged: %d/%d rows matched (%.1f%%)",
+        matched, len(matrix), 100 * matched / max(len(matrix), 1),
+    )
+
+    return matrix
 
 
 def _compute_dataframe_hash(*dfs: pd.DataFrame) -> str:

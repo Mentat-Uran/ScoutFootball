@@ -9,7 +9,7 @@
     },
     {
       "name": "season_id",
-      "dtype": "string",
+      "dtype": "object",
       "source": "category",
       "missing_rate": 0.0
     },
@@ -140,6 +140,42 @@
       "missing_rate": 0.0
     },
     {
+      "name": "tackles_won",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0002
+    },
+    {
+      "name": "interceptions",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0002
+    },
+    {
+      "name": "fouls_committed",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0002
+    },
+    {
+      "name": "fouls_drawn",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0002
+    },
+    {
+      "name": "crosses",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0002
+    },
+    {
+      "name": "own_goals",
+      "dtype": "Int64",
+      "source": "player_stats",
+      "missing_rate": 0.0002
+    },
+    {
       "name": "finishing_raw",
       "dtype": "float64",
       "source": "derived",
@@ -177,5 +213,5 @@
     }
   ],
   "input_hash": "unknown",
-  "timestamp": "2026-06-11T09:58:58.346132+00:00"
+  "timestamp": "2026-06-11T13:06:21.865424+00:00"
 }

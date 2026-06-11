@@ -979,9 +979,10 @@ def _build_market_enriched_features(
     """Merge market_value into player features from Transfermarkt or synthetic source."""
     enriched = player_rolling.copy()
 
-    # Try real Transfermarkt manual import first
+    # Try real Transfermarkt manual import first (schema-compliant CSVs)
     tm_path = settings.raw_root / "transfermarkt_manual"
     market_source = "none"
+    market_df = None
 
     for csv_file in sorted(tm_path.glob("*.csv")):
         if csv_file.name.startswith("."):
@@ -995,7 +996,12 @@ def _build_market_enriched_features(
             break
         except Exception:
             continue
-    else:
+
+    # Fallback: try raw Transfermarkt CSVs (player_market_value + player_profiles)
+    if market_df is None:
+        market_df, market_source = _load_raw_transfermarkt_csv(settings)
+
+    if market_df is None:
         # No real Transfermarkt data — generate synthetic market values
         market_df = _generate_synthetic_market_values(enriched)
         market_source = "synthetic"
@@ -1047,6 +1053,65 @@ def _build_market_enriched_features(
         len(enriched),
     )
     return enriched
+
+
+def _load_raw_transfermarkt_csv(
+    settings: PlatformSettings,
+) -> tuple[pd.DataFrame | None, str]:
+    """Load raw Transfermarkt CSVs (player_market_value + player_profiles) and
+    return a DataFrame with player_name, team_name, snapshot_date, market_value columns.
+
+    Returns (None, "none") if the required files are not found.
+    """
+    tm_dir = settings.raw_root / "transfermarkt"
+    mv_path = tm_dir / "player_latest_market_value.csv"
+    profiles_path = tm_dir / "player_profiles.csv"
+
+    # Fallback to full history file if latest not available
+    if not mv_path.exists():
+        mv_path = tm_dir / "player_market_value.csv"
+
+    if not mv_path.exists() or not profiles_path.exists():
+        return None, "none"
+
+    try:
+        mv_df = pd.read_csv(mv_path)
+        profiles_df = pd.read_csv(
+            profiles_path,
+            usecols=["player_id", "player_name", "current_club_name"],
+        )
+
+        # Join on player_id
+        merged = mv_df.merge(profiles_df, on="player_id", how="left")
+
+        # Build canonical columns
+        result = pd.DataFrame(
+            {
+                "player_name": merged["player_name"].astype("string").str.strip(),
+                "team_name": merged["current_club_name"].astype("string").str.strip(),
+                "snapshot_date": pd.to_datetime(merged["date_unix"], errors="coerce"),
+                "market_value": pd.to_numeric(merged["value"], errors="coerce"),
+            }
+        )
+
+        # Drop rows with missing critical fields
+        result = result.dropna(subset=["player_name", "market_value"])
+
+        # Take latest snapshot per player
+        result = result.sort_values("snapshot_date").drop_duplicates(
+            subset=["player_name"], keep="last"
+        )
+
+        source_label = mv_path.name
+        logger.info(
+            "Loaded raw Transfermarkt CSV: %s, %d players with market value",
+            source_label,
+            len(result),
+        )
+        return result, source_label
+    except Exception as exc:
+        logger.warning("Failed to load raw Transfermarkt CSVs: %s", exc)
+        return None, "none"
 
 
 def _generate_synthetic_market_values(player_rolling: pd.DataFrame) -> pd.DataFrame:

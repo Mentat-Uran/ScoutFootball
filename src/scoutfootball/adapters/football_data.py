@@ -113,7 +113,7 @@ def rebuild_combined_results(
       rebuild_time   – ISO-8601 timestamp of the rebuild
     """
     data_dir = Path(data_dir)
-    resolved_output = output_path or data_dir / "combined_results.parquet"
+    resolved_output = Path(output_path) if output_path else data_dir / "combined_results.parquet"
 
     season_dirs = sorted(
         d for d in data_dir.iterdir()
@@ -159,6 +159,10 @@ def rebuild_combined_results(
         combined = pd.DataFrame()
     else:
         combined = pd.concat(frames, ignore_index=True, sort=False)
+        # Coerce mixed-type object columns to str so pyarrow can write Parquet.
+        for col in combined.columns:
+            if combined[col].dtype == object:
+                combined[col] = combined[col].astype(str)
 
     resolved_output.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(resolved_output, index=False)

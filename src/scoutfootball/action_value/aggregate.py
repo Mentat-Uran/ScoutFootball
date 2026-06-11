@@ -1,9 +1,9 @@
 """Player-level aggregation of action values.
 
 Aggregates xT values at the player level to produce
-player_value_metrics.parquet.
+player_action_value.parquet.
 
-Current status: P2. Uses StatsBomb Open Data sample only.
+Current status: P2. Full StatsBomb Open Data (7.7M actions).
 Output must NOT be treated as full league action value data.
 """
 from __future__ import annotations
@@ -20,7 +20,10 @@ from scoutfootball.action_value.xt import action_xt_value, compute_xt
 logger = logging.getLogger(__name__)
 
 SOURCE_ATTRIBUTION = "StatsBomb Open Data"
-COVERAGE_NOTE = "Sample: StatsBomb Open Data only. NOT full league coverage."
+COVERAGE_NOTE = "StatsBomb Open Data. NOT full league coverage."
+
+# Output path
+PLAYER_ACTION_VALUE_PATH = Path("data/gold/feature_store/player_action_value.parquet")
 
 
 def aggregate_player_xt(
@@ -532,3 +535,223 @@ def save_player_action_value(df: pd.DataFrame, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_path, index=False)
     logger.info("Saved player_value_metrics to %s (%d rows)", output_path, len(df))
+
+
+def aggregate_player_action_values(
+    actions_df: pd.DataFrame,
+    output_path: Path = PLAYER_ACTION_VALUE_PATH,
+) -> pd.DataFrame:
+    """Aggregate action-level xT to player-season level (vectorized).
+
+    Takes the DataFrame returned by compute_xt_from_actions() and produces
+    a player-season summary with xT totals, per-90 metrics, and action counts.
+
+    Output columns:
+        player_id, player_name, team_id, season, competition,
+        n_actions, n_matches, estimated_minutes,
+        xt_total, xt_per_90, xt_mean,
+        n_pass, n_shot, n_dribble, n_carry,
+        pass_completion_rate, forward_pass_rate,
+        final_third_actions, penalty_area_actions,
+        source, source_attribution, coverage_note
+    """
+    if actions_df.empty:
+        logger.warning("Empty actions DataFrame, nothing to aggregate")
+        return pd.DataFrame()
+
+    df = actions_df.copy()
+
+    # Filter out actions without player_id
+    df = df[df["player_id"].notna() & (df["player_id"] != "")].copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    # --- Estimate minutes per player-match ---
+    minutes = df.groupby(["player_id", "team_id", "match_id"]).agg(
+        max_minute=("minute", "max"),
+        min_minute=("minute", "min"),
+    ).reset_index()
+    minutes["estimated_minutes"] = (minutes["max_minute"] - minutes["min_minute"]).clip(lower=1)
+    minutes["estimated_minutes"] = minutes["estimated_minutes"].clip(lower=45)
+
+    # --- Action counts per type per player-match ---
+    atype = df["action_type"].values
+    for atype_name in ["pass", "shot", "dribble", "carry", "tackle", "interception"]:
+        df[f"_is_{atype_name}"] = (atype == atype_name).astype(np.int32)
+
+    df["_is_success"] = (df["result"] == "success").astype(np.int32)
+    df["_is_failure"] = (df["result"] == "failure").astype(np.int32)
+
+    # Final third / penalty area flags
+    df["_final_third"] = (df["start_x"] > 66.7).astype(np.int32)
+    df["_penalty_area"] = (df["start_x"] > 83.3).astype(np.int32)
+
+    # Forward pass flag
+    df["_forward_pass"] = (
+        (atype == "pass") & (df["end_x"] > df["start_x"])
+    ).astype(np.int32)
+
+    # Aggregate per player-match
+    agg_cols = {
+        "xt_delta": ["sum", "mean"],
+        "_is_pass": "sum",
+        "_is_shot": "sum",
+        "_is_dribble": "sum",
+        "_is_carry": "sum",
+        "_is_tackle": "sum",
+        "_is_interception": "sum",
+        "_is_success": "sum",
+        "_is_failure": "sum",
+        "_final_third": "sum",
+        "_penalty_area": "sum",
+        "_forward_pass": "sum",
+    }
+
+    # Build flat agg dict
+    flat_agg: dict[str, str] = {}
+    for col, specs in agg_cols.items():
+        if isinstance(specs, list):
+            for spec in specs:
+                flat_agg[col] = flat_agg.get(col, [])
+                if isinstance(flat_agg[col], list):
+                    flat_agg[col].append(spec)
+                else:
+                    flat_agg[col] = [flat_agg[col], spec]
+        else:
+            flat_agg[col] = specs
+
+    pm_agg = df.groupby(["player_id", "team_id", "match_id"]).agg(flat_agg).reset_index()
+    pm_agg.columns = [
+        "_".join(col).rstrip("_") if isinstance(col, tuple) else col
+        for col in pm_agg.columns
+    ]
+
+    # Rename aggregated columns
+    rename = {
+        "xt_delta_sum": "xt_total",
+        "xt_delta_mean": "xt_mean",
+        "_is_pass_sum": "n_pass",
+        "_is_shot_sum": "n_shot",
+        "_is_dribble_sum": "n_dribble",
+        "_is_carry_sum": "n_carry",
+        "_is_tackle_sum": "n_tackle",
+        "_is_interception_sum": "n_interception",
+        "_is_success_sum": "n_success",
+        "_is_failure_sum": "n_failure",
+        "_final_third_sum": "final_third_actions",
+        "_penalty_area_sum": "penalty_area_actions",
+        "_forward_pass_sum": "forward_passes",
+    }
+    pm_agg = pm_agg.rename(columns=rename)
+
+    # Add n_actions and n_matches
+    n_actions = (
+        df.groupby(["player_id", "team_id", "match_id"])
+        .size()
+        .reset_index(name="n_actions")
+    )
+    pm_agg = pm_agg.merge(n_actions, on=["player_id", "team_id", "match_id"], how="left")
+
+    # Merge minutes
+    pm_agg = pm_agg.merge(minutes[["player_id", "team_id", "match_id", "estimated_minutes"]],
+                          on=["player_id", "team_id", "match_id"], how="left")
+
+    # Add season/competition from actions
+    if "season" in df.columns:
+        season_info = (
+            df[["player_id", "team_id", "match_id", "season", "competition"]]
+            .drop_duplicates(["player_id", "team_id", "match_id"])
+        )
+        pm_agg = pm_agg.merge(season_info, on=["player_id", "team_id", "match_id"], how="left")
+
+    # --- Aggregate to player-season level ---
+    group_keys = ["player_id", "team_id"]
+    if "season" in pm_agg.columns:
+        group_keys.append("season")
+
+    sum_cols = [
+        "n_actions", "estimated_minutes", "xt_total",
+        "n_pass", "n_shot", "n_dribble", "n_carry",
+        "n_tackle", "n_interception",
+        "n_success", "n_failure",
+        "final_third_actions", "penalty_area_actions", "forward_passes",
+    ]
+    agg_dict = {c: "sum" for c in sum_cols if c in pm_agg.columns}
+
+    ps = pm_agg.groupby(group_keys, as_index=False).agg(agg_dict)
+
+    # n_matches = unique match count
+    match_counts = pm_agg.groupby(group_keys)["match_id"].nunique().reset_index(name="n_matches")
+    ps = ps.merge(match_counts, on=group_keys, how="left")
+
+    # Add player_name (take first non-empty)
+    if "player_name" in df.columns:
+        names = (
+            df[df["player_name"] != ""]
+            .groupby("player_id")["player_name"]
+            .first()
+            .reset_index()
+        )
+        ps = ps.merge(names, on="player_id", how="left")
+        ps["player_name"] = ps["player_name"].fillna("")
+    else:
+        ps["player_name"] = ""
+
+    # Add competition (take mode)
+    if "competition" in pm_agg.columns:
+        comp = pm_agg.groupby(group_keys)["competition"].first().reset_index()
+        ps = ps.merge(comp, on=group_keys, how="left")
+
+    # --- Per-90 metrics ---
+    ps["minutes_90"] = (ps["estimated_minutes"] / 90.0).clip(lower=0.1)
+    ps["xt_per_90"] = ps["xt_total"] / ps["minutes_90"]
+    ps["passes_per_90"] = ps["n_pass"] / ps["minutes_90"]
+    ps["shots_per_90"] = ps["n_shot"] / ps["minutes_90"]
+    ps["carries_per_90"] = ps["n_carry"] / ps["minutes_90"]
+    ps["dribbles_per_90"] = ps["n_dribble"] / ps["minutes_90"]
+    ps["tackles_per_90"] = ps["n_tackle"] / ps["minutes_90"]
+    ps["interceptions_per_90"] = ps["n_interception"] / ps["minutes_90"]
+    ps["final_third_per_90"] = ps["final_third_actions"] / ps["minutes_90"]
+    ps["penalty_area_per_90"] = ps["penalty_area_actions"] / ps["minutes_90"]
+
+    # Pass completion rate
+    ps["pass_completion_rate"] = np.where(
+        ps["n_pass"] > 0,
+        (ps["n_pass"] - ps["n_failure"].clip(upper=ps["n_pass"])) / ps["n_pass"],
+        0.0,
+    )
+
+    # Forward pass rate
+    ps["forward_pass_rate"] = np.where(
+        ps["n_pass"] > 0,
+        ps["forward_passes"] / ps["n_pass"],
+        0.0,
+    )
+
+    # --- Metadata ---
+    ps["source"] = SOURCE_ATTRIBUTION
+    ps["source_attribution"] = SOURCE_ATTRIBUTION
+    ps["coverage_note"] = COVERAGE_NOTE
+
+    # --- Select output columns ---
+    output_cols = [
+        "player_id", "player_name", "team_id", "season", "competition",
+        "n_actions", "n_matches", "estimated_minutes",
+        "xt_total", "xt_per_90", "xt_mean",
+        "n_pass", "n_shot", "n_dribble", "n_carry",
+        "passes_per_90", "shots_per_90", "carries_per_90", "dribbles_per_90",
+        "tackles_per_90", "interceptions_per_90",
+        "pass_completion_rate", "forward_pass_rate",
+        "final_third_actions", "final_third_per_90",
+        "penalty_area_actions", "penalty_area_per_90",
+        "source", "source_attribution", "coverage_note",
+    ]
+    final_cols = [c for c in output_cols if c in ps.columns]
+    result = ps[final_cols].sort_values("xt_total", ascending=False).reset_index(drop=True)
+
+    # Save
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    result.to_parquet(output_path, index=False)
+    logger.info("Saved player_action_value to %s (%d rows)", output_path, len(result))
+
+    return result
