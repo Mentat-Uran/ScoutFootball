@@ -41,6 +41,21 @@ def _read_parquet(path: Path):
     return duckdb.read_parquet(str(path)).fetchdf()
 
 
+# ── World Cup data cache ──────────────────────────────────────────
+_wc_cache: dict[str, Any] = {}
+
+
+def _get_wc_enriched_squads():
+    """Return enriched WC squads, computing once and caching."""
+    if "enriched_squads" not in _wc_cache:
+        ratings_df = load_player_ratings()
+        _wc_cache["enriched_squads"] = enrich_squads_with_ratings(ratings_df)
+        _wc_cache["strengths"] = compute_team_strengths(
+            enriched_squads=_wc_cache["enriched_squads"]
+        )
+    return _wc_cache["enriched_squads"], _wc_cache["strengths"]
+
+
 @dataclass(frozen=True)
 class HealthResponse:
     status: str
@@ -1610,9 +1625,7 @@ def get_player_profile(
 
 def get_wc_groups() -> dict:
     """Return World Cup group data with team strength ratings."""
-    ratings_df = load_player_ratings()
-    enriched = enrich_squads_with_ratings(ratings_df)
-    strengths = compute_team_strengths(enriched_squads=enriched)
+    enriched, strengths = _get_wc_enriched_squads()
 
     groups_data = []
     for letter, teams in GROUPS.items():
@@ -1692,9 +1705,8 @@ def get_wc_schedule(
 
 def get_wc_squad(team: str) -> dict:
     """Return a specific team's World Cup squad with player ratings."""
-    ratings_df = load_player_ratings()
-    squad = get_squad(team)
-    squad = enrich_squad_with_ratings(squad, ratings_df)
+    enriched, _ = _get_wc_enriched_squads()
+    squad = enriched.get(team, get_squad(team))
 
     group = get_team_group(team)
     rated = [p for p in squad if p.has_rating]
@@ -1743,9 +1755,7 @@ def get_wc_squad(team: str) -> dict:
 
 def get_wc_predictions() -> dict:
     """Return World Cup group stage predictions based on team strengths."""
-    ratings_df = load_player_ratings()
-    enriched = enrich_squads_with_ratings(ratings_df)
-    strengths = compute_team_strengths(enriched_squads=enriched)
+    enriched, strengths = _get_wc_enriched_squads()
     group_preds = compute_group_predictions(strengths)
 
     # Build 48-team ranking
@@ -1792,9 +1802,7 @@ def get_wc_predictions() -> dict:
 
 def get_wc_teams() -> dict:
     """Return all 48 World Cup teams with strength ratings and group info."""
-    ratings_df = load_player_ratings()
-    enriched = enrich_squads_with_ratings(ratings_df)
-    strengths = compute_team_strengths(enriched_squads=enriched)
+    enriched, strengths = _get_wc_enriched_squads()
 
     teams_data = []
     for letter, team_names in GROUPS.items():
