@@ -27,7 +27,7 @@ Write-Host "[1/4] Building Python backend with PyInstaller..." -ForegroundColor 
 
 # Install Python dependencies
 Push-Location $ProjectDir
-uv sync --quiet 2>$null
+uv sync --quiet
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: uv sync failed" -ForegroundColor Red
     Pop-Location
@@ -35,7 +35,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Install PyInstaller if not present
-uv run pip install pyinstaller --quiet 2>$null
+uv run pip install pyinstaller --quiet
 
 # Build the backend executable
 Push-Location $DesktopDir
