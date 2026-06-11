@@ -17,8 +17,6 @@ from scoutfootball.features.rating_matrix import build_rating_feature_matrix, wr
 from scoutfootball.features.team_match import build_team_match_features
 from scoutfootball.features.team_rolling import build_team_rolling_features
 from scoutfootball.models.match_prediction import (
-    CalibrationReport,
-    calibrate_predictions,
     fit_dixon_coles,
     fit_independent_poisson,
 )

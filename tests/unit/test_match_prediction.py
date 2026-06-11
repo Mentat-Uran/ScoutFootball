@@ -7,11 +7,13 @@ import pandas as pd
 import pytest
 
 from scoutfootball.models.match_prediction import (
+    CalibrationReport,
     DixonColesModel,
     IndependentPoissonModel,
     MatchProbabilitySummary,
     PoissonPrediction,
     _dc_tau_scalar,
+    calibrate_predictions,
     fit_dixon_coles,
     fit_independent_poisson,
     predict_match,
@@ -154,6 +156,48 @@ class TestFitDixonColes:
         model = fit_dixon_coles(df, half_life_days=180)
         assert model.half_life_days == 180
 
+    def test_decay_parameter(self) -> None:
+        df = _make_team_match_df(n_teams=6, n_rounds=4)
+        df["match_date"] = "2025-01-01"
+        model = fit_dixon_coles(df, decay=0.005)
+        assert model.decay is not None
+        assert model.decay == pytest.approx(0.005)
+
+    def test_decay_precedence_over_half_life(self) -> None:
+        df = _make_team_match_df(n_teams=6, n_rounds=4)
+        df["match_date"] = "2025-01-01"
+        model = fit_dixon_coles(df, half_life_days=180, decay=0.005)
+        # When both are set, decay takes precedence; half_life_days should be None
+        assert model.decay is not None
+        assert model.half_life_days is None
+
+    def test_decay_affects_parameters(self) -> None:
+        """Time decay should produce different parameters than no decay."""
+        rng = np.random.default_rng(42)
+        teams = [f"team_{i}" for i in range(6)]
+        rows = []
+        match_id = 0
+        for season in range(3):
+            season_year = 2022 + season
+            for round_num in range(4):
+                for i in range(0, 6, 2):
+                    home, away = teams[i], teams[i + 1]
+                    hg = rng.poisson(1.5)
+                    ag = rng.poisson(1.1)
+                    match_date = f"{season_year}-{1 + round_num:02d}-{15 + i:02d}"
+                    rows.append({"match_id": str(match_id), "match_date": match_date,
+                                 "team_id": home, "is_home": True,
+                                 "goals_for": hg, "goals_against": ag})
+                    rows.append({"match_id": str(match_id), "match_date": match_date,
+                                 "team_id": away, "is_home": False,
+                                 "goals_for": ag, "goals_against": hg})
+                    match_id += 1
+        df = pd.DataFrame(rows)
+        model_no_decay = fit_dixon_coles(df)
+        model_with_decay = fit_dixon_coles(df, decay=0.01)
+        # Parameters should differ
+        assert model_no_decay.team_attack != model_with_decay.team_attack
+
     def test_missing_columns_raises(self) -> None:
         df = pd.DataFrame({"team_id": ["A"], "is_home": [True]})
         with pytest.raises(ValueError, match="missing required columns"):
@@ -240,3 +284,79 @@ class TestDCTauScalar:
         # Even with extreme rho, tau should be clamped to > 0
         tau = _dc_tau_scalar(0, 0, 5.0, 5.0, -0.99)
         assert tau > 0
+
+
+class TestCalibratePredictions:
+    def _make_predictions_df(self, n: int = 200) -> pd.DataFrame:
+        """Create synthetic predictions DataFrame for calibration testing."""
+        rng = np.random.default_rng(42)
+        home_win_prob = rng.uniform(0.1, 0.8, n)
+        draw_prob = rng.uniform(0.1, 0.4, n)
+        away_win_prob = 1.0 - home_win_prob - draw_prob
+        # Clip to ensure valid probabilities
+        away_win_prob = np.clip(away_win_prob, 0.05, 0.9)
+        total = home_win_prob + draw_prob + away_win_prob
+        home_win_prob /= total
+        draw_prob /= total
+        away_win_prob /= total
+
+        outcomes = rng.choice(["home_win", "draw", "away_win"], n, p=[0.45, 0.28, 0.27])
+        return pd.DataFrame({
+            "home_win_probability": home_win_prob,
+            "draw_probability": draw_prob,
+            "away_win_probability": away_win_prob,
+            "actual_outcome": outcomes,
+        })
+
+    def test_returns_calibration_report(self) -> None:
+        df = self._make_predictions_df()
+        report = calibrate_predictions(df)
+        assert isinstance(report, CalibrationReport)
+
+    def test_isotonic_method(self) -> None:
+        df = self._make_predictions_df()
+        report = calibrate_predictions(df, method="isotonic")
+        assert report.method == "isotonic"
+        assert report.n_matches == len(df)
+
+    def test_platt_method(self) -> None:
+        df = self._make_predictions_df()
+        report = calibrate_predictions(df, method="platt")
+        assert report.method == "platt"
+        assert report.n_matches == len(df)
+
+    def test_brier_after_not_worse(self) -> None:
+        df = self._make_predictions_df()
+        report = calibrate_predictions(df, method="isotonic")
+        # Isotonic calibration should not make Brier score significantly worse
+        assert report.brier_after <= report.brier_before + 1e-6
+
+    def test_rps_after_not_worse(self) -> None:
+        df = self._make_predictions_df()
+        report = calibrate_predictions(df, method="isotonic")
+        assert report.rps_after <= report.rps_before + 1e-6
+
+    def test_calibrated_predictions_df(self) -> None:
+        df = self._make_predictions_df()
+        report = calibrate_predictions(df)
+        assert report.calibrated_predictions is not None
+        cal_df = report.calibrated_predictions
+        assert "home_win_probability_calibrated" in cal_df.columns
+        assert "draw_probability_calibrated" in cal_df.columns
+        assert "away_win_probability_calibrated" in cal_df.columns
+
+    def test_calibrated_probabilities_sum_to_one(self) -> None:
+        df = self._make_predictions_df()
+        report = calibrate_predictions(df)
+        cal_df = report.calibrated_predictions
+        total = (
+            cal_df["home_win_probability_calibrated"]
+            + cal_df["draw_probability_calibrated"]
+            + cal_df["away_win_probability_calibrated"]
+        )
+        np.testing.assert_allclose(total, 1.0, atol=1e-6)
+
+    def test_invalid_method_raises(self) -> None:
+        df = self._make_predictions_df()
+        with pytest.raises(ValueError, match="Unknown calibration method"):
+            calibrate_predictions(df, method="invalid")

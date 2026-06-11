@@ -11,7 +11,9 @@ import pandas as pd
 
 from scoutfootball.models import TimeSplitConfig
 from scoutfootball.models.match_prediction import (
+    CalibrationReport,
     DixonColesModel,
+    calibrate_predictions,
     fit_dixon_coles,
     fit_independent_poisson,
     predict_match,
@@ -72,8 +74,12 @@ def run_poisson_backtest(
                 fixture["away_team_id"],
                 max_goals=max_goals,
             )
+            hg = int(fixture["home_goals"])
+            ag = int(fixture["away_goals"])
+            if hg > max_goals or ag > max_goals:
+                continue
             exact_probability = float(
-                prediction.score_matrix.loc[fixture["home_goals"], fixture["away_goals"]]
+                prediction.score_matrix.loc[hg, ag]
             )
             outcome_label = _outcome_label(fixture["home_goals"], fixture["away_goals"])
             fold_predictions.append(
@@ -408,6 +414,7 @@ def _load_dc_artifacts(model_root: Path) -> DixonColesModel:
     )
 
     hld = row.get("half_life_days")
+    decay_val = row.get("decay")
     return DixonColesModel(
         team_attack=team_attack,
         team_defense=team_defense,
@@ -416,6 +423,7 @@ def _load_dc_artifacts(model_root: Path) -> DixonColesModel:
         league_mean_goals=float(row["league_mean_goals"]),
         num_matches=int(row["num_matches"]),
         half_life_days=float(hld) if pd.notna(hld) else None,
+        decay=float(decay_val) if pd.notna(decay_val) else None,
     )
 
 
@@ -476,6 +484,7 @@ def run_dixon_coles_backtest(
     *,
     max_goals: int = 10,
     half_life_days: float | None = None,
+    decay: float | None = None,
 ) -> DixonColesBacktestResult:
     """Run a past-only rolling backtest for the Dixon-Coles model."""
 
@@ -500,7 +509,9 @@ def run_dixon_coles_backtest(
         ].copy()
 
         try:
-            model = fit_dixon_coles(train_team_match, half_life_days=half_life_days)
+            model = fit_dixon_coles(
+                train_team_match, half_life_days=half_life_days, decay=decay,
+            )
         except (ValueError, RuntimeError, OverflowError, ArithmeticError, FloatingPointError):
             # Skip fold if DC fitting fails (e.g., too few matches)
             continue
@@ -513,10 +524,12 @@ def run_dixon_coles_backtest(
                 fixture["away_team_id"],
                 max_goals=max_goals,
             )
+            hg = int(fixture["home_goals"])
+            ag = int(fixture["away_goals"])
+            if hg > max_goals or ag > max_goals:
+                continue
             exact_probability = float(
-                prediction.score_matrix.loc[
-                    fixture["home_goals"], fixture["away_goals"]
-                ]
+                prediction.score_matrix.loc[hg, ag]
             )
             outcome_label = _outcome_label(fixture["home_goals"], fixture["away_goals"])
             fold_predictions.append(
@@ -737,3 +750,123 @@ def _compute_league_coverage(predictions: pd.DataFrame) -> pd.DataFrame:
         })
 
     return pd.DataFrame(rows)
+
+
+@dataclass(frozen=True)
+class DCDecayComparisonResult:
+    """Comparison of Dixon-Coles backtest with and without time decay."""
+
+    no_decay: DixonColesBacktestResult
+    with_decay: DixonColesBacktestResult
+    decay_value: float
+    comparison: pd.DataFrame
+
+
+def run_dc_decay_comparison(
+    team_match_df: pd.DataFrame,
+    split_cfg: TimeSplitConfig | None = None,
+    *,
+    decay: float = 0.005,
+    max_goals: int = 10,
+) -> DCDecayComparisonResult:
+    """Run Dixon-Coles backtest with and without time decay, then compare.
+
+    Parameters
+    ----------
+    team_match_df : DataFrame with match data.
+    split_cfg : Time split configuration.
+    decay : Exponential decay parameter (default 0.005, Dixon-Coles paper).
+    max_goals : Maximum goals for score matrix.
+
+    Returns
+    -------
+    DCDecayComparisonResult with both backtest results and a comparison table.
+    """
+    no_decay_result = run_dixon_coles_backtest(
+        team_match_df, split_cfg, max_goals=max_goals,
+    )
+    with_decay_result = run_dixon_coles_backtest(
+        team_match_df, split_cfg, max_goals=max_goals, decay=decay,
+    )
+
+    comparison_rows = []
+    for metric_name in ["log_loss_exact", "brier_1x2", "rps_1x2"]:
+        nd_val = no_decay_result.metrics[metric_name]
+        wd_val = with_decay_result.metrics[metric_name]
+        delta = wd_val - nd_val
+        comparison_rows.append({
+            "metric": metric_name,
+            "no_decay": round(nd_val, 6),
+            f"decay={decay}": round(wd_val, 6),
+            "delta": round(delta, 6),
+            "improved": delta < 0,
+        })
+
+    comparison = pd.DataFrame(comparison_rows)
+
+    return DCDecayComparisonResult(
+        no_decay=no_decay_result,
+        with_decay=with_decay_result,
+        decay_value=decay,
+        comparison=comparison,
+    )
+
+
+@dataclass(frozen=True)
+class DCCalibrationBacktestResult:
+    """Dixon-Coles backtest with calibration applied."""
+
+    backtest: DixonColesBacktestResult
+    calibration: CalibrationReport
+    metrics: dict[str, float]
+
+
+def run_dc_backtest_with_calibration(
+    team_match_df: pd.DataFrame,
+    split_cfg: TimeSplitConfig | None = None,
+    *,
+    decay: float | None = None,
+    half_life_days: float | None = None,
+    calibration_method: str = "isotonic",
+    max_goals: int = 10,
+) -> DCCalibrationBacktestResult:
+    """Run Dixon-Coles backtest and apply probability calibration.
+
+    Parameters
+    ----------
+    team_match_df : DataFrame with match data.
+    split_cfg : Time split configuration.
+    decay : Exponential decay parameter.
+    half_life_days : Half-life for time decay (ignored if decay is set).
+    calibration_method : "isotonic" or "platt".
+    max_goals : Maximum goals for score matrix.
+
+    Returns
+    -------
+    DCCalibrationBacktestResult with backtest, calibration report, and combined metrics.
+    """
+    bt_result = run_dixon_coles_backtest(
+        team_match_df, split_cfg,
+        max_goals=max_goals, decay=decay, half_life_days=half_life_days,
+    )
+
+    cal_report = calibrate_predictions(
+        bt_result.predictions, method=calibration_method,
+    )
+
+    metrics = {
+        "log_loss_exact": bt_result.metrics["log_loss_exact"],
+        "brier_1x2_before": cal_report.brier_before,
+        "brier_1x2_after": cal_report.brier_after,
+        "rps_before": cal_report.rps_before,
+        "rps_after": cal_report.rps_after,
+        "brier_improvement": cal_report.brier_before - cal_report.brier_after,
+        "rps_improvement": cal_report.rps_before - cal_report.rps_after,
+        "n_matches": cal_report.n_matches,
+    }
+
+    return DCCalibrationBacktestResult(
+        backtest=bt_result,
+        calibration=cal_report,
+        metrics=metrics,
+    )

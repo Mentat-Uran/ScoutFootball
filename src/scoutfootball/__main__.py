@@ -247,6 +247,7 @@ def _cmd_export_ratings(_args: argparse.Namespace) -> None:
 
 def _cmd_backtest(args: argparse.Namespace) -> None:
     from scoutfootball.evaluation.backtests import (
+        run_dc_backtest_with_calibration,
         run_dixon_coles_backtest,
         run_poisson_backtest,
     )
@@ -295,6 +296,7 @@ def _cmd_backtest(args: argparse.Namespace) -> None:
     print(f"  team_match: {len(team_match)} rows, {team_match['match_id'].nunique()} matches")
 
     n_splits = args.n_splits
+    decay = args.decay
     split_cfg = TimeSplitConfig(n_splits=n_splits, gap=0)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -314,15 +316,15 @@ def _cmd_backtest(args: argparse.Namespace) -> None:
     print(f"  Brier:    {p_result.metrics['brier_1x2']:.4f}")
     print(f"  RPS:      {p_result.metrics['rps_1x2']:.4f}")
 
-    # Dixon-Coles
-    print("\n=== Dixon-Coles Backtest ===")
+    # Dixon-Coles (no decay)
+    print("\n=== Dixon-Coles Backtest (no decay) ===")
     dc_result = run_dixon_coles_backtest(team_match, split_cfg)
     dc_result.predictions.to_parquet(
         out_dir / "dixon_coles_backtest_predictions.parquet",
         index=False,
     )
     dc_metrics = {
-        "model": "dixon_coles", "n_splits": n_splits,
+        "model": "dixon_coles", "decay": None, "n_splits": n_splits,
         "total_predictions": len(dc_result.predictions),
         "overall": dc_result.metrics,
         "folds": dc_result.fold_metrics.to_dict(orient="records"),
@@ -333,15 +335,64 @@ def _cmd_backtest(args: argparse.Namespace) -> None:
     print(f"  Brier:    {dc_result.metrics['brier_1x2']:.4f}")
     print(f"  RPS:      {dc_result.metrics['rps_1x2']:.4f}")
 
-    # Comparison
-    print(f"\n{'Metric':<25} {'Poisson':>12} {'Dixon-Coles':>12} {'Delta':>10}")
-    print("-" * 60)
+    # Dixon-Coles (with decay)
+    print(f"\n=== Dixon-Coles Backtest (decay={decay}) ===")
+    dc_decay_result = run_dixon_coles_backtest(team_match, split_cfg, decay=decay)
+    dc_decay_result.predictions.to_parquet(
+        out_dir / "dixon_coles_decay_backtest_predictions.parquet",
+        index=False,
+    )
+    dc_decay_metrics = {
+        "model": "dixon_coles", "decay": decay, "n_splits": n_splits,
+        "total_predictions": len(dc_decay_result.predictions),
+        "overall": dc_decay_result.metrics,
+        "folds": dc_decay_result.fold_metrics.to_dict(orient="records"),
+    }
+    with open(out_dir / "dixon_coles_decay_backtest_metrics.json", "w", encoding="utf-8") as f:
+        json.dump(dc_decay_metrics, f, indent=2, default=str, ensure_ascii=False)
+    print(f"  Log Loss: {dc_decay_result.metrics['log_loss_exact']:.4f}")
+    print(f"  Brier:    {dc_decay_result.metrics['brier_1x2']:.4f}")
+    print(f"  RPS:      {dc_decay_result.metrics['rps_1x2']:.4f}")
+
+    # Comparison: Poisson vs DC (no decay) vs DC (with decay)
+    print(f"\n{'Metric':<25} {'Poisson':>12} {'DC(no decay)':>12} {'DC(decay)':>12}")
+    print("-" * 65)
     for m in ["log_loss_exact", "brier_1x2", "rps_1x2"]:
         pv = p_result.metrics[m]
         dv = dc_result.metrics[m]
-        delta = dv - pv
-        sign = "+" if delta > 0 else ""
-        print(f"  {m:<23} {pv:>12.4f} {dv:>12.4f} {sign}{delta:>9.4f}")
+        ddv = dc_decay_result.metrics[m]
+        print(f"  {m:<23} {pv:>12.4f} {dv:>12.4f} {ddv:>12.4f}")
+
+    # Probability calibration (isotonic)
+    print(f"\n=== Dixon-Coles Calibration (decay={decay}, isotonic) ===")
+    try:
+        cal_bt = run_dc_backtest_with_calibration(
+            team_match, split_cfg, decay=decay, calibration_method="isotonic",
+        )
+        cal_metrics = cal_bt.metrics
+        print(f"  Brier before: {cal_metrics['brier_1x2_before']:.4f}")
+        print(f"  Brier after:  {cal_metrics['brier_1x2_after']:.4f}")
+        print(f"  RPS before:   {cal_metrics['rps_before']:.4f}")
+        print(f"  RPS after:    {cal_metrics['rps_after']:.4f}")
+        print(f"  N matches:    {cal_metrics['n_matches']}")
+
+        # Save calibration report
+        if cal_bt.calibration.calibrated_predictions is not None:
+            cal_bt.calibration.calibrated_predictions.to_parquet(
+                out_dir / "dc_calibrated_predictions.parquet", index=False,
+            )
+        cal_report_data = {
+            "method": "isotonic", "decay": decay,
+            "brier_before": cal_metrics["brier_1x2_before"],
+            "brier_after": cal_metrics["brier_1x2_after"],
+            "rps_before": cal_metrics["rps_before"],
+            "rps_after": cal_metrics["rps_after"],
+            "n_matches": cal_metrics["n_matches"],
+        }
+        with open(out_dir / "dc_calibration_report.json", "w", encoding="utf-8") as f:
+            json.dump(cal_report_data, f, indent=2, default=str, ensure_ascii=False)
+    except Exception as exc:
+        print(f"  Calibration failed: {exc}")
 
     print(f"\nResults saved to {out_dir}")
 
@@ -397,6 +448,10 @@ def main() -> None:
     bt_p.add_argument(
         "--n-splits", type=int, default=3,
         help="Number of time-series folds (default: 3)",
+    )
+    bt_p.add_argument(
+        "--decay", type=float, default=0.005,
+        help="Exponential decay parameter for Dixon-Coles (default: 0.005)",
     )
     bt_p.add_argument(
         "--output-dir", type=str, default=None,
