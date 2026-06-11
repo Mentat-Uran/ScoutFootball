@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from scoutfootball.api import (
+    _clean_json_value,
+    _settings,
     get_action_value_summary,
     get_artifacts_summary,
     get_match_prediction,
@@ -226,6 +228,93 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/predictions")
     def wc_predictions():
         return get_wc_predictions()
+
+    # ── Tactical board export helpers ─────────────────────────────
+    @app.get("/tactical-board/capabilities")
+    def tactical_board_capabilities():
+        """Detect available export capabilities (ffmpeg, etc.)."""
+        import shutil
+
+        ffmpeg_path = shutil.which("ffmpeg")
+        return {
+            "ffmpeg_available": ffmpeg_path is not None,
+            "ffmpeg_path": ffmpeg_path,
+            "supported_formats": {
+                "png": True,
+                "webm": True,  # MediaRecorder-based, browser-side
+                "mp4": ffmpeg_path is not None,
+                "gif": ffmpeg_path is not None,
+                "pdf": True,  # Browser print-based
+            },
+            "export_dir": str(
+                _settings().data_root / "reports" / "tactical_exports"
+            ),
+        }
+
+    @app.post("/tactical-board/export/mp4")
+    async def tactical_board_export_mp4(request: Request):
+        """Convert a WebM file to MP4 using ffmpeg (backend-side)."""
+        import shutil
+        import subprocess
+        import tempfile
+
+        ffmpeg_path = shutil.which("ffmpeg")
+        if not ffmpeg_path:
+            return _clean_json_value({
+                "status": "error",
+                "error": "ffmpeg not found on system PATH",
+            })
+
+        try:
+            body = await request.body()
+            export_dir = _settings().data_root / "reports" / "tactical_exports"
+            export_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save uploaded WebM to temp file
+            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
+                tmp_in.write(body)
+                tmp_in_path = tmp_in.name
+
+            # Generate output path
+            import time
+
+            ts = int(time.time())
+            out_path = export_dir / f"tactical-board-{ts}.mp4"
+
+            # Convert using ffmpeg
+            result = subprocess.run(
+                [
+                    ffmpeg_path,
+                    "-y",
+                    "-i", tmp_in_path,
+                    "-c:v", "libx264",
+                    "-preset", "fast",
+                    "-crf", "23",
+                    "-pix_fmt", "yuv420p",
+                    str(out_path),
+                ],
+                capture_output=True,
+                timeout=60,
+            )
+
+            # Clean up temp file
+            Path(tmp_in_path).unlink(missing_ok=True)
+
+            if result.returncode != 0:
+                return _clean_json_value({
+                    "status": "error",
+                    "error": f"ffmpeg failed: {result.stderr.decode()[:200]}",
+                })
+
+            return _clean_json_value({
+                "status": "ok",
+                "path": str(out_path),
+                "size_bytes": out_path.stat().st_size,
+            })
+        except subprocess.TimeoutExpired:
+            return _clean_json_value({"status": "error", "error": "ffmpeg timeout (60s)"})
+        except Exception as exc:
+            return _clean_json_value({"status": "error", "error": str(exc)})
 
     # Serve frontend static files
     from pathlib import Path

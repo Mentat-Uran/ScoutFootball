@@ -3058,6 +3058,76 @@ function bindEvents() {
             }
         });
     }
+    // MP4 export via backend ffmpeg conversion
+    const tacticalExportMp4 = document.getElementById("tactical-export-mp4");
+    if (tacticalExportMp4) {
+        // Check if ffmpeg is available on the backend
+        fetch(`${API_BASE}/tactical-board/capabilities`).then(r => r.json()).then(caps => {
+            if (caps.ffmpeg_available) {
+                tacticalExportMp4.style.opacity = "1";
+                tacticalExportMp4.title = "ffmpeg detected: " + (caps.ffmpeg_path || "");
+            } else {
+                tacticalExportMp4.title = "ffmpeg not found on server — MP4 export unavailable";
+            }
+        }).catch(() => { /* API offline, keep button dimmed */ });
+
+        tacticalExportMp4.addEventListener("click", async () => {
+            if (typeof TacticalRenderer === "undefined") return;
+            const zT = appState.lang === "zh";
+            try {
+                // First export as WebM blob
+                tacticalExportMp4.disabled = true;
+                tacticalExportMp4.textContent = zT ? "◆ 导出中..." : "◆ Exporting...";
+
+                const stream = TacticalRenderer.canvas.captureStream(30);
+                const mimeType = "video/webm;codecs=vp9";
+                const recorder = new MediaRecorder(stream, { mimeType });
+                const chunks = [];
+                recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+                // Play animation and record
+                const wasPlaying = TacticalRenderer.animationState.playing;
+                if (!wasPlaying) TacticalRenderer.toggleAnimation();
+                recorder.start();
+
+                await new Promise(resolve => setTimeout(resolve, 3000)); // Record 3s
+
+                recorder.stop();
+                if (wasPlaying) TacticalRenderer.toggleAnimation();
+
+                await new Promise(resolve => { recorder.onstop = resolve; });
+                const webmBlob = new Blob(chunks, { type: "video/webm" });
+
+                // Send to backend for MP4 conversion
+                const resp = await fetch(`${API_BASE}/tactical-board/export/mp4`, {
+                    method: "POST",
+                    headers: { "Content-Type": "video/webm" },
+                    body: webmBlob,
+                });
+                const result = await resp.json();
+
+                if (result.status === "ok") {
+                    alert(zT
+                        ? `◆ MP4 导出成功！\n保存到: ${result.path}\n大小: ${(result.size_bytes / 1024).toFixed(1)} KB`
+                        : `◆ MP4 exported!\nSaved to: ${result.path}\nSize: ${(result.size_bytes / 1024).toFixed(1)} KB`
+                    );
+                } else {
+                    alert(zT
+                        ? `◆ MP4 导出失败: ${result.error}`
+                        : `◆ MP4 export failed: ${result.error}`
+                    );
+                }
+            } catch (err) {
+                alert(zT
+                    ? `◆ MP4 导出失败: ${err.message}`
+                    : `◆ MP4 export failed: ${err.message}`
+                );
+            } finally {
+                tacticalExportMp4.disabled = false;
+                tacticalExportMp4.textContent = "◆ 导出 MP4";
+            }
+        });
+    }
 
     // Animation controls
     const tacticalAddFrame = document.getElementById("tactical-add-frame");
