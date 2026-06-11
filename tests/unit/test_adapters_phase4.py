@@ -120,9 +120,9 @@ def test_fbref_fetch_player_standard_uses_low_frequency_cache_and_parses_table(
 
     assert result.dataframe["Player"].tolist() == ["A. Forward", "B. Midfielder"]
     assert result.dataframe.loc[0, "league"] == "ENG-Premier League"
-    assert "fbref/Premier-League/2025-2026/stats_standard.html" in str(
+    assert "fbref/Premier-League/2025-2026/stats_standard.html" in Path(
         result.metadata.cache_path,
-    )
+    ).as_posix()
     assert FBREF_RATE_LIMIT_SECONDS == 6.5
 
     cached = fetch_player_standard(
