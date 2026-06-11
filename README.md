@@ -59,6 +59,12 @@ The `frontend/` directory contains a static analysis workbench with a consistent
 | **Compare** (⟷) | Head-to-head team comparison with radar overlay |
 | **Probability** (⊞) | Group advancement probabilities, 48-team strength ranking |
 
+### Live Demo
+
+**https://scoutfootball.vercel.app/**
+
+Frontend hosted on Vercel, backend on Render (free tier — first request may take ~30s to wake up).
+
 ### Demo Data
 
 The frontend falls back to built-in demo data when the FastAPI backend is unavailable or when specific artifacts are missing. Views using demo data display a **DEMO** badge.
