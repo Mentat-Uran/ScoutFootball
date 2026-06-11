@@ -48,3 +48,9 @@ data/gold/**/*.npy
 data/gold/feature_store/training_report.html
 # data/models/**/* already handled above with !data/models/runs/** exception
 data/logs/**/*
+
+# StatsBomb cached JSON downloads (consolidated in events_all.parquet)
+data/raw/statsbomb_open/events/*.json
+data/raw/statsbomb_open/matches/*.json
+data/raw/statsbomb_open/matches/*/
+data/raw/statsbomb_open/lineups/*.json
