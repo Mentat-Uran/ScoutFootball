@@ -372,7 +372,7 @@ const i18n = {
     },
 };
 
-const API_BASE = window.__SCOUTFOOTBALL_API__ || "";
+const API_BASE = window.__SCOUTFOOTBALL_API__ || "http://localhost:8600";
 
 let players = [];
 let reviews = [];
