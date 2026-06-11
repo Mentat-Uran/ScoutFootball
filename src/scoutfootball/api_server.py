@@ -38,6 +38,8 @@ from scoutfootball.api import (
 _DEFAULT_CORS_ORIGINS = [
     "http://localhost:8600",
     "http://127.0.0.1:8600",
+    "http://localhost:8601",
+    "http://127.0.0.1:8601",
     "http://localhost:8000",
 ]
 

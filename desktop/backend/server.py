@@ -40,6 +40,13 @@ def _resolve_data_root() -> Path:
 
 def main() -> None:
     """Start the ScoutFootball API server."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="ScoutFootball API server")
+    parser.add_argument("--port", type=int, default=8600)
+    parser.add_argument("--host", type=str, default="127.0.0.1")
+    cli_args = parser.parse_args()
+
     data_root = _resolve_data_root()
 
     # Set environment for the app
@@ -57,9 +64,9 @@ def main() -> None:
         from scoutfootball.api_server import create_app
 
         app = create_app()
-        print("ScoutFootball API server starting on port 8600...")
+        print(f"ScoutFootball API server starting on port {cli_args.port}...")
         print(f"Data root: {data_root}")
-        uvicorn.run(app, host="127.0.0.1", port=8600, log_level="info")
+        uvicorn.run(app, host=cli_args.host, port=cli_args.port, log_level="info")
     except ImportError as e:
         print(f"Error: Missing dependency: {e}")
         print("Please ensure all dependencies are installed.")
