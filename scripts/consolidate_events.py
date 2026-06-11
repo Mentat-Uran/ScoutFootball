@@ -4,9 +4,10 @@
 Processes JSON directly (not via pd.json_normalize) for speed.
 Only extracts the columns needed for xT/action-value computation.
 """
-import json
 import gc
+import json
 from pathlib import Path
+
 import pandas as pd
 
 EVENTS_DIR = Path("data/raw/statsbomb_open/events")
@@ -64,7 +65,9 @@ def extract_event(ev: dict, match_id: int) -> dict | None:
         "pass_end_location": pas.get("end_location") if isinstance(pas, dict) else None,
         "shot_end_location": shot.get("end_location") if isinstance(shot, dict) else None,
         "shot_statsbomb_xg": shot.get("statsbomb_xg") if isinstance(shot, dict) else None,
-        "shot_outcome_name": shot.get("outcome", {}).get("name") if isinstance(shot, dict) else None,
+        "shot_outcome_name": (
+            shot.get("outcome", {}).get("name") if isinstance(shot, dict) else None
+        ),
         "pass_outcome_name": pas.get("outcome", {}).get("name") if isinstance(pas, dict) else None,
     }
     return row

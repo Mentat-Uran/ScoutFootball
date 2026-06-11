@@ -11,6 +11,12 @@ import pytest
 @pytest.fixture(autouse=True)
 def _close_matplotlib_figures() -> Generator[None]:
     """Close all matplotlib figures after each test to prevent memory leaks."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+    except ImportError:
+        pass
     yield
     try:
         import matplotlib.pyplot as plt

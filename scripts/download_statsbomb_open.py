@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
-import sys
+import ssl
 import time
+import urllib.request
 from pathlib import Path
 
 import pandas as pd
@@ -17,15 +17,13 @@ DELAY = 0.5  # seconds between requests
 
 
 def fetch_json(url: str, retries: int = 3):
-    import urllib.request
-    import ssl
     ctx = ssl.create_default_context()
     for attempt in range(retries):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "ScoutFootball/1.0"})
             with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                 return json.loads(resp.read().decode("utf-8"))
-        except Exception as e:
+        except Exception:
             if attempt < retries - 1:
                 time.sleep(2 ** (attempt + 1))
             else:
