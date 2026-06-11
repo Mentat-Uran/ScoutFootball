@@ -44,6 +44,24 @@ jobs:
           uv run python -m scoutfootball build-features || true
           uv run python -m scoutfootball train || true
 
+      - name: Ensure data directories exist for packaging
+        shell: bash
+        run: |
+          # electron-builder extraResources requires these directories to exist
+          mkdir -p data/gold/feature_store
+          mkdir -p data/models
+          mkdir -p data/reports
+          mkdir -p data/raw/statsbomb_open
+          # Create placeholder files so the directories aren't empty (needed for some packagers)
+          touch data/gold/feature_store/.gitkeep
+          touch data/models/.gitkeep
+          touch data/reports/.gitkeep
+          touch data/raw/statsbomb_open/.gitkeep
+          # Create duckdb placeholder if not exists (use uv run to ensure duckdb is available)
+          if [ ! -f data/gold/scoutlab.duckdb ]; then
+            uv run python -c "import duckdb; duckdb.connect('data/gold/scoutlab.duckdb').close(); print('Created empty scoutlab.duckdb')" 2>/dev/null || touch data/gold/scoutlab.duckdb
+          fi
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
