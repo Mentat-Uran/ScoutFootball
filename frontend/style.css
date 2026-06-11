@@ -948,26 +948,42 @@ tbody button {
 @media (max-width: 760px) {
     body {
         overflow: auto;
+        font-size: 14px;
     }
 
     .app-shell {
         min-height: 100dvh;
         height: auto;
         flex-direction: column;
-        padding: 14px;
-        gap: 14px;
+        padding: 12px;
+        gap: 12px;
         overflow: visible;
     }
 
+    /* Nav becomes a horizontally-scrolling chip bar */
     .side-nav {
         width: 100%;
         min-width: 0;
         height: auto;
-        border-radius: 26px;
-        padding: 10px;
+        border-radius: 22px;
+        padding: 8px;
         flex-direction: row;
         align-items: center;
+        gap: 6px;
         overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }
+
+    .side-nav::-webkit-scrollbar {
+        display: none;
     }
 
     .side-nav:hover,
@@ -977,6 +993,9 @@ tbody button {
 
     .brand-lockup {
         width: auto;
+        flex-shrink: 0;
+        padding: 4px 8px;
+        scroll-snap-align: start;
     }
 
     .brand-text,
@@ -991,20 +1010,28 @@ tbody button {
     .nav-stack {
         flex-direction: row;
         gap: 4px;
+        display: flex;
     }
 
     .nav-action {
         width: auto;
-        padding: 0;
-        min-height: 40px;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0 10px;
+        justify-content: center;
+        flex-shrink: 0;
+        scroll-snap-align: center;
     }
 
     .brand-mark,
     .nav-icon {
-        width: 38px;
-        min-width: 38px;
-        height: 38px;
+        width: 40px;
+        min-width: 40px;
+        height: 40px;
         font-size: 1.05rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .nav-footer {
@@ -1013,49 +1040,355 @@ tbody button {
         gap: 6px;
     }
 
+    .nav-author-card {
+        padding: 4px 8px;
+        font-size: 0.65rem;
+        max-width: 120px;
+    }
+
+    .nav-author-name {
+        font-size: 0.6rem;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .nav-author-link {
+        font-size: 0.65rem;
+        white-space: nowrap;
+    }
+
+    .nav-footer-actions {
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
     .icon-button {
-        width: 38px;
-        min-height: 38px;
+        width: 40px;
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 0.95rem;
     }
 
     .text-button {
-        min-height: 38px;
+        min-height: 40px;
         padding: 0 10px;
+        font-size: 0.75rem;
     }
 
     .main-stage {
         overflow: visible;
+        gap: 14px;
+        padding: 0;
     }
 
     .top-bar {
         min-height: auto;
-        border-radius: 24px;
+        border-radius: 20px;
         align-items: stretch;
         flex-direction: column;
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .top-bar h1 {
+        font-size: 1.25rem;
+        margin: 4px 0 0;
+    }
+
+    .top-bar .eyebrow {
+        font-size: 0.7rem;
     }
 
     .top-actions {
         justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .top-link {
+        padding: 6px 10px;
+        font-size: 0.7rem;
     }
 
     .search-box {
         width: 100%;
         min-width: 0;
+        height: 42px;
+        padding: 0 14px;
     }
 
+    .status-pill {
+        font-size: 0.65rem;
+        padding: 4px 8px;
+    }
+
+    /* Content cards */
+    .liquid-panel {
+        padding: 16px;
+        border-radius: 20px;
+    }
+
+    /* Grid layouts: single column on mobile */
     .coverage-strip,
     .detail-grid,
     .backend-list.two-col,
     .selector-grid {
         grid-template-columns: 1fr;
+        gap: 12px;
     }
 
     .hero-copy h2 {
-        font-size: 2rem;
+        font-size: 1.5rem;
+        line-height: 1.2;
+    }
+
+    .hero-copy p {
+        font-size: 0.9rem;
+    }
+
+    /* Charts — taller and scrollable */
+    .chart-box {
+        height: 300px;
+        min-height: 260px;
+    }
+
+    /* Tables — horizontal scroll */
+    table,
+    .data-table {
+        width: 100%;
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+    }
+
+    table thead,
+    table tbody {
+        display: table;
+        width: 100%;
+    }
+
+    .data-row {
+        min-width: 560px;
+    }
+
+    /* Player profile cards */
+    .player-card-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .player-rank {
+        font-size: 1.1rem;
+        min-width: 36px;
+    }
+
+    .player-name {
+        font-size: 0.95rem;
+    }
+
+    .player-meta,
+    .player-league {
+        font-size: 0.7rem;
+    }
+
+    .rating-score {
+        font-size: 1.15rem;
+        text-align: right;
+    }
+
+    /* WC views */
+    .wc-group-table th,
+    .wc-group-table td {
+        padding: 8px 6px;
+        font-size: 0.75rem;
+    }
+
+    .wc-squad-list {
+        column-count: 1;
+        -webkit-column-count: 1;
+    }
+
+    .wc-squad-list li {
+        font-size: 0.85rem;
+        padding: 8px 10px;
+    }
+
+    .wc-schedule-match {
+        padding: 10px 12px;
+        font-size: 0.8rem;
+        grid-template-columns: 1fr auto 1fr;
+    }
+
+    .wc-match-teams {
+        flex-direction: column;
+        gap: 4px;
+        align-items: flex-start;
+    }
+
+    .wc-match-time,
+    .wc-match-venue {
+        font-size: 0.7rem;
+    }
+
+    /* Action values / value cards */
+    .metric-card,
+    .value-metric {
+        padding: 12px;
+    }
+
+    .metric-card h3,
+    .value-metric .label {
+        font-size: 0.8rem;
+    }
+
+    .metric-card .value,
+    .value-metric .value {
+        font-size: 1.25rem;
+    }
+
+    /* Scroll containers for wide content */
+    .content-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Touch target minimum for all interactive elements */
+    button,
+    .nav-action,
+    .icon-button,
+    .text-button,
+    .action-btn {
+        min-height: 44px;
+    }
+
+    /* Hero grid compact */
+    .hero-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .hero-card {
+        padding: 12px;
+    }
+
+    .hero-card .value {
+        font-size: 1.1rem;
+    }
+
+    .hero-card .label {
+        font-size: 0.7rem;
+    }
+
+    /* Summary list spacing */
+    .backend-list li {
+        padding: 10px 12px;
+        font-size: 0.85rem;
+    }
+}
+
+/* ── Extra-small phones (<= 480px) ─────────────────────────────────────── */
+
+@media (max-width: 480px) {
+    body {
+        font-size: 13px;
+    }
+
+    .app-shell {
+        padding: 8px;
+        gap: 10px;
+    }
+
+    .side-nav {
+        border-radius: 18px;
+        padding: 6px;
+        gap: 4px;
+    }
+
+    .nav-action {
+        min-width: 40px;
+        min-height: 40px;
+        padding: 0 8px;
+    }
+
+    .brand-mark,
+    .nav-icon {
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+
+    .icon-button {
+        width: 36px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+
+    .text-button {
+        min-height: 36px;
+        padding: 0 8px;
+    }
+
+    .nav-author-card {
+        display: none;
+    }
+
+    .top-bar {
+        padding: 12px;
+        border-radius: 18px;
+        gap: 10px;
+    }
+
+    .top-bar h1 {
+        font-size: 1.1rem;
+    }
+
+    .liquid-panel {
+        padding: 12px;
+        border-radius: 18px;
     }
 
     .chart-box {
-        height: 330px;
+        height: 260px;
+        min-height: 220px;
+    }
+
+    .hero-copy h2 {
+        font-size: 1.25rem;
+    }
+
+    .hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .top-link {
+        font-size: 0.65rem;
+        padding: 5px 8px;
+    }
+
+    .status-pill {
+        font-size: 0.6rem;
+        padding: 3px 6px;
+    }
+
+    .search-box {
+        height: 38px;
+        padding: 0 12px;
+    }
+
+    .data-row {
+        min-width: 540px;
+    }
+
+    /* WC tables even more compact */
+    .wc-group-table th,
+    .wc-group-table td {
+        padding: 6px 4px;
+        font-size: 0.7rem;
     }
 }
 
