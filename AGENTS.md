@@ -29,11 +29,12 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - `data_loader.py` 已加固：DuckDB 读取异常时正确 fallback 到 Parquet；新增 `_safe_read_parquet` 辅助函数，corrupt Parquet 文件不会导致 500；6 个数据加载函数已改用安全读取。
 - `api.py` 已加固：`_clean_json_value` 支持 numpy.int64/float64/bool_ 和 inf；`get_match_prediction` 捕获所有异常类型；内联 NaN 清理代码已合并到 `_clean_json_value`。
 - 电子战术板 P1.5 已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。新增：绘图工具（自由画笔/线条/矩形/椭圆）、文字注释、曲线箭头、触摸手势支持、循环动画、对象删除按钮。PNG 静态导出、WebM 动画导出、PDF 导出和版本迁移已实现。MP4 导出通过后端 ffmpeg 转换实现（`/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）。GIF 导出已通过 gif.js 实现浏览器端生成。
-- 桌面应用已构建：`desktop/` 目录包含 Electron + PyInstaller 打包配置，macOS arm64 版本已验证可用（221MB .dmg）。前端打包进 app.asar，后端可执行文件放在 extraResources，数据文件随应用分发。自动更新通过 electron-updater + GitHub releases 实现。仅支持 arm64 芯片，不提供 Intel 版本。
+- 桌面应用已构建：`desktop/` 目录包含 Electron + PyInstaller 打包配置，macOS arm64 版本已验证可用（221MB .dmg），Windows 构建脚本 `scripts/build-desktop-windows.ps1` 已添加。前端打包进 app.asar，后端可执行文件放在 extraResources，数据文件随应用分发。自动更新通过 electron-updater + GitHub releases 实现。
 - Dixon-Coles 比分预测模型已实现：`fit_dixon_coles()` 已接入 pipeline 和 `data_loader.py`，7 个单元测试覆盖参数拟合与预测。校准已接入 time decay + isotonic 校准，Brier 0.632，RPS 0.220。
 - 前端安全加固：`index.html` 增加 CSP meta tag、echarts CDN 加 SRI integrity、HTTP 响应增加 `X-Content-Type-Options: nosniff`；浏览器级 XSS/CSV 回归测试已完成。
 - 测试 warnings 清理：`conftest.py` 新增 matplotlib backend fixture 避免 GUI 警告，`pyproject.toml` 增加 `filterwarnings` 配置。
-- Bug 修复：26 个 bug 已修复（6 critical、9 warning、11 minor），测试总数 604。
+- Bug 修复：26 个 bug 已修复（6 critical、9 warning、11 minor），测试总数 613。
+- Phase 4 CI/CD 与部署：GitHub Actions CI 已配置（`.github/workflows/ci.yml`），含 ruff lint + pytest + node 语法检查；Windows 桌面应用构建脚本 `scripts/build-desktop-windows.ps1` 已添加；云端部署配置已添加（Streamlit Cloud `.streamlit/config.toml` + `Procfile`）；集成测试已添加（9 个：4 pipeline + 5 API），位于 `tests/integration/`。
 - 身价偏离分析：value-fairness OOF 残差、联赛/位置偏差、年龄散点分析已实现。
 - 球探队列增强：审阅状态流转（review_status）、watchlist diff、shortlist notes 已落地。
 - 球员对比百分位表：同位置 percentile 对比表已实现。
@@ -193,6 +194,7 @@ uv run ruff check .
 uv run pytest
 uv run pytest tests/unit/test_rating_optimizer_validation.py
 uv run pytest tests/unit/test_rating_optimizer_validation.py tests/unit/test_composite_objective.py tests/unit/test_player_rating_nn.py
+uv run pytest tests/integration/ -q
 PYTHONPATH=src uv run python -m scoutfootball info
 PYTHONPATH=src uv run python -m scoutfootball validate
 PYTHONPATH=src uv run python -m scoutfootball ingest
