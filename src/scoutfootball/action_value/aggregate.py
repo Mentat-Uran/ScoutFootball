@@ -206,6 +206,18 @@ def build_player_action_value(
     merged = xt_agg.merge(action_counts, on=["player_id", "team_id", "match_id"], how="left")
     merged = merged.merge(minutes_df, on=["player_id", "team_id", "match_id"], how="left")
 
+    # Aggregate to player level (sum across matches)
+    skip = {"player_id", "team_id", "match_id"}
+    num_dtypes = {"float64", "float32", "int64", "int32"}
+    num_cols = [
+        c for c in merged.columns
+        if c not in skip and merged[c].dtype in num_dtypes
+    ]
+    agg_dict = {c: "sum" for c in num_cols}
+    merged = merged.groupby(
+        ["player_id", "team_id"], as_index=False
+    ).agg(agg_dict)
+
     # 5. Add shot/xG stats if events_df provided
     if events_df is not None and not events_df.empty:
         shot_stats = _aggregate_shot_stats(events_df)
@@ -376,7 +388,7 @@ def build_player_action_value(
 
     # 11. Select final columns matching existing schema
     output_cols = [
-        "player_id", "player_name", "team_id", "match_id",
+        "player_id", "player_name", "team_id",
         "estimated_minutes",
         "shots", "shots_per_90", "xG_total", "xG_per_90",
         "goals", "goals_per_90", "finishing_delta",
@@ -392,6 +404,10 @@ def build_player_action_value(
     # Only include columns that exist
     final_cols = [c for c in output_cols if c in merged.columns]
     result = merged[final_cols].copy()
+
+    # Deduplicate: keep one row per player (highest composite_score)
+    result = result.sort_values("composite_score", ascending=False)
+    result = result.drop_duplicates(subset=["player_id"], keep="first")
 
     # Aggregate across matches for player-level summary
     player_agg = _aggregate_to_player_level(result)
