@@ -2477,12 +2477,12 @@ function renderData() {
             const rows = a.rows || 0;
             totalRows += rows;
             if (rows > 0) sourceCount++;
-            const srcType = _classifyArtifact(a.name || "");
+            const srcType = _classifyArtifact(a.label || a.name || "");
             const typeLabel = srcType === "real" ? t("data_type_real") : (srcType === "proxy" ? t("data_type_proxy") : t("data_type_synthetic"));
             const typeCls = srcType === "real" ? "status-high" : (srcType === "proxy" ? "status-medium" : "status-low");
-            const modified = a.modified ? new Date(a.modified * 1000).toISOString().slice(0, 10) : "–";
+            const modified = a.updated_at ? new Date(a.updated_at * 1000).toISOString().slice(0, 10) : "–";
             return `<tr>
-                <td>${escapeHtml(a.name || "–")}</td>
+                <td>${escapeHtml(a.label || a.name || "–")}</td>
                 <td>${rows.toLocaleString()}</td>
                 <td>${escapeHtml(modified)}</td>
                 <td><span class="status-pill ${typeCls}">${escapeHtml(typeLabel)}</span></td>

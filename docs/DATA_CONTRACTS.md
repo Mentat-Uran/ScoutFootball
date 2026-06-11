@@ -433,3 +433,133 @@ Full details for a single model run.
 
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
+
+### GET /license
+Data source license attribution.
+
+**Response**:
+```json
+{
+  "license_attribution": {
+    "statsbomb": { "name", "license", "url", "attribution_required", "note" },
+    "fbref": { ... },
+    "football_data": { ... },
+    "understat": { ... },
+    "club_elo": { ... },
+    "transfermarkt": { ... }
+  },
+  "data_source_label": "string",
+  "updated_at": 1234567890.0
+}
+```
+
+### GET /value-summary
+Value deviation analysis from OOF predictions.
+
+**Response**: `{ players: [...], summary: { ... } }`
+
+### GET /predictions/meta
+Match prediction model metadata.
+
+---
+
+## 10. Cross-Provider Schema Reference
+
+### 10.1 SPADL / atomic-SPADL Compatibility
+
+ScoutFootball's `InternalAction` schema is designed to be compatible with
+[socceraction](https://socceraction.readthedocs.io/)'s SPADL representation:
+
+| SPADL Field | InternalAction Field | Notes |
+|---|---|---|
+| game_id | match_id | |
+| period_id | period | |
+| seconds | minute * 60 + second | SPADL uses absolute seconds |
+| team_id | team_id | |
+| player_id | player_id | |
+| start_x, start_y | start_x, start_y | Both use 0-100 normalized |
+| end_x, end_y | end_x, end_y | Both use 0-100 normalized |
+| action_type | action_type | SPADL has 19 types; InternalAction has 13 |
+| result_id | result | SPADL uses int (0/1/-1); InternalAction uses string |
+
+**Key differences from SPADL**:
+- SPADL uses integer result codes; InternalAction uses string enums.
+- SPADL has separate "goalkick" and "freekick" action types; InternalAction
+  maps these to existing types via the `qualifier` dict.
+- SPADL coordinates are 0-105 x 0-68 (meters); InternalAction uses 0-100 x 100.
+
+### 10.2 kloppy Compatibility
+
+[kloppy](https://kloppy.pysport.org/) provides dataset loading and coordinate
+system transformation for tracking data. Current status:
+
+- **Evaluation**: kloppy supports StatsBomb, Opta, Wyscout, TRACAB, SkillCorner,
+  Metrica, and FIFA tracking formats with configurable coordinate systems.
+- **Risk**: kloppy adds a dependency chain (lxml, requests) and its own coordinate
+  normalization may conflict with InternalAction's 0-100 system.
+- **Decision**: Use kloppy as reference for coordinate transformation patterns,
+  but do not add as direct dependency until P6 cross-provider schema is stable.
+  If tracking data enters the pipeline, kloppy's `DatasetTransformer` patterns
+  should be adapted rather than imported.
+
+### 10.3 floodlight Compatibility
+
+[floodlight](https://floodlight.readthedocs.io/) provides Game/Team/Player/Event/Frame/Segment
+abstractions. Current status:
+
+- **Evaluation**: floodlight's modular design (separate objects for positions,
+  events, segments) is a good reference for future tracking data integration.
+- **Decision**: Reference only. Not a direct dependency candidate until
+  tracking/freeze-frame data enters the pipeline (P8+).
+
+### 10.4 Common Data Format (CDF)
+
+[CDF](https://www.cdf.football/) defines standardized schemas for football data exchange.
+
+- **Evaluation**: CDF's event schema covers similar ground to InternalAction
+  but focuses on interoperability between commercial providers.
+- **Decision**: Use as validation reference for field completeness; do not
+  adopt CDF as the primary internal schema since InternalAction is already
+  tailored to the StatsBomb -> xT/VAEP pipeline.
+
+---
+
+## 11. Socceraction Dependency Evaluation
+
+### Current Assessment
+
+[socceraction](https://socceraction.readthedocs.io/en/stable/) provides:
+- SPADL and atomic-SPADL action representations
+- Expected Threat (xT) model training and evaluation
+- VAEP model training and evaluation
+- StatsBomb/Wyscout/Opta event conversion
+
+### Dependency Risk
+
+| Factor | Assessment |
+|---|---|
+| Maintenance | Active (last release 2024, regular commits) |
+| Dependencies | numpy, pandas, scipy, scikit-learn (already in project) |
+| License | MIT |
+| Size | Lightweight (~15 modules) |
+| Breaking changes | Low risk; stable API since v1.0 |
+| Testing | Well-tested with StatsBomb Open Data |
+
+### Recommendation
+
+**Short-term (P2)**: Use socceraction's SPADL conversion and xT implementation
+as reference for validating our `spadl_adapter.py` and `xt.py`. Do NOT add as
+direct dependency yet — our internal adapter is already functional and adding
+socceraction would require reconciling coordinate systems and action type enums.
+
+**Medium-term (P3-P4)**: Evaluate adding socceraction as an optional dependency
+for VAEP training. The key value would be reusing socceraction's VAEP pipeline
+rather than reimplementing gradient-boosted feature engineering. Add as
+`socceraction[statsbomb]` optional extra in `pyproject.toml` only after:
+1. InternalAction schema is stable
+2. xT results are validated against socceraction's reference implementation
+3. VAEP is the next priority (after truth labels and rating calibration)
+
+**Not recommended**: Using socceraction as the primary action schema.
+InternalAction's string-based enums and 0-100 normalized coordinates are
+better suited to our multi-source pipeline and frontend visualization needs.
