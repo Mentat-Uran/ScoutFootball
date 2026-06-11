@@ -103,7 +103,7 @@ fi
 case $BUILD_TARGET in
     mac)
         echo "      Building for macOS..."
-        npx electron-builder --mac
+        npx electron-builder --mac -p never
         echo ""
         echo "=========================================="
         echo "  macOS build complete!"
@@ -113,7 +113,7 @@ case $BUILD_TARGET in
         ;;
     win)
         echo "      Building for Windows..."
-        npx electron-builder --win
+        npx electron-builder --win -p never
         echo ""
         echo "=========================================="
         echo "  Windows build complete!"
@@ -123,7 +123,7 @@ case $BUILD_TARGET in
         ;;
     all)
         echo "      Building for macOS and Windows..."
-        npx electron-builder --mac --win
+        npx electron-builder --mac --win -p never
         echo ""
         echo "=========================================="
         echo "  Build complete!"
