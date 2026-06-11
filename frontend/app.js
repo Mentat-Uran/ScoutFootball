@@ -386,7 +386,82 @@ const i18n = {
     },
 };
 
+// ─ API configuration ─────────────────────────────────────────────────────
+// STATIC_DATA = true  →  read from /data/*.json (no backend needed; works on any static host)
+// STATIC_DATA = false →  read from API_BASE (backend required, full feature set)
+const STATIC_DATA = (window.__SCOUTFOOTBALL_STATIC__ !== false)
+    && !(window.location.hostname === "127.0.0.1" && window.location.port === "8600")
+    && !(window.location.hostname === "localhost" && window.location.port === "8600");
 const API_BASE = window.__SCOUTFOOTBALL_API__ || "http://127.0.0.1:8600";
+
+// Team name → filename slug (must match scripts/export_static_frontend_data.py)
+function _teamSlug(name) {
+    return String(name || "").replace(/\s+/g, "_").replace(/\//g, "_");
+}
+
+// Map an API path + params to a local JSON file URL in static mode.
+// Falls back to API_BASE when dynamic data is needed and STATIC_DATA=false.
+function staticDataUrl(apiPath, params) {
+    if (STATIC_DATA) {
+        // Map common API paths to their static JSON counterparts.
+        // Dynamic paths (specific player, specific match prediction) fall back
+        // to generic data files; the caller handles null responses.
+        const m = (apiPath || "").replace(/^\/+/, "/");
+        const map = {
+            "/health": "/data/health.json",
+            "/artifacts": "/data/artifacts.json",
+            "/teams": "/data/teams.json",
+            "/ratings": "/data/ratings.json",
+            "/ratings/meta": "/data/ratings_meta.json",
+            "/ratings/snapshots": "/data/ratings.json",
+            "/predictions/meta": "/data/predictions_meta.json",
+            "/predictions/calibration": "/data/predictions_calibration.json",
+            "/value-summary": "/data/value_summary.json",
+            "/action-values": "/data/action_values.json",
+            "/review-queue": "/data/review_queue.json",
+            "/watchlist": "/data/watchlist.json",
+            "/shortlist": "/data/shortlist.json",
+            "/model-runs": "/data/model_runs.json",
+            "/reports/model-runs": "/data/model_runs.json",
+            "/license": "/data/artifacts.json",
+            "/players": "/data/players_list.json",
+            "/worldcup/teams": "/data/worldcup/teams.json",
+            "/world-cup/groups": "/data/worldcup/groups.json",
+            "/world-cup/schedule": "/data/worldcup/schedule.json",
+            "/world-cup/predictions": "/data/worldcup/predictions.json",
+        };
+        if (map[m]) return map[m];
+        // Squad: /world-cup/squads/<Team Name> → /data/worldcup/squads/<Team_Slug>.json
+        const squad = m.match(/^\/world-cup\/squads\/(.+)$/);
+        if (squad) return `/data/worldcup/squads/${encodeURIComponent(_teamSlug(decodeURIComponent(squad[1])))}.json`;
+        // Player profile: use pre-exported file if available.
+        const player = m.match(/^\/players?\/(.+)$/);
+        if (player) return `/data/player_profiles/${encodeURIComponent(_teamSlug(decodeURIComponent(player[1])))}.json`;
+        // Specific-match prediction: not available statically — return null sentinel
+        if (m.match(/^\/predictions\/.+/)) return null;
+        // Tactical board capabilities: not available statically
+        if (m.startsWith("/tactical-board")) return null;
+        return null;
+    }
+    // Non-static: build the normal API URL
+    let url = API_BASE + apiPath;
+    if (params && String(params).length > 0) url += `?${params}`;
+    return url;
+}
+
+// Fetch JSON from the appropriate source; returns parsed JSON or throws.
+async function fetchJson(apiPath, opts) {
+    const params = (opts && opts.params) || "";
+    const url = staticDataUrl(apiPath, params);
+    if (url === null) {
+        // Feature not available in static mode
+        throw new Error("static_mode_not_available");
+    }
+    const fetchOpts = opts && opts.fetchOpts ? opts.fetchOpts : undefined;
+    const resp = await fetch(url, fetchOpts);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+}
 
 let players = [];
 let reviews = [];
@@ -406,9 +481,7 @@ async function fetchRatings(position, league) {
     if (league) params.set("league", league);
     params.set("limit", "3000");
     try {
-        const resp = await fetch(`${API_BASE}/ratings?${params}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/ratings", { params });
         const rawPlayers = (data.players || []).map((p) => ({
             name: p.player || "",
             position: p.position_group || "",
@@ -469,9 +542,8 @@ function getDemoPlayers() {
 
 async function fetchRatingsMeta() {
     try {
-        const resp = await fetch(`${API_BASE}/ratings/meta`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
+        const data = await fetchJson("/ratings/meta");
+        return data;
     } catch (err) {
         console.warn("Failed to fetch ratings meta:", err);
         return { model_meta: {}, league_metrics: [] };
@@ -480,9 +552,7 @@ async function fetchRatingsMeta() {
 
 async function fetchArtifacts() {
     try {
-        const resp = await fetch(`${API_BASE}/artifacts`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
+        return await fetchJson("/artifacts");
     } catch (err) {
         console.warn("Failed to fetch artifacts:", err);
         return {};
@@ -491,9 +561,7 @@ async function fetchArtifacts() {
 
 async function fetchTeams() {
     try {
-        const resp = await fetch(`${API_BASE}/teams`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/teams");
         return data.teams || [];
     } catch (err) {
         console.warn("Failed to fetch teams:", err);
@@ -502,10 +570,12 @@ async function fetchTeams() {
 }
 
 async function fetchPrediction(homeTeam, awayTeam) {
+    if (STATIC_DATA) {
+        // Specific-match predictions are not available in static mode.
+        return null;
+    }
     try {
-        const resp = await fetch(`${API_BASE}/predictions/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
+        return await fetchJson(`/predictions/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
     } catch (err) {
         console.warn("Failed to fetch prediction:", err);
         return null;
@@ -514,9 +584,7 @@ async function fetchPrediction(homeTeam, awayTeam) {
 
 async function fetchPredictionMeta() {
     try {
-        const resp = await fetch(`${API_BASE}/predictions/meta`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
+        return await fetchJson("/predictions/meta");
     } catch (err) {
         console.warn("Failed to fetch prediction meta:", err);
         return { status: "no_data" };
@@ -525,9 +593,7 @@ async function fetchPredictionMeta() {
 
 async function fetchModelRuns() {
     try {
-        const resp = await fetch(`${API_BASE}/reports/model-runs`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
+        return await fetchJson("/reports/model-runs");
     } catch (err) {
         console.warn("Failed to fetch model runs:", err);
         return { count: 0, runs: [] };
@@ -536,9 +602,7 @@ async function fetchModelRuns() {
 
 async function fetchActionValues() {
     try {
-        const resp = await fetch(`${API_BASE}/action-values?limit=12`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
+        return await fetchJson("/action-values");
     } catch (err) {
         console.warn("Failed to fetch action values:", err);
         return { status: "no_data", players: [], metrics: {} };
@@ -558,9 +622,7 @@ const LICENSE_SOURCES = [
 
 async function fetchLicense() {
     try {
-        const resp = await fetch(`${API_BASE}/license`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
+        return await fetchJson("/license");
     } catch (err) {
         console.warn("Failed to fetch license info:", err);
         return { license_attribution: {}, data_source_label: "", updated_at: null };
@@ -788,8 +850,7 @@ async function renderPlayerProfile() {
     // Fetch real profile data for radar
     let profile = null;
     try {
-        const resp = await fetch(`${API_BASE}/players/${encodeURIComponent(player.name)}?season=${player.season}`);
-        if (resp.ok) profile = await resp.json();
+        profile = await fetchJson(`/players/${encodeURIComponent(player.name)}?season=${player.season}`);
     } catch (err) { /* fallback to list data */ }
 
     const detailMinutes = profile ? profile.minutes : player.minutes;
@@ -1183,9 +1244,7 @@ let valuePlayers = [];
 
 async function fetchValueReport() {
     try {
-        const resp = await fetch(`${API_BASE}/value-summary`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/value-summary");
         valueSummaryMeta = data;
         if (data.players && data.players.length > 0) {
             return data.players.map((p) => ({
@@ -1777,9 +1836,7 @@ let reviewQueue = [];
 
 async function fetchReviewQueue() {
     try {
-        const resp = await fetch(`${API_BASE}/review-queue?limit=50`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/review-queue");
         return (data.players || []).map((p) => ({
             name: p.player || "",
             team: p.team || "",
@@ -1796,9 +1853,7 @@ async function fetchReviewQueue() {
 
 async function fetchWatchlist() {
     try {
-        const resp = await fetch(`${API_BASE}/watchlist?limit=12`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/watchlist");
         return data.players || [];
     } catch (err) {
         console.warn("Failed to fetch watchlist:", err);
@@ -1808,9 +1863,7 @@ async function fetchWatchlist() {
 
 async function fetchShortlist() {
     try {
-        const resp = await fetch(`${API_BASE}/shortlist?limit=12`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/shortlist");
         return data.players || [];
     } catch (err) {
         console.warn("Failed to fetch shortlist:", err);
@@ -2761,9 +2814,7 @@ async function renderActiveView() {
 async function renderCalibration() {
     const statusPill = document.getElementById("calibration-status");
     try {
-        const resp = await fetch(`${API_BASE}/predictions/calibration`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/predictions/calibration");
 
         // Status
         const dcStatus = data.dixon_coles ? data.dixon_coles.status : "not_available";
@@ -3227,7 +3278,7 @@ function bindEvents() {
     const tacticalExportMp4 = document.getElementById("tactical-export-mp4");
     if (tacticalExportMp4) {
         // Check if ffmpeg is available on the backend
-        fetch(`${API_BASE}/tactical-board/capabilities`).then(r => r.json()).then(caps => {
+        fetchJson("/tactical-board/capabilities").then(caps => {
             if (caps.ffmpeg_available) {
                 tacticalExportMp4.style.opacity = "1";
                 tacticalExportMp4.title = "ffmpeg detected: " + (caps.ffmpeg_path || "");
@@ -3867,9 +3918,7 @@ const WC_DEMO_SQUADS = {};
 
 async function fetchWcTeams() {
     try {
-        const resp = await fetch(`${API_BASE}/worldcup/teams`, { signal: AbortSignal.timeout(60000) });
-        if (!resp.ok) throw new Error(`API ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/worldcup/teams", { fetchOpts: { signal: AbortSignal.timeout(60000) } });
         wcApiData.teams = data;
         wcApiData.apiOnline = true;
         return data;
@@ -3881,9 +3930,7 @@ async function fetchWcTeams() {
 
 async function fetchWcGroups() {
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/groups`, { signal: AbortSignal.timeout(60000) });
-        if (!resp.ok) throw new Error(`API ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/world-cup/groups", { fetchOpts: { signal: AbortSignal.timeout(60000) } });
         wcApiData.groups = data;
         wcApiData.apiOnline = true;
         return data;
@@ -3895,14 +3942,7 @@ async function fetchWcGroups() {
 
 async function fetchWcSchedule(group, matchday) {
     try {
-        let url = `${API_BASE}/world-cup/schedule`;
-        const params = [];
-        if (group) params.push(`group=${encodeURIComponent(group)}`);
-        if (matchday) params.push(`matchday=${matchday}`);
-        if (params.length) url += "?" + params.join("&");
-        const resp = await fetch(url, { signal: AbortSignal.timeout(60000) });
-        if (!resp.ok) throw new Error(`API ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/world-cup/schedule", { fetchOpts: { signal: AbortSignal.timeout(60000) } });
         wcApiData.schedule = data;
         wcApiData.apiOnline = true;
         return data;
@@ -3915,9 +3955,7 @@ async function fetchWcSchedule(group, matchday) {
 async function fetchWcSquad(team) {
     if (wcApiData.squadCache[team]) return wcApiData.squadCache[team];
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/squads/${encodeURIComponent(team)}`, { signal: AbortSignal.timeout(60000) });
-        if (!resp.ok) throw new Error(`API ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson(`/world-cup/squads/${encodeURIComponent(team)}`, { fetchOpts: { signal: AbortSignal.timeout(60000) } });
         wcApiData.squadCache[team] = data;
         wcApiData.apiOnline = true;
         return data;
@@ -3929,9 +3967,7 @@ async function fetchWcSquad(team) {
 
 async function fetchWcPredictions() {
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/predictions`, { signal: AbortSignal.timeout(60000) });
-        if (!resp.ok) throw new Error(`API ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchJson("/world-cup/predictions", { fetchOpts: { signal: AbortSignal.timeout(60000) } });
         wcApiData.predictions = data;
         wcApiData.apiOnline = true;
         return data;
@@ -4828,19 +4864,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     const apiPill = document.getElementById("top-api-pill");
     let apiOnline = false;
     if (apiPill) {
-        try {
-            const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
-            if (healthResp.ok) {
-                apiPill.textContent = "API OK";
-                apiPill.className = "status-pill status-high";
-                apiOnline = true;
-            } else {
-                apiPill.textContent = "API ERR";
+        if (STATIC_DATA) {
+            apiPill.textContent = "STATIC";
+            apiPill.className = "status-pill status-medium";
+            apiOnline = true;
+        } else {
+            try {
+                const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+                if (healthResp.ok) {
+                    apiPill.textContent = "API OK";
+                    apiPill.className = "status-pill status-high";
+                    apiOnline = true;
+                } else {
+                    apiPill.textContent = "API ERR";
+                    apiPill.className = "status-pill status-low";
+                }
+            } catch {
+                apiPill.textContent = "OFFLINE";
                 apiPill.className = "status-pill status-low";
             }
-        } catch {
-            apiPill.textContent = "OFFLINE";
-            apiPill.className = "status-pill status-low";
         }
     }
     // Show global DEMO banner when API is offline
