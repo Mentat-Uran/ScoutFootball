@@ -106,3 +106,9 @@ See `docs/MODEL_CARD.md` and the "Known Limitations" section in README for detai
 - World Cup views contain demo/sample data pending official squad rosters
 - Rating system is still in calibration phase; strong teams may be systematically undervalued
 - FBref data limited to 5 seasons; coarse position mapping needs StatsBomb/formation data to improve
+
+### Post-Release Fixes (2026-06-12)
+
+- **Release workflow**: Removed `publish` block from `desktop/package.json` (was causing `GH_TOKEN` error in electron-builder); fixed Windows `Join-Path` syntax (4 args → nested calls); added `-p never` to Windows electron-builder; made pipeline step `continue-on-error` with `shell: bash`
+- **Test environment**: Removed broken torch namespace package (25 tests recovered from FAILED); added `httpx` dev dependency (integration tests were failing to collect); fixed `api_server.py` version from hardcoded `0.2.0` to `__version__`
+- **Lint**: Removed unused `enrich_squad_with_ratings` import from `api.py`
