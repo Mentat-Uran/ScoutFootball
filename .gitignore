@@ -36,6 +36,10 @@ data/soccerdata/**
 # Build artifacts
 scoutlab-gpu-server.zip
 *.zip
+desktop/build/
+desktop/dist/
+desktop/backend-dist/
+desktop/backend-build/
 
 # Large binary artifacts
 data/gold/**/*.npy

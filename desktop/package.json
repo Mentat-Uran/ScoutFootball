@@ -22,6 +22,7 @@
   "build": {
     "appId": "com.scoutfootball.desktop",
     "productName": "ScoutFootball",
+    "icon": "build/icon.png",
     "directories": {
       "output": "dist"
     },
