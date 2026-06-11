@@ -29,8 +29,15 @@ class PlatformSettings(BaseModel):
 
     @classmethod
     def from_root(cls, root: Path | None = None) -> PlatformSettings:
+        import os
+
         project_root = (root or Path(__file__).resolve().parents[2]).resolve()
-        data_root = project_root / "data"
+        # Support SCOUTFOOTBALL_DATA_ROOT for packaged desktop app
+        env_data_root = os.environ.get("SCOUTFOOTBALL_DATA_ROOT")
+        if env_data_root:
+            data_root = Path(env_data_root).resolve()
+        else:
+            data_root = project_root / "data"
         return cls(
             project_root=project_root,
             source_root=project_root / "src",
