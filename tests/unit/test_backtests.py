@@ -7,8 +7,12 @@ import pandas as pd
 import pytest
 
 from scoutfootball.evaluation.backtests import (
+    DCCalibrationBacktestResult,
+    DCDecayComparisonResult,
     DixonColesBacktestResult,
     PoissonBacktestResult,
+    run_dc_backtest_with_calibration,
+    run_dc_decay_comparison,
     run_dixon_coles_backtest,
     run_poisson_backtest,
 )
@@ -117,3 +121,62 @@ class TestRunDixonColesBacktest:
             df, TimeSplitConfig(n_splits=3, gap=0), half_life_days=180,
         )
         assert not result.predictions.empty
+
+    def test_with_decay_parameter(self) -> None:
+        df = _make_team_match_df()
+        result = run_dixon_coles_backtest(
+            df, TimeSplitConfig(n_splits=3, gap=0), decay=0.005,
+        )
+        assert not result.predictions.empty
+        assert "log_loss_exact" in result.metrics
+
+
+class TestRunDCDecayComparison:
+    def test_returns_comparison_result(self) -> None:
+        df = _make_team_match_df()
+        result = run_dc_decay_comparison(
+            df, TimeSplitConfig(n_splits=3, gap=0), decay=0.005,
+        )
+        assert isinstance(result, DCDecayComparisonResult)
+
+    def test_comparison_has_metrics(self) -> None:
+        df = _make_team_match_df()
+        result = run_dc_decay_comparison(
+            df, TimeSplitConfig(n_splits=3, gap=0), decay=0.005,
+        )
+        assert not result.comparison.empty
+        assert "metric" in result.comparison.columns
+        assert "no_decay" in result.comparison.columns
+
+    def test_decay_value_stored(self) -> None:
+        df = _make_team_match_df()
+        result = run_dc_decay_comparison(
+            df, TimeSplitConfig(n_splits=3, gap=0), decay=0.005,
+        )
+        assert result.decay_value == 0.005
+
+
+class TestRunDCBacktestWithCalibration:
+    def test_returns_result(self) -> None:
+        df = _make_team_match_df()
+        result = run_dc_backtest_with_calibration(
+            df, TimeSplitConfig(n_splits=3, gap=0),
+        )
+        assert isinstance(result, DCCalibrationBacktestResult)
+
+    def test_has_calibration_metrics(self) -> None:
+        df = _make_team_match_df()
+        result = run_dc_backtest_with_calibration(
+            df, TimeSplitConfig(n_splits=3, gap=0),
+        )
+        assert "brier_1x2_before" in result.metrics
+        assert "brier_1x2_after" in result.metrics
+        assert "rps_before" in result.metrics
+        assert "rps_after" in result.metrics
+
+    def test_with_decay(self) -> None:
+        df = _make_team_match_df()
+        result = run_dc_backtest_with_calibration(
+            df, TimeSplitConfig(n_splits=3, gap=0), decay=0.005,
+        )
+        assert result.metrics["n_matches"] > 0

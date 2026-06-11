@@ -41,6 +41,7 @@ class DixonColesModel:
     league_mean_goals: float
     num_matches: int
     half_life_days: float | None = None
+    decay: float | None = None
 
 
 @dataclass(frozen=True)
@@ -179,6 +180,7 @@ def fit_dixon_coles(
     *,
     maxiter: int = 500,
     half_life_days: float | None = None,
+    decay: float | None = None,
 ) -> DixonColesModel:
     """Fit a Dixon-Coles (1997) model via maximum likelihood estimation.
 
@@ -188,6 +190,10 @@ def fit_dixon_coles(
     maxiter : Maximum optimizer iterations.
     half_life_days : If set, apply exponential time decay weighting. Each match
         is weighted by 0.5 ** (days_since_most_recent / half_life_days).
+        Ignored if ``decay`` is also provided.
+    decay : If set, apply exponential time decay weighting. Each match is
+        weighted by exp(-decay * days_since_match_i). The Dixon-Coles (1997)
+        paper recommends decay ≈ 0.005. Takes precedence over ``half_life_days``.
 
     Returns
     -------
@@ -219,11 +225,19 @@ def fit_dixon_coles(
 
     # Compute time decay weights if requested
     decay_weights = np.ones(len(matches_merged))
-    if half_life_days is not None and "match_date_home" in matches_merged.columns:
+    effective_decay: float | None = None
+    if "match_date_home" in matches_merged.columns:
         dates = pd.to_datetime(matches_merged["match_date_home"], errors="coerce")
         most_recent = dates.max()
         days_since = (most_recent - dates).dt.days.to_numpy(dtype=float)
-        decay_weights = 0.5 ** (days_since / half_life_days)
+        if decay is not None:
+            # Dixon-Coles paper: w_i = exp(-decay * days_since)
+            decay_weights = np.exp(-decay * days_since)
+            effective_decay = decay
+        elif half_life_days is not None:
+            # Alternative: half-life formulation
+            decay_weights = 0.5 ** (days_since / half_life_days)
+            effective_decay = float(np.log(2) / half_life_days)
 
     teams = sorted(df["team_id"].dropna().astype(str).unique())
     n_teams = len(teams)
@@ -312,7 +326,8 @@ def fit_dixon_coles(
         rho=float(rho),
         league_mean_goals=league_mean,
         num_matches=len(hg),
-        half_life_days=half_life_days,
+        half_life_days=half_life_days if decay is None else None,
+        decay=effective_decay,
     )
 
 
@@ -474,3 +489,102 @@ def _summarize_score_matrix(score_matrix: pd.DataFrame) -> MatchProbabilitySumma
         btts_yes=btts_yes,
         btts_no=btts_no,
     )
+
+
+@dataclass(frozen=True)
+class CalibrationReport:
+    """Calibration report for Dixon-Coles 1x2 probability predictions."""
+
+    method: str
+    brier_before: float
+    brier_after: float
+    rps_before: float
+    rps_after: float
+    n_matches: int
+    calibrated_predictions: pd.DataFrame | None = None
+
+
+def calibrate_predictions(
+    predictions: pd.DataFrame,
+    *,
+    method: str = "isotonic",
+) -> CalibrationReport:
+    """Calibrate 1x2 (home/draw/away) probabilities using isotonic regression or Platt scaling.
+
+    Parameters
+    ----------
+    predictions : DataFrame with columns: home_win_probability, draw_probability,
+        away_win_probability, actual_outcome.
+    method : "isotonic" or "platt".
+
+    Returns
+    -------
+    CalibrationReport with before/after Brier and RPS metrics.
+    """
+    from sklearn.isotonic import IsotonicRegression
+    from sklearn.linear_model import LogisticRegression
+
+    probs = predictions.loc[
+        :, ["home_win_probability", "draw_probability", "away_win_probability"]
+    ].to_numpy()
+    actual = predictions["actual_outcome"].to_numpy()
+
+    # Build one-hot actual matrix
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    actual_idx = np.array([outcome_map[o] for o in actual])
+    actual_onehot = np.zeros_like(probs)
+    actual_onehot[np.arange(len(actual_idx)), actual_idx] = 1.0
+
+    # Pre-calibration metrics
+    brier_before = float(np.mean(np.sum((probs - actual_onehot) ** 2, axis=1)))
+    rps_before = _compute_rps(probs, actual_onehot)
+
+    # Calibrate each outcome independently
+    calibrated_probs = probs.copy()
+    for col_idx in range(3):
+        y_true = actual_onehot[:, col_idx]
+        y_prob = probs[:, col_idx]
+
+        if method == "isotonic":
+            iso = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
+            iso.fit(y_prob, y_true)
+            calibrated_probs[:, col_idx] = iso.transform(y_prob)
+        elif method == "platt":
+            lr = LogisticRegression(C=1e10, solver="lbfgs", max_iter=1000)
+            x_feat = y_prob.reshape(-1, 1)
+            lr.fit(x_feat, y_true)
+            calibrated_probs[:, col_idx] = lr.predict_proba(x_feat)[:, 1]
+        else:
+            raise ValueError(f"Unknown calibration method: {method}")
+
+    # Normalize so probabilities sum to 1
+    row_sums = calibrated_probs.sum(axis=1, keepdims=True)
+    row_sums = np.where(row_sums == 0, 1.0, row_sums)
+    calibrated_probs = calibrated_probs / row_sums
+
+    # Post-calibration metrics
+    brier_after = float(np.mean(np.sum((calibrated_probs - actual_onehot) ** 2, axis=1)))
+    rps_after = _compute_rps(calibrated_probs, actual_onehot)
+
+    # Build calibrated predictions DataFrame
+    cal_df = predictions.copy()
+    cal_df["home_win_probability_calibrated"] = calibrated_probs[:, 0]
+    cal_df["draw_probability_calibrated"] = calibrated_probs[:, 1]
+    cal_df["away_win_probability_calibrated"] = calibrated_probs[:, 2]
+
+    return CalibrationReport(
+        method=method,
+        brier_before=brier_before,
+        brier_after=brier_after,
+        rps_before=rps_before,
+        rps_after=rps_after,
+        n_matches=len(predictions),
+        calibrated_predictions=cal_df,
+    )
+
+
+def _compute_rps(probs: np.ndarray, actual_onehot: np.ndarray) -> float:
+    """Compute Ranked Probability Score."""
+    cumulative_probs = np.cumsum(probs, axis=1)
+    cumulative_actual = np.cumsum(actual_onehot, axis=1)
+    return float(np.mean(np.sum((cumulative_probs - cumulative_actual) ** 2, axis=1) / 2.0))

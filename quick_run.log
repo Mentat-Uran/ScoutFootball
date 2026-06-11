@@ -1,0 +1,12 @@
+﻿uv : Traceback (most recent call last):
+At line:14 char:1648
++ ... l\scoutlab; uv run python scripts/optimize_ratings_gpu.py --data_dir  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\onedrive\football\scoutlab\scripts\optimize_ratings_gpu.py", line 36, in <module>
+    import torch
+  File "C:\onedrive\football\scoutlab\.venv\Lib\site-packages\torch\__init__.py", line 37, in <module>
+    from typing_extensions import ParamSpec as _ParamSpec, TypeGuard as _TypeGuard
+ModuleNotFoundError: No module named 'typing_extensions'
