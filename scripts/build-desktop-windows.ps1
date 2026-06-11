@@ -105,7 +105,7 @@ Write-Host ""
 # ── Step 3: Verify backend executable ──────────────────────────
 Write-Host "[3/4] Verifying backend executable..." -ForegroundColor Yellow
 
-$BackendExe = Join-Path $DesktopDir "backend-dist" "scoutfootball-server" "scoutfootball-server.exe"
+$BackendExe = Join-Path (Join-Path (Join-Path $DesktopDir "backend-dist") "scoutfootball-server") "scoutfootball-server.exe"
 if (Test-Path $BackendExe) {
     $size = (Get-Item $BackendExe).Length / 1MB
     Write-Host "      Backend executable: $([math]::Round($size, 1)) MB"
@@ -130,7 +130,7 @@ if (-not $SkipNpm -and -not (Test-Path "node_modules")) {
     }
 }
 
-npx electron-builder --win --x64
+npx electron-builder --win --x64 -p never
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: electron-builder failed" -ForegroundColor Red
     Pop-Location
