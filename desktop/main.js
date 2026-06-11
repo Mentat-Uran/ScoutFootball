@@ -59,7 +59,7 @@ function getBackendPath() {
   if (isDev) {
     return {
       command: "python3",
-      args: ["-m", "scoutfootball", "serve"],
+      args: ["-m", "scoutfootball", "serve", "--port", String(API_PORT)],
       cwd: path.join(__dirname, ".."),
       env: { ...process.env, PYTHONPATH: path.join(__dirname, "..", "src") },
     };
@@ -77,7 +77,7 @@ function getBackendPath() {
 
   return {
     command: backendExe,
-    args: [],
+    args: ["--port", String(API_PORT)],
     cwd: process.resourcesPath,
     env: {
       ...process.env,
