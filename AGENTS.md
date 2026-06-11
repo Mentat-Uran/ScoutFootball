@@ -34,7 +34,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 前端安全加固：`index.html` 增加 CSP meta tag、echarts CDN 加 SRI integrity、HTTP 响应增加 `X-Content-Type-Options: nosniff`；浏览器级 XSS/CSV 回归测试已完成。
 - 测试 warnings 清理：`conftest.py` 新增 matplotlib backend fixture 避免 GUI 警告，`pyproject.toml` 增加 `filterwarnings` 配置。
 - Bug 修复：26 个 bug 已修复（6 critical、9 warning、11 minor），测试总数 582（575 unit + 5 integration + 2 skipped）。
-- Phase 4 CI/CD 与部署：GitHub Actions CI 已配置（`.github/workflows/ci.yml`），含 ruff lint + pytest + node 语法检查；Windows 桌面应用构建脚本 `scripts/build-desktop-windows.ps1` 已添加；云端部署配置已添加（Streamlit Cloud `.streamlit/config.toml` + `Procfile`）；集成测试已添加（9 个：4 pipeline + 5 API），位于 `tests/integration/`。
+- Phase 4 CI/CD 与部署：GitHub Actions CI 已配置（`.github/workflows/ci.yml`），含 ruff lint + pytest + node 语法检查；Release workflow（`.github/workflows/release.yml`）已修复：删除 `package.json` 的 `publish` 块解决 GH_TOKEN 错误、修复 Windows 构建脚本 `Join-Path` 语法、添加 `-p never`、pipeline 步骤改为 `continue-on-error`；Windows 桌面应用构建脚本 `scripts/build-desktop-windows.ps1` 已添加；云端部署配置已添加（Streamlit Cloud `.streamlit/config.toml` + `Procfile`）；集成测试已添加（5 API），位于 `tests/integration/`。
 - 身价偏离分析：value-fairness OOF 残差、联赛/位置偏差、年龄散点分析已实现。
 - 球探队列增强：审阅状态流转（review_status）、watchlist diff、shortlist notes 已落地。
 - 球员对比百分位表：同位置 percentile 对比表已实现。
@@ -156,7 +156,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 新增球探人工校准数据优先写入 `data/gold/feature_store/player_truth_labels.parquet`、`data/reports/review_queue/` 或等价本地产物；不要把人工标签和模型预测写进同一字段。
 - 新增足球专用图表时优先扩展 `src/scoutfootball/viz/`，不要把绘图逻辑堆进 Streamlit 页面。
 - `frontend/` 是静态产品壳：保留 `frontend/index.html`、`frontend/style.css`、`frontend/app.js` 的 Liquid Glass 风格，页面只做本地展示和轻量交互，不在浏览器中执行训练、爬取或重型数据处理。
-- `desktop/` 是桌面应用打包目录：`main.js`（Electron 主进程）、`preload.js`（IPC 桥）、`backend/server.py`（PyInstaller 入口）、`scoutfootball-server.spec`（PyInstaller 配置）、`package.json`（electron-builder 配置）。构建产物（`dist/`、`backend-dist/`、`backend-build/`、`frontend/`、`node_modules/`）不入 git，通过 `.gitignore` 排除。构建命令：`bash scripts/build-desktop.sh --mac`。
+- `desktop/` 是桌面应用打包目录：`main.js`（Electron 主进程）、`preload.js`（IPC 桥）、`backend/server.py`（PyInstaller 入口）、`scoutfootball-server.spec`（PyInstaller 配置）、`package.json`（electron-builder 配置，不含 `publish` 块——发布由 GitHub Actions 的 `softprops/action-gh-release` 处理）。构建产物（`dist/`、`backend-dist/`、`backend-build/`、`frontend/`、`node_modules/`）不入 git，通过 `.gitignore` 排除。构建命令：`bash scripts/build-desktop.sh --mac`。
 - `frontend/` Phase 3 已完成 mock→real 替换；所有页面均读取 FastAPI 本地产物，不再依赖 mock 数据块。
 - `frontend/app.js` 中已有 `escapeHtml()`、`escapeAttr()`、`sanitizeCssPercent()` 和 `csvCell()`；新增 HTML 模板、attribute、style width 或 CSV 导出时优先复用这些 helper，不要把后端/本地字符串直接拼进 HTML。
 - 当前已落地的 FastAPI 只读契约子集：`/artifacts`、`/players/{player_name}`（含位置内百分位 + 低置信度原因 + 3 赛季趋势）、`/ratings/snapshots`、`/predictions/{home}/{away}`（含比分矩阵热力图 + 校准指标 + 胜平负概率）、`/predictions/meta`、`/predictions/calibration`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`（15,062 行全量 + 分页 + source attribution）、`/worldcup/teams`（48 队真实阵容）、`/reports/model-runs`、`/tactical-board/capabilities`、`/tactical-board/export/mp4`；旧路由别名继续保留给现有页面兼容使用。

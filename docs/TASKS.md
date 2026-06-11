@@ -125,6 +125,8 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 前端安全加固：CSP meta tag、SRI（echarts CDN）、X-Content-Type-Options 安全头、浏览器级 XSS/CSV 回归测试。
 - [x] v1.0.0 发布准备：版本号统一、CHANGELOG.md、scripts/demo.sh、README 安装文档和已知限制、世界杯页 SAMPLE DATA 标记、前端 DEMO 横幅。
 - [x] 桌面应用打包：Electron + PyInstaller，macOS arm64 构建成功（221MB .dmg），前端打包进 app.asar，后端在 extraResources，自动更新通过 electron-updater + GitHub releases。
+- [x] Release workflow 修复：删除 `package.json` `publish` 块解决 GH_TOKEN 错误、修复 Windows `Join-Path` 语法、添加 `-p never`、pipeline 步骤改为 `continue-on-error`。
+- [x] 测试环境修复：清理损坏的 torch 命名空间包（25 个测试从 FAILED 恢复）、添加 httpx dev 依赖修复集成测试、`api_server.py` 版本号从硬编码 `0.2.0` 改为 `__version__`。
 - [x] MP4 导出通过后端 ffmpeg 转换实现（`/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）。
 - [x] 前端 Data Status 页面字段名修复（`a.name` → `a.label`，`a.modified` → `a.updated_at`）。
 - [x] `/license` 端点字段名修复（`modified` → `updated_at`）。
