@@ -116,6 +116,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 
 ## 开发原则
 
+- v1.0.0 之后新增功能必须通过 PR 合并，禁止直接 commit 到 main 分支。
 - 数据处理必须可复现、可缓存、可校验。
 - ETL 必须幂等，不能依赖不可控的实时网页状态。
 - 模型必须有 baseline、时间切分、指标和误差分析。
