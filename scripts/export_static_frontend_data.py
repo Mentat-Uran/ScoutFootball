@@ -106,10 +106,10 @@ def export_ratings(limit: int) -> int:
 
 def export_basics() -> None:
     from scoutfootball.api import (
-        health_check,
         get_artifacts_summary,
-        list_teams,
+        health_check,
         list_players,
+        list_teams,
     )
 
     _write_json(DATA_DIR / "health.json", health_check())
@@ -118,7 +118,12 @@ def export_basics() -> None:
     _write_json(DATA_DIR / "teams.json", {"teams": teams})
     players = list_players()
     _write_json(DATA_DIR / "players_list.json", players)
-    print(f"  health.json, artifacts.json, teams.json ({len(teams)}), players_list.json ({players.player_count if hasattr(players, 'player_count') else len(players.get('players', []))})")
+    pc = (
+        players.player_count
+        if hasattr(players, "player_count")
+        else len(players.get("players", []))
+    )
+    print(f"  health.json, artifacts.json, teams.json ({len(teams)}), players_list.json ({pc})")
 
 
 def export_value_summary() -> None:
@@ -129,7 +134,7 @@ def export_value_summary() -> None:
 
 
 def export_predictions_meta() -> None:
-    from scoutfootball.api import get_prediction_summary, get_prediction_calibration
+    from scoutfootball.api import get_prediction_calibration, get_prediction_summary
 
     _write_json(DATA_DIR / "predictions_meta.json", get_prediction_summary())
     _write_json(DATA_DIR / "predictions_calibration.json", get_prediction_calibration())
@@ -145,7 +150,7 @@ def export_action_values(limit: int) -> None:
 
 
 def export_scouting(queue_limit: int) -> None:
-    from scoutfootball.api import get_review_queue, get_watchlist, get_shortlist
+    from scoutfootball.api import get_review_queue, get_shortlist, get_watchlist
 
     _write_json(DATA_DIR / "review_queue.json", get_review_queue(limit=queue_limit))
     _write_json(DATA_DIR / "watchlist.json", get_watchlist(limit=12))
@@ -163,11 +168,11 @@ def export_model_runs() -> None:
 def export_worldcup() -> int:
     """Export all World Cup data: teams, groups, schedule, 48 squads, predictions."""
     from scoutfootball.api import (
-        get_wc_teams,
         get_wc_groups,
+        get_wc_predictions,
         get_wc_schedule,
         get_wc_squad,
-        get_wc_predictions,
+        get_wc_teams,
     )
     from scoutfootball.worldcup.data import GROUPS
 
@@ -184,14 +189,14 @@ def export_worldcup() -> int:
         _write_json(SQUADS_DIR / filename, squad)
         squad_count += 1
 
-    print(f"  worldcup/teams.json, groups.json, schedule.json, predictions.json")
+    print("  worldcup/teams.json, groups.json, schedule.json, predictions.json")
     print(f"  worldcup/squads/*.json ({squad_count} teams)")
     return squad_count
 
 
 def export_sample_player_profiles(limit: int = 30) -> None:
     """Pre-export top-N player profiles so click-to-detail works offline."""
-    from scoutfootball.api import get_player_ratings, get_player_profile
+    from scoutfootball.api import get_player_profile, get_player_ratings
 
     ratings = get_player_ratings(limit=limit)
     players = ratings.get("players", [])
@@ -222,7 +227,7 @@ def write_manifest() -> None:
         files.append({"path": f"/{rel}", "kb": round(size_kb, 1)})
 
     manifest = {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "generated_at": dt.datetime.now(dt.UTC).isoformat(),
         "file_count": len(files),
         "total_kb": round(sum(f["kb"] for f in files), 1),
         "files": files,
@@ -250,8 +255,14 @@ def main() -> int:
         help="If >0, also export top-N player profile JSON files",
     )
     parser.add_argument(
-        "--skip", nargs="*", default=[],
-        choices=["basics", "ratings", "value", "predictions", "action_values", "scouting", "model_runs", "worldcup", "manifest"],
+        "--skip",
+        nargs="*",
+        default=[],
+        choices=[
+            "basics", "ratings", "value", "predictions",
+            "action_values", "scouting", "model_runs",
+            "worldcup", "manifest",
+        ],
         help="Sections to skip",
     )
     args = parser.parse_args()
