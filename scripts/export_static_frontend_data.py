@@ -1,0 +1,316 @@
+"""Export ScoutFootball API data to static JSON files for the frontend.
+
+This script calls the service layer in scoutfootball.api directly (no HTTP
+server needed) and writes the results to frontend/data/*.json.
+
+Used by:
+- Local development: ``PYTHONPATH=src python scripts/export_static_frontend_data.py``
+- GitHub Actions: ``.github/workflows/export-static-data.yml``
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+import time
+from pathlib import Path
+
+# ─ project root ──────────────────────────────────────────────────────────
+REPO_ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_DIR = REPO_ROOT / "frontend"
+DATA_DIR = FRONTEND_DIR / "data"
+WORLDCUP_DIR = DATA_DIR / "worldcup"
+SQUADS_DIR = WORLDCUP_DIR / "squads"
+
+# Default limits for static-export size control
+DEFAULT_RATINGS_LIMIT = 3000
+DEFAULT_ACTION_VALUES_LIMIT = 100
+DEFAULT_QUEUE_LIMIT = 200
+
+
+def _team_slug(team_name: str) -> str:
+    """Convert a team display name to a safe filename slug."""
+    return team_name.replace(" ", "_").replace("/", "_")
+
+
+def _clean(obj: object) -> object:
+    """Recursively convert numpy scalars / NaN / inf to JSON-safe values.
+
+    Re-implements a safe subset of scoutfootball.api._clean_json_value so the
+    script can run without importing the full package from a subprocess.
+    """
+    try:
+        import numpy as np
+    except ImportError:
+        np = None
+    try:
+        import pandas as pd
+    except ImportError:
+        pd = None
+
+    if obj is None:
+        return None
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, int):
+        return obj
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _clean(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_clean(v) for v in obj]
+    if np is not None:
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            f = float(obj)
+            if math.isnan(f) or math.isinf(f):
+                return None
+            return f
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return [_clean(v) for v in obj.tolist()]
+    if pd is not None:
+        if obj is pd.NA or getattr(obj, "name", None) == "NaT":
+            return None
+    # Fallback: try string representation
+    return str(obj)
+
+
+def _write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(_clean(payload), f, ensure_ascii=False, separators=(",", ":"))
+
+
+def export_ratings(limit: int) -> int:
+    """Export full ratings + metadata. Returns record count."""
+    from scoutfootball.api import get_player_ratings, get_ratings_meta
+
+    ratings = get_player_ratings(limit=limit)
+    meta = get_ratings_meta()
+    _write_json(DATA_DIR / "ratings.json", ratings)
+    _write_json(DATA_DIR / "ratings_meta.json", meta)
+    count = ratings.get("count", 0)
+    print(f"  ratings.json: {count} players")
+    return count
+
+
+def export_basics() -> None:
+    from scoutfootball.api import (
+        health_check,
+        get_artifacts_summary,
+        list_teams,
+        list_players,
+    )
+
+    _write_json(DATA_DIR / "health.json", health_check())
+    _write_json(DATA_DIR / "artifacts.json", get_artifacts_summary())
+    teams = list_teams()
+    _write_json(DATA_DIR / "teams.json", {"teams": teams})
+    players = list_players()
+    _write_json(DATA_DIR / "players_list.json", players)
+    print(f"  health.json, artifacts.json, teams.json ({len(teams)}), players_list.json ({players.player_count if hasattr(players, 'player_count') else len(players.get('players', []))})")
+
+
+def export_value_summary() -> None:
+    from scoutfootball.api import get_value_summary
+
+    _write_json(DATA_DIR / "value_summary.json", get_value_summary())
+    print("  value_summary.json")
+
+
+def export_predictions_meta() -> None:
+    from scoutfootball.api import get_prediction_summary, get_prediction_calibration
+
+    _write_json(DATA_DIR / "predictions_meta.json", get_prediction_summary())
+    _write_json(DATA_DIR / "predictions_calibration.json", get_prediction_calibration())
+    print("  predictions_meta.json, predictions_calibration.json")
+
+
+def export_action_values(limit: int) -> None:
+    from scoutfootball.api import get_action_value_summary
+
+    data = get_action_value_summary(limit=limit, full=False)
+    _write_json(DATA_DIR / "action_values.json", data)
+    print(f"  action_values.json (limit={limit})")
+
+
+def export_scouting(queue_limit: int) -> None:
+    from scoutfootball.api import get_review_queue, get_watchlist, get_shortlist
+
+    _write_json(DATA_DIR / "review_queue.json", get_review_queue(limit=queue_limit))
+    _write_json(DATA_DIR / "watchlist.json", get_watchlist(limit=12))
+    _write_json(DATA_DIR / "shortlist.json", get_shortlist(limit=12))
+    print("  review_queue.json, watchlist.json, shortlist.json")
+
+
+def export_model_runs() -> None:
+    from scoutfootball.api import get_model_runs
+
+    _write_json(DATA_DIR / "model_runs.json", get_model_runs())
+    print("  model_runs.json")
+
+
+def export_worldcup() -> int:
+    """Export all World Cup data: teams, groups, schedule, 48 squads, predictions."""
+    from scoutfootball.api import (
+        get_wc_teams,
+        get_wc_groups,
+        get_wc_schedule,
+        get_wc_squad,
+        get_wc_predictions,
+    )
+    from scoutfootball.worldcup.data import GROUPS
+
+    _write_json(WORLDCUP_DIR / "teams.json", get_wc_teams())
+    _write_json(WORLDCUP_DIR / "groups.json", get_wc_groups())
+    _write_json(WORLDCUP_DIR / "schedule.json", get_wc_schedule())
+    _write_json(WORLDCUP_DIR / "predictions.json", get_wc_predictions())
+
+    # 48 team squads
+    squad_count = 0
+    for team_name in [t for ts in GROUPS.values() for t in ts]:
+        squad = get_wc_squad(team_name)
+        filename = f"{_team_slug(team_name)}.json"
+        _write_json(SQUADS_DIR / filename, squad)
+        squad_count += 1
+
+    print(f"  worldcup/teams.json, groups.json, schedule.json, predictions.json")
+    print(f"  worldcup/squads/*.json ({squad_count} teams)")
+    return squad_count
+
+
+def export_sample_player_profiles(limit: int = 30) -> None:
+    """Pre-export top-N player profiles so click-to-detail works offline."""
+    from scoutfootball.api import get_player_ratings, get_player_profile
+
+    ratings = get_player_ratings(limit=limit)
+    players = ratings.get("players", [])
+    profiles_dir = DATA_DIR / "player_profiles"
+    exported = 0
+    for player in players:
+        name = player.get("player") or player.get("player_name")
+        if not name:
+            continue
+        try:
+            profile = get_player_profile(name)
+            # Skip profile-only artifacts that are too big or failed
+            _write_json(profiles_dir / f"{_team_slug(name)}.json", profile)
+            exported += 1
+        except Exception:
+            continue
+    print(f"  player_profiles/*.json ({exported} players)")
+
+
+def write_manifest() -> None:
+    """Write a small manifest file so the frontend can show last-updated time."""
+    import datetime as dt
+
+    files = []
+    for p in sorted(DATA_DIR.rglob("*.json")):
+        rel = p.relative_to(FRONTEND_DIR).as_posix()
+        size_kb = p.stat().st_size / 1024
+        files.append({"path": f"/{rel}", "kb": round(size_kb, 1)})
+
+    manifest = {
+        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "file_count": len(files),
+        "total_kb": round(sum(f["kb"] for f in files), 1),
+        "files": files,
+    }
+    _write_json(FRONTEND_DIR / "data_manifest.json", manifest)
+    print(f"  data_manifest.json ({len(files)} files, {manifest['total_kb']:.0f} KB)")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--ratings-limit", type=int, default=DEFAULT_RATINGS_LIMIT,
+        help=f"Max ratings rows to export (default: {DEFAULT_RATINGS_LIMIT})",
+    )
+    parser.add_argument(
+        "--action-values-limit", type=int, default=DEFAULT_ACTION_VALUES_LIMIT,
+        help=f"Max action-value rows to export (default: {DEFAULT_ACTION_VALUES_LIMIT})",
+    )
+    parser.add_argument(
+        "--queue-limit", type=int, default=DEFAULT_QUEUE_LIMIT,
+        help=f"Max review-queue rows to export (default: {DEFAULT_QUEUE_LIMIT})",
+    )
+    parser.add_argument(
+        "--player-profiles", type=int, default=0,
+        help="If >0, also export top-N player profile JSON files",
+    )
+    parser.add_argument(
+        "--skip", nargs="*", default=[],
+        choices=["basics", "ratings", "value", "predictions", "action_values", "scouting", "model_runs", "worldcup", "manifest"],
+        help="Sections to skip",
+    )
+    args = parser.parse_args()
+
+    # Ensure PYTHONPATH includes src if called directly
+    src_root = str(REPO_ROOT / "src")
+    if src_root not in sys.path:
+        sys.path.insert(0, src_root)
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    WORLDCUP_DIR.mkdir(parents=True, exist_ok=True)
+    SQUADS_DIR.mkdir(parents=True, exist_ok=True)
+
+    t0 = time.time()
+    print(f"Exporting ScoutFootball static data -> {DATA_DIR}")
+    print("-" * 72)
+
+    failures = []
+
+    sections = [
+        ("basics", lambda: export_basics()),
+        ("ratings", lambda: export_ratings(args.ratings_limit)),
+        ("value", lambda: export_value_summary()),
+        ("predictions", lambda: export_predictions_meta()),
+        ("action_values", lambda: export_action_values(args.action_values_limit)),
+        ("scouting", lambda: export_scouting(args.queue_limit)),
+        ("model_runs", lambda: export_model_runs()),
+        ("worldcup", lambda: export_worldcup()),
+    ]
+
+    for name, fn in sections:
+        if name in args.skip:
+            print(f"  [{name}] skipped")
+            continue
+        try:
+            fn()
+        except Exception as exc:
+            print(f"  [{name}] FAILED: {exc}")
+            failures.append(name)
+
+    if args.player_profiles > 0 and "player_profiles" not in args.skip:
+        try:
+            export_sample_player_profiles(limit=args.player_profiles)
+        except Exception as exc:
+            print(f"  [player_profiles] FAILED: {exc}")
+            failures.append("player_profiles")
+
+    if "manifest" not in args.skip:
+        try:
+            write_manifest()
+        except Exception as exc:
+            print(f"  [manifest] FAILED: {exc}")
+            failures.append("manifest")
+
+    dt_s = time.time() - t0
+    print("-" * 72)
+    print(f"Done in {dt_s:.1f}s. Failures: {', '.join(failures) if failures else 'none'}")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

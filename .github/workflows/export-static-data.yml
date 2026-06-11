@@ -1,0 +1,72 @@
+name: Export static frontend data
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/scoutfootball/**"
+      - "data/**"
+      - "scripts/export_static_frontend_data.py"
+      - "frontend/**"
+      - ".github/workflows/export-static-data.yml"
+  workflow_dispatch:
+  schedule:
+    # Every day at 05:00 UTC (13:00 Beijing time) — before daily-data-sync at 06:00
+    - cron: "0 5 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: export-static-data
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Pull Git LFS objects
+        run: git lfs pull
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Export static data
+        env:
+          MPLBACKEND: Agg
+          PYTHONPATH: src
+        run: |
+          uv run python scripts/export_static_frontend_data.py \
+            --ratings-limit 3000 \
+            --action-values-limit 100 \
+            --player-profiles 30
+
+      - name: Commit exported data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f frontend/data frontend/data_manifest.json || true
+          git status --short
+          if git diff --cached --quiet; then
+            echo "No static data changes to commit."
+          else
+            git commit -m "data: export static frontend JSON $(date -u +%Y-%m-%d)"
+            git push
+          fi
