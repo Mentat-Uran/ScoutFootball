@@ -95,7 +95,7 @@ def _cmd_action_value(args: argparse.Namespace) -> None:
         build_player_action_value,
         save_player_action_value,
     )
-    from scoutfootball.action_value.spadl_adapter import convert_all_events
+    from scoutfootball.action_value.spadl_adapter import convert_all_events_to_actions
 
     project_root = Path(__file__).resolve().parents[2]
     events_path = Path(args.events_path) if args.events_path else (
@@ -114,7 +114,7 @@ def _cmd_action_value(args: argparse.Namespace) -> None:
     print(f"  Loaded {len(events_df)} events from {events_path}")
 
     # Convert to InternalActions
-    actions = convert_all_events(events_path)
+    actions = convert_all_events_to_actions(events_path)
     print(f"  Converted to {len(actions)} internal actions")
 
     if not actions:

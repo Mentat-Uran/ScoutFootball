@@ -13,23 +13,40 @@ computes the threat value of each cell based on:
 Reference: Karun Singh, "Expected Threat" (2018)
 https://karun.in/blog/expected-threat.html
 
-Current status: P2. Uses StatsBomb Open Data sample only.
-Grid dimensions are reduced (12x8) due to small sample size (3 matches).
+Current status: P2. Full StatsBomb Open Data (7.7M actions).
+Grid dimensions: 16x12 for full dataset.
 """
 from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
-from scoutfootball.action_value.schema import ActionType, InternalAction
+from scoutfootball.action_value.schema import ActionResult, ActionType, InternalAction
 
 logger = logging.getLogger(__name__)
 
-# Reduced grid for small sample (3 matches, ~12K events)
-DEFAULT_X_CELLS = 12
-DEFAULT_Y_CELLS = 8
+# Grid for full dataset (7.7M actions)
+DEFAULT_X_CELLS = 16
+DEFAULT_Y_CELLS = 12
+
+# Action types used for xT grid computation
+POSSESSION_TYPES = frozenset({
+    ActionType.PASS, ActionType.CARRY, ActionType.DRIBBLE,
+    ActionType.TACKLE, ActionType.INTERCEPTION,
+    ActionType.CLEARANCE, ActionType.BLOCK,
+    ActionType.GOALKEEPER, ActionType.TAKE_ON,
+})
+MOVE_TYPES = frozenset({ActionType.PASS, ActionType.CARRY, ActionType.DRIBBLE})
+
+# Paths
+ACTIONS_PATH = Path("data/gold/feature_store/actions_all.parquet")
+XT_GRID_PATH = Path("data/gold/feature_store/xt_grid.npy")
+MATCHES_PATH = Path("data/raw/statsbomb_open/matches_all.parquet")
+EVENTS_PATH = Path("data/raw/statsbomb_open/events_all.parquet")
 
 
 def create_xt_grid(
@@ -151,7 +168,7 @@ def iterate_xt(
     transitions: np.ndarray,
     x_cells: int = DEFAULT_X_CELLS,
     y_cells: int = DEFAULT_Y_CELLS,
-    n_iterations: int = 100,
+    n_iterations: int = 1000,
     convergence_threshold: float = 1e-6,
 ) -> np.ndarray:
     """Iteratively compute xT values.
@@ -227,3 +244,248 @@ def action_xt_value(
     end_xt = xt_grid[ey, ex]
 
     return float(end_xt - start_xt)
+
+
+# ---------------------------------------------------------------------------
+# Vectorized versions for large DataFrames (7M+ rows)
+# ---------------------------------------------------------------------------
+
+def _get_cell_indices_vectorized(
+    x: np.ndarray,
+    y: np.ndarray,
+    x_cells: int,
+    y_cells: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Vectorized get_cell: returns (xi, yi) arrays."""
+    xi = np.clip((x / 100.0 * x_cells).astype(np.int32), 0, x_cells - 1)
+    yi = np.clip((y / 100.0 * y_cells).astype(np.int32), 0, y_cells - 1)
+    return xi, yi
+
+
+def compute_shot_goal_matrices_vectorized(
+    df: pd.DataFrame,
+    x_cells: int = DEFAULT_X_CELLS,
+    y_cells: int = DEFAULT_Y_CELLS,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Vectorized shot/goal probability computation from DataFrame.
+
+    Expects columns: action_type, result, start_x, start_y.
+    """
+    possession_count = np.zeros((y_cells, x_cells), dtype=np.float64)
+    shot_count = np.zeros((y_cells, x_cells), dtype=np.float64)
+    goal_count = np.zeros((y_cells, x_cells), dtype=np.float64)
+
+    atype = df["action_type"].values
+    result = df["result"].values
+    sx = df["start_x"].values.astype(np.float64)
+    sy = df["start_y"].values.astype(np.float64)
+
+    # Possession actions (non-shot, non-receipt, non-freeze, non-unknown)
+    possession_mask = np.isin(atype, [t.value for t in POSSESSION_TYPES])
+    shot_mask = atype == ActionType.SHOT.value
+
+    # Cell indices for possession actions
+    pos_xi, pos_yi = _get_cell_indices_vectorized(
+        sx[possession_mask], sy[possession_mask], x_cells, y_cells,
+    )
+    np.add.at(possession_count, (pos_yi, pos_xi), 1)
+
+    # Cell indices for shot actions
+    shot_xi, shot_yi = _get_cell_indices_vectorized(
+        sx[shot_mask], sy[shot_mask], x_cells, y_cells,
+    )
+    np.add.at(shot_count, (shot_yi, shot_xi), 1)
+    np.add.at(possession_count, (shot_yi, shot_xi), 1)
+
+    # Goals = successful shots
+    goal_mask = shot_mask & (result == ActionResult.SUCCESS.value)
+    goal_xi, goal_yi = _get_cell_indices_vectorized(
+        sx[goal_mask], sy[goal_mask], x_cells, y_cells,
+    )
+    np.add.at(goal_count, (goal_yi, goal_xi), 1)
+
+    # Shot probability
+    with np.errstate(divide="ignore", invalid="ignore"):
+        shot_prob = np.where(possession_count > 0, shot_count / possession_count, 0.0)
+    shot_prob = np.clip(shot_prob, 0.0, 1.0)
+
+    # Goal probability
+    with np.errstate(divide="ignore", invalid="ignore"):
+        goal_prob = np.where(shot_count > 0, goal_count / shot_count, 0.0)
+    # Default for cells with no shots: distance-based heuristic
+    no_shot = shot_count == 0
+    if no_shot.any():
+        xi_arr = np.arange(x_cells)
+        yi_arr = np.arange(y_cells)
+        xi_grid, yi_grid = np.meshgrid(xi_arr, yi_arr)
+        x_norm = (xi_grid + 0.5) / x_cells
+        goal_prob[no_shot] = np.maximum(0.01, 0.3 * x_norm[no_shot] ** 2)
+    goal_prob = np.clip(goal_prob, 0.0, 1.0)
+
+    logger.info(
+        "Shot prob: min=%.4f, max=%.4f, nonzero_cells=%d",
+        shot_prob.min(), shot_prob.max(), (shot_prob > 0).sum(),
+    )
+    logger.info(
+        "Goal prob: min=%.4f, max=%.4f, nonzero_cells=%d",
+        goal_prob.min(), goal_prob.max(), (goal_prob > 0).sum(),
+    )
+
+    return shot_prob, goal_prob
+
+
+def compute_transition_matrix_vectorized(
+    df: pd.DataFrame,
+    x_cells: int = DEFAULT_X_CELLS,
+    y_cells: int = DEFAULT_Y_CELLS,
+) -> np.ndarray:
+    """Vectorized transition matrix computation from DataFrame.
+
+    Expects columns: action_type, start_x, start_y, end_x, end_y.
+    """
+    n_cells = x_cells * y_cells
+    transitions = np.zeros((n_cells, n_cells), dtype=np.float64)
+
+    atype = df["action_type"].values
+    move_mask = np.isin(atype, [t.value for t in MOVE_TYPES])
+    move_df = df.loc[move_mask]
+
+    if move_df.empty:
+        return transitions
+
+    sx = move_df["start_x"].values.astype(np.float64)
+    sy = move_df["start_y"].values.astype(np.float64)
+    ex = move_df["end_x"].values.astype(np.float64)
+    ey = move_df["end_y"].values.astype(np.float64)
+
+    s_xi, s_yi = _get_cell_indices_vectorized(sx, sy, x_cells, y_cells)
+    e_xi, e_yi = _get_cell_indices_vectorized(ex, ey, x_cells, y_cells)
+
+    from_idx = s_yi * x_cells + s_xi
+    to_idx = e_yi * x_cells + e_xi
+
+    np.add.at(transitions, (from_idx, to_idx), 1)
+
+    # Normalize rows
+    row_sums = transitions.sum(axis=1, keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        transitions = np.where(row_sums > 0, transitions / row_sums, 0.0)
+
+    return transitions
+
+
+def batch_action_xt_value(
+    df: pd.DataFrame,
+    xt_grid: np.ndarray,
+    x_cells: int = DEFAULT_X_CELLS,
+    y_cells: int = DEFAULT_Y_CELLS,
+    chunk_size: int = 1_000_000,
+) -> np.ndarray:
+    """Compute xT value for all actions in a DataFrame (vectorized, chunked).
+
+    Returns an array of xT deltas, same length as df.
+    """
+    n = len(df)
+    result = np.zeros(n, dtype=np.float64)
+
+    for start in range(0, n, chunk_size):
+        end = min(start + chunk_size, n)
+        chunk = df.iloc[start:end]
+
+        sx = chunk["start_x"].values.astype(np.float64)
+        sy = chunk["start_y"].values.astype(np.float64)
+        ex = chunk["end_x"].values.astype(np.float64)
+        ey = chunk["end_y"].values.astype(np.float64)
+
+        s_xi, s_yi = _get_cell_indices_vectorized(sx, sy, x_cells, y_cells)
+        e_xi, e_yi = _get_cell_indices_vectorized(ex, ey, x_cells, y_cells)
+
+        start_xt = xt_grid[s_yi, s_xi]
+        end_xt = xt_grid[e_yi, e_xi]
+
+        result[start:end] = end_xt - start_xt
+
+    return result
+
+
+def compute_xt_from_actions(
+    actions_path: Path = ACTIONS_PATH,
+    xt_grid_path: Path = XT_GRID_PATH,
+    matches_path: Path = MATCHES_PATH,
+    events_path: Path = EVENTS_PATH,
+    x_cells: int = DEFAULT_X_CELLS,
+    y_cells: int = DEFAULT_Y_CELLS,
+) -> tuple[np.ndarray, pd.DataFrame]:
+    """Full pipeline: read SPADL actions, compute xT grid, assign per-action xT.
+
+    Steps:
+    1. Read actions_all.parquet
+    2. Compute shot_prob, goal_prob, transition matrices (vectorized)
+    3. Iterate to convergence -> xT grid
+    4. Save xT grid to xt_grid.npy
+    5. Compute per-action xT delta (batch vectorized)
+    6. Join season info from matches_all.parquet
+    7. Join player_name from events_all.parquet
+    8. Return (xt_grid, actions_with_xt DataFrame)
+
+    The returned DataFrame has columns:
+        player_id, player_name, team_id, match_id, season, competition,
+        action_type, result, start_x, start_y, end_x, end_y, xt_delta
+    """
+    logger.info("Reading actions from %s", actions_path)
+    df = pd.read_parquet(actions_path)
+    logger.info("Loaded %d actions", len(df))
+
+    # 2. Compute xT grid
+    logger.info("Computing shot/goal matrices (vectorized)...")
+    shot_prob, goal_prob = compute_shot_goal_matrices_vectorized(
+        df, x_cells, y_cells,
+    )
+    logger.info("Computing transition matrix (vectorized)...")
+    transitions = compute_transition_matrix_vectorized(df, x_cells, y_cells)
+
+    logger.info("Iterating xT convergence...")
+    xt_grid = iterate_xt(shot_prob, goal_prob, transitions, x_cells, y_cells)
+    logger.info(
+        "xT grid: min=%.6f, max=%.6f, mean=%.6f",
+        xt_grid.min(), xt_grid.max(), xt_grid.mean(),
+    )
+
+    # 3. Save xT grid
+    xt_grid_path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(xt_grid_path, xt_grid)
+    logger.info("Saved xT grid to %s", xt_grid_path)
+
+    # 4. Compute per-action xT delta
+    logger.info("Computing per-action xT values (batch)...")
+    xt_delta = batch_action_xt_value(df, xt_grid, x_cells, y_cells)
+    df["xt_delta"] = xt_delta
+    logger.info(
+        "xT delta stats: min=%.6f, max=%.6f, mean=%.6f, std=%.6f",
+        xt_delta.min(), xt_delta.max(), xt_delta.mean(), xt_delta.std(),
+    )
+
+    # 5. Join season info
+    logger.info("Joining season info from %s", matches_path)
+    matches = pd.read_parquet(matches_path)
+    matches["match_id"] = matches["match_id"].astype(str)
+    season_map = (
+        matches[["match_id", "season_name", "competition_name"]]
+        .drop_duplicates("match_id")
+    )
+    df = df.merge(season_map, on="match_id", how="left")
+    df.rename(columns={"season_name": "season", "competition_name": "competition"}, inplace=True)
+
+    # 6. Join player_name
+    logger.info("Joining player names from %s", events_path)
+    events = pd.read_parquet(events_path, columns=["player_id", "player_name"])
+    events["player_id"] = events["player_id"].astype(str)
+    name_map = events.dropna(subset=["player_name"]).drop_duplicates("player_id")
+    df = df.merge(name_map, on="player_id", how="left")
+    df["player_name"] = df["player_name"].fillna("")
+
+    logger.info(
+        "Final actions with xT: %d rows, %d unique players",
+        len(df), df["player_id"].nunique(),
+    )
+    return xt_grid, df

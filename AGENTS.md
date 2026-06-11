@@ -9,12 +9,14 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 本地缓存当前可验证状态：
 
 - FBref：5 赛季标准、射门、misc 表均为 14,356 行。
-- Football-Data：`data/raw/football_data/combined_results.parquet` 当前为 4 赛季（2223–2526）、5 个联赛、7,081 行。2526 赛季数据已补充。8 个球队名 alias 不匹配已修复（重音符号去除 + 12 个新 alias）。
+- Football-Data：`data/raw/football_data/combined_results.parquet` 当前为 10 赛季（1617–2526）、20 个联赛、68,953 行。2526 赛季数据已补充。8 个球队名 alias 不匹配已修复（重音符号去除 + 12 个新 alias）。
 - Understat：10 赛季、6 个联赛，`players_10seasons.parquet` 当前为 31,902 个球员赛季行。
-- StatsBomb Open Data：`big5_matches.parquet` 当前为 126 场比赛，`events_all.parquet` 当前为 11,871 条事件；`matches_all.parquet` 当前为空表，不要把它当 matches 真源。
+- StatsBomb Open Data：`big5_matches.parquet` 当前为 126 场比赛，`events_all.parquet` 当前为 7,744,412 条事件；`actions_all.parquet` 当前为 7,740,429 行（SPADL 格式）；`matches_all.parquet` 当前为空表，不要把它当 matches 真源。
+- xT 网格：`xt_grid.npy` 全量 xT 网格已生成，用于动作价值计算。
+- 世界杯数据：48 队 1,104 球员真实阵容，66.2% 评分匹配率。
 - 评分产物：`player_ratings_optimized.parquet` 当前为 30,483 行。
 - GPU 优化结果（2026-06-09，alias 修复后）：2526 holdout Spearman=0.740/Pearson=0.744（baseline 0.618/0.619），3-fold CV 平均 test Spearman=0.718/Pearson=0.719。Fold 1（2324）Spearman=0.662，Fold 2（2425）Spearman=0.792，Fold 3（2526）Spearman=0.701。参数稳定性 3 seeds std=0.002。特征重要性：assists_p90 > npg_p90 > minutes。强队系统性低估（Barcelona -37.7, Real Madrid -33.4），降级队高估（Burnley +24.9）。
-- 评分特征矩阵：`rating_feature_matrix.parquet`（8,141 行）+ `rating_feature_matrix_manifest.json`，含缺失字段标记、数据源覆盖标记和位置内中位数 fallback。
+- 评分特征矩阵：`rating_feature_matrix.parquet`（8,141 行）+ `rating_feature_matrix_manifest.json`，含缺失字段标记、数据源覆盖标记和位置内中位数 fallback。新增 6 个防守字段（tackles_won, interceptions, fouls_committed, fouls_drawn, crosses, own_goals），missing rate 0.02%。
 - Coverage 置信度规则：HIGH/MEDIUM/LOW 三级，coverage < 0.90 禁止强排序结论。
 - 出勤捷径诊断报告：置换重要性、位置 availability 权重、球队聚合权重分布、出勤驱动球员识别。
 - 位置内指标：GK/CB/FB/DM/CM/AM/W/ST 各位置核心维度、percentile rank 和中文解释模板。
@@ -49,9 +51,9 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 评分系统仍处于校准阶段：
 
 - PyTorch GPU 优化器和远程 GPU 计算脚本已存在。
-- 优化目标已从纯 Spearman/Pearson 改为组合目标：Spearman(0.42) + soft NDCG@20(0.16) + 位置内排序一致性(0.12) + 训练集积分回归校准(0.16) + 积分分布匹配(0.10) + 争冠/降级尾部校准(0.14) + 训练集联赛平均残差惩罚(0.08) + 球员评分离群 guardrail(0.05) + 可选球员真值标签锚定(默认 0.08，标签不足时禁用) + 先验正则(0.04)；各权重可通过命令行参数覆盖。v1.3 GPU 重跑已完成：2526 holdout Spearman=0.737/Pearson=0.742，points spread ratio=0.985，points MAE=11.55；主要残留问题是联赛截距偏差。v1.3.1-dev 已新增 train-fitted league residual offset 和 league-bias loss，只读复算可把当前参数 points MAE 从 11.55 降到 9.44，完整 GPU 重跑待执行。v1.3.2-dev 已新增 truth-anchor optimizer 入口和 `scoutfootball train-rating-nn` 监督式 MLP 候选；当前 `player_truth_labels.parquet` 为空，所以 NN 路径只输出 skipped 状态，不替换默认评分。
+- 优化目标已从纯 Spearman/Pearson 改为组合目标：Spearman(0.42) + soft NDCG@20(0.16) + 位置内排序一致性(0.12) + 训练集积分回归校准(0.16) + 积分分布匹配(0.10) + 争冠/降级尾部校准(0.14) + 训练集联赛平均残差惩罚(0.08) + 球员评分离群 guardrail(0.05) + 可选球员真值标签锚定(默认 0.08，标签不足时禁用) + 先验正则(0.04)；各权重可通过命令行参数覆盖。v1.3 GPU 重跑已完成：2526 holdout Spearman=0.737/Pearson=0.742，points spread ratio=0.985，points MAE=11.55；主要残留问题是联赛截距偏差。v1.3.1-dev 已新增 train-fitted league residual offset 和 league-bias loss，只读复算可把当前参数 points MAE 从 11.55 降到 9.44，完整 GPU 重跑待执行。v1.3.2-dev 已新增 truth-anchor optimizer 入口和 `scoutfootball train-rating-nn` 监督式 MLP 候选；当前 `player_truth_labels.parquet` 为 41,389 行（Transfermarkt 身价 33,532 + expert_tier 7,840 + award 17），NN 路径可正常训练。
 - 模型运行登记已实现：每次优化后保存到 `data/models/runs/<timestamp>/`，含 optimized_params.npy + meta.json（参数、种子、输入 hash、指标、位置内指标、误差案例摘要）。
-- 神经网络准入门槛已写入 `docs/MODEL_CARD.md`：必须先有球员真实标签、时间切分、baseline 对比、位置内指标、误差案例复盘；禁止纯球队积分监督训练。当前已实现 `src/scoutfootball/models/player_rating_nn.py` 作为监督式 sklearn MLP 候选入口，但因本地标签为空不会产出可用模型。
+- 神经网络准入门槛已写入 `docs/MODEL_CARD.md`：必须先有球员真实标签、时间切分、baseline 对比、位置内指标、误差案例复盘；禁止纯球队积分监督训练。当前已实现 `src/scoutfootball/models/player_rating_nn.py` 作为监督式 sklearn MLP 候选入口，`player_truth_labels.parquet` 已有 41,389 行标签数据。
 - 当前评分层优先做角色、联赛、真实影响力校准，不再把 Top N 配额作为主目标。
 - 已加入粗位置角色重判、较强联赛强度曲线、holdout 评估、Pearson 指标修复、ST/W quality cap。
 - 已把所有位置 availability cap 降到 0.18-0.20，CM/DM/FB/CB/GK 不能再用 0.30-0.36 的出勤权重主导评分。
@@ -61,10 +63,10 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 球队积分相关性会偏向出勤、CM 和 GK，不能单独作为球员影响力标签。
 - 弱联赛顶端样本已被压低，但仍需真实身价、奖项、专家标签或人工分档校准跨联赛等级。
 - FBref 粗位置只能保守重判，仍需要 StatsBomb、阵型或人工位置增强。
-- `player_value_metrics.parquet` 只有 StatsBomb 事件价值样本，不能当作全量联赛动作价值；`player_truth_labels.parquet` 已有空表模板和 schema 契约（`truth_labels.py`），待手动填充真实标签数据。
+- `player_value_metrics.parquet` 只有 StatsBomb 事件价值样本，不能当作全量联赛动作价值；`player_truth_labels.parquet` 当前为 41,389 行（Transfermarkt 身价 33,532 + expert_tier 7,840 + award 17）；`player_action_value.parquet` 当前为 9,951 行（全量 xT）。
 - 评估流程已增加 N/A 球队过滤：`build_matched_results()` 和 `build_team_target_tensors()` 自动剔除积分 NaN/inf 球队，`evaluate_params()` 报告剔除数量。
 - 评分模型卡 `docs/MODEL_CARD.md` 已输出，记录数据源、标签定义、适用边界、已知偏差和不可用场景。
-- 神经网络评分器只能作为真实标签层完成后的候选实验；没有球员级标签、特征缺失标记、时间切分和 baseline 对比前，不要把 MLP/深度模型写成默认评分能力。`scoutfootball train-rating-nn` 当前应被描述为候选入口和 skipped smoke，而不是已训练模型。
+- 神经网络评分器只能作为真实标签层完成后的候选实验；`scoutfootball train-rating-nn` 当前已有 41,389 行标签数据可用，但仍需时间切分、baseline 对比和误差案例复盘后才能替换默认评分。
 - `docs/PROBLEMS.md` 中记录的问题只能算完成第一轮代码级防护；完整结论必须重新跑 GPU 优化和 2526 holdout 误差复盘后再写。
 - GPU 重跑已完成（2026-06-09，alias 修复后，RTX 5070 Ti）：2526 holdout Spearman=0.740/Pearson=0.744（baseline 0.618，提升 +0.122）。3-fold CV 平均 test Spearman=0.718/Pearson=0.719。Fold 1（2324）Spearman=0.662，Fold 2（2425）Spearman=0.792，Fold 3（2526）Spearman=0.701。参数稳定性 3 seeds std=0.002。特征重要性：assists_p90 > npg_p90 > minutes。强队系统性低估（Barcelona -37.7, Real Madrid -33.4），降级队高估（Burnley +24.9）。alias 已修复（12 个新 alias + 重音符号去除），Bundesliga coverage 0.778 待重跑验证。
 
@@ -108,7 +110,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 9. P7：球探决策与人工校准层，把真实标签、低置信度样本、误差案例和战术备注纳入 review queue、watchlist、shortlist。
 10. P8：空间/视频/离球研究层，StatsBomb 360、Metrica/open tracking、xG+、off-ball value、强化学习只作为远期方向。
 
-除战术板外，当前规划必须继续保留这些缺口：真实球员标签仍为空、v1.3.1-dev 完整 GPU 重跑和误差复盘未做、世界杯页仍是样例/混合数据、前端 player/value/prediction/report 只读契约还不完整、动作价值仍是 StatsBomb 样本、球探人工标注回灌未实现、概率校准仍未完成、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
+除战术板外，当前规划必须继续保留这些缺口：v1.3.1-dev 完整 GPU 重跑和误差复盘未做、世界杯页仍是样例/混合数据、前端 player/value/prediction/report 只读契约还不完整、球探人工标注回灌未实现、概率校准仍未完成、跨供应商 schema 与 tracking/video 研究仍停留在后续阶段。
 
 ## 开发原则
 

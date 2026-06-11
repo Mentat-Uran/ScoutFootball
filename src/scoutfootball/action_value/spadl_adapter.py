@@ -6,8 +6,8 @@ them to the InternalAction schema defined in schema.py.
 StatsBomb Open Data uses a flat column format:
 - event_type: action type name (e.g., "Pass", "Shot")
 - player_id, player_name, team_id, team_name: identifiers
-- location: [x, y] start coordinates (0-120, 0-80)
-- pass_end_location, carry_end_location, shot_end_location: end coords
+- location_x, location_y: start coordinates (0-120, 0-80)
+- pass_end_location_x/y, shot_end_location_x/y: end coords
 
 Current status: P2. Reads events_all.parquet from data/raw/statsbomb_open/.
 """
@@ -16,50 +16,20 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from scoutfootball.action_value.schema import (
+    STATSBOMB_ACTION_MAP,
     ActionResult,
     ActionType,
     InternalAction,
-    normalize_coordinates,
 )
 
 logger = logging.getLogger(__name__)
 
-# StatsBomb action type mapping (flat format)
-STATSBOMB_ACTION_MAP: dict[str, ActionType] = {
-    "Pass": ActionType.PASS,
-    "Ball Receipt*": ActionType.RECEIPT,
-    "Carry": ActionType.CARRY,
-    "Shot": ActionType.SHOT,
-    "Dribble": ActionType.DRIBBLE,
-    "Dribbled Past": ActionType.DRIBBLE,
-    "Tackle": ActionType.TACKLE,
-    "Interception": ActionType.INTERCEPTION,
-    "Clearance": ActionType.CLEARANCE,
-    "Block": ActionType.BLOCK,
-    "Goal Keeper": ActionType.GOALKEEPER,
-    "Foul Committed": ActionType.TACKLE,
-    "Foul Won": ActionType.RECEIPT,
-    "Ball Recovery": ActionType.INTERCEPTION,
-    "Dispossessed": ActionType.CARRY,
-    "Miscontrol": ActionType.CARRY,
-    "50/50": ActionType.TACKLE,
-    "Half Start": ActionType.FREEZE,
-    "Half End": ActionType.FREEZE,
-    "Starting XI": ActionType.FREEZE,
-    "Substitution": ActionType.FREEZE,
-    "Injury Stoppage": ActionType.FREEZE,
-    "Referee Ball-Drop": ActionType.FREEZE,
-    "Bad Behaviour": ActionType.FREEZE,
-    "Offside": ActionType.FREEZE,
-    "Error": ActionType.CARRY,
-    "Shield": ActionType.CARRY,
-    "Pressure": ActionType.TACKLE,
-    "Duel": ActionType.TACKLE,
-    "Tactical Shift": ActionType.FREEZE,
-}
+# Event types that map to FREEZE or UNKNOWN — skip these entirely
+_SKIP_TYPES: set[ActionType] = {ActionType.FREEZE, ActionType.UNKNOWN}
 
 
 def load_statsbomb_events(events_path: Path) -> pd.DataFrame:
@@ -74,159 +44,249 @@ def load_statsbomb_events(events_path: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _parse_location(loc) -> tuple[float, float] | None:
-    """Parse a location field (list, tuple, or numpy array) to (x, y)."""
-    if loc is None:
-        return None
-    try:
-        import numpy as np
-        if isinstance(loc, np.ndarray):
-            if len(loc) >= 2:
-                return (float(loc[0]), float(loc[1]))
-            return None
-    except ImportError:
-        pass
-    if isinstance(loc, (list, tuple)):
-        if len(loc) >= 2:
-            return (float(loc[0]), float(loc[1]))
-        return None
-    if isinstance(loc, str):
-        try:
-            cleaned = loc.strip("[]")
-            parts = cleaned.split(",")
-            return (float(parts[0].strip()), float(parts[1].strip()))
-        except (ValueError, IndexError):
-            return None
-    return None
+def _determine_result_vectorized(df: pd.DataFrame) -> pd.Series:
+    """Determine action result for each row using vectorized logic.
 
-
-def _get_end_location(row: pd.Series, action_type: ActionType) -> tuple[float, float] | None:
-    """Get end location based on action type."""
-    if action_type == ActionType.PASS:
-        return _parse_location(row.get("pass_end_location"))
-    elif action_type == ActionType.CARRY:
-        return _parse_location(row.get("carry_end_location"))
-    elif action_type == ActionType.SHOT:
-        return _parse_location(row.get("shot_end_location"))
-    elif action_type == ActionType.GOALKEEPER:
-        return _parse_location(row.get("goalkeeper_end_location"))
-    return None
-
-
-def _get_result(row: pd.Series, action_type: ActionType) -> ActionResult:
-    """Determine action result from the row."""
-    # Check pass outcome
-    if action_type == ActionType.PASS:
-        pass_outcome = row.get("pass_outcome_name")
-        if pd.isna(pass_outcome) or pass_outcome is None:
-            return ActionResult.SUCCESS
-        return ActionResult.FAILURE
-
-    # Check shot outcome
-    if action_type == ActionType.SHOT:
-        shot_outcome = row.get("shot_outcome_name")
-        if pd.isna(shot_outcome) or shot_outcome is None:
-            return ActionResult.UNKNOWN
-        if "Goal" in str(shot_outcome):
-            return ActionResult.SUCCESS
-        return ActionResult.FAILURE
-
-    return ActionResult.UNKNOWN
-
-
-def convert_event_to_action(row: pd.Series, match_id: str) -> InternalAction | None:
-    """Convert a single StatsBomb event row to an InternalAction.
-
-    Returns None for events that don't map to actionable types (e.g., Half Start).
+    Rules:
+    - pass: no pass_outcome_name → success; otherwise → failure
+    - shot: shot_outcome_name contains "Goal" → success; otherwise → failure
+    - dribble: check dribble_outcome_name for "Complete" → success; else → failure
+    - tackle: check dribble_outcome_name or tackle_outcome_name for "Won" → success; else → failure
+    - interception: default success
+    - clearance: default success
+    - block: default success
+    - own goal: success
+    - others: unknown
     """
-    event_type = str(row.get("event_type", "Unknown"))
-    action_type = STATSBOMB_ACTION_MAP.get(event_type, ActionType.UNKNOWN)
+    result = pd.Series("unknown", index=df.index, dtype="object")
 
-    if action_type in (ActionType.FREEZE, ActionType.UNKNOWN):
-        return None
+    action_type = df["_action_type"]
 
-    # Get start location
-    start_loc = _parse_location(row.get("location"))
-    if start_loc:
-        start_x, start_y = normalize_coordinates(start_loc[0], start_loc[1])
+    # Pass
+    is_pass = action_type == ActionType.PASS
+    pass_outcome = df.get("pass_outcome_name")
+    if pass_outcome is not None:
+        result[is_pass & pass_outcome.isna()] = ActionResult.SUCCESS
+        result[is_pass & pass_outcome.notna()] = ActionResult.FAILURE
     else:
-        start_x, start_y = 50.0, 50.0
+        result[is_pass] = ActionResult.SUCCESS
 
-    # Get end location
-    end_loc = _get_end_location(row, action_type)
-    if end_loc:
-        end_x, end_y = normalize_coordinates(end_loc[0], end_loc[1])
+    # Shot
+    is_shot = action_type == ActionType.SHOT
+    shot_outcome = df.get("shot_outcome_name")
+    if shot_outcome is not None:
+        goal_mask = shot_outcome.fillna("").str.contains("Goal", na=False)
+        result[is_shot & goal_mask] = ActionResult.SUCCESS
+        result[is_shot & ~goal_mask] = ActionResult.FAILURE
     else:
-        end_x, end_y = start_x, start_y
+        result[is_shot] = ActionResult.FAILURE
 
-    # Get result
-    result = _get_result(row, action_type)
-
-    # Get identifiers
-    raw_player_id = row.get("player_id")
-    if pd.isna(raw_player_id) or raw_player_id is None:
-        player_id = ""
+    # Dribble: check dribble_outcome_name if available
+    is_dribble = action_type == ActionType.DRIBBLE
+    dribble_outcome = df.get("dribble_outcome_name")
+    if dribble_outcome is not None:
+        complete_mask = dribble_outcome.fillna("").str.contains("Complete", na=False)
+        result[is_dribble & complete_mask] = ActionResult.SUCCESS
+        result[is_dribble & ~complete_mask] = ActionResult.FAILURE
     else:
-        player_id = str(int(float(raw_player_id)))
+        # No outcome column available — default to failure (most dribbles in open data
+        # are incomplete without explicit outcome)
+        result[is_dribble] = ActionResult.FAILURE
 
-    raw_team_id = row.get("team_id")
-    if pd.isna(raw_team_id) or raw_team_id is None:
-        team_id = ""
+    # Tackle: check tackle_outcome_name if available
+    is_tackle = action_type == ActionType.TACKLE
+    tackle_outcome = df.get("tackle_outcome_name")
+    if tackle_outcome is not None:
+        won_mask = tackle_outcome.fillna("").str.contains("Won", na=False)
+        result[is_tackle & won_mask] = ActionResult.SUCCESS
+        result[is_tackle & ~won_mask] = ActionResult.FAILURE
     else:
-        team_id = str(int(float(raw_team_id)))
+        result[is_tackle] = ActionResult.FAILURE
 
-    # Get timing
-    period = int(row.get("period", 1)) if not pd.isna(row.get("period")) else 1
-    minute = int(row.get("minute", 0)) if not pd.isna(row.get("minute")) else 0
-    second = int(row.get("second", 0)) if not pd.isna(row.get("second")) else 0
+    # Interception: default success
+    result[action_type == ActionType.INTERCEPTION] = ActionResult.SUCCESS
 
-    # Get action_id
-    index = int(row.get("index", 0)) if not pd.isna(row.get("index")) else 0
-    event_id = str(row.get("event_id", ""))
+    # Clearance: default success
+    result[action_type == ActionType.CLEARANCE] = ActionResult.SUCCESS
 
-    return InternalAction(
-        action_id=index,
-        provider_action_id=event_id,
-        match_id=str(match_id),
-        team_id=team_id,
-        player_id=player_id,
-        period=period,
-        minute=minute,
-        second=second,
-        action_type=action_type,
-        result=result,
-        start_x=start_x,
-        start_y=start_y,
-        end_x=end_x,
-        end_y=end_y,
-        source="statsbomb",
-        source_coverage="sample",
-    )
+    # Block: default success
+    result[action_type == ActionType.BLOCK] = ActionResult.SUCCESS
+
+    return result
 
 
-def convert_match_events(events_df: pd.DataFrame, match_id: str) -> list[InternalAction]:
-    """Convert all events for a single match to internal actions."""
-    actions = []
-    for _, row in events_df.iterrows():
-        action = convert_event_to_action(row, match_id)
-        if action is not None:
-            actions.append(action)
-    return actions
+def _get_end_location_vectorized(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute end_x, end_y for each row using vectorized logic.
+
+    Priority:
+    - pass: pass_end_location_x/y
+    - shot: shot_end_location_x/y
+    - carry: carry_end_location_x/y (if missing, fallback to start location)
+    - goalkeeper: goalkeeper_end_location_x/y (if missing, fallback to start)
+    - others: same as start location
+    """
+    start_x = df["_start_x"].values
+    start_y = df["_start_y"].values
+    action_type = df["_action_type"]
+
+    end_x = start_x.copy()
+    end_y = start_y.copy()
+
+    # Pass end location
+    is_pass = action_type == ActionType.PASS
+    pass_end_x = df.get("pass_end_location_x")
+    pass_end_y = df.get("pass_end_location_y")
+    if pass_end_x is not None:
+        valid = is_pass & pass_end_x.notna()
+        end_x[valid] = pass_end_x[valid].values / 120.0 * 100.0
+        end_y[valid] = pass_end_y[valid].values / 80.0 * 100.0
+
+    # Shot end location
+    is_shot = action_type == ActionType.SHOT
+    shot_end_x = df.get("shot_end_location_x")
+    shot_end_y = df.get("shot_end_location_y")
+    if shot_end_x is not None:
+        valid = is_shot & shot_end_x.notna()
+        end_x[valid] = shot_end_x[valid].values / 120.0 * 100.0
+        end_y[valid] = shot_end_y[valid].values / 80.0 * 100.0
+
+    # Carry end location — fallback to start location if missing
+    is_carry = action_type == ActionType.CARRY
+    carry_end_x = df.get("carry_end_location_x")
+    carry_end_y = df.get("carry_end_location_y")
+    if carry_end_x is not None:
+        valid = is_carry & carry_end_x.notna()
+        end_x[valid] = carry_end_x[valid].values / 120.0 * 100.0
+        end_y[valid] = carry_end_y[valid].values / 80.0 * 100.0
+    # If carry_end_location columns don't exist, end_x/y already = start_x/y
+
+    # Goalkeeper end location — fallback to start if missing
+    is_gk = action_type == ActionType.GOALKEEPER
+    gk_end_x = df.get("goalkeeper_end_location_x")
+    gk_end_y = df.get("goalkeeper_end_location_y")
+    if gk_end_x is not None:
+        valid = is_gk & gk_end_x.notna()
+        end_x[valid] = gk_end_x[valid].values / 120.0 * 100.0
+        end_y[valid] = gk_end_y[valid].values / 80.0 * 100.0
+
+    return pd.DataFrame({"_end_x": end_x, "_end_y": end_y}, index=df.index)
 
 
-def convert_all_events(events_path: Path) -> list[InternalAction]:
-    """Convert all StatsBomb events to internal actions."""
+def convert_all_events(events_path: Path) -> pd.DataFrame:
+    """Convert all StatsBomb events to SPADL-format DataFrame.
+
+    Returns a DataFrame with columns matching InternalAction fields,
+    ready for xT/VAEP computation.
+    """
     df = load_statsbomb_events(events_path)
+    if df.empty:
+        return pd.DataFrame()
+
+    # Map event_type → ActionType
+    df["_action_type"] = df["event_type"].map(STATSBOMB_ACTION_MAP).fillna(ActionType.UNKNOWN)
+
+    # Filter out FREEZE and UNKNOWN types
+    mask = ~df["_action_type"].isin(_SKIP_TYPES)
+    df = df.loc[mask].copy()
+
+    if df.empty:
+        logger.info("No actionable events after filtering")
+        return pd.DataFrame()
+
+    # Normalize start coordinates
+    loc_x = df.get("location_x", pd.Series(np.nan, index=df.index))
+    loc_y = df.get("location_y", pd.Series(np.nan, index=df.index))
+    df["_start_x"] = loc_x.fillna(60.0) / 120.0 * 100.0
+    df["_start_y"] = loc_y.fillna(40.0) / 80.0 * 100.0
+
+    # Compute end locations
+    end_locs = _get_end_location_vectorized(df)
+    df["_end_x"] = end_locs["_end_x"]
+    df["_end_y"] = end_locs["_end_y"]
+
+    # Determine results
+    df["_result"] = _determine_result_vectorized(df)
+
+    # Build output DataFrame
+    player_id = df.get("player_id", pd.Series("", index=df.index))
+    team_id = df.get("team_id", pd.Series("", index=df.index))
+    match_id = df.get("match_id", pd.Series("", index=df.index))
+
+    out = pd.DataFrame({
+        "action_id": df.get("index", pd.Series(0, index=df.index)).fillna(0).astype(int),
+        "provider_action_id": df.get("event_id", pd.Series("", index=df.index)).astype(str),
+        "match_id": match_id.fillna("").astype(str),
+        "team_id": team_id.fillna("").apply(
+            lambda x: str(int(float(x))) if pd.notna(x) and x != "" else ""
+        ),
+        "player_id": player_id.fillna("").apply(
+            lambda x: str(int(float(x))) if pd.notna(x) and x != "" else ""
+        ),
+        "period": df.get("period", pd.Series(1, index=df.index)).fillna(1).astype(int),
+        "minute": df.get("minute", pd.Series(0, index=df.index)).fillna(0).astype(int),
+        "second": df.get("second", pd.Series(0, index=df.index)).fillna(0).astype(int),
+        "action_type": df["_action_type"].astype(str),
+        "result": df["_result"].astype(str),
+        "start_x": df["_start_x"].round(2),
+        "start_y": df["_start_y"].round(2),
+        "end_x": df["_end_x"].round(2),
+        "end_y": df["_end_y"].round(2),
+        "body_part": "foot",
+        "source": "statsbomb",
+        "source_coverage": "sample",
+    })
+
+    # Drop temp columns
+    out.reset_index(drop=True, inplace=True)
+
+    logger.info("Converted %d events to %d SPADL actions", len(df), len(out))
+    return out
+
+
+def convert_all_events_to_actions(events_path: Path) -> list[InternalAction]:
+    """Convert all StatsBomb events to InternalAction objects.
+
+    Convenience wrapper that returns a list of InternalAction dataclass instances.
+    For large datasets, prefer convert_all_events() which returns a DataFrame.
+    """
+    df = convert_all_events(events_path)
     if df.empty:
         return []
 
-    all_actions = []
-    if "match_id" in df.columns:
-        for mid, group in df.groupby("match_id"):
-            actions = convert_match_events(group, str(int(mid)))
-            all_actions.extend(actions)
-    else:
-        all_actions = convert_match_events(df, "unknown")
+    actions = []
+    for _, row in df.iterrows():
+        actions.append(InternalAction(
+            action_id=int(row["action_id"]),
+            provider_action_id=str(row["provider_action_id"]),
+            match_id=str(row["match_id"]),
+            team_id=str(row["team_id"]),
+            player_id=str(row["player_id"]),
+            period=int(row["period"]),
+            minute=int(row["minute"]),
+            second=int(row["second"]),
+            action_type=ActionType(row["action_type"]),
+            result=ActionResult(row["result"]),
+            start_x=float(row["start_x"]),
+            start_y=float(row["start_y"]),
+            end_x=float(row["end_x"]),
+            end_y=float(row["end_y"]),
+            source="statsbomb",
+            source_coverage="sample",
+        ))
+    return actions
 
-    logger.info("Converted %d events to %d internal actions", len(df), len(all_actions))
-    return all_actions
+
+def save_spadl_actions(events_path: Path, output_path: Path) -> pd.DataFrame:
+    """Convert StatsBomb events to SPADL and save as Parquet.
+
+    Returns the DataFrame for inspection.
+    """
+    df = convert_all_events(events_path)
+    if df.empty:
+        logger.warning("No SPADL actions to save")
+        return df
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(output_path, index=False)
+    logger.info("Saved %d SPADL actions to %s", len(df), output_path)
+    return df

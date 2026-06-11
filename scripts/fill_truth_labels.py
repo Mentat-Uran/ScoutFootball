@@ -76,7 +76,7 @@ def validate_truth_labels(df: pd.DataFrame) -> list[str]:
 # Paths
 RATINGS_PATH = PROJECT_ROOT / "data" / "gold" / "feature_store" / "player_ratings_optimized.parquet"
 OUTPUT_PATH = PROJECT_ROOT / "data" / "gold" / "feature_store" / "player_truth_labels.parquet"
-TRANSFERMARKT_DIR = PROJECT_ROOT / "data" / "raw" / "transfermarkt_datasets"
+TRANSFERMARKT_DIR = PROJECT_ROOT / "data" / "raw" / "transfermarkt"
 
 # Seasons to label
 TARGET_SEASONS = ["2223", "2324", "2425", "2526"]
@@ -224,97 +224,98 @@ def build_award_labels() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def build_transfermarkt_labels() -> pd.DataFrame | None:
-    """Add Transfermarkt market value labels if data exists.
+def _date_to_season(date_str: str) -> str | None:
+    """Convert a YYYY-MM-DD date string to a season code like '2324'.
 
-    Market value is used as a proxy with MEDIUM confidence.
+    A season spans July 1 to June 30.  2023-07-01 -> '2324'.
     """
-    if not TRANSFERMARKT_DIR.exists():
-        print(f"  Transfermarkt dir not found: {TRANSFERMARKT_DIR}")
+    try:
+        parts = date_str.split("-")
+        year = int(parts[0])
+        month = int(parts[1])
+    except (ValueError, IndexError):
+        return None
+    # If month >= 7, season starts this year; otherwise previous year
+    start_year = year if month >= 7 else year - 1
+    code = f"{start_year % 100:02d}{(start_year + 1) % 100:02d}"
+    return code
+
+
+def build_transfermarkt_labels() -> pd.DataFrame | None:
+    """Add Transfermarkt market value labels from CSV files.
+
+    Reads player_latest_market_value.csv and player_profiles.csv,
+    maps dates to seasons, and normalises log(value) to a 1-5 scale.
+    """
+    import numpy as np
+
+    values_path = TRANSFERMARKT_DIR / "player_latest_market_value.csv"
+    profiles_path = TRANSFERMARKT_DIR / "player_profiles.csv"
+
+    if not values_path.exists():
+        print(f"  Transfermarkt value file not found: {values_path}")
         return None
 
-    # Look for DuckDB or Parquet files
-    duckdb_files = list(TRANSFERMARKT_DIR.glob("*.duckdb"))
-    parquet_files = list(TRANSFERMARKT_DIR.glob("**/*.parquet"))
+    # Load market values
+    mv = pd.read_csv(values_path)
+    print(f"  Loaded market values: {len(mv)} rows")
 
-    if not duckdb_files and not parquet_files:
-        print("  No Transfermarkt data files found")
+    # Filter out zero / null values
+    mv = mv[mv["value"].notna() & (mv["value"] > 0)].copy()
+    if mv.empty:
+        print("  No positive market values found")
         return None
 
-    # Try reading parquet files first
-    if parquet_files:
-        try:
-            # Look for player_valuations or similar
-            val_file = None
-            for f in parquet_files:
-                if "valuat" in f.name.lower() or "player_val" in f.name.lower():
-                    val_file = f
-                    break
-            if val_file is None:
-                # Try the first parquet file that looks like player data
-                for f in parquet_files:
-                    if "player" in f.name.lower():
-                        val_file = f
-                        break
-            if val_file is None:
-                print("  No suitable Transfermarkt valuation file found")
-                return None
+    # Map date to season
+    mv["season"] = mv["date_unix"].apply(_date_to_season)
+    mv = mv[mv["season"].isin(TARGET_SEASONS)]
+    if mv.empty:
+        print("  No Transfermarkt data for target seasons")
+        return None
 
-            tm = pd.read_parquet(val_file)
-            print(f"  Loaded Transfermarkt data: {val_file.name}, shape={tm.shape}")
-            print(f"  Columns: {list(tm.columns)[:15]}")
+    print(f"  After season filter: {len(mv)} rows, seasons={sorted(mv['season'].unique())}")
 
-            # We need columns: player name, season, market value
-            # The exact column names depend on the Transfermarkt dataset schema
-            # Common names: name, season, market_value_in_eur
-            name_col = _find_col(tm, ["name", "player_name", "player"])
-            season_col = _find_col(tm, ["season", "season_id"])
-            value_col = _find_col(tm, ["market_value_in_eur", "market_value", "value"])
+    # Load player profiles for names
+    if profiles_path.exists():
+        profiles = pd.read_csv(profiles_path, usecols=["player_id", "player_name"])
+        mv = mv.merge(profiles, on="player_id", how="left")
+    else:
+        print(f"  Player profiles not found: {profiles_path}")
+        mv["player_name"] = mv["player_id"].astype(str)
 
-            if not all([name_col, season_col, value_col]):
-                print(f"  Cannot identify required columns. Available: {list(tm.columns)}")
-                return None
+    # Keep the latest record per (player_id, season)
+    mv = mv.sort_values("date_unix", ascending=False)
+    mv = mv.drop_duplicates(subset=["player_id", "season"], keep="first")
 
-            # Filter to target seasons
-            tm = tm[tm[season_col].astype(str).isin(TARGET_SEASONS)]
-            if tm.empty:
-                print("  No Transfermarkt data for target seasons")
-                return None
+    # Log-transform and normalise to 1-5
+    log_values = np.log1p(mv["value"])
+    vmin, vmax = log_values.min(), log_values.max()
+    if vmax == vmin:
+        print("  All market values are identical after log transform")
+        return None
 
-            # Normalize market value to a 1-5 scale using log transform
-            values = tm[value_col].dropna()
-            values = values[values > 0]
-            if values.empty:
-                return None
+    mv["label_value"] = 1.0 + 4.0 * (log_values - vmin) / (vmax - vmin)
 
-            log_values = np.log1p(values)
-            vmin, vmax = log_values.min(), log_values.max()
-            if vmax == vmin:
-                return None
+    rows = []
+    for _, row in mv.iterrows():
+        player_name = row.get("player_name", "")
+        rows.append({
+            "player_id": (
+                normalize_player_key(player_name)
+                if pd.notna(player_name) and player_name
+                else str(row["player_id"])
+            ),
+            "player_name": player_name if pd.notna(player_name) else "",
+            "season": row["season"],
+            "label_source": LABEL_SOURCE_TRANSFERMARKT_VALUE,
+            "label_confidence": CONFIDENCE_MEDIUM,
+            "label_value": row["label_value"],
+            "as_of_date": _season_end_date(row["season"]),
+            "position_scope": "all",
+            "manual_review_flag": False,
+        })
 
-            # Scale to 1-5
-            tm["label_value"] = 1.0 + 4.0 * (log_values - vmin) / (vmax - vmin)
-
-            rows = []
-            for _, row in tm.iterrows():
-                rows.append({
-                    "player_id": normalize_player_key(row[name_col]),
-                    "season": str(row[season_col]),
-                    "label_source": LABEL_SOURCE_TRANSFERMARKT_VALUE,
-                    "label_confidence": CONFIDENCE_MEDIUM,
-                    "label_value": row["label_value"],
-                    "as_of_date": _season_end_date(str(row[season_col])),
-                    "position_scope": "all",
-                    "manual_review_flag": False,
-                })
-
-            return pd.DataFrame(rows)
-
-        except Exception as e:
-            print(f"  Error reading Transfermarkt data: {e}")
-            return None
-
-    return None
+    return pd.DataFrame(rows)
 
 
 def _find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
@@ -418,5 +419,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import numpy as np  # noqa: E402
     main()

@@ -95,7 +95,7 @@ class ActionSequence:
 # StatsBomb action type mapping
 STATSBOMB_ACTION_MAP: dict[str, ActionType] = {
     "Pass": ActionType.PASS,
-    "Ball Receipt": ActionType.RECEIPT,
+    "Ball Receipt*": ActionType.RECEIPT,
     "Carry": ActionType.CARRY,
     "Shot": ActionType.SHOT,
     "Dribble": ActionType.DRIBBLE,
@@ -111,6 +111,8 @@ STATSBOMB_ACTION_MAP: dict[str, ActionType] = {
     "Dispossessed": ActionType.CARRY,
     "Miscontrol": ActionType.CARRY,
     "50/50": ActionType.TACKLE,
+    "Pressure": ActionType.TACKLE,
+    "Duel": ActionType.TACKLE,
     "Half Start": ActionType.FREEZE,
     "Half End": ActionType.FREEZE,
     "Starting XI": ActionType.FREEZE,
@@ -119,6 +121,13 @@ STATSBOMB_ACTION_MAP: dict[str, ActionType] = {
     "Referee Ball-Drop": ActionType.FREEZE,
     "Bad Behaviour": ActionType.FREEZE,
     "Offside": ActionType.FREEZE,
+    "Tactical Shift": ActionType.FREEZE,
+    "Player On": ActionType.FREEZE,
+    "Player Off": ActionType.FREEZE,
+    "Camera On": ActionType.FREEZE,
+    "Camera off": ActionType.FREEZE,
+    "Own Goal For": ActionType.SHOT,
+    "Own Goal Against": ActionType.SHOT,
     "Error": ActionType.CARRY,
     "Shield": ActionType.CARRY,
 }
