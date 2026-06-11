@@ -26,7 +26,7 @@ FIELD_GROUPS: dict[str, list[str]] = {
         "own_goals",
     ],
     "possession": ["touches", "dribbles", "dispossessed"],
-    "xT_VAEP": ["xT_added", "vaep_value"],
+    "xT_VAEP": ["xt_total", "xt_per_90", "vaep_total", "vaep_per_90"],
     "goalkeeper": ["saves", "goals_conceded", "psxg"],
 }
 
@@ -50,6 +50,10 @@ RATING_NUMERIC_COLUMNS: list[str] = [
     "fouls_drawn",
     "crosses",
     "own_goals",
+    "xt_total",
+    "xt_per_90",
+    "vaep_total",
+    "vaep_per_90",
 ]
 
 # Category columns to include in the rating matrix.
@@ -303,6 +307,9 @@ def build_rating_feature_matrix(
     # --- Merge FBref misc defensive stats ---
     matrix = _merge_fbref_misc_defense(matrix)
 
+    # --- Merge xT and VAEP action-value data ---
+    matrix = _merge_xt_vaep_data(matrix)
+
     # --- Re-evaluate defense_missing after misc merge ---
     # The initial mark_missing_fields ran before misc data was available,
     # so defense_missing may be True even though misc fields now have data.
@@ -312,6 +319,14 @@ def build_rating_feature_matrix(
         matrix["defense_missing"] = matrix[existing_defense].isna().all(axis=1)
     else:
         matrix["defense_missing"] = True
+
+    # --- Re-evaluate xT_VAEP_missing after action-value merge ---
+    xt_vaep_fields = FIELD_GROUPS.get("xT_VAEP", [])
+    existing_xt_vaep = [f for f in xt_vaep_fields if f in matrix.columns]
+    if existing_xt_vaep:
+        matrix["xT_VAEP_missing"] = matrix[existing_xt_vaep].isna().all(axis=1)
+    else:
+        matrix["xT_VAEP_missing"] = True
 
     # --- Compute finishing shrinkage ---
     # raw_finishing = (goals - xG) / shots; shrunk = (shots/(shots+K)) * raw
@@ -502,6 +517,157 @@ def _merge_fbref_misc_defense(matrix: pd.DataFrame) -> pd.DataFrame:
     logger.info(
         "FBref misc defense merged: %d/%d rows matched (%.1f%%)",
         matched, len(matrix), 100 * matched / max(len(matrix), 1),
+    )
+
+    return matrix
+
+
+def _merge_xt_vaep_data(matrix: pd.DataFrame) -> pd.DataFrame:
+    """Merge xT and VAEP action-value data into the rating feature matrix.
+
+    Reads ``player_action_value.parquet`` (xT) and ``player_vaep.parquet``,
+    extracts relevant fields, and merges them onto *matrix* using
+    normalized player_name + season_id as keys.
+
+    If the files are missing or empty, the new columns are added as NaN.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.entities.normalize import normalize_person_name
+
+    resolved = PlatformSettings.from_root()
+    xt_path = resolved.gold_root / "feature_store" / "player_action_value.parquet"
+    vaep_path = resolved.gold_root / "feature_store" / "player_vaep.parquet"
+
+    new_cols = ["xt_total", "xt_per_90", "vaep_total", "vaep_per_90"]
+
+    # Build normalized player_name for matrix from player_id
+    # player_id format: "name|year|country" — extract name part
+    def _extract_name_from_pid(pid: str) -> str:
+        return str(pid).split("|")[0].strip()
+
+    matrix["_norm_name"] = matrix["player_id"].apply(
+        lambda x: normalize_person_name(_extract_name_from_pid(str(x))),
+    )
+
+    # --- Merge xT data ---
+    if xt_path.exists():
+        try:
+            xt_raw = pd.read_parquet(xt_path)
+            if not xt_raw.empty and "player_name" in xt_raw.columns:
+                xt_clean = pd.DataFrame()
+                xt_clean["_norm_name"] = xt_raw["player_name"].apply(
+                    lambda x: normalize_person_name(str(x)),
+                )
+                if "season" in xt_raw.columns:
+                    # Convert "2022/2023" -> "2223" format
+                    def _convert_season(s: str) -> str:
+                        s = str(s).strip()
+                        if "/" in s:
+                            parts = s.split("/")
+                            return parts[0][-2:] + parts[1][-2:]
+                        return s
+                    xt_clean["season_id"] = xt_raw["season"].apply(_convert_season)
+                xt_clean["xt_total"] = pd.to_numeric(xt_raw.get("xt_total"), errors="coerce")
+                xt_clean["xt_per_90"] = pd.to_numeric(xt_raw.get("xt_per_90"), errors="coerce")
+
+                if "season_id" in xt_clean.columns:
+                    xt_agg = xt_clean.groupby(["_norm_name", "season_id"], as_index=False).agg(
+                        {"xt_total": "sum", "xt_per_90": "mean"},
+                    )
+                    matrix = matrix.merge(
+                        xt_agg, on=["_norm_name", "season_id"],
+                        how="left", suffixes=("", "_xt"),
+                    )
+                else:
+                    xt_agg = xt_clean.groupby("_norm_name", as_index=False).agg(
+                        {"xt_total": "sum", "xt_per_90": "mean"},
+                    )
+                    matrix = matrix.merge(xt_agg, on="_norm_name", how="left", suffixes=("", "_xt"))
+                # Drop duplicate columns from merge
+                dup_cols = [c for c in matrix.columns if c.endswith("_xt")]
+                if dup_cols:
+                    matrix = matrix.drop(columns=dup_cols)
+            else:
+                matrix["xt_total"] = pd.NA
+                matrix["xt_per_90"] = pd.NA
+        except Exception:
+            logger.warning("Failed to read xT action-value file — xT fields will be NaN")
+            matrix["xt_total"] = pd.NA
+            matrix["xt_per_90"] = pd.NA
+    else:
+        logger.warning("xT action-value file not found: %s — xT fields will be NaN", xt_path)
+        matrix["xt_total"] = pd.NA
+        matrix["xt_per_90"] = pd.NA
+
+    # --- Merge VAEP data ---
+    # VAEP player_name is empty; use xT data as bridge to map StatsBomb player_id -> normalized name
+    sb_id_to_norm_name: dict[str, str] = {}
+    if xt_path.exists():
+        try:
+            xt_raw = pd.read_parquet(xt_path)
+            if not xt_raw.empty and "player_name" in xt_raw.columns:
+                xt_names = xt_raw[["player_id", "player_name"]].drop_duplicates()
+                for _, row in xt_names.iterrows():
+                    pid = str(row["player_id"]).strip()
+                    norm = normalize_person_name(str(row["player_name"]))
+                    if norm and pid not in sb_id_to_norm_name:
+                        sb_id_to_norm_name[pid] = norm
+        except Exception:
+            pass
+
+    if vaep_path.exists():
+        try:
+            vaep_raw = pd.read_parquet(vaep_path)
+            if not vaep_raw.empty and "player_id" in vaep_raw.columns:
+                vaep_clean = pd.DataFrame()
+                # Map StatsBomb player_id to normalized name via xT bridge
+                vaep_clean["_norm_name"] = vaep_raw["player_id"].apply(
+                    lambda x: sb_id_to_norm_name.get(str(x).strip(), ""),
+                )
+                vaep_clean["vaep_total"] = pd.to_numeric(
+                    vaep_raw.get("vaep_total"), errors="coerce",
+                )
+                vaep_clean["vaep_per_90"] = pd.to_numeric(
+                    vaep_raw.get("vaep_per_90"), errors="coerce",
+                )
+
+                # Drop rows where name mapping failed
+                vaep_clean = vaep_clean[vaep_clean["_norm_name"] != ""]
+
+                # VAEP has no season column; aggregate to player level
+                vaep_agg = vaep_clean.groupby("_norm_name", as_index=False).agg(
+                    {"vaep_total": "sum", "vaep_per_90": "mean"},
+                )
+                matrix = matrix.merge(vaep_agg, on="_norm_name", how="left", suffixes=("", "_vaep"))
+                dup_cols = [c for c in matrix.columns if c.endswith("_vaep")]
+                if dup_cols:
+                    matrix = matrix.drop(columns=dup_cols)
+            else:
+                matrix["vaep_total"] = pd.NA
+                matrix["vaep_per_90"] = pd.NA
+        except Exception:
+            logger.warning("Failed to read VAEP file — VAEP fields will be NaN")
+            matrix["vaep_total"] = pd.NA
+            matrix["vaep_per_90"] = pd.NA
+    else:
+        logger.warning("VAEP file not found: %s — VAEP fields will be NaN", vaep_path)
+        matrix["vaep_total"] = pd.NA
+        matrix["vaep_per_90"] = pd.NA
+
+    # Clean up temp column
+    matrix = matrix.drop(columns=["_norm_name"])
+
+    # Ensure numeric dtype for new columns
+    for col in new_cols:
+        if col in matrix.columns:
+            matrix[col] = pd.to_numeric(matrix[col], errors="coerce")
+
+    xt_matched = matrix["xt_total"].notna().sum() if "xt_total" in matrix.columns else 0
+    vaep_matched = matrix["vaep_total"].notna().sum() if "vaep_total" in matrix.columns else 0
+    logger.info(
+        "xT/VAEP merged: xT %d/%d rows (%.1f%%), VAEP %d/%d rows (%.1f%%)",
+        xt_matched, len(matrix), 100 * xt_matched / max(len(matrix), 1),
+        vaep_matched, len(matrix), 100 * vaep_matched / max(len(matrix), 1),
     )
 
     return matrix

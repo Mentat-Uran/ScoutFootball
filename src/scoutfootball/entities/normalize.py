@@ -201,13 +201,23 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "dortmund": "Dortmund",
     "borussia monchengladbach": "M'gladbach",
     "borussia mgladbach": "M'gladbach",
+    "borussia m.gladbach": "M'gladbach",
     "monchengladbach": "M'gladbach",
+    "gladbach": "M'gladbach",
+    "bielefeld": "Arminia Bielefeld",
+    "arminia bielefeld": "Arminia Bielefeld",
     "darmstadt": "Darmstadt",
+    "darmstadt 98": "Darmstadt",
     "sv darmstadt": "Darmstadt",
+    "sv darmstadt 98": "Darmstadt",
     "eintracht": "Ein Frankfurt",
     "eintracht frankfurt": "Ein Frankfurt",
     "freiburg": "Freiburg",
     "sc freiburg": "Freiburg",
+    "fortuna dusseldorf": "Fortuna Duesseldorf",
+    "fortuna duesseldorf": "Fortuna Duesseldorf",
+    "greuther furth": "Greuther Fuerth",
+    "greuther fuerth": "Greuther Fuerth",
     "hamburg": "Hamburg",
     "hamburger sv": "Hamburg",
     "hannover": "Hannover",
@@ -220,10 +230,16 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "cologne": "Koln",
     "fc koln": "Koln",
     "koln": "Koln",
+    "köln": "Koln",
+    "fc cologne": "Koln",
     "leipzig": "RB Leipzig",
     "rb leipzig": "RB Leipzig",
+    "rasenballsport leipzig": "RB Leipzig",
     "mainz": "Mainz",
     "mainz 05": "Mainz",
+    "nurnberg": "Nuernberg",
+    "nuernberg": "Nuernberg",
+    "nürnberg": "Nuernberg",
     "paderborn": "Paderborn",
     "sc paderborn": "Paderborn",
     "schalke": "Schalke 04",
@@ -241,6 +257,8 @@ TEAM_NAME_ALIASES: dict[str, str] = {
     "st pauli": "St Pauli",
     "fc st pauli": "St Pauli",
     "holstein kiel": "Holstein Kiel",
+    "ingolstadt": "Ingolstadt",
+    "fc ingolstadt": "Ingolstadt",
     # Serie A
     "atalanta": "Atalanta",
     "bologna": "Bologna",
@@ -377,14 +395,18 @@ TEAM_NAME_ALIASES: dict[str, str] = {
 def normalize_team_name(name: str | None) -> str:
     """Normalize a team name to its canonical form.
 
-    Looks up the lowercased, stripped name in TEAM_NAME_ALIASES first.
+    Strips accents, lowercases, and looks up in TEAM_NAME_ALIASES.
     Falls back to the original stripped name if no alias is found.
     Returns empty string for None / NaN / blank input.
     """
     if not name or pd.isna(name):
         return ""
-    lower = str(name).strip().lower()
-    return TEAM_NAME_ALIASES.get(lower, str(name).strip())
+    stripped = str(name).strip()
+    # Strip accents for matching (e.g. Köln -> Koln)
+    normalized = unicodedata.normalize("NFKD", stripped)
+    ascii_name = "".join(c for c in normalized if not unicodedata.combining(c))
+    lower = ascii_name.strip().lower()
+    return TEAM_NAME_ALIASES.get(lower, stripped)
 
 
 def normalize_country_name(country: str | None) -> str:
