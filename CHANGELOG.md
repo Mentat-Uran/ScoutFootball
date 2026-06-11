@@ -83,6 +83,15 @@ First stable release of ScoutFootball — a local-first football analytics platf
 - DATA_CONTRACTS.md: all Parquet schemas, API contracts, cross-provider schema reference, socceraction evaluation
 - EVALUATION.md: baselines, metrics, error analysis
 
+### Desktop App
+
+- Electron + PyInstaller packaging for macOS (arm64)
+- Bundled Python backend, frontend, and pre-computed data (~12MB)
+- Auto-update via GitHub releases (electron-updater)
+- System tray integration
+- One-command build: `bash scripts/build-desktop.sh --mac`
+- Output: 221MB .dmg for Apple Silicon Macs
+
 ### Testing
 
 - 570 unit tests across 37 test files

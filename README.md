@@ -131,7 +131,31 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 
 The first tactical-board slice is available as a local-first coaching and analysis workspace inside `frontend/`, aligned with products such as [Tactico](https://tactico.pro/), [DrawTactics](https://drawtactics.com/animated-tactics-board), [TacticSlate](https://tacticslate.com/football-tactic-board), [JLA Tactics Board](https://jlatacticsboard.com/), [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards), and [TacticalBoards](https://tacticalboards.com/). The current slice covers static local canvas work, normalized coordinates, basic objects, formation presets, local JSON projects, localStorage persistence, and schema-sanitized import/export.
 
-Remaining P1.5 scope stays lightweight but broader than simple animation: red/blue teams, editable jersey numbers, player hover cards, whiteboard-style freehand drawing, eraser and line tools, training equipment, set-piece and drill templates, richer team/player project schema, animation timeline, browser playback, PNG/PDF still export, WebM animation export via the browser, report embedding, version migration, and read-only fallback for incompatible projects. MP4/GIF export, local ffmpeg, video telestration, tracking-data import, 2D/3D synced views, live collaboration, and behind-goal views are later extensions after the canvas model, data contract, and attribution rules are stable.
+Remaining P1.5 scope stays lightweight but broader than simple animation: red/blue teams, editable jersey numbers, player hover cards, whiteboard-style freehand drawing, eraser and line tools, training equipment, set-piece and drill templates, richer team/player project schema, animation timeline, browser playback, PNG/PDF still export, WebM animation export via the browser, report embedding, version migration, and read-only fallback for incompatible projects. MP4 export is available via backend ffmpeg conversion (`/tactical-board/capabilities` and `/tactical-board/export/mp4` endpoints). GIF export, video telestration, tracking-data import, 2D/3D synced views, live collaboration, and behind-goal views are later extensions.
+
+### Desktop App (macOS)
+
+A standalone desktop application is available for macOS (Apple Silicon / arm64). It bundles the Python backend, frontend, and pre-computed data into a single native app with auto-update support.
+
+| Feature | Status |
+|---|---|
+| macOS arm64 (.dmg) | Built and verified (221MB) |
+| Auto-update via GitHub releases | Implemented (electron-updater) |
+| System tray | Implemented |
+| Bundled data (~12MB) | Player ratings, match results, models |
+| Windows build | Not yet (requires Windows machine) |
+
+Build from source:
+
+```bash
+# Install dependencies
+cd desktop && npm install
+
+# Build macOS arm64
+bash scripts/build-desktop.sh --mac
+```
+
+Output: `desktop/dist/ScoutFootball-1.0.0-arm64.dmg`
 
 ### Local Data Overview
 
@@ -322,7 +346,28 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 
 电子战术板第一切片已作为 `frontend/` 内的本地优先教练和分析工作台落地，参考 [Tactico](https://tactico.pro/)、[DrawTactics](https://drawtactics.com/animated-tactics-board)、[TacticSlate](https://tacticslate.com/football-tactic-board)、[JLA Tactics Board](https://jlatacticsboard.com/)、[Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards) 和 [TacticalBoards](https://tacticalboards.com/) 等案例。当前能力包括静态本地画布、标准化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。
 
-剩余 P1.5 仍保持轻量，但不只做动画：红蓝双队、可编辑球衣号码、球员 hover 信息卡、白板式自由画笔、橡皮擦和线型工具、训练器材、定位球/训练模板、更完整的球队/球员工程 schema、动画时间轴、浏览器播放、PNG/PDF 静态导出、浏览器 WebM 动画导出、嵌入报告、版本迁移和不兼容工程只读打开都应进入后续 backlog。MP4/GIF 导出、本地 ffmpeg、视频叠画、tracking 数据导入、2D/3D 同步视图、实时协作和门后视角放到后续阶段，等画布模型、数据契约和引用边界稳定后再做。
+剩余 P1.5 仍保持轻量，但不只做动画：红蓝双队、可编辑球衣号码、球员 hover 信息卡、白板式自由画笔、橡皮擦和线型工具、训练器材、定位球/训练模板、更完整的球队/球员工程 schema、动画时间轴、浏览器播放、PNG/PDF 静态导出、浏览器 WebM 动画导出、嵌入报告、版本迁移和不兼容工程只读打开都应进入后续 backlog。MP4 导出已通过后端 ffmpeg 转换实现（`/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）。GIF 导出、视频叠画、tracking 数据导入、2D/3D 同步视图、实时协作和门后视角放到后续阶段。
+
+### 桌面应用（macOS）
+
+独立桌面应用已可用于 macOS（Apple Silicon / arm64）。将 Python 后端、前端和预计算数据打包为单一原生应用，支持自动更新。
+
+| 功能 | 状态 |
+|---|---|
+| macOS arm64 (.dmg) | 已构建并验证（221MB） |
+| GitHub Release 自动更新 | 已实现（electron-updater） |
+| 系统托盘 | 已实现 |
+| 内置数据（~12MB） | 球员评分、比赛结果、模型 |
+| Windows 构建 | 未实现（需要 Windows 机器） |
+
+从源码构建：
+
+```bash
+cd desktop && npm install
+bash scripts/build-desktop.sh --mac
+```
+
+产出：`desktop/dist/ScoutFootball-1.0.0-arm64.dmg`
 
 ### 本地数据概览
 
