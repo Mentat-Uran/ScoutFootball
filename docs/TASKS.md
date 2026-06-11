@@ -121,14 +121,14 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 球员对比百分位表：同位置 percentile 对比表。
 - [x] 身价偏离分析：value-fairness OOF 残差、联赛/位置偏差、年龄散点分析。
 - [x] 球探队列增强：审阅状态流转（review_status）、watchlist diff、shortlist notes。
-- [x] Bug 修复：26 个 bug（6 critical、9 warning、11 minor），测试总数 605+。
+- [x] Bug 修复：26 个 bug（6 critical、9 warning、11 minor），测试总数 570。
 - [x] 前端安全加固：CSP meta tag、SRI（echarts CDN）、X-Content-Type-Options 安全头、浏览器级 XSS/CSV 回归测试。
 - [x] 前端 Data Status 页面字段名修复（`a.name` → `a.label`，`a.modified` → `a.updated_at`）。
 - [x] `/license` 端点字段名修复（`modified` → `updated_at`）。
 - [x] `/predictions/meta` 端点添加顶层字段别名（`status`、`model_type`、`num_teams`、`train_rows`、`coverage`），修复前端 match 视图始终显示 "no artifact" 的 bug。
 - [x] 前端 match 视图 calibration 部分修复：从正确的嵌套对象读取 rho、home_advantage、coverage、brier、rps 等字段。
 - [x] 前端报告页增强：显示 Dixon-Coles 模型状态和 rho 参数。
-- [x] 新增 6 个测试文件（91 个测试）：action_value/schema、calibration、match_prediction、scouting_queue、cross_provider_schema、prediction_summary。
+- [x] 新增 8 个测试文件（104 个新测试）：action_value/schema、calibration、match_prediction、scouting_queue、cross_provider_schema、prediction_summary、tactical_board_api、backtests。
 - [x] P6 跨供应商 schema 参考文档：SPADL 兼容性、kloppy/floodlight/CDF 评估已写入 DATA_CONTRACTS.md。
 - [x] P2 socceraction 依赖评估文档已写入 DATA_CONTRACTS.md。
 - [x] DATA_CONTRACTS.md 补充 `/license`、`/value-summary`、`/predictions/meta` 端点文档。
@@ -312,7 +312,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 支持 PNG 静态导出：当前画布、透明/球场背景、16:9/1:1/9:16 裁切。
 - [x] 支持 PDF 导出：通过浏览器打印窗口导出当前画布为可打印 PDF。
 - [x] 支持 WebM 动画导出：优先用 `canvas.captureStream` + `MediaRecorder`；导出失败时给出清晰降级提示。
-- [ ] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。
+- [x] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。（已实现 `/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）
 - [ ] GIF 导出作为低优先级增强，只有 WebM 稳定后再评估体积、画质和浏览器兼容性。
 - [x] 导出裁切和版式：full/half-left/half-right/center-16:9/square-1:1 裁切 + 透明背景已实现。
 - [x] 打印模式：多帧 PDF + 备注 + 球员图例 + source attribution 已实现。
