@@ -43,6 +43,10 @@ where = ["src"]
 addopts = "-q"
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 filterwarnings = [
     "ignore:Mean of empty slice:RuntimeWarning",
     "ignore:.*set_tight_layout.*:PendingDeprecationWarning",

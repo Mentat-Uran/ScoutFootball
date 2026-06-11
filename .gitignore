@@ -40,6 +40,13 @@ desktop/build/
 desktop/dist/
 desktop/backend-dist/
 desktop/backend-build/
+desktop/node_modules/
+
+# Windows installer artifacts (under desktop/dist/)
+desktop/dist/*.exe
+desktop/dist/*.msi
+desktop/dist/*.nsis
+desktop/dist/*.blockmap
 
 # Large binary artifacts
 data/gold/**/*.npy

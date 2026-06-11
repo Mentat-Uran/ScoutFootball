@@ -71,6 +71,7 @@
       ]
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -80,14 +81,18 @@
           "target": "zip",
           "arch": ["x64"]
         }
-      ]
+      ],
+      "artifactName": "ScoutFootball-${version}-win-x64.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "ScoutFootball"
+      "shortcutName": "ScoutFootball",
+      "artifactName": "ScoutFootball-Setup-${version}-win-x64.${ext}",
+      "unicode": true,
+      "deleteAppDataOnUninstall": false
     },
     "publish": {
       "provider": "github",

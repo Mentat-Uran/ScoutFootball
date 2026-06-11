@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec file for ScoutFootball backend server
+# Compatible with macOS and Windows.
 
 import sys
 from pathlib import Path
@@ -7,8 +8,12 @@ from pathlib import Path
 block_cipher = None
 
 # Project root (parent of desktop/)
-project_root = Path(SPECPATH).parents[0]
+project_root = Path(SPECPATH).resolve().parents[0]
 src_dir = project_root / "src"
+
+# On Windows, use .exe suffix for the executable name
+is_windows = sys.platform == "win32"
+exe_name = "scoutfootball-server"
 
 a = Analysis(
     [str(Path(SPECPATH) / "backend" / "server.py")],
@@ -98,13 +103,14 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="scoutfootball-server",
+    name=exe_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     console=True,
     disable_windowed_traceback=False,
+    icon=str(Path(SPECPATH) / "build" / "icon.ico") if is_windows and (Path(SPECPATH) / "build" / "icon.ico").exists() else None,
 )
 
 coll = COLLECT(
@@ -115,5 +121,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="scoutfootball-server",
+    name=exe_name,
 )

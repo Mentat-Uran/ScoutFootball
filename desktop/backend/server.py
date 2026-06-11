@@ -13,7 +13,7 @@ from pathlib import Path
 
 def _resolve_data_root() -> Path:
     """Resolve the data root directory for the packaged app."""
-    # Check environment variable first
+    # Check environment variable first (set by Electron main process)
     env_root = os.environ.get("SCOUTFOOTBALL_DATA_ROOT")
     if env_root:
         p = Path(env_root)
@@ -23,15 +23,21 @@ def _resolve_data_root() -> Path:
     # Check if we're running as a PyInstaller bundle
     if getattr(sys, "frozen", False):
         # Running as compiled executable
-        bundle_dir = Path(sys._MEIPASS)  # type: ignore[attr-defined]
-        # Data is in extraResources
-        if sys.platform == "darwin":
-            # macOS: Resources dir is next to the .app bundle
-            resources_dir = bundle_dir.parent / "Resources"
-            if resources_dir.exists():
-                return resources_dir
-        # Windows/Linux: data is next to the executable
-        exe_dir = Path(sys.executable).parent
+        # On Windows: data is in extraResources, resolved via SCOUTFOOTBALL_DATA_ROOT
+        # set by Electron. If not set, look relative to the executable.
+        exe_dir = Path(sys.executable).parent.resolve()
+
+        # Check common data locations relative to the exe
+        # NSIS install: C:\Program Files\ScoutFootball\resources\data\...
+        for candidate in [
+            exe_dir / "data",
+            exe_dir.parent / "data",
+            exe_dir / "resources" / "data",
+        ]:
+            if candidate.exists():
+                return candidate
+
+        # Fallback: the exe directory itself
         return exe_dir
 
     # Development mode: use project root
