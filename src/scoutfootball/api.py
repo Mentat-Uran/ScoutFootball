@@ -345,6 +345,11 @@ def get_prediction_summary() -> dict[str, Any]:
             dc_info["status"] = "error"
 
     return _clean_json_value({
+        "status": poisson_info.get("status", "no_data"),
+        "model_type": poisson_info.get("model_type", "independent_poisson"),
+        "num_teams": poisson_info.get("num_teams"),
+        "train_rows": poisson_info.get("train_rows"),
+        "coverage": poisson_info.get("coverage"),
         "poisson": poisson_info,
         "dixon_coles": dc_info,
         "available_models": (

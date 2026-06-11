@@ -1467,14 +1467,16 @@ async function renderMatches() {
     // Calibration section below score matrix
     const calibEl = document.getElementById('match-calibration');
     if (calibEl) {
-        const rho = predictionMeta.dc_rho ?? predictionMeta.rho ?? null;
-        const homeAdv = predictionMeta.home_advantage ?? predictionMeta.home_adv ?? null;
-        const coverage = predictionMeta.coverage ?? predictionMeta.team_coverage ?? null;
-        const brier = predictionMeta.brier_score ?? predictionMeta.brier ?? null;
-        const rps = predictionMeta.rps ?? predictionMeta.ranked_probability_score ?? null;
-        const modelVer = predictionMeta.model_version || predictionMeta.version || '';
-        const modelType = predictionMeta.model_type || 'Poisson';
-        const lowScore = predictionMeta.low_score_analysis || predictionMeta.low_score || {};
+        const dcModel = predictionMeta.dixon_coles || {};
+        const poissonModel = predictionMeta.poisson || {};
+        const rho = dcModel.rho ?? null;
+        const homeAdv = dcModel.home_advantage ?? null;
+        const coverage = predictionMeta.coverage ?? poissonModel.coverage ?? null;
+        const brier = poissonModel.brier_score ?? dcModel.brier_score ?? null;
+        const rps = poissonModel.rps ?? dcModel.rps ?? null;
+        const modelVer = poissonModel.model_version || dcModel.model_version || '';
+        const modelType = predictionMeta.model_type || poissonModel.model_type || 'Poisson';
+        const lowScore = poissonModel.low_score_analysis || dcModel.low_score_analysis || {};
         const z = appState.lang === 'zh';
 
         let calibHtml = '';
@@ -2074,11 +2076,19 @@ function renderReports() {
     document.getElementById("report-value-status").className = `status-pill ${valueSummaryMeta.sample_count > 0 ? "status-high" : "status-low"}`;
 
     const predictionReady = predictionMeta.status === "ok";
+    const dcReady = (predictionMeta.dixon_coles || {}).status === "ok";
     const predictionLabel = predictionReady
         ? `${predictionMeta.model_type || "independent_poisson"} · ${predictionMeta.num_teams || 0} teams`
         : "no artifact";
-    document.getElementById("report-prediction-title").textContent = "poisson_baseline";
-    document.getElementById("report-prediction-status").textContent = predictionLabel;
+    const dcLabel = dcReady
+        ? `DC: rho=${((predictionMeta.dixon_coles || {}).rho || 0).toFixed(3)}`
+        : "";
+    document.getElementById("report-prediction-title").textContent = predictionReady
+        ? (dcReady ? "Poisson + Dixon-Coles" : "Poisson baseline")
+        : "prediction";
+    document.getElementById("report-prediction-status").textContent = dcReady
+        ? `${predictionLabel} | ${dcLabel}`
+        : predictionLabel;
     document.getElementById("report-prediction-status").className = `status-pill ${predictionReady ? "status-medium" : "status-low"}`;
 
     document.getElementById("model-runs-count").textContent = String(modelRuns.count || 0);
