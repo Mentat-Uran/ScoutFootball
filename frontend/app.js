@@ -154,6 +154,13 @@ const i18n = {
         action_watchlist: "观察",
         action_shortlist: "候选",
         action_tactical: "战术",
+        action_compare: "对比",
+        compare_title: "球员对比",
+        compare_select_hint: "选择两名球员进行对比",
+        compare_clear: "清除",
+        compare_dimension: "维度",
+        compare_percentile: "百分位",
+        compare_no_same_pos: "两名球员位置不同，百分位基于各自位置池计算",
         value_fairness: "身价公平性",
         oof_residual_label: "OOF 残差",
         league_bias_label: "联赛偏差",
@@ -339,6 +346,13 @@ const i18n = {
         action_watchlist: "Watch",
         action_shortlist: "Short",
         action_tactical: "Tactical",
+        action_compare: "Compare",
+        compare_title: "Player Comparison",
+        compare_select_hint: "Select two players to compare",
+        compare_clear: "Clear",
+        compare_dimension: "Dimension",
+        compare_percentile: "Percentile",
+        compare_no_same_pos: "Players have different positions; percentiles are position-relative",
         value_fairness: "Value Fairness",
         oof_residual_label: "OOF Residual",
         league_bias_label: "League Bias",
@@ -443,72 +457,14 @@ async function fetchRatings(position, league) {
         }
         return rawPlayers;
     } catch (err) {
-        console.warn("Failed to fetch ratings, using demo data:", err);
+        console.warn("Failed to fetch ratings:", err);
         return getDemoPlayers();
     }
 }
 
 function getDemoPlayers() {
-    /* Real data from optimized_params (2425 season, GPU run 2026-06-09) */
-    const demoData = [
-        { name: "James Maddison", position: "W", team: "Tottenham", league: "Premier League", season: "2425", rating: 94.2, minutes: 1809, matches: 31 },
-        { name: "Anthony Elanga", position: "AM", team: "Nott'm Forest", league: "Premier League", season: "2425", rating: 93.2, minutes: 2501, matches: 38 },
-        { name: "Trent Alexander-Arnold", position: "FB", team: "Liverpool", league: "Premier League", season: "2425", rating: 92.4, minutes: 2365, matches: 33 },
-        { name: "Michael Olise", position: "W", team: "Bayern Munich", league: "Bundesliga", season: "2425", rating: 91.5, minutes: 2334, matches: 34 },
-        { name: "Ousmane Dembélé", position: "ST", team: "Paris SG", league: "Ligue 1", season: "2425", rating: 91.1, minutes: 1730, matches: 29 },
-        { name: "Bruno Fernandes", position: "CM", team: "Manchester Utd", league: "Premier League", season: "2425", rating: 91.1, minutes: 3018, matches: 36 },
-        { name: "Bukayo Saka", position: "W", team: "Arsenal", league: "Premier League", season: "2425", rating: 90.1, minutes: 1729, matches: 25 },
-        { name: "Matheus Cunha", position: "W", team: "Wolves", league: "Premier League", season: "2425", rating: 89.8, minutes: 2597, matches: 33 },
-        { name: "Pedro Porro", position: "FB", team: "Tottenham", league: "Premier League", season: "2425", rating: 89.7, minutes: 2610, matches: 33 },
-        { name: "Jacob Murphy", position: "W", team: "Newcastle", league: "Premier League", season: "2425", rating: 89.7, minutes: 2360, matches: 35 },
-        { name: "Declan Rice", position: "CM", team: "Arsenal", league: "Premier League", season: "2425", rating: 89.5, minutes: 2825, matches: 35 },
-        { name: "Jordan Pickford", position: "GK", team: "Everton", league: "Premier League", season: "2425", rating: 88.8, minutes: 3420, matches: 38 },
-        { name: "Kevin De Bruyne", position: "AM", team: "Man City", league: "Premier League", season: "2425", rating: 88.0, minutes: 1702, matches: 28 },
-        { name: "Enzo Fernández", position: "CM", team: "Chelsea", league: "Premier League", season: "2425", rating: 87.9, minutes: 2947, matches: 36 },
-        { name: "Mark Flekken", position: "GK", team: "Brentford", league: "Premier League", season: "2425", rating: 87.4, minutes: 3275, matches: 37 },
-        { name: "Omar Marmoush", position: "W", team: "Ein Frankfurt", league: "Bundesliga", season: "2425", rating: 87.3, minutes: 1448, matches: 17 },
-        { name: "Antonee Robinson", position: "FB", team: "Fulham", league: "Premier League", season: "2425", rating: 87.1, minutes: 3167, matches: 36 },
-        { name: "Andreas Pereira", position: "CM", team: "Fulham", league: "Premier League", season: "2425", rating: 86.8, minutes: 2013, matches: 33 },
-        { name: "Marcus Tavernier", position: "CM", team: "Bournemouth", league: "Premier League", season: "2425", rating: 86.4, minutes: 1939, matches: 29 },
-        { name: "Raphinha", position: "AM", team: "Barcelona", league: "La Liga", season: "2425", rating: 85.8, minutes: 2839, matches: 36 },
-        { name: "Federico Dimarco", position: "FB", team: "Inter", league: "Serie A", season: "2425", rating: 85.8, minutes: 2177, matches: 33 },
-        { name: "Nico Williams", position: "CM", team: "Ath Bilbao", league: "La Liga", season: "2425", rating: 85.8, minutes: 1996, matches: 29 },
-        { name: "Rayan Cherki", position: "AM", team: "Lyon", league: "Ligue 1", season: "2425", rating: 85.6, minutes: 2041, matches: 30 },
-        { name: "Bradley Barcola", position: "ST", team: "Paris SG", league: "Ligue 1", season: "2425", rating: 85.3, minutes: 2181, matches: 34 },
-        { name: "Dwight McNeil", position: "W", team: "Everton", league: "Premier League", season: "2425", rating: 85.2, minutes: 1371, matches: 21 },
-        { name: "Alexander Isak", position: "ST", team: "Newcastle", league: "Premier League", season: "2425", rating: 84.8, minutes: 2756, matches: 34 },
-        { name: "Marc Guéhi", position: "CB", team: "Crystal Palace", league: "Premier League", season: "2425", rating: 84.8, minutes: 3059, matches: 34 },
-        { name: "Aleix García", position: "CM", team: "Leverkusen", league: "Bundesliga", season: "2425", rating: 84.7, minutes: 1455, matches: 28 },
-        { name: "Sergio Gómez", position: "FB", team: "Real Sociedad", league: "La Liga", season: "2425", rating: 84.7, minutes: 2738, matches: 37 },
-        { name: "Jonathan Clauss", position: "FB", team: "Nice", league: "Ligue 1", season: "2425", rating: 84.6, minutes: 2303, matches: 28 },
-    ];
-    return demoData.map(p => ({
-        name: p.name,
-        position: p.position,
-        team: p.team,
-        league: p.league,
-        season: p.season,
-        key: `${p.name}|${p.season}|${p.team}`,
-        rating: p.rating,
-        confidence: "MEDIUM",
-        minutes: p.minutes,
-        matches: p.matches,
-        low_appearance: p.minutes < 900,
-        npg_p90: p.position === "ST" ? 0.65 : p.position === "W" ? 0.35 : 0.12,
-        assists_p90: p.position === "AM" ? 0.38 : p.position === "W" ? 0.30 : 0.10,
-        defense_composite: ["CB", "DM", "FB", "GK"].includes(p.position) ? 72 : 45,
-        possession_composite: ["CM", "AM", "DM"].includes(p.position) ? 75 : 50,
-        percentile: 50 + (p.rating - 80) * 3,
-        value: 0,
-        residual: 0,
-        radar: [
-            Math.min(99, Math.max(10, p.rating - 30 + Math.random() * 20)),
-            Math.min(99, Math.max(10, p.rating - 25 + Math.random() * 20)),
-            Math.min(99, Math.max(10, p.rating - 35 + Math.random() * 20)),
-            Math.min(99, Math.max(10, p.rating - 30 + Math.random() * 20)),
-            Math.min(99, Math.max(10, p.rating - 25 + Math.random() * 20)),
-        ],
-    }));
+    /* Fallback: no demo data — API must be online for player ratings */
+    return [];
 }
 
 async function fetchRatingsMeta() {
@@ -528,14 +484,8 @@ async function fetchArtifacts() {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return await resp.json();
     } catch (err) {
-        console.warn("Failed to fetch artifacts, using demo data:", err);
-        return {
-            player_match_rows: 8689,
-            team_match_rows: 10660,
-            rating_rows: 27254,
-            event_samples: 8141,
-            data_health: { oof_available: true, truth_labels_available: false },
-        };
+        console.warn("Failed to fetch artifacts:", err);
+        return {};
     }
 }
 
@@ -546,12 +496,8 @@ async function fetchTeams() {
         const data = await resp.json();
         return data.teams || [];
     } catch (err) {
-        console.warn("Failed to fetch teams, using demo data:", err);
-        return [
-            "Arsenal", "Liverpool", "Man City", "Chelsea", "Real Madrid", "Barcelona",
-            "Bayern", "Leverkusen", "PSG", "Inter", "Napoli", "Milan",
-            "Man United", "Tottenham", "Dortmund", "Atletico Madrid",
-        ];
+        console.warn("Failed to fetch teams:", err);
+        return [];
     }
 }
 
@@ -643,6 +589,7 @@ const appState = {
     playerPageSize: 50,
     playerSortCol: "rating",
     playerSortAsc: false,
+    compareKeys: [],
 };
 
 function t(key) {
@@ -751,6 +698,7 @@ function renderPlayers() {
             <td class="actions-cell">
                 <button class="action-btn${isInPlayerWatchlist(player.key) ? ' active' : ''}" data-action-watch="${escapeAttr(player.key)}" title="${escapeHtml(t('action_watchlist'))}" type="button">\u25A1</button>
                 <button class="action-btn${isInPlayerShortlist(player.key) ? ' active' : ''}" data-action-short="${escapeAttr(player.key)}" title="${escapeHtml(t('action_shortlist'))}" type="button">\u25B3</button>
+                <button class="action-btn${appState.compareKeys.includes(player.key) ? ' active' : ''}" data-action-compare="${escapeAttr(player.key)}" title="${escapeHtml(t('action_compare'))}" type="button">\u27F7</button>
                 <button class="action-btn" data-action-tactical="${escapeAttr(player.key)}" title="${escapeHtml(t('action_tactical'))}" type="button">\u25CE</button>
             </td>
         </tr>`;
@@ -791,6 +739,21 @@ function renderPlayers() {
             if (player) sendToTacticalBoard(player);
         });
     });
+    tbody.querySelectorAll("[data-action-compare]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const playerKey = btn.dataset.actionCompare;
+            const idx = appState.compareKeys.indexOf(playerKey);
+            if (idx >= 0) {
+                appState.compareKeys.splice(idx, 1);
+            } else {
+                if (appState.compareKeys.length >= 2) appState.compareKeys.shift();
+                appState.compareKeys.push(playerKey);
+            }
+            renderPlayers();
+            renderComparePanel();
+        });
+    });
 
     // Pagination controls
     const pageInfo = document.getElementById("player-page-info");
@@ -814,6 +777,7 @@ function renderPlayers() {
         appState.selectedPlayerKey = rows[0].key;
     }
     renderPlayerProfile();
+    renderComparePanel();
 }
 
 async function renderPlayerProfile() {
@@ -1064,57 +1028,158 @@ function renderRadar(player) {
     });
 }
 
+function renderComparePanel() {
+    const panel = document.getElementById("compare-panel");
+    if (!panel) return;
+    const z = appState.lang === "zh";
+
+    if (appState.compareKeys.length < 2) {
+        panel.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:1.5rem 0;font-size:0.85rem">${escapeHtml(t("compare_select_hint"))}</div>`;
+        return;
+    }
+
+    const p1 = players.find((p) => p.key === appState.compareKeys[0]);
+    const p2 = players.find((p) => p.key === appState.compareKeys[1]);
+    if (!p1 || !p2) {
+        panel.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:1.5rem 0;font-size:0.85rem">${escapeHtml(t("compare_select_hint"))}</div>`;
+        return;
+    }
+
+    const radarLabels = [
+        z ? "进攻" : "Attack",
+        z ? "控球" : "Possession",
+        z ? "防守" : "Defense",
+        z ? "可靠性" : "Reliability",
+        z ? "影响力" : "Impact",
+    ];
+
+    // Info cards
+    let html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.8rem;gap:0.5rem">`;
+    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:8px;background:rgba(74,144,217,.12)">`;
+    html += `<div style="font-weight:700;font-size:0.95rem">${escapeHtml(p1.name)}</div>`;
+    html += `<div style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(p1.team)} · ${escapeHtml(p1.position)}</div>`;
+    html += `<div style="font-size:1.1rem;font-weight:700;margin-top:0.2rem">${p1.rating.toFixed(1)}</div>`;
+    html += `</div>`;
+    html += `<div style="flex:0 0 auto;align-self:center;font-size:0.8rem;color:var(--text-muted);font-weight:700">VS</div>`;
+    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:8px;background:rgba(255,159,67,.12)">`;
+    html += `<div style="font-weight:700;font-size:0.95rem">${escapeHtml(p2.name)}</div>`;
+    html += `<div style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(p2.team)} · ${escapeHtml(p2.position)}</div>`;
+    html += `<div style="font-size:1.1rem;font-weight:700;margin-top:0.2rem">${p2.rating.toFixed(1)}</div>`;
+    html += `</div>`;
+    html += `</div>`;
+
+    // Position mismatch warning
+    if (p1.position !== p2.position) {
+        html += `<div style="font-size:0.72rem;color:#ff9f43;margin-bottom:0.5rem;text-align:center">${escapeHtml(t("compare_no_same_pos"))}</div>`;
+    }
+
+    // Radar chart container
+    html += `<div id="compare-radar-chart" class="chart-box" style="height:260px"></div>`;
+
+    // Percentile comparison table
+    html += `<div style="margin-top:0.6rem;overflow-x:auto"><table style="width:100%;font-size:0.78rem;border-collapse:collapse">`;
+    html += `<thead><tr style="border-bottom:1px solid var(--glass-border)">`;
+    html += `<th style="text-align:left;padding:0.3rem 0.4rem;color:var(--text-muted)">${escapeHtml(t("compare_dimension"))}</th>`;
+    html += `<th style="text-align:center;padding:0.3rem 0.4rem">${escapeHtml(p1.name)}</th>`;
+    html += `<th style="text-align:center;padding:0.3rem 0.4rem">${escapeHtml(p2.name)}</th>`;
+    html += `<th style="text-align:center;padding:0.3rem 0.4rem">${z ? "差值" : "Diff"}</th>`;
+    html += `</tr></thead><tbody>`;
+
+    const r1 = p1.radar || [50, 50, 50, 50, 50];
+    const r2 = p2.radar || [50, 50, 50, 50, 50];
+    for (let i = 0; i < radarLabels.length; i++) {
+        const v1 = r1[i] ?? 0;
+        const v2 = r2[i] ?? 0;
+        const diff = v1 - v2;
+        const diffColor = diff > 0 ? "#57d68d" : diff < 0 ? "#ff6b6b" : "var(--text-muted)";
+        html += `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">`;
+        html += `<td style="padding:0.3rem 0.4rem">${escapeHtml(radarLabels[i])}</td>`;
+        html += `<td style="text-align:center;padding:0.3rem 0.4rem">${Math.round(v1)}pct</td>`;
+        html += `<td style="text-align:center;padding:0.3rem 0.4rem">${Math.round(v2)}pct</td>`;
+        html += `<td style="text-align:center;padding:0.3rem 0.4rem;color:${diffColor}">${diff > 0 ? "+" : ""}${Math.round(diff)}</td>`;
+        html += `</tr>`;
+    }
+
+    // Extra metrics rows
+    const extraMetrics = [
+        { label: z ? "非点球进球/90" : "NPG p90", k: "npg_p90" },
+        { label: z ? "助攻/90" : "Assists p90", k: "assists_p90" },
+        { label: z ? "分钟" : "Minutes", k: "minutes" },
+        { label: z ? "出场" : "Matches", k: "matches" },
+    ];
+    for (const m of extraMetrics) {
+        const v1 = p1[m.k] ?? 0;
+        const v2 = p2[m.k] ?? 0;
+        const diff = v1 - v2;
+        const diffColor = diff > 0 ? "#57d68d" : diff < 0 ? "#ff6b6b" : "var(--text-muted)";
+        html += `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">`;
+        html += `<td style="padding:0.3rem 0.4rem">${escapeHtml(m.label)}</td>`;
+        html += `<td style="text-align:center;padding:0.3rem 0.4rem">${typeof v1 === "number" ? (m.k === "npg_p90" || m.k === "assists_p90" ? v1.toFixed(3) : v1) : escapeHtml(String(v1))}</td>`;
+        html += `<td style="text-align:center;padding:0.3rem 0.4rem">${typeof v2 === "number" ? (m.k === "npg_p90" || m.k === "assists_p90" ? v2.toFixed(3) : v2) : escapeHtml(String(v2))}</td>`;
+        html += `<td style="text-align:center;padding:0.3rem 0.4rem;color:${diffColor}">${diff > 0 ? "+" : ""}${(m.k === "npg_p90" || m.k === "assists_p90") ? diff.toFixed(3) : Math.round(diff)}</td>`;
+        html += `</tr>`;
+    }
+
+    html += `</tbody></table></div>`;
+
+    // Clear button
+    html += `<div style="text-align:center;margin-top:0.6rem"><button class="text-button" id="btn-clear-compare" type="button" style="font-size:0.78rem;padding:0.25rem 0.6rem">${escapeHtml(t("compare_clear"))}</button></div>`;
+
+    panel.innerHTML = html;
+
+    // Render comparison radar
+    requestAnimationFrame(() => {
+        const chartEl = document.getElementById("compare-radar-chart");
+        if (chartEl && window.echarts) {
+            const chart = echarts.init(chartEl);
+            appState.charts["compare-radar-chart"] = chart;
+            chart.setOption({
+                radar: {
+                    indicator: radarLabels.map((name) => ({ name, max: 100 })),
+                    shape: "circle",
+                    axisName: { color: chartTextColor(), fontWeight: 700, fontSize: 11 },
+                    splitLine: { lineStyle: { color: chartGridColor() } },
+                    axisLine: { lineStyle: { color: chartGridColor() } },
+                    splitArea: { show: false },
+                },
+                series: [{
+                    type: "radar",
+                    data: [
+                        {
+                            value: r1,
+                            name: p1.name,
+                            areaStyle: { color: "rgba(74,144,217,.18)" },
+                            lineStyle: { color: "#4a90d9", width: 2 },
+                            itemStyle: { color: "#4a90d9" },
+                        },
+                        {
+                            value: r2,
+                            name: p2.name,
+                            areaStyle: { color: "rgba(255,159,67,.18)" },
+                            lineStyle: { color: "#ff9f43", width: 2 },
+                            itemStyle: { color: "#ff9f43" },
+                        },
+                    ],
+                }],
+            });
+            requestAnimationFrame(() => chart.resize());
+        }
+
+        // Clear button handler
+        const clearBtn = document.getElementById("btn-clear-compare");
+        if (clearBtn) {
+            clearBtn.addEventListener("click", () => {
+                appState.compareKeys = [];
+                renderPlayers();
+                renderComparePanel();
+            });
+        }
+    });
+}
+
 let valuePlayers = [];
 
-// Mock value data for demo when API is unavailable
-const MOCK_VALUE_DATA = (() => {
-    const names = [
-        "Mbapp\u00e9","Haaland","Vinicius Jr","Saka","Salah","Kane","Bellingham","Pedri","Rodri","Wirtz",
-        "Musiala","Odegaard","Palmer","Foden","Rice","Gavi","Valverde","Bruno Fernandes","Lewandowski","De Bruyne",
-        "Gundogan","Bernardo Silva","Griezmann","Lamine Yamal","Reus","Maddison","Xavi Simons","Leao","Osimhen","Isak",
-        "Nkunku","Diaz","Barcola","Kvaratskhelia","Sane","Havertz","Martinelli","Gyokeres","Sesko","Dovbyk",
-        "Thuram","Lookman","Lautaro Martinez","Lozano","Adeyemi","Mudryk","Nico Williams","Olmo","Zubimendi","Grimaldo",
-        "Kulusevski","Mac Allister","Onana","Ruben Dias","Saliba","Van Dijk","Araujo","Marquinhos","Alisson","Courtois",
-        "Raphinha","Mikel Merino","Zaire-Emery","Branco","Simakan","Bastoni","Achraf","Theo Hernandez","Robertson","Alexander-Arnold",
-    ];
-    const teams = [
-        "Real Madrid","Man City","Real Madrid","Arsenal","Liverpool","Bayern","Real Madrid","Barcelona","Man City","Leverkusen",
-        "Bayern","Arsenal","Chelsea","Man City","Arsenal","Barcelona","Real Madrid","Man United","Barcelona","Man City",
-        "Barcelona","Man City","Atl\u00e9tico","Barcelona","Dortmund","Tottenham","RB Leipzig","Milan","Napoli","Newcastle",
-        "Chelsea","Liverpool","PSG","Napoli","Bayern","Arsenal","Arsenal","Sporting","RB Leipzig","Roma",
-        "Inter","Atalanta","Inter","PSV","Dortmund","Chelsea","Athletic","Barcelona","Real Sociedad","Leverkusen",
-        "Tottenham","Liverpool","Man United","Man City","Arsenal","Liverpool","Barcelona","PSG","Liverpool","Real Madrid",
-        "Barcelona","Real Sociedad","PSG","Leverkusen","RB Leipzig","Inter","PSG","Milan","Liverpool","Liverpool",
-    ];
-    const residuals = [
-        0.82,0.65,0.71,0.45,0.38,0.22,0.55,0.30,0.12,0.48,
-        0.42,0.18,0.62,0.08,-0.05,0.15,0.10,0.28,-0.35,-0.18,
-        -0.22,-0.10,0.05,0.88,-0.42,0.32,0.35,0.25,0.15,0.40,
-        0.20,-0.08,0.52,0.58,-0.15,-0.12,-0.25,0.72,0.30,0.18,
-        0.10,0.45,-0.08,-0.30,-0.20,-0.55,0.38,0.12,0.05,-0.10,
-        -0.15,-0.08,-0.22,-0.35,-0.18,-0.42,-0.25,-0.15,-0.50,-0.38,
-        0.15,-0.05,0.22,-0.12,-0.18,-0.08,-0.10,-0.20,-0.45,-0.28,
-    ];
-    const actualValues = [
-        180,170,150,120,90,110,120,100,90,130,
-        120,100,90,100,80,80,90,80,50,60,
-        30,60,40,100,25,55,60,70,75,65,
-        55,65,50,70,45,55,50,65,40,35,
-        45,35,50,20,30,28,45,40,30,25,
-        35,50,40,55,60,45,50,45,50,40,
-        45,30,45,30,22,40,50,45,30,55,
-    ];
-    return names.map((name, i) => {
-        const actual = actualValues[i] * 1e6;
-        const predicted = Math.round(actual * Math.exp(-residuals[i]));
-        return {
-            name, team: teams[i], season: "2526",
-            actualValue: actual, predictedValue: predicted,
-            residual: residuals[i],
-            fairness: residuals[i] > 0.3 ? "cheap" : residuals[i] < -0.3 ? "expensive" : "fair",
-        };
-    });
-})();
+// No mock value data — API must be online for value report
 
 async function fetchValueReport() {
     try {
@@ -1141,7 +1206,7 @@ async function fetchValueReport() {
 
 function renderValue() {
     const isMock = valuePlayers.length === 0;
-    const data = isMock ? MOCK_VALUE_DATA : valuePlayers;
+    const data = valuePlayers;
     // Apply price band filter
     const band = appState.valuePriceBand || "all";
     let filtered = data;
@@ -1353,10 +1418,10 @@ function renderAgeCurveScatter(data) {
         itemStyle: { color: POS_COLORS[pos] || "rgba(160,170,200,.7)" },
         emphasis: { itemStyle: { shadowBlur: 8 } },
     }));
-    // Fallback: if data has no age field, generate synthetic ages from mock data
+    // TODO: replace with API call — if data has no age field, generate synthetic ages
     const hasAge = data.some((p) => p.age != null);
     if (!hasAge) {
-        // Generate synthetic age data for the mock
+        // Generate synthetic age data when API doesn't provide age
         for (const s of series) {
             s.data = s.data.map((d) => ({ ...d, value: [20 + Math.random() * 15, d.value[1]] }));
         }
@@ -1419,9 +1484,13 @@ function selectedMatch() {
             aw: currentPrediction.away_win || 0.38,
             xh: currentPrediction.home_lambda || 1.32,
             xa: currentPrediction.away_lambda || 1.42,
+            score_matrix: currentPrediction.score_matrix || null,
+            calibration: currentPrediction.calibration || null,
+            model_version: currentPrediction.model_version || "",
+            model_type: currentPrediction.model_type || "poisson",
         };
     }
-    return { home: appState.home, away: appState.away, hw: 0.34, draw: 0.28, aw: 0.38, xh: 1.32, xa: 1.42 };
+    return { home: appState.home, away: appState.away, hw: 0.34, draw: 0.28, aw: 0.38, xh: 1.32, xa: 1.42, score_matrix: null, calibration: null, model_version: "", model_type: "poisson" };
 }
 
 function renderMatchSelectors() {
@@ -1460,10 +1529,11 @@ async function renderMatches() {
     document.getElementById("match-detail").innerHTML = `
         <div><span>${escapeHtml(t("expected_goals"))}</span><strong>${match.xh.toFixed(2)} / ${match.xa.toFixed(2)}</strong></div>
         <div><span>${escapeHtml(t("coverage"))}</span><strong>${escapeHtml(predictionCoverage)}</strong></div>
-        <div><span>model</span><strong>${escapeHtml(predictionMeta.model_type || "Poisson")}</strong></div>
+        <div><span>model</span><strong>${escapeHtml(match.model_type || predictionMeta.model_type || "Poisson")}</strong></div>
         <div><span>train_rows</span><strong>${escapeHtml(predictionMeta.train_rows || "pending")}</strong></div>
     `;
     renderScoreMatrix(match);
+    renderOutcomeBar(match);
 
     // Calibration section below score matrix
     const calibEl = document.getElementById('match-calibration');
@@ -1568,6 +1638,35 @@ async function renderMatches() {
             calibHtml += `</div>`;
         }
 
+        // API-level calibration from /predictions/{home}/{away}
+        if (match.calibration) {
+            const apiCal = match.calibration;
+            calibHtml += `<p style="margin:0.5rem 0 0.2rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? '预测校准指标' : 'Prediction calibration'}</p>`;
+            calibHtml += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.2rem 0.6rem;font-size:0.75rem">`;
+            calibHtml += `<div style="color:var(--text-muted)">${z ? '指标' : 'Metric'}</div>`;
+            calibHtml += `<div style="color:var(--text-muted)">${z ? '值' : 'Value'}</div>`;
+            calibHtml += `<div style="color:var(--text-muted)">${z ? '说明' : 'Note'}</div>`;
+            const calibMetrics = [
+                { key: "brier", label: "Brier", note: z ? "越低越好" : "Lower is better" },
+                { key: "rps", label: "RPS", note: z ? "越低越好" : "Lower is better" },
+                { key: "log_loss", label: z ? "对数损失" : "Log loss", note: z ? "越低越好" : "Lower is better" },
+            ];
+            for (const m of calibMetrics) {
+                const val = apiCal[m.key];
+                calibHtml += `<div>${escapeHtml(m.label)}</div>`;
+                calibHtml += `<div>${val != null ? escapeHtml(String(Number(val).toFixed(4))) : '–'}</div>`;
+                calibHtml += `<div style="color:var(--text-muted)">${escapeHtml(m.note)}</div>`;
+            }
+            calibHtml += `</div>`;
+        }
+
+        // Model version from API
+        if (match.model_version) {
+            calibHtml += `<div style="margin-top:0.3rem;font-size:0.72rem;color:var(--text-muted)">`;
+            calibHtml += `${z ? '模型版本' : 'Model version'}: <strong>${escapeHtml(match.model_version)}</strong>`;
+            calibHtml += `</div>`;
+        }
+
         calibEl.innerHTML = calibHtml;
     }
 }
@@ -1582,9 +1681,22 @@ function renderScoreMatrix(match) {
     const chart = getChart("score-chart");
     if (!chart) return;
     const data = [];
-    for (let home = 0; home <= 5; home += 1) {
-        for (let away = 0; away <= 5; away += 1) {
-            data.push([away, home, +(poisson(match.xh, home) * poisson(match.xa, away)).toFixed(3)]);
+
+    // Use API score_matrix if available, otherwise compute client-side
+    if (match.score_matrix && Array.isArray(match.score_matrix)) {
+        for (let home = 0; home <= 5; home += 1) {
+            for (let away = 0; away <= 5; away += 1) {
+                const val = (match.score_matrix[home] && match.score_matrix[home][away] != null)
+                    ? match.score_matrix[home][away]
+                    : +(poisson(match.xh, home) * poisson(match.xa, away)).toFixed(3);
+                data.push([away, home, +val.toFixed(4)]);
+            }
+        }
+    } else {
+        for (let home = 0; home <= 5; home += 1) {
+            for (let away = 0; away <= 5; away += 1) {
+                data.push([away, home, +(poisson(match.xh, home) * poisson(match.xa, away)).toFixed(3)]);
+            }
         }
     }
     chart.setOption({
@@ -1619,6 +1731,48 @@ function renderScoreMatrix(match) {
     chart.resize();
 }
 
+function renderOutcomeBar(match) {
+    const chart = getChart("outcome-bar-chart");
+    if (!chart) return;
+    const z = appState.lang === "zh";
+    const labels = [z ? "主胜" : "Home", z ? "平局" : "Draw", z ? "客胜" : "Away"];
+    const values = [match.hw, match.draw, match.aw];
+    const colors = ["#4a90d9", "#8e8e93", "#ff9f43"];
+    chart.setOption({
+        tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+        grid: { left: 60, right: 20, top: 20, bottom: 36 },
+        xAxis: {
+            type: "category",
+            data: labels,
+            axisLabel: { color: chartTextColor(), fontSize: 12 },
+        },
+        yAxis: {
+            type: "value",
+            max: 1,
+            axisLabel: { color: chartTextColor(), formatter: (v) => (v * 100).toFixed(0) + "%" },
+            splitLine: { lineStyle: { color: chartGridColor() } },
+        },
+        series: [{
+            type: "bar",
+            data: values.map((v, i) => ({
+                value: v,
+                itemStyle: { color: colors[i], borderRadius: [4, 4, 0, 0] },
+            })),
+            barWidth: "40%",
+            label: {
+                show: true,
+                position: "top",
+                color: chartTextColor(),
+                formatter: ({ value }) => (value * 100).toFixed(1) + "%",
+            },
+        }],
+    });
+    requestAnimationFrame(() => {
+        chart.resize();
+        requestAnimationFrame(() => chart.resize());
+    });
+}
+
 let reviewQueue = [];
 
 async function fetchReviewQueue() {
@@ -1635,13 +1789,8 @@ async function fetchReviewQueue() {
             minutes: Math.round(p.minutes || 0),
         }));
     } catch (err) {
-        console.warn("Failed to fetch review queue, using demo data:", err);
-        return [
-            { name: "Lamine Yamal", team: "Barcelona", position: "W", confidence: "LOW", score: 83.5, minutes: 2100 },
-            { name: "Pau Cubarsí", team: "Barcelona", position: "CB", confidence: "LOW", score: 78.2, minutes: 1800 },
-            { name: "Warren Zaïre-Emery", team: "PSG", position: "CM", confidence: "MEDIUM", score: 79.5, minutes: 2000 },
-            { name: "Alejandro Garnacho", team: "Man United", position: "W", confidence: "LOW", score: 76.8, minutes: 1600 },
-        ];
+        console.warn("Failed to fetch review queue:", err);
+        return [];
     }
 }
 
@@ -2425,6 +2574,12 @@ function refreshAllChartColors() {
             case "score-chart":
                 renderScoreMatrix(selectedMatch());
                 break;
+            case "outcome-bar-chart":
+                renderOutcomeBar(selectedMatch());
+                break;
+            case "compare-radar-chart":
+                renderComparePanel();
+                break;
             case "action-chart":
                 renderActions();
                 break;
@@ -3056,6 +3211,15 @@ function bindEvents() {
             if (typeof TacticalRenderer !== "undefined") {
                 const title = tacticalProject?.title || "tactical-animation";
                 TacticalRenderer.exportWebM(`${title}.webm`);
+            }
+        });
+    }
+    const tacticalExportGif = document.getElementById("tactical-export-gif");
+    if (tacticalExportGif) {
+        tacticalExportGif.addEventListener("click", () => {
+            if (typeof TacticalRenderer !== "undefined") {
+                const title = tacticalProject?.title || "tactical-animation";
+                TacticalRenderer.exportGIF(`${title}.gif`);
             }
         });
     }
@@ -3694,104 +3858,26 @@ let wcApiData = {
     schedule: null,     // from /world-cup/schedule
     squadCache: {},     // team -> from /world-cup/squads/{team}
     predictions: null,  // from /world-cup/predictions
+    teams: null,        // from /worldcup/teams
     apiOnline: false,
 };
 
-/* ── Demo squad data (fallback when WC API is offline) ──────────────── */
-const WC_DEMO_SQUADS = {
-    "Argentina": [
-        {name:"Lionel Messi",position:"AM",club:"Inter Miami",league:"MLS"},
-        {name:"Julian Alvarez",position:"ST",club:"Atletico Madrid",league:"La Liga"},
-        {name:"Lautaro Martinez",position:"ST",club:"Inter Milan",league:"Serie A"},
-        {name:"Rodrigo De Paul",position:"CM",club:"Atletico Madrid",league:"La Liga"},
-        {name:"Enzo Fernandez",position:"CM",club:"Chelsea",league:"Premier League"},
-        {name:"Alexis Mac Allister",position:"CM",club:"Liverpool",league:"Premier League"},
-        {name:"Emiliano Martinez",position:"GK",club:"Aston Villa",league:"Premier League"},
-        {name:"Cristian Romero",position:"CB",club:"Tottenham",league:"Premier League"},
-        {name:"Nahuel Molina",position:"FB",club:"Atletico Madrid",league:"La Liga"},
-        {name:"Leandro Paredes",position:"DM",club:"Roma",league:"Serie A"},
-        {name:"Paulo Dybala",position:"AM",club:"Roma",league:"Serie A"},
-    ],
-    "Brazil": [
-        {name:"Vinicius Junior",position:"W",club:"Real Madrid",league:"La Liga"},
-        {name:"Rodrygo",position:"W",club:"Real Madrid",league:"La Liga"},
-        {name:"Raphinha",position:"W",club:"Barcelona",league:"La Liga"},
-        {name:"Bruno Guimaraes",position:"CM",club:"Newcastle",league:"Premier League"},
-        {name:"Marquinhos",position:"CB",club:"PSG",league:"Ligue 1"},
-        {name:"Alisson",position:"GK",club:"Liverpool",league:"Premier League"},
-        {name:"Gabriel Magalhaes",position:"CB",club:"Arsenal",league:"Premier League"},
-        {name:"Endrick",position:"ST",club:"Real Madrid",league:"La Liga"},
-        {name:"Casemiro",position:"DM",club:"Manchester United",league:"Premier League"},
-    ],
-    "France": [
-        {name:"Kylian Mbappe",position:"W",club:"Real Madrid",league:"La Liga"},
-        {name:"Ousmane Dembele",position:"W",club:"PSG",league:"Ligue 1"},
-        {name:"Antoine Griezmann",position:"AM",club:"Atletico Madrid",league:"La Liga"},
-        {name:"Aurelien Tchouameni",position:"DM",club:"Real Madrid",league:"La Liga"},
-        {name:"Eduardo Camavinga",position:"CM",club:"Real Madrid",league:"La Liga"},
-        {name:"William Saliba",position:"CB",club:"Arsenal",league:"Premier League"},
-        {name:"Theo Hernandez",position:"FB",club:"AC Milan",league:"Serie A"},
-        {name:"Mike Maignan",position:"GK",club:"AC Milan",league:"Serie A"},
-        {name:"Jules Kounde",position:"CB",club:"Barcelona",league:"La Liga"},
-    ],
-    "England": [
-        {name:"Jude Bellingham",position:"AM",club:"Real Madrid",league:"La Liga"},
-        {name:"Bukayo Saka",position:"W",club:"Arsenal",league:"Premier League"},
-        {name:"Phil Foden",position:"W",club:"Man City",league:"Premier League"},
-        {name:"Declan Rice",position:"DM",club:"Arsenal",league:"Premier League"},
-        {name:"Cole Palmer",position:"AM",club:"Chelsea",league:"Premier League"},
-        {name:"Harry Kane",position:"ST",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Trent Alexander-Arnold",position:"FB",club:"Liverpool",league:"Premier League"},
-        {name:"Marc Guehi",position:"CB",club:"Crystal Palace",league:"Premier League"},
-        {name:"Jordan Pickford",position:"GK",club:"Everton",league:"Premier League"},
-    ],
-    "Germany": [
-        {name:"Florian Wirtz",position:"AM",club:"Leverkusen",league:"Bundesliga"},
-        {name:"Jamal Musiala",position:"AM",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Leroy Sane",position:"W",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Joshua Kimmich",position:"DM",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Antonio Rudiger",position:"CB",club:"Real Madrid",league:"La Liga"},
-        {name:"Kai Havertz",position:"ST",club:"Arsenal",league:"Premier League"},
-        {name:"Toni Kroos",position:"CM",club:"Real Madrid",league:"La Liga"},
-    ],
-    "Spain": [
-        {name:"Lamine Yamal",position:"W",club:"Barcelona",league:"La Liga"},
-        {name:"Pedri",position:"CM",club:"Barcelona",league:"La Liga"},
-        {name:"Rodri",position:"DM",club:"Man City",league:"Premier League"},
-        {name:"Gavi",position:"CM",club:"Barcelona",league:"La Liga"},
-        {name:"Nico Williams",position:"W",club:"Athletic Bilbao",league:"La Liga"},
-        {name:"Dani Olmo",position:"AM",club:"Barcelona",league:"La Liga"},
-        {name:"Alvaro Morata",position:"ST",club:"AC Milan",league:"Serie A"},
-    ],
-    "Portugal": [
-        {name:"Cristiano Ronaldo",position:"ST",club:"Al Nassr",league:"Saudi Pro League"},
-        {name:"Bruno Fernandes",position:"AM",club:"Manchester United",league:"Premier League"},
-        {name:"Bernardo Silva",position:"W",club:"Man City",league:"Premier League"},
-        {name:"Rafael Leao",position:"W",club:"AC Milan",league:"Serie A"},
-        {name:"Ruben Dias",position:"CB",club:"Man City",league:"Premier League"},
-        {name:"Diogo Jota",position:"W",club:"Liverpool",league:"Premier League"},
-        {name:"Vitinha",position:"CM",club:"PSG",league:"Ligue 1"},
-    ],
-    "Netherlands": [
-        {name:"Xavi Simons",position:"AM",club:"RB Leipzig",league:"Bundesliga"},
-        {name:"Virgil van Dijk",position:"CB",club:"Liverpool",league:"Premier League"},
-        {name:"Frenkie de Jong",position:"CM",club:"Barcelona",league:"La Liga"},
-        {name:"Cody Gakpo",position:"W",club:"Liverpool",league:"Premier League"},
-        {name:"Matthijs de Ligt",position:"CB",club:"Bayern Munich",league:"Bundesliga"},
-        {name:"Denzel Dumfries",position:"FB",club:"Inter Milan",league:"Serie A"},
-    ],
-    "Belgium": [
-        {name:"Kevin De Bruyne",position:"AM",club:"Man City",league:"Premier League"},
-        {name:"Romelu Lukaku",position:"ST",club:"Napoli",league:"Serie A"},
-        {name:"Jeremy Doku",position:"W",club:"Man City",league:"Premier League"},
-        {name:"Amadou Onana",position:"DM",club:"Aston Villa",league:"Premier League"},
-    ],
-    "Croatia": [
-        {name:"Luka Modric",position:"CM",club:"Real Madrid",league:"La Liga"},
-        {name:"Josko Gvardiol",position:"CB",club:"Man City",league:"Premier League"},
-        {name:"Marcelo Brozovic",position:"DM",club:"Al Nassr",league:"Saudi Pro League"},
-    ],
-};
+/* ── No demo squad data — API must be online for WC squads ─────────── */
+const WC_DEMO_SQUADS = {};
+
+async function fetchWcTeams() {
+    try {
+        const resp = await fetch(`${API_BASE}/worldcup/teams`, { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) throw new Error("API error");
+        const data = await resp.json();
+        wcApiData.teams = data;
+        wcApiData.apiOnline = true;
+        return data;
+    } catch {
+        wcApiData.apiOnline = false;
+        return null;
+    }
+}
 
 async function fetchWcGroups() {
     try {
@@ -3850,17 +3936,24 @@ async function fetchWcPredictions() {
 }
 
 function wcAllTeams() {
+    if (wcApiData.teams && wcApiData.teams.teams) {
+        return wcApiData.teams.teams.map((t) => t.team);
+    }
     return Object.values(WC_GROUPS).flat();
 }
 
 function wcTeamGroup(team) {
+    if (wcApiData.teams && wcApiData.teams.teams) {
+        const entry = wcApiData.teams.teams.find((t) => t.team === team);
+        if (entry) return entry.group;
+    }
     for (const [letter, teams] of Object.entries(WC_GROUPS)) {
         if (teams.includes(team)) return letter;
     }
     return "?";
 }
 
-// Get enriched squad data (from API cache, or fallback to empty)
+// Get enriched squad data (from API cache, or return empty)
 function wcGetSquad(team) {
     const cached = wcApiData.squadCache[team];
     if (cached && cached.players) {
@@ -3873,11 +3966,6 @@ function wcGetSquad(team) {
             rating: p.rating,
             confidence: p.rating_confidence ? p.rating_confidence.toUpperCase() : "NONE",
         }));
-    }
-    // Fallback to demo data when API is offline
-    const demo = WC_DEMO_SQUADS[team];
-    if (demo) {
-        return demo.map((p) => ({...p, hasRating: false, rating: 0, confidence: "NONE"}));
     }
     return [];
 }
@@ -3909,6 +3997,11 @@ function matchSquadWithRatings(squad) {
 
 // Compute team strength from API data or fallback
 function wcTeamStrength(team) {
+    // Try from teams API data
+    if (wcApiData.teams && wcApiData.teams.teams) {
+        const entry = wcApiData.teams.teams.find((t) => t.team === team);
+        if (entry) return entry.strength;
+    }
     // Try from predictions API data
     if (wcApiData.predictions && wcApiData.predictions.ranking) {
         const entry = wcApiData.predictions.ranking.find((r) => r.team === team);
@@ -4217,10 +4310,11 @@ async function initWorldCup() {
     appState.wcCompareB = "France";
 
     // Fetch API data in background, then re-render
-    const [groupsData, scheduleData, predictionsData] = await Promise.all([
+    const [groupsData, scheduleData, predictionsData, teamsData] = await Promise.all([
         fetchWcGroups(),
         fetchWcSchedule(),
         fetchWcPredictions(),
+        fetchWcTeams(),
     ]);
 
     // Pre-fetch squads for the initially selected teams
@@ -4738,8 +4832,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff6b6b;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
             const z = appState.lang === "zh";
             demoBanner.textContent = z
-                ? "◆ API 离线 — 使用内置演示数据。启动后端：PYTHONPATH=src uv run python -m scoutfootball serve"
-                : "◆ API Offline — Using built-in demo data. Start backend: PYTHONPATH=src uv run python -m scoutfootball serve";
+                ? "◆ API 离线 — 数据不可用。启动后端：PYTHONPATH=src uv run python -m scoutfootball serve"
+                : "◆ API Offline — Data unavailable. Start backend: PYTHONPATH=src uv run python -m scoutfootball serve";
             document.body.prepend(demoBanner);
         }
     }

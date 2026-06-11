@@ -2951,6 +2951,90 @@ const TacticalRenderer = {
         });
     },
 
+    /* ── GIF Animation Export ──────────────────────────────────────────── */
+    exportGIF(filename) {
+        if (!this.canvas) return;
+
+        if (typeof GIF === "undefined") {
+            alert("\u25C6 GIF export is not available.\n\nThe gif.js library is not loaded.\nPlease check your network connection or use WebM export instead.");
+            return;
+        }
+
+        if (!this.project || !this.project.frames || this.project.frames.length < 2) {
+            alert("\u25C6 No animation frames to export.\n\nPlease add at least two keyframes before exporting.");
+            return;
+        }
+
+        const self = this;
+        const frames = this.project.frames;
+        const fps = 10;
+        const delay = Math.round(1000 / fps);
+
+        // Save current state
+        const savedFrame = this.animationState.currentFrame;
+        const savedPlaying = this.animationState.isPlaying;
+        if (savedPlaying) this.stop();
+
+        try {
+            const gif = new GIF({
+                workers: 2,
+                quality: 10,
+                width: this.canvas.width,
+                height: this.canvas.height,
+                workerScript: "https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js",
+            });
+
+            // Capture each frame
+            for (let i = 0; i < frames.length; i++) {
+                this.animationState.currentFrame = i;
+                this._loadFrameForCapture(i);
+                this.render();
+                const frameDelay = frames[i].duration_ms || 3000;
+                const frameCount = Math.max(1, Math.round(frameDelay / delay));
+                for (let j = 0; j < frameCount; j++) {
+                    gif.addFrame(this.canvas, { copy: true, delay: delay });
+                }
+            }
+
+            gif.on("finished", function (blob) {
+                // Restore state
+                self.animationState.currentFrame = savedFrame;
+                self._loadFrameForCapture(savedFrame);
+                self.render();
+
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.download = filename || "tactical-animation.gif";
+                link.href = url;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+            });
+
+            gif.on("progress", function (p) {
+                // Could update a progress indicator; no-op for now
+            });
+
+            gif.render();
+        } catch (e) {
+            // Restore state on error
+            this.animationState.currentFrame = savedFrame;
+            this._loadFrameForCapture(savedFrame);
+            this.render();
+            alert("\u25C6 GIF export failed: " + e.message + "\n\nPlease try WebM export instead.");
+        }
+    },
+
+    _loadFrameForCapture(frameIndex) {
+        /* Load frame objects for rendering without triggering animation logic. */
+        if (!this.project || !this.project.frames) return;
+        const frame = this.project.frames[frameIndex];
+        if (!frame || !frame.objects) return;
+        // Apply frame objects directly to the renderer state
+        this.currentObjects = JSON.parse(JSON.stringify(frame.objects));
+    },
+
     /* ── Presentation Mode ───────────────────────────────────────────── */
     togglePresentation() {
         if (this._presentationMode) {

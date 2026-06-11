@@ -149,6 +149,65 @@ def list_teams() -> list[str]:
     return []
 
 
+def _score_matrix_to_list(prediction) -> list[list[float]]:
+    """Convert a score_matrix DataFrame to a 2-D list (0-5 goals)."""
+    sm = prediction.score_matrix
+    max_goals = 5
+    rows = min(max_goals + 1, sm.shape[0])
+    cols = min(max_goals + 1, sm.shape[1])
+    matrix = []
+    for i in range(rows):
+        row = []
+        for j in range(cols):
+            val = float(sm.iloc[i, j]) if i < sm.shape[0] and j < sm.shape[1] else 0.0
+            row.append(round(val, 4))
+        # Pad if score_matrix is smaller than 6x6
+        while len(row) < max_goals + 1:
+            row.append(0.0)
+        matrix.append(row)
+    while len(matrix) < max_goals + 1:
+        matrix.append([0.0] * (max_goals + 1))
+    return matrix
+
+
+def _prediction_calibration() -> dict[str, Any]:
+    """Load Brier/RPS from prediction artifacts."""
+    settings = _settings()
+    artifact_dir = settings.data_root / "models" / "artifacts"
+    calibration: dict[str, Any] = {}
+
+    # Poisson calibration
+    poisson_path = artifact_dir / "poisson_baseline_results.parquet"
+    if poisson_path.exists():
+        try:
+            pf = _read_parquet(poisson_path)
+            if not pf.empty:
+                row = pf.iloc[0].to_dict()
+                calibration["brier"] = _clean_json_value(row.get("brier_1x2"))
+                calibration["rps"] = _clean_json_value(row.get("rps_1x2"))
+                calibration["log_loss"] = _clean_json_value(row.get("log_loss_exact"))
+        except Exception:
+            pass
+
+    # DC calibration (overrides if available)
+    dc_path = artifact_dir / "dixon_coles_results.parquet"
+    if dc_path.exists():
+        try:
+            dc_df = _read_parquet(dc_path)
+            if not dc_df.empty:
+                dc_row = dc_df.iloc[0].to_dict()
+                calibration["brier"] = _clean_json_value(
+                    dc_row.get("brier_1x2", calibration.get("brier"))
+                )
+                calibration["rps"] = _clean_json_value(
+                    dc_row.get("rps_1x2", calibration.get("rps"))
+                )
+        except Exception:
+            pass
+
+    return calibration
+
+
 def get_match_prediction(home_team: str, away_team: str) -> dict:
     try:
         prediction = load_score_prediction(home_team, away_team)
@@ -156,10 +215,11 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
         return {"error": str(exc)}
     if isinstance(prediction, dict):
         return prediction
-    return {
+    result = {
         "home_team": home_team,
         "away_team": away_team,
         "model_type": "poisson",
+        "model_version": "1.0",
         "home_lambda": prediction.home_lambda,
         "away_lambda": prediction.away_lambda,
         "home_win": prediction.summary.home_win,
@@ -167,7 +227,10 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
         "away_win": prediction.summary.away_win,
         "over_2_5": prediction.summary.over_2_5,
         "btts_yes": prediction.summary.btts_yes,
+        "score_matrix": _score_matrix_to_list(prediction),
+        "calibration": _prediction_calibration(),
     }
+    return _clean_json_value(result)
 
 
 def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
@@ -188,6 +251,7 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
         "home_team": home_team,
         "away_team": away_team,
         "model_type": "dixon_coles",
+        "model_version": "1.0",
         "home_lambda": prediction.home_lambda,
         "away_lambda": prediction.away_lambda,
         "home_win": prediction.summary.home_win,
@@ -195,6 +259,8 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
         "away_win": prediction.summary.away_win,
         "over_2_5": prediction.summary.over_2_5,
         "btts_yes": prediction.summary.btts_yes,
+        "score_matrix": _score_matrix_to_list(prediction),
+        "calibration": _prediction_calibration(),
     }
     # Try to enrich with DC-specific parameters (rho, home_advantage)
     try:
@@ -213,7 +279,7 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
                     result["home_advantage"] = _clean_json_value(dc_row["home_advantage"])
     except Exception:
         pass  # enrichment is optional
-    return result
+    return _clean_json_value(result)
 
 
 def get_value_summary() -> dict:
@@ -523,39 +589,230 @@ def get_prediction_calibration() -> dict[str, Any]:
     })
 
 
-def get_action_value_summary(limit: int = 20) -> dict[str, Any]:
-    frame = load_player_value_metrics()
-    if frame.empty:
+def get_action_value_summary(
+    limit: int = 20,
+    offset: int = 0,
+    full: bool = False,
+) -> dict[str, Any]:
+    """Return action value data combining xT and VAEP sources.
+
+    When full=True, returns the complete merged dataset (xT + VAEP).
+    Otherwise returns a sample (legacy behavior).
+    Supports pagination via limit/offset.
+    """
+    import pandas as pd
+
+    settings = _settings()
+    xt_path = settings.data_root / "gold" / "feature_store" / "player_action_value.parquet"
+    vaep_path = settings.data_root / "gold" / "feature_store" / "player_vaep.parquet"
+
+    # Load xT data
+    xt_df = pd.DataFrame()
+    if xt_path.exists():
+        try:
+            xt_df = _read_parquet(xt_path)
+        except Exception:
+            pass
+
+    # Load VAEP data
+    vaep_df = pd.DataFrame()
+    if vaep_path.exists():
+        try:
+            vaep_df = _read_parquet(vaep_path)
+        except Exception:
+            pass
+
+    if xt_df.empty and vaep_df.empty:
+        # Fallback to legacy player_value_metrics
+        frame = load_player_value_metrics()
+        if frame.empty:
+            return {"status": "no_data", "count": 0, "players": []}
+
+        working = frame.copy()
+        if "composite_score" in working.columns:
+            working = working.sort_values("composite_score", ascending=False)
+
+        return _clean_json_value({
+            "status": "ok",
+            "count": len(working),
+            "data_source": "StatsBomb Open Data + xT/VAEP model",
+            "metrics": {
+                "players_with_xt": (
+                    int(working["xT_per_90"].notna().sum())
+                    if "xT_per_90" in working.columns
+                    else 0
+                ),
+                "players_with_finishing": int(working["finishing_delta"].notna().sum())
+                if "finishing_delta" in working.columns
+                else 0,
+                "mean_xt_per_90": (
+                    float(working["xT_per_90"].dropna().mean())
+                    if "xT_per_90" in working.columns
+                    else None
+                ),
+                "mean_composite_score": float(working["composite_score"].dropna().mean())
+                if "composite_score" in working.columns
+                else None,
+            },
+            "players": working.head(limit).to_dict(orient="records"),
+        })
+
+    # Merge xT + VAEP
+    # Check if VAEP has usable player_name (non-empty)
+    vaep_has_names = (
+        not vaep_df.empty
+        and "player_name" in vaep_df.columns
+        and vaep_df["player_name"].replace("", pd.NA).notna().any()
+    )
+
+    if not vaep_df.empty and not vaep_has_names:
+        # VAEP lacks usable player_name — return as separate sections
+        xt_cols = [
+            "player_name", "season", "team_id", "competition",
+            "n_actions", "n_matches", "estimated_minutes",
+            "xt_total", "xt_per_90",
+            "passes_per_90", "shots_per_90", "carries_per_90", "dribbles_per_90",
+            "final_third_per_90", "penalty_area_per_90",
+            "pass_completion_rate", "forward_pass_rate",
+        ]
+        xt_select = [c for c in xt_cols if c in xt_df.columns]
+        xt_part = xt_df[xt_select].copy()
+
+        # Sort xT by xt_per_90 desc
+        if "xt_per_90" in xt_part.columns:
+            xt_part = xt_part.sort_values("xt_per_90", ascending=False)
+
+        # Aggregate VAEP by player_id for summary
+        vaep_summary_cols = [
+            "player_id", "vaep_total", "vaep_per_90", "vaep_mean",
+            "n_actions", "n_matches", "estimated_minutes", "minutes_90",
+        ]
+        vaep_select = [c for c in vaep_summary_cols if c in vaep_df.columns]
+        vaep_summary = vaep_df[vaep_select].copy()
+        numeric_cols = vaep_summary.select_dtypes(include=["number"]).columns.tolist()
+        if "player_id" in vaep_summary.columns and numeric_cols:
+            vaep_summary = vaep_summary.groupby("player_id", as_index=False)[numeric_cols].mean()
+        if "vaep_per_90" in vaep_summary.columns:
+            vaep_summary = vaep_summary.sort_values("vaep_per_90", ascending=False)
+
+        total_count = len(xt_part) + len(vaep_summary)
+        xt_page = xt_part.iloc[offset : offset + limit]
+        vaep_offset = max(0, offset - len(xt_part))
+        vaep_limit = max(0, limit - len(xt_page))
+        vaep_page = vaep_summary.iloc[vaep_offset : vaep_offset + vaep_limit]
+
+        metrics: dict[str, Any] = {
+            "total_rows": total_count,
+            "xt_rows": len(xt_part),
+            "vaep_rows": len(vaep_summary),
+        }
+        if "xt_per_90" in xt_part.columns:
+            metrics["mean_xt_per_90"] = round(float(xt_part["xt_per_90"].dropna().mean()), 4)
+            metrics["players_with_xt"] = int(xt_part["xt_per_90"].notna().sum())
+        if "vaep_per_90" in vaep_summary.columns:
+            metrics["mean_vaep_per_90"] = round(
+                float(vaep_summary["vaep_per_90"].dropna().mean()), 4
+            )
+            metrics["players_with_vaep"] = int(vaep_summary["vaep_per_90"].notna().sum())
+
+        return _clean_json_value({
+            "status": "ok",
+            "count": total_count,
+            "offset": offset,
+            "limit": limit,
+            "data_source": "StatsBomb Open Data + xT/VAEP model",
+            "metrics": metrics,
+            "players": xt_page.to_dict(orient="records"),
+            "xt_players": xt_page.to_dict(orient="records"),
+            "vaep_players": vaep_page.to_dict(orient="records"),
+        })
+
+    # Both have usable player_name — merge on player_name (+ season if both have it)
+    xt_cols = [
+        "player_name", "season", "team_id", "competition",
+        "n_actions", "n_matches", "estimated_minutes",
+        "xt_total", "xt_per_90",
+        "passes_per_90", "shots_per_90", "carries_per_90", "dribbles_per_90",
+        "final_third_per_90", "penalty_area_per_90",
+        "pass_completion_rate", "forward_pass_rate",
+    ]
+    vaep_cols = [
+        "player_name", "season",
+        "vaep_total", "vaep_per_90", "vaep_mean",
+        "n_actions", "n_matches", "estimated_minutes",
+        "minutes_90",
+    ]
+
+    xt_select = [c for c in xt_cols if c in xt_df.columns]
+    vaep_select = [c for c in vaep_cols if c in vaep_df.columns]
+
+    xt_part = xt_df[xt_select].copy()
+    vaep_part = vaep_df[vaep_select].copy()
+
+    # If VAEP lacks season, aggregate to player level
+    if not vaep_part.empty and "season" not in vaep_part.columns:
+        agg_dict: dict[str, Any] = {}
+        for c in vaep_part.columns:
+            if c == "player_name":
+                continue
+            if vaep_part[c].dtype in ["float64", "float32", "int64", "int32"]:
+                agg_dict[c] = "mean"
+            else:
+                agg_dict[c] = "first"
+        if agg_dict:
+            vaep_part = vaep_part.groupby("player_name", as_index=False).agg(agg_dict)
+
+    # Rename overlapping columns in vaep to avoid collision
+    overlap = set(xt_select) - {"player_name", "season"}
+    rename_map = {c: f"vaep_{c}" for c in vaep_select if c in overlap}
+    vaep_part = vaep_part.rename(columns=rename_map)
+
+    # Determine merge keys
+    merge_keys = ["player_name"]
+    if "season" in xt_part.columns and "season" in vaep_part.columns:
+        merge_keys.append("season")
+
+    if not xt_part.empty and not vaep_part.empty:
+        merged = pd.merge(xt_part, vaep_part, on=merge_keys, how="outer")
+    elif not xt_part.empty:
+        merged = xt_part
+    else:
+        merged = vaep_part
+
+    if merged.empty:
         return {"status": "no_data", "count": 0, "players": []}
 
-    working = frame.copy()
-    if "composite_score" in working.columns:
-        working = working.sort_values("composite_score", ascending=False)
+    # Sort by xt_per_90 descending (or vaep_per_90 as fallback)
+    sort_col = "xt_per_90" if "xt_per_90" in merged.columns else "vaep_per_90"
+    if sort_col in merged.columns:
+        merged = merged.sort_values(sort_col, ascending=False)
 
-    summary = {
-        "status": "ok",
-        "count": len(working),
-        "metrics": {
-            "players_with_xt": (
-                int(working["xT_per_90"].notna().sum())
-                if "xT_per_90" in working.columns
-                else 0
-            ),
-            "players_with_finishing": int(working["finishing_delta"].notna().sum())
-            if "finishing_delta" in working.columns
-            else 0,
-            "mean_xt_per_90": (
-                float(working["xT_per_90"].dropna().mean())
-                if "xT_per_90" in working.columns
-                else None
-            ),
-            "mean_composite_score": float(working["composite_score"].dropna().mean())
-            if "composite_score" in working.columns
-            else None,
-        },
-        "players": _clean_json_value(working.head(limit).to_dict(orient="records")),
+    total_count = len(merged)
+    page = merged.iloc[offset : offset + limit]
+
+    # Summary metrics
+    metrics: dict[str, Any] = {
+        "total_rows": total_count,
+        "xt_rows": len(xt_df),
+        "vaep_rows": len(vaep_df),
+        "merged_rows": total_count,
     }
-    return summary
+    if "xt_per_90" in merged.columns:
+        metrics["mean_xt_per_90"] = round(float(merged["xt_per_90"].dropna().mean()), 4)
+        metrics["players_with_xt"] = int(merged["xt_per_90"].notna().sum())
+    if "vaep_per_90" in merged.columns:
+        metrics["mean_vaep_per_90"] = round(float(merged["vaep_per_90"].dropna().mean()), 4)
+        metrics["players_with_vaep"] = int(merged["vaep_per_90"].notna().sum())
+
+    return _clean_json_value({
+        "status": "ok",
+        "count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "data_source": "StatsBomb Open Data + xT/VAEP model",
+        "metrics": metrics,
+        "players": page.to_dict(orient="records"),
+    })
 
 
 def get_artifacts_summary() -> dict:
@@ -1054,6 +1311,88 @@ def _build_position_explanation(
     return dims
 
 
+def _compute_position_percentiles(row: Any, pos_pool: Any) -> dict[str, Any]:
+    """Compute within-position percentile ranks for key metrics."""
+    import pandas as pd
+
+    from scoutfootball.evaluation.position_metrics import (
+        POSITION_DIMENSIONS,
+        POSITION_GROUP_MAP,
+        compute_dimension_percentile,
+    )
+
+    raw_position = str(row.get("position_group", ""))
+    resolved = POSITION_GROUP_MAP.get(raw_position, raw_position)
+    dim_defs = POSITION_DIMENSIONS.get(resolved, {})
+
+    result: dict[str, Any] = {}
+    for dim_key, dim_cfg in dim_defs.items():
+        label = dim_cfg.get("label", dim_key)
+        pct = compute_dimension_percentile(pos_pool, dim_cfg, row)
+        result[dim_key] = {"label": label, "percentile": round(pct, 1)}
+
+    # Add overall optimized_score percentile within position
+    if "optimized_score" in pos_pool.columns:
+        clean = pd.to_numeric(pos_pool["optimized_score"], errors="coerce").dropna()
+        score_val = pd.to_numeric(row.get("optimized_score"), errors="coerce")
+        if not clean.empty and pd.notna(score_val):
+            overall_pct = float((clean < score_val).mean() * 100)
+        else:
+            overall_pct = None
+    else:
+        overall_pct = None
+    result["overall_score"] = {
+        "label": "综合评分",
+        "percentile": round(overall_pct, 1) if overall_pct is not None else None,
+    }
+
+    return result
+
+
+def _compute_low_confidence_reasons(row: Any) -> list[str]:
+    """Compute low-confidence reasons using the confidence module."""
+    from scoutfootball.evaluation.confidence import assess_player_confidence
+
+    assessment = assess_player_confidence(row)
+    return list(assessment.reasons)
+
+
+def _compute_3season_trend(player_rows: Any) -> list[dict[str, Any]]:
+    """Compute 3-season trend data for a player from their season rows."""
+
+    if player_rows.empty:
+        return []
+
+    # Sort by season descending, take up to 3
+    sorted_rows = player_rows.sort_values("season", ascending=False).head(3)
+
+    trends = []
+    for _, r in sorted_rows.iterrows():
+        entry: dict[str, Any] = {
+            "season": str(r.get("season", "")),
+            "optimized_score": round(float(r.get("optimized_score", 0) or 0), 1),
+            "goals": round(float(r.get("npg_p90", 0) or 0), 3),
+            "assists": round(float(r.get("assists_p90", 0) or 0), 3),
+            "minutes": round(float(r.get("minutes", 0) or 0)),
+        }
+        trends.append(entry)
+
+    # Compute deltas (newest vs oldest)
+    if len(trends) >= 2:
+        newest = trends[0]
+        oldest = trends[-1]
+        delta = {
+            "season_from": oldest["season"],
+            "season_to": newest["season"],
+            "score_change": round(newest["optimized_score"] - oldest["optimized_score"], 1),
+            "goals_change": round(newest["goals"] - oldest["goals"], 3),
+            "assists_change": round(newest["assists"] - oldest["assists"], 3),
+            "minutes_change": round(newest["minutes"] - oldest["minutes"]),
+        }
+        return {"seasons": trends, "delta": delta}
+    return {"seasons": trends, "delta": None}
+
+
 def get_player_profile(
     player_name: str,
     season: str | None = None,
@@ -1256,6 +1595,9 @@ def get_player_profile(
         "seasons": seasons,
         "position_explanation": position_explanation,
         "xt_summary": xt_summary,
+        "position_percentiles": _compute_position_percentiles(row, pos_pool),
+        "low_confidence_reasons": _compute_low_confidence_reasons(row),
+        "trend_3seasons": _compute_3season_trend(rows),
     })
     # CSV export
     if fmt == "csv":
@@ -1445,4 +1787,47 @@ def get_wc_predictions() -> dict:
         "groups": group_preds,
         "ranking": ranking,
         "best_third_place": third_place[:8],
+    })
+
+
+def get_wc_teams() -> dict:
+    """Return all 48 World Cup teams with strength ratings and group info."""
+    ratings_df = load_player_ratings()
+    enriched = enrich_squads_with_ratings(ratings_df)
+    strengths = compute_team_strengths(enriched_squads=enriched)
+
+    teams_data = []
+    for letter, team_names in GROUPS.items():
+        for team in team_names:
+            squad = enriched.get(team, [])
+            rated = [p for p in squad if p.has_rating]
+            big5_count = sum(1 for p in squad if p.club_league in BIG5_LEAGUES)
+            avg_rating = (
+                round(sum(p.rating for p in rated) / len(rated), 2)
+                if rated else None
+            )
+            teams_data.append({
+                "team": team,
+                "group": letter,
+                "is_host": team in HOSTS,
+                "strength": round(strengths.get(team, 0), 3),
+                "rated_players": len(rated),
+                "total_players": len(squad),
+                "big5_players": big5_count,
+                "avg_rating": avg_rating,
+            })
+
+    return _clean_json_value({
+        "status": "ok",
+        "count": len(teams_data),
+        "source_attribution": (
+            "Ratings derived from FBref/Understat data "
+            "via ScoutFootball optimizer"
+        ),
+        "disclaimer": (
+            "Squad ratings are from domestic league performance, "
+            "not national team matches. Non-Big5 league players "
+            "may lack rating data."
+        ),
+        "teams": teams_data,
     })
