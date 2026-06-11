@@ -1,0 +1,17 @@
+{
+  "model": "poisson_strength_ratio",
+  "sources": [
+    "scoutfootball_ratings",
+    "opta_win_probability",
+    "big5_league_count"
+  ],
+  "files": {
+    "match_predictions": "match_predictions.json",
+    "group_predictions": "group_predictions.json"
+  },
+  "summary": {
+    "matches": 72,
+    "groups": 12,
+    "teams": 48
+  }
+}

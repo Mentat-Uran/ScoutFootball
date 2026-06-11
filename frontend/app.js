@@ -429,6 +429,9 @@ function staticDataUrl(apiPath, params) {
             "/world-cup/groups": "/data/worldcup/groups.json",
             "/world-cup/schedule": "/data/worldcup/schedule.json",
             "/world-cup/predictions": "/data/worldcup/predictions.json",
+            "/world-cup/match-predictions": "/data/worldcup/match_predictions.json",
+            "/world-cup/group-predictions": "/data/worldcup/group_predictions.json",
+            "/world-cup/predictions-index": "/data/worldcup/predictions_index.json",
         };
         if (map[m]) return map[m];
         // Squad: /world-cup/squads/<Team Name> → /data/worldcup/squads/<Team_Slug>.json
