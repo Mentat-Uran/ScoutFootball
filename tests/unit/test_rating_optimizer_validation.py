@@ -2,7 +2,9 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-import torch
+import pytest
+
+torch = pytest.importorskip("torch")
 
 
 def _load_optimizer_module():

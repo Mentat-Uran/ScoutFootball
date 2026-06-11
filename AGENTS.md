@@ -33,7 +33,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - Dixon-Coles 比分预测模型已实现：`fit_dixon_coles()` 已接入 pipeline 和 `data_loader.py`，7 个单元测试覆盖参数拟合与预测。校准已接入 time decay + isotonic 校准，Brier 0.632，RPS 0.220。
 - 前端安全加固：`index.html` 增加 CSP meta tag、echarts CDN 加 SRI integrity、HTTP 响应增加 `X-Content-Type-Options: nosniff`；浏览器级 XSS/CSV 回归测试已完成。
 - 测试 warnings 清理：`conftest.py` 新增 matplotlib backend fixture 避免 GUI 警告，`pyproject.toml` 增加 `filterwarnings` 配置。
-- Bug 修复：26 个 bug 已修复（6 critical、9 warning、11 minor），测试总数 613。
+- Bug 修复：26 个 bug 已修复（6 critical、9 warning、11 minor），测试总数 582（575 unit + 5 integration + 2 skipped）。
 - Phase 4 CI/CD 与部署：GitHub Actions CI 已配置（`.github/workflows/ci.yml`），含 ruff lint + pytest + node 语法检查；Windows 桌面应用构建脚本 `scripts/build-desktop-windows.ps1` 已添加；云端部署配置已添加（Streamlit Cloud `.streamlit/config.toml` + `Procfile`）；集成测试已添加（9 个：4 pipeline + 5 API），位于 `tests/integration/`。
 - 身价偏离分析：value-fairness OOF 残差、联赛/位置偏差、年龄散点分析已实现。
 - 球探队列增强：审阅状态流转（review_status）、watchlist diff、shortlist notes 已落地。

@@ -27,6 +27,7 @@ scoutfootball = "scoutfootball.__main__:main"
 
 [dependency-groups]
 dev = [
+  "httpx>=0.28.1",
   "py>=1.11.0",
   "pyinstaller>=6.20.0",
   "pytest>=8.4,<9.0",

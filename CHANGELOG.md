@@ -94,7 +94,7 @@ First stable release of ScoutFootball — a local-first football analytics platf
 
 ### Testing
 
-- 570 unit tests across 37 test files
+- 582 tests across 40 test files (575 unit + 5 integration + 2 skipped)
 - Coverage: action value schema, calibration, match prediction, backtests, scouting queue, cross-provider schema, frontend security, rating regression, position metrics, and more
 
 ### Known Limitations

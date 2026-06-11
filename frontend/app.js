@@ -1418,7 +1418,7 @@ function renderAgeCurveScatter(data) {
         itemStyle: { color: POS_COLORS[pos] || "rgba(160,170,200,.7)" },
         emphasis: { itemStyle: { shadowBlur: 8 } },
     }));
-    // TODO: replace with API call — if data has no age field, generate synthetic ages
+    // If API data lacks age field, generate synthetic ages for visualization
     const hasAge = data.some((p) => p.age != null);
     if (!hasAge) {
         // Generate synthetic age data when API doesn't provide age
@@ -3867,26 +3867,28 @@ const WC_DEMO_SQUADS = {};
 
 async function fetchWcTeams() {
     try {
-        const resp = await fetch(`${API_BASE}/worldcup/teams`, { signal: AbortSignal.timeout(15000) });
-        if (!resp.ok) throw new Error("API error");
+        const resp = await fetch(`${API_BASE}/worldcup/teams`, { signal: AbortSignal.timeout(60000) });
+        if (!resp.ok) throw new Error(`API ${resp.status}`);
         const data = await resp.json();
         wcApiData.teams = data;
         wcApiData.apiOnline = true;
         return data;
-    } catch {
+    } catch (e) {
+        console.warn("[WC] fetchWcTeams failed:", e.message);
         return null;
     }
 }
 
 async function fetchWcGroups() {
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/groups`, { signal: AbortSignal.timeout(15000) });
-        if (!resp.ok) throw new Error("API error");
+        const resp = await fetch(`${API_BASE}/world-cup/groups`, { signal: AbortSignal.timeout(60000) });
+        if (!resp.ok) throw new Error(`API ${resp.status}`);
         const data = await resp.json();
         wcApiData.groups = data;
         wcApiData.apiOnline = true;
         return data;
-    } catch {
+    } catch (e) {
+        console.warn("[WC] fetchWcGroups failed:", e.message);
         return null;
     }
 }
@@ -3898,12 +3900,14 @@ async function fetchWcSchedule(group, matchday) {
         if (group) params.push(`group=${encodeURIComponent(group)}`);
         if (matchday) params.push(`matchday=${matchday}`);
         if (params.length) url += "?" + params.join("&");
-        const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
-        if (!resp.ok) throw new Error("API error");
+        const resp = await fetch(url, { signal: AbortSignal.timeout(60000) });
+        if (!resp.ok) throw new Error(`API ${resp.status}`);
         const data = await resp.json();
         wcApiData.schedule = data;
+        wcApiData.apiOnline = true;
         return data;
-    } catch {
+    } catch (e) {
+        console.warn("[WC] fetchWcSchedule failed:", e.message);
         return null;
     }
 }
@@ -3911,24 +3915,28 @@ async function fetchWcSchedule(group, matchday) {
 async function fetchWcSquad(team) {
     if (wcApiData.squadCache[team]) return wcApiData.squadCache[team];
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/squads/${encodeURIComponent(team)}`, { signal: AbortSignal.timeout(15000) });
-        if (!resp.ok) throw new Error("API error");
+        const resp = await fetch(`${API_BASE}/world-cup/squads/${encodeURIComponent(team)}`, { signal: AbortSignal.timeout(60000) });
+        if (!resp.ok) throw new Error(`API ${resp.status}`);
         const data = await resp.json();
         wcApiData.squadCache[team] = data;
+        wcApiData.apiOnline = true;
         return data;
-    } catch {
+    } catch (e) {
+        console.warn("[WC] fetchWcSquad failed:", e.message);
         return null;
     }
 }
 
 async function fetchWcPredictions() {
     try {
-        const resp = await fetch(`${API_BASE}/world-cup/predictions`, { signal: AbortSignal.timeout(15000) });
-        if (!resp.ok) throw new Error("API error");
+        const resp = await fetch(`${API_BASE}/world-cup/predictions`, { signal: AbortSignal.timeout(60000) });
+        if (!resp.ok) throw new Error(`API ${resp.status}`);
         const data = await resp.json();
         wcApiData.predictions = data;
+        wcApiData.apiOnline = true;
         return data;
-    } catch {
+    } catch (e) {
+        console.warn("[WC] fetchWcPredictions failed:", e.message);
         return null;
     }
 }
@@ -4723,7 +4731,8 @@ function renderTacticalFrameList() {
 document.addEventListener("DOMContentLoaded", async () => {
     applyLocale();
     renderMatchSelectors();
-    initWorldCup();
+    // Start WC init early — it runs in parallel with other API calls
+    const wcInitPromise = initWorldCup();
     bindEvents();
     setView("overview");
 
@@ -4848,6 +4857,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.body.prepend(demoBanner);
         }
     }
+
+    // Initialize World Cup — already started in parallel above, just await completion
+    await wcInitPromise;
 });
 
 const SCOUT_QUEUE_KEY = "scout-queue-statuses";

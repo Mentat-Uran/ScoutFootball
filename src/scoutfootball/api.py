@@ -27,7 +27,6 @@ from scoutfootball.worldcup.data import (
     HOSTS,
     compute_group_predictions,
     compute_team_strengths,
-    enrich_squad_with_ratings,
     enrich_squads_with_ratings,
     generate_group_stage_matches,
     get_squad,
