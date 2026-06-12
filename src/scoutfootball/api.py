@@ -111,10 +111,22 @@ def _read_json(path: Path) -> dict[str, Any]:
         return json.load(handle)
 
 
-def _artifact_file_info(path: Path, label: str, *, rows: int | None = None) -> dict[str, Any]:
+def _artifact_file_info(
+    path: Path,
+    label: str,
+    *,
+    rows: int | None = None,
+    display_root: Path | None = None,
+) -> dict[str, Any]:
+    display_path = path
+    if display_root is not None:
+        try:
+            display_path = path.resolve().relative_to(display_root.resolve())
+        except ValueError:
+            display_path = path
     return {
         "label": label,
-        "path": str(path),
+        "path": str(display_path).replace("\\", "/"),
         "exists": path.exists(),
         "rows": rows,
         "updated_at": path.stat().st_mtime if path.exists() else None,
@@ -968,24 +980,38 @@ def get_artifacts_summary() -> dict:
             settings.data_root / "gold" / "feature_store" / "player_match.parquet",
             "player_match",
             rows=len(player_match),
+            display_root=settings.project_root,
         ),
         _artifact_file_info(
             settings.data_root / "gold" / "feature_store" / "team_match.parquet",
             "team_match",
             rows=len(team_match),
+            display_root=settings.project_root,
         ),
         _artifact_file_info(
             settings.data_root / "gold" / "feature_store" / "player_ratings_optimized.parquet",
             "player_ratings_optimized",
             rows=len(ratings),
+            display_root=settings.project_root,
         ),
-        _artifact_file_info(events_path, "events_all", rows=events_count),
+        _artifact_file_info(
+            events_path,
+            "events_all",
+            rows=events_count,
+            display_root=settings.project_root,
+        ),
         _artifact_file_info(
             settings.data_root / "models" / "oof_predictions" / "value_fairness_oof.parquet",
             "value_fairness_oof",
             rows=len(oof),
+            display_root=settings.project_root,
         ),
-        _artifact_file_info(truth_path, "player_truth_labels", rows=truth_rows),
+        _artifact_file_info(
+            truth_path,
+            "player_truth_labels",
+            rows=truth_rows,
+            display_root=settings.project_root,
+        ),
     ]
 
     return _clean_json_value({

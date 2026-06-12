@@ -8,6 +8,7 @@ __pycache__/
 *.egg-info/
 *.duckdb
 .streamlit/
+latest_logs/
 
 # Raw data: allow specific sources, exclude others
 data/raw/transfermarkt_datasets/

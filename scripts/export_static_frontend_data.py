@@ -87,8 +87,16 @@ def _clean(obj: object) -> object:
 
 def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(_clean(payload), f, ensure_ascii=False, separators=(",", ":"))
+    serialized = json.dumps(
+        _clean(payload),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        if existing == serialized:
+            return
+    path.write_text(serialized, encoding="utf-8")
 
 
 def export_ratings(limit: int) -> int:
@@ -221,13 +229,15 @@ def write_manifest() -> None:
     import datetime as dt
 
     files = []
+    latest_mtime = 0.0
     for p in sorted(DATA_DIR.rglob("*.json")):
         rel = p.relative_to(FRONTEND_DIR).as_posix()
         size_kb = p.stat().st_size / 1024
+        latest_mtime = max(latest_mtime, p.stat().st_mtime)
         files.append({"path": f"/{rel}", "kb": round(size_kb, 1)})
 
     manifest = {
-        "generated_at": dt.datetime.now(dt.UTC).isoformat(),
+        "generated_at": dt.datetime.fromtimestamp(latest_mtime, dt.UTC).isoformat() if latest_mtime else None,
         "file_count": len(files),
         "total_kb": round(sum(f["kb"] for f in files), 1),
         "files": files,
