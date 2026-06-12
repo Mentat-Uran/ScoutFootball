@@ -4274,30 +4274,94 @@ function renderWcSchedule() {
     if (wcApiData.schedule && wcApiData.schedule.matches) {
         matches = wcApiData.schedule.matches;
     } else {
-        // Fallback: generate locally (same logic as before)
-        const groupStartOffsets = {A:0,B:0,C:0,D:0,E:1,F:1,G:1,H:1,I:2,J:2,K:2,L:2};
-        const mdGaps = [0, 4, 8];
-        const groupVenues = {
-            A:["Estadio Azteca","Mexico City"],B:["BMO Field","Toronto"],
-            C:["SoFi Stadium","Los Angeles"],D:["AT&T Stadium","Arlington"],
-            E:["MetLife Stadium","New York"],F:["Lumen Field","Seattle"],
-            G:["Mercedes-Benz Stadium","Atlanta"],H:["Hard Rock Stadium","Miami"],
-            I:["Gillette Stadium","Boston"],J:["NRG Stadium","Houston"],
-            K:["Levi's Stadium","San Francisco"],L:["Lincoln Financial Field","Philadelphia"],
-        };
-        for (const [letter, teams] of Object.entries(WC_GROUPS)) {
-            const offset = groupStartOffsets[letter];
-            const [venue, city] = groupVenues[letter];
-            const [t1, t2, t3, t4] = teams;
-            for (let md = 0; md < 3; md++) {
-                const day = 11 + offset + mdGaps[md];
-                const dateStr = `2026-06-${String(day).padStart(2, "0")}`;
-                const pairings = md === 0 ? [[t1,t2],[t3,t4]] : md === 1 ? [[t1,t3],[t2,t4]] : [[t1,t4],[t2,t3]];
-                pairings.forEach(([home, away], gi) => {
-                    matches.push({date: dateStr, time_et: gi === 0 ? "19:30" : "22:00", group: letter, home, away, venue, city, matchday: md + 1});
-                });
-            }
-        }
+        // Fallback: official 2026 World Cup schedule (all times ET)
+        const schedule = [
+            // Group A
+            {date:"2026-06-11",time_et:"15:00",group:"A",home:"Mexico",away:"South Africa",venue:"Estadio Azteca",city:"Mexico City",matchday:1},
+            {date:"2026-06-11",time_et:"22:00",group:"A",home:"South Korea",away:"Czech Republic",venue:"Estadio Akron",city:"Guadalajara",matchday:1},
+            {date:"2026-06-18",time_et:"12:00",group:"A",home:"South Africa",away:"Czech Republic",venue:"Mercedes-Benz Stadium",city:"Atlanta",matchday:2},
+            {date:"2026-06-18",time_et:"21:00",group:"A",home:"Mexico",away:"South Korea",venue:"Estadio Akron",city:"Guadalajara",matchday:2},
+            {date:"2026-06-24",time_et:"21:00",group:"A",home:"Mexico",away:"Czech Republic",venue:"Estadio Azteca",city:"Mexico City",matchday:3},
+            {date:"2026-06-24",time_et:"21:00",group:"A",home:"South Africa",away:"South Korea",venue:"Estadio BBVA",city:"Monterrey",matchday:3},
+            // Group B
+            {date:"2026-06-12",time_et:"15:00",group:"B",home:"Canada",away:"Bosnia and Herzegovina",venue:"BMO Field",city:"Toronto",matchday:1},
+            {date:"2026-06-13",time_et:"15:00",group:"B",home:"Qatar",away:"Switzerland",venue:"Levi's Stadium",city:"San Francisco Bay Area",matchday:1},
+            {date:"2026-06-18",time_et:"15:00",group:"B",home:"Bosnia and Herzegovina",away:"Switzerland",venue:"SoFi Stadium",city:"Los Angeles",matchday:2},
+            {date:"2026-06-18",time_et:"18:00",group:"B",home:"Canada",away:"Qatar",venue:"BC Place",city:"Vancouver",matchday:2},
+            {date:"2026-06-24",time_et:"15:00",group:"B",home:"Bosnia and Herzegovina",away:"Qatar",venue:"Lumen Field",city:"Seattle",matchday:3},
+            {date:"2026-06-24",time_et:"15:00",group:"B",home:"Canada",away:"Switzerland",venue:"BC Place",city:"Vancouver",matchday:3},
+            // Group C
+            {date:"2026-06-13",time_et:"18:00",group:"C",home:"Brazil",away:"Morocco",venue:"MetLife Stadium",city:"New York/New Jersey",matchday:1},
+            {date:"2026-06-13",time_et:"21:00",group:"C",home:"Haiti",away:"Scotland",venue:"Gillette Stadium",city:"Boston",matchday:1},
+            {date:"2026-06-19",time_et:"18:00",group:"C",home:"Morocco",away:"Scotland",venue:"Gillette Stadium",city:"Boston",matchday:2},
+            {date:"2026-06-19",time_et:"21:00",group:"C",home:"Haiti",away:"Brazil",venue:"Lincoln Financial Field",city:"Philadelphia",matchday:2},
+            {date:"2026-06-24",time_et:"18:00",group:"C",home:"Morocco",away:"Haiti",venue:"Mercedes-Benz Stadium",city:"Atlanta",matchday:3},
+            {date:"2026-06-24",time_et:"18:00",group:"C",home:"Brazil",away:"Scotland",venue:"Hard Rock Stadium",city:"Miami",matchday:3},
+            // Group D
+            {date:"2026-06-12",time_et:"21:00",group:"D",home:"United States",away:"Paraguay",venue:"SoFi Stadium",city:"Los Angeles",matchday:1},
+            {date:"2026-06-13",time_et:"00:00",group:"D",home:"Australia",away:"Turkey",venue:"BC Place",city:"Vancouver",matchday:1},
+            {date:"2026-06-19",time_et:"00:00",group:"D",home:"Paraguay",away:"Turkey",venue:"Levi's Stadium",city:"San Francisco Bay Area",matchday:2},
+            {date:"2026-06-19",time_et:"15:00",group:"D",home:"United States",away:"Australia",venue:"Lumen Field",city:"Seattle",matchday:2},
+            {date:"2026-06-25",time_et:"22:00",group:"D",home:"United States",away:"Turkey",venue:"SoFi Stadium",city:"Los Angeles",matchday:3},
+            {date:"2026-06-25",time_et:"22:00",group:"D",home:"Paraguay",away:"Australia",venue:"Levi's Stadium",city:"San Francisco Bay Area",matchday:3},
+            // Group E
+            {date:"2026-06-14",time_et:"13:00",group:"E",home:"Germany",away:"Curacao",venue:"NRG Stadium",city:"Houston",matchday:1},
+            {date:"2026-06-14",time_et:"19:00",group:"E",home:"Ivory Coast",away:"Ecuador",venue:"Lincoln Financial Field",city:"Philadelphia",matchday:1},
+            {date:"2026-06-20",time_et:"16:00",group:"E",home:"Germany",away:"Ivory Coast",venue:"BMO Field",city:"Toronto",matchday:2},
+            {date:"2026-06-20",time_et:"20:00",group:"E",home:"Curacao",away:"Ecuador",venue:"Arrowhead Stadium",city:"Kansas City",matchday:2},
+            {date:"2026-06-25",time_et:"16:00",group:"E",home:"Germany",away:"Ecuador",venue:"MetLife Stadium",city:"New York/New Jersey",matchday:3},
+            {date:"2026-06-25",time_et:"16:00",group:"E",home:"Curacao",away:"Ivory Coast",venue:"Lincoln Financial Field",city:"Philadelphia",matchday:3},
+            // Group F
+            {date:"2026-06-14",time_et:"16:00",group:"F",home:"Netherlands",away:"Japan",venue:"AT&T Stadium",city:"Dallas",matchday:1},
+            {date:"2026-06-14",time_et:"19:00",group:"F",home:"Sweden",away:"Tunisia",venue:"Estadio BBVA",city:"Monterrey",matchday:1},
+            {date:"2026-06-20",time_et:"13:00",group:"F",home:"Netherlands",away:"Sweden",venue:"NRG Stadium",city:"Houston",matchday:2},
+            {date:"2026-06-20",time_et:"00:00",group:"F",home:"Japan",away:"Tunisia",venue:"Estadio BBVA",city:"Monterrey",matchday:2},
+            {date:"2026-06-25",time_et:"19:00",group:"F",home:"Netherlands",away:"Tunisia",venue:"Arrowhead Stadium",city:"Kansas City",matchday:3},
+            {date:"2026-06-25",time_et:"19:00",group:"F",home:"Japan",away:"Sweden",venue:"AT&T Stadium",city:"Dallas",matchday:3},
+            // Group G
+            {date:"2026-06-15",time_et:"15:00",group:"G",home:"Belgium",away:"Egypt",venue:"Lumen Field",city:"Seattle",matchday:1},
+            {date:"2026-06-15",time_et:"21:00",group:"G",home:"Iran",away:"New Zealand",venue:"SoFi Stadium",city:"Los Angeles",matchday:1},
+            {date:"2026-06-21",time_et:"15:00",group:"G",home:"Belgium",away:"Iran",venue:"SoFi Stadium",city:"Los Angeles",matchday:2},
+            {date:"2026-06-21",time_et:"21:00",group:"G",home:"Egypt",away:"New Zealand",venue:"BC Place",city:"Vancouver",matchday:2},
+            {date:"2026-06-26",time_et:"23:00",group:"G",home:"Belgium",away:"New Zealand",venue:"BC Place",city:"Vancouver",matchday:3},
+            {date:"2026-06-26",time_et:"23:00",group:"G",home:"Egypt",away:"Iran",venue:"Lumen Field",city:"Seattle",matchday:3},
+            // Group H
+            {date:"2026-06-15",time_et:"12:00",group:"H",home:"Spain",away:"Cape Verde",venue:"Mercedes-Benz Stadium",city:"Atlanta",matchday:1},
+            {date:"2026-06-15",time_et:"18:00",group:"H",home:"Saudi Arabia",away:"Uruguay",venue:"Hard Rock Stadium",city:"Miami",matchday:1},
+            {date:"2026-06-21",time_et:"12:00",group:"H",home:"Spain",away:"Saudi Arabia",venue:"Mercedes-Benz Stadium",city:"Atlanta",matchday:2},
+            {date:"2026-06-21",time_et:"18:00",group:"H",home:"Cape Verde",away:"Uruguay",venue:"Hard Rock Stadium",city:"Miami",matchday:2},
+            {date:"2026-06-26",time_et:"20:00",group:"H",home:"Spain",away:"Uruguay",venue:"Estadio Akron",city:"Guadalajara",matchday:3},
+            {date:"2026-06-26",time_et:"20:00",group:"H",home:"Cape Verde",away:"Saudi Arabia",venue:"NRG Stadium",city:"Houston",matchday:3},
+            // Group I
+            {date:"2026-06-16",time_et:"15:00",group:"I",home:"France",away:"Senegal",venue:"MetLife Stadium",city:"New York/New Jersey",matchday:1},
+            {date:"2026-06-16",time_et:"18:00",group:"I",home:"Iraq",away:"Norway",venue:"Gillette Stadium",city:"Boston",matchday:1},
+            {date:"2026-06-22",time_et:"17:00",group:"I",home:"France",away:"Iraq",venue:"Lincoln Financial Field",city:"Philadelphia",matchday:2},
+            {date:"2026-06-22",time_et:"20:00",group:"I",home:"Senegal",away:"Norway",venue:"MetLife Stadium",city:"New York/New Jersey",matchday:2},
+            {date:"2026-06-26",time_et:"15:00",group:"I",home:"France",away:"Norway",venue:"Gillette Stadium",city:"Boston",matchday:3},
+            {date:"2026-06-26",time_et:"15:00",group:"I",home:"Iraq",away:"Senegal",venue:"BMO Field",city:"Toronto",matchday:3},
+            // Group J
+            {date:"2026-06-16",time_et:"21:00",group:"J",home:"Argentina",away:"Algeria",venue:"Arrowhead Stadium",city:"Kansas City",matchday:1},
+            {date:"2026-06-16",time_et:"00:00",group:"J",home:"Austria",away:"Jordan",venue:"Levi's Stadium",city:"San Francisco Bay Area",matchday:1},
+            {date:"2026-06-22",time_et:"13:00",group:"J",home:"Argentina",away:"Austria",venue:"AT&T Stadium",city:"Dallas",matchday:2},
+            {date:"2026-06-22",time_et:"23:00",group:"J",home:"Algeria",away:"Jordan",venue:"Levi's Stadium",city:"San Francisco Bay Area",matchday:2},
+            {date:"2026-06-27",time_et:"22:00",group:"J",home:"Argentina",away:"Jordan",venue:"AT&T Stadium",city:"Dallas",matchday:3},
+            {date:"2026-06-27",time_et:"22:00",group:"J",home:"Algeria",away:"Austria",venue:"Arrowhead Stadium",city:"Kansas City",matchday:3},
+            // Group K
+            {date:"2026-06-17",time_et:"13:00",group:"K",home:"Portugal",away:"DR Congo",venue:"NRG Stadium",city:"Houston",matchday:1},
+            {date:"2026-06-17",time_et:"22:00",group:"K",home:"Uzbekistan",away:"Colombia",venue:"Estadio Azteca",city:"Mexico City",matchday:1},
+            {date:"2026-06-23",time_et:"13:00",group:"K",home:"Portugal",away:"Uzbekistan",venue:"NRG Stadium",city:"Houston",matchday:2},
+            {date:"2026-06-23",time_et:"22:00",group:"K",home:"DR Congo",away:"Colombia",venue:"Estadio Akron",city:"Guadalajara",matchday:2},
+            {date:"2026-06-27",time_et:"19:30",group:"K",home:"Portugal",away:"Colombia",venue:"Hard Rock Stadium",city:"Miami",matchday:3},
+            {date:"2026-06-27",time_et:"19:30",group:"K",home:"DR Congo",away:"Uzbekistan",venue:"Mercedes-Benz Stadium",city:"Atlanta",matchday:3},
+            // Group L
+            {date:"2026-06-17",time_et:"16:00",group:"L",home:"England",away:"Croatia",venue:"AT&T Stadium",city:"Dallas",matchday:1},
+            {date:"2026-06-17",time_et:"19:00",group:"L",home:"Ghana",away:"Panama",venue:"BMO Field",city:"Toronto",matchday:1},
+            {date:"2026-06-23",time_et:"16:00",group:"L",home:"England",away:"Ghana",venue:"Gillette Stadium",city:"Boston",matchday:2},
+            {date:"2026-06-23",time_et:"19:00",group:"L",home:"Croatia",away:"Panama",venue:"BMO Field",city:"Toronto",matchday:2},
+            {date:"2026-06-27",time_et:"17:00",group:"L",home:"England",away:"Panama",venue:"MetLife Stadium",city:"New York/New Jersey",matchday:3},
+            {date:"2026-06-27",time_et:"17:00",group:"L",home:"Croatia",away:"Ghana",venue:"Lincoln Financial Field",city:"Philadelphia",matchday:3},
+        ];
+        matches = schedule;
     }
 
     const filtered = matches.filter((m) => {
@@ -4549,7 +4613,7 @@ function renderWcProbability() {
             <td>${x.rank}</td><td>${escapeHtml(x.team)}</td><td>${escapeHtml(x.group || "?")}</td><td>${x.strength.toFixed(3)}</td>
         </tr>`).join("");
     } else {
-        // Fallback: compute locally
+        // Fallback: compute locally with proper ranking probability model
         const teams = wcAllTeams();
         const strengths = {};
         teams.forEach((t) => { strengths[t] = wcTeamStrength(t); });
@@ -4560,7 +4624,28 @@ function renderWcProbability() {
             const total = teamStrs.reduce((s, x) => s + x.strength, 0);
             const rows = teamStrs.sort((a, b) => b.strength - a.strength).map((x) => {
                 const p1 = x.strength / total;
-                const pct = Math.round(p1 * 100);
+                let p2 = 0;
+                for (const other of teamStrs) {
+                    if (other.team === x.team) continue;
+                    const p1Other = other.strength / total;
+                    const remaining = total - other.strength;
+                    p2 += p1Other * (remaining > 0 ? x.strength / remaining : 0);
+                }
+                // p3rd: sum over each pair (j, k) being 1st and 2nd, prob i is best of remaining
+                let p3 = 0;
+                for (const j of teamStrs) {
+                    if (j.team === x.team) continue;
+                    const p1J = j.strength / total;
+                    const remJ = total - j.strength;
+                    for (const k of teamStrs) {
+                        if (k.team === x.team || k.team === j.team) continue;
+                        const p2Jk = p1J * (remJ > 0 ? k.strength / remJ : 0);
+                        const remJk = total - j.strength - k.strength;
+                        p3 += p2Jk * (remJk > 0 ? x.strength / remJk : 0);
+                    }
+                }
+                const pAdvance = Math.min(p1 + p2 + p3 * (8 / 12), 1.0);
+                const pct = Math.round(pAdvance * 100);
                 return `<div class="wc-prob-row"><span>${escapeHtml(x.team)}</span><div class="probability-track"><div class="probability-fill" style="width:${sanitizeCssPercent(pct)}%"></div></div><strong>${pct}%</strong></div>`;
             }).join("");
             return `<article class="liquid-panel compact-panel"><h3>${escapeHtml(letter)}</h3>${rows}</article>`;
