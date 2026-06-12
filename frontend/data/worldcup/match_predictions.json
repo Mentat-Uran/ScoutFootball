@@ -53,43 +53,43 @@
       "stage": "Group Stage",
       "home": "Mexico",
       "away": "South Africa",
-      "exp_home_goals": 1.22,
-      "exp_away_goals": 1.49,
-      "home_win_p": 0.3113,
-      "draw_p": 0.2547,
-      "away_win_p": 0.434,
+      "exp_home_goals": 1.18,
+      "exp_away_goals": 1.55,
+      "home_win_p": 0.2909,
+      "draw_p": 0.2519,
+      "away_win_p": 0.4572,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12081
+          "probability": 0.11946
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.09872
+          "probability": 0.10114
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09009
+          "probability": 0.0923
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.07815
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.081
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 1,
-          "probability": 0.07392
+          "probability": 0.07731
         }
       ],
-      "exp_points_home": 1.19,
-      "exp_points_away": 1.56,
-      "home_strength": 0.165,
-      "away_strength": 0.217
+      "exp_points_home": 1.12,
+      "exp_points_away": 1.62,
+      "home_strength": 0.161,
+      "away_strength": 0.227
     },
     {
       "group": "A",
@@ -101,43 +101,43 @@
       "stage": "Group Stage",
       "home": "South Korea",
       "away": "Czech Republic",
-      "exp_home_goals": 1.4,
-      "exp_away_goals": 1.3,
-      "home_win_p": 0.3953,
-      "draw_p": 0.2576,
-      "away_win_p": 0.3471,
+      "exp_home_goals": 1.43,
+      "exp_away_goals": 1.27,
+      "home_win_p": 0.4076,
+      "draw_p": 0.2569,
+      "away_win_p": 0.3355,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12217
+          "probability": 0.12186
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.094
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 1,
-          "probability": 0.08699
+          "probability": 0.09559
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08579
+          "probability": 0.08723
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.08512
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.07939
+          "probability": 0.07768
         }
       ],
-      "exp_points_home": 1.44,
-      "exp_points_away": 1.3,
-      "home_strength": 0.309,
-      "away_strength": 0.309
+      "exp_points_home": 1.48,
+      "exp_points_away": 1.26,
+      "home_strength": 0.313,
+      "away_strength": 0.301
     },
     {
       "group": "A",
@@ -149,43 +149,43 @@
       "stage": "Group Stage",
       "home": "Mexico",
       "away": "South Korea",
-      "exp_home_goals": 1.02,
-      "exp_away_goals": 1.78,
-      "home_win_p": 0.2162,
-      "draw_p": 0.2326,
-      "away_win_p": 0.5512,
+      "exp_home_goals": 1.01,
+      "exp_away_goals": 1.81,
+      "home_win_p": 0.2075,
+      "draw_p": 0.2293,
+      "away_win_p": 0.5632,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11033
+          "probability": 0.10878
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10768
+          "probability": 0.10811
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09827
+          "probability": 0.09866
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.09591
+          "probability": 0.09805
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.06194
+          "probability": 0.05997
         }
       ],
-      "exp_points_home": 0.88,
-      "exp_points_away": 1.89,
-      "home_strength": 0.165,
-      "away_strength": 0.309
+      "exp_points_home": 0.85,
+      "exp_points_away": 1.92,
+      "home_strength": 0.161,
+      "away_strength": 0.313
     },
     {
       "group": "A",
@@ -197,43 +197,43 @@
       "stage": "Group Stage",
       "home": "South Africa",
       "away": "Czech Republic",
-      "exp_home_goals": 1.18,
-      "exp_away_goals": 1.55,
-      "home_win_p": 0.2884,
-      "draw_p": 0.2514,
-      "away_win_p": 0.4602,
+      "exp_home_goals": 1.22,
+      "exp_away_goals": 1.5,
+      "home_win_p": 0.3093,
+      "draw_p": 0.2545,
+      "away_win_p": 0.4362,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11926
+          "probability": 0.1207
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10143
+          "probability": 0.09896
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09257
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 2,
-          "probability": 0.07873
+          "probability": 0.09031
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.07683
+          "probability": 0.08065
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.07405
         }
       ],
-      "exp_points_home": 1.12,
-      "exp_points_away": 1.63,
-      "home_strength": 0.217,
-      "away_strength": 0.309
+      "exp_points_home": 1.18,
+      "exp_points_away": 1.56,
+      "home_strength": 0.227,
+      "away_strength": 0.301
     },
     {
       "group": "A",
@@ -245,43 +245,43 @@
       "stage": "Group Stage",
       "home": "Mexico",
       "away": "Czech Republic",
-      "exp_home_goals": 1.02,
+      "exp_home_goals": 1.03,
       "exp_away_goals": 1.78,
-      "home_win_p": 0.2163,
-      "draw_p": 0.2326,
-      "away_win_p": 0.5511,
+      "home_win_p": 0.2168,
+      "draw_p": 0.2328,
+      "away_win_p": 0.5503,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11035
+          "probability": 0.11044
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10767
+          "probability": 0.10764
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09826
+          "probability": 0.09824
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.09588
+          "probability": 0.09574
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.06196
+          "probability": 0.06208
         }
       ],
       "exp_points_home": 0.88,
-      "exp_points_away": 1.89,
-      "home_strength": 0.165,
-      "away_strength": 0.309
+      "exp_points_away": 1.88,
+      "home_strength": 0.161,
+      "away_strength": 0.301
     },
     {
       "group": "A",
@@ -293,43 +293,43 @@
       "stage": "Group Stage",
       "home": "South Africa",
       "away": "South Korea",
-      "exp_home_goals": 1.18,
-      "exp_away_goals": 1.55,
-      "home_win_p": 0.2883,
-      "draw_p": 0.2514,
-      "away_win_p": 0.4603,
+      "exp_home_goals": 1.2,
+      "exp_away_goals": 1.53,
+      "home_win_p": 0.2981,
+      "draw_p": 0.253,
+      "away_win_p": 0.4489,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11925
+          "probability": 0.11999
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10145
+          "probability": 0.10032
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09258
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 2,
-          "probability": 0.07876
+          "probability": 0.09155
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.0768
+          "probability": 0.07863
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.07654
         }
       ],
-      "exp_points_home": 1.12,
-      "exp_points_away": 1.63,
-      "home_strength": 0.217,
-      "away_strength": 0.309
+      "exp_points_home": 1.15,
+      "exp_points_away": 1.6,
+      "home_strength": 0.227,
+      "away_strength": 0.313
     },
     {
       "group": "B",
@@ -341,43 +341,43 @@
       "stage": "Group Stage",
       "home": "Canada",
       "away": "Bosnia and Herzegovina",
-      "exp_home_goals": 1.34,
+      "exp_home_goals": 1.35,
       "exp_away_goals": 1.36,
-      "home_win_p": 0.3669,
+      "home_win_p": 0.3683,
       "draw_p": 0.2581,
-      "away_win_p": 0.375,
+      "away_win_p": 0.3736,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12241
+          "probability": 0.12242
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.0912
+          "probability": 0.091
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.09002
+          "probability": 0.09022
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.08323
+          "probability": 0.08305
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08215
+          "probability": 0.08234
         }
       ],
       "exp_points_home": 1.36,
       "exp_points_away": 1.38,
-      "home_strength": 0.232,
-      "away_strength": 0.254
+      "home_strength": 0.238,
+      "away_strength": 0.259
     },
     {
       "group": "B",
@@ -389,43 +389,43 @@
       "stage": "Group Stage",
       "home": "Qatar",
       "away": "Switzerland",
-      "exp_home_goals": 0.94,
-      "exp_away_goals": 1.95,
-      "home_win_p": 0.175,
-      "draw_p": 0.2148,
-      "away_win_p": 0.6102,
+      "exp_home_goals": 0.92,
+      "exp_away_goals": 1.98,
+      "home_win_p": 0.169,
+      "draw_p": 0.2117,
+      "away_win_p": 0.6194,
       "most_likely_score": "0-1",
       "top_scorelines": [
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10881
+          "probability": 0.10876
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.10605
+          "probability": 0.10751
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10188
+          "probability": 0.1004
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.0993
+          "probability": 0.09925
         },
         {
           "home_goals": 0,
           "away_goals": 3,
-          "probability": 0.06891
+          "probability": 0.07086
         }
       ],
-      "exp_points_home": 0.74,
-      "exp_points_away": 2.05,
+      "exp_points_home": 0.72,
+      "exp_points_away": 2.07,
       "home_strength": 0.15,
-      "away_strength": 0.337
+      "away_strength": 0.347
     },
     {
       "group": "B",
@@ -437,42 +437,42 @@
       "stage": "Group Stage",
       "home": "Canada",
       "away": "Qatar",
-      "exp_home_goals": 1.75,
-      "exp_away_goals": 1.04,
-      "home_win_p": 0.5386,
-      "draw_p": 0.2359,
-      "away_win_p": 0.2255,
+      "exp_home_goals": 1.77,
+      "exp_away_goals": 1.03,
+      "home_win_p": 0.546,
+      "draw_p": 0.234,
+      "away_win_p": 0.2201,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11188
+          "probability": 0.11099
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10713
+          "probability": 0.10746
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09776
+          "probability": 0.09807
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09361
+          "probability": 0.09496
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06401
+          "probability": 0.0628
         }
       ],
-      "exp_points_home": 1.85,
-      "exp_points_away": 0.91,
-      "home_strength": 0.232,
+      "exp_points_home": 1.87,
+      "exp_points_away": 0.89,
+      "home_strength": 0.238,
       "away_strength": 0.15
     },
     {
@@ -485,43 +485,43 @@
       "stage": "Group Stage",
       "home": "Bosnia and Herzegovina",
       "away": "Switzerland",
-      "exp_home_goals": 1.22,
+      "exp_home_goals": 1.21,
       "exp_away_goals": 1.5,
-      "home_win_p": 0.3091,
-      "draw_p": 0.2544,
-      "away_win_p": 0.4364,
+      "home_win_p": 0.3061,
+      "draw_p": 0.2541,
+      "away_win_p": 0.4399,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12069
+          "probability": 0.12051
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.09899
+          "probability": 0.09936
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09034
+          "probability": 0.09068
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.08062
+          "probability": 0.08007
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.0741
+          "probability": 0.07477
         }
       ],
-      "exp_points_home": 1.18,
-      "exp_points_away": 1.56,
-      "home_strength": 0.254,
-      "away_strength": 0.337
+      "exp_points_home": 1.17,
+      "exp_points_away": 1.57,
+      "home_strength": 0.259,
+      "away_strength": 0.347
     },
     {
       "group": "B",
@@ -533,43 +533,43 @@
       "stage": "Group Stage",
       "home": "Canada",
       "away": "Switzerland",
-      "exp_home_goals": 1.17,
+      "exp_home_goals": 1.16,
       "exp_away_goals": 1.57,
-      "home_win_p": 0.2835,
-      "draw_p": 0.2506,
-      "away_win_p": 0.4659,
+      "home_win_p": 0.2818,
+      "draw_p": 0.2503,
+      "away_win_p": 0.4679,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11886
+          "probability": 0.11871
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10198
+          "probability": 0.10216
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09306
+          "probability": 0.09323
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.07985
+          "probability": 0.08023
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.0759
+          "probability": 0.07558
         }
       ],
       "exp_points_home": 1.1,
       "exp_points_away": 1.65,
-      "home_strength": 0.232,
-      "away_strength": 0.337
+      "home_strength": 0.238,
+      "away_strength": 0.347
     },
     {
       "group": "B",
@@ -581,42 +581,42 @@
       "stage": "Group Stage",
       "home": "Bosnia and Herzegovina",
       "away": "Qatar",
-      "exp_home_goals": 1.83,
-      "exp_away_goals": 1.0,
-      "home_win_p": 0.5683,
-      "draw_p": 0.2279,
-      "away_win_p": 0.2038,
+      "exp_home_goals": 1.84,
+      "exp_away_goals": 0.99,
+      "home_win_p": 0.5742,
+      "draw_p": 0.2262,
+      "away_win_p": 0.1997,
       "most_likely_score": "1-0",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10826
+          "probability": 0.10841
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10808
+          "probability": 0.10727
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09896
+          "probability": 0.09998
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.0988
+          "probability": 0.09894
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.0603
+          "probability": 0.06147
         }
       ],
-      "exp_points_home": 1.93,
-      "exp_points_away": 0.84,
-      "home_strength": 0.254,
+      "exp_points_home": 1.95,
+      "exp_points_away": 0.83,
+      "home_strength": 0.259,
       "away_strength": 0.15
     },
     {
@@ -629,43 +629,43 @@
       "stage": "Group Stage",
       "home": "Brazil",
       "away": "Morocco",
-      "exp_home_goals": 1.83,
-      "exp_away_goals": 1.0,
-      "home_win_p": 0.5693,
-      "draw_p": 0.2276,
-      "away_win_p": 0.2031,
+      "exp_home_goals": 1.85,
+      "exp_away_goals": 0.99,
+      "home_win_p": 0.5762,
+      "draw_p": 0.2256,
+      "away_win_p": 0.1982,
       "most_likely_score": "1-0",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10829
+          "probability": 0.10846
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10794
+          "probability": 0.10699
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09914
+          "probability": 0.10033
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09882
+          "probability": 0.09898
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.06051
+          "probability": 0.06188
         }
       ],
-      "exp_points_home": 1.94,
-      "exp_points_away": 0.84,
-      "home_strength": 0.624,
-      "away_strength": 0.367
+      "exp_points_home": 1.95,
+      "exp_points_away": 0.82,
+      "home_strength": 0.631,
+      "away_strength": 0.363
     },
     {
       "group": "C",
@@ -679,41 +679,41 @@
       "away": "Scotland",
       "exp_home_goals": 1.26,
       "exp_away_goals": 1.45,
-      "home_win_p": 0.3287,
-      "draw_p": 0.2564,
-      "away_win_p": 0.4149,
+      "home_win_p": 0.3298,
+      "draw_p": 0.2565,
+      "away_win_p": 0.4137,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12163
+          "probability": 0.12167
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.09649
+          "probability": 0.09634
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.08805
+          "probability": 0.08792
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.084
+          "probability": 0.08418
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.07666
+          "probability": 0.07682
         }
       ],
-      "exp_points_home": 1.24,
+      "exp_points_home": 1.25,
       "exp_points_away": 1.5,
-      "home_strength": 0.229,
-      "away_strength": 0.284
+      "home_strength": 0.236,
+      "away_strength": 0.292
     },
     {
       "group": "C",
@@ -725,43 +725,43 @@
       "stage": "Group Stage",
       "home": "Brazil",
       "away": "Haiti",
-      "exp_home_goals": 2.32,
-      "exp_away_goals": 0.79,
-      "home_win_p": 0.7169,
-      "draw_p": 0.1726,
-      "away_win_p": 0.1105,
+      "exp_home_goals": 2.3,
+      "exp_away_goals": 0.8,
+      "home_win_p": 0.7117,
+      "draw_p": 0.175,
+      "away_win_p": 0.1134,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.12034
+          "probability": 0.11982
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10389
+          "probability": 0.10438
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09481
+          "probability": 0.09526
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.09293
+          "probability": 0.09169
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.08186
+          "probability": 0.08298
         }
       ],
-      "exp_points_home": 2.32,
-      "exp_points_away": 0.5,
-      "home_strength": 0.624,
-      "away_strength": 0.229
+      "exp_points_home": 2.31,
+      "exp_points_away": 0.52,
+      "home_strength": 0.631,
+      "away_strength": 0.236
     },
     {
       "group": "C",
@@ -773,43 +773,43 @@
       "stage": "Group Stage",
       "home": "Morocco",
       "away": "Scotland",
-      "exp_home_goals": 1.59,
-      "exp_away_goals": 1.14,
-      "home_win_p": 0.478,
-      "draw_p": 0.2486,
-      "away_win_p": 0.2734,
+      "exp_home_goals": 1.57,
+      "exp_away_goals": 1.16,
+      "home_win_p": 0.4663,
+      "draw_p": 0.2505,
+      "away_win_p": 0.2831,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11794
+          "probability": 0.11883
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10305
+          "probability": 0.10202
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09405
+          "probability": 0.0931
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.08218
+          "probability": 0.07993
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.07395
+          "probability": 0.07583
         }
       ],
-      "exp_points_home": 1.68,
-      "exp_points_away": 1.07,
-      "home_strength": 0.367,
-      "away_strength": 0.284
+      "exp_points_home": 1.65,
+      "exp_points_away": 1.1,
+      "home_strength": 0.363,
+      "away_strength": 0.292
     },
     {
       "group": "C",
@@ -821,43 +821,43 @@
       "stage": "Group Stage",
       "home": "Brazil",
       "away": "Scotland",
-      "exp_home_goals": 2.08,
+      "exp_home_goals": 2.06,
       "exp_away_goals": 0.88,
-      "home_win_p": 0.6516,
-      "draw_p": 0.1999,
-      "away_win_p": 0.1485,
+      "home_win_p": 0.6471,
+      "draw_p": 0.2016,
+      "away_win_p": 0.1513,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.11237
+          "probability": 0.11172
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10805
+          "probability": 0.1082
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09861
+          "probability": 0.09875
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.09482
+          "probability": 0.09564
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.07791
+          "probability": 0.0769
         }
       ],
-      "exp_points_home": 2.15,
-      "exp_points_away": 0.65,
-      "home_strength": 0.624,
-      "away_strength": 0.284
+      "exp_points_home": 2.14,
+      "exp_points_away": 0.66,
+      "home_strength": 0.631,
+      "away_strength": 0.292
     },
     {
       "group": "C",
@@ -869,43 +869,43 @@
       "stage": "Group Stage",
       "home": "Morocco",
       "away": "Haiti",
-      "exp_home_goals": 1.78,
-      "exp_away_goals": 1.03,
-      "home_win_p": 0.5494,
-      "draw_p": 0.2331,
-      "away_win_p": 0.2175,
+      "exp_home_goals": 1.74,
+      "exp_away_goals": 1.05,
+      "home_win_p": 0.5365,
+      "draw_p": 0.2364,
+      "away_win_p": 0.2271,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11056
+          "probability": 0.11213
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10761
+          "probability": 0.10702
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.0982
+          "probability": 0.09767
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09557
+          "probability": 0.09323
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06224
+          "probability": 0.06436
         }
       ],
-      "exp_points_home": 1.88,
-      "exp_points_away": 0.89,
-      "home_strength": 0.367,
-      "away_strength": 0.229
+      "exp_points_home": 1.85,
+      "exp_points_away": 0.92,
+      "home_strength": 0.363,
+      "away_strength": 0.236
     },
     {
       "group": "D",
@@ -917,43 +917,43 @@
       "stage": "Group Stage",
       "home": "United States",
       "away": "Paraguay",
-      "exp_home_goals": 1.86,
+      "exp_home_goals": 1.85,
       "exp_away_goals": 0.98,
-      "home_win_p": 0.5804,
-      "draw_p": 0.2243,
-      "away_win_p": 0.1953,
+      "home_win_p": 0.5774,
+      "draw_p": 0.2252,
+      "away_win_p": 0.1974,
       "most_likely_score": "1-0",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10855
+          "probability": 0.10848
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10639
+          "probability": 0.10682
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.10107
+          "probability": 0.10054
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09906
+          "probability": 0.099
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.06274
+          "probability": 0.06212
         }
       ],
-      "exp_points_home": 1.97,
-      "exp_points_away": 0.81,
-      "home_strength": 0.35,
-      "away_strength": 0.199
+      "exp_points_home": 1.96,
+      "exp_points_away": 0.82,
+      "home_strength": 0.357,
+      "away_strength": 0.205
     },
     {
       "group": "D",
@@ -965,43 +965,43 @@
       "stage": "Group Stage",
       "home": "Australia",
       "away": "Turkey",
-      "exp_home_goals": 1.2,
-      "exp_away_goals": 1.52,
-      "home_win_p": 0.2987,
-      "draw_p": 0.253,
-      "away_win_p": 0.4483,
+      "exp_home_goals": 1.18,
+      "exp_away_goals": 1.55,
+      "home_win_p": 0.2896,
+      "draw_p": 0.2516,
+      "away_win_p": 0.4588,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12003
+          "probability": 0.11936
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10025
+          "probability": 0.1013
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09149
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 0,
-          "probability": 0.07873
+          "probability": 0.09245
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.07641
+          "probability": 0.07846
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.07705
         }
       ],
-      "exp_points_home": 1.15,
-      "exp_points_away": 1.6,
-      "home_strength": 0.25,
-      "away_strength": 0.344
+      "exp_points_home": 1.12,
+      "exp_points_away": 1.63,
+      "home_strength": 0.245,
+      "away_strength": 0.348
     },
     {
       "group": "D",
@@ -1013,43 +1013,43 @@
       "stage": "Group Stage",
       "home": "United States",
       "away": "Australia",
-      "exp_home_goals": 1.66,
-      "exp_away_goals": 1.1,
-      "home_win_p": 0.5045,
-      "draw_p": 0.2436,
-      "away_win_p": 0.2518,
+      "exp_home_goals": 1.69,
+      "exp_away_goals": 1.08,
+      "home_win_p": 0.5179,
+      "draw_p": 0.2408,
+      "away_win_p": 0.2414,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11557
+          "probability": 0.11421
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10512
+          "probability": 0.10599
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09593
+          "probability": 0.09673
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.08725
+          "probability": 0.08977
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06962
+          "probability": 0.06742
         }
       ],
-      "exp_points_home": 1.76,
-      "exp_points_away": 1.0,
-      "home_strength": 0.35,
-      "away_strength": 0.25
+      "exp_points_home": 1.79,
+      "exp_points_away": 0.96,
+      "home_strength": 0.357,
+      "away_strength": 0.245
     },
     {
       "group": "D",
@@ -1061,43 +1061,43 @@
       "stage": "Group Stage",
       "home": "Paraguay",
       "away": "Turkey",
-      "exp_home_goals": 1.07,
-      "exp_away_goals": 1.71,
-      "home_win_p": 0.2365,
-      "draw_p": 0.2393,
-      "away_win_p": 0.5241,
+      "exp_home_goals": 1.08,
+      "exp_away_goals": 1.7,
+      "home_win_p": 0.241,
+      "draw_p": 0.2407,
+      "away_win_p": 0.5184,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11353
+          "probability": 0.11415
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10637
+          "probability": 0.10602
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09707
+          "probability": 0.09676
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.09094
+          "probability": 0.08987
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.06639
+          "probability": 0.06734
         }
       ],
-      "exp_points_home": 0.95,
-      "exp_points_away": 1.81,
-      "home_strength": 0.199,
-      "away_strength": 0.344
+      "exp_points_home": 0.96,
+      "exp_points_away": 1.8,
+      "home_strength": 0.205,
+      "away_strength": 0.348
     },
     {
       "group": "D",
@@ -1110,42 +1110,42 @@
       "home": "United States",
       "away": "Turkey",
       "exp_home_goals": 1.42,
-      "exp_away_goals": 1.29,
-      "home_win_p": 0.4004,
-      "draw_p": 0.2573,
-      "away_win_p": 0.3422,
+      "exp_away_goals": 1.28,
+      "home_win_p": 0.403,
+      "draw_p": 0.2572,
+      "away_win_p": 0.3398,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12206
+          "probability": 0.12199
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.09467
+          "probability": 0.09501
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.0864
+          "probability": 0.0867
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.08622
+          "probability": 0.08582
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.07868
+          "probability": 0.07832
         }
       ],
-      "exp_points_home": 1.46,
+      "exp_points_home": 1.47,
       "exp_points_away": 1.28,
-      "home_strength": 0.35,
-      "away_strength": 0.344
+      "home_strength": 0.357,
+      "away_strength": 0.348
     },
     {
       "group": "D",
@@ -1157,43 +1157,43 @@
       "stage": "Group Stage",
       "home": "Paraguay",
       "away": "Australia",
-      "exp_home_goals": 1.25,
-      "exp_away_goals": 1.46,
-      "home_win_p": 0.3245,
-      "draw_p": 0.2561,
-      "away_win_p": 0.4194,
+      "exp_home_goals": 1.28,
+      "exp_away_goals": 1.42,
+      "home_win_p": 0.3393,
+      "draw_p": 0.2572,
+      "away_win_p": 0.4035,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12146
+          "probability": 0.12198
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.09704
+          "probability": 0.09507
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.08856
+          "probability": 0.08676
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.08329
+          "probability": 0.08574
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.07601
+          "probability": 0.07825
         }
       ],
-      "exp_points_home": 1.23,
-      "exp_points_away": 1.51,
-      "home_strength": 0.199,
-      "away_strength": 0.25
+      "exp_points_home": 1.28,
+      "exp_points_away": 1.47,
+      "home_strength": 0.205,
+      "away_strength": 0.245
     },
     {
       "group": "E",
@@ -1205,42 +1205,42 @@
       "stage": "Group Stage",
       "home": "Germany",
       "away": "Curacao",
-      "exp_home_goals": 2.65,
-      "exp_away_goals": 0.69,
-      "home_win_p": 0.7906,
-      "draw_p": 0.1365,
-      "away_win_p": 0.073,
+      "exp_home_goals": 2.67,
+      "exp_away_goals": 0.68,
+      "home_win_p": 0.7946,
+      "draw_p": 0.1343,
+      "away_win_p": 0.0711,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.12459
+          "probability": 0.12461
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.1101
+          "probability": 0.11101
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.09399
+          "probability": 0.09325
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08577
+          "probability": 0.0851
         },
         {
           "home_goals": 3,
           "away_goals": 1,
-          "probability": 0.0758
+          "probability": 0.07581
         }
       ],
-      "exp_points_home": 2.51,
-      "exp_points_away": 0.36,
-      "home_strength": 0.535,
+      "exp_points_home": 2.52,
+      "exp_points_away": 0.35,
+      "home_strength": 0.544,
       "away_strength": 0.15
     },
     {
@@ -1253,43 +1253,43 @@
       "stage": "Group Stage",
       "home": "Ivory Coast",
       "away": "Ecuador",
-      "exp_home_goals": 1.69,
-      "exp_away_goals": 1.08,
-      "home_win_p": 0.516,
-      "draw_p": 0.2412,
-      "away_win_p": 0.2428,
+      "exp_home_goals": 1.68,
+      "exp_away_goals": 1.09,
+      "home_win_p": 0.5116,
+      "draw_p": 0.2421,
+      "away_win_p": 0.2462,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11441
+          "probability": 0.11486
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10588
+          "probability": 0.1056
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09662
+          "probability": 0.09637
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.08942
+          "probability": 0.0886
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06774
+          "probability": 0.06845
         }
       ],
-      "exp_points_home": 1.79,
-      "exp_points_away": 0.97,
-      "home_strength": 0.392,
-      "away_strength": 0.271
+      "exp_points_home": 1.78,
+      "exp_points_away": 0.98,
+      "home_strength": 0.396,
+      "away_strength": 0.277
     },
     {
       "group": "E",
@@ -1301,246 +1301,6 @@
       "stage": "Group Stage",
       "home": "Germany",
       "away": "Ivory Coast",
-      "exp_home_goals": 1.64,
-      "exp_away_goals": 1.11,
-      "home_win_p": 0.4966,
-      "draw_p": 0.2452,
-      "away_win_p": 0.2581,
-      "most_likely_score": "1-1",
-      "top_scorelines": [
-        {
-          "home_goals": 1,
-          "away_goals": 1,
-          "probability": 0.11632
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 0,
-          "probability": 0.10455
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 1,
-          "probability": 0.09541
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 0,
-          "probability": 0.08576
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 1,
-          "probability": 0.07091
-        }
-      ],
-      "exp_points_home": 1.74,
-      "exp_points_away": 1.02,
-      "home_strength": 0.535,
-      "away_strength": 0.392
-    },
-    {
-      "group": "E",
-      "matchday": 2,
-      "date": "2026-06-18",
-      "time_et": "22:00",
-      "venue": "MetLife Stadium",
-      "city": "New York",
-      "stage": "Group Stage",
-      "home": "Curacao",
-      "away": "Ecuador",
-      "exp_home_goals": 1.05,
-      "exp_away_goals": 1.75,
-      "home_win_p": 0.2259,
-      "draw_p": 0.236,
-      "away_win_p": 0.5381,
-      "most_likely_score": "1-1",
-      "top_scorelines": [
-        {
-          "home_goals": 1,
-          "away_goals": 1,
-          "probability": 0.11194
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 1,
-          "probability": 0.1071
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 2,
-          "probability": 0.09774
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 2,
-          "probability": 0.09352
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 0,
-          "probability": 0.0641
-        }
-      ],
-      "exp_points_home": 0.91,
-      "exp_points_away": 1.85,
-      "home_strength": 0.15,
-      "away_strength": 0.271
-    },
-    {
-      "group": "E",
-      "matchday": 3,
-      "date": "2026-06-24",
-      "time_et": "19:30",
-      "venue": "MetLife Stadium",
-      "city": "New York",
-      "stage": "Group Stage",
-      "home": "Germany",
-      "away": "Ecuador",
-      "exp_home_goals": 1.97,
-      "exp_away_goals": 0.92,
-      "home_win_p": 0.6182,
-      "draw_p": 0.2121,
-      "away_win_p": 0.1697,
-      "most_likely_score": "1-0",
-      "top_scorelines": [
-        {
-          "home_goals": 1,
-          "away_goals": 0,
-          "probability": 0.10877
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 0,
-          "probability": 0.10733
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 1,
-          "probability": 0.10059
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 1,
-          "probability": 0.09926
-        },
-        {
-          "home_goals": 3,
-          "away_goals": 0,
-          "probability": 0.07061
-        }
-      ],
-      "exp_points_home": 2.07,
-      "exp_points_away": 0.72,
-      "home_strength": 0.535,
-      "away_strength": 0.271
-    },
-    {
-      "group": "E",
-      "matchday": 3,
-      "date": "2026-06-24",
-      "time_et": "22:00",
-      "venue": "MetLife Stadium",
-      "city": "New York",
-      "stage": "Group Stage",
-      "home": "Curacao",
-      "away": "Ivory Coast",
-      "exp_home_goals": 0.87,
-      "exp_away_goals": 2.1,
-      "home_win_p": 0.1447,
-      "draw_p": 0.1975,
-      "away_win_p": 0.6579,
-      "most_likely_score": "0-2",
-      "top_scorelines": [
-        {
-          "home_goals": 0,
-          "away_goals": 2,
-          "probability": 0.11326
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 1,
-          "probability": 0.10782
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 2,
-          "probability": 0.0984
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 1,
-          "probability": 0.09367
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 3,
-          "probability": 0.07931
-        }
-      ],
-      "exp_points_home": 0.63,
-      "exp_points_away": 2.17,
-      "home_strength": 0.15,
-      "away_strength": 0.392
-    },
-    {
-      "group": "F",
-      "matchday": 1,
-      "date": "2026-06-12",
-      "time_et": "19:30",
-      "venue": "Lumen Field",
-      "city": "Seattle",
-      "stage": "Group Stage",
-      "home": "Netherlands",
-      "away": "Japan",
-      "exp_home_goals": 1.63,
-      "exp_away_goals": 1.12,
-      "home_win_p": 0.4937,
-      "draw_p": 0.2458,
-      "away_win_p": 0.2605,
-      "most_likely_score": "1-1",
-      "top_scorelines": [
-        {
-          "home_goals": 1,
-          "away_goals": 1,
-          "probability": 0.11659
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 0,
-          "probability": 0.10433
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 1,
-          "probability": 0.09521
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 0,
-          "probability": 0.08521
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 1,
-          "probability": 0.07138
-        }
-      ],
-      "exp_points_home": 1.73,
-      "exp_points_away": 1.03,
-      "home_strength": 0.476,
-      "away_strength": 0.352
-    },
-    {
-      "group": "F",
-      "matchday": 1,
-      "date": "2026-06-12",
-      "time_et": "22:00",
-      "venue": "Lumen Field",
-      "city": "Seattle",
-      "stage": "Group Stage",
-      "home": "Sweden",
-      "away": "Tunisia",
       "exp_home_goals": 1.65,
       "exp_away_goals": 1.11,
       "home_win_p": 0.4986,
@@ -1556,12 +1316,12 @@
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10469
+          "probability": 0.1047
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09554
+          "probability": 0.09555
         },
         {
           "home_goals": 2,
@@ -1571,157 +1331,397 @@
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.07059
+          "probability": 0.07058
         }
       ],
       "exp_points_home": 1.74,
       "exp_points_away": 1.01,
-      "home_strength": 0.339,
-      "away_strength": 0.247
+      "home_strength": 0.544,
+      "away_strength": 0.396
     },
     {
-      "group": "F",
-      "matchday": 2,
-      "date": "2026-06-18",
-      "time_et": "19:30",
-      "venue": "Lumen Field",
-      "city": "Seattle",
-      "stage": "Group Stage",
-      "home": "Netherlands",
-      "away": "Sweden",
-      "exp_home_goals": 1.67,
-      "exp_away_goals": 1.1,
-      "home_win_p": 0.5065,
-      "draw_p": 0.2432,
-      "away_win_p": 0.2503,
-      "most_likely_score": "1-1",
-      "top_scorelines": [
-        {
-          "home_goals": 1,
-          "away_goals": 1,
-          "probability": 0.11538
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 0,
-          "probability": 0.10525
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 1,
-          "probability": 0.09606
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 0,
-          "probability": 0.08763
-        },
-        {
-          "home_goals": 0,
-          "away_goals": 1,
-          "probability": 0.06929
-        }
-      ],
-      "exp_points_home": 1.76,
-      "exp_points_away": 0.99,
-      "home_strength": 0.476,
-      "away_strength": 0.339
-    },
-    {
-      "group": "F",
+      "group": "E",
       "matchday": 2,
       "date": "2026-06-18",
       "time_et": "22:00",
-      "venue": "Lumen Field",
-      "city": "Seattle",
+      "venue": "MetLife Stadium",
+      "city": "New York",
       "stage": "Group Stage",
-      "home": "Japan",
-      "away": "Tunisia",
-      "exp_home_goals": 1.68,
-      "exp_away_goals": 1.09,
-      "home_win_p": 0.5113,
-      "draw_p": 0.2422,
-      "away_win_p": 0.2465,
+      "home": "Curacao",
+      "away": "Ecuador",
+      "exp_home_goals": 1.03,
+      "exp_away_goals": 1.77,
+      "home_win_p": 0.2202,
+      "draw_p": 0.234,
+      "away_win_p": 0.5458,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11489
-        },
-        {
-          "home_goals": 1,
-          "away_goals": 0,
-          "probability": 0.10558
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 1,
-          "probability": 0.09635
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 0,
-          "probability": 0.08854
+          "probability": 0.11101
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.0685
+          "probability": 0.10745
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09806
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.09492
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.06283
         }
       ],
-      "exp_points_home": 1.78,
-      "exp_points_away": 0.98,
-      "home_strength": 0.352,
-      "away_strength": 0.247
+      "exp_points_home": 0.89,
+      "exp_points_away": 1.87,
+      "home_strength": 0.15,
+      "away_strength": 0.277
     },
     {
-      "group": "F",
+      "group": "E",
       "matchday": 3,
       "date": "2026-06-24",
       "time_et": "19:30",
-      "venue": "Lumen Field",
-      "city": "Seattle",
+      "venue": "MetLife Stadium",
+      "city": "New York",
       "stage": "Group Stage",
-      "home": "Netherlands",
-      "away": "Tunisia",
-      "exp_home_goals": 1.95,
-      "exp_away_goals": 0.94,
-      "home_win_p": 0.6109,
-      "draw_p": 0.2146,
-      "away_win_p": 0.1746,
+      "home": "Germany",
+      "away": "Ecuador",
+      "exp_home_goals": 1.97,
+      "exp_away_goals": 0.93,
+      "home_win_p": 0.6159,
+      "draw_p": 0.2129,
+      "away_win_p": 0.1712,
       "most_likely_score": "1-0",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10881
+          "probability": 0.10878
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.10615
+          "probability": 0.10696
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10178
+          "probability": 0.10097
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.0993
+          "probability": 0.09928
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.06904
+          "probability": 0.07011
         }
       ],
-      "exp_points_home": 2.05,
-      "exp_points_away": 0.74,
-      "home_strength": 0.476,
-      "away_strength": 0.247
+      "exp_points_home": 2.06,
+      "exp_points_away": 0.73,
+      "home_strength": 0.544,
+      "away_strength": 0.277
+    },
+    {
+      "group": "E",
+      "matchday": 3,
+      "date": "2026-06-24",
+      "time_et": "22:00",
+      "venue": "MetLife Stadium",
+      "city": "New York",
+      "stage": "Group Stage",
+      "home": "Curacao",
+      "away": "Ivory Coast",
+      "exp_home_goals": 0.86,
+      "exp_away_goals": 2.11,
+      "home_win_p": 0.1427,
+      "draw_p": 0.1962,
+      "away_win_p": 0.661,
+      "most_likely_score": "0-2",
+      "top_scorelines": [
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.1137
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10769
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09828
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.09308
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 3,
+          "probability": 0.08003
+        }
+      ],
+      "exp_points_home": 0.62,
+      "exp_points_away": 2.18,
+      "home_strength": 0.15,
+      "away_strength": 0.396
+    },
+    {
+      "group": "F",
+      "matchday": 1,
+      "date": "2026-06-12",
+      "time_et": "19:30",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "Netherlands",
+      "away": "Japan",
+      "exp_home_goals": 1.64,
+      "exp_away_goals": 1.12,
+      "home_win_p": 0.4947,
+      "draw_p": 0.2456,
+      "away_win_p": 0.2597,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1165
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.1044
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09528
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08538
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07123
+        }
+      ],
+      "exp_points_home": 1.73,
+      "exp_points_away": 1.02,
+      "home_strength": 0.486,
+      "away_strength": 0.358
+    },
+    {
+      "group": "F",
+      "matchday": 1,
+      "date": "2026-06-12",
+      "time_et": "22:00",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "Sweden",
+      "away": "Tunisia",
+      "exp_home_goals": 1.63,
+      "exp_away_goals": 1.12,
+      "home_win_p": 0.4913,
+      "draw_p": 0.2462,
+      "away_win_p": 0.2624,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1168
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10415
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09504
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08475
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07177
+        }
+      ],
+      "exp_points_home": 1.72,
+      "exp_points_away": 1.03,
+      "home_strength": 0.349,
+      "away_strength": 0.26
+    },
+    {
+      "group": "F",
+      "matchday": 2,
+      "date": "2026-06-18",
+      "time_et": "19:30",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "Netherlands",
+      "away": "Sweden",
+      "exp_home_goals": 1.66,
+      "exp_away_goals": 1.1,
+      "home_win_p": 0.5031,
+      "draw_p": 0.2439,
+      "away_win_p": 0.253,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11571
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10502
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09584
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08699
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06985
+        }
+      ],
+      "exp_points_home": 1.75,
+      "exp_points_away": 1.0,
+      "home_strength": 0.486,
+      "away_strength": 0.349
+    },
+    {
+      "group": "F",
+      "matchday": 2,
+      "date": "2026-06-18",
+      "time_et": "22:00",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "Japan",
+      "away": "Tunisia",
+      "exp_home_goals": 1.65,
+      "exp_away_goals": 1.11,
+      "home_win_p": 0.4998,
+      "draw_p": 0.2446,
+      "away_win_p": 0.2556,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11603
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10478
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09562
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08635
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07039
+        }
+      ],
+      "exp_points_home": 1.74,
+      "exp_points_away": 1.01,
+      "home_strength": 0.358,
+      "away_strength": 0.26
+    },
+    {
+      "group": "F",
+      "matchday": 3,
+      "date": "2026-06-24",
+      "time_et": "19:30",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "Netherlands",
+      "away": "Tunisia",
+      "exp_home_goals": 1.92,
+      "exp_away_goals": 0.95,
+      "home_win_p": 0.6005,
+      "draw_p": 0.218,
+      "away_win_p": 0.1815,
+      "most_likely_score": "1-0",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10879
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.10445
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10341
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09929
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.06686
+        }
+      ],
+      "exp_points_home": 2.02,
+      "exp_points_away": 0.76,
+      "home_strength": 0.486,
+      "away_strength": 0.26
     },
     {
       "group": "F",
@@ -1733,43 +1733,43 @@
       "stage": "Group Stage",
       "home": "Japan",
       "away": "Sweden",
-      "exp_home_goals": 1.43,
+      "exp_home_goals": 1.42,
       "exp_away_goals": 1.28,
-      "home_win_p": 0.4074,
-      "draw_p": 0.2569,
-      "away_win_p": 0.3357,
+      "home_win_p": 0.4033,
+      "draw_p": 0.2572,
+      "away_win_p": 0.3396,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12187
+          "probability": 0.12199
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.09556
+          "probability": 0.09504
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08721
+          "probability": 0.08673
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.08515
+          "probability": 0.08578
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.07771
+          "probability": 0.07829
         }
       ],
-      "exp_points_home": 1.48,
-      "exp_points_away": 1.26,
-      "home_strength": 0.352,
-      "away_strength": 0.339
+      "exp_points_home": 1.47,
+      "exp_points_away": 1.28,
+      "home_strength": 0.358,
+      "away_strength": 0.349
     },
     {
       "group": "G",
@@ -1783,41 +1783,41 @@
       "away": "Egypt",
       "exp_home_goals": 1.77,
       "exp_away_goals": 1.03,
-      "home_win_p": 0.5459,
-      "draw_p": 0.234,
-      "away_win_p": 0.2201,
+      "home_win_p": 0.5468,
+      "draw_p": 0.2338,
+      "away_win_p": 0.2194,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.111
+          "probability": 0.11088
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10746
+          "probability": 0.1075
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09807
+          "probability": 0.0981
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09494
+          "probability": 0.09511
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06282
+          "probability": 0.06266
         }
       ],
       "exp_points_home": 1.87,
       "exp_points_away": 0.89,
-      "home_strength": 0.38,
-      "away_strength": 0.24
+      "home_strength": 0.384,
+      "away_strength": 0.242
     },
     {
       "group": "G",
@@ -1829,43 +1829,43 @@
       "stage": "Group Stage",
       "home": "Iran",
       "away": "New Zealand",
-      "exp_home_goals": 1.15,
-      "exp_away_goals": 1.58,
-      "home_win_p": 0.2773,
-      "draw_p": 0.2494,
-      "away_win_p": 0.4732,
+      "exp_home_goals": 1.14,
+      "exp_away_goals": 1.6,
+      "home_win_p": 0.2711,
+      "draw_p": 0.2482,
+      "away_win_p": 0.4808,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11831
+          "probability": 0.11771
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10264
+          "probability": 0.10329
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09367
+          "probability": 0.09426
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.08126
+          "probability": 0.08272
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.07472
+          "probability": 0.0735
         }
       ],
-      "exp_points_home": 1.08,
-      "exp_points_away": 1.67,
+      "exp_points_home": 1.06,
+      "exp_points_away": 1.69,
       "home_strength": 0.15,
-      "away_strength": 0.223
+      "away_strength": 0.228
     },
     {
       "group": "G",
@@ -1877,42 +1877,42 @@
       "stage": "Group Stage",
       "home": "Belgium",
       "away": "Iran",
-      "exp_home_goals": 2.24,
-      "exp_away_goals": 0.82,
-      "home_win_p": 0.6959,
-      "draw_p": 0.1819,
-      "away_win_p": 0.1222,
+      "exp_home_goals": 2.25,
+      "exp_away_goals": 0.81,
+      "home_win_p": 0.6985,
+      "draw_p": 0.1808,
+      "away_win_p": 0.1207,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.11811
+          "probability": 0.1184
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10566
+          "probability": 0.10547
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09643
+          "probability": 0.09625
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.08801
+          "probability": 0.08862
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.08627
+          "probability": 0.08573
         }
       ],
-      "exp_points_home": 2.27,
-      "exp_points_away": 0.55,
-      "home_strength": 0.38,
+      "exp_points_home": 2.28,
+      "exp_points_away": 0.54,
+      "home_strength": 0.384,
       "away_strength": 0.15
     },
     {
@@ -1925,43 +1925,43 @@
       "stage": "Group Stage",
       "home": "Egypt",
       "away": "New Zealand",
-      "exp_home_goals": 1.46,
-      "exp_away_goals": 1.25,
-      "home_win_p": 0.4195,
-      "draw_p": 0.256,
-      "away_win_p": 0.3245,
+      "exp_home_goals": 1.45,
+      "exp_away_goals": 1.26,
+      "home_win_p": 0.414,
+      "draw_p": 0.2565,
+      "away_win_p": 0.3295,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12145
+          "probability": 0.12166
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.09704
+          "probability": 0.09638
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08856
+          "probability": 0.08796
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.08328
+          "probability": 0.08413
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.076
+          "probability": 0.07678
         }
       ],
-      "exp_points_home": 1.51,
-      "exp_points_away": 1.23,
-      "home_strength": 0.24,
-      "away_strength": 0.223
+      "exp_points_home": 1.5,
+      "exp_points_away": 1.25,
+      "home_strength": 0.242,
+      "away_strength": 0.228
     },
     {
       "group": "G",
@@ -1973,43 +1973,43 @@
       "stage": "Group Stage",
       "home": "Belgium",
       "away": "New Zealand",
-      "exp_home_goals": 1.84,
-      "exp_away_goals": 0.99,
-      "home_win_p": 0.5709,
-      "draw_p": 0.2271,
-      "away_win_p": 0.202,
-      "most_likely_score": "1-0",
+      "exp_home_goals": 1.82,
+      "exp_away_goals": 1.0,
+      "home_win_p": 0.5663,
+      "draw_p": 0.2284,
+      "away_win_p": 0.2053,
+      "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
-          "away_goals": 0,
-          "probability": 0.10833
+          "away_goals": 1,
+          "probability": 0.10836
         },
         {
           "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.1082
+        },
+        {
+          "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.10773
+          "probability": 0.09874
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09941
-        },
-        {
-          "home_goals": 2,
-          "away_goals": 1,
-          "probability": 0.09886
+          "probability": 0.0986
         },
         {
           "home_goals": 3,
-          "away_goals": 0,
-          "probability": 0.06082
+          "away_goals": 1,
+          "probability": 0.05999
         }
       ],
-      "exp_points_home": 1.94,
-      "exp_points_away": 0.83,
-      "home_strength": 0.38,
-      "away_strength": 0.223
+      "exp_points_home": 1.93,
+      "exp_points_away": 0.84,
+      "home_strength": 0.384,
+      "away_strength": 0.228
     },
     {
       "group": "G",
@@ -2022,41 +2022,41 @@
       "home": "Egypt",
       "away": "Iran",
       "exp_home_goals": 1.78,
-      "exp_away_goals": 1.03,
-      "home_win_p": 0.5494,
-      "draw_p": 0.2331,
-      "away_win_p": 0.2176,
+      "exp_away_goals": 1.02,
+      "home_win_p": 0.5513,
+      "draw_p": 0.2326,
+      "away_win_p": 0.2161,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11056
+          "probability": 0.11032
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.1076
+          "probability": 0.10768
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.0982
+          "probability": 0.09827
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09557
+          "probability": 0.09592
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06224
+          "probability": 0.06193
         }
       ],
-      "exp_points_home": 1.88,
-      "exp_points_away": 0.89,
-      "home_strength": 0.24,
+      "exp_points_home": 1.89,
+      "exp_points_away": 0.88,
+      "home_strength": 0.242,
       "away_strength": 0.15
     },
     {
@@ -2069,43 +2069,43 @@
       "stage": "Group Stage",
       "home": "Spain",
       "away": "Cape Verde",
-      "exp_home_goals": 2.77,
+      "exp_home_goals": 2.75,
       "exp_away_goals": 0.66,
-      "home_win_p": 0.812,
-      "draw_p": 0.1249,
-      "away_win_p": 0.0631,
+      "home_win_p": 0.8083,
+      "draw_p": 0.1269,
+      "away_win_p": 0.0647,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.12439
+          "probability": 0.12448
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.11483
+          "probability": 0.11403
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.08983
+          "probability": 0.09059
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08198
+          "probability": 0.08267
         },
         {
           "home_goals": 4,
           "away_goals": 0,
-          "probability": 0.0795
+          "probability": 0.07835
         }
       ],
-      "exp_points_home": 2.56,
-      "exp_points_away": 0.31,
-      "home_strength": 0.712,
-      "away_strength": 0.183
+      "exp_points_home": 2.55,
+      "exp_points_away": 0.32,
+      "home_strength": 0.715,
+      "away_strength": 0.187
     },
     {
       "group": "H",
@@ -2117,43 +2117,43 @@
       "stage": "Group Stage",
       "home": "Saudi Arabia",
       "away": "Uruguay",
-      "exp_home_goals": 0.94,
-      "exp_away_goals": 1.95,
-      "home_win_p": 0.1752,
-      "draw_p": 0.2149,
-      "away_win_p": 0.6098,
+      "exp_home_goals": 0.92,
+      "exp_away_goals": 1.99,
+      "home_win_p": 0.1672,
+      "draw_p": 0.2107,
+      "away_win_p": 0.622,
       "most_likely_score": "0-1",
       "top_scorelines": [
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10881
+          "probability": 0.10873
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.10599
+          "probability": 0.10793
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10194
+          "probability": 0.09996
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.0993
+          "probability": 0.09923
         },
         {
           "home_goals": 0,
           "away_goals": 3,
-          "probability": 0.06883
+          "probability": 0.07142
         }
       ],
-      "exp_points_home": 0.74,
-      "exp_points_away": 2.04,
+      "exp_points_home": 0.71,
+      "exp_points_away": 2.08,
       "home_strength": 0.15,
-      "away_strength": 0.337
+      "away_strength": 0.35
     },
     {
       "group": "H",
@@ -2165,42 +2165,42 @@
       "stage": "Group Stage",
       "home": "Spain",
       "away": "Saudi Arabia",
-      "exp_home_goals": 3.06,
+      "exp_home_goals": 3.07,
       "exp_away_goals": 0.6,
-      "home_win_p": 0.8563,
-      "draw_p": 0.0995,
-      "away_win_p": 0.0442,
+      "home_win_p": 0.857,
+      "draw_p": 0.099,
+      "away_win_p": 0.0439,
       "most_likely_score": "3-0",
       "top_scorelines": [
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.12331
+          "probability": 0.12344
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.1209
+          "probability": 0.1208
         },
         {
           "home_goals": 4,
           "away_goals": 0,
-          "probability": 0.09433
+          "probability": 0.0946
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.07903
+          "probability": 0.07881
         },
         {
           "home_goals": 3,
           "away_goals": 1,
-          "probability": 0.07356
+          "probability": 0.07349
         }
       ],
       "exp_points_home": 2.67,
       "exp_points_away": 0.23,
-      "home_strength": 0.712,
+      "home_strength": 0.715,
       "away_strength": 0.15
     },
     {
@@ -2213,43 +2213,43 @@
       "stage": "Group Stage",
       "home": "Cape Verde",
       "away": "Uruguay",
-      "exp_home_goals": 1.04,
-      "exp_away_goals": 1.76,
-      "home_win_p": 0.2212,
-      "draw_p": 0.2344,
-      "away_win_p": 0.5445,
+      "exp_home_goals": 1.03,
+      "exp_away_goals": 1.78,
+      "home_win_p": 0.2166,
+      "draw_p": 0.2328,
+      "away_win_p": 0.5506,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11117
+          "probability": 0.1104
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.1074
+          "probability": 0.10766
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09801
+          "probability": 0.09825
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.09468
+          "probability": 0.0958
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.06305
+          "probability": 0.06203
         }
       ],
-      "exp_points_home": 0.9,
-      "exp_points_away": 1.87,
-      "home_strength": 0.183,
-      "away_strength": 0.337
+      "exp_points_home": 0.88,
+      "exp_points_away": 1.88,
+      "home_strength": 0.187,
+      "away_strength": 0.35
     },
     {
       "group": "H",
@@ -2261,43 +2261,43 @@
       "stage": "Group Stage",
       "home": "Spain",
       "away": "Uruguay",
-      "exp_home_goals": 2.04,
-      "exp_away_goals": 0.89,
-      "home_win_p": 0.6399,
-      "draw_p": 0.2043,
-      "away_win_p": 0.1558,
+      "exp_home_goals": 2.01,
+      "exp_away_goals": 0.91,
+      "home_win_p": 0.6291,
+      "draw_p": 0.2082,
+      "away_win_p": 0.1627,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.11067
+          "probability": 0.10903
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.1084
+          "probability": 0.10863
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09893
+          "probability": 0.09914
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.0969
+          "probability": 0.09877
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.07532
+          "probability": 0.07296
         }
       ],
-      "exp_points_home": 2.12,
-      "exp_points_away": 0.67,
-      "home_strength": 0.712,
-      "away_strength": 0.337
+      "exp_points_home": 2.1,
+      "exp_points_away": 0.7,
+      "home_strength": 0.715,
+      "away_strength": 0.35
     },
     {
       "group": "H",
@@ -2309,42 +2309,42 @@
       "stage": "Group Stage",
       "home": "Cape Verde",
       "away": "Saudi Arabia",
-      "exp_home_goals": 1.55,
-      "exp_away_goals": 1.18,
-      "home_win_p": 0.4597,
-      "draw_p": 0.2515,
-      "away_win_p": 0.2888,
+      "exp_home_goals": 1.57,
+      "exp_away_goals": 1.17,
+      "home_win_p": 0.466,
+      "draw_p": 0.2506,
+      "away_win_p": 0.2834,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.1193
+          "probability": 0.11885
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10139
+          "probability": 0.10198
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09253
+          "probability": 0.09307
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.07864
+          "probability": 0.07986
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.07691
+          "probability": 0.07589
         }
       ],
-      "exp_points_home": 1.63,
-      "exp_points_away": 1.12,
-      "home_strength": 0.183,
+      "exp_points_home": 1.65,
+      "exp_points_away": 1.1,
+      "home_strength": 0.187,
       "away_strength": 0.15
     },
     {
@@ -2357,43 +2357,43 @@
       "stage": "Group Stage",
       "home": "France",
       "away": "Senegal",
-      "exp_home_goals": 1.81,
-      "exp_away_goals": 1.01,
-      "home_win_p": 0.5628,
-      "draw_p": 0.2294,
-      "away_win_p": 0.2078,
+      "exp_home_goals": 1.82,
+      "exp_away_goals": 1.0,
+      "home_win_p": 0.564,
+      "draw_p": 0.2291,
+      "away_win_p": 0.2069,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10883
+          "probability": 0.10867
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10809
+          "probability": 0.10813
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09865
+          "probability": 0.09868
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09798
+          "probability": 0.09819
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06003
+          "probability": 0.05983
         }
       ],
       "exp_points_home": 1.92,
       "exp_points_away": 0.85,
-      "home_strength": 0.653,
-      "away_strength": 0.392
+      "home_strength": 0.665,
+      "away_strength": 0.398
     },
     {
       "group": "I",
@@ -2405,43 +2405,43 @@
       "stage": "Group Stage",
       "home": "Iraq",
       "away": "Norway",
-      "exp_home_goals": 0.94,
-      "exp_away_goals": 1.93,
-      "home_win_p": 0.1788,
-      "draw_p": 0.2167,
-      "away_win_p": 0.6045,
+      "exp_home_goals": 0.93,
+      "exp_away_goals": 1.96,
+      "home_win_p": 0.1716,
+      "draw_p": 0.2131,
+      "away_win_p": 0.6153,
       "most_likely_score": "0-1",
       "top_scorelines": [
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10881
+          "probability": 0.10879
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.10511
+          "probability": 0.10687
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10279
+          "probability": 0.10106
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.0993
+          "probability": 0.09928
         },
         {
           "home_goals": 0,
           "away_goals": 3,
-          "probability": 0.06769
+          "probability": 0.06999
         }
       ],
-      "exp_points_home": 0.75,
-      "exp_points_away": 2.03,
+      "exp_points_home": 0.73,
+      "exp_points_away": 2.06,
       "home_strength": 0.15,
-      "away_strength": 0.331
+      "away_strength": 0.343
     },
     {
       "group": "I",
@@ -2453,42 +2453,42 @@
       "stage": "Group Stage",
       "home": "France",
       "away": "Iraq",
-      "exp_home_goals": 2.93,
+      "exp_home_goals": 2.96,
       "exp_away_goals": 0.62,
-      "home_win_p": 0.8378,
-      "draw_p": 0.1104,
-      "away_win_p": 0.0518,
+      "home_win_p": 0.8418,
+      "draw_p": 0.108,
+      "away_win_p": 0.0501,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.12295
+          "probability": 0.12258
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.12005
+          "probability": 0.1208
         },
         {
           "home_goals": 4,
           "away_goals": 0,
-          "probability": 0.08792
+          "probability": 0.08929
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.08394
+          "probability": 0.08292
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.0766
+          "probability": 0.07567
         }
       ],
-      "exp_points_home": 2.62,
-      "exp_points_away": 0.27,
-      "home_strength": 0.653,
+      "exp_points_home": 2.63,
+      "exp_points_away": 0.26,
+      "home_strength": 0.665,
       "away_strength": 0.15
     },
     {
@@ -2501,43 +2501,43 @@
       "stage": "Group Stage",
       "home": "Senegal",
       "away": "Norway",
-      "exp_home_goals": 1.53,
-      "exp_away_goals": 1.2,
-      "home_win_p": 0.4491,
-      "draw_p": 0.2529,
-      "away_win_p": 0.2979,
+      "exp_home_goals": 1.51,
+      "exp_away_goals": 1.21,
+      "home_win_p": 0.443,
+      "draw_p": 0.2537,
+      "away_win_p": 0.3033,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11997
+          "probability": 0.12033
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10034
+          "probability": 0.0997
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09157
+          "probability": 0.09098
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.0786
+          "probability": 0.07957
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.07658
+          "probability": 0.07538
         }
       ],
-      "exp_points_home": 1.6,
-      "exp_points_away": 1.15,
-      "home_strength": 0.392,
-      "away_strength": 0.331
+      "exp_points_home": 1.58,
+      "exp_points_away": 1.16,
+      "home_strength": 0.398,
+      "away_strength": 0.343
     },
     {
       "group": "I",
@@ -2549,43 +2549,43 @@
       "stage": "Group Stage",
       "home": "France",
       "away": "Norway",
-      "exp_home_goals": 1.97,
+      "exp_home_goals": 1.96,
       "exp_away_goals": 0.93,
-      "home_win_p": 0.6174,
-      "draw_p": 0.2124,
-      "away_win_p": 0.1703,
+      "home_win_p": 0.6125,
+      "draw_p": 0.214,
+      "away_win_p": 0.1735,
       "most_likely_score": "1-0",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10877
+          "probability": 0.1088
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.1072
+          "probability": 0.10642
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10072
+          "probability": 0.10152
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09927
+          "probability": 0.09929
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.07043
+          "probability": 0.06939
         }
       ],
-      "exp_points_home": 2.06,
-      "exp_points_away": 0.72,
-      "home_strength": 0.653,
-      "away_strength": 0.331
+      "exp_points_home": 2.05,
+      "exp_points_away": 0.73,
+      "home_strength": 0.665,
+      "away_strength": 0.343
     },
     {
       "group": "I",
@@ -2597,42 +2597,42 @@
       "stage": "Group Stage",
       "home": "Senegal",
       "away": "Iraq",
-      "exp_home_goals": 2.27,
+      "exp_home_goals": 2.29,
       "exp_away_goals": 0.8,
-      "home_win_p": 0.7046,
-      "draw_p": 0.1781,
-      "away_win_p": 0.1173,
+      "home_win_p": 0.709,
+      "draw_p": 0.1761,
+      "away_win_p": 0.1148,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.11908
+          "probability": 0.11954
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10498
+          "probability": 0.10461
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.0958
+          "probability": 0.09547
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.09005
+          "probability": 0.09107
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.08446
+          "probability": 0.08354
         }
       ],
-      "exp_points_home": 2.29,
-      "exp_points_away": 0.53,
-      "home_strength": 0.392,
+      "exp_points_home": 2.3,
+      "exp_points_away": 0.52,
+      "home_strength": 0.398,
       "away_strength": 0.15
     },
     {
@@ -2645,43 +2645,43 @@
       "stage": "Group Stage",
       "home": "Argentina",
       "away": "Algeria",
-      "exp_home_goals": 1.58,
+      "exp_home_goals": 1.59,
       "exp_away_goals": 1.15,
-      "home_win_p": 0.4738,
-      "draw_p": 0.2493,
-      "away_win_p": 0.2769,
+      "home_win_p": 0.4771,
+      "draw_p": 0.2488,
+      "away_win_p": 0.2741,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11827
+          "probability": 0.11801
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10269
+          "probability": 0.10298
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09371
+          "probability": 0.09398
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.08137
+          "probability": 0.08201
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.07463
+          "probability": 0.07409
         }
       ],
-      "exp_points_home": 1.67,
-      "exp_points_away": 1.08,
-      "home_strength": 0.564,
-      "away_strength": 0.443
+      "exp_points_home": 1.68,
+      "exp_points_away": 1.07,
+      "home_strength": 0.567,
+      "away_strength": 0.441
     },
     {
       "group": "J",
@@ -2695,40 +2695,40 @@
       "away": "Jordan",
       "exp_home_goals": 2.14,
       "exp_away_goals": 0.85,
-      "home_win_p": 0.6705,
-      "draw_p": 0.1925,
-      "away_win_p": 0.137,
+      "home_win_p": 0.6691,
+      "draw_p": 0.193,
+      "away_win_p": 0.1378,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.11497
+          "probability": 0.11479
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10724
+          "probability": 0.10731
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09787
+          "probability": 0.09793
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.09129
+          "probability": 0.09155
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.08217
+          "probability": 0.08186
         }
       ],
       "exp_points_home": 2.2,
-      "exp_points_away": 0.6,
-      "home_strength": 0.35,
+      "exp_points_away": 0.61,
+      "home_strength": 0.348,
       "away_strength": 0.15
     },
     {
@@ -2741,43 +2741,43 @@
       "stage": "Group Stage",
       "home": "Argentina",
       "away": "Austria",
-      "exp_home_goals": 1.78,
+      "exp_home_goals": 1.79,
       "exp_away_goals": 1.02,
-      "home_win_p": 0.5517,
-      "draw_p": 0.2325,
-      "away_win_p": 0.2159,
+      "home_win_p": 0.555,
+      "draw_p": 0.2316,
+      "away_win_p": 0.2134,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11027
+          "probability": 0.10985
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.1077
+          "probability": 0.10782
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09828
+          "probability": 0.0984
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09599
+          "probability": 0.09659
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06186
+          "probability": 0.06131
         }
       ],
-      "exp_points_home": 1.89,
-      "exp_points_away": 0.88,
-      "home_strength": 0.564,
-      "away_strength": 0.35
+      "exp_points_home": 1.9,
+      "exp_points_away": 0.87,
+      "home_strength": 0.567,
+      "away_strength": 0.348
     },
     {
       "group": "J",
@@ -2791,40 +2791,40 @@
       "away": "Jordan",
       "exp_home_goals": 2.41,
       "exp_away_goals": 0.76,
-      "home_win_p": 0.74,
-      "draw_p": 0.1619,
-      "away_win_p": 0.0981,
+      "home_win_p": 0.7387,
+      "draw_p": 0.1625,
+      "away_win_p": 0.0988,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.12234
+          "probability": 0.12224
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10145
+          "probability": 0.1016
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.09835
+          "probability": 0.09805
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09258
+          "probability": 0.09272
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.07678
+          "probability": 0.07706
         }
       ],
       "exp_points_home": 2.38,
       "exp_points_away": 0.46,
-      "home_strength": 0.443,
+      "home_strength": 0.441,
       "away_strength": 0.15
     },
     {
@@ -2837,42 +2837,42 @@
       "stage": "Group Stage",
       "home": "Argentina",
       "away": "Jordan",
-      "exp_home_goals": 2.72,
+      "exp_home_goals": 2.73,
       "exp_away_goals": 0.67,
-      "home_win_p": 0.8037,
-      "draw_p": 0.1294,
-      "away_win_p": 0.0668,
+      "home_win_p": 0.8051,
+      "draw_p": 0.1287,
+      "away_win_p": 0.0662,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.12456
+          "probability": 0.12454
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.11303
+          "probability": 0.11333
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.09152
+          "probability": 0.09124
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08352
+          "probability": 0.08327
         },
         {
           "home_goals": 4,
           "away_goals": 0,
-          "probability": 0.07692
+          "probability": 0.07735
         }
       ],
       "exp_points_home": 2.54,
       "exp_points_away": 0.33,
-      "home_strength": 0.564,
+      "home_strength": 0.567,
       "away_strength": 0.15
     },
     {
@@ -2895,12 +2895,12 @@
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.11844
+          "probability": 0.11845
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10249
+          "probability": 0.10248
         },
         {
           "home_goals": 2,
@@ -2910,18 +2910,18 @@
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.08093
+          "probability": 0.08092
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.075
+          "probability": 0.07501
         }
       ],
       "exp_points_home": 1.66,
       "exp_points_away": 1.09,
-      "home_strength": 0.443,
-      "away_strength": 0.35
+      "home_strength": 0.441,
+      "away_strength": 0.348
     },
     {
       "group": "K",
@@ -2933,42 +2933,42 @@
       "stage": "Group Stage",
       "home": "Portugal",
       "away": "DR Congo",
-      "exp_home_goals": 2.55,
+      "exp_home_goals": 2.58,
       "exp_away_goals": 0.71,
-      "home_win_p": 0.7712,
-      "draw_p": 0.1465,
-      "away_win_p": 0.0823,
+      "home_win_p": 0.776,
+      "draw_p": 0.1441,
+      "away_win_p": 0.0799,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.12412
+          "probability": 0.12429
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.10566
+          "probability": 0.10677
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.09721
+          "probability": 0.09645
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08871
+          "probability": 0.08802
         },
         {
           "home_goals": 3,
           "away_goals": 1,
-          "probability": 0.07552
+          "probability": 0.07562
         }
       ],
-      "exp_points_home": 2.46,
-      "exp_points_away": 0.39,
-      "home_strength": 0.528,
+      "exp_points_home": 2.47,
+      "exp_points_away": 0.38,
+      "home_strength": 0.538,
       "away_strength": 0.16
     },
     {
@@ -2983,41 +2983,41 @@
       "away": "Colombia",
       "exp_home_goals": 0.93,
       "exp_away_goals": 1.97,
-      "home_win_p": 0.171,
-      "draw_p": 0.2127,
-      "away_win_p": 0.6163,
+      "home_win_p": 0.1714,
+      "draw_p": 0.2129,
+      "away_win_p": 0.6157,
       "most_likely_score": "0-1",
       "top_scorelines": [
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10878
+          "probability": 0.10879
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.10702
+          "probability": 0.10692
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10091
+          "probability": 0.10101
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09927
+          "probability": 0.09928
         },
         {
           "home_goals": 0,
           "away_goals": 3,
-          "probability": 0.07019
+          "probability": 0.07006
         }
       ],
       "exp_points_home": 0.73,
       "exp_points_away": 2.06,
       "home_strength": 0.15,
-      "away_strength": 0.344
+      "away_strength": 0.343
     },
     {
       "group": "K",
@@ -3029,42 +3029,42 @@
       "stage": "Group Stage",
       "home": "Portugal",
       "away": "Uzbekistan",
-      "exp_home_goals": 2.63,
+      "exp_home_goals": 2.66,
       "exp_away_goals": 0.69,
-      "home_win_p": 0.7873,
-      "draw_p": 0.1382,
-      "away_win_p": 0.0745,
+      "home_win_p": 0.7919,
+      "draw_p": 0.1357,
+      "away_win_p": 0.0723,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.12455
+          "probability": 0.1246
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.10936
+          "probability": 0.11041
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.09456
+          "probability": 0.09374
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.0863
+          "probability": 0.08555
         },
         {
           "home_goals": 3,
           "away_goals": 1,
-          "probability": 0.07577
+          "probability": 0.0758
         }
       ],
-      "exp_points_home": 2.5,
-      "exp_points_away": 0.36,
-      "home_strength": 0.528,
+      "exp_points_home": 2.51,
+      "exp_points_away": 0.35,
+      "home_strength": 0.538,
       "away_strength": 0.15
     },
     {
@@ -3079,41 +3079,41 @@
       "away": "Colombia",
       "exp_home_goals": 0.96,
       "exp_away_goals": 1.91,
-      "home_win_p": 0.1844,
-      "draw_p": 0.2194,
-      "away_win_p": 0.5962,
+      "home_win_p": 0.1848,
+      "draw_p": 0.2196,
+      "away_win_p": 0.5956,
       "most_likely_score": "0-1",
       "top_scorelines": [
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.10877
+          "probability": 0.10876
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10407
+          "probability": 0.10416
         },
         {
           "home_goals": 0,
           "away_goals": 2,
-          "probability": 0.10374
+          "probability": 0.10364
         },
         {
           "home_goals": 1,
           "away_goals": 2,
-          "probability": 0.09926
+          "probability": 0.09925
         },
         {
           "home_goals": 0,
           "away_goals": 3,
-          "probability": 0.06596
+          "probability": 0.06584
         }
       ],
       "exp_points_home": 0.77,
       "exp_points_away": 2.01,
       "home_strength": 0.16,
-      "away_strength": 0.344
+      "away_strength": 0.343
     },
     {
       "group": "K",
@@ -3125,43 +3125,43 @@
       "stage": "Group Stage",
       "home": "Portugal",
       "away": "Colombia",
-      "exp_home_goals": 1.74,
-      "exp_away_goals": 1.05,
-      "home_win_p": 0.5358,
-      "draw_p": 0.2365,
-      "away_win_p": 0.2276,
+      "exp_home_goals": 1.76,
+      "exp_away_goals": 1.04,
+      "home_win_p": 0.5425,
+      "draw_p": 0.2349,
+      "away_win_p": 0.2226,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.1122
+          "probability": 0.11141
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10699
+          "probability": 0.10731
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09764
+          "probability": 0.09793
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.0931
+          "probability": 0.09432
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06447
+          "probability": 0.06337
         }
       ],
-      "exp_points_home": 1.84,
-      "exp_points_away": 0.92,
-      "home_strength": 0.528,
-      "away_strength": 0.344
+      "exp_points_home": 1.86,
+      "exp_points_away": 0.9,
+      "home_strength": 0.538,
+      "away_strength": 0.343
     },
     {
       "group": "K",
@@ -3221,43 +3221,43 @@
       "stage": "Group Stage",
       "home": "England",
       "away": "Croatia",
-      "exp_home_goals": 1.8,
-      "exp_away_goals": 1.02,
-      "home_win_p": 0.5567,
-      "draw_p": 0.2311,
-      "away_win_p": 0.2122,
+      "exp_home_goals": 1.78,
+      "exp_away_goals": 1.03,
+      "home_win_p": 0.5491,
+      "draw_p": 0.2332,
+      "away_win_p": 0.2177,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10963
+          "probability": 0.11059
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10789
+          "probability": 0.1076
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09846
+          "probability": 0.09819
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.09689
+          "probability": 0.09553
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.06103
+          "probability": 0.06228
         }
       ],
-      "exp_points_home": 1.9,
-      "exp_points_away": 0.87,
-      "home_strength": 0.593,
-      "away_strength": 0.362
+      "exp_points_home": 1.88,
+      "exp_points_away": 0.89,
+      "home_strength": 0.602,
+      "away_strength": 0.376
     },
     {
       "group": "L",
@@ -3269,43 +3269,43 @@
       "stage": "Group Stage",
       "home": "Ghana",
       "away": "Panama",
-      "exp_home_goals": 2.0,
-      "exp_away_goals": 0.91,
-      "home_win_p": 0.626,
-      "draw_p": 0.2093,
-      "away_win_p": 0.1646,
+      "exp_home_goals": 1.98,
+      "exp_away_goals": 0.92,
+      "home_win_p": 0.6211,
+      "draw_p": 0.211,
+      "away_win_p": 0.1678,
       "most_likely_score": "1-0",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10868
+          "probability": 0.10874
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.10856
+          "probability": 0.10779
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.09929
+          "probability": 0.10011
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09918
+          "probability": 0.09924
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.0723
+          "probability": 0.07124
         }
       ],
-      "exp_points_home": 2.09,
-      "exp_points_away": 0.7,
-      "home_strength": 0.309,
-      "away_strength": 0.153
+      "exp_points_home": 2.07,
+      "exp_points_away": 0.71,
+      "home_strength": 0.314,
+      "away_strength": 0.157
     },
     {
       "group": "L",
@@ -3319,9 +3319,9 @@
       "away": "Ghana",
       "exp_home_goals": 1.94,
       "exp_away_goals": 0.94,
-      "home_win_p": 0.6087,
-      "draw_p": 0.2153,
-      "away_win_p": 0.176,
+      "home_win_p": 0.6083,
+      "draw_p": 0.2154,
+      "away_win_p": 0.1763,
       "most_likely_score": "1-0",
       "top_scorelines": [
         {
@@ -3332,12 +3332,12 @@
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.10581
+          "probability": 0.10574
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.10212
+          "probability": 0.10218
         },
         {
           "home_goals": 2,
@@ -3347,13 +3347,13 @@
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.06859
+          "probability": 0.0685
         }
       ],
       "exp_points_home": 2.04,
       "exp_points_away": 0.74,
-      "home_strength": 0.593,
-      "away_strength": 0.309
+      "home_strength": 0.602,
+      "away_strength": 0.314
     },
     {
       "group": "L",
@@ -3365,43 +3365,43 @@
       "stage": "Group Stage",
       "home": "Croatia",
       "away": "Panama",
-      "exp_home_goals": 2.16,
+      "exp_home_goals": 2.17,
       "exp_away_goals": 0.84,
-      "home_win_p": 0.6759,
-      "draw_p": 0.1903,
-      "away_win_p": 0.1338,
+      "home_win_p": 0.6779,
+      "draw_p": 0.1895,
+      "away_win_p": 0.1326,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.11568
+          "probability": 0.11593
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10695
+          "probability": 0.10684
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09761
+          "probability": 0.09751
         },
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.09025
+          "probability": 0.08987
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.08341
+          "probability": 0.08385
         }
       ],
       "exp_points_home": 2.22,
       "exp_points_away": 0.59,
-      "home_strength": 0.362,
-      "away_strength": 0.153
+      "home_strength": 0.376,
+      "away_strength": 0.157
     },
     {
       "group": "L",
@@ -3413,43 +3413,43 @@
       "stage": "Group Stage",
       "home": "England",
       "away": "Panama",
-      "exp_home_goals": 2.77,
-      "exp_away_goals": 0.66,
-      "home_win_p": 0.8117,
-      "draw_p": 0.1251,
-      "away_win_p": 0.0632,
+      "exp_home_goals": 2.74,
+      "exp_away_goals": 0.67,
+      "home_win_p": 0.8077,
+      "draw_p": 0.1273,
+      "away_win_p": 0.065,
       "most_likely_score": "2-0",
       "top_scorelines": [
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.1244
+          "probability": 0.12449
         },
         {
           "home_goals": 3,
           "away_goals": 0,
-          "probability": 0.11475
+          "probability": 0.11389
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.0899
+          "probability": 0.09072
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.08204
+          "probability": 0.08279
         },
         {
           "home_goals": 4,
           "away_goals": 0,
-          "probability": 0.07939
+          "probability": 0.07815
         }
       ],
-      "exp_points_home": 2.56,
-      "exp_points_away": 0.31,
-      "home_strength": 0.593,
-      "away_strength": 0.153
+      "exp_points_home": 2.55,
+      "exp_points_away": 0.32,
+      "home_strength": 0.602,
+      "away_strength": 0.157
     },
     {
       "group": "L",
@@ -3461,43 +3461,43 @@
       "stage": "Group Stage",
       "home": "Croatia",
       "away": "Ghana",
-      "exp_home_goals": 1.52,
-      "exp_away_goals": 1.2,
-      "home_win_p": 0.4464,
-      "draw_p": 0.2533,
-      "away_win_p": 0.3003,
+      "exp_home_goals": 1.54,
+      "exp_away_goals": 1.19,
+      "home_win_p": 0.4535,
+      "draw_p": 0.2524,
+      "away_win_p": 0.2941,
       "most_likely_score": "1-1",
       "top_scorelines": [
         {
           "home_goals": 1,
           "away_goals": 1,
-          "probability": 0.12014
+          "probability": 0.1197
         },
         {
           "home_goals": 1,
           "away_goals": 0,
-          "probability": 0.10006
+          "probability": 0.10078
         },
         {
           "home_goals": 2,
           "away_goals": 1,
-          "probability": 0.09131
+          "probability": 0.09197
         },
         {
           "home_goals": 0,
           "away_goals": 1,
-          "probability": 0.07903
+          "probability": 0.0779
         },
         {
           "home_goals": 2,
           "away_goals": 0,
-          "probability": 0.07605
+          "probability": 0.07744
         }
       ],
-      "exp_points_home": 1.59,
-      "exp_points_away": 1.15,
-      "home_strength": 0.362,
-      "away_strength": 0.309
+      "exp_points_home": 1.61,
+      "exp_points_away": 1.13,
+      "home_strength": 0.376,
+      "away_strength": 0.314
     }
   ]
 }
