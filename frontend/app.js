@@ -446,19 +446,54 @@ function _staticUrlFor(apiPath) {
     // Player profile: use pre-exported file if available.
     const player = m.match(/^\/players?\/(.+)$/);
     if (player) return `/data/player_profiles/${encodeURIComponent(_teamSlug(decodeURIComponent(player[1])))}.json`;
+    // Match predictions: /predictions/<home>/<away> → generic static prediction
+    const pred = m.match(/^\/predictions\/.+\/.+$/);
+    if (pred) return "/data/predictions_default.json";
     return null;
 }
 
-// Fetch JSON with API-first + static fallback strategy.
-// 1. Try the live API.
-// 2. On network error / timeout / 5xx, fall back to local static JSON.
-// 3. If no static file exists for this path, throw the original error.
+// Fetch JSON with configurable strategy.
+// On Vercel demo: static-first (instant load), then optionally refresh from API.
+// On local/LAN: API-first with static fallback.
 async function fetchJson(apiPath, opts) {
     const params = (opts && opts.params) || "";
     const fetchOpts = opts && opts.fetchOpts ? opts.fetchOpts : undefined;
+
+    if (IS_VERCEL_DEMO) {
+        return _fetchJsonStaticFirst(apiPath, params, fetchOpts);
+    }
+    return _fetchJsonApiFirst(apiPath, params, fetchOpts);
+}
+
+async function _fetchJsonStaticFirst(apiPath, params, fetchOpts) {
+    const staticUrl = _staticUrlFor(apiPath);
+    if (staticUrl !== null) {
+        try {
+            const resp = await fetch(staticUrl, fetchOpts);
+            if (resp.ok) {
+                const data = await resp.json();
+                apiOnline = false;
+                _tryRefreshFromApi(apiPath, params, fetchOpts);
+                return data;
+            }
+        } catch (_) { /* static failed, try API below */ }
+    }
+    return _fetchJsonApiFirst(apiPath, params, fetchOpts);
+}
+
+function _tryRefreshFromApi(apiPath, params, fetchOpts) {
+    try {
+        let url = API_BASE + apiPath;
+        if (params && String(params).length > 0) url += `?${params}`;
+        fetch(url, { ...fetchOpts, signal: AbortSignal.timeout(8000) })
+            .then((resp) => { if (resp.ok) apiOnline = true; })
+            .catch(() => {});
+    } catch (_) {}
+}
+
+async function _fetchJsonApiFirst(apiPath, params, fetchOpts) {
     const apiTimeout = (fetchOpts && fetchOpts.signal) ? undefined : AbortSignal.timeout(5000);
 
-    // 1. Try API
     try {
         let url = API_BASE + apiPath;
         if (params && String(params).length > 0) url += `?${params}`;
@@ -467,18 +502,13 @@ async function fetchJson(apiPath, opts) {
             apiOnline = true;
             return resp.json();
         }
-        // 4xx = API responded but no data — don't fallback, let caller handle
         if (resp.status >= 400 && resp.status < 500) {
             throw new Error(`HTTP ${resp.status}`);
         }
-        // 5xx = server error — try fallback below
     } catch (err) {
-        // 4xx errors should not trigger fallback
         if (err.message && /^HTTP [4]\d\d$/.test(err.message)) throw err;
-        // Network error, timeout, or 5xx — attempt static fallback
     }
 
-    // 2. Fallback to static
     const staticUrl = _staticUrlFor(apiPath);
     if (staticUrl !== null) {
         try {
@@ -487,12 +517,9 @@ async function fetchJson(apiPath, opts) {
                 apiOnline = false;
                 return resp.json();
             }
-        } catch (fallbackErr) {
-            // Static file also failed
-        }
+        } catch (_) {}
     }
 
-    // 3. No fallback available or both failed
     apiOnline = false;
     throw new Error("api_and_static_unavailable");
 }
@@ -604,9 +631,13 @@ async function fetchTeams() {
 }
 
 async function fetchPrediction(homeTeam, awayTeam) {
-    // Try API first; if offline, no static fallback for specific match predictions
     try {
-        return await fetchJson(`/predictions/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
+        const data = await fetchJson(`/predictions/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
+        if (data) {
+            data.home_team = data.home_team || homeTeam;
+            data.away_team = data.away_team || awayTeam;
+        }
+        return data;
     } catch {
         return null;
     }
