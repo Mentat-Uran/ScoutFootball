@@ -1847,22 +1847,26 @@ def compute_group_predictions(
 ) -> list[dict]:
     """Estimate group advancement probabilities for all groups.
 
-    Uses a simple strength-ratio model. Returns a list of group dicts,
+    Uses a strength-ratio model with exponential amplification (k=2.5)
+    to differentiate strong and weak teams. Returns a list of group dicts,
     each containing group letter, teams with their advancement probabilities.
     """
+    _amplification = 2.5  # exponent to widen gap between strong/weak teams
     results = []
     for letter, teams in GROUPS.items():
         team_strength_pairs = [
             (t, team_strengths.get(t, 0.2)) for t in teams
         ]
-        total = sum(s for _, s in team_strength_pairs)
+        # Amplify strengths to widen probability gaps
+        amplified = [(t, s ** _amplification) for t, s in team_strength_pairs]
+        total = sum(s for _, s in amplified)
 
         group_teams = []
-        for team, strength in team_strength_pairs:
+        for (team, _raw_strength), (_, strength) in zip(team_strength_pairs, amplified, strict=True):
             p1 = strength / total if total > 0 else 0.25
             # p2nd: sum over each other team j being 1st, prob i is best of remaining
             p2 = 0.0
-            for other_team, other_strength in team_strength_pairs:
+            for other_team, other_strength in amplified:
                 if other_team == team:
                     continue
                 p1_other = other_strength / total if total > 0 else 0
@@ -1870,12 +1874,12 @@ def compute_group_predictions(
                 p2 += p1_other * (strength / remaining if remaining > 0 else 0)
             # p3rd: sum over each pair (j, k) being 1st and 2nd, prob i is best of remaining
             p3 = 0.0
-            for j_team, j_strength in team_strength_pairs:
+            for j_team, j_strength in amplified:
                 if j_team == team:
                     continue
                 p1_j = j_strength / total if total > 0 else 0
                 remaining_after_j = total - j_strength
-                for k_team, k_strength in team_strength_pairs:
+                for k_team, k_strength in amplified:
                     if k_team == team or k_team == j_team:
                         continue
                     p2_jk = p1_j * (k_strength / remaining_after_j if remaining_after_j > 0 else 0)
@@ -1886,7 +1890,7 @@ def compute_group_predictions(
             p_advance = min(p1 + p2 + p3 * (8 / 12), 1.0)
             group_teams.append({
                 "team": team,
-                "strength": round(strength, 3),
+                "strength": round(_raw_strength, 3),
                 "p1st": round(p1, 3),
                 "p2nd": round(p2, 3),
                 "p3rd": round(p3, 3),

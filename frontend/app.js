@@ -4614,15 +4614,16 @@ function renderWcProbability() {
         </tr>`).join("");
     } else {
         // Fallback: compute locally with proper ranking probability model
+        const _AMP = 2.5; // exponent to widen gap between strong/weak teams
         const teams = wcAllTeams();
         const strengths = {};
         teams.forEach((t) => { strengths[t] = wcTeamStrength(t); });
 
         const container = document.getElementById("wc-prob-groups");
         container.innerHTML = Object.entries(WC_GROUPS).map(([letter, groupTeams]) => {
-            const teamStrs = groupTeams.map((t) => ({team: t, strength: strengths[t]}));
+            const teamStrs = groupTeams.map((t) => ({team: t, raw: strengths[t], strength: Math.pow(strengths[t], _AMP)}));
             const total = teamStrs.reduce((s, x) => s + x.strength, 0);
-            const rows = teamStrs.sort((a, b) => b.strength - a.strength).map((x) => {
+            const rows = teamStrs.sort((a, b) => b.raw - a.raw).map((x) => {
                 const p1 = x.strength / total;
                 let p2 = 0;
                 for (const other of teamStrs) {
