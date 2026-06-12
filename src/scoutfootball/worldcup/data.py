@@ -99,61 +99,104 @@ class Match:
 def generate_group_stage_matches() -> list[Match]:
     """Generate all 72 group-stage matches (12 groups x 6 matches each).
 
-    Dates span June 11-25 for the group stage.
-    Exact times/venues will be updated from FIFA's official fixture list.
+    Uses the official 2026 FIFA World Cup fixture schedule (all times ET).
     """
-    matches: list[Match] = []
-    group_start_offsets = {
-        "A": 0, "B": 0, "C": 0, "D": 0,
-        "E": 1, "F": 1, "G": 1, "H": 1,
-        "I": 2, "J": 2, "K": 2, "L": 2,
-    }
-    matchday_gaps = [0, 6, 12]  # days between matchdays within a group
+    schedule: list[tuple[str, int, str, str, str, str, str, str]] = [
+        # (group, matchday, date, time_et, home, away, venue, city)
+        # Group A
+        ("A", 1, "2026-06-11", "15:00", "Mexico", "South Africa", "Estadio Azteca", "Mexico City"),
+        ("A", 1, "2026-06-11", "22:00", "South Korea", "Czech Republic", "Estadio Akron", "Guadalajara"),
+        ("A", 2, "2026-06-18", "12:00", "South Africa", "Czech Republic", "Mercedes-Benz Stadium", "Atlanta"),
+        ("A", 2, "2026-06-18", "21:00", "Mexico", "South Korea", "Estadio Akron", "Guadalajara"),
+        ("A", 3, "2026-06-24", "21:00", "Mexico", "Czech Republic", "Estadio Azteca", "Mexico City"),
+        ("A", 3, "2026-06-24", "21:00", "South Africa", "South Korea", "Estadio BBVA", "Monterrey"),
+        # Group B
+        ("B", 1, "2026-06-12", "15:00", "Canada", "Bosnia and Herzegovina", "BMO Field", "Toronto"),
+        ("B", 1, "2026-06-13", "15:00", "Qatar", "Switzerland", "Levi's Stadium", "San Francisco Bay Area"),
+        ("B", 2, "2026-06-18", "15:00", "Bosnia and Herzegovina", "Switzerland", "SoFi Stadium", "Los Angeles"),
+        ("B", 2, "2026-06-18", "18:00", "Canada", "Qatar", "BC Place", "Vancouver"),
+        ("B", 3, "2026-06-24", "15:00", "Bosnia and Herzegovina", "Qatar", "Lumen Field", "Seattle"),
+        ("B", 3, "2026-06-24", "15:00", "Canada", "Switzerland", "BC Place", "Vancouver"),
+        # Group C
+        ("C", 1, "2026-06-13", "18:00", "Brazil", "Morocco", "MetLife Stadium", "New York/New Jersey"),
+        ("C", 1, "2026-06-13", "21:00", "Haiti", "Scotland", "Gillette Stadium", "Boston"),
+        ("C", 2, "2026-06-19", "18:00", "Morocco", "Scotland", "Gillette Stadium", "Boston"),
+        ("C", 2, "2026-06-19", "21:00", "Haiti", "Brazil", "Lincoln Financial Field", "Philadelphia"),
+        ("C", 3, "2026-06-24", "18:00", "Morocco", "Haiti", "Mercedes-Benz Stadium", "Atlanta"),
+        ("C", 3, "2026-06-24", "18:00", "Brazil", "Scotland", "Hard Rock Stadium", "Miami"),
+        # Group D
+        ("D", 1, "2026-06-12", "21:00", "United States", "Paraguay", "SoFi Stadium", "Los Angeles"),
+        ("D", 1, "2026-06-13", "00:00", "Australia", "Turkey", "BC Place", "Vancouver"),
+        ("D", 2, "2026-06-19", "00:00", "Paraguay", "Turkey", "Levi's Stadium", "San Francisco Bay Area"),
+        ("D", 2, "2026-06-19", "15:00", "United States", "Australia", "Lumen Field", "Seattle"),
+        ("D", 3, "2026-06-25", "22:00", "United States", "Turkey", "SoFi Stadium", "Los Angeles"),
+        ("D", 3, "2026-06-25", "22:00", "Paraguay", "Australia", "Levi's Stadium", "San Francisco Bay Area"),
+        # Group E
+        ("E", 1, "2026-06-14", "13:00", "Germany", "Curacao", "NRG Stadium", "Houston"),
+        ("E", 1, "2026-06-14", "19:00", "Ivory Coast", "Ecuador", "Lincoln Financial Field", "Philadelphia"),
+        ("E", 2, "2026-06-20", "16:00", "Germany", "Ivory Coast", "BMO Field", "Toronto"),
+        ("E", 2, "2026-06-20", "20:00", "Curacao", "Ecuador", "Arrowhead Stadium", "Kansas City"),
+        ("E", 3, "2026-06-25", "16:00", "Germany", "Ecuador", "MetLife Stadium", "New York/New Jersey"),
+        ("E", 3, "2026-06-25", "16:00", "Curacao", "Ivory Coast", "Lincoln Financial Field", "Philadelphia"),
+        # Group F
+        ("F", 1, "2026-06-14", "16:00", "Netherlands", "Japan", "AT&T Stadium", "Dallas"),
+        ("F", 1, "2026-06-14", "19:00", "Sweden", "Tunisia", "Estadio BBVA", "Monterrey"),
+        ("F", 2, "2026-06-20", "13:00", "Netherlands", "Sweden", "NRG Stadium", "Houston"),
+        ("F", 2, "2026-06-20", "00:00", "Japan", "Tunisia", "Estadio BBVA", "Monterrey"),
+        ("F", 3, "2026-06-25", "19:00", "Netherlands", "Tunisia", "Arrowhead Stadium", "Kansas City"),
+        ("F", 3, "2026-06-25", "19:00", "Japan", "Sweden", "AT&T Stadium", "Dallas"),
+        # Group G
+        ("G", 1, "2026-06-15", "15:00", "Belgium", "Egypt", "Lumen Field", "Seattle"),
+        ("G", 1, "2026-06-15", "21:00", "Iran", "New Zealand", "SoFi Stadium", "Los Angeles"),
+        ("G", 2, "2026-06-21", "15:00", "Belgium", "Iran", "SoFi Stadium", "Los Angeles"),
+        ("G", 2, "2026-06-21", "21:00", "Egypt", "New Zealand", "BC Place", "Vancouver"),
+        ("G", 3, "2026-06-26", "23:00", "Belgium", "New Zealand", "BC Place", "Vancouver"),
+        ("G", 3, "2026-06-26", "23:00", "Egypt", "Iran", "Lumen Field", "Seattle"),
+        # Group H
+        ("H", 1, "2026-06-15", "12:00", "Spain", "Cape Verde", "Mercedes-Benz Stadium", "Atlanta"),
+        ("H", 1, "2026-06-15", "18:00", "Saudi Arabia", "Uruguay", "Hard Rock Stadium", "Miami"),
+        ("H", 2, "2026-06-21", "12:00", "Spain", "Saudi Arabia", "Mercedes-Benz Stadium", "Atlanta"),
+        ("H", 2, "2026-06-21", "18:00", "Cape Verde", "Uruguay", "Hard Rock Stadium", "Miami"),
+        ("H", 3, "2026-06-26", "20:00", "Spain", "Uruguay", "Estadio Akron", "Guadalajara"),
+        ("H", 3, "2026-06-26", "20:00", "Cape Verde", "Saudi Arabia", "NRG Stadium", "Houston"),
+        # Group I
+        ("I", 1, "2026-06-16", "15:00", "France", "Senegal", "MetLife Stadium", "New York/New Jersey"),
+        ("I", 1, "2026-06-16", "18:00", "Iraq", "Norway", "Gillette Stadium", "Boston"),
+        ("I", 2, "2026-06-22", "17:00", "France", "Iraq", "Lincoln Financial Field", "Philadelphia"),
+        ("I", 2, "2026-06-22", "20:00", "Senegal", "Norway", "MetLife Stadium", "New York/New Jersey"),
+        ("I", 3, "2026-06-26", "15:00", "France", "Norway", "Gillette Stadium", "Boston"),
+        ("I", 3, "2026-06-26", "15:00", "Iraq", "Senegal", "BMO Field", "Toronto"),
+        # Group J
+        ("J", 1, "2026-06-16", "21:00", "Argentina", "Algeria", "Arrowhead Stadium", "Kansas City"),
+        ("J", 1, "2026-06-16", "00:00", "Austria", "Jordan", "Levi's Stadium", "San Francisco Bay Area"),
+        ("J", 2, "2026-06-22", "13:00", "Argentina", "Austria", "AT&T Stadium", "Dallas"),
+        ("J", 2, "2026-06-22", "23:00", "Algeria", "Jordan", "Levi's Stadium", "San Francisco Bay Area"),
+        ("J", 3, "2026-06-27", "22:00", "Argentina", "Jordan", "AT&T Stadium", "Dallas"),
+        ("J", 3, "2026-06-27", "22:00", "Algeria", "Austria", "Arrowhead Stadium", "Kansas City"),
+        # Group K
+        ("K", 1, "2026-06-17", "13:00", "Portugal", "DR Congo", "NRG Stadium", "Houston"),
+        ("K", 1, "2026-06-17", "22:00", "Uzbekistan", "Colombia", "Estadio Azteca", "Mexico City"),
+        ("K", 2, "2026-06-23", "13:00", "Portugal", "Uzbekistan", "NRG Stadium", "Houston"),
+        ("K", 2, "2026-06-23", "22:00", "DR Congo", "Colombia", "Estadio Akron", "Guadalajara"),
+        ("K", 3, "2026-06-27", "19:30", "Portugal", "Colombia", "Hard Rock Stadium", "Miami"),
+        ("K", 3, "2026-06-27", "19:30", "DR Congo", "Uzbekistan", "Mercedes-Benz Stadium", "Atlanta"),
+        # Group L
+        ("L", 1, "2026-06-17", "16:00", "England", "Croatia", "AT&T Stadium", "Dallas"),
+        ("L", 1, "2026-06-17", "19:00", "Ghana", "Panama", "BMO Field", "Toronto"),
+        ("L", 2, "2026-06-23", "16:00", "England", "Ghana", "Gillette Stadium", "Boston"),
+        ("L", 2, "2026-06-23", "19:00", "Croatia", "Panama", "BMO Field", "Toronto"),
+        ("L", 3, "2026-06-27", "17:00", "England", "Panama", "MetLife Stadium", "New York/New Jersey"),
+        ("L", 3, "2026-06-27", "17:00", "Croatia", "Ghana", "Lincoln Financial Field", "Philadelphia"),
+    ]
 
-    group_venues: dict[str, tuple[str, str]] = {
-        "A": ("Estadio Azteca", "Mexico City"),
-        "B": ("BMO Field", "Toronto"),
-        "C": ("SoFi Stadium", "Los Angeles"),
-        "D": ("AT&T Stadium", "Arlington"),
-        "E": ("MetLife Stadium", "New York"),
-        "F": ("Lumen Field", "Seattle"),
-        "G": ("Mercedes-Benz Stadium", "Atlanta"),
-        "H": ("Hard Rock Stadium", "Miami"),
-        "I": ("Gillette Stadium", "Boston"),
-        "J": ("NRG Stadium", "Houston"),
-        "K": ("Levi's Stadium", "San Francisco"),
-        "L": ("Lincoln Financial Field", "Philadelphia"),
-    }
-
-    for group_letter, teams in GROUPS.items():
-        offset = group_start_offsets[group_letter]
-        venue, city = group_venues[group_letter]
-        t1, t2, t3, t4 = teams
-
-        for md_idx, gap in enumerate(matchday_gaps):
-            day = 11 + offset + gap
-            month = 6
-            if day > 30:
-                month = 7
-                day -= 30
-            date_str = f"2026-{month:02d}-{day:02d}"
-
-            if md_idx == 0:
-                pairings = [(t1, t2), (t3, t4)]
-            elif md_idx == 1:
-                pairings = [(t1, t3), (t2, t4)]
-            else:
-                pairings = [(t1, t4), (t2, t3)]
-
-            for game_idx, (home, away) in enumerate(pairings):
-                time_et = "19:30" if game_idx == 0 else "22:00"
-                matches.append(Match(
-                    matchday=md_idx + 1, date=date_str, time_et=time_et,
-                    home=home, away=away, venue=venue, city=city,
-                    group=group_letter, stage="Group Stage",
-                ))
-
-    return matches
+    return [
+        Match(
+            matchday=md, date=date, time_et=time_et,
+            home=home, away=away, venue=venue, city=city,
+            group=group, stage="Group Stage",
+        )
+        for group, md, date, time_et, home, away, venue, city in schedule
+    ]
 
 
 # ── Squad data ────────────────────────────────────────────────────────────
@@ -1544,11 +1587,11 @@ LEAGUE_PROXY_RATINGS: dict[str, float] = {
     "EFL Championship": 47.0,
     "Scottish Premiership": 46.5,
     "Scottish Premiership ": 46.5,
-    "MLS": 45.0,
+    "MLS": 49.0,
     "Brasileirao": 51.5,
-    "Super Lig": 46.5,
-    "SPL": 46.5,
-    "Saudi Pro League": 46.5,
+    "Super Lig": 48.0,
+    "SPL": 50.5,
+    "Saudi Pro League": 50.5,
     "A-League": 41.0,
     "J-League": 44.0,
     "Swiss Super League": 46.0,
@@ -1776,6 +1819,8 @@ def compute_team_strength_details(
             + 0.07 * coverage_score
             + 0.05 * big5_score
         )
+        if team_name in HOSTS:
+            strength = min(strength + 0.04, 1.0)  # ~4% host bonus, capped at 1.0
         strengths[team_name] = {
             "strength": round(strength, 4),
             "coverage": round(coverage, 4),
@@ -1815,21 +1860,38 @@ def compute_group_predictions(
         group_teams = []
         for team, strength in team_strength_pairs:
             p1 = strength / total if total > 0 else 0.25
-            remaining_strength = total - strength
-            p2 = (
-                (remaining_strength / total)
-                * (strength / remaining_strength)
-                if remaining_strength > 0
-                else 0
-            )
-            p3 = max(1 - p1 - p2, 0)
+            # p2nd: sum over each other team j being 1st, prob i is best of remaining
+            p2 = 0.0
+            for other_team, other_strength in team_strength_pairs:
+                if other_team == team:
+                    continue
+                p1_other = other_strength / total if total > 0 else 0
+                remaining = total - other_strength
+                p2 += p1_other * (strength / remaining if remaining > 0 else 0)
+            # p3rd: sum over each pair (j, k) being 1st and 2nd, prob i is best of remaining
+            p3 = 0.0
+            for j_team, j_strength in team_strength_pairs:
+                if j_team == team:
+                    continue
+                p1_j = j_strength / total if total > 0 else 0
+                remaining_after_j = total - j_strength
+                for k_team, k_strength in team_strength_pairs:
+                    if k_team == team or k_team == j_team:
+                        continue
+                    p2_jk = p1_j * (k_strength / remaining_after_j if remaining_after_j > 0 else 0)
+                    remaining_after_jk = total - j_strength - k_strength
+                    p3 += p2_jk * (strength / remaining_after_jk if remaining_after_jk > 0 else 0)
+            p4 = max(1 - p1 - p2 - p3, 0)
+            # 8 of 12 third-place teams advance to knockout
+            p_advance = min(p1 + p2 + p3 * (8 / 12), 1.0)
             group_teams.append({
                 "team": team,
                 "strength": round(strength, 3),
                 "p1st": round(p1, 3),
                 "p2nd": round(p2, 3),
                 "p3rd": round(p3, 3),
-                "p_advance": round(min(p1 + p2, 1.0), 3),
+                "p4th": round(p4, 3),
+                "p_advance": round(p_advance, 3),
             })
 
         group_teams.sort(key=lambda x: x["strength"], reverse=True)
