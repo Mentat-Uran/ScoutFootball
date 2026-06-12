@@ -1,3 +1,3 @@
 interface Env {
-  SCOUT_BACKEND: DurableObjectNamespace;
+  SCOUT_BACKEND: DurableObjectNamespace<import("./index").ScoutBackend>;
 }
