@@ -2,7 +2,7 @@ name = "scoutfootball-fullstack"
 main = "cloudflare/index.ts"
 compatibility_date = "2026-06-12"
 
-[container]
+[[containers]]
 class_name = "ScoutBackend"
 image = "./Dockerfile"
 max_instances = 1
