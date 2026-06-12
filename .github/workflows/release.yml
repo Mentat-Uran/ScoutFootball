@@ -6,6 +6,9 @@ on:
       - 'v*'
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -78,15 +81,67 @@ jobs:
           # Skip macOS code signing in CI (no certificate available)
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
-      - name: Upload artifacts to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: desktop-${{ matrix.os }}
+          path: |
             desktop/dist/*.exe
             desktop/dist/*.dmg
             desktop/dist/*.zip
             desktop/dist/*.blockmap
             desktop/dist/latest*.yml
+          retention-days: 7
+
+  create-release:
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate version tag
+        id: version
+        run: |
+          VERSION="v$(date +%Y%m%d.%H%M%S)-$(echo ${{ github.sha }} | cut -c1-7)"
+          echo "tag=$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f | head -20
+
+      - name: Create release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Release ${{ steps.version.outputs.tag }}"
+          body: |
+            ## ScoutFootball Desktop ${{ steps.version.outputs.tag }}
+
+            Automated release from main branch merge.
+
+            ### Changes
+            - Commit: ${{ github.sha }}
+            - Merged by: ${{ github.actor }}
+            - PR: #${{ github.event.pull_request.number }}
+
+            ### Assets
+            - Windows: `.exe` installer
+            - macOS: `.dmg` disk image
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+            artifacts/**/*.blockmap
+            artifacts/**/latest*.yml
+          prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
