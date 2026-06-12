@@ -1,1 +1,1 @@
-{"dixon_coles":{"status":"not_available"},"poisson":{"status":"not_available"},"low_score_breakdown":[],"calibration_plot":[],"league_coverage":[]}
+{"dixon_coles":{"status":"not_available"},"poisson":{"status":"ok","log_loss_exact":null,"brier_1x2":null,"rps_1x2":null,"n_matches":null},"low_score_breakdown":[],"calibration_plot":[],"league_coverage":[]}
