@@ -398,9 +398,10 @@ const IS_VERCEL_DEMO =
     HOSTNAME === "scoutfootball.vercel.app"
     || HOSTNAME === "scoutfootball-for-world-cup.vercel.app"
     || HOSTNAME.endsWith(".vercel.app");
-const API_BASE = IS_VERCEL_DEMO
-    ? (window.__SCOUTFOOTBALL_API__ || "https://scoutfootball-for-world-cup.onrender.com")
-    : window.location.origin;
+const API_BASE = window.__SCOUTFOOTBALL_API__
+    || (IS_VERCEL_DEMO
+        ? "https://scoutfootball-for-world-cup.onrender.com"
+        : window.location.origin);
 let apiOnline = null; // null=unknown, true=online, false=offline
 
 // Team name → filename slug (must match scripts/export_static_frontend_data.py)
