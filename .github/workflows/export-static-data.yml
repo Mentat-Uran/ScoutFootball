@@ -58,6 +58,13 @@ jobs:
             --action-values-limit 100 \
             --player-profiles 30
 
+      - name: Compute World Cup group-stage predictions
+        env:
+          MPLBACKEND: Agg
+          PYTHONPATH: src
+        run: |
+          uv run python scripts/compute_worldcup_predictions.py
+
       - name: Commit exported data
         run: |
           git config user.name "github-actions[bot]"
