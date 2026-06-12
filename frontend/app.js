@@ -387,12 +387,19 @@ const i18n = {
 };
 
 // ─ API configuration ─────────────────────────────────────────────────────
-// STATIC_DATA = true  →  read from /data/*.json (no backend needed; works on any static host)
+// STATIC_DATA = true  →  read from /data/*.json (no backend needed; works on static demo hosts)
 // STATIC_DATA = false →  read from API_BASE (backend required, full feature set)
-const STATIC_DATA = (window.__SCOUTFOOTBALL_STATIC__ !== false)
-    && !(window.location.hostname === "127.0.0.1" && window.location.port === "8600")
-    && !(window.location.hostname === "localhost" && window.location.port === "8600");
-const API_BASE = window.__SCOUTFOOTBALL_API__ || "http://127.0.0.1:8600";
+const HOSTNAME = window.location.hostname || "";
+const IS_VERCEL_DEMO =
+    HOSTNAME === "scoutfootball.vercel.app"
+    || HOSTNAME === "scoutfootball-for-world-cup.vercel.app"
+    || HOSTNAME.endsWith(".vercel.app");
+const STATIC_DATA = typeof window.__SCOUTFOOTBALL_STATIC__ === "boolean"
+    ? window.__SCOUTFOOTBALL_STATIC__
+    : IS_VERCEL_DEMO;
+const API_BASE = IS_VERCEL_DEMO
+    ? (window.__SCOUTFOOTBALL_API__ || "https://scoutfootball-for-world-cup.onrender.com")
+    : window.location.origin;
 
 // Team name → filename slug (must match scripts/export_static_frontend_data.py)
 function _teamSlug(name) {
@@ -1044,7 +1051,23 @@ function getChart(id) {
     if (!element) return null;
     // Don't init on hidden containers - will have zero dimensions
     if (element.offsetParent === null) return null;
-    if (!appState.charts[id]) appState.charts[id] = echarts.init(element);
+    const existing = appState.charts[id];
+    if (existing) {
+        try {
+            if (existing.isDisposed && existing.isDisposed()) {
+                delete appState.charts[id];
+            } else if (existing.getDom && existing.getDom() !== element) {
+                existing.dispose();
+                delete appState.charts[id];
+            }
+        } catch {
+            delete appState.charts[id];
+        }
+    }
+    if (!appState.charts[id]) {
+        const adopted = echarts.getInstanceByDom(element);
+        appState.charts[id] = adopted || echarts.init(element);
+    }
     return appState.charts[id];
 }
 
@@ -1739,8 +1762,8 @@ function poisson(lambda, k) {
     return Math.exp(-lambda) * (lambda ** k) / factorial;
 }
 
-function renderScoreMatrix(match) {
-    const chart = getChart("score-chart");
+function renderScoreMatrixInto(chartId, match) {
+    const chart = getChart(chartId);
     if (!chart) return;
     const data = [];
 
@@ -1793,8 +1816,12 @@ function renderScoreMatrix(match) {
     chart.resize();
 }
 
-function renderOutcomeBar(match) {
-    const chart = getChart("outcome-bar-chart");
+function renderScoreMatrix(match) {
+    renderScoreMatrixInto("score-chart", match);
+}
+
+function renderOutcomeBarInto(chartId, match) {
+    const chart = getChart(chartId);
     if (!chart) return;
     const z = appState.lang === "zh";
     const labels = [z ? "主胜" : "Home", z ? "平局" : "Draw", z ? "客胜" : "Away"];
@@ -1833,6 +1860,10 @@ function renderOutcomeBar(match) {
         chart.resize();
         requestAnimationFrame(() => chart.resize());
     });
+}
+
+function renderOutcomeBar(match) {
+    renderOutcomeBarInto("outcome-bar-chart", match);
 }
 
 let reviewQueue = [];
@@ -3048,12 +3079,32 @@ function bindEvents() {
     });
     document.getElementById("wc-compare-a").addEventListener("change", async (e) => {
         appState.wcCompareA = e.target.value;
-        await fetchWcSquad(e.target.value);
+        if (appState.wcCompareA === appState.wcCompareB) {
+            const nextB = wcAllTeams().find((team) => team !== appState.wcCompareA);
+            if (nextB) {
+                appState.wcCompareB = nextB;
+                document.getElementById("wc-compare-b").value = nextB;
+            }
+        }
+        await Promise.all([
+            fetchWcSquad(e.target.value),
+            fetchWcMatchPrediction(e.target.value, appState.wcCompareB),
+        ]);
         renderWcCompare();
     });
     document.getElementById("wc-compare-b").addEventListener("change", async (e) => {
         appState.wcCompareB = e.target.value;
-        await fetchWcSquad(e.target.value);
+        if (appState.wcCompareA === appState.wcCompareB) {
+            const nextA = wcAllTeams().find((team) => team !== appState.wcCompareB);
+            if (nextA) {
+                appState.wcCompareA = nextA;
+                document.getElementById("wc-compare-a").value = nextA;
+            }
+        }
+        await Promise.all([
+            fetchWcSquad(e.target.value),
+            fetchWcMatchPrediction(appState.wcCompareA, e.target.value),
+        ]);
         renderWcCompare();
     });
 
@@ -3912,6 +3963,7 @@ let wcApiData = {
     schedule: null,     // from /world-cup/schedule
     squadCache: {},     // team -> from /world-cup/squads/{team}
     predictions: null,  // from /world-cup/predictions
+    matchPredictionCache: {}, // home|away -> single-match prediction
     teams: null,        // from /worldcup/teams
     apiOnline: false,
 };
@@ -3976,6 +4028,22 @@ async function fetchWcPredictions() {
         return data;
     } catch (e) {
         console.warn("[WC] fetchWcPredictions failed:", e.message);
+        return null;
+    }
+}
+
+async function fetchWcMatchPrediction(teamA, teamB) {
+    const cacheKey = `${teamA}|${teamB}`;
+    if (wcApiData.matchPredictionCache[cacheKey]) return wcApiData.matchPredictionCache[cacheKey];
+    try {
+        const data = await fetchJson(`/world-cup/predictions/${encodeURIComponent(teamA)}/${encodeURIComponent(teamB)}`, {
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
+        wcApiData.matchPredictionCache[cacheKey] = data;
+        wcApiData.apiOnline = true;
+        return data;
+    } catch (e) {
+        console.warn("[WC] fetchWcMatchPrediction failed:", e.message);
         return null;
     }
 }
@@ -4154,10 +4222,30 @@ function renderWcSchedule() {
     });
 
     const tbody = document.getElementById("wc-schedule-table");
-    tbody.innerHTML = filtered.map((m) => `<tr>
+    tbody.innerHTML = filtered.map((m, index) => `<tr data-wc-home="${escapeAttr(m.home)}" data-wc-away="${escapeAttr(m.away)}" data-row-index="${index}" style="cursor:pointer">
         <td>${escapeHtml(m.date)}</td><td>${escapeHtml(m.time_et || m.time)} ET</td><td>${escapeHtml(m.group)}</td>
         <td>${escapeHtml(m.home)}</td><td>${escapeHtml(m.away)}</td><td>${escapeHtml(m.venue)}, ${escapeHtml(m.city)}</td>
     </tr>`).join("");
+
+    tbody.querySelectorAll("tr[data-wc-home][data-wc-away]").forEach((row) => {
+        row.addEventListener("click", async () => {
+            const home = row.dataset.wcHome;
+            const away = row.dataset.wcAway;
+            if (!home || !away) return;
+            appState.wcCompareA = home;
+            appState.wcCompareB = away;
+            const selA = document.getElementById("wc-compare-a");
+            const selB = document.getElementById("wc-compare-b");
+            if (selA) selA.value = home;
+            if (selB) selB.value = away;
+            await Promise.all([
+                fetchWcSquad(home),
+                fetchWcSquad(away),
+                fetchWcMatchPrediction(home, away),
+            ]);
+            await setView("wc_compare");
+        });
+    });
 }
 
 function renderWcSquads() {
@@ -4285,6 +4373,76 @@ function renderWcCompare() {
     document.getElementById("wc-compare-b-top-title").textContent = `${teamB} Top 5`;
     renderTop([...ratedA], document.getElementById("wc-compare-a-top"));
     renderTop([...ratedB], document.getElementById("wc-compare-b-top"));
+
+    renderWcMatchPredictionPanel(teamA, teamB);
+}
+
+function renderWcMatchPredictionPanel(teamA, teamB) {
+    const panel = document.getElementById("wc-match-prediction-panel");
+    if (!panel) return;
+
+    const cacheKey = `${teamA}|${teamB}`;
+    const prediction = wcApiData.matchPredictionCache[cacheKey];
+    if (!prediction || prediction.error) {
+        panel.innerHTML = `<div style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(t("wc_no_data"))}</div>`;
+        return;
+    }
+
+    const match = {
+        home: prediction.home_team || teamA,
+        away: prediction.away_team || teamB,
+        hw: prediction.home_win || 0,
+        draw: prediction.draw || 0,
+        aw: prediction.away_win || 0,
+        xh: prediction.home_lambda || 0,
+        xa: prediction.away_lambda || 0,
+        score_matrix: prediction.score_matrix || null,
+        model_type: prediction.model_type || "world_cup_strength_poisson",
+        model_version: prediction.model_version || "wc-1.0",
+    };
+
+    const z = appState.lang === "zh";
+    panel.innerHTML = `
+        <div class="layout-2">
+            <article class="liquid-panel table-panel">
+                <div class="panel-head">
+                    <h3>${escapeHtml(match.home)} vs ${escapeHtml(match.away)}</h3>
+                    <span class="status-pill status-medium">${escapeHtml(match.model_type)}</span>
+                </div>
+                <div id="wc-match-probabilities"></div>
+                <div class="wc-summary-row" id="wc-match-detail" style="margin-top:0.8rem"></div>
+                <div id="wc-outcome-bar-chart" class="chart-box" style="height:220px;margin-top:0.8rem"></div>
+            </article>
+            <article class="liquid-panel chart-panel">
+                <div class="panel-head">
+                    <h3>${z ? "比分矩阵" : "Score Matrix"}</h3>
+                </div>
+                <div id="wc-score-chart" class="chart-box" style="height:340px"></div>
+            </article>
+        </div>
+    `;
+
+    document.getElementById("wc-match-probabilities").innerHTML = [
+        [z ? "主胜" : "Home", match.hw],
+        [z ? "平局" : "Draw", match.draw],
+        [z ? "客胜" : "Away", match.aw],
+    ].map(([label, value]) => `
+        <div class="probability-row">
+            <span class="probability-label">${escapeHtml(label)}</span>
+            <div class="probability-track"><div class="probability-fill" style="width:${sanitizeCssPercent(value * 100)}%"></div></div>
+            <strong>${sanitizeCssPercent(value * 100)}%</strong>
+        </div>
+    `).join("");
+
+    document.getElementById("wc-match-detail").innerHTML = `
+        <div><span>${escapeHtml(t("expected_goals"))}</span><strong>${match.xh.toFixed(2)} / ${match.xa.toFixed(2)}</strong></div>
+        <div><span>${z ? "强度" : "Strength"}</span><strong>${Number(prediction.home_strength || 0).toFixed(3)} / ${Number(prediction.away_strength || 0).toFixed(3)}</strong></div>
+        <div><span>model</span><strong>${escapeHtml(match.model_version)}</strong></div>
+        <div><span>${z ? "主场修正" : "Host bonus"}</span><strong>${Number(prediction.host_bonus || 0).toFixed(2)}</strong></div>
+    `;
+
+    renderScoreMatrixInto("wc-score-chart", match);
+    renderOutcomeBarInto("wc-outcome-bar-chart", match);
 }
 
 function renderWcProbability() {
@@ -4366,6 +4524,7 @@ async function initWorldCup() {
     await Promise.all([
         fetchWcSquad("Argentina"),
         fetchWcSquad("France"),
+        fetchWcMatchPrediction("Argentina", "France"),
     ]);
 
     // Re-render all WC views with API data

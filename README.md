@@ -65,6 +65,29 @@ The `frontend/` directory contains a static analysis workbench with a consistent
 
 Frontend hosted on Vercel, backend on Render (free tier — first request may take ~30s to wake up).
 
+### LAN / Campus Network Deployment
+
+For access from other devices on the same campus network, run the backend on your computer and let it serve both the frontend and API:
+
+```bash
+uv sync
+uv run python -m scoutfootball serve --host 0.0.0.0 --port 8000
+```
+
+Then open `http://YOUR-PC-IP:8000` from another device on the same network.
+
+Windows users can use:
+
+```bat
+scripts\start-lan.bat
+```
+
+Notes:
+
+- `frontend/` is mounted by FastAPI at `/`, so one port is enough.
+- Local/LAN deployments now default to same-origin API mode.
+- Allow TCP `8000` through Windows Firewall, or choose another port if needed.
+
 ### Demo Data
 
 The frontend falls back to built-in demo data when the FastAPI backend is unavailable or when specific artifacts are missing. Views using demo data display a **DEMO** badge.

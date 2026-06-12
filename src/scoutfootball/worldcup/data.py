@@ -1530,6 +1530,42 @@ BIG5_LEAGUE_ALIASES: dict[str, str] = {
     "Ligue 1": "FRA-Ligue 1",
 }
 
+LEAGUE_PROXY_RATINGS: dict[str, float] = {
+    "Premier League": 61.0,
+    "La Liga": 60.5,
+    "Bundesliga": 58.5,
+    "Serie A": 58.0,
+    "Ligue 1": 56.0,
+    "Liga Portugal": 53.0,
+    "Eredivisie": 52.5,
+    "Belgian Pro League": 49.5,
+    "Jupiler Pro League": 49.5,
+    "Championship": 47.0,
+    "EFL Championship": 47.0,
+    "Scottish Premiership": 46.5,
+    "Scottish Premiership ": 46.5,
+    "MLS": 45.0,
+    "Brasileirao": 51.5,
+    "Super Lig": 46.5,
+    "SPL": 46.5,
+    "Saudi Pro League": 46.5,
+    "A-League": 41.0,
+    "J-League": 44.0,
+    "Swiss Super League": 46.0,
+    "Austrian Bundesliga": 47.0,
+    "Danish Superliga": 46.0,
+    "Eliteserien": 44.5,
+    "HNL": 44.5,
+    "NB I": 42.0,
+    "RFPL": 47.0,
+    "Qatar Stars League": 40.5,
+    "Persian Gulf Pro League": 39.5,
+    "UAE Pro League": 39.0,
+    "K League 1": 42.0,
+    "K-League": 42.0,
+    "Jupiler Pro League ": 49.5,
+}
+
 
 # ── Squad access helpers ──────────────────────────────────────────────────
 
@@ -1566,6 +1602,23 @@ def get_squad(team: str) -> list[SquadPlayer]:
 def is_big5_league(league_name: str) -> bool:
     """Check if a league name is a Big-5 European league."""
     return league_name in BIG5_LEAGUES or league_name in BIG5_LEAGUE_ALIASES
+
+
+def league_proxy_rating(league_name: str) -> float:
+    """Return a proxy player rating for leagues without direct player scores."""
+    if league_name in LEAGUE_PROXY_RATINGS:
+        return LEAGUE_PROXY_RATINGS[league_name]
+    if is_big5_league(league_name):
+        return 58.0
+    if "League One" in league_name or "League Two" in league_name:
+        return 38.0
+    if "Super League" in league_name:
+        return 43.0
+    if "Pro League" in league_name:
+        return 42.0
+    if "Bundesliga" in league_name:
+        return 46.0
+    return 42.0
 
 
 def enrich_squad_with_ratings(
@@ -1654,47 +1707,92 @@ def compute_team_strengths(
     enriched_squads: dict[str, list[SquadPlayer]] | None = None,
     ratings_df=None,  # pd.DataFrame | None
 ) -> dict[str, float]:
-    """Compute a strength score for each World Cup team.
+    """Compute a strength score for each World Cup team."""
+    details = compute_team_strength_details(
+        enriched_squads=enriched_squads,
+        ratings_df=ratings_df,
+    )
+    return {team: values["strength"] for team, values in details.items()}
 
-    Combines:
-    1. Average rating of squad players with system ratings (weight: 0.5)
-    2. Opta win probability if available (weight: 0.3)
-    3. Number of Big5 players as a proxy (weight: 0.2)
 
-    Returns a dict of team -> strength score (0-1).
-    """
+def compute_team_strength_details(
+    enriched_squads: dict[str, list[SquadPlayer]] | None = None,
+    ratings_df=None,  # pd.DataFrame | None
+) -> dict[str, dict[str, float]]:
+    """Compute strength score plus interpretable components for each team."""
     if enriched_squads is None:
         if ratings_df is None:
             from scoutfootball.app.data_loader import load_player_ratings
             ratings_df = load_player_ratings()
         enriched_squads = enrich_squads_with_ratings(ratings_df)
 
-    strengths: dict[str, float] = {}
+    strengths: dict[str, dict[str, float]] = {}
 
     for team_name, squad in enriched_squads.items():
         rated = [p for p in squad if p.has_rating]
+        coverage = len(rated) / len(squad) if squad else 0.0
 
-        # Component 1: average rating (normalized to 0-1)
-        if rated:
-            avg_rating = sum(p.rating for p in rated) / len(rated)
-            rating_score = min(max((avg_rating - 30) / 70, 0), 1)
-        else:
-            rating_score = 0.2
+        observed_avg = (
+            sum(p.rating for p in rated if p.rating is not None) / len(rated)
+            if rated else 43.0
+        )
+        proxy_scores = [league_proxy_rating(p.club_league) for p in squad]
+        proxy_avg = sum(proxy_scores) / len(proxy_scores) if proxy_scores else 42.0
+        shrunk_avg = coverage * observed_avg + (1 - coverage) * proxy_avg
 
-        # Component 2: Opta win probability (already 0-1)
+        imputed_scores = [
+            float(p.rating) if p.has_rating and p.rating is not None else league_proxy_rating(p.club_league)
+            for p in squad
+        ]
+        imputed_scores.sort(reverse=True)
+        core = imputed_scores[:11]
+        depth = imputed_scores[11:18]
+        reserve = imputed_scores[18:]
+        core_avg = sum(core) / len(core) if core else shrunk_avg
+        depth_avg = sum(depth) / len(depth) if depth else core_avg
+        reserve_avg = sum(reserve) / len(reserve) if reserve else depth_avg
+
+        squad_quality = (
+            0.55 * core_avg
+            + 0.20 * depth_avg
+            + 0.10 * reserve_avg
+            + 0.15 * shrunk_avg
+        )
+        rating_score = min(max((squad_quality - 30) / 40, 0), 1)
+
         opta_score = OPTA_WIN_PROBABILITY.get(team_name, 0.01)
         opta_normalized = min(opta_score / 0.16, 1.0)
 
-        # Component 3: Big5 player count (proxy for squad quality)
         big5_count = sum(1 for p in squad if p.club_league in BIG5_LEAGUES)
-        big5_score = min(big5_count / 10, 1.0)
+        big5_ratio = big5_count / len(squad) if squad else 0.0
+        big5_score = min(big5_ratio / 0.6, 1.0)
+        league_score = min(max((proxy_avg - 35) / 25, 0), 1)
+        coverage_score = coverage ** 0.7
 
         strength = (
-            0.5 * rating_score
-            + 0.3 * opta_normalized
-            + 0.2 * big5_score
+            0.46 * rating_score
+            + 0.24 * opta_normalized
+            + 0.18 * league_score
+            + 0.07 * coverage_score
+            + 0.05 * big5_score
         )
-        strengths[team_name] = strength
+        strengths[team_name] = {
+            "strength": round(strength, 4),
+            "coverage": round(coverage, 4),
+            "observed_avg_rating": round(observed_avg, 2),
+            "proxy_avg_rating": round(proxy_avg, 2),
+            "shrunk_avg_rating": round(shrunk_avg, 2),
+            "core_avg_rating": round(core_avg, 2),
+            "depth_avg_rating": round(depth_avg, 2),
+            "reserve_avg_rating": round(reserve_avg, 2),
+            "squad_quality_rating": round(squad_quality, 2),
+            "rating_score": round(rating_score, 4),
+            "opta_score": round(opta_normalized, 4),
+            "league_score": round(league_score, 4),
+            "coverage_score": round(coverage_score, 4),
+            "big5_score": round(big5_score, 4),
+            "big5_ratio": round(big5_ratio, 4),
+        }
 
     return strengths
 
