@@ -1,1 +1,933 @@
-{"status":"ok","source_attribution":"Predictions based on squad ratings from FBref/Understat data and Opta public priors","disclaimer":"Probabilities are rough estimates from a simplified strength-ratio model. Non-Big5 league team strengths may be underestimated. Not a real match prediction.","groups":[{"group":"A","teams":[{"team":"Czech Republic","strength":0.404,"p1st":0.278,"p2nd":0.278,"p3rd":0.445,"p_advance":0.555},{"team":"Mexico","strength":0.368,"p1st":0.253,"p2nd":0.253,"p3rd":0.494,"p_advance":0.506},{"team":"South Korea","strength":0.366,"p1st":0.252,"p2nd":0.252,"p3rd":0.497,"p_advance":0.503,"group":"A"},{"team":"South Africa","strength":0.317,"p1st":0.218,"p2nd":0.218,"p3rd":0.565,"p_advance":0.435}]},{"group":"B","teams":[{"team":"Switzerland","strength":0.568,"p1st":0.344,"p2nd":0.344,"p3rd":0.312,"p_advance":0.688},{"team":"Bosnia and Herzegovina","strength":0.43,"p1st":0.261,"p2nd":0.261,"p3rd":0.479,"p_advance":0.521},{"team":"Canada","strength":0.381,"p1st":0.231,"p2nd":0.231,"p3rd":0.538,"p_advance":0.462,"group":"B"},{"team":"Qatar","strength":0.271,"p1st":0.164,"p2nd":0.164,"p3rd":0.672,"p_advance":0.328}]},{"group":"C","teams":[{"team":"Brazil","strength":0.814,"p1st":0.375,"p2nd":0.375,"p3rd":0.25,"p_advance":0.75},{"team":"Morocco","strength":0.503,"p1st":0.231,"p2nd":0.231,"p3rd":0.537,"p_advance":0.463},{"team":"Scotland","strength":0.449,"p1st":0.207,"p2nd":0.207,"p3rd":0.587,"p_advance":0.413,"group":"C"},{"team":"Haiti","strength":0.407,"p1st":0.187,"p2nd":0.187,"p3rd":0.626,"p_advance":0.374}]},{"group":"D","teams":[{"team":"United States","strength":0.513,"p1st":0.292,"p2nd":0.292,"p3rd":0.417,"p_advance":0.583},{"team":"Turkey","strength":0.479,"p1st":0.273,"p2nd":0.273,"p3rd":0.455,"p_advance":0.545},{"team":"Paraguay","strength":0.395,"p1st":0.225,"p2nd":0.225,"p3rd":0.55,"p_advance":0.45,"group":"D"},{"team":"Australia","strength":0.371,"p1st":0.211,"p2nd":0.211,"p3rd":0.578,"p_advance":0.422}]},{"group":"E","teams":[{"team":"Germany","strength":0.77,"p1st":0.36,"p2nd":0.36,"p3rd":0.281,"p_advance":0.719},{"team":"Ivory Coast","strength":0.595,"p1st":0.278,"p2nd":0.278,"p3rd":0.444,"p_advance":0.556},{"team":"Ecuador","strength":0.448,"p1st":0.209,"p2nd":0.209,"p3rd":0.582,"p_advance":0.418,"group":"E"},{"team":"Curacao","strength":0.329,"p1st":0.153,"p2nd":0.153,"p3rd":0.693,"p_advance":0.307}]},{"group":"F","teams":[{"team":"Netherlands","strength":0.728,"p1st":0.335,"p2nd":0.335,"p3rd":0.331,"p_advance":0.669},{"team":"Sweden","strength":0.526,"p1st":0.242,"p2nd":0.242,"p3rd":0.516,"p_advance":0.484},{"team":"Japan","strength":0.521,"p1st":0.239,"p2nd":0.239,"p3rd":0.521,"p_advance":0.479,"group":"F"},{"team":"Tunisia","strength":0.399,"p1st":0.184,"p2nd":0.184,"p3rd":0.633,"p_advance":0.367}]},{"group":"G","teams":[{"team":"Belgium","strength":0.598,"p1st":0.373,"p2nd":0.373,"p3rd":0.253,"p_advance":0.747},{"team":"New Zealand","strength":0.392,"p1st":0.244,"p2nd":0.244,"p3rd":0.511,"p_advance":0.489},{"team":"Egypt","strength":0.381,"p1st":0.238,"p2nd":0.238,"p3rd":0.524,"p_advance":0.476,"group":"G"},{"team":"Iran","strength":0.231,"p1st":0.144,"p2nd":0.144,"p3rd":0.712,"p_advance":0.288}]},{"group":"H","teams":[{"team":"Spain","strength":0.925,"p1st":0.425,"p2nd":0.425,"p3rd":0.15,"p_advance":0.85},{"team":"Uruguay","strength":0.52,"p1st":0.239,"p2nd":0.239,"p3rd":0.523,"p_advance":0.477},{"team":"Cape Verde","strength":0.422,"p1st":0.194,"p2nd":0.194,"p3rd":0.612,"p_advance":0.388,"group":"H"},{"team":"Saudi Arabia","strength":0.31,"p1st":0.143,"p2nd":0.143,"p3rd":0.715,"p_advance":0.285}]},{"group":"I","teams":[{"team":"France","strength":0.861,"p1st":0.371,"p2nd":0.371,"p3rd":0.259,"p_advance":0.741},{"team":"Senegal","strength":0.612,"p1st":0.263,"p2nd":0.263,"p3rd":0.473,"p_advance":0.527},{"team":"Norway","strength":0.529,"p1st":0.228,"p2nd":0.228,"p3rd":0.544,"p_advance":0.456,"group":"I"},{"team":"Iraq","strength":0.321,"p1st":0.138,"p2nd":0.138,"p3rd":0.724,"p_advance":0.276}]},{"group":"J","teams":[{"team":"Argentina","strength":0.785,"p1st":0.333,"p2nd":0.333,"p3rd":0.334,"p_advance":0.666},{"team":"Algeria","strength":0.681,"p1st":0.289,"p2nd":0.289,"p3rd":0.422,"p_advance":0.578},{"team":"Austria","strength":0.568,"p1st":0.241,"p2nd":0.241,"p3rd":0.518,"p_advance":0.482,"group":"J"},{"team":"Jordan","strength":0.322,"p1st":0.137,"p2nd":0.137,"p3rd":0.726,"p_advance":0.274}]},{"group":"K","teams":[{"team":"Portugal","strength":0.749,"p1st":0.399,"p2nd":0.399,"p3rd":0.202,"p_advance":0.798},{"team":"Colombia","strength":0.519,"p1st":0.276,"p2nd":0.276,"p3rd":0.447,"p_advance":0.553},{"team":"DR Congo","strength":0.341,"p1st":0.181,"p2nd":0.181,"p3rd":0.637,"p_advance":0.363,"group":"K"},{"team":"Uzbekistan","strength":0.268,"p1st":0.143,"p2nd":0.143,"p3rd":0.714,"p_advance":0.286}]},{"group":"L","teams":[{"team":"England","strength":0.85,"p1st":0.378,"p2nd":0.378,"p3rd":0.244,"p_advance":0.756},{"team":"Croatia","strength":0.568,"p1st":0.253,"p2nd":0.253,"p3rd":0.495,"p_advance":0.505},{"team":"Ghana","strength":0.491,"p1st":0.219,"p2nd":0.219,"p3rd":0.563,"p_advance":0.437,"group":"L"},{"team":"Panama","strength":0.339,"p1st":0.151,"p2nd":0.151,"p3rd":0.698,"p_advance":0.302}]}],"ranking":[{"rank":1,"team":"Spain","group":"H","strength":0.925,"rated_players":24,"coverage":0.9231,"core_avg_rating":69.27,"shrunk_avg_rating":60.14},{"rank":2,"team":"France","group":"I","strength":0.861,"rated_players":21,"coverage":0.8077,"core_avg_rating":71.01,"shrunk_avg_rating":60.77},{"rank":3,"team":"England","group":"L","strength":0.85,"rated_players":25,"coverage":0.9615,"core_avg_rating":71.24,"shrunk_avg_rating":60.5},{"rank":4,"team":"Brazil","group":"C","strength":0.814,"rated_players":22,"coverage":0.8462,"core_avg_rating":70.69,"shrunk_avg_rating":60.02},{"rank":5,"team":"Argentina","group":"J","strength":0.785,"rated_players":25,"coverage":0.9615,"core_avg_rating":70.91,"shrunk_avg_rating":58.47},{"rank":6,"team":"Germany","group":"E","strength":0.77,"rated_players":24,"coverage":0.9231,"core_avg_rating":67.54,"shrunk_avg_rating":59.15},{"rank":7,"team":"Portugal","group":"K","strength":0.749,"rated_players":22,"coverage":0.8462,"core_avg_rating":69.43,"shrunk_avg_rating":59.6},{"rank":8,"team":"Netherlands","group":"F","strength":0.728,"rated_players":26,"coverage":1.0,"core_avg_rating":68.64,"shrunk_avg_rating":55.82},{"rank":9,"team":"Algeria","group":"J","strength":0.681,"rated_players":23,"coverage":0.8846,"core_avg_rating":71.25,"shrunk_avg_rating":60.44},{"rank":10,"team":"Senegal","group":"I","strength":0.612,"rated_players":25,"coverage":0.9615,"core_avg_rating":65.17,"shrunk_avg_rating":55.03},{"rank":11,"team":"Belgium","group":"G","strength":0.598,"rated_players":24,"coverage":0.9231,"core_avg_rating":63.14,"shrunk_avg_rating":48.04},{"rank":12,"team":"Ivory Coast","group":"E","strength":0.595,"rated_players":25,"coverage":0.9615,"core_avg_rating":69.31,"shrunk_avg_rating":54.66},{"rank":13,"team":"Austria","group":"J","strength":0.568,"rated_players":22,"coverage":0.8462,"core_avg_rating":62.7,"shrunk_avg_rating":49.46},{"rank":14,"team":"Croatia","group":"L","strength":0.568,"rated_players":23,"coverage":0.8846,"core_avg_rating":62.88,"shrunk_avg_rating":52.3},{"rank":15,"team":"Switzerland","group":"B","strength":0.568,"rated_players":24,"coverage":0.9231,"core_avg_rating":60.9,"shrunk_avg_rating":48.67},{"rank":16,"team":"Norway","group":"I","strength":0.529,"rated_players":17,"coverage":0.6538,"core_avg_rating":60.5,"shrunk_avg_rating":49.93},{"rank":17,"team":"Sweden","group":"F","strength":0.526,"rated_players":20,"coverage":0.7692,"core_avg_rating":59.33,"shrunk_avg_rating":49.55},{"rank":18,"team":"Japan","group":"F","strength":0.521,"rated_players":21,"coverage":0.8077,"core_avg_rating":59.07,"shrunk_avg_rating":50.3},{"rank":19,"team":"Uruguay","group":"H","strength":0.52,"rated_players":16,"coverage":0.6154,"core_avg_rating":60.47,"shrunk_avg_rating":48.44},{"rank":20,"team":"Colombia","group":"K","strength":0.519,"rated_players":20,"coverage":0.7692,"core_avg_rating":60.67,"shrunk_avg_rating":48.69},{"rank":21,"team":"United States","group":"D","strength":0.513,"rated_players":21,"coverage":0.8077,"core_avg_rating":59.89,"shrunk_avg_rating":49.95},{"rank":22,"team":"Morocco","group":"C","strength":0.503,"rated_players":21,"coverage":0.8077,"core_avg_rating":60.82,"shrunk_avg_rating":50.39},{"rank":23,"team":"Ghana","group":"L","strength":0.491,"rated_players":20,"coverage":0.7692,"core_avg_rating":60.37,"shrunk_avg_rating":45.55},{"rank":24,"team":"Turkey","group":"D","strength":0.479,"rated_players":12,"coverage":0.4615,"core_avg_rating":60.54,"shrunk_avg_rating":51.15},{"rank":25,"team":"Scotland","group":"C","strength":0.449,"rated_players":22,"coverage":0.8462,"core_avg_rating":56.72,"shrunk_avg_rating":42.17},{"rank":26,"team":"Ecuador","group":"E","strength":0.448,"rated_players":16,"coverage":0.6154,"core_avg_rating":58.05,"shrunk_avg_rating":47.69},{"rank":27,"team":"Bosnia and Herzegovina","group":"B","strength":0.43,"rated_players":17,"coverage":0.6538,"core_avg_rating":59.01,"shrunk_avg_rating":45.65},{"rank":28,"team":"Cape Verde","group":"H","strength":0.422,"rated_players":23,"coverage":0.8846,"core_avg_rating":60.29,"shrunk_avg_rating":45.36},{"rank":29,"team":"Haiti","group":"C","strength":0.407,"rated_players":15,"coverage":0.5769,"core_avg_rating":58.74,"shrunk_avg_rating":47.96},{"rank":30,"team":"Czech Republic","group":"A","strength":0.404,"rated_players":11,"coverage":0.4231,"core_avg_rating":57.51,"shrunk_avg_rating":48.46},{"rank":31,"team":"Tunisia","group":"F","strength":0.399,"rated_players":15,"coverage":0.5769,"core_avg_rating":56.46,"shrunk_avg_rating":44.3},{"rank":32,"team":"Paraguay","group":"D","strength":0.395,"rated_players":17,"coverage":0.6538,"core_avg_rating":55.92,"shrunk_avg_rating":45.91},{"rank":33,"team":"New Zealand","group":"G","strength":0.392,"rated_players":10,"coverage":0.3846,"core_avg_rating":60.32,"shrunk_avg_rating":47.64},{"rank":34,"team":"Egypt","group":"G","strength":0.381,"rated_players":11,"coverage":0.4231,"core_avg_rating":57.95,"shrunk_avg_rating":46.26},{"rank":35,"team":"Canada","group":"B","strength":0.381,"rated_players":16,"coverage":0.6154,"core_avg_rating":51.65,"shrunk_avg_rating":42.61},{"rank":36,"team":"Australia","group":"D","strength":0.371,"rated_players":14,"coverage":0.5385,"core_avg_rating":48.78,"shrunk_avg_rating":41.56},{"rank":37,"team":"Mexico","group":"A","strength":0.368,"rated_players":14,"coverage":0.5385,"core_avg_rating":56.33,"shrunk_avg_rating":40.96},{"rank":38,"team":"South Korea","group":"A","strength":0.366,"rated_players":4,"coverage":0.1538,"core_avg_rating":53.68,"shrunk_avg_rating":48.73},{"rank":39,"team":"DR Congo","group":"K","strength":0.341,"rated_players":14,"coverage":0.5385,"core_avg_rating":51.59,"shrunk_avg_rating":38.48},{"rank":40,"team":"Panama","group":"L","strength":0.339,"rated_players":13,"coverage":0.5,"core_avg_rating":54.36,"shrunk_avg_rating":46.29},{"rank":41,"team":"Curacao","group":"E","strength":0.329,"rated_players":9,"coverage":0.3462,"core_avg_rating":51.39,"shrunk_avg_rating":43.61},{"rank":42,"team":"Jordan","group":"J","strength":0.322,"rated_players":15,"coverage":0.5769,"core_avg_rating":52.92,"shrunk_avg_rating":44.22},{"rank":43,"team":"Iraq","group":"I","strength":0.321,"rated_players":10,"coverage":0.3846,"core_avg_rating":55.96,"shrunk_avg_rating":42.09},{"rank":44,"team":"South Africa","group":"A","strength":0.317,"rated_players":6,"coverage":0.2308,"core_avg_rating":51.75,"shrunk_avg_rating":46.3},{"rank":45,"team":"Saudi Arabia","group":"H","strength":0.31,"rated_players":2,"coverage":0.0769,"core_avg_rating":48.11,"shrunk_avg_rating":46.33},{"rank":46,"team":"Qatar","group":"B","strength":0.271,"rated_players":9,"coverage":0.3462,"core_avg_rating":51.35,"shrunk_avg_rating":42.45},{"rank":47,"team":"Uzbekistan","group":"K","strength":0.268,"rated_players":6,"coverage":0.2308,"core_avg_rating":47.81,"shrunk_avg_rating":42.63},{"rank":48,"team":"Iran","group":"G","strength":0.231,"rated_players":6,"coverage":0.2308,"core_avg_rating":45.93,"shrunk_avg_rating":41.6}],"best_third_place":[{"team":"Austria","strength":0.568,"p1st":0.241,"p2nd":0.241,"p3rd":0.518,"p_advance":0.482,"group":"J"},{"team":"Norway","strength":0.529,"p1st":0.228,"p2nd":0.228,"p3rd":0.544,"p_advance":0.456,"group":"I"},{"team":"Japan","strength":0.521,"p1st":0.239,"p2nd":0.239,"p3rd":0.521,"p_advance":0.479,"group":"F"},{"team":"Ghana","strength":0.491,"p1st":0.219,"p2nd":0.219,"p3rd":0.563,"p_advance":0.437,"group":"L"},{"team":"Scotland","strength":0.449,"p1st":0.207,"p2nd":0.207,"p3rd":0.587,"p_advance":0.413,"group":"C"},{"team":"Ecuador","strength":0.448,"p1st":0.209,"p2nd":0.209,"p3rd":0.582,"p_advance":0.418,"group":"E"},{"team":"Cape Verde","strength":0.422,"p1st":0.194,"p2nd":0.194,"p3rd":0.612,"p_advance":0.388,"group":"H"},{"team":"Paraguay","strength":0.395,"p1st":0.225,"p2nd":0.225,"p3rd":0.55,"p_advance":0.45,"group":"D"}]}
+{
+  "status": "ok",
+  "source_attribution": "Predictions based on squad ratings from FBref/Understat data and Opta public priors",
+  "disclaimer": "Probabilities are rough estimates from a simplified strength-ratio model. Non-Big5 league team strengths may be underestimated. Not a real match prediction.",
+  "groups": [
+    {
+      "group": "A",
+      "teams": [
+        {
+          "team": "Mexico",
+          "strength": 0.412,
+          "p1st": 0.273,
+          "p2nd": 0.263,
+          "p3rd": 0.247,
+          "p4th": 0.216,
+          "p_advance": 0.701
+        },
+        {
+          "team": "Czech Republic",
+          "strength": 0.404,
+          "p1st": 0.268,
+          "p2nd": 0.26,
+          "p3rd": 0.249,
+          "p4th": 0.223,
+          "p_advance": 0.694
+        },
+        {
+          "team": "South Korea",
+          "strength": 0.369,
+          "p1st": 0.244,
+          "p2nd": 0.248,
+          "p3rd": 0.253,
+          "p4th": 0.255,
+          "p_advance": 0.661
+        },
+        {
+          "team": "South Africa",
+          "strength": 0.324,
+          "p1st": 0.215,
+          "p2nd": 0.229,
+          "p3rd": 0.251,
+          "p4th": 0.306,
+          "p_advance": 0.611
+        }
+      ]
+    },
+    {
+      "group": "B",
+      "teams": [
+        {
+          "team": "Switzerland",
+          "strength": 0.568,
+          "p1st": 0.328,
+          "p2nd": 0.289,
+          "p3rd": 0.236,
+          "p4th": 0.148,
+          "p_advance": 0.774
+        },
+        {
+          "team": "Canada",
+          "strength": 0.452,
+          "p1st": 0.261,
+          "p2nd": 0.265,
+          "p3rd": 0.262,
+          "p4th": 0.212,
+          "p_advance": 0.701
+        },
+        {
+          "team": "Bosnia and Herzegovina",
+          "strength": 0.439,
+          "p1st": 0.254,
+          "p2nd": 0.261,
+          "p3rd": 0.264,
+          "p4th": 0.222,
+          "p_advance": 0.691
+        },
+        {
+          "team": "Qatar",
+          "strength": 0.271,
+          "p1st": 0.157,
+          "p2nd": 0.185,
+          "p3rd": 0.239,
+          "p4th": 0.419,
+          "p_advance": 0.501
+        }
+      ]
+    },
+    {
+      "group": "C",
+      "teams": [
+        {
+          "team": "Brazil",
+          "strength": 0.818,
+          "p1st": 0.373,
+          "p2nd": 0.297,
+          "p3rd": 0.212,
+          "p4th": 0.117,
+          "p_advance": 0.812
+        },
+        {
+          "team": "Morocco",
+          "strength": 0.51,
+          "p1st": 0.233,
+          "p2nd": 0.253,
+          "p3rd": 0.264,
+          "p4th": 0.251,
+          "p_advance": 0.662
+        },
+        {
+          "team": "Scotland",
+          "strength": 0.45,
+          "p1st": 0.205,
+          "p2nd": 0.232,
+          "p3rd": 0.264,
+          "p4th": 0.298,
+          "p_advance": 0.614
+        },
+        {
+          "team": "Haiti",
+          "strength": 0.413,
+          "p1st": 0.188,
+          "p2nd": 0.218,
+          "p3rd": 0.26,
+          "p4th": 0.334,
+          "p_advance": 0.579
+        }
+      ]
+    },
+    {
+      "group": "D",
+      "teams": [
+        {
+          "team": "United States",
+          "strength": 0.567,
+          "p1st": 0.308,
+          "p2nd": 0.279,
+          "p3rd": 0.238,
+          "p4th": 0.175,
+          "p_advance": 0.746
+        },
+        {
+          "team": "Turkey",
+          "strength": 0.491,
+          "p1st": 0.267,
+          "p2nd": 0.263,
+          "p3rd": 0.251,
+          "p4th": 0.219,
+          "p_advance": 0.698
+        },
+        {
+          "team": "Paraguay",
+          "strength": 0.403,
+          "p1st": 0.219,
+          "p2nd": 0.234,
+          "p3rd": 0.256,
+          "p4th": 0.29,
+          "p_advance": 0.624
+        },
+        {
+          "team": "Australia",
+          "strength": 0.378,
+          "p1st": 0.206,
+          "p2nd": 0.224,
+          "p3rd": 0.254,
+          "p4th": 0.316,
+          "p_advance": 0.599
+        }
+      ]
+    },
+    {
+      "group": "E",
+      "teams": [
+        {
+          "team": "Germany",
+          "strength": 0.771,
+          "p1st": 0.358,
+          "p2nd": 0.298,
+          "p3rd": 0.222,
+          "p4th": 0.122,
+          "p_advance": 0.804
+        },
+        {
+          "team": "Ivory Coast",
+          "strength": 0.602,
+          "p1st": 0.279,
+          "p2nd": 0.28,
+          "p3rd": 0.257,
+          "p4th": 0.184,
+          "p_advance": 0.731
+        },
+        {
+          "team": "Ecuador",
+          "strength": 0.448,
+          "p1st": 0.208,
+          "p2nd": 0.235,
+          "p3rd": 0.274,
+          "p4th": 0.283,
+          "p_advance": 0.625
+        },
+        {
+          "team": "Curacao",
+          "strength": 0.333,
+          "p1st": 0.155,
+          "p2nd": 0.187,
+          "p3rd": 0.247,
+          "p4th": 0.411,
+          "p_advance": 0.506
+        }
+      ]
+    },
+    {
+      "group": "F",
+      "teams": [
+        {
+          "team": "Netherlands",
+          "strength": 0.728,
+          "p1st": 0.334,
+          "p2nd": 0.287,
+          "p3rd": 0.23,
+          "p4th": 0.149,
+          "p_advance": 0.774
+        },
+        {
+          "team": "Sweden",
+          "strength": 0.527,
+          "p1st": 0.242,
+          "p2nd": 0.252,
+          "p3rd": 0.259,
+          "p4th": 0.247,
+          "p_advance": 0.667
+        },
+        {
+          "team": "Japan",
+          "strength": 0.521,
+          "p1st": 0.239,
+          "p2nd": 0.25,
+          "p3rd": 0.26,
+          "p4th": 0.251,
+          "p_advance": 0.662
+        },
+        {
+          "team": "Tunisia",
+          "strength": 0.405,
+          "p1st": 0.186,
+          "p2nd": 0.21,
+          "p3rd": 0.251,
+          "p4th": 0.353,
+          "p_advance": 0.564
+        }
+      ]
+    },
+    {
+      "group": "G",
+      "teams": [
+        {
+          "team": "Belgium",
+          "strength": 0.599,
+          "p1st": 0.373,
+          "p2nd": 0.3,
+          "p3rd": 0.216,
+          "p4th": 0.111,
+          "p_advance": 0.817
+        },
+        {
+          "team": "New Zealand",
+          "strength": 0.396,
+          "p1st": 0.246,
+          "p2nd": 0.264,
+          "p3rd": 0.271,
+          "p4th": 0.218,
+          "p_advance": 0.691
+        },
+        {
+          "team": "Egypt",
+          "strength": 0.383,
+          "p1st": 0.238,
+          "p2nd": 0.259,
+          "p3rd": 0.274,
+          "p4th": 0.229,
+          "p_advance": 0.679
+        },
+        {
+          "team": "Iran",
+          "strength": 0.231,
+          "p1st": 0.143,
+          "p2nd": 0.177,
+          "p3rd": 0.238,
+          "p4th": 0.441,
+          "p_advance": 0.479
+        }
+      ]
+    },
+    {
+      "group": "H",
+      "teams": [
+        {
+          "team": "Spain",
+          "strength": 0.925,
+          "p1st": 0.41,
+          "p2nd": 0.303,
+          "p3rd": 0.196,
+          "p4th": 0.091,
+          "p_advance": 0.843
+        },
+        {
+          "team": "Uruguay",
+          "strength": 0.523,
+          "p1st": 0.232,
+          "p2nd": 0.263,
+          "p3rd": 0.27,
+          "p4th": 0.235,
+          "p_advance": 0.675
+        },
+        {
+          "team": "Cape Verde",
+          "strength": 0.427,
+          "p1st": 0.189,
+          "p2nd": 0.227,
+          "p3rd": 0.272,
+          "p4th": 0.312,
+          "p_advance": 0.597
+        },
+        {
+          "team": "Saudi Arabia",
+          "strength": 0.381,
+          "p1st": 0.169,
+          "p2nd": 0.208,
+          "p3rd": 0.263,
+          "p4th": 0.361,
+          "p_advance": 0.551
+        }
+      ]
+    },
+    {
+      "group": "I",
+      "teams": [
+        {
+          "team": "France",
+          "strength": 0.863,
+          "p1st": 0.37,
+          "p2nd": 0.301,
+          "p3rd": 0.218,
+          "p4th": 0.111,
+          "p_advance": 0.817
+        },
+        {
+          "team": "Senegal",
+          "strength": 0.616,
+          "p1st": 0.264,
+          "p2nd": 0.275,
+          "p3rd": 0.267,
+          "p4th": 0.194,
+          "p_advance": 0.717
+        },
+        {
+          "team": "Norway",
+          "strength": 0.529,
+          "p1st": 0.227,
+          "p2nd": 0.251,
+          "p3rd": 0.279,
+          "p4th": 0.243,
+          "p_advance": 0.664
+        },
+        {
+          "team": "Iraq",
+          "strength": 0.324,
+          "p1st": 0.139,
+          "p2nd": 0.172,
+          "p3rd": 0.236,
+          "p4th": 0.453,
+          "p_advance": 0.468
+        }
+      ]
+    },
+    {
+      "group": "J",
+      "teams": [
+        {
+          "team": "Argentina",
+          "strength": 0.788,
+          "p1st": 0.333,
+          "p2nd": 0.294,
+          "p3rd": 0.237,
+          "p4th": 0.136,
+          "p_advance": 0.785
+        },
+        {
+          "team": "Algeria",
+          "strength": 0.683,
+          "p1st": 0.289,
+          "p2nd": 0.282,
+          "p3rd": 0.257,
+          "p4th": 0.171,
+          "p_advance": 0.743
+        },
+        {
+          "team": "Austria",
+          "strength": 0.568,
+          "p1st": 0.241,
+          "p2nd": 0.256,
+          "p3rd": 0.276,
+          "p4th": 0.227,
+          "p_advance": 0.681
+        },
+        {
+          "team": "Jordan",
+          "strength": 0.324,
+          "p1st": 0.137,
+          "p2nd": 0.168,
+          "p3rd": 0.229,
+          "p4th": 0.466,
+          "p_advance": 0.457
+        }
+      ]
+    },
+    {
+      "group": "K",
+      "teams": [
+        {
+          "team": "Portugal",
+          "strength": 0.753,
+          "p1st": 0.397,
+          "p2nd": 0.307,
+          "p3rd": 0.203,
+          "p4th": 0.093,
+          "p_advance": 0.839
+        },
+        {
+          "team": "Colombia",
+          "strength": 0.522,
+          "p1st": 0.275,
+          "p2nd": 0.289,
+          "p3rd": 0.261,
+          "p4th": 0.174,
+          "p_advance": 0.739
+        },
+        {
+          "team": "DR Congo",
+          "strength": 0.351,
+          "p1st": 0.185,
+          "p2nd": 0.223,
+          "p3rd": 0.283,
+          "p4th": 0.309,
+          "p_advance": 0.596
+        },
+        {
+          "team": "Uzbekistan",
+          "strength": 0.271,
+          "p1st": 0.143,
+          "p2nd": 0.181,
+          "p3rd": 0.252,
+          "p4th": 0.424,
+          "p_advance": 0.492
+        }
+      ]
+    },
+    {
+      "group": "L",
+      "teams": [
+        {
+          "team": "England",
+          "strength": 0.85,
+          "p1st": 0.376,
+          "p2nd": 0.3,
+          "p3rd": 0.213,
+          "p4th": 0.111,
+          "p_advance": 0.818
+        },
+        {
+          "team": "Croatia",
+          "strength": 0.57,
+          "p1st": 0.252,
+          "p2nd": 0.268,
+          "p3rd": 0.266,
+          "p4th": 0.213,
+          "p_advance": 0.698
+        },
+        {
+          "team": "Ghana",
+          "strength": 0.495,
+          "p1st": 0.219,
+          "p2nd": 0.245,
+          "p3rd": 0.274,
+          "p4th": 0.261,
+          "p_advance": 0.647
+        },
+        {
+          "team": "Panama",
+          "strength": 0.345,
+          "p1st": 0.153,
+          "p2nd": 0.186,
+          "p3rd": 0.246,
+          "p4th": 0.415,
+          "p_advance": 0.503
+        }
+      ]
+    }
+  ],
+  "ranking": [
+    {
+      "rank": 1,
+      "team": "Spain",
+      "group": "H",
+      "strength": 0.925,
+      "rated_players": 24,
+      "coverage": 0.9231,
+      "core_avg_rating": 69.27
+    },
+    {
+      "rank": 2,
+      "team": "France",
+      "group": "I",
+      "strength": 0.863,
+      "rated_players": 21,
+      "coverage": 0.8077,
+      "core_avg_rating": 71.01
+    },
+    {
+      "rank": 3,
+      "team": "England",
+      "group": "L",
+      "strength": 0.85,
+      "rated_players": 25,
+      "coverage": 0.9615,
+      "core_avg_rating": 71.24
+    },
+    {
+      "rank": 4,
+      "team": "Brazil",
+      "group": "C",
+      "strength": 0.818,
+      "rated_players": 22,
+      "coverage": 0.8462,
+      "core_avg_rating": 70.69
+    },
+    {
+      "rank": 5,
+      "team": "Argentina",
+      "group": "J",
+      "strength": 0.788,
+      "rated_players": 25,
+      "coverage": 0.9615,
+      "core_avg_rating": 70.91
+    },
+    {
+      "rank": 6,
+      "team": "Germany",
+      "group": "E",
+      "strength": 0.771,
+      "rated_players": 24,
+      "coverage": 0.9231,
+      "core_avg_rating": 67.54
+    },
+    {
+      "rank": 7,
+      "team": "Portugal",
+      "group": "K",
+      "strength": 0.753,
+      "rated_players": 22,
+      "coverage": 0.8462,
+      "core_avg_rating": 69.43
+    },
+    {
+      "rank": 8,
+      "team": "Netherlands",
+      "group": "F",
+      "strength": 0.728,
+      "rated_players": 26,
+      "coverage": 1.0,
+      "core_avg_rating": 68.64
+    },
+    {
+      "rank": 9,
+      "team": "Algeria",
+      "group": "J",
+      "strength": 0.683,
+      "rated_players": 23,
+      "coverage": 0.8846,
+      "core_avg_rating": 71.25
+    },
+    {
+      "rank": 10,
+      "team": "Senegal",
+      "group": "I",
+      "strength": 0.616,
+      "rated_players": 25,
+      "coverage": 0.9615,
+      "core_avg_rating": 65.17
+    },
+    {
+      "rank": 11,
+      "team": "Ivory Coast",
+      "group": "E",
+      "strength": 0.602,
+      "rated_players": 25,
+      "coverage": 0.9615,
+      "core_avg_rating": 69.31
+    },
+    {
+      "rank": 12,
+      "team": "Belgium",
+      "group": "G",
+      "strength": 0.599,
+      "rated_players": 24,
+      "coverage": 0.9231,
+      "core_avg_rating": 63.14
+    },
+    {
+      "rank": 13,
+      "team": "Croatia",
+      "group": "L",
+      "strength": 0.57,
+      "rated_players": 23,
+      "coverage": 0.8846,
+      "core_avg_rating": 62.88
+    },
+    {
+      "rank": 14,
+      "team": "Austria",
+      "group": "J",
+      "strength": 0.568,
+      "rated_players": 22,
+      "coverage": 0.8462,
+      "core_avg_rating": 62.7
+    },
+    {
+      "rank": 15,
+      "team": "Switzerland",
+      "group": "B",
+      "strength": 0.568,
+      "rated_players": 24,
+      "coverage": 0.9231,
+      "core_avg_rating": 60.9
+    },
+    {
+      "rank": 16,
+      "team": "United States",
+      "group": "D",
+      "strength": 0.567,
+      "rated_players": 21,
+      "coverage": 0.8077,
+      "core_avg_rating": 59.89
+    },
+    {
+      "rank": 17,
+      "team": "Norway",
+      "group": "I",
+      "strength": 0.529,
+      "rated_players": 17,
+      "coverage": 0.6538,
+      "core_avg_rating": 60.5
+    },
+    {
+      "rank": 18,
+      "team": "Sweden",
+      "group": "F",
+      "strength": 0.527,
+      "rated_players": 20,
+      "coverage": 0.7692,
+      "core_avg_rating": 59.33
+    },
+    {
+      "rank": 19,
+      "team": "Uruguay",
+      "group": "H",
+      "strength": 0.523,
+      "rated_players": 16,
+      "coverage": 0.6154,
+      "core_avg_rating": 60.47
+    },
+    {
+      "rank": 20,
+      "team": "Colombia",
+      "group": "K",
+      "strength": 0.522,
+      "rated_players": 20,
+      "coverage": 0.7692,
+      "core_avg_rating": 60.67
+    },
+    {
+      "rank": 21,
+      "team": "Japan",
+      "group": "F",
+      "strength": 0.521,
+      "rated_players": 21,
+      "coverage": 0.8077,
+      "core_avg_rating": 59.07
+    },
+    {
+      "rank": 22,
+      "team": "Morocco",
+      "group": "C",
+      "strength": 0.51,
+      "rated_players": 21,
+      "coverage": 0.8077,
+      "core_avg_rating": 60.82
+    },
+    {
+      "rank": 23,
+      "team": "Ghana",
+      "group": "L",
+      "strength": 0.495,
+      "rated_players": 20,
+      "coverage": 0.7692,
+      "core_avg_rating": 60.74
+    },
+    {
+      "rank": 24,
+      "team": "Turkey",
+      "group": "D",
+      "strength": 0.491,
+      "rated_players": 12,
+      "coverage": 0.4615,
+      "core_avg_rating": 60.54
+    },
+    {
+      "rank": 25,
+      "team": "Canada",
+      "group": "B",
+      "strength": 0.452,
+      "rated_players": 16,
+      "coverage": 0.6154,
+      "core_avg_rating": 53.04
+    },
+    {
+      "rank": 26,
+      "team": "Scotland",
+      "group": "C",
+      "strength": 0.45,
+      "rated_players": 22,
+      "coverage": 0.8462,
+      "core_avg_rating": 56.72
+    },
+    {
+      "rank": 27,
+      "team": "Ecuador",
+      "group": "E",
+      "strength": 0.448,
+      "rated_players": 16,
+      "coverage": 0.6154,
+      "core_avg_rating": 58.05
+    },
+    {
+      "rank": 28,
+      "team": "Bosnia and Herzegovina",
+      "group": "B",
+      "strength": 0.439,
+      "rated_players": 17,
+      "coverage": 0.6538,
+      "core_avg_rating": 59.29
+    },
+    {
+      "rank": 29,
+      "team": "Cape Verde",
+      "group": "H",
+      "strength": 0.427,
+      "rated_players": 23,
+      "coverage": 0.8846,
+      "core_avg_rating": 60.29
+    },
+    {
+      "rank": 30,
+      "team": "Haiti",
+      "group": "C",
+      "strength": 0.413,
+      "rated_players": 15,
+      "coverage": 0.5769,
+      "core_avg_rating": 58.74
+    },
+    {
+      "rank": 31,
+      "team": "Mexico",
+      "group": "A",
+      "strength": 0.412,
+      "rated_players": 14,
+      "coverage": 0.5385,
+      "core_avg_rating": 56.42
+    },
+    {
+      "rank": 32,
+      "team": "Tunisia",
+      "group": "F",
+      "strength": 0.405,
+      "rated_players": 15,
+      "coverage": 0.5769,
+      "core_avg_rating": 56.82
+    },
+    {
+      "rank": 33,
+      "team": "Czech Republic",
+      "group": "A",
+      "strength": 0.404,
+      "rated_players": 11,
+      "coverage": 0.4231,
+      "core_avg_rating": 57.51
+    },
+    {
+      "rank": 34,
+      "team": "Paraguay",
+      "group": "D",
+      "strength": 0.403,
+      "rated_players": 17,
+      "coverage": 0.6538,
+      "core_avg_rating": 56.11
+    },
+    {
+      "rank": 35,
+      "team": "New Zealand",
+      "group": "G",
+      "strength": 0.396,
+      "rated_players": 10,
+      "coverage": 0.3846,
+      "core_avg_rating": 60.5
+    },
+    {
+      "rank": 36,
+      "team": "Egypt",
+      "group": "G",
+      "strength": 0.383,
+      "rated_players": 11,
+      "coverage": 0.4231,
+      "core_avg_rating": 57.95
+    },
+    {
+      "rank": 37,
+      "team": "Saudi Arabia",
+      "group": "H",
+      "strength": 0.381,
+      "rated_players": 2,
+      "coverage": 0.0769,
+      "core_avg_rating": 51.75
+    },
+    {
+      "rank": 38,
+      "team": "Australia",
+      "group": "D",
+      "strength": 0.378,
+      "rated_players": 14,
+      "coverage": 0.5385,
+      "core_avg_rating": 49.51
+    },
+    {
+      "rank": 39,
+      "team": "South Korea",
+      "group": "A",
+      "strength": 0.369,
+      "rated_players": 4,
+      "coverage": 0.1538,
+      "core_avg_rating": 53.81
+    },
+    {
+      "rank": 40,
+      "team": "DR Congo",
+      "group": "K",
+      "strength": 0.351,
+      "rated_players": 14,
+      "coverage": 0.5385,
+      "core_avg_rating": 52.59
+    },
+    {
+      "rank": 41,
+      "team": "Panama",
+      "group": "L",
+      "strength": 0.345,
+      "rated_players": 13,
+      "coverage": 0.5,
+      "core_avg_rating": 54.55
+    },
+    {
+      "rank": 42,
+      "team": "Curacao",
+      "group": "E",
+      "strength": 0.333,
+      "rated_players": 9,
+      "coverage": 0.3462,
+      "core_avg_rating": 51.71
+    },
+    {
+      "rank": 43,
+      "team": "South Africa",
+      "group": "A",
+      "strength": 0.324,
+      "rated_players": 6,
+      "coverage": 0.2308,
+      "core_avg_rating": 52.48
+    },
+    {
+      "rank": 44,
+      "team": "Iraq",
+      "group": "I",
+      "strength": 0.324,
+      "rated_players": 10,
+      "coverage": 0.3846,
+      "core_avg_rating": 55.96
+    },
+    {
+      "rank": 45,
+      "team": "Jordan",
+      "group": "J",
+      "strength": 0.324,
+      "rated_players": 15,
+      "coverage": 0.5769,
+      "core_avg_rating": 52.92
+    },
+    {
+      "rank": 46,
+      "team": "Uzbekistan",
+      "group": "K",
+      "strength": 0.271,
+      "rated_players": 6,
+      "coverage": 0.2308,
+      "core_avg_rating": 48.08
+    },
+    {
+      "rank": 47,
+      "team": "Qatar",
+      "group": "B",
+      "strength": 0.271,
+      "rated_players": 9,
+      "coverage": 0.3462,
+      "core_avg_rating": 51.35
+    },
+    {
+      "rank": 48,
+      "team": "Iran",
+      "group": "G",
+      "strength": 0.231,
+      "rated_players": 6,
+      "coverage": 0.2308,
+      "core_avg_rating": 45.93
+    }
+  ]
+}
