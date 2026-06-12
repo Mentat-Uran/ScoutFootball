@@ -58,7 +58,7 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          python3 -c "
+          uv run python3 -c "
           import os, sys
 
           checks = []
