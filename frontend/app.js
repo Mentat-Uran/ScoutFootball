@@ -387,90 +387,113 @@ const i18n = {
 };
 
 // ─ API configuration ─────────────────────────────────────────────────────
-// STATIC_DATA = true  →  read from /data/*.json (no backend needed; works on static demo hosts)
-// STATIC_DATA = false →  read from API_BASE (backend required, full feature set)
+// Strategy: API-first with static fallback.
+// - Always try the live API first.
+// - If the API is unreachable (network error, timeout, 5xx), fall back to
+//   the local static JSON files in /data/.
+// - apiOnline tracks whether the backend is reachable so the UI can show
+//   a status indicator.
 const HOSTNAME = window.location.hostname || "";
 const IS_VERCEL_DEMO =
     HOSTNAME === "scoutfootball.vercel.app"
     || HOSTNAME === "scoutfootball-for-world-cup.vercel.app"
     || HOSTNAME.endsWith(".vercel.app");
-const STATIC_DATA = typeof window.__SCOUTFOOTBALL_STATIC__ === "boolean"
-    ? window.__SCOUTFOOTBALL_STATIC__
-    : IS_VERCEL_DEMO;
 const API_BASE = IS_VERCEL_DEMO
     ? (window.__SCOUTFOOTBALL_API__ || "https://scoutfootball-for-world-cup.onrender.com")
     : window.location.origin;
+let apiOnline = null; // null=unknown, true=online, false=offline
 
 // Team name → filename slug (must match scripts/export_static_frontend_data.py)
 function _teamSlug(name) {
     return String(name || "").replace(/\s+/g, "_").replace(/\//g, "_");
 }
 
-// Map an API path + params to a local JSON file URL in static mode.
-// Falls back to API_BASE when dynamic data is needed and STATIC_DATA=false.
-function staticDataUrl(apiPath, params) {
-    if (STATIC_DATA) {
-        // Map common API paths to their static JSON counterparts.
-        // Dynamic paths (specific player, specific match prediction) fall back
-        // to generic data files; the caller handles null responses.
-        const m = (apiPath || "").replace(/^\/+/, "/");
-        const map = {
-            "/health": "/data/health.json",
-            "/artifacts": "/data/artifacts.json",
-            "/teams": "/data/teams.json",
-            "/ratings": "/data/ratings.json",
-            "/ratings/meta": "/data/ratings_meta.json",
-            "/ratings/snapshots": "/data/ratings.json",
-            "/predictions/meta": "/data/predictions_meta.json",
-            "/predictions/calibration": "/data/predictions_calibration.json",
-            "/value-summary": "/data/value_summary.json",
-            "/action-values": "/data/action_values.json",
-            "/review-queue": "/data/review_queue.json",
-            "/watchlist": "/data/watchlist.json",
-            "/shortlist": "/data/shortlist.json",
-            "/model-runs": "/data/model_runs.json",
-            "/reports/model-runs": "/data/model_runs.json",
-            "/license": "/data/artifacts.json",
-            "/players": "/data/players_list.json",
-            "/worldcup/teams": "/data/worldcup/teams.json",
-            "/world-cup/groups": "/data/worldcup/groups.json",
-            "/world-cup/schedule": "/data/worldcup/schedule.json",
-            "/world-cup/predictions": "/data/worldcup/predictions.json",
-            "/world-cup/match-predictions": "/data/worldcup/match_predictions.json",
-            "/world-cup/group-predictions": "/data/worldcup/group_predictions.json",
-            "/world-cup/predictions-index": "/data/worldcup/predictions_index.json",
-        };
-        if (map[m]) return map[m];
-        // Squad: /world-cup/squads/<Team Name> → /data/worldcup/squads/<Team_Slug>.json
-        const squad = m.match(/^\/world-cup\/squads\/(.+)$/);
-        if (squad) return `/data/worldcup/squads/${encodeURIComponent(_teamSlug(decodeURIComponent(squad[1])))}.json`;
-        // Player profile: use pre-exported file if available.
-        const player = m.match(/^\/players?\/(.+)$/);
-        if (player) return `/data/player_profiles/${encodeURIComponent(_teamSlug(decodeURIComponent(player[1])))}.json`;
-        // Specific-match prediction: not available statically — return null sentinel
-        if (m.match(/^\/predictions\/.+/)) return null;
-        // Tactical board capabilities: not available statically
-        if (m.startsWith("/tactical-board")) return null;
-        return null;
-    }
-    // Non-static: build the normal API URL
-    let url = API_BASE + apiPath;
-    if (params && String(params).length > 0) url += `?${params}`;
-    return url;
+// Map an API path to a local static JSON file URL.
+// Returns null if no static equivalent exists.
+function _staticUrlFor(apiPath) {
+    const m = (apiPath || "").replace(/^\/+/, "/");
+    const map = {
+        "/health": "/data/health.json",
+        "/artifacts": "/data/artifacts.json",
+        "/teams": "/data/teams.json",
+        "/ratings": "/data/ratings.json",
+        "/ratings/meta": "/data/ratings_meta.json",
+        "/ratings/snapshots": "/data/ratings.json",
+        "/predictions/meta": "/data/predictions_meta.json",
+        "/predictions/calibration": "/data/predictions_calibration.json",
+        "/value-summary": "/data/value_summary.json",
+        "/action-values": "/data/action_values.json",
+        "/review-queue": "/data/review_queue.json",
+        "/watchlist": "/data/watchlist.json",
+        "/shortlist": "/data/shortlist.json",
+        "/model-runs": "/data/model_runs.json",
+        "/reports/model-runs": "/data/model_runs.json",
+        "/license": "/data/artifacts.json",
+        "/players": "/data/players_list.json",
+        "/worldcup/teams": "/data/worldcup/teams.json",
+        "/world-cup/groups": "/data/worldcup/groups.json",
+        "/world-cup/schedule": "/data/worldcup/schedule.json",
+        "/world-cup/predictions": "/data/worldcup/predictions.json",
+        "/world-cup/match-predictions": "/data/worldcup/match_predictions.json",
+        "/world-cup/group-predictions": "/data/worldcup/group_predictions.json",
+        "/world-cup/predictions-index": "/data/worldcup/predictions_index.json",
+    };
+    if (map[m]) return map[m];
+    // Squad: /world-cup/squads/<Team Name> → /data/worldcup/squads/<Team_Slug>.json
+    const squad = m.match(/^\/world-cup\/squads\/(.+)$/);
+    if (squad) return `/data/worldcup/squads/${encodeURIComponent(_teamSlug(decodeURIComponent(squad[1])))}.json`;
+    // Player profile: use pre-exported file if available.
+    const player = m.match(/^\/players?\/(.+)$/);
+    if (player) return `/data/player_profiles/${encodeURIComponent(_teamSlug(decodeURIComponent(player[1])))}.json`;
+    return null;
 }
 
-// Fetch JSON from the appropriate source; returns parsed JSON or throws.
+// Fetch JSON with API-first + static fallback strategy.
+// 1. Try the live API.
+// 2. On network error / timeout / 5xx, fall back to local static JSON.
+// 3. If no static file exists for this path, throw the original error.
 async function fetchJson(apiPath, opts) {
     const params = (opts && opts.params) || "";
-    const url = staticDataUrl(apiPath, params);
-    if (url === null) {
-        // Feature not available in static mode
-        throw new Error("static_mode_not_available");
-    }
     const fetchOpts = opts && opts.fetchOpts ? opts.fetchOpts : undefined;
-    const resp = await fetch(url, fetchOpts);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    return resp.json();
+    const apiTimeout = (fetchOpts && fetchOpts.signal) ? undefined : AbortSignal.timeout(5000);
+
+    // 1. Try API
+    try {
+        let url = API_BASE + apiPath;
+        if (params && String(params).length > 0) url += `?${params}`;
+        const resp = await fetch(url, { ...fetchOpts, signal: apiTimeout });
+        if (resp.ok) {
+            apiOnline = true;
+            return resp.json();
+        }
+        // 4xx = API responded but no data — don't fallback, let caller handle
+        if (resp.status >= 400 && resp.status < 500) {
+            throw new Error(`HTTP ${resp.status}`);
+        }
+        // 5xx = server error — try fallback below
+    } catch (err) {
+        // 4xx errors should not trigger fallback
+        if (err.message && /^HTTP [4]\d\d$/.test(err.message)) throw err;
+        // Network error, timeout, or 5xx — attempt static fallback
+    }
+
+    // 2. Fallback to static
+    const staticUrl = _staticUrlFor(apiPath);
+    if (staticUrl !== null) {
+        try {
+            const resp = await fetch(staticUrl, fetchOpts);
+            if (resp.ok) {
+                apiOnline = false;
+                return resp.json();
+            }
+        } catch (fallbackErr) {
+            // Static file also failed
+        }
+    }
+
+    // 3. No fallback available or both failed
+    apiOnline = false;
+    throw new Error("api_and_static_unavailable");
 }
 
 let players = [];
@@ -580,14 +603,10 @@ async function fetchTeams() {
 }
 
 async function fetchPrediction(homeTeam, awayTeam) {
-    if (STATIC_DATA) {
-        // Specific-match predictions are not available in static mode.
-        return null;
-    }
+    // Try API first; if offline, no static fallback for specific match predictions
     try {
         return await fetchJson(`/predictions/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
-    } catch (err) {
-        console.warn("Failed to fetch prediction:", err);
+    } catch {
         return null;
     }
 }
@@ -4035,6 +4054,40 @@ async function fetchWcPredictions() {
 async function fetchWcMatchPrediction(teamA, teamB) {
     const cacheKey = `${teamA}|${teamB}`;
     if (wcApiData.matchPredictionCache[cacheKey]) return wcApiData.matchPredictionCache[cacheKey];
+
+    // If API is offline, look up from pre-computed match_predictions.json
+    if (apiOnline === false) {
+        try {
+            if (!wcApiData._matchPredictionsAll) {
+                const mpData = await fetchJson("/world-cup/match-predictions");
+                wcApiData._matchPredictionsAll = mpData && mpData.matches ? mpData.matches : [];
+            }
+            const found = wcApiData._matchPredictionsAll.find(
+                (m) => (m.home === teamA && m.away === teamB) || (m.home === teamB && m.away === teamA)
+            );
+            if (found) {
+                // Convert to the same format as the dynamic API response
+                const result = {
+                    home_team: found.home,
+                    away_team: found.away,
+                    home_win: found.home_win_p,
+                    draw: found.draw_p,
+                    away_win: found.away_win_p,
+                    home_lambda: found.exp_home_goals,
+                    away_lambda: found.exp_away_goals,
+                    model_type: "poisson_strength_ratio",
+                    model_version: "wc-static-1.0",
+                    score_matrix: null,
+                };
+                wcApiData.matchPredictionCache[cacheKey] = result;
+                return result;
+            }
+        } catch (e) {
+            console.warn("[WC] static match prediction lookup failed:", e.message);
+        }
+        return null;
+    }
+
     try {
         const data = await fetchJson(`/world-cup/predictions/${encodeURIComponent(teamA)}/${encodeURIComponent(teamB)}`, {
             fetchOpts: { signal: AbortSignal.timeout(60000) },
@@ -5024,31 +5077,26 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Check API connection status
     const apiPill = document.getElementById("top-api-pill");
-    let apiOnline = false;
     if (apiPill) {
-        if (STATIC_DATA) {
-            apiPill.textContent = "STATIC";
-            apiPill.className = "status-pill status-medium";
-            apiOnline = true;
-        } else {
-            try {
-                const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
-                if (healthResp.ok) {
-                    apiPill.textContent = "API OK";
-                    apiPill.className = "status-pill status-high";
-                    apiOnline = true;
-                } else {
-                    apiPill.textContent = "API ERR";
-                    apiPill.className = "status-pill status-low";
-                }
-            } catch {
-                apiPill.textContent = "OFFLINE";
+        try {
+            const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+            if (healthResp.ok) {
+                apiPill.textContent = "API OK";
+                apiPill.className = "status-pill status-high";
+                apiOnline = true;
+            } else {
+                apiPill.textContent = "API ERR";
                 apiPill.className = "status-pill status-low";
+                apiOnline = false;
             }
+        } catch {
+            apiPill.textContent = "OFFLINE";
+            apiPill.className = "status-pill status-medium";
+            apiOnline = false;
         }
     }
-    // Show global DEMO banner when API is offline
-    if (!apiOnline) {
+    // Show global DEMO banner when API is offline (static data is being used)
+    if (apiOnline === false) {
         let demoBanner = document.getElementById("global-demo-banner");
         if (!demoBanner) {
             demoBanner = document.createElement("div");
@@ -5056,8 +5104,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff6b6b;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
             const z = appState.lang === "zh";
             demoBanner.textContent = z
-                ? "◆ API 离线 — 数据不可用。启动后端：PYTHONPATH=src uv run python -m scoutfootball serve"
-                : "◆ API Offline — Data unavailable. Start backend: PYTHONPATH=src uv run python -m scoutfootball serve";
+                ? "◆ API 离线 — 使用静态缓存数据。启动后端获取实时数据：PYTHONPATH=src uv run python -m scoutfootball serve"
+                : "◆ API Offline — Using cached static data. Start backend for live data: PYTHONPATH=src uv run python -m scoutfootball serve";
             document.body.prepend(demoBanner);
         }
     }
