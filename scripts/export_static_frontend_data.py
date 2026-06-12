@@ -1,10 +1,11 @@
 """Export ScoutFootball API data to static JSON files for the frontend.
 
 This script calls the service layer in scoutfootball.api directly (no HTTP
-server needed) and writes the results to frontend/data/*.json.
+server needed) and writes the results to static JSON files.
 
 Used by:
 - Local development: ``PYTHONPATH=src python scripts/export_static_frontend_data.py``
+- Release export: ``PYTHONPATH=src python scripts/export_static_frontend_data.py --profile release``
 - GitHub Actions: ``.github/workflows/export-static-data.yml``
 """
 
@@ -20,14 +21,32 @@ from pathlib import Path
 # ─ project root ──────────────────────────────────────────────────────────
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = REPO_ROOT / "frontend"
-DATA_DIR = FRONTEND_DIR / "data"
-WORLDCUP_DIR = DATA_DIR / "worldcup"
-SQUADS_DIR = WORLDCUP_DIR / "squads"
+RELEASE_DATA_DIR = FRONTEND_DIR / "data"
+LOCAL_DATA_DIR = FRONTEND_DIR / "local-data"
 
 # Default limits for static-export size control
 DEFAULT_RATINGS_LIMIT = 3000
 DEFAULT_ACTION_VALUES_LIMIT = 100
 DEFAULT_QUEUE_LIMIT = 200
+
+DATA_DIR = RELEASE_DATA_DIR
+WORLDCUP_DIR = DATA_DIR / "worldcup"
+SQUADS_DIR = WORLDCUP_DIR / "squads"
+MANIFEST_PATH = FRONTEND_DIR / "data_manifest.json"
+
+
+def configure_output_paths(profile: str) -> None:
+    global DATA_DIR, WORLDCUP_DIR, SQUADS_DIR, MANIFEST_PATH
+
+    if profile == "release":
+        DATA_DIR = RELEASE_DATA_DIR
+        MANIFEST_PATH = FRONTEND_DIR / "data_manifest.json"
+    else:
+        DATA_DIR = LOCAL_DATA_DIR
+        MANIFEST_PATH = FRONTEND_DIR / "local-data-manifest.json"
+
+    WORLDCUP_DIR = DATA_DIR / "worldcup"
+    SQUADS_DIR = WORLDCUP_DIR / "squads"
 
 
 def _team_slug(team_name: str) -> str:
@@ -242,8 +261,8 @@ def write_manifest() -> None:
         "total_kb": round(sum(f["kb"] for f in files), 1),
         "files": files,
     }
-    _write_json(FRONTEND_DIR / "data_manifest.json", manifest)
-    print(f"  data_manifest.json ({len(files)} files, {manifest['total_kb']:.0f} KB)")
+    _write_json(MANIFEST_PATH, manifest)
+    print(f"  {MANIFEST_PATH.name} ({len(files)} files, {manifest['total_kb']:.0f} KB)")
 
 
 def main() -> int:
@@ -275,7 +294,15 @@ def main() -> int:
         ],
         help="Sections to skip",
     )
+    parser.add_argument(
+        "--profile",
+        choices=["local", "release"],
+        default="local",
+        help="Write either a local ignored snapshot or the tracked release snapshot",
+    )
     args = parser.parse_args()
+
+    configure_output_paths(args.profile)
 
     # Ensure PYTHONPATH includes src if called directly
     src_root = str(REPO_ROOT / "src")
@@ -287,7 +314,7 @@ def main() -> int:
     SQUADS_DIR.mkdir(parents=True, exist_ok=True)
 
     t0 = time.time()
-    print(f"Exporting ScoutFootball static data -> {DATA_DIR}")
+    print(f"Exporting ScoutFootball static data [{args.profile}] -> {DATA_DIR}")
     print("-" * 72)
 
     failures = []

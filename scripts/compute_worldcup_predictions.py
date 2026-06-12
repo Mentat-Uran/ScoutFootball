@@ -3,22 +3,27 @@
 Uses the team-strength pipeline from scoutfootball.worldcup.data plus a
 simple Poisson model for win/draw/loss probabilities and expected scores.
 
-Output: frontend/data/worldcup/match_predictions.json
-        frontend/data/worldcup/group_predictions.json
+Output:
+- release profile: frontend/data/worldcup/*.json
+- local profile: frontend/local-data/worldcup/*.json
 
 Usage:
     python scripts/compute_worldcup_predictions.py
+    python scripts/compute_worldcup_predictions.py --profile release
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
-DATA_DIR = REPO_ROOT / "frontend" / "data" / "worldcup"
+RELEASE_DATA_DIR = REPO_ROOT / "frontend" / "data" / "worldcup"
+LOCAL_DATA_DIR = REPO_ROOT / "frontend" / "local-data" / "worldcup"
 
 BASE_GOALS_PER_GAME = 2.6
 HOME_ADVANTAGE = 1.08
@@ -94,7 +99,21 @@ def compute_match_prediction(home: str, away: str, strengths: dict[str, float]) 
 
 
 def main() -> int:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--profile",
+        choices=["local", "release"],
+        default="local",
+        help="Write either ignored local World Cup snapshots or tracked release snapshots",
+    )
+    args = parser.parse_args()
+
+    data_dir = RELEASE_DATA_DIR if args.profile == "release" else LOCAL_DATA_DIR
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    src_root = str(REPO_ROOT / "src")
+    if src_root not in sys.path:
+        sys.path.insert(0, src_root)
 
     from scoutfootball.worldcup.data import (
         GROUPS,
@@ -120,7 +139,7 @@ def main() -> int:
             **pred,
         })
 
-    match_out = DATA_DIR / "match_predictions.json"
+    match_out = data_dir / "match_predictions.json"
     with open(match_out, "w", encoding="utf-8") as f:
         json.dump({
             "model": "poisson_strength_ratio",
@@ -176,7 +195,7 @@ def main() -> int:
             ],
         })
 
-    group_out = DATA_DIR / "group_predictions.json"
+    group_out = data_dir / "group_predictions.json"
     with open(group_out, "w", encoding="utf-8") as f:
         json.dump({
             "model": "poisson_strength_ratio",
@@ -198,7 +217,7 @@ def main() -> int:
             "teams": 48,
         },
     }
-    index_out = DATA_DIR / "predictions_index.json"
+    index_out = data_dir / "predictions_index.json"
     with open(index_out, "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False, indent=2)
     print(f"Wrote predictions index -> {index_out}")
