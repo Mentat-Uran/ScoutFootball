@@ -29,7 +29,6 @@ from scoutfootball.worldcup.data import (
     HOSTS,
     compute_group_predictions,
     compute_team_strength_details,
-    compute_team_strengths,
     enrich_squads_with_ratings,
     generate_group_stage_matches,
     get_squad,
@@ -241,7 +240,9 @@ def _prediction_calibration() -> dict[str, Any]:
     return calibration
 
 
-def _world_cup_score_matrix(home_lambda: float, away_lambda: float, *, max_goals: int = 5) -> list[list[float]]:
+def _world_cup_score_matrix(
+    home_lambda: float, away_lambda: float, *, max_goals: int = 5
+) -> list[list[float]]:
     from scipy.stats import poisson
 
     goals = np.arange(max_goals + 1)
@@ -249,7 +250,10 @@ def _world_cup_score_matrix(home_lambda: float, away_lambda: float, *, max_goals
     away_probs = poisson.pmf(goals, away_lambda)
     matrix = np.outer(home_probs, away_probs)
     matrix = matrix / matrix.sum()
-    return [[round(float(matrix[i, j]), 4) for j in range(max_goals + 1)] for i in range(max_goals + 1)]
+    return [
+        [round(float(matrix[i, j]), 4) for j in range(max_goals + 1)]
+        for i in range(max_goals + 1)
+    ]
 
 
 def _world_cup_market_summary(score_matrix: list[list[float]]) -> dict[str, float]:
