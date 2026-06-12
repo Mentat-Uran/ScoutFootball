@@ -27,6 +27,7 @@ from scoutfootball.api import (
     get_shortlist,
     get_value_summary,
     get_watchlist,
+    get_world_cup_match_prediction,
     get_wc_groups,
     get_wc_predictions,
     get_wc_schedule,
@@ -234,6 +235,10 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/predictions")
     def wc_predictions():
         return get_wc_predictions()
+
+    @app.get("/world-cup/predictions/{home_team}/{away_team}")
+    def wc_match_prediction(home_team: str, away_team: str):
+        return get_world_cup_match_prediction(home_team, away_team)
 
     @app.get("/worldcup/teams")
     def wc_teams():

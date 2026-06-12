@@ -99,6 +99,38 @@ uv run python -m scoutfootball export-ratings
 
 ---
 
+## 🌐 校园网 / 局域网访问
+
+最简单的部署方式是单端口运行 FastAPI，由它同时提供前端和 API：
+
+```bash
+uv sync
+uv run python -m scoutfootball serve --host 0.0.0.0 --port 8000
+```
+
+然后在本机访问：
+
+```text
+http://127.0.0.1:8000
+```
+
+同一校园网内的其他设备访问：
+
+```text
+http://你的电脑IPv4地址:8000
+```
+
+Windows 可直接运行：
+
+```bat
+scripts\start-lan.bat
+```
+
+如果其他设备仍无法访问，通常是以下两类原因：
+
+- Windows 防火墙未放行对应 TCP 端口。
+- 校园网开启了 AP/Client Isolation，禁止终端之间互访。
+
 ## 🔧 手动启动命令
 
 ### Streamlit 单独启动

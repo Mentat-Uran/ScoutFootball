@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from scoutfootball.app.data_loader import (
     data_source_label,
     load_league_metrics,
@@ -26,6 +28,7 @@ from scoutfootball.worldcup.data import (
     GROUPS,
     HOSTS,
     compute_group_predictions,
+    compute_team_strength_details,
     compute_team_strengths,
     enrich_squads_with_ratings,
     generate_group_stage_matches,
@@ -49,9 +52,13 @@ def _get_wc_enriched_squads():
     if "enriched_squads" not in _wc_cache:
         ratings_df = load_player_ratings()
         _wc_cache["enriched_squads"] = enrich_squads_with_ratings(ratings_df)
-        _wc_cache["strengths"] = compute_team_strengths(
+        _wc_cache["strength_details"] = compute_team_strength_details(
             enriched_squads=_wc_cache["enriched_squads"]
         )
+        _wc_cache["strengths"] = {
+            team: values["strength"]
+            for team, values in _wc_cache["strength_details"].items()
+        }
     return _wc_cache["enriched_squads"], _wc_cache["strengths"]
 
 
@@ -220,6 +227,93 @@ def _prediction_calibration() -> dict[str, Any]:
             pass
 
     return calibration
+
+
+def _world_cup_score_matrix(home_lambda: float, away_lambda: float, *, max_goals: int = 5) -> list[list[float]]:
+    from scipy.stats import poisson
+
+    goals = np.arange(max_goals + 1)
+    home_probs = poisson.pmf(goals, home_lambda)
+    away_probs = poisson.pmf(goals, away_lambda)
+    matrix = np.outer(home_probs, away_probs)
+    matrix = matrix / matrix.sum()
+    return [[round(float(matrix[i, j]), 4) for j in range(max_goals + 1)] for i in range(max_goals + 1)]
+
+
+def _world_cup_market_summary(score_matrix: list[list[float]]) -> dict[str, float]:
+    home_win = 0.0
+    draw = 0.0
+    away_win = 0.0
+    over_2_5 = 0.0
+    btts_yes = 0.0
+    for home_goals, row in enumerate(score_matrix):
+        for away_goals, prob in enumerate(row):
+            if home_goals > away_goals:
+                home_win += prob
+            elif home_goals == away_goals:
+                draw += prob
+            else:
+                away_win += prob
+            if home_goals + away_goals >= 3:
+                over_2_5 += prob
+            if home_goals > 0 and away_goals > 0:
+                btts_yes += prob
+    return {
+        "home_win": round(home_win, 4),
+        "draw": round(draw, 4),
+        "away_win": round(away_win, 4),
+        "over_2_5": round(over_2_5, 4),
+        "under_2_5": round(1 - over_2_5, 4),
+        "btts_yes": round(btts_yes, 4),
+        "btts_no": round(1 - btts_yes, 4),
+    }
+
+
+def get_world_cup_match_prediction(home_team: str, away_team: str) -> dict[str, Any]:
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    valid_teams = set(enriched_squads)
+    if home_team not in valid_teams:
+        return {"error": f"World Cup home team '{home_team}' not found"}
+    if away_team not in valid_teams:
+        return {"error": f"World Cup away team '{away_team}' not found"}
+    if home_team == away_team:
+        return {"error": "Home and away World Cup teams must be different"}
+
+    home_strength = float(strengths.get(home_team, 0.2))
+    away_strength = float(strengths.get(away_team, 0.2))
+
+    strength_gap = math.log((home_strength + 0.05) / (away_strength + 0.05))
+    host_bonus = 0.12 if home_team in HOSTS else 0.0
+    if away_team in HOSTS:
+        host_bonus -= 0.12
+
+    total_goals = 2.35 + 0.55 * ((home_strength + away_strength) - 1.0)
+    total_goals = min(max(total_goals, 2.05), 3.35)
+
+    home_share = 1 / (1 + math.exp(-(0.62 * strength_gap + host_bonus)))
+    home_share = min(max(home_share, 0.22), 0.78)
+
+    home_lambda = min(max(total_goals * home_share, 0.25), 3.2)
+    away_lambda = min(max(total_goals - home_lambda, 0.2), 3.0)
+
+    score_matrix = _world_cup_score_matrix(home_lambda, away_lambda)
+    summary = _world_cup_market_summary(score_matrix)
+
+    result = {
+        "home_team": home_team,
+        "away_team": away_team,
+        "model_type": "world_cup_strength_poisson",
+        "model_version": "wc-1.0",
+        "home_lambda": round(home_lambda, 4),
+        "away_lambda": round(away_lambda, 4),
+        "home_strength": round(home_strength, 4),
+        "away_strength": round(away_strength, 4),
+        "host_bonus": round(host_bonus, 4),
+        "strength_gap": round(strength_gap, 4),
+        "score_matrix": score_matrix,
+        **summary,
+    }
+    return _clean_json_value(result)
 
 
 def get_match_prediction(home_team: str, away_team: str) -> dict:
@@ -1755,6 +1849,7 @@ def get_wc_squad(team: str) -> dict:
 def get_wc_predictions() -> dict:
     """Return World Cup group stage predictions based on team strengths."""
     enriched, strengths = _get_wc_enriched_squads()
+    strength_details = _wc_cache.get("strength_details", {})
     group_preds = compute_group_predictions(strengths)
 
     # Build 48-team ranking
@@ -1770,6 +1865,9 @@ def get_wc_predictions() -> dict:
             "group": group,
             "strength": round(strength, 3),
             "rated_players": len(rated),
+            "coverage": strength_details.get(team, {}).get("coverage"),
+            "core_avg_rating": strength_details.get(team, {}).get("core_avg_rating"),
+            "shrunk_avg_rating": strength_details.get(team, {}).get("shrunk_avg_rating"),
         })
 
     # Best 3rd-place predictions
@@ -1802,6 +1900,7 @@ def get_wc_predictions() -> dict:
 def get_wc_teams() -> dict:
     """Return all 48 World Cup teams with strength ratings and group info."""
     enriched, strengths = _get_wc_enriched_squads()
+    strength_details = _wc_cache.get("strength_details", {})
 
     teams_data = []
     for letter, team_names in GROUPS.items():
@@ -1813,6 +1912,7 @@ def get_wc_teams() -> dict:
                 round(sum(p.rating for p in rated) / len(rated), 2)
                 if rated else None
             )
+            details = strength_details.get(team, {})
             teams_data.append({
                 "team": team,
                 "group": letter,
@@ -1822,6 +1922,19 @@ def get_wc_teams() -> dict:
                 "total_players": len(squad),
                 "big5_players": big5_count,
                 "avg_rating": avg_rating,
+                "coverage": details.get("coverage"),
+                "observed_avg_rating": details.get("observed_avg_rating"),
+                "proxy_avg_rating": details.get("proxy_avg_rating"),
+                "shrunk_avg_rating": details.get("shrunk_avg_rating"),
+                "core_avg_rating": details.get("core_avg_rating"),
+                "depth_avg_rating": details.get("depth_avg_rating"),
+                "reserve_avg_rating": details.get("reserve_avg_rating"),
+                "squad_quality_rating": details.get("squad_quality_rating"),
+                "rating_score": details.get("rating_score"),
+                "opta_score": details.get("opta_score"),
+                "league_score": details.get("league_score"),
+                "coverage_score": details.get("coverage_score"),
+                "big5_score": details.get("big5_score"),
             })
 
     return _clean_json_value({
