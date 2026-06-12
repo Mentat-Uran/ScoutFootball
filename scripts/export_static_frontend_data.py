@@ -26,7 +26,7 @@ LOCAL_DATA_DIR = FRONTEND_DIR / "local-data"
 
 # Default limits for static-export size control
 DEFAULT_RATINGS_LIMIT = 3000
-DEFAULT_ACTION_VALUES_LIMIT = 100
+DEFAULT_ACTION_VALUES_LIMIT = 500
 DEFAULT_QUEUE_LIMIT = 200
 
 DATA_DIR = RELEASE_DATA_DIR
@@ -171,9 +171,26 @@ def export_predictions_meta() -> None:
 def export_action_values(limit: int) -> None:
     from scoutfootball.api import get_action_value_summary
 
-    data = get_action_value_summary(limit=limit, full=False)
-    _write_json(DATA_DIR / "action_values.json", data)
-    print(f"  action_values.json (limit={limit})")
+    # Export xT top-N
+    xt_data = get_action_value_summary(limit=limit, full=True)
+    # Also fetch VAEP by offsetting past all xT rows
+    xt_count = xt_data.get("metrics", {}).get("xt_rows", 0)
+    vaep_data = get_action_value_summary(limit=limit, offset=xt_count, full=True)
+
+    # Merge: use xT players + vaep players from the second call
+    merged = dict(xt_data)
+    if vaep_data.get("vaep_players"):
+        merged["vaep_players"] = vaep_data["vaep_players"]
+    if vaep_data.get("metrics", {}).get("mean_vaep_per_90") is not None:
+        merged.setdefault("metrics", {}).update({
+            k: v for k, v in vaep_data.get("metrics", {}).items()
+            if k.startswith("vaep")
+        })
+
+    _write_json(DATA_DIR / "action_values.json", merged)
+    xt_n = len(merged.get("xt_players", merged.get("players", [])))
+    vaep_n = len(merged.get("vaep_players", []))
+    print(f"  action_values.json (xt={xt_n}, vaep={vaep_n})")
 
 
 def export_scouting(queue_limit: int) -> None:
@@ -256,7 +273,11 @@ def write_manifest() -> None:
         files.append({"path": f"/{rel}", "kb": round(size_kb, 1)})
 
     manifest = {
-        "generated_at": dt.datetime.fromtimestamp(latest_mtime, dt.UTC).isoformat() if latest_mtime else None,
+        "generated_at": (
+            dt.datetime.fromtimestamp(latest_mtime, dt.UTC).isoformat()
+            if latest_mtime
+            else None
+        ),
         "file_count": len(files),
         "total_kb": round(sum(f["kb"] for f in files), 1),
         "files": files,
@@ -280,8 +301,8 @@ def main() -> int:
         help=f"Max review-queue rows to export (default: {DEFAULT_QUEUE_LIMIT})",
     )
     parser.add_argument(
-        "--player-profiles", type=int, default=0,
-        help="If >0, also export top-N player profile JSON files",
+        "--player-profiles", type=int, default=200,
+        help="If >0, also export top-N player profile JSON files (default: 200)",
     )
     parser.add_argument(
         "--skip",
