@@ -9,38 +9,38 @@
         {
           "team": "Mexico",
           "strength": 0.412,
-          "p1st": 0.273,
-          "p2nd": 0.263,
-          "p3rd": 0.247,
-          "p4th": 0.216,
-          "p_advance": 0.701
+          "p1st": 0.307,
+          "p2nd": 0.282,
+          "p3rd": 0.243,
+          "p4th": 0.168,
+          "p_advance": 0.751
         },
         {
           "team": "Czech Republic",
           "strength": 0.404,
-          "p1st": 0.268,
-          "p2nd": 0.26,
-          "p3rd": 0.249,
-          "p4th": 0.223,
-          "p_advance": 0.694
+          "p1st": 0.292,
+          "p2nd": 0.277,
+          "p3rd": 0.248,
+          "p4th": 0.182,
+          "p_advance": 0.735
         },
         {
           "team": "South Korea",
           "strength": 0.369,
-          "p1st": 0.244,
-          "p2nd": 0.248,
-          "p3rd": 0.253,
-          "p4th": 0.255,
-          "p_advance": 0.661
+          "p1st": 0.233,
+          "p2nd": 0.246,
+          "p3rd": 0.265,
+          "p4th": 0.257,
+          "p_advance": 0.655
         },
         {
           "team": "South Africa",
           "strength": 0.324,
-          "p1st": 0.215,
-          "p2nd": 0.229,
-          "p3rd": 0.251,
-          "p4th": 0.306,
-          "p_advance": 0.611
+          "p1st": 0.168,
+          "p2nd": 0.195,
+          "p3rd": 0.244,
+          "p4th": 0.393,
+          "p_advance": 0.526
         }
       ]
     },
@@ -50,38 +50,38 @@
         {
           "team": "Switzerland",
           "strength": 0.568,
-          "p1st": 0.328,
-          "p2nd": 0.289,
-          "p3rd": 0.236,
-          "p4th": 0.148,
-          "p_advance": 0.774
+          "p1st": 0.445,
+          "p2nd": 0.319,
+          "p3rd": 0.187,
+          "p4th": 0.05,
+          "p_advance": 0.888
         },
         {
           "team": "Canada",
           "strength": 0.452,
-          "p1st": 0.261,
-          "p2nd": 0.265,
-          "p3rd": 0.262,
-          "p4th": 0.212,
-          "p_advance": 0.701
+          "p1st": 0.252,
+          "p2nd": 0.297,
+          "p3rd": 0.313,
+          "p4th": 0.138,
+          "p_advance": 0.758
         },
         {
           "team": "Bosnia and Herzegovina",
           "strength": 0.439,
-          "p1st": 0.254,
-          "p2nd": 0.261,
-          "p3rd": 0.264,
-          "p4th": 0.222,
-          "p_advance": 0.691
+          "p1st": 0.234,
+          "p2nd": 0.283,
+          "p3rd": 0.328,
+          "p4th": 0.155,
+          "p_advance": 0.736
         },
         {
           "team": "Qatar",
           "strength": 0.271,
-          "p1st": 0.157,
-          "p2nd": 0.185,
-          "p3rd": 0.239,
-          "p4th": 0.419,
-          "p_advance": 0.501
+          "p1st": 0.07,
+          "p2nd": 0.101,
+          "p3rd": 0.172,
+          "p4th": 0.657,
+          "p_advance": 0.286
         }
       ]
     },
@@ -91,38 +91,38 @@
         {
           "team": "Brazil",
           "strength": 0.818,
-          "p1st": 0.373,
-          "p2nd": 0.297,
-          "p3rd": 0.212,
-          "p4th": 0.117,
-          "p_advance": 0.812
+          "p1st": 0.584,
+          "p2nd": 0.285,
+          "p3rd": 0.107,
+          "p4th": 0.024,
+          "p_advance": 0.94
         },
         {
           "team": "Morocco",
           "strength": 0.51,
-          "p1st": 0.233,
-          "p2nd": 0.253,
-          "p3rd": 0.264,
-          "p4th": 0.251,
-          "p_advance": 0.662
+          "p1st": 0.179,
+          "p2nd": 0.3,
+          "p3rd": 0.304,
+          "p4th": 0.217,
+          "p_advance": 0.682
         },
         {
           "team": "Scotland",
           "strength": 0.45,
-          "p1st": 0.205,
-          "p2nd": 0.232,
-          "p3rd": 0.264,
-          "p4th": 0.298,
-          "p_advance": 0.614
+          "p1st": 0.131,
+          "p2nd": 0.228,
+          "p3rd": 0.31,
+          "p4th": 0.331,
+          "p_advance": 0.566
         },
         {
           "team": "Haiti",
           "strength": 0.413,
-          "p1st": 0.188,
-          "p2nd": 0.218,
-          "p3rd": 0.26,
-          "p4th": 0.334,
-          "p_advance": 0.579
+          "p1st": 0.105,
+          "p2nd": 0.187,
+          "p3rd": 0.279,
+          "p4th": 0.429,
+          "p_advance": 0.478
         }
       ]
     },
@@ -132,38 +132,38 @@
         {
           "team": "United States",
           "strength": 0.567,
-          "p1st": 0.308,
-          "p2nd": 0.279,
-          "p3rd": 0.238,
-          "p4th": 0.175,
-          "p_advance": 0.746
+          "p1st": 0.402,
+          "p2nd": 0.309,
+          "p3rd": 0.2,
+          "p4th": 0.089,
+          "p_advance": 0.844
         },
         {
           "team": "Turkey",
           "strength": 0.491,
-          "p1st": 0.267,
-          "p2nd": 0.263,
-          "p3rd": 0.251,
-          "p4th": 0.219,
-          "p_advance": 0.698
+          "p1st": 0.281,
+          "p2nd": 0.295,
+          "p3rd": 0.258,
+          "p4th": 0.166,
+          "p_advance": 0.748
         },
         {
           "team": "Paraguay",
           "strength": 0.403,
-          "p1st": 0.219,
-          "p2nd": 0.234,
-          "p3rd": 0.256,
-          "p4th": 0.29,
-          "p_advance": 0.624
+          "p1st": 0.171,
+          "p2nd": 0.211,
+          "p3rd": 0.281,
+          "p4th": 0.336,
+          "p_advance": 0.57
         },
         {
           "team": "Australia",
           "strength": 0.378,
-          "p1st": 0.206,
-          "p2nd": 0.224,
-          "p3rd": 0.254,
-          "p4th": 0.316,
-          "p_advance": 0.599
+          "p1st": 0.146,
+          "p2nd": 0.185,
+          "p3rd": 0.26,
+          "p4th": 0.408,
+          "p_advance": 0.505
         }
       ]
     },
@@ -173,38 +173,38 @@
         {
           "team": "Germany",
           "strength": 0.771,
-          "p1st": 0.358,
-          "p2nd": 0.298,
-          "p3rd": 0.222,
-          "p4th": 0.122,
-          "p_advance": 0.804
+          "p1st": 0.521,
+          "p2nd": 0.32,
+          "p3rd": 0.133,
+          "p4th": 0.026,
+          "p_advance": 0.93
         },
         {
           "team": "Ivory Coast",
           "strength": 0.602,
-          "p1st": 0.279,
-          "p2nd": 0.28,
-          "p3rd": 0.257,
-          "p4th": 0.184,
-          "p_advance": 0.731
+          "p1st": 0.281,
+          "p2nd": 0.368,
+          "p3rd": 0.262,
+          "p4th": 0.089,
+          "p_advance": 0.824
         },
         {
           "team": "Ecuador",
           "strength": 0.448,
-          "p1st": 0.208,
-          "p2nd": 0.235,
-          "p3rd": 0.274,
-          "p4th": 0.283,
-          "p_advance": 0.625
+          "p1st": 0.134,
+          "p2nd": 0.207,
+          "p3rd": 0.387,
+          "p4th": 0.272,
+          "p_advance": 0.599
         },
         {
           "team": "Curacao",
           "strength": 0.333,
-          "p1st": 0.155,
-          "p2nd": 0.187,
-          "p3rd": 0.247,
-          "p4th": 0.411,
-          "p_advance": 0.506
+          "p1st": 0.064,
+          "p2nd": 0.105,
+          "p3rd": 0.217,
+          "p4th": 0.614,
+          "p_advance": 0.314
         }
       ]
     },
@@ -214,38 +214,38 @@
         {
           "team": "Netherlands",
           "strength": 0.728,
-          "p1st": 0.334,
-          "p2nd": 0.287,
-          "p3rd": 0.23,
-          "p4th": 0.149,
-          "p_advance": 0.774
+          "p1st": 0.474,
+          "p2nd": 0.308,
+          "p3rd": 0.165,
+          "p4th": 0.054,
+          "p_advance": 0.891
         },
         {
           "team": "Sweden",
           "strength": 0.527,
-          "p1st": 0.242,
-          "p2nd": 0.252,
-          "p3rd": 0.259,
-          "p4th": 0.247,
-          "p_advance": 0.667
+          "p1st": 0.212,
+          "p2nd": 0.271,
+          "p3rd": 0.298,
+          "p4th": 0.218,
+          "p_advance": 0.682
         },
         {
           "team": "Japan",
           "strength": 0.521,
-          "p1st": 0.239,
-          "p2nd": 0.25,
-          "p3rd": 0.26,
-          "p4th": 0.251,
-          "p_advance": 0.662
+          "p1st": 0.205,
+          "p2nd": 0.265,
+          "p3rd": 0.301,
+          "p4th": 0.229,
+          "p_advance": 0.671
         },
         {
           "team": "Tunisia",
           "strength": 0.405,
-          "p1st": 0.186,
-          "p2nd": 0.21,
-          "p3rd": 0.251,
-          "p4th": 0.353,
-          "p_advance": 0.564
+          "p1st": 0.109,
+          "p2nd": 0.156,
+          "p3rd": 0.236,
+          "p4th": 0.499,
+          "p_advance": 0.422
         }
       ]
     },
@@ -255,38 +255,38 @@
         {
           "team": "Belgium",
           "strength": 0.599,
-          "p1st": 0.373,
-          "p2nd": 0.3,
-          "p3rd": 0.216,
-          "p4th": 0.111,
-          "p_advance": 0.817
+          "p1st": 0.564,
+          "p2nd": 0.299,
+          "p3rd": 0.117,
+          "p4th": 0.019,
+          "p_advance": 0.942
         },
         {
           "team": "New Zealand",
           "strength": 0.396,
-          "p1st": 0.246,
-          "p2nd": 0.264,
-          "p3rd": 0.271,
-          "p4th": 0.218,
-          "p_advance": 0.691
+          "p1st": 0.2,
+          "p2nd": 0.315,
+          "p3rd": 0.347,
+          "p4th": 0.138,
+          "p_advance": 0.746
         },
         {
           "team": "Egypt",
           "strength": 0.383,
-          "p1st": 0.238,
-          "p2nd": 0.259,
-          "p3rd": 0.274,
-          "p4th": 0.229,
-          "p_advance": 0.679
+          "p1st": 0.184,
+          "p2nd": 0.294,
+          "p3rd": 0.365,
+          "p4th": 0.157,
+          "p_advance": 0.721
         },
         {
           "team": "Iran",
           "strength": 0.231,
-          "p1st": 0.143,
-          "p2nd": 0.177,
-          "p3rd": 0.238,
-          "p4th": 0.441,
-          "p_advance": 0.479
+          "p1st": 0.052,
+          "p2nd": 0.092,
+          "p3rd": 0.171,
+          "p4th": 0.685,
+          "p_advance": 0.258
         }
       ]
     },
@@ -296,38 +296,38 @@
         {
           "team": "Spain",
           "strength": 0.925,
-          "p1st": 0.41,
-          "p2nd": 0.303,
-          "p3rd": 0.196,
-          "p4th": 0.091,
-          "p_advance": 0.843
+          "p1st": 0.669,
+          "p2nd": 0.253,
+          "p3rd": 0.068,
+          "p4th": 0.01,
+          "p_advance": 0.968
         },
         {
           "team": "Uruguay",
           "strength": 0.523,
-          "p1st": 0.232,
-          "p2nd": 0.263,
-          "p3rd": 0.27,
-          "p4th": 0.235,
-          "p_advance": 0.675
+          "p1st": 0.161,
+          "p2nd": 0.356,
+          "p3rd": 0.312,
+          "p4th": 0.17,
+          "p_advance": 0.726
         },
         {
           "team": "Cape Verde",
           "strength": 0.427,
-          "p1st": 0.189,
-          "p2nd": 0.227,
-          "p3rd": 0.272,
-          "p4th": 0.312,
-          "p_advance": 0.597
+          "p1st": 0.097,
+          "p2nd": 0.222,
+          "p3rd": 0.338,
+          "p4th": 0.343,
+          "p_advance": 0.544
         },
         {
           "team": "Saudi Arabia",
           "strength": 0.381,
-          "p1st": 0.169,
-          "p2nd": 0.208,
-          "p3rd": 0.263,
-          "p4th": 0.361,
-          "p_advance": 0.551
+          "p1st": 0.073,
+          "p2nd": 0.169,
+          "p3rd": 0.282,
+          "p4th": 0.477,
+          "p_advance": 0.429
         }
       ]
     },
@@ -337,38 +337,38 @@
         {
           "team": "France",
           "strength": 0.863,
-          "p1st": 0.37,
-          "p2nd": 0.301,
-          "p3rd": 0.218,
-          "p4th": 0.111,
-          "p_advance": 0.817
+          "p1st": 0.552,
+          "p2nd": 0.307,
+          "p3rd": 0.122,
+          "p4th": 0.019,
+          "p_advance": 0.94
         },
         {
           "team": "Senegal",
           "strength": 0.616,
-          "p1st": 0.264,
-          "p2nd": 0.275,
-          "p3rd": 0.267,
-          "p4th": 0.194,
-          "p_advance": 0.717
+          "p1st": 0.238,
+          "p2nd": 0.351,
+          "p3rd": 0.313,
+          "p4th": 0.098,
+          "p_advance": 0.797
         },
         {
           "team": "Norway",
           "strength": 0.529,
-          "p1st": 0.227,
-          "p2nd": 0.251,
-          "p3rd": 0.279,
-          "p4th": 0.243,
-          "p_advance": 0.664
+          "p1st": 0.162,
+          "p2nd": 0.259,
+          "p3rd": 0.401,
+          "p4th": 0.177,
+          "p_advance": 0.689
         },
         {
           "team": "Iraq",
           "strength": 0.324,
-          "p1st": 0.139,
-          "p2nd": 0.172,
-          "p3rd": 0.236,
-          "p4th": 0.453,
-          "p_advance": 0.468
+          "p1st": 0.048,
+          "p2nd": 0.083,
+          "p3rd": 0.164,
+          "p4th": 0.706,
+          "p_advance": 0.24
         }
       ]
     },
@@ -378,38 +378,38 @@
         {
           "team": "Argentina",
           "strength": 0.788,
-          "p1st": 0.333,
-          "p2nd": 0.294,
-          "p3rd": 0.237,
-          "p4th": 0.136,
-          "p_advance": 0.785
+          "p1st": 0.444,
+          "p2nd": 0.332,
+          "p3rd": 0.188,
+          "p4th": 0.037,
+          "p_advance": 0.901
         },
         {
           "team": "Algeria",
           "strength": 0.683,
-          "p1st": 0.289,
-          "p2nd": 0.282,
-          "p3rd": 0.257,
-          "p4th": 0.171,
-          "p_advance": 0.743
+          "p1st": 0.311,
+          "p2nd": 0.341,
+          "p3rd": 0.276,
+          "p4th": 0.072,
+          "p_advance": 0.836
         },
         {
           "team": "Austria",
           "strength": 0.568,
-          "p1st": 0.241,
+          "p1st": 0.197,
           "p2nd": 0.256,
-          "p3rd": 0.276,
-          "p4th": 0.227,
-          "p_advance": 0.681
+          "p3rd": 0.396,
+          "p4th": 0.152,
+          "p_advance": 0.716
         },
         {
           "team": "Jordan",
           "strength": 0.324,
-          "p1st": 0.137,
-          "p2nd": 0.168,
-          "p3rd": 0.229,
-          "p4th": 0.466,
-          "p_advance": 0.457
+          "p1st": 0.048,
+          "p2nd": 0.072,
+          "p3rd": 0.14,
+          "p4th": 0.74,
+          "p_advance": 0.213
         }
       ]
     },
@@ -419,38 +419,38 @@
         {
           "team": "Portugal",
           "strength": 0.753,
-          "p1st": 0.397,
-          "p2nd": 0.307,
-          "p3rd": 0.203,
-          "p4th": 0.093,
-          "p_advance": 0.839
+          "p1st": 0.615,
+          "p2nd": 0.293,
+          "p3rd": 0.082,
+          "p4th": 0.01,
+          "p_advance": 0.963
         },
         {
           "team": "Colombia",
           "strength": 0.522,
-          "p1st": 0.275,
-          "p2nd": 0.289,
-          "p3rd": 0.261,
-          "p4th": 0.174,
-          "p_advance": 0.739
+          "p1st": 0.246,
+          "p2nd": 0.43,
+          "p3rd": 0.254,
+          "p4th": 0.069,
+          "p_advance": 0.846
         },
         {
           "team": "DR Congo",
           "strength": 0.351,
-          "p1st": 0.185,
-          "p2nd": 0.223,
-          "p3rd": 0.283,
-          "p4th": 0.309,
-          "p_advance": 0.596
+          "p1st": 0.091,
+          "p2nd": 0.18,
+          "p3rd": 0.422,
+          "p4th": 0.308,
+          "p_advance": 0.552
         },
         {
           "team": "Uzbekistan",
           "strength": 0.271,
-          "p1st": 0.143,
-          "p2nd": 0.181,
-          "p3rd": 0.252,
-          "p4th": 0.424,
-          "p_advance": 0.492
+          "p1st": 0.048,
+          "p2nd": 0.097,
+          "p3rd": 0.243,
+          "p4th": 0.613,
+          "p_advance": 0.307
         }
       ]
     },
@@ -460,38 +460,38 @@
         {
           "team": "England",
           "strength": 0.85,
-          "p1st": 0.376,
-          "p2nd": 0.3,
-          "p3rd": 0.213,
-          "p4th": 0.111,
-          "p_advance": 0.818
+          "p1st": 0.577,
+          "p2nd": 0.295,
+          "p3rd": 0.109,
+          "p4th": 0.019,
+          "p_advance": 0.944
         },
         {
           "team": "Croatia",
           "strength": 0.57,
-          "p1st": 0.252,
-          "p2nd": 0.268,
-          "p3rd": 0.266,
-          "p4th": 0.213,
-          "p_advance": 0.698
+          "p1st": 0.213,
+          "p2nd": 0.341,
+          "p3rd": 0.314,
+          "p4th": 0.132,
+          "p_advance": 0.763
         },
         {
           "team": "Ghana",
           "strength": 0.495,
-          "p1st": 0.219,
-          "p2nd": 0.245,
-          "p3rd": 0.274,
-          "p4th": 0.261,
-          "p_advance": 0.647
+          "p1st": 0.15,
+          "p2nd": 0.254,
+          "p3rd": 0.373,
+          "p4th": 0.223,
+          "p_advance": 0.653
         },
         {
           "team": "Panama",
           "strength": 0.345,
-          "p1st": 0.153,
-          "p2nd": 0.186,
-          "p3rd": 0.246,
-          "p4th": 0.415,
-          "p_advance": 0.503
+          "p1st": 0.061,
+          "p2nd": 0.11,
+          "p3rd": 0.204,
+          "p4th": 0.626,
+          "p_advance": 0.306
         }
       ]
     }
