@@ -1,0 +1,13 @@
+{
+  "name": "scoutfootball-fullstack",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/containers": "^0.1.0",
+    "typescript": "^5.8.0",
+    "wrangler": "^4.0.0"
+  }
+}
