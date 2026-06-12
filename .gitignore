@@ -9,6 +9,8 @@ __pycache__/
 *.duckdb
 .streamlit/
 latest_logs/
+frontend/local-data/
+frontend/local-data-manifest.json
 
 # Raw data: allow specific sources, exclude others
 data/raw/transfermarkt_datasets/

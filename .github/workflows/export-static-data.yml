@@ -54,6 +54,7 @@ jobs:
           PYTHONPATH: src
         run: |
           uv run python scripts/export_static_frontend_data.py \
+            --profile release \
             --ratings-limit 3000 \
             --action-values-limit 100 \
             --player-profiles 30
@@ -63,7 +64,7 @@ jobs:
           MPLBACKEND: Agg
           PYTHONPATH: src
         run: |
-          uv run python scripts/compute_worldcup_predictions.py
+          uv run python scripts/compute_worldcup_predictions.py --profile release
 
       - name: Commit exported data
         run: |

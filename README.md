@@ -88,6 +88,25 @@ Notes:
 - Local/LAN deployments now default to same-origin API mode.
 - Allow TCP `8000` through Windows Firewall, or choose another port if needed.
 
+### Static Snapshot Layout
+
+- `frontend/data/` is the tracked release snapshot used by the static demo and refreshed by GitHub Actions.
+- `frontend/local-data/` is the ignored local snapshot for ad-hoc exports on your machine.
+
+Local export:
+
+```bash
+uv run python scripts/export_static_frontend_data.py
+uv run python scripts/compute_worldcup_predictions.py
+```
+
+Release export:
+
+```bash
+uv run python scripts/export_static_frontend_data.py --profile release
+uv run python scripts/compute_worldcup_predictions.py --profile release
+```
+
 ### Demo Data
 
 The frontend falls back to built-in demo data when the FastAPI backend is unavailable or when specific artifacts are missing. Views using demo data display a **DEMO** badge.

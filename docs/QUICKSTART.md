@@ -131,6 +131,27 @@ scripts\start-lan.bat
 - Windows 防火墙未放行对应 TCP 端口。
 - 校园网开启了 AP/Client Isolation，禁止终端之间互访。
 
+## 🗂️ 静态产物分层
+
+为了避免本地导出把仓库里的发布快照改脏，静态 JSON 现在分成两层：
+
+- `frontend/data/`：发布快照，已跟踪，供静态演示站和 GitHub Actions 使用。
+- `frontend/local-data/`：本地快照，已忽略，供你在自己电脑上临时导出验证。
+
+本地导出：
+
+```bash
+uv run python scripts/export_static_frontend_data.py
+uv run python scripts/compute_worldcup_predictions.py
+```
+
+发布导出：
+
+```bash
+uv run python scripts/export_static_frontend_data.py --profile release
+uv run python scripts/compute_worldcup_predictions.py --profile release
+```
+
 ## 🔧 手动启动命令
 
 ### Streamlit 单独启动
