@@ -27,6 +27,7 @@ LOCAL_DATA_DIR = REPO_ROOT / "frontend" / "local-data" / "worldcup"
 
 BASE_GOALS_PER_GAME = 2.6
 HOME_ADVANTAGE = 1.08
+HOST_NATIONS = {"United States", "Canada", "Mexico"}
 
 
 def poisson_pmf(lmbda: float, k: int) -> float:
@@ -39,6 +40,10 @@ def compute_match_prediction(home: str, away: str, strengths: dict[str, float]) 
 
     exp_home = 1.3 * (s_home / s_away) ** 0.5 * HOME_ADVANTAGE
     exp_away = 1.3 * (s_away / s_home) ** 0.5
+
+    # Additional 10% boost for host nations at home
+    if home in HOST_NATIONS:
+        exp_home *= 1.10
 
     exp_home = max(0.3, min(exp_home, 4.5))
     exp_away = max(0.3, min(exp_away, 4.5))
