@@ -141,6 +141,7 @@ jobs:
             artifacts/**/*.zip
             artifacts/**/*.blockmap
             artifacts/**/latest*.yml
+            docs/USER_GUIDE.md
           prerelease: false
           generate_release_notes: true
         env:
