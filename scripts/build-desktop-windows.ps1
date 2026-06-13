@@ -82,6 +82,17 @@ foreach ($file in $FrontendFiles) {
         Write-Host "      WARNING: $file not found in frontend/" -ForegroundColor DarkYellow
     }
 }
+
+# Copy frontend static data for offline fallback
+$FrontendDataSrc = Join-Path $FrontendSrc "data"
+$FrontendDataDest = Join-Path $FrontendDest "data"
+if (Test-Path $FrontendDataSrc) {
+    Copy-Item -Path $FrontendDataSrc -Destination $FrontendDataDest -Recurse -Force
+    Write-Host "      Frontend data copied."
+} else {
+    Write-Host "      WARNING: frontend/data/ not found, static fallback will be unavailable" -ForegroundColor DarkYellow
+}
+
 Write-Host "      Frontend copied."
 
 # Copy app icon to build/

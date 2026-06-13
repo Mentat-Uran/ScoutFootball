@@ -54,6 +54,22 @@ def main() -> None:
     cli_args = parser.parse_args()
 
     data_root = _resolve_data_root()
+    print(f"[server] Resolved data_root: {data_root}")
+    print(f"[server] data_root exists: {data_root.exists()}")
+    if data_root.exists():
+        try:
+            contents = list(data_root.iterdir())
+            print(f"[server] data_root contents: {[p.name for p in contents[:20]]}")
+        except Exception as e:
+            print(f"[server] Cannot list data_root: {e}")
+
+    # Check critical data subdirectories
+    for subdir in ["gold", "models", "reports"]:
+        subpath = data_root / subdir
+        if not subpath.exists():
+            print(f"[server] WARNING: data_root/{subdir} does not exist")
+        else:
+            print(f"[server] data_root/{subdir} exists")
 
     # Set environment for the app
     os.environ["SCOUTFOOTBALL_DATA_ROOT"] = str(data_root)

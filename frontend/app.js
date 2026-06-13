@@ -459,7 +459,8 @@ async function fetchJson(apiPath, opts) {
     const params = (opts && opts.params) || "";
     const fetchOpts = opts && opts.fetchOpts ? opts.fetchOpts : undefined;
 
-    if (IS_VERCEL_DEMO) {
+    // Desktop app: static-first (instant load from bundled data), then refresh from API
+    if (IS_VERCEL_DEMO || window.__SCOUTFOOTBALL_DESKTOP__) {
         return _fetchJsonStaticFirst(apiPath, params, fetchOpts);
     }
     return _fetchJsonApiFirst(apiPath, params, fetchOpts);
@@ -5214,7 +5215,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
     // Show global DEMO banner when API is offline (static data is being used)
-    if (apiOnline === false) {
+    // Desktop app uses bundled real data, not demo data, so skip the banner
+    if (apiOnline === false && !window.__SCOUTFOOTBALL_DESKTOP__) {
         let demoBanner = document.getElementById("global-demo-banner");
         if (!demoBanner) {
             demoBanner = document.createElement("div");
