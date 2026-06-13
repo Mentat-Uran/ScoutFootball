@@ -1,4 +1,4 @@
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.2";
 const i18n = {
     zh: {
         nav_overview: "总览",
@@ -1242,6 +1242,7 @@ function renderComparePanel() {
 }
 
 let valuePlayers = [];
+let valueStratification = {};
 
 // No mock value data — API must be online for value report
 
@@ -1249,10 +1250,21 @@ async function fetchValueReport() {
     try {
         const data = await fetchJson("/value-summary");
         valueSummaryMeta = data;
+        // Prefer dedicated stratification fields, fall back to nested
+        // structure from newer API payloads.
+        if (data && typeof data === "object") {
+            valueStratification = data.stratification || {};
+        }
         if (data.players && data.players.length > 0) {
             return data.players.map((p) => ({
                 name: p.player || "",
                 team: p.team || "",
+                season: p.season || "",
+                league: p.league || "",
+                positionGroup: p.position_group || "",
+                age: p.age ?? null,
+                ageBand: p.age_band || "",
+                priceBand: p.price_band || "",
                 actualValue: p.actual_value || 0,
                 predictedValue: p.predicted_value || 0,
                 residual: p.residual_log || 0,
@@ -1345,6 +1357,56 @@ function renderValue() {
             fhtml += `<div style="font-size:0.78rem;color:var(--text-muted);padding:0.2rem 0">${escapeHtml(t('value_no_fairness'))}</div>`;
         }
         fairnessEl.innerHTML = fhtml;
+    }
+
+    // Stratification chips (position / league / age band / price band)
+    const stratEl = document.getElementById("value-stratification");
+    if (stratEl) {
+        const sections = [
+            { key: "by_position", labelZh: "位置", labelEn: "Position" },
+            { key: "by_league", labelZh: "联赛", labelEn: "League" },
+            { key: "by_age_band", labelZh: "年龄段", labelEn: "Age band" },
+            { key: "by_price_band", labelZh: "身价段", labelEn: "Price band" },
+        ];
+        const isZh = appState.lang === "zh";
+        const html = [];
+        for (const section of sections) {
+            const rows = valueStratification[section.key];
+            if (!Array.isArray(rows) || rows.length === 0) continue;
+            const title = isZh ? section.labelZh : section.labelEn;
+            html.push(`<div class="strat-block">
+                <h4 style="margin:.2rem 0 .4rem; font-weight:600; font-size:.85rem; color:var(--text-muted)">
+                    ${escapeHtml(title)}
+                </h4>
+                <div style="display:flex; flex-wrap:wrap; gap:.35rem;">
+                ${rows.slice(0, 8).map((r) => {
+                    const residual = Number(r.mean_residual_log);
+                    const cls = residual >= 0 ? "status-high" : "status-medium";
+                    const sign = residual > 0 ? "+" : "";
+                    return `<span class="status-pill ${cls}" title="${escapeHtml(r.group)}: ${sign}${residual.toFixed(2)} (n=${r.count})">
+                        ${escapeHtml(r.group)} <small style="opacity:.7">${sign}${residual.toFixed(2)} · ${r.count}</small>
+                    </span>`;
+                }).join("")}
+                </div>
+            </div>`);
+        }
+        // Fairness distribution
+        const fairnessDist = valueStratification.fairness_distribution;
+        if (fairnessDist && typeof fairnessDist === "object" && Object.keys(fairnessDist).length > 0) {
+            const title = isZh ? "高估 / 低估分布" : "Fairness distribution";
+            const items = Object.entries(fairnessDist).slice(0, 10).sort((a, b) => b[1] - a[1]);
+            html.push(`<div class="strat-block">
+                <h4 style="margin:.2rem 0 .4rem; font-weight:600; font-size:.85rem; color:var(--text-muted)">${escapeHtml(title)}</h4>
+                <div style="display:flex; flex-wrap:wrap; gap:.35rem;">
+                ${items.map(([k, v]) => `<span class="status-pill status-medium">${escapeHtml(k)} <small style="opacity:.7">${v}</small></span>`).join("")}
+                </div>
+            </div>`);
+        }
+        if (html.length > 0) {
+            stratEl.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(14rem, 1fr)); gap:.6rem; padding:.4rem 0;">${html.join("")}</div>`;
+        } else {
+            stratEl.innerHTML = "";
+        }
     }
 
     valueListEl.innerHTML = sorted.slice(0, 50).map((player) => {
