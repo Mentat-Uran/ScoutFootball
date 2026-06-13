@@ -127,11 +127,11 @@ def main() -> None:
 
     # package-lock.json special handling
     bump_package_lock(new)
-    print(f"  OK: desktop/package-lock.json")
+    print("  OK: desktop/package-lock.json")
 
     # CHANGELOG
     add_changelog_entry(new)
-    print(f"  OK: CHANGELOG.md")
+    print("  OK: CHANGELOG.md")
 
     print(f"\nDone. Version bumped from {old} to {new}.")
 
