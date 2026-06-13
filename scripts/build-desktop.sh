@@ -69,6 +69,15 @@ cp "$PROJECT_DIR/frontend/style.css" frontend/
 cp "$PROJECT_DIR/frontend/app.js" frontend/
 cp "$PROJECT_DIR/frontend/tactical-board.js" frontend/
 cp "$PROJECT_DIR/frontend/tactical-renderer.js" frontend/
+
+# Copy frontend static data for offline fallback
+if [ -d "$PROJECT_DIR/frontend/data" ]; then
+    cp -r "$PROJECT_DIR/frontend/data" frontend/data
+    echo "      Frontend data copied."
+else
+    echo "      WARNING: frontend/data/ not found, static fallback will be unavailable"
+fi
+
 echo "      Frontend copied."
 echo ""
 

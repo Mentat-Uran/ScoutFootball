@@ -27,3 +27,4 @@ contextBridge.exposeInMainWorld("scoutDesktop", {
 // Inject API base URL so frontend fetches go to the backend (port 8600),
 // not the frontend static server (port 8601).
 contextBridge.exposeInMainWorld("__SCOUTFOOTBALL_API__", "http://127.0.0.1:8600");
+contextBridge.exposeInMainWorld("__SCOUTFOOTBALL_DESKTOP__", true);
