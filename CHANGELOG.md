@@ -2,6 +2,12 @@
 
 All notable changes to ScoutFootball will be documented in this file.
 
+## [1.0.2] - 2026-06-13
+
+### Changed
+
+- Bump version to 1.0.2 across all modules (pyproject.toml, __init__.py, package.json, frontend, preload, tests, health.json).
+
 ## [1.0.0] - 2026-06-11
 
 ### Highlights
