@@ -98,6 +98,25 @@ function startBackend() {
   log(`Backend cwd: ${config.cwd}`);
   log(`Backend data root: ${config.env.SCOUTFOOTBALL_DATA_ROOT || "default"}`);
 
+  // Diagnostic: list resources directory contents when packaged
+  if (app.isPackaged) {
+    try {
+      const resContents = fs.readdirSync(process.resourcesPath);
+      log(`Resources dir contents: ${resContents.join(", ")}`);
+      const backendDir = path.join(process.resourcesPath, "backend");
+      if (fs.existsSync(backendDir)) {
+        log(`Backend dir contents: ${fs.readdirSync(backendDir).join(", ")}`);
+      }
+      const dataDir = path.join(process.resourcesPath, "data");
+      if (fs.existsSync(dataDir)) {
+        const dataSubdirs = fs.readdirSync(dataDir);
+        log(`Data dir contents: ${dataSubdirs.join(", ")}`);
+      }
+    } catch (e) {
+      log(`Cannot list resources: ${e.message}`);
+    }
+  }
+
   try {
     backendProcess = spawn(config.command, config.args, {
       cwd: config.cwd,
@@ -213,6 +232,7 @@ function startFrontendServer() {
       ".png": "image/png",
       ".svg": "image/svg+xml",
       ".ico": "image/x-icon",
+      ".parquet": "application/octet-stream",
     };
 
     fs.readFile(filePath, (err, data) => {
@@ -388,11 +408,17 @@ app.on("ready", async () => {
   log(`__dirname: ${__dirname}`);
   log(`resourcesPath: ${process.resourcesPath}`);
 
-  // Start backend
+  // Start backend (non-blocking: window opens immediately, backend readiness checked in background)
   const backendStarted = startBackend();
   if (backendStarted) {
     log("Waiting for backend to be ready...");
-    await waitForBackend();
+    waitForBackend().then((ready) => {
+      if (ready) {
+        log("Backend is ready - frontend will detect API online on next health check");
+      } else {
+        log("Backend did not become ready - frontend will use static fallback");
+      }
+    });
   }
 
   // Start frontend server
@@ -419,7 +445,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  if (mainWindow) mainWindow.show();
+    if (mainWindow) {
+        mainWindow.show();
+    } else {
+        createWindow();
+    }
 });
 
 app.on("before-quit", () => {
