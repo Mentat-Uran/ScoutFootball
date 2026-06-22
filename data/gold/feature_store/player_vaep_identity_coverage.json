@@ -1,0 +1,21 @@
+{
+  "schema": "scoutfootball.vaep-identity-coverage",
+  "version": "1.0.0",
+  "generated_at": "2026-06-22T20:22:26.419217+00:00",
+  "identity_source": "statsbomb_event_match_id_bridge",
+  "total_rows": 6771,
+  "mapped_rows": 6698,
+  "partial_rows": 0,
+  "unmapped_rows": 73,
+  "coverage_rate": 0.989219,
+  "unmapped_rate": 0.010781,
+  "player_name_rows": 6698,
+  "player_name_coverage_rate": 0.989219,
+  "team_name_rows": 6698,
+  "team_name_coverage_rate": 0.989219,
+  "season_context_rows": 6698,
+  "season_context_coverage_rate": 0.989219,
+  "single_season_rows": 5107,
+  "multi_season_rows": 1591,
+  "variant_rows": 71
+}
