@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,11 +58,30 @@ def _cors_origins() -> list[str]:
     return _DEFAULT_CORS_ORIGINS
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Startup: warm up World Cup cache to avoid 40-50s first-request delay
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        import time
+
+        from scoutfootball.api import _get_wc_enriched_squads
+
+        t0 = time.time()
+        _get_wc_enriched_squads()
+        logger.info("WC cache warmed up in %.1fs", time.time() - t0)
+    except Exception as e:
+        logger.warning("WC cache warmup failed (will compute on first request): %s", e)
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="ScoutFootball API",
         version=__version__,
         description="Local-first football data research platform API",
+        lifespan=_lifespan,
     )
 
     # Configurable CORS — set SCOUTFOOTBALL_CORS_ORIGINS env var for production
@@ -337,21 +357,6 @@ def create_app() -> FastAPI:
     frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
     if frontend_dir.exists():
         app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
-
-    # Warm up World Cup cache on startup to avoid 40-50s first-request delay
-    @app.on_event("startup")
-    def _warmup_wc_cache():
-        import logging
-        logger = logging.getLogger(__name__)
-        try:
-            import time
-
-            from scoutfootball.api import _get_wc_enriched_squads
-            t0 = time.time()
-            _get_wc_enriched_squads()
-            logger.info("WC cache warmed up in %.1fs", time.time() - t0)
-        except Exception as e:
-            logger.warning("WC cache warmup failed (will compute on first request): %s", e)
 
     return app
 
