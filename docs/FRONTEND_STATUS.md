@@ -1,39 +1,69 @@
-# ScoutFootball Liquid Glass 前端开发状态追踪
+# Liquid Glass 前端当前状态
 
-## 📅 项目愿景
-为 ScoutFootball 提供基于 macOS 26/iOS 26 “液态玻璃”美学的前端交互。特点包含：超高折射率毛玻璃 (`backdrop-filter: blur(40px)`)、流体物理交互、Mesh Gradient 动态光影、以及带有降级容错（针对低置信度数据的“冰霜”效果）的内容呈现。
+> 状态日期：2026-06-23。任务完成状态以 `docs/TASKS.md` 为准，中长期顺序见 `docs/ROADMAP.md`。
 
-## 📍 当前进度 (静态工作台阶段)
-- [x] **架构设计**: 确立了液态玻璃的设计规范。
-- [x] **原型构建**: 初始化 HTML/CSS 原型，搭建了侧边栏与液态卡片结构。
-- [x] **渐变色升级**: 舍弃花哨色彩，采用更加极简、高级的深空灰/钛银配色流体网格。
-- [x] **浅色/深色主题**: 增加了浅色(Light)与深色(Dark)无缝切换，CSS自适应光晕、阴影、背板颜色，连带ECharts图表动态变色。
-- [x] **双语切换 (i18n)**: 增加中英文切换环境，支持通过点击一键切换界面的本地化呈现。
-- [x] **引入可视化图表**: 已接入 ECharts，完成针对多维指标能力画像的环形雷达图渲染。
-- [x] **模拟数据读取结构**: 在界面中集成了数据表视图(Data Grid)、球员画像、身价偏离、比赛预测、球探复核、动作价值和报告视图，当前仍使用前端 mock 数据。
-- [x] **静态单页工作台**: `frontend/index.html` + `frontend/style.css` + `frontend/app.js` 已可通过本地静态服务器打开，不依赖前端构建工具。
-- [ ] **框架引入**: 计划引入 Vue/React/Next.js 以完全接管路由和流体动画 (Framer Motion)。
-- [ ] **API 联调**: 将 FastAPI 与现有的 `src/scoutfootball/` 生成的 Parquet 产物完全连接，提供给前端读取。
+## 产品形态
 
-## 🧩 核心功能模块实现表
-| 模块 | 功能描述 | 状态 | 涉及组件 (前端) |
-| :--- | :--- | :--- | :--- |
-| **导航侧边栏** | macOS 浮动胶囊面板 | 🚧 进行中 | `Sidebar` / `GlassNav` |
-| **球员库/对比** | 搜索球员，滑动阻尼，灵动岛对比提示 | ⏳ 待开发 | `DataGrid` / `CompareIsland` |
-| **全息档案页** | 展示雷达图、3D多边形、低置信度冰霜效果 | ⏳ 待开发 | `ProfileSheet` / `GlassRadar` |
-| **比分预测卡** | 液态量杯动画、随时间衰减的概率流 | ⏳ 待开发 | `MatchPredictor` |
-| **管线暗房** | 控制训练流程，脉冲发光效果 | ⏳ 待开发 | `PipelineDAG` |
+`frontend/` 是无构建步骤的本地优先分析工作台，由 `index.html`、`style.css`、`app.js`、战术板脚本和预计算 JSON 组成。视觉方向保持克制的 Liquid Glass 数据终端：浅/深主题、几何 Unicode 图标、清晰的置信度和来源状态。短期不引入 React/Vue；框架迁移必须先证明能降低状态、测试和路由复杂度。
 
-## 🔗 后端对接顺序
+## 当前视图
 
-1. `/artifacts`：行数、更新时间、真实/代理/合成数据状态、license attribution。
-2. `/players/{id}`：球员画像、位置内指标、置信度原因、评分快照。
-3. `/value-report`：OOF 残差、分层偏差、身价导入边界。
-4. `/predictions/{home}/{away}`：预测概率、比分矩阵、模型版本和覆盖率。
-5. `/review-queue`：低置信度样本、误差案例、watchlist/shortlist 只读展示。
-6. `/reports/model-runs`：输入 hash、随机种子、参数、指标和误差案例。
+- 分析：总览、球员、身价、比赛预测、球探、动作价值、报告。
+- 工作流：电子战术板。
+- 世界杯：赛程、名单、对比、出线概率。
+- 治理：数据源、数据状态、校准、帮助。
 
-## 🎨 Token 与样式规范
-- **毛玻璃**: `background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(40px);`
-- **边框**: `border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 20px rgba(255,255,255,0.05);`
-- **流体动画 (Spring)**: 阻尼弹簧效果，快速响应，平滑回弹。
+## 本轮恢复的功能
+
+### 球探
+
+- 侧栏入口已恢复。
+- 修复 `player_name` 被错误读取为 `player` 的契约错配，保留 reason、status、note、date、snapshot ID。
+- 支持搜索、状态筛选、优先级/日期/姓名排序、状态流转、显式 watchlist 快照和复核队列 CSV 导出。
+- 服务端 watchlist/shortlist 与球员页 localStorage 手动选择合并展示。
+- 边界：API 队列只读；状态和备注仅保存在当前浏览器，尚未形成正式审计产物。
+
+### 动作价值
+
+- 侧栏入口已恢复。
+- 修复旧 `xT_per_90/composite_score/finishing_delta` 与现行 `xt_per_90/vaep_per_90` 的字段错配及未定义变量异常。
+- 支持 xT/VAEP 切换、搜索、赛事筛选、最低估算分钟筛选、样本摘要、Top 20 图表和小样本提示。
+- xT 模式可把带 StatsBomb attribution 的样例热区发送到战术板；VAEP 模式禁用该动作。
+- 边界：部分 VAEP 产物只有 `player_id`，当前明确显示 ID；动作价值只代表 StatsBomb Open Data 覆盖样本。
+
+### 静态模式
+
+- API 在线时优先读取 FastAPI。
+- 对有静态映射的端点，纯静态服务器返回 404 时继续回退到 `frontend/data/`。
+- `frontend/data/` 是跟踪的发布快照；`frontend/local-data/` 是忽略的本地快照。
+
+## 质量基线
+
+- 所有外部字符串进入 `innerHTML` 前使用 `escapeHtml()` / `escapeAttr()`。
+- CSV 使用 `csvCell()` 防公式注入。
+- StatsBomb 衍生图表和导出必须显示 attribution。
+- 动画尊重 `prefers-reduced-motion`；交互元素保留焦点态和移动端触控尺寸。
+- 当前验证：Node 语法检查、前端契约测试、API 集成测试、安全回归和本地浏览器交互检查。
+
+## 下一步
+
+1. 把球探/动作价值浏览器流程加入 CI，覆盖 API、静态、空数据和移动断点。
+2. review queue 增加分页或虚拟列表。
+3. 建立版本化 scouting workspace 导入/导出和审计字段。
+4. 完成 VAEP 球员身份映射与覆盖率报告。
+5. 增加动作类型、比赛、球队和球员三级下钻；在任何评分融合前完成独立评估。
+
+## 启动与验收
+
+```bash
+# API + 前端同源
+uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
+
+# 纯静态发布快照
+python -m http.server 8601 --directory frontend
+
+node --check frontend/app.js
+uv run pytest tests/unit/test_frontend_feature_contracts.py -q
+uv run pytest tests/unit/test_frontend_security.py -q
+uv run pytest tests/integration/test_api_endpoints.py -q
+```

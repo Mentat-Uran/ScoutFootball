@@ -37,11 +37,11 @@
                     <span class="nav-icon">△</span>
                     <span data-i18n="nav_matches">预测</span>
                 </button>
-                <button class="nav-action" data-view="scouting" type="button" style="display:none">
+                <button class="nav-action" data-view="scouting" type="button">
                     <span class="nav-icon">□</span>
                     <span data-i18n="nav_scouting">球探</span>
                 </button>
-                <button class="nav-action" data-view="actions" type="button" style="display:none">
+                <button class="nav-action" data-view="actions" type="button">
                     <span class="nav-icon">⌁</span>
                     <span data-i18n="nav_actions">动作价值</span>
                 </button>
@@ -355,6 +355,34 @@
             </section>
 
             <section class="view" id="view-scouting" aria-label="scouting">
+                <article class="liquid-panel feature-hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="scouting_kicker">本地优先决策台</p>
+                        <h2 data-i18n="scouting_title">复核、观察与候选闭环</h2>
+                        <p class="feature-note" data-i18n="scouting_boundary">服务端队列只读；复核状态、备注和球员页手动选择保存在当前浏览器。</p>
+                    </div>
+                    <div class="feature-metric-strip" aria-label="Scouting queue summary">
+                        <div><span class="metric-value" id="scout-review-count">0</span><span data-i18n="scouting_metric_review">待复核</span></div>
+                        <div><span class="metric-value" id="scout-watch-count">0</span><span data-i18n="watchlist">Watchlist</span></div>
+                        <div><span class="metric-value" id="scout-short-count">0</span><span data-i18n="scouting_metric_short">候选</span></div>
+                    </div>
+                </article>
+                <div class="feature-toolbar" aria-label="Scouting filters">
+                    <label class="search-box compact-search">
+                        <span>⌕</span>
+                        <input id="scout-search" type="search" data-i18n-placeholder="scouting_search" placeholder="搜索球员、球队或原因">
+                    </label>
+                    <select id="scout-status-filter" class="glass-control" aria-label="Review status">
+                        <option value="ALL" data-i18n="scouting_status_all">全部状态</option>
+                        <option value="pending" data-i18n="status_pending">待处理</option>
+                        <option value="reviewing" data-i18n="status_reviewing">审核中</option>
+                        <option value="approved" data-i18n="status_approved">已通过</option>
+                        <option value="rejected" data-i18n="status_rejected">已拒绝</option>
+                    </select>
+                    <button class="text-button" id="scout-save-snapshot" type="button">◇ <span data-i18n="snapshot">快照</span></button>
+                    <button class="text-button" id="scout-export-csv" type="button">↧ <span data-i18n="export_csv">导出 CSV</span></button>
+                    <span class="toolbar-status" id="scout-snapshot-status" aria-live="polite"></span>
+                </div>
                 <div class="layout-2">
                     <article class="liquid-panel table-panel">
                         <div class="panel-head">
@@ -366,7 +394,7 @@
                     <article class="liquid-panel table-panel">
                         <div class="panel-head">
                             <h3 data-i18n="watchlist">Watchlist</h3>
-                            <button class="text-button" type="button" data-i18n="snapshot">快照</button>
+                            <span class="status-pill status-medium" data-i18n="scouting_local_state">本地状态</span>
                         </div>
                         <div id="watchlist" class="watch-grid"></div>
                         <div class="panel-head" style="margin-top:1rem">
@@ -381,12 +409,39 @@
             </section>
 
             <section class="view" id="view-actions" aria-label="actions">
+                <article class="liquid-panel feature-hero action-feature-hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="action_kicker">StatsBomb 样本</p>
+                        <h2 data-i18n="action_title">动作价值研究台</h2>
+                        <p class="feature-note" data-i18n="action_boundary">仅表示当前 StatsBomb Open Data 覆盖样本；默认过滤低于 450 分钟的极小样本。</p>
+                    </div>
+                    <div class="feature-metric-strip" id="action-metrics" aria-label="Action value summary"></div>
+                </article>
+                <div class="feature-toolbar" aria-label="Action value filters">
+                    <div class="segmented compact-segmented" role="group" aria-label="Action value model">
+                        <button class="active" type="button" data-action-mode="xt" aria-pressed="true">xT</button>
+                        <button type="button" data-action-mode="vaep" aria-pressed="false">VAEP</button>
+                    </div>
+                    <label class="search-box compact-search">
+                        <span>⌕</span>
+                        <input id="action-search" type="search" data-i18n-placeholder="action_search" placeholder="搜索球员或赛事">
+                    </label>
+                    <select id="action-competition-filter" class="glass-control" aria-label="Competition filter">
+                        <option value="ALL" data-i18n="action_all_competitions">全部赛事</option>
+                    </select>
+                    <select id="action-minutes-filter" class="glass-control" aria-label="Minimum estimated minutes">
+                        <option value="0">0 min</option>
+                        <option value="180">180 min</option>
+                        <option value="450" selected>450 min</option>
+                        <option value="900">900 min</option>
+                    </select>
+                </div>
                 <div class="layout-2">
                     <article class="liquid-panel chart-panel">
                         <div class="panel-head">
                             <div>
                                 <p class="eyebrow" data-i18n="action_kicker">StatsBomb sample</p>
-                                <h2 data-i18n="action_title">动作价值热区</h2>
+                                <h2 id="action-chart-title">xT / 90</h2>
                             </div>
                             <span class="status-pill status-medium" id="action-status-pill">loading</span>
                         </div>
@@ -398,7 +453,7 @@
                     </article>
                     <article class="liquid-panel table-panel">
                         <div class="panel-head">
-                            <h3 data-i18n="action_pipeline">动作价值后端</h3>
+                            <h3 id="action-list-title" data-i18n="action_ranking">动作价值排名</h3>
                             <span class="status-pill status-medium">xT -> VAEP</span>
                         </div>
                         <div id="action-list" class="rank-list"></div>
