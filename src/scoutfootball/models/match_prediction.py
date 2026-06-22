@@ -550,7 +550,7 @@ def calibrate_predictions(
             iso.fit(y_prob, y_true)
             calibrated_probs[:, col_idx] = iso.transform(y_prob)
         elif method == "platt":
-            lr = LogisticRegression(C=1e10, solver="lbfgs", max_iter=1000)
+            lr = LogisticRegression(C=1e10, solver="lbfgs", max_iter=5000)
             x_feat = y_prob.reshape(-1, 1)
             lr.fit(x_feat, y_true)
             calibrated_probs[:, col_idx] = lr.predict_proba(x_feat)[:, 1]

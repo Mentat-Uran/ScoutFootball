@@ -41,6 +41,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.uv]
+link-mode = "copy"
+
 [tool.pytest.ini_options]
 addopts = "-q"
 pythonpath = ["src"]
@@ -52,6 +55,7 @@ markers = [
 filterwarnings = [
     "ignore:Mean of empty slice:RuntimeWarning",
     "ignore:.*set_tight_layout.*:PendingDeprecationWarning",
+    "ignore:lbfgs failed to converge:sklearn.exceptions.ConvergenceWarning",
 ]
 
 [tool.ruff]

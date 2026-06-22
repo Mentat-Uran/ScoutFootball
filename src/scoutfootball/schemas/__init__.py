@@ -1,5 +1,13 @@
-"""Schema models for project structure and storage metadata."""
+"""Schema models for project structure, storage metadata, and match/event/tracking."""
 
+from .match import (
+    InternalEvent,
+    InternalLineup,
+    InternalMatch,
+    MatchStatus,
+    PeriodType,
+    TrackingFrame,
+)
 from .project import DataDirectorySpec, ModuleBoundary, ProjectArchitecture
 from .storage import (
     ColumnDefinition,
@@ -13,9 +21,15 @@ __all__ = [
     "ColumnDefinition",
     "DataDirectorySpec",
     "IngestMetadata",
+    "InternalEvent",
+    "InternalLineup",
+    "InternalMatch",
+    "MatchStatus",
     "ModuleBoundary",
+    "PeriodType",
     "ProjectArchitecture",
     "SourceRequestLogEntry",
     "TableDefinition",
+    "TrackingFrame",
     "build_core_table_definitions",
 ]
