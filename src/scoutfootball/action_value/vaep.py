@@ -365,10 +365,10 @@ def train_vaep_model(
         )
     elif model_type == "lr":
         scores_model = LogisticRegression(
-            max_iter=1000, C=1.0, random_state=random_state, solver="lbfgs",
+            max_iter=5000, C=1.0, random_state=random_state, solver="lbfgs",
         )
         concedes_model = LogisticRegression(
-            max_iter=1000, C=1.0, random_state=random_state, solver="lbfgs",
+            max_iter=5000, C=1.0, random_state=random_state, solver="lbfgs",
         )
     else:
         raise ValueError(f"Unknown model_type: {model_type}")

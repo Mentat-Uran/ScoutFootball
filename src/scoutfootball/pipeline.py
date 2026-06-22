@@ -563,7 +563,9 @@ def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataF
         raise FileNotFoundError(f"Missing Football-Data artifact: {input_path}")
 
     matches = pd.read_parquet(input_path).copy()
-    matches["match_date"] = pd.to_datetime(matches["Date"], dayfirst=True, errors="raise")
+    matches["match_date"] = pd.to_datetime(
+        matches["Date"], dayfirst=True, format="mixed", errors="raise"
+    )
     matches = matches.sort_values(["match_date", "league", "HomeTeam", "AwayTeam"]).reset_index(
         drop=True
     )

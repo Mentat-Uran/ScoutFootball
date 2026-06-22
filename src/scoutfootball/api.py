@@ -35,6 +35,11 @@ from scoutfootball.worldcup.data import (
     get_team_group,
 )
 
+_STATSBOMB_ATTRIBUTION = (
+    "StatsBomb Open Data must be attributed in any public display. "
+    "License: CC-BY-SA 4.0. See https://github.com/statsbomb/open-data"
+)
+
 
 def _read_parquet(path: Path):
     """Read a Parquet file via DuckDB (avoids pyarrow dependency)."""
@@ -750,7 +755,10 @@ def get_action_value_summary(
         # Fallback to legacy player_value_metrics
         frame = load_player_value_metrics()
         if frame.empty:
-            return {"status": "no_data", "count": 0, "players": []}
+            return _clean_json_value({
+            "status": "no_data", "count": 0, "players": [],
+            "attribution_required": _STATSBOMB_ATTRIBUTION,
+        })
 
         working = frame.copy()
         if "composite_score" in working.columns:
@@ -760,6 +768,7 @@ def get_action_value_summary(
             "status": "ok",
             "count": len(working),
             "data_source": "StatsBomb Open Data + xT/VAEP model",
+            "attribution_required": _STATSBOMB_ATTRIBUTION,
             "metrics": {
                 "players_with_xt": (
                     int(working["xT_per_90"].notna().sum())
@@ -845,6 +854,7 @@ def get_action_value_summary(
             "offset": offset,
             "limit": limit,
             "data_source": "StatsBomb Open Data + xT/VAEP model",
+            "attribution_required": _STATSBOMB_ATTRIBUTION,
             "metrics": metrics,
             "players": xt_page.to_dict(orient="records"),
             "xt_players": xt_page.to_dict(orient="records"),
@@ -934,6 +944,7 @@ def get_action_value_summary(
         "offset": offset,
         "limit": limit,
         "data_source": "StatsBomb Open Data + xT/VAEP model",
+        "attribution_required": _STATSBOMB_ATTRIBUTION,
         "metrics": metrics,
         "players": page.to_dict(orient="records"),
     })
@@ -1284,6 +1295,7 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
                     "Match results from Football-Data.co.uk. "
                     "Event data from StatsBomb Open Data."
                 ),
+                "statsbomb_attribution_required": _STATSBOMB_ATTRIBUTION,
             }
 
             return _clean_json_value(meta)
@@ -1305,6 +1317,7 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
                 "Match results from Football-Data.co.uk. "
                 "Event data from StatsBomb Open Data."
             ),
+            "statsbomb_attribution_required": _STATSBOMB_ATTRIBUTION,
         }
         return _clean_json_value(meta)
 
