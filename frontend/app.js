@@ -50,8 +50,20 @@ const i18n = {
         review_queue: "复核队列",
         watchlist: "Watchlist",
         snapshot: "快照",
+        scouting_kicker: "本地优先决策台",
+        scouting_title: "复核、观察与候选闭环",
+        scouting_boundary: "服务端队列只读；复核状态、备注和球员页手动选择保存在当前浏览器。",
+        scouting_metric_review: "待复核",
+        scouting_metric_short: "候选",
+        scouting_search: "搜索球员、球队或原因",
+        scouting_status_all: "全部状态",
+        scouting_local_state: "本地状态",
         action_kicker: "StatsBomb 样本",
-        action_title: "动作价值热区",
+        action_title: "动作价值研究台",
+        action_boundary: "仅表示当前 StatsBomb Open Data 覆盖样本；默认过滤低于 450 分钟的极小样本。",
+        action_search: "搜索球员或赛事",
+        action_all_competitions: "全部赛事",
+        action_ranking: "动作价值排名",
         action_pipeline: "动作价值后端",
         backend_contracts: "后端契约",
         minutes: "分钟",
@@ -179,6 +191,7 @@ const i18n = {
         generate_tactical_role: "生成战术角色",
         tactical_role_label: "战术角色分析",
         nav_calibration: "校准",
+        nav_help: "帮助",
         calibration_kicker: "模型校准",
         calibration_title: "预测 vs 实际",
         calibration_plot: "校准图",
@@ -242,8 +255,20 @@ const i18n = {
         review_queue: "Review queue",
         watchlist: "Watchlist",
         snapshot: "Snapshot",
+        scouting_kicker: "Local-first decision desk",
+        scouting_title: "Review, monitor, decide",
+        scouting_boundary: "Server queues are read-only; review states, notes, and manual player selections stay in this browser.",
+        scouting_metric_review: "To review",
+        scouting_metric_short: "Shortlist",
+        scouting_search: "Search player, team, or reason",
+        scouting_status_all: "All statuses",
+        scouting_local_state: "Local state",
         action_kicker: "StatsBomb sample",
-        action_title: "Action value heat zones",
+        action_title: "Action-value research desk",
+        action_boundary: "Current StatsBomb Open Data coverage only; samples below 450 estimated minutes are filtered by default.",
+        action_search: "Search player or competition",
+        action_all_competitions: "All competitions",
+        action_ranking: "Action-value ranking",
         action_pipeline: "Action-value backend",
         backend_contracts: "Backend contracts",
         minutes: "Minutes",
@@ -371,6 +396,7 @@ const i18n = {
         generate_tactical_role: "Generate Tactical Role",
         tactical_role_label: "Tactical Role Analysis",
         nav_calibration: "Calibration",
+        nav_help: "Help",
         calibration_kicker: "Model calibration",
         calibration_title: "Predicted vs Actual",
         calibration_plot: "Calibration plot",
@@ -503,7 +529,10 @@ async function _fetchJsonApiFirst(apiPath, params, fetchOpts) {
             apiOnline = true;
             return resp.json();
         }
-        if (resp.status >= 400 && resp.status < 500) {
+        // A plain static server returns 404 for API routes. When a tracked
+        // static snapshot exists, continue to that fallback instead of
+        // treating the 404 as a terminal API error.
+        if (resp.status >= 400 && resp.status < 500 && _staticUrlFor(apiPath) === null) {
             throw new Error(`HTTP ${resp.status}`);
         }
     } catch (err) {
@@ -714,6 +743,12 @@ const appState = {
     playerSortCol: "rating",
     playerSortAsc: false,
     compareKeys: [],
+    scoutingQuery: "",
+    scoutingStatus: "ALL",
+    actionMode: "xt",
+    actionQuery: "",
+    actionCompetition: "ALL",
+    actionMinMinutes: 450,
 };
 
 function t(key) {
@@ -1986,12 +2021,24 @@ async function fetchReviewQueue() {
     try {
         const data = await fetchJson("/review-queue");
         return (data.players || []).map((p) => ({
-            name: p.player || "",
+            player_id: p.player_id || "",
+            name: p.player_name || p.player || "",
+            player_name: p.player_name || p.player || "",
             team: p.team || "",
+            league: p.league || "",
+            season: p.season || "",
             position: p.position_group || "",
+            position_group: p.position_group || "",
             confidence: (p.confidence_level || "LOW").toUpperCase(),
+            confidence_level: (p.confidence_level || "LOW").toUpperCase(),
             score: +(p.optimized_score || 0).toFixed(1),
+            optimized_score: +(p.optimized_score || 0).toFixed(1),
             minutes: Math.round(p.minutes || 0),
+            reason_code: p.reason_code || "",
+            review_status: p.review_status || "pending",
+            reviewer_note: p.reviewer_note || "",
+            as_of_date: p.as_of_date || "",
+            rating_snapshot_id: p.rating_snapshot_id || "",
         }));
     } catch (err) {
         console.warn("Failed to fetch review queue:", err);
@@ -2021,7 +2068,21 @@ async function fetchShortlist() {
 
 function renderScouting() {
     const queue = reviewQueue.length > 0 ? reviewQueue : [];
-    const sortedQueue = sortReviewQueue(queue, scoutSortMode);
+    const filteredQueue = filterReviewQueue(queue);
+    const sortedQueue = sortReviewQueue(filteredQueue, scoutSortMode);
+    const combinedWatchlist = mergeScoutingRows(watchlistData, getPlayerWatchlist());
+    const combinedShortlist = mergeScoutingRows(shortlistData, getPlayerShortlist());
+
+    const reviewCount = queue.filter((player) => {
+        const status = getQueueStatus(player);
+        return status === "pending" || status === "reviewing";
+    }).length;
+    const reviewCountEl = document.getElementById("scout-review-count");
+    const watchCountEl = document.getElementById("scout-watch-count");
+    const shortCountEl = document.getElementById("scout-short-count");
+    if (reviewCountEl) reviewCountEl.textContent = String(reviewCount);
+    if (watchCountEl) watchCountEl.textContent = String(combinedWatchlist.length);
+    if (shortCountEl) shortCountEl.textContent = String(combinedShortlist.length);
 
     // Sort bar
     const sortModes = [
@@ -2041,30 +2102,32 @@ function renderScouting() {
     if (sortedQueue.length > 0) {
         for (const p of sortedQueue) {
             const pKey = p.player_name || p.name || "";
-            const status = scoutQueueStatuses[pKey] || "pending";
+            const statusKey = queueStatusKey(p);
+            const status = getQueueStatus(p);
             const statusClass = "status-" + status;
             const icon = STATUS_ICONS[status] || "\u25CB";
             const conf = (p.confidence_level || p.confidence || "LOW").toUpperCase();
+            const meta = [p.team, p.position_group || p.position, `${p.minutes || 0}min`, p.reason_code, p.as_of_date]
+                .filter(Boolean).join(" \u00B7 ");
             reviewHtml += `
-                <div class="rank-item">
+                <div class="rank-item" data-review-state="${escapeAttr(status)}">
                     <div>
                         <strong>${escapeHtml(pKey)}</strong>
-                        <span class="rank-meta">${escapeHtml(p.team)} \u00B7 ${escapeHtml(p.position_group || p.position || "")} \u00B7 ${escapeHtml(p.minutes)}min \u00B7 ${escapeHtml(p.reason_code || "")}</span>
+                        <span class="rank-meta">${escapeHtml(meta)}</span>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center">
-                        <span class="status-pill status-clickable ${statusClass}" data-queue-status="${escapeAttr(pKey)}" title="${escapeHtml(t("status_" + status))}" style="cursor:pointer">${icon} ${escapeHtml(t("status_" + status))}</span>
-                        <span class="status-pill ${confidenceClass(conf)}">${escapeHtml(conf)}</span>
+                        <button class="status-pill status-clickable ${statusClass}" data-queue-status="${escapeAttr(statusKey)}" title="${escapeHtml(t("status_" + status))}" type="button">${icon} ${escapeHtml(t("status_" + status))}</button>
+                        <span class="status-pill ${confidenceClass(conf)}">${Number(p.optimized_score || p.score || 0).toFixed(1)} · ${escapeHtml(conf)}</span>
                     </div>
                 </div>`;
         }
     } else {
-        reviewHtml += '<div style="color:var(--text-muted);text-align:center;padding:1rem">No low-confidence players in queue</div>';
+        reviewHtml += `<div style="color:var(--text-muted);text-align:center;padding:1rem">${escapeHtml(appState.lang === "zh" ? "当前筛选没有复核对象" : "No review items match the current filters")}</div>`;
     }
     document.getElementById("review-list").innerHTML = reviewHtml;
 
     // Watchlist with diff badge
-    computeWatchlistDiff(watchlistData);
-    const wlBadge = watchlistDiffCount > 0 ? `<span class="scout-badge">${watchlistDiffCount} ${t("scout_new_badge")}</span>` : "";
+    computeWatchlistDiff(combinedWatchlist);
     const wlHeader = document.querySelector("#view-scouting .panel-head h3[data-i18n='watchlist']");
     if (wlHeader) {
         const existingBadge = wlHeader.querySelector(".scout-badge");
@@ -2077,7 +2140,7 @@ function renderScouting() {
         }
     }
 
-    document.getElementById("watchlist").innerHTML = watchlistData.length > 0 ? watchlistData.map((player) => {
+    document.getElementById("watchlist").innerHTML = combinedWatchlist.length > 0 ? combinedWatchlist.map((player) => {
         const pName = player.player_name || player.name || "";
         const conf = (player.confidence_level || player.confidence || "LOW").toUpperCase();
         const wlNote = watchlistNotes[pName] || "";
@@ -2095,12 +2158,9 @@ function renderScouting() {
         </div>`;
     }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
 
-    // Save watchlist snapshot after rendering
-    saveWatchlistSnapshot(watchlistData);
-
     // Shortlist with notes
-    document.getElementById("shortlist-count").textContent = String(shortlistData.length);
-    document.getElementById("shortlist").innerHTML = shortlistData.length > 0 ? shortlistData.map((player) => {
+    document.getElementById("shortlist-count").textContent = String(combinedShortlist.length);
+    document.getElementById("shortlist").innerHTML = combinedShortlist.length > 0 ? combinedShortlist.map((player) => {
         const pName = player.player_name || player.name || "";
         const conf = (player.confidence_level || player.confidence || "HIGH").toUpperCase();
         const note = scoutShortlistNotes[pName] || "";
@@ -2118,6 +2178,51 @@ function renderScouting() {
             </div>
         </div>`;
     }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
+
+    updateSnapshotStatus();
+}
+
+function queueStatusKey(player) {
+    return String(player.player_id || player.player_name || player.name || "");
+}
+
+function getQueueStatus(player) {
+    const stableKey = queueStatusKey(player);
+    const nameKey = String(player.player_name || player.name || "");
+    const localStatus = scoutQueueStatuses[stableKey] || scoutQueueStatuses[nameKey];
+    if (STATUS_CYCLE.includes(localStatus)) return localStatus;
+    const apiStatus = String(player.review_status || "pending").toLowerCase();
+    return STATUS_CYCLE.includes(apiStatus) ? apiStatus : "pending";
+}
+
+function filterReviewQueue(queue) {
+    const query = appState.scoutingQuery.trim().toLowerCase();
+    return queue.filter((player) => {
+        const statusMatch = appState.scoutingStatus === "ALL" || getQueueStatus(player) === appState.scoutingStatus;
+        const haystack = [player.player_name, player.name, player.team, player.league, player.position_group, player.reason_code]
+            .join(" ").toLowerCase();
+        return statusMatch && (!query || haystack.includes(query));
+    });
+}
+
+function mergeScoutingRows(serverRows, localRows) {
+    const merged = [];
+    const seen = new Set();
+    for (const row of [...(serverRows || []), ...(localRows || [])]) {
+        const name = row.player_name || row.name || "";
+        const key = String(row.player_id || row.key || name).toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        merged.push({
+            ...row,
+            player_name: name,
+            position_group: row.position_group || row.position || "",
+            optimized_score: Number(row.optimized_score || row.rating || 0),
+            confidence_level: (row.confidence_level || row.confidence || "MEDIUM").toUpperCase(),
+            reason_code: row.reason_code || (row.key ? "manual_selection" : ""),
+        });
+    }
+    return merged;
 }
 
 function sortReviewQueue(queue, mode) {
@@ -2125,8 +2230,8 @@ function sortReviewQueue(queue, mode) {
     if (mode === "priority") {
         const confOrder = { "LOW": 0, "MEDIUM": 1, "HIGH": 2 };
         arr.sort((a, b) => {
-            const sa = scoutQueueStatuses[a.player_name || a.name] || "pending";
-            const sb = scoutQueueStatuses[b.player_name || b.name] || "pending";
+            const sa = getQueueStatus(a);
+            const sb = getQueueStatus(b);
             const siA = STATUS_CYCLE.indexOf(sa);
             const siB = STATUS_CYCLE.indexOf(sb);
             if (siA !== siB) return siA - siB;
@@ -2137,7 +2242,7 @@ function sortReviewQueue(queue, mode) {
     } else if (mode === "name") {
         arr.sort((a, b) => (a.player_name || a.name || "").localeCompare(b.player_name || b.name || ""));
     } else if (mode === "date") {
-        arr.sort((a, b) => (b.minutes || 0) - (a.minutes || 0));
+        arr.sort((a, b) => String(b.as_of_date || "").localeCompare(String(a.as_of_date || "")) || (b.minutes || 0) - (a.minutes || 0));
     }
     return arr;
 }
@@ -2149,16 +2254,16 @@ function computeLeagueCoverage() {
         const season = p.season || "";
         if (!league) continue;
         const key = `${league}|${season}`;
-        if (!byLeagueSeason[key]) byLeagueSeason[key] = { league, season, teams: new Set(), rated: 0 };
+        if (!byLeagueSeason[key]) byLeagueSeason[key] = { league, season, teams: new Set(), ratedTeams: new Set() };
         byLeagueSeason[key].teams.add(p.team);
-        if (p.rating > 0) byLeagueSeason[key].rated++;
+        if (p.rating > 0 && p.team) byLeagueSeason[key].ratedTeams.add(p.team);
     }
     // Group by league (aggregate seasons)
     const byLeague = {};
     for (const entry of Object.values(byLeagueSeason)) {
         if (!byLeague[entry.league]) byLeague[entry.league] = { total: 0, rated: 0 };
         byLeague[entry.league].total += entry.teams.size;
-        byLeague[entry.league].rated += entry.rated;
+        byLeague[entry.league].rated += entry.ratedTeams.size;
     }
     return Object.entries(byLeague).map(([league, data]) => ({
         league,
@@ -2643,40 +2748,84 @@ function renderReports() {
 
 function renderActions() {
     const chart = getChart("action-chart");
-    const players = actionValueSummary.players || [];
+    const mode = appState.actionMode;
+    const sourceRows = mode === "vaep"
+        ? (actionValueSummary.vaep_players || [])
+        : (actionValueSummary.xt_players || actionValueSummary.players || []);
+    const metricKey = mode === "vaep" ? "vaep_per_90" : "xt_per_90";
+    const legacyMetricKey = mode === "xt" ? "xT_per_90" : metricKey;
+    const query = appState.actionQuery.trim().toLowerCase();
+    const players = sourceRows.filter((player) => {
+        const minutes = Number(player.estimated_minutes || player.minutes || 0);
+        const competition = String(player.competition || "");
+        const label = String(player.player_name || player.player_id || "");
+        const matchesQuery = !query || `${label} ${competition} ${player.season || ""}`.toLowerCase().includes(query);
+        const matchesCompetition = mode === "vaep" || appState.actionCompetition === "ALL" || competition === appState.actionCompetition;
+        return matchesQuery && matchesCompetition && minutes >= appState.actionMinMinutes;
+    }).sort((a, b) => Number(b[metricKey] ?? b[legacyMetricKey] ?? 0) - Number(a[metricKey] ?? a[legacyMetricKey] ?? 0));
     const actionList = document.getElementById("action-list");
     const actionStatus = document.getElementById("action-status-pill");
+    const metrics = actionValueSummary.metrics || {};
+
+    populateActionCompetitionFilter(sourceRows);
+
+    document.querySelectorAll("[data-action-mode]").forEach((button) => {
+        const active = button.dataset.actionMode === mode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const competitionSelect = document.getElementById("action-competition-filter");
+    if (competitionSelect) competitionSelect.disabled = mode === "vaep";
+
+    const chartTitle = document.getElementById("action-chart-title");
+    const listTitle = document.getElementById("action-list-title");
+    if (chartTitle) chartTitle.textContent = mode === "vaep" ? "VAEP / 90" : "xT / 90";
+    if (listTitle) listTitle.textContent = mode === "vaep"
+        ? (appState.lang === "zh" ? "VAEP 排名" : "VAEP ranking")
+        : (appState.lang === "zh" ? "xT 排名" : "xT ranking");
 
     if (actionStatus) {
         actionStatus.textContent = actionValueSummary.status === "ok"
-            ? `REAL ${players.length}`
+            ? `${mode.toUpperCase()} ${players.length}`
             : "NO DATA";
         actionStatus.className = `status-pill ${actionValueSummary.status === "ok" ? "status-medium" : "status-low"}`;
+    }
+
+    const metricsEl = document.getElementById("action-metrics");
+    if (metricsEl) {
+        const coverage = mode === "vaep"
+            ? (metrics.players_with_vaep ?? metrics.vaep_rows ?? sourceRows.length)
+            : (metrics.players_with_xt ?? metrics.xt_rows ?? sourceRows.length);
+        const mean = mode === "vaep" ? metrics.mean_vaep_per_90 : metrics.mean_xt_per_90;
+        metricsEl.innerHTML = `
+            <div><span class="metric-value">${Number(metrics.total_rows || actionValueSummary.count || sourceRows.length).toLocaleString()}</span><span>${escapeHtml(appState.lang === "zh" ? "动作价值行" : "action-value rows")}</span></div>
+            <div><span class="metric-value">${Number(coverage || 0).toLocaleString()}</span><span>${escapeHtml(mode === "vaep" ? "VAEP coverage" : "xT coverage")}</span></div>
+            <div><span class="metric-value">${mean == null ? "–" : Number(mean).toFixed(3)}</span><span>${escapeHtml(appState.lang === "zh" ? "样本均值 / 90" : "sample mean / 90")}</span></div>`;
     }
 
     actionList.innerHTML = players.length > 0
         ? players.map((player) => `
             <div class="rank-item">
                 <div>
-                    <strong>${escapeHtml(player.player_name || "")}</strong>
-                    <span class="rank-meta">xT/90 ${Number(player.xT_per_90 || 0).toFixed(3)} · composite ${Number(player.composite_score || 0).toFixed(1)}</span>
+                    <strong>${escapeHtml(actionPlayerLabel(player, mode))}</strong>
+                    <span class="rank-meta">${escapeHtml(actionPlayerMeta(player, mode))}</span>
+                    ${Number(player.estimated_minutes || player.minutes || 0) < 900 ? `<div class="sample-warning">${escapeHtml(appState.lang === "zh" ? "小样本，仅供研究" : "Small sample; research use only")}</div>` : ""}
                 </div>
-                <span class="status-pill status-medium">${Number(player.finishing_delta || 0).toFixed(2)}</span>
+                <span class="status-pill status-medium">${Number(player[metricKey] ?? player[legacyMetricKey] ?? 0).toFixed(3)}</span>
             </div>
         `).join("")
-        : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No action value artifact</div>';
+        : `<div style="color:var(--text-muted);text-align:center;padding:1rem">${escapeHtml(appState.lang === "zh" ? "当前筛选没有动作价值样本" : "No action-value samples match the current filters")}</div>`;
 
     // StatsBomb Open Data attribution
     const attrEl = document.getElementById('action-attribution');
     if (attrEl) {
-        const apiAttr = actionData && actionData.attribution_required
-            ? escapeHtml(actionData.attribution_required)
-            : (appState.lang === 'zh' ? '公开展示时必须注明数据来源' : 'Data source must be attributed in any public display');
-        attrEl.innerHTML = `\u25C6 ${appState.lang === 'zh' ? '\u6570\u636E\u6765\u6E90' : 'Data source'}: StatsBomb Open Data | github.com/statsbomb/open-data<br><small>${apiAttr}</small>`;
+        const apiAttr = actionValueSummary.attribution_required
+            || (appState.lang === 'zh' ? '公开展示时必须注明数据来源' : 'Data source must be attributed in any public display');
+        attrEl.innerHTML = `\u25C6 ${appState.lang === 'zh' ? '\u6570\u636E\u6765\u6E90' : 'Data source'}: StatsBomb Open Data | github.com/statsbomb/open-data<br><small>${escapeHtml(apiAttr)}</small>`;
     }
 
     if (!chart) return;
-    const chartPlayers = players.filter((player) => player.player_name && player.xT_per_90 != null);
+    const chartPlayers = players.filter((player) => (player.player_name || player.player_id) && (player[metricKey] ?? player[legacyMetricKey]) != null).slice(0, 20);
     if (chartPlayers.length === 0) {
         chart.clear();
         return;
@@ -2690,20 +2839,20 @@ function renderActions() {
         grid: { left: 56, right: 20, top: 34, bottom: 60 },
         xAxis: {
             type: "category",
-            data: chartPlayers.map((player) => player.player_name),
+            data: chartPlayers.map((player) => actionPlayerLabel(player, mode)),
             axisLabel: { color: chartTextColor(), rotate: 30 },
         },
         yAxis: {
             type: "value",
-            name: "xT/90",
+            name: mode === "vaep" ? "VAEP/90" : "xT/90",
             nameTextStyle: { color: chartTextColor() },
             axisLabel: { color: chartTextColor() },
             splitLine: { lineStyle: { color: chartGridColor() } },
         },
         series: [{
             type: "bar",
-            data: chartPlayers.map((player) => Number(player.xT_per_90 || 0)),
-            itemStyle: { color: "rgba(87,214,141,.78)" },
+            data: chartPlayers.map((player) => Number(player[metricKey] ?? player[legacyMetricKey] ?? 0)),
+            itemStyle: { color: mode === "vaep" ? "rgba(124,168,255,.82)" : "rgba(87,214,141,.78)" },
             label: { show: false },
         }],
     }, true);
@@ -2713,6 +2862,7 @@ function renderActions() {
     const btnXTHeatmap = document.getElementById("btn-xt-heatmap-tactical");
     const heatmapStatus = document.getElementById("xt-heatmap-status");
     if (btnXTHeatmap) {
+        btnXTHeatmap.disabled = mode !== "xt" || sourceRows.length === 0;
         btnXTHeatmap.onclick = function() {
             if (!actionValueSummary || actionValueSummary.status === "no_data") {
                 if (heatmapStatus) heatmapStatus.textContent = appState.lang === "zh" ? "\u65e0\u6570\u636e" : "No data available";
@@ -2726,15 +2876,42 @@ function renderActions() {
                 var toggleBtn = document.getElementById("tactical-toggle-heatmap");
                 if (toggleBtn) toggleBtn.classList.add("active");
                 // Update source_attribution to include StatsBomb when xT data is loaded
-                if (tacticalProject && !tacticalProject.source_attribution.includes("StatsBomb")) {
+                if (tacticalProject && !String(tacticalProject.source_attribution || "").includes("StatsBomb")) {
                     tacticalProject.source_attribution = "ScoutFootball tactical board + StatsBomb Open Data (xT)";
                 }
                 // Navigate to tactical view
-                switchView("tactical");
+                setView("tactical");
                 if (heatmapStatus) heatmapStatus.textContent = appState.lang === "zh" ? "\u5df2\u52a0\u8f7d" : "Loaded on tactical board";
             }
         };
     }
+}
+
+function populateActionCompetitionFilter(rows) {
+    const select = document.getElementById("action-competition-filter");
+    if (!select) return;
+    const competitions = [...new Set((rows || []).map((row) => row.competition).filter(Boolean))].sort();
+    const previous = appState.actionCompetition;
+    select.innerHTML = `<option value="ALL">${escapeHtml(t("action_all_competitions"))}</option>`
+        + competitions.map((competition) => `<option value="${escapeAttr(competition)}">${escapeHtml(competition)}</option>`).join("");
+    appState.actionCompetition = competitions.includes(previous) ? previous : "ALL";
+    select.value = appState.actionCompetition;
+}
+
+function actionPlayerLabel(player, mode) {
+    if (player.player_name) return player.player_name;
+    return mode === "vaep" ? `Player ID ${player.player_id || "–"}` : String(player.player_id || "–");
+}
+
+function actionPlayerMeta(player, mode) {
+    const parts = [];
+    if (player.competition) parts.push(player.competition);
+    if (player.season) parts.push(player.season);
+    if (player.estimated_minutes != null) parts.push(`${Math.round(Number(player.estimated_minutes || 0))}min`);
+    if (player.n_matches != null) parts.push(`${Number(player.n_matches).toFixed(Number(player.n_matches) % 1 ? 1 : 0)} matches`);
+    if (mode === "xt" && player.xt_total != null) parts.push(`xT ${Number(player.xt_total).toFixed(2)}`);
+    if (mode === "vaep" && player.vaep_total != null) parts.push(`VAEP ${Number(player.vaep_total).toFixed(2)}`);
+    return parts.join(" \u00B7 ");
 }
 
 function generateXTHeatmapGrid(summary) {
@@ -3989,6 +4166,31 @@ function bindEvents() {
         }
     });
 
+    const scoutSearch = document.getElementById("scout-search");
+    if (scoutSearch) {
+        scoutSearch.addEventListener("input", (e) => {
+            appState.scoutingQuery = e.target.value;
+            renderScouting();
+        });
+    }
+    const scoutStatusFilter = document.getElementById("scout-status-filter");
+    if (scoutStatusFilter) {
+        scoutStatusFilter.addEventListener("change", (e) => {
+            appState.scoutingStatus = e.target.value;
+            renderScouting();
+        });
+    }
+    const scoutSnapshotButton = document.getElementById("scout-save-snapshot");
+    if (scoutSnapshotButton) {
+        scoutSnapshotButton.addEventListener("click", () => {
+            saveWatchlistSnapshot(mergeScoutingRows(watchlistData, getPlayerWatchlist()));
+            computeWatchlistDiff(mergeScoutingRows(watchlistData, getPlayerWatchlist()));
+            renderScouting();
+        });
+    }
+    const scoutExportButton = document.getElementById("scout-export-csv");
+    if (scoutExportButton) scoutExportButton.addEventListener("click", exportReviewQueueCSV);
+
     // Scouting: note input change
     document.addEventListener("change", (e) => {
         if (e.target.matches(".scout-note-textarea") && e.target.dataset.notePlayer) {
@@ -4031,7 +4233,8 @@ function bindEvents() {
         const roleBtn = e.target.closest("[data-tactical-role]");
         if (roleBtn) {
             const pName = roleBtn.dataset.tacticalRole;
-            const player = shortlistData.find((p) => (p.player_name || p.name || "") === pName);
+            const player = mergeScoutingRows(shortlistData, getPlayerShortlist())
+                .find((p) => (p.player_name || p.name || "") === pName);
             if (player) {
                 const role = generateTacticalRole(player);
                 const roleEl = document.getElementById("player-tactical-role");
@@ -4048,6 +4251,34 @@ function bindEvents() {
         priceBandSelect.addEventListener("change", (e) => {
             appState.valuePriceBand = e.target.value;
             renderValue();
+        });
+    }
+
+    document.querySelectorAll("[data-action-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+            appState.actionMode = button.dataset.actionMode;
+            renderActions();
+        });
+    });
+    const actionSearch = document.getElementById("action-search");
+    if (actionSearch) {
+        actionSearch.addEventListener("input", (e) => {
+            appState.actionQuery = e.target.value;
+            renderActions();
+        });
+    }
+    const actionCompetitionFilter = document.getElementById("action-competition-filter");
+    if (actionCompetitionFilter) {
+        actionCompetitionFilter.addEventListener("change", (e) => {
+            appState.actionCompetition = e.target.value;
+            renderActions();
+        });
+    }
+    const actionMinutesFilter = document.getElementById("action-minutes-filter");
+    if (actionMinutesFilter) {
+        actionMinutesFilter.addEventListener("change", (e) => {
+            appState.actionMinMinutes = Number(e.target.value || 0);
+            renderActions();
         });
     }
     window.addEventListener("resize", () => {
@@ -5444,7 +5675,8 @@ function generateTacticalRole(player) {
 }
 
 function cycleQueueStatus(playerKey) {
-    const current = scoutQueueStatuses[playerKey] || "pending";
+    const player = reviewQueue.find((row) => queueStatusKey(row) === playerKey);
+    const current = scoutQueueStatuses[playerKey] || (player ? getQueueStatus(player) : "pending");
     const idx = STATUS_CYCLE.indexOf(current);
     scoutQueueStatuses[playerKey] = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
     saveScoutQueueStatuses();
@@ -5452,7 +5684,6 @@ function cycleQueueStatus(playerKey) {
 
 function computeWatchlistDiff(currentPlayers) {
     try {
-        const lastVisit = parseInt(localStorage.getItem(SCOUT_LASTVISIT_KEY)) || 0;
         const snapshot = JSON.parse(localStorage.getItem(SCOUT_SNAPSHOT_KEY)) || [];
         const currentKeys = new Set(currentPlayers.map(p => p.player_name || p.name));
         const snapshotKeys = new Set(snapshot);
@@ -5470,4 +5701,50 @@ function saveWatchlistSnapshot(currentPlayers) {
         localStorage.setItem(SCOUT_SNAPSHOT_KEY, JSON.stringify(keys));
         localStorage.setItem(SCOUT_LASTVISIT_KEY, String(Date.now()));
     } catch {}
+}
+
+function updateSnapshotStatus() {
+    const status = document.getElementById("scout-snapshot-status");
+    if (!status) return;
+    try {
+        const timestamp = Number(localStorage.getItem(SCOUT_LASTVISIT_KEY) || 0);
+        if (!timestamp) {
+            status.textContent = appState.lang === "zh" ? "尚未保存基线快照" : "No baseline snapshot saved";
+            return;
+        }
+        const stamp = new Date(timestamp).toLocaleString(appState.lang === "zh" ? "zh-CN" : "en-US");
+        status.textContent = watchlistDiffCount > 0
+            ? `${watchlistDiffCount} ${appState.lang === "zh" ? "名新增 · 基线" : "new · baseline"} ${stamp}`
+            : `${appState.lang === "zh" ? "无新增 · 基线" : "No additions · baseline"} ${stamp}`;
+    } catch {
+        status.textContent = "";
+    }
+}
+
+function exportReviewQueueCSV() {
+    const rows = sortReviewQueue(filterReviewQueue(reviewQueue), scoutSortMode);
+    const header = ["player_id", "player_name", "team", "league", "season", "position_group", "optimized_score", "minutes", "confidence_level", "reason_code", "review_status", "reviewer_note", "as_of_date"];
+    const data = rows.map((player) => [
+        player.player_id || "",
+        player.player_name || player.name || "",
+        player.team || "",
+        player.league || "",
+        player.season || "",
+        player.position_group || player.position || "",
+        player.optimized_score || player.score || 0,
+        player.minutes || 0,
+        player.confidence_level || player.confidence || "",
+        player.reason_code || "",
+        getQueueStatus(player),
+        player.reviewer_note || "",
+        player.as_of_date || "",
+    ]);
+    const csv = [header, ...data].map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "scoutfootball-review-queue.csv";
+    link.click();
+    URL.revokeObjectURL(url);
 }

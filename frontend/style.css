@@ -451,6 +451,116 @@ body.dark-mode .mesh-bg {
     line-height: 1.3;
 }
 
+.feature-hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+    gap: 24px;
+    align-items: center;
+    padding: 24px 28px;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+}
+
+.feature-hero::after {
+    content: "";
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    right: -110px;
+    top: -170px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--blue) 26%, transparent), transparent 68%);
+    pointer-events: none;
+}
+
+.action-feature-hero::after {
+    background: radial-gradient(circle, color-mix(in srgb, var(--good) 28%, transparent), transparent 68%);
+}
+
+.feature-note {
+    max-width: 68ch;
+    margin: 8px 0 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
+.feature-metric-strip {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.feature-metric-strip > div {
+    min-height: 82px;
+    padding: 14px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    background: var(--glass-bg-strong);
+}
+
+.feature-metric-strip .metric-value {
+    display: block;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.feature-metric-strip .metric-value + span {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.feature-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    background: var(--glass-bg);
+    backdrop-filter: blur(24px);
+}
+
+.compact-search {
+    min-width: min(320px, 100%);
+    flex: 1 1 240px;
+}
+
+.toolbar-status {
+    min-height: 1em;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.compact-segmented {
+    flex-wrap: nowrap;
+}
+
+.compact-segmented button {
+    min-width: 68px;
+}
+
+.rank-item[data-review-state="approved"] {
+    border-color: color-mix(in srgb, var(--good) 38%, var(--glass-border));
+}
+
+.rank-item[data-review-state="rejected"] {
+    opacity: 0.68;
+}
+
+.sample-warning {
+    margin-top: 8px;
+    color: var(--warn);
+    font-size: 0.7rem;
+}
+
 .rank-item-extra,
 .watch-card-extra {
     grid-column: 1 / -1;
@@ -1007,6 +1117,23 @@ tbody button {
 /* ── Mobile ──────────────────────────────────────────────────────────────── */
 
 @media (max-width: 760px) {
+    .feature-hero {
+        grid-template-columns: 1fr;
+        padding: 20px;
+    }
+
+    .feature-metric-strip {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .feature-toolbar > * {
+        flex: 1 1 160px;
+    }
+
+    .feature-toolbar .compact-segmented {
+        flex: 0 0 auto;
+    }
+
     body {
         overflow: auto;
         font-size: 14px;
@@ -1375,6 +1502,24 @@ tbody button {
 /* ── Extra-small phones (<= 480px) ─────────────────────────────────────── */
 
 @media (max-width: 480px) {
+    .feature-metric-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .feature-metric-strip > div {
+        min-height: 68px;
+    }
+
+    .feature-toolbar {
+        align-items: stretch;
+    }
+
+    .feature-toolbar > *,
+    .feature-toolbar .compact-segmented {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
     body {
         font-size: 13px;
     }
