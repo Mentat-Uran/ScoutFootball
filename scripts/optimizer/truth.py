@@ -59,22 +59,26 @@ def resolve_truth_labels(
         return pd.DataFrame()
 
     if "player_name" not in work.columns:
-        if not feature_matrix_path.exists():
-            return pd.DataFrame()
-        matrix = pd.read_parquet(feature_matrix_path)
-        bridge_cols = [
-            col
-            for col in ["player_id", "season_id", "player_name", "position_group"]
-            if col in matrix.columns
-        ]
-        if {"player_id", "season_id", "player_name"} - set(bridge_cols):
-            return pd.DataFrame()
-        bridge = matrix[bridge_cols].copy()
-        bridge["season"] = bridge["season_id"].astype(str)
-        bridge = bridge.drop(columns=["season_id"]).drop_duplicates(
-            subset=["player_id", "season"],
-        )
-        work = work.merge(bridge, on=["player_id", "season"], how="left")
+        # Try bridge merge via feature matrix (player_id as key)
+        if feature_matrix_path.exists():
+            matrix = pd.read_parquet(feature_matrix_path)
+            bridge_cols = [
+                col
+                for col in ["player_id", "season_id", "player_name", "position_group"]
+                if col in matrix.columns
+            ]
+            if not ({"player_id", "season_id", "player_name"} - set(bridge_cols)):
+                bridge = matrix[bridge_cols].copy()
+                bridge["season"] = bridge["season_id"].astype(str)
+                bridge = bridge.drop(columns=["season_id"]).drop_duplicates(
+                    subset=["player_id", "season"],
+                )
+                work = work.merge(bridge, on=["player_id", "season"], how="left")
+
+    # If bridge merge failed, treat player_id as player_name directly
+    # (truth labels may store player names in the player_id column)
+    if "player_name" not in work.columns or work["player_name"].isna().all():
+        work["player_name"] = work["player_id"]
 
     if "player_name" not in work.columns:
         return pd.DataFrame()
