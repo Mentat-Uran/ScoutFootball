@@ -28,7 +28,7 @@ ScoutFootball 是本地优先的足球分析平台，把公开数据、手动导
 - **数据验证:** `scoutfootball validate` 检查训练前数据一致性。
 - **本地数据层:** DuckDB + Parquet，按 raw/silver/gold/models/reports/logs 分层。
 - **球员评分:** PyTorch 权重优化器，组合目标（Spearman + soft NDCG@20 + 位置内一致性 + 训练集积分/联赛校准 + 分布/尾部/联赛偏差损失 + 球员评分 guardrail + 可选球员真值标签锚定），holdout 评估、availability cap、quality cap、稳健球队聚合、覆盖率过滤和模型运行登记。
-- **真实标签契约:** `player_truth_labels.parquet` schema 与校验，支持历史身价、奖项、专家分档、人工校准。当前本地真值标签表仍为空，因此监督式球员层训练路径会按设计跳过。
+- **真实标签契约:** `player_truth_labels.parquet` schema 与校验，支持历史身价、奖项、专家分档、人工校准。当前本地表有 41,389 行，但标签独立性和时间切分评估仍是准入门槛。
 - **神经网络候选模型:** `scoutfootball train-rating-nn` 使用 `rating_feature_matrix.parquet` + `player_truth_labels.parquet` 训练监督式 sklearn MLP 候选模型，并写入 `data/models/player_rating_nn/`；除非同切分下优于当前优化器和 baseline，否则不替换 `player_ratings_optimized.parquet`。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界和已知偏差。
 - **比分预测:** Independent Poisson baseline，含比分概率矩阵。
@@ -46,8 +46,8 @@ ScoutFootball 是本地优先的足球分析平台，把公开数据、手动导
 | **球员** (◇) | 球员池、雷达图、位置内百分位 | `/ratings`、`/players/{name}` API |
 | **身价** (€) | 身价偏离散点图、高估/低估排名 | `/value-summary` API |
 | **预测** (△) | 比赛预测、比分概率矩阵 | `/predictions/{home}/{away}` API |
-| **球探** (□) | 复核队列、watchlist、shortlist | `/review-queue`、`/watchlist`、`/shortlist` API |
-| **动作价值** (⌁) | StatsBomb 动作价值热区 | `/action-values` API |
+| **球探** (□) | 复核筛选、本地状态/备注、watchlist 快照、CSV 导出 | `/review-queue`、`/watchlist`、`/shortlist` API |
+| **动作价值** (⌁) | xT/VAEP 排名、样本筛选、战术板热区联动 | `/action-values` API |
 | **报告** (▣) | 模型运行记录、后端契约、指标 | `/reports/model-runs` API |
 
 **4 个世界杯视图：**
@@ -61,7 +61,7 @@ ScoutFootball 是本地优先的足球分析平台，把公开数据、手动导
 
 ## Demo 数据
 
-当 FastAPI 后端不可用或特定产物缺失时，前端会回退到内置 demo 数据。使用 demo 数据的视图会显示 **DEMO** 标记。
+当 FastAPI 后端不可用时，有映射的视图会回退到 `frontend/data/` 的跟踪静态快照。静态快照是缓存数据，不是实时数据；特定估算数据仍会显示 **DEMO** 标记。
 
 查看真实数据：
 
@@ -96,37 +96,39 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 | 球员雷达 / Pizza chart | 已集成 mplsoccer |
 | 位置内排名 | 可用，带置信度标记 |
 | 比分概率矩阵 | Streamlit 可用 |
-| 电子战术板 | 已有本地画布/JSON 第一切片；动画时间轴、PNG/PDF/WebM 导出、报告嵌入和版本迁移仍属 P1.5 |
-| Dixon-Coles + 时间衰减 | 计划中 (P5) |
+| 电子战术板 | 本地画布、动画、PNG/PDF/WebM/GIF、可选 MP4、报告快照和 schema 迁移已实现 |
+| Dixon-Coles + 时间衰减 | 已实现基线与校准指标 |
 
-## 已知限制（v1.0.0）
+## 当前已知限制
 
 **评分系统：**
-- 球员真实标签为空；监督式训练路径（NN 候选）默认跳过
+- 真实标签已存在，但 Transfermarkt 衍生和自循环标签不能独立证明球员真实影响力
 - 评分系统处于校准阶段；强队（Barcelona、Real Madrid）可能被系统性低估
 - 联赛截距偏差存在（Serie A -16.6、Ligue 1 -11.3）
 
 **数据覆盖：**
-- 动作价值指标仅为 StatsBomb 样本（3 场比赛、~12K 事件），非全量联赛覆盖
+- 动作价值产物有 15,062 行 xT/VAEP，仍只代表当前 StatsBomb Open Data 样本，不是全量联赛覆盖
 - FBref 数据限于 5 赛季；粗位置映射需要 StatsBomb/阵型数据
-- 世界杯视图包含 demo/样本数据，待官方阵容公布
+- 世界杯阵容已填充，但五大联赛外的评分覆盖仍不完整
 
 **前端：**
-- API 不可用时前端回退到内置 demo 数据（标记 DEMO 徽章）
+- API 不可用时，有映射的视图回退到跟踪静态快照；静态快照不是实时数据
+- 球探复核状态和备注仍只保存在浏览器，尚未形成版本化审计 workspace
+- 部分 VAEP 行只有 `player_id`，身份映射尚未完成
 - 战术板 MP4 导出需要系统安装 ffmpeg
-- GIF 导出尚未实现
 
 **v1.0 未包含：**
-- VAEP（计划在 xT 稳定后实现）
 - 空间/视频分析（StatsBomb 360、tracking 数据）
 - 战术板实时协作
 - 移动端战术板编辑优化
 
 ## 电子战术板
 
-电子战术板第一切片已作为 `frontend/` 内的本地优先教练和分析工作台落地，参考 [Tactico](https://tactico.pro/)、[DrawTactics](https://drawtactics.com/animated-tactics-board)、[TacticSlate](https://tacticslate.com/football-tactic-board)、[JLA Tactics Board](https://jlatacticsboard.com/)、[Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards) 和 [TacticalBoards](https://tacticalboards.com/) 等案例。当前能力包括静态本地画布、标准化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。
+电子战术板已作为 `frontend/` 内的本地优先教练和分析工作台落地，参考 [Tactico](https://tactico.pro/)、[DrawTactics](https://drawtactics.com/animated-tactics-board)、[TacticSlate](https://tacticslate.com/football-tactic-board) 和 [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards) 等案例。当前能力包括标准化球场坐标、阵型与定位球、绘图工具、逐帧/路径动画、本地 JSON 工程、schema 迁移、报告快照和 PNG/PDF/WebM/GIF 导出。MP4 是需要 ffmpeg 的可选本地后端能力；公开链接、云同步、视频叠画、tracking 导入和实时协作仍属后续方向。
 
-剩余 P1.5 仍保持轻量，但不只做动画：红蓝双队、可编辑球衣号码、球员 hover 信息卡、白板式自由画笔、橡皮擦和线型工具、训练器材、定位球/训练模板、更完整的球队/球员工程 schema、动画时间轴、浏览器播放、PNG/PDF 静态导出、浏览器 WebM 动画导出、嵌入报告、版本迁移和不兼容工程只读打开都应进入后续 backlog。MP4 导出已通过后端 ffmpeg 转换实现（`/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）。GIF 导出、视频叠画、tracking 数据导入、2D/3D 同步视图、实时协作和门后视角放到后续阶段。
+中长期开发顺序和工程准入门槛见 [`docs/ROADMAP.md`](ROADMAP.md)。
+
+剩余 P1.5 以发布加固和选择性分享为主：剪贴板图片、只读本地演示链接、更严格的迁移 fixture 和浏览器 CI。云同步、视频叠画、tracking 数据导入、2D/3D 同步视图、实时协作和门后视角放到后续阶段。
 
 ## 桌面应用（macOS）
 

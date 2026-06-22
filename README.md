@@ -28,7 +28,7 @@ The focus right now: upgrading the rating system into an interpretable, evaluabl
 - **Data Validation:** `scoutfootball validate` checks data integrity before training.
 - **Local Data Layer:** DuckDB + Parquet, organized into raw/silver/gold/models/reports/logs.
 - **Player Ratings:** PyTorch optimizer with composite objective (Spearman + soft NDCG@20 + position consistency + train-fitted points/league calibration + distribution/tail/league-bias losses + player-score guardrails + optional player truth-label anchor), holdout evaluation, availability caps, quality caps, robust team pooling, coverage reports, and model run registry.
-- **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet` — transfermarkt value, awards, expert tiers, manual calibration. The current local truth-label table is still empty, so supervised player-level training paths skip by design.
+- **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet` — transfermarkt value, awards, expert tiers, manual calibration. The current local table has 41,389 rows, but label independence and temporal evaluation remain release gates.
 - **Neural Rating Candidate:** `scoutfootball train-rating-nn` trains a supervised sklearn MLP candidate from `rating_feature_matrix.parquet` + `player_truth_labels.parquet` and writes artifacts to `data/models/player_rating_nn/`; it does not replace `player_ratings_optimized.parquet` unless it beats the current optimizer on the same holdout and baseline checks.
 - **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `docs/MODEL_CARD.md`.
 - **Match Prediction:** Independent Poisson baseline with score probability matrices.
@@ -46,8 +46,8 @@ The `frontend/` directory contains a static analysis workbench with a consistent
 | **Players** (◇) | Player pool, radar charts, position percentiles | `/ratings`, `/players/{name}` API |
 | **Value** (€) | Value deviation scatter, over/under-valued rankings | `/value-summary` API |
 | **Matches** (△) | Match prediction, score probability matrix | `/predictions/{home}/{away}` API |
-| **Scouting** (□) | Review queue, watchlist, shortlist | `/review-queue`, `/watchlist`, `/shortlist` API |
-| **Actions** (⌁) | StatsBomb action value heatmaps | `/action-values` API |
+| **Scouting** (□) | Review queue filters, local status/notes, watchlist snapshots, CSV export | `/review-queue`, `/watchlist`, `/shortlist` API |
+| **Actions** (⌁) | xT/VAEP ranking, sample filters, tactical heatmap handoff | `/action-values` API |
 | **Reports** (▣) | Model runs, backend contracts, metrics | `/reports/model-runs` API |
 
 **4 World Cup Views:**
@@ -86,6 +86,7 @@ Notes:
 
 - `frontend/` is mounted by FastAPI at `/`, so one port is enough.
 - Local/LAN deployments now default to same-origin API mode.
+- A plain static server falls back to the tracked JSON snapshot under `frontend/data/` when mapped API routes return 404.
 - Allow TCP `8000` through Windows Firewall, or choose another port if needed.
 
 ### Static Snapshot Layout
@@ -144,37 +145,39 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 | Player radar / pizza chart | Available via mplsoccer |
 | Position-relative rankings | Available with confidence badges |
 | Score probability matrix | Available in Streamlit |
-| Electronic tactical board | First local canvas/JSON slice available; animation timeline, PNG/PDF/WebM export, report embedding, and version migration remain P1.5 work |
-| Dixon-Coles with time decay | Planned (P5) |
+| Electronic tactical board | Local canvas, animation, PNG/PDF/WebM/GIF export, optional MP4, report snapshots, and schema migration available |
+| Dixon-Coles with time decay | Implemented baseline with calibration metrics |
 
-### Known Limitations (v1.0.0)
+### Current Known Limitations
 
 **Rating System:**
-- Player truth labels are empty; supervised training paths (NN candidate) skip by default
+- Truth labels exist, but Transfermarkt-derived and self-referential labels are not an independent proof of player impact
 - Rating system is in calibration phase; strong teams (Barcelona, Real Madrid) may be systematically undervalued
 - League intercept bias exists (Serie A -16.6, Ligue 1 -11.3)
 
 **Data Coverage:**
-- Action value metrics are StatsBomb sample only (3 matches, ~12K events), not full league coverage
+- Action value artifacts contain 15,062 xT/VAEP rows derived from the current StatsBomb Open Data sample; they are not full-league coverage
 - FBref data limited to 5 seasons; coarse position mapping needs StatsBomb/formation data
-- World Cup views contain demo/sample data pending official squad rosters
+- World Cup squads are populated, but rating coverage remains incomplete outside the major leagues
 
 **Frontend:**
-- Frontend falls back to built-in demo data when API is unavailable (marked with DEMO badge)
+- Frontend falls back to a tracked static snapshot when mapped API routes are unavailable; it is cached data, not live data
+- Scouting review states and notes are browser-local and are not yet a versioned audit workspace
+- Some VAEP rows only have `player_id`; identity mapping remains incomplete
 - Tactical board MP4 export requires ffmpeg installed on the system
-- GIF export not yet implemented
 
 **Not Included in v1.0:**
-- VAEP (planned for future after xT stabilization)
 - Spatial/video analysis (StatsBomb 360, tracking data)
 - Real-time collaboration on tactical board
 - Mobile-optimized tactical board editing
 
 ### Electronic Tactical Board
 
-The first tactical-board slice is available as a local-first coaching and analysis workspace inside `frontend/`, aligned with products such as [Tactico](https://tactico.pro/), [DrawTactics](https://drawtactics.com/animated-tactics-board), [TacticSlate](https://tacticslate.com/football-tactic-board), [JLA Tactics Board](https://jlatacticsboard.com/), [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards), and [TacticalBoards](https://tacticalboards.com/). The current slice covers static local canvas work, normalized coordinates, basic objects, formation presets, local JSON projects, localStorage persistence, and schema-sanitized import/export.
+The tactical board is available as a local-first coaching and analysis workspace inside `frontend/`, aligned with products such as [Tactico](https://tactico.pro/), [DrawTactics](https://drawtactics.com/animated-tactics-board), [TacticSlate](https://tacticslate.com/football-tactic-board), [JLA Tactics Board](https://jlatacticsboard.com/), and [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards). It includes normalized pitch coordinates, formations and set pieces, drawing tools, frame/path animation, local JSON projects, schema migration, report snapshots, and PNG/PDF/WebM/GIF export. MP4 remains an optional local-backend capability requiring ffmpeg; public links, cloud sync, video telestration, tracking import, and real-time collaboration remain later work.
 
-Remaining P1.5 scope stays lightweight but broader than simple animation: red/blue teams, editable jersey numbers, player hover cards, whiteboard-style freehand drawing, eraser and line tools, training equipment, set-piece and drill templates, richer team/player project schema, animation timeline, browser playback, PNG/PDF still export, WebM animation export via the browser, report embedding, version migration, and read-only fallback for incompatible projects. MP4 export is available via backend ffmpeg conversion (`/tactical-board/capabilities` and `/tactical-board/export/mp4` endpoints). GIF export, video telestration, tracking-data import, 2D/3D synced views, live collaboration, and behind-goal views are later extensions.
+Long-term sequencing and engineering gates are documented in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+The remaining P1.5 work is release hardening and selective sharing: clipboard image export, read-only local presentation links, stricter migration fixtures, and browser CI. Cloud sync, video telestration, tracking-data import, 2D/3D synchronized views, live collaboration, and behind-goal views remain later extensions.
 
 ### Desktop App (macOS)
 
