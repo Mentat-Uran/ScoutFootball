@@ -1,5 +1,8 @@
 # ScoutFootball for World Cup
 
+## link
+https://scoutfootball.vercel.app/
+
 > **Your local-first football analytics toolkit for the 2026 FIFA World Cup.**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
