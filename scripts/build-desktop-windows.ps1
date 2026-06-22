@@ -73,7 +73,7 @@ if (Test-Path $FrontendDest) {
 New-Item -ItemType Directory -Path $FrontendDest -Force | Out-Null
 
 $FrontendSrc = Join-Path $ProjectDir "frontend"
-$FrontendFiles = @("index.html", "style.css", "app.js", "tactical-board.js", "tactical-renderer.js")
+$FrontendFiles = @("index.html", "style.css", "app.js", "tactical-board.js", "tactical-renderer.js", "config.js", "user-guide.html")
 foreach ($file in $FrontendFiles) {
     $src = Join-Path $FrontendSrc $file
     if (Test-Path $src) {
