@@ -337,7 +337,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 从国家队/世界杯页创建队伍模板：4-3-3 阵型 + 球员姓名/号码已实现。
 - [x] 支持战术板上显示球员评分 badge（颜色编码：绿/黄/红），可通过按钮切换显示/隐藏。
 - [x] xT 热区背景层：action values 页 'Show on Tactical Board' 按钮，蓝红色标，StatsBomb 归属已实现。
-- [ ] 公开导出物如果包含 StatsBomb Open Data 或其他衍生数据，必须带 data source attribution。
+- [x] 公开导出物如果包含 StatsBomb Open Data 或其他衍生数据，必须带 data source attribution。（前端已自动更新 source_attribution，导出已包含 attribution 文字）
 
 ### 第五切片：质量、安全和兼容性
 
@@ -369,7 +369,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 输出 `data/gold/feature_store/player_action_value.parquet`。
 - [x] 生成球员 xT 排行榜、球队 xT 热区图、球员传球/带球推进价值图。
 - [x] 评估 socceraction 作为依赖的可维护性，优先复用其 SPADL/xT/VAEP 能力。（评估结果写入 DATA_CONTRACTS.md Section 11）
-- [ ] 明确 StatsBomb 数据引用要求：公开展示研究或图表时必须注明数据源。
+- [x] 明确 StatsBomb 数据引用要求：公开展示研究或图表时必须注明数据源。（api.py `_STATSBOMB_ATTRIBUTION` + 前端 `attribution_required` 已实现）
 
 验收：
 
@@ -465,7 +465,7 @@ player_rating =
 
 目标：让 ScoutFootball 未来可以接入更多 event/tracking 数据，但当前不新增商业数据源，不改变 DuckDB + Parquet 主干。
 
-- [ ] 设计 ScoutFootball internal match/event/tracking schema，字段至少覆盖 match metadata、team/player identity、period/time、coordinates、action type、outcome、freeze frame 可选字段和 source attribution。
+- [x] 设计 ScoutFootball internal match/event/tracking schema，字段至少覆盖 match metadata、team/player identity、period/time、coordinates、action type、outcome、freeze frame 可选字段和 source attribution。（schemas/match.py 已实现 InternalMatch/InternalEvent/TrackingFrame/InternalLineup）
 - [x] 写 docs/DATA_CONTRACTS.md：StatsBomb events、internal actions、SPADL 映射、所有 parquet schema、API 契约已实现。
 - [x] 评估 kloppy：作为直接依赖、离线转换工具或暂不接入三种方案都要给出依赖风险、坐标转换风险和测试成本。（评估结果写入 DATA_CONTRACTS.md Section 10.2）
 - [ ] 参考 floodlight 的 Game/Team/Player/Event/Frame/Segment 抽象，但只有在 tracking 样例数据进入仓库后才考虑代码接入。
@@ -483,7 +483,7 @@ player_rating =
 
 - [x] 新增人工审阅队列：低置信度球员、弱联赛顶端样本、位置重判不确定样本、误差案例球员自动进入 review queue；审阅状态流转（review_status）已实现。
 - [x] 设计 watchlist/shortlist 数据契约，字段包括 `player_id`、`reason_code`、`rating_snapshot_id`、`confidence_level`、`review_status`、`reviewer_note`、`as_of_date`；默认放在 `data/reports/scouting/*.parquet`，缺失时可由评分产物派生只读结果。
-- [ ] 将 Transfermarkt 手动导入、奖项、专家分档、人工校准集统一进入 `player_truth_labels.parquet`，并保留标签来源和置信度。
+- [x] 将 Transfermarkt 手动导入、奖项、专家分档、人工校准集统一进入 `player_truth_labels.parquet`，并保留标签来源和置信度。（transfermarkt_manual.py 已实现 `snapshot_to_truth_labels()`）
 - [ ] Streamlit 后续只读展示 review queue；写入型人工标注先用本地 CSV/Parquet 管理，不直接放进生产页面。
 - [x] 每轮评分优化后输出 watchlist diff：新增、移除、置信度变化、排名变化和触发原因。
 

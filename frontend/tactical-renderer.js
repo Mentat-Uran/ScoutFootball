@@ -54,6 +54,7 @@ const TacticalRenderer = {
     _debugMode: false,             // show FPS counter
     _xtHeatmapData: null,          // xT heatmap data for overlay
     _showXTHeatmap: false,         // toggle xT heatmap visibility
+    _showExportAttribution: false, // draw attribution on canvas during export
 
     /* ── Initialize ─────────────────────────────────────────────────── */
     init(canvasId, project) {
@@ -251,6 +252,11 @@ const TacticalRenderer = {
         // Draw performance warnings (object/frame count)
         this._drawPerformanceWarnings();
 
+        // Draw export attribution when recording or capturing frames
+        if (this._showExportAttribution) {
+            this._drawExportAttribution();
+        }
+
         // Draw FPS counter in debug mode
         if (this._debugMode) {
             this._drawFPSCounter(perfStart);
@@ -336,6 +342,22 @@ const TacticalRenderer = {
             ctx.fillText(msg, w / 2, y + 5);
             y += 28;
         }
+        ctx.restore();
+    },
+
+    /* ── Export attribution (drawn on canvas before PNG/WebM/GIF capture) */
+    _drawExportAttribution() {
+        if (!this.project) return;
+        var ctx = this.ctx;
+        var w = this.canvas.width / (window.devicePixelRatio || 1);
+        var h = this.canvas.height / (window.devicePixelRatio || 1);
+        var attribution = this.project.source_attribution || "ScoutFootball tactical board";
+        ctx.save();
+        ctx.font = "10px Inter, sans-serif";
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(attribution + " \u2014 " + new Date().toISOString().slice(0, 10), w - 10, h - 6);
         ctx.restore();
     },
 
@@ -2737,6 +2759,7 @@ const TacticalRenderer = {
         const dataUrl = this.canvas.toDataURL("image/png");
         this.selectedObject = savedSelection;
         this.render();
+        const attribution = this.project.source_attribution || "ScoutFootball tactical board";
         const w = window.open("", "_blank");
         if (!w) { alert("\u25C6 \u8BF7\u5141\u8BB8\u5F39\u51FA\u7A97\u53E3\u4EE5\u5BFC\u51FAPDF"); return; }
         w.document.write(
@@ -2745,6 +2768,7 @@ const TacticalRenderer = {
             '</head><body>' +
             '<h2 style="font-family:Inter,sans-serif;color:#333">\u6218\u672F\u677F \u2014 Tactical Board</h2>' +
             '<img src="' + dataUrl + '" style="max-width:100%;border:1px solid #ccc;border-radius:4px" />' +
+            '<div style="margin-top:8px;font-size:11px;color:#999;font-family:Inter,sans-serif">' + this._escapeNotesHtml(attribution) + ' \u2014 ' + new Date().toISOString().slice(0, 10) + '</div>' +
             '<script>setTimeout(function(){window.print()},500)<\/script>' +
             '</body></html>'
         );
@@ -2765,7 +2789,9 @@ const TacticalRenderer = {
 
         if (crop === "full" && !transparent) {
             // Simple case: render as-is
+            this._showExportAttribution = true;
             this.render();
+            this._showExportAttribution = false;
             dataUrl = this.canvas.toDataURL("image/png");
         } else {
             // Determine crop region in normalized coordinates (0-100 pitch space)
@@ -2847,7 +2873,9 @@ const TacticalRenderer = {
                     }
                 }
             } else {
+                this._showExportAttribution = true;
                 this.render();
+                this._showExportAttribution = false;
             }
 
             // Create offscreen canvas for cropping
@@ -2927,6 +2955,7 @@ const TacticalRenderer = {
         // Save the original _animate so we can restore after recording
         if (this._isRecording) return;
         this._isRecording = true;
+        this._showExportAttribution = true;
         const self = this;
         const originalAnimate = this._animate.bind(this);
 
@@ -2948,6 +2977,7 @@ const TacticalRenderer = {
         recorder.addEventListener("stop", () => {
             this._animate = originalAnimate;
             this._isRecording = false;
+            this._showExportAttribution = false;
         });
     },
 
@@ -2976,6 +3006,7 @@ const TacticalRenderer = {
         if (savedPlaying) this.stop();
 
         try {
+            this._showExportAttribution = true;
             const gif = new GIF({
                 workers: 2,
                 quality: 10,
@@ -2998,6 +3029,7 @@ const TacticalRenderer = {
 
             gif.on("finished", function (blob) {
                 // Restore state
+                self._showExportAttribution = false;
                 self.animationState.currentFrame = savedFrame;
                 self._loadFrameForCapture(savedFrame);
                 self.render();
@@ -3019,6 +3051,7 @@ const TacticalRenderer = {
             gif.render();
         } catch (e) {
             // Restore state on error
+            this._showExportAttribution = false;
             this.animationState.currentFrame = savedFrame;
             this._loadFrameForCapture(savedFrame);
             this.render();

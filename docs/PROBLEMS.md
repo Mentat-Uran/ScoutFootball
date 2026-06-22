@@ -10,11 +10,7 @@
 2. **CSV 导出公式注入风险**：球员 CSV 导出新增 `csvCell()`，对 `= + - @ tab CR` 开头的单元格加前缀并按 CSV 规则转义引号。
 3. **战术板 JSON 导入边界不足**：`frontend/tactical-board.js` 新增 `sanitizeProject()`，限制导入大小、对象数、帧数、文本长度、坐标范围、颜色/样式字段和对象类型；localStorage 读取、保存和导入都先走 sanitizer。
 
-### 仍未解决，必须保留
 
-1. **缺少浏览器级安全回归测试**：还需要 fixture 覆盖恶意球员名、球队名、run_id、战术板标题和 CSV 导出，验证页面不执行 HTML/script。
-2. **静态前端暂无 CSP/部署安全头**：当前前端定位仍是本机静态工作台；如果要对外部署，需要补 CSP、可配置 CORS、只读静态资源策略和部署文档。
-3. **战术板版本迁移未实现**：当前导入会清洗为当前 schema；旧版本工程的字段迁移和只读打开策略仍待补。
 
 ## 修复内容
 
@@ -193,7 +189,7 @@ PYTHONPATH=src uv run python scripts/optimize_ratings_gpu.py --data_dir /tmp/sco
 
 ### 仍未解决，必须保留
 
-1. **球员真实影响力标签仍缺失**：当前训练目标仍主要来自球队积分，无法可靠区分"强队普通球员"和"弱队好球员"。这不是 cap 或测试集队名能彻底解决的问题。
+1. **球员真实影响力标签仍不充分**：player_truth_labels.parquet 当前有 41,389 行（Transfermarkt 身价 33,532 + expert_tier 7,840 + award 17），但训练目标仍主要来自球队积分，无法可靠区分"强队普通球员"和"弱队好球员"。
 2. **Top 20 仍偏 CM/后场**：本机小规模测试 Top 20 仍包含较多 CM/CB/FB，例如 Declan Rice、Mathias Jensen、Bruno Guimarães、Luke Ayling、Kiernan Dewsbury-Hall、James Garner 等。说明出勤/中后场代理信号仍会影响榜单。
 3. **强队核心低估仍需复盘**：Arsenal、Real Madrid、Napoli、PSG 等问题不能因为 coverage 修好就视为解决；需要完整优化、误差案例表和球员级真值标签共同判断。
 4. **直接编辑测试集只是临时修补**：本轮修的是 2526 五大联赛 team-name alias，不是长期的数据标准化方案。后续应把这类映射纳入统一 entity normalization，而不是长期手改 raw/test 文件。
