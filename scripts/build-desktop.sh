@@ -69,6 +69,8 @@ cp "$PROJECT_DIR/frontend/style.css" frontend/
 cp "$PROJECT_DIR/frontend/app.js" frontend/
 cp "$PROJECT_DIR/frontend/tactical-board.js" frontend/
 cp "$PROJECT_DIR/frontend/tactical-renderer.js" frontend/
+cp "$PROJECT_DIR/frontend/config.js" frontend/
+cp "$PROJECT_DIR/frontend/user-guide.html" frontend/
 
 # Copy frontend static data for offline fallback
 if [ -d "$PROJECT_DIR/frontend/data" ]; then

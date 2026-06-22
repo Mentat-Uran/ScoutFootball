@@ -89,6 +89,8 @@ a = Analysis(
         "tornado",
         "ipykernel",
         "ipywidgets",
+        "pkg_resources",
+        "setuptools",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
