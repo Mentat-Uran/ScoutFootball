@@ -473,7 +473,7 @@ async function _fetchJsonStaticFirst(apiPath, params, fetchOpts) {
             const resp = await fetch(staticUrl, fetchOpts);
             if (resp.ok) {
                 const data = await resp.json();
-                apiOnline = false;
+                // Don't force apiOnline=false; let health check poll determine status
                 _tryRefreshFromApi(apiPath, params, fetchOpts);
                 return data;
             }
@@ -2669,7 +2669,10 @@ function renderActions() {
     // StatsBomb Open Data attribution
     const attrEl = document.getElementById('action-attribution');
     if (attrEl) {
-        attrEl.innerHTML = `\u25C6 ${appState.lang === 'zh' ? '\u6570\u636E\u6765\u6E90' : 'Data source'}: StatsBomb Open Data | github.com/statsbomb/open-data`;
+        const apiAttr = actionData && actionData.attribution_required
+            ? escapeHtml(actionData.attribution_required)
+            : (appState.lang === 'zh' ? '公开展示时必须注明数据来源' : 'Data source must be attributed in any public display');
+        attrEl.innerHTML = `\u25C6 ${appState.lang === 'zh' ? '\u6570\u636E\u6765\u6E90' : 'Data source'}: StatsBomb Open Data | github.com/statsbomb/open-data<br><small>${apiAttr}</small>`;
     }
 
     if (!chart) return;
@@ -2722,6 +2725,10 @@ function renderActions() {
                 TacticalRenderer._showXTHeatmap = true;
                 var toggleBtn = document.getElementById("tactical-toggle-heatmap");
                 if (toggleBtn) toggleBtn.classList.add("active");
+                // Update source_attribution to include StatsBomb when xT data is loaded
+                if (tacticalProject && !tacticalProject.source_attribution.includes("StatsBomb")) {
+                    tacticalProject.source_attribution = "ScoutFootball tactical board + StatsBomb Open Data (xT)";
+                }
                 // Navigate to tactical view
                 switchView("tactical");
                 if (heatmapStatus) heatmapStatus.textContent = appState.lang === "zh" ? "\u5df2\u52a0\u8f7d" : "Loaded on tactical board";
@@ -5256,41 +5263,51 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderActiveView();
 
-    // Check API connection status
+    // Check API connection status (initial + periodic polling)
     const apiPill = document.getElementById("top-api-pill");
-    if (apiPill) {
-        try {
-            const healthResp = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
-            if (healthResp.ok) {
-                apiPill.textContent = "API OK";
-                apiPill.className = "status-pill status-high";
-                apiOnline = true;
-            } else {
-                apiPill.textContent = "API ERR";
-                apiPill.className = "status-pill status-low";
+    function syncApiOfflineBanner() {
+        const existingBanner = document.getElementById("global-demo-banner");
+        if (apiOnline !== false || window.__SCOUTFOOTBALL_DESKTOP__) {
+            if (existingBanner) existingBanner.remove();
+            return;
+        }
+
+        if (existingBanner) return;
+        const demoBanner = document.createElement("div");
+        demoBanner.id = "global-demo-banner";
+        demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff6b6b;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
+        const z = appState.lang === "zh";
+        demoBanner.textContent = z
+            ? "◆ API 离线 — 使用静态缓存数据。启动后端获取实时数据：PYTHONPATH=src uv run python -m scoutfootball serve"
+            : "◆ API Offline — Using cached static data. Start backend for live data: PYTHONPATH=src uv run python -m scoutfootball serve";
+        document.body.prepend(demoBanner);
+    }
+
+    function checkApiStatus() {
+        if (!apiPill) return;
+        fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) })
+            .then((resp) => {
+                if (resp.ok) {
+                    apiPill.textContent = "API OK";
+                    apiPill.className = "status-pill status-high";
+                    apiOnline = true;
+                } else {
+                    apiPill.textContent = "API ERR";
+                    apiPill.className = "status-pill status-low";
+                    apiOnline = false;
+                }
+                syncApiOfflineBanner();
+            })
+            .catch(() => {
+                apiPill.textContent = "OFFLINE";
+                apiPill.className = "status-pill status-medium";
                 apiOnline = false;
-            }
-        } catch {
-            apiPill.textContent = "OFFLINE";
-            apiPill.className = "status-pill status-medium";
-            apiOnline = false;
-        }
+                syncApiOfflineBanner();
+            });
     }
-    // Show global DEMO banner when API is offline (static data is being used)
-    // Desktop app uses bundled real data, not demo data, so skip the banner
-    if (apiOnline === false && !window.__SCOUTFOOTBALL_DESKTOP__) {
-        let demoBanner = document.getElementById("global-demo-banner");
-        if (!demoBanner) {
-            demoBanner = document.createElement("div");
-            demoBanner.id = "global-demo-banner";
-            demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff6b6b;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
-            const z = appState.lang === "zh";
-            demoBanner.textContent = z
-                ? "◆ API 离线 — 使用静态缓存数据。启动后端获取实时数据：PYTHONPATH=src uv run python -m scoutfootball serve"
-                : "◆ API Offline — Using cached static data. Start backend for live data: PYTHONPATH=src uv run python -m scoutfootball serve";
-            document.body.prepend(demoBanner);
-        }
-    }
+    checkApiStatus();
+    // Poll every 10s so backend coming online is detected automatically
+    setInterval(checkApiStatus, 10000);
 
     // Initialize World Cup — already started in parallel above, just await completion
     await wcInitPromise;

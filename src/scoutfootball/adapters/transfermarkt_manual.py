@@ -164,3 +164,46 @@ def _sha256_file(path: Path) -> str:
     import hashlib
 
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def snapshot_to_truth_labels(
+    path: str | Path,
+    season: str,
+    confidence: str = "medium",
+) -> pd.DataFrame:
+    """Import a Transfermarkt snapshot and convert to truth labels format.
+
+    This is the bridge between the manual Transfermarkt importer and the
+    player_truth_labels.parquet schema used by the rating optimizer.
+
+    Args:
+        path: Path to the local CSV or Parquet snapshot.
+        season: Season identifier (e.g., "2526").
+        confidence: Confidence level ("high", "medium", "low").
+            Transfermarkt market values are proxy labels, so "medium" is default.
+
+    Returns:
+        DataFrame matching the player_truth_labels schema.
+    """
+    result = load_snapshot(path)
+    df = result.dataframe
+
+    today = datetime.now(tz=UTC).strftime("%Y-%m-%d")
+    labels = pd.DataFrame({
+        "player_id": df["player_name"].astype("string"),
+        "season": season,
+        "label_source": "transfermarkt_value",
+        "label_confidence": confidence,
+        "label_value": df["market_value"].astype("float64"),
+        "as_of_date": today,
+        "position_scope": "all",
+        "manual_review_flag": False,
+    })
+
+    # Validate using truth_labels module
+    from scoutfootball.evaluation.truth_labels import validate_truth_labels
+    errors = validate_truth_labels(labels)
+    if errors:
+        raise ValueError(f"Truth labels validation failed: {'; '.join(errors)}")
+
+    return labels
