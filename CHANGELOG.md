@@ -2,6 +2,16 @@
 
 All notable changes to ScoutFootball will be documented in this file.
 
+## [Unreleased]
+
+### Frontend
+
+- Restored the Scouting and Action Value navigation entries after fixing their pending payload bugs.
+- Scouting now preserves the current queue contract, supports search/status filters, local review workflow, explicit snapshots, CSV export, and merged local watchlist/shortlist selections.
+- Action Value now supports the current xT/VAEP payloads, model/search/competition/minutes filters, sample summaries, low-sample warnings, and guarded tactical-board handoff.
+- Plain static servers now fall back to mapped `frontend/data/` snapshots after API-route 404 responses.
+- Added frontend feature contract tests and synchronized the roadmap, status, API/static sync, task, agent, and user documentation.
+
 ## [1.0.2] - 2026-06-13
 
 ### Changed

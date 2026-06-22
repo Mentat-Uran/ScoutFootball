@@ -68,19 +68,20 @@ chmod +x scripts/start.sh
 | Value Deviation | 身价 | `/value-summary` |
 | Score Matrix | 预测 | `/prediction/{home}/{away}` |
 | Match Prediction | 预测 | `/prediction/{home}/{away}` |
-| World Cup Schedule/Squads/Compare/Probability | 无 | 🆕 世界杯模块 |
+| World Cup Schedule/Squads/Compare/Probability | 世界杯四视图 | `/world-cup/*`, `/worldcup/teams` |
 | - | 总览 | `/artifacts`, `/health`, `/ratings/meta` |
-| - | 球探 | `/review-queue`, `/teams` |
-| - | 动作价值 | 待实现 |
-| - | 报告 | `/model-runs` |
+| Scouting Queue | 球探 | `/review-queue`, `/watchlist`, `/shortlist` |
+| Action Value | 动作价值 | `/action-values` |
+| - | 报告 | `/reports/model-runs` |
 
 ---
 
 ## 💾 数据准备
 
-### 已有数据 (demo 模式可运行)
-- 无需数据即可启动，自动使用 demo 数据
-- 但功能受限
+### 跟踪静态快照
+- 无需启动 API 即可用 `python -m http.server 8601 --directory frontend` 打开发布快照。
+- 有映射的 API 路径会回退到 `frontend/data/`；这是缓存数据，不是实时数据。
+- 需要最新本地产物、动态球员详情或可选 MP4 导出时，启动 FastAPI。
 
 ### 完整数据准备
 ```bash

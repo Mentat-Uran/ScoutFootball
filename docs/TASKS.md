@@ -209,8 +209,10 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 ### 前端长期功能和后端配套
 
+中长期顺序、阶段门槛和非目标见 `docs/ROADMAP.md`；本文件继续作为唯一任务状态真源。
+
 - [x] 全局数据状态页读取 artifact registry，显示产物更新时间、行数、数据源类型、联赛覆盖率和 confidence gate 已实现。
-- 当前已接入 artifact registry、更新时间、行数和 data source label；license attribution 与 confidence gate 仍待补齐。
+- [x] artifact registry、更新时间、行数、data source label、license attribution 与 confidence gate 已接入。
 - [x] 球员画像页接入 player profile API：模糊搜索、分页、位置/赛季过滤、CSV 导出、xT 摘要、置信度原因、评分快照历史已实现。
 - [x] 球员画像页补完整个人信息卡：赛季趋势、低置信度原因、数据来源、位置百分位、缺失字段列表已实现。
 - [x] 球员列表补 watchlist/shortlist/战术板操作：每行 3 个动作按钮（□/△/◎），localStorage 存储已实现。
@@ -219,15 +221,29 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 比赛预测页统一 Score Matrix 和 Match Prediction 后端逻辑：模型对比（Poisson vs Dixon-Coles）、log-loss、coverage gate 已实现。
 - [x] 比赛预测页补校准视图：Dixon-Coles 参数、coverage gate 警告、低比分分析、Brier/RPS 指标已实现。
 - [x] 球探页接入 review queue/watchlist/shortlist 只读契约；当前优先读取 `data/reports/scouting/*.parquet`，缺失时从评分产物派生只读队列。
-- [x] 动作价值页已切到 `player_value_metrics.parquet` 的真实 StatsBomb 样本；仍明确标注为样本页，不写成全量动作价值能力。
+- [x] 动作价值页接入 15,062 行 xT + VAEP 产物；仍明确标注为 StatsBomb 样本，不写成全量联赛能力。
 - [x] 动作价值页补 StatsBomb Open Data attribution 已实现。
 - [x] 报告页接入 model-run registry：展开/折叠详情、复制命令、依赖版本显示已实现。
-- 当前已接入 model-run registry 的 `run_id`、`input_hash`、Spearman/Pearson 等基础指标；随机种子、参数和误差案例仍待补齐。
+- [x] model-run registry 已展示 `run_id`、`input_hash`、随机种子、参数、训练/测试切分、Spearman/Pearson 和特征重要性。
 - [x] 报告页补完整模型运行详情：参数完整列表、随机种子、训练/测试赛季切分、特征重要性 Top 5 已实现。
 - [x] FastAPI 增加 typed read-only endpoints：`/artifacts`、`/players/{player_name}`、`/ratings/snapshots`、`/predictions/{home}/{away}`、`/predictions/meta`、`/review-queue`、`/watchlist`、`/shortlist`、`/action-values`、`/reports/model-runs`；兼容旧路由别名。
 - [x] 前端浏览器级安全回归测试已完成：XSS 测试覆盖恶意球员名/队名/报告 run_id/战术板标题/CSV 公式注入。
 - [x] 前端已补 CSP meta tag、SRI（echarts CDN）和 X-Content-Type-Options 安全头；CORS 已支持 SCOUTFOOTBALL_CORS_ORIGINS 环境变量配置。
 - [x] 世界杯页接入真实评分数据：球员名与评分匹配、覆盖率摘要、未匹配球员 N/A 显示已实现。
+
+### P1.1：球探与动作价值恢复和稳定化（2026-06-23）
+
+- [x] 恢复侧栏“球探”和“动作价值”入口，移除临时 `display:none`。
+- [x] 修复球探 `player_name` 契约错配，保留 reason/status/note/date/snapshot 字段。
+- [x] 球探增加搜索、状态筛选、显式快照、复核队列 CSV 导出，并合并球员页 localStorage 手动选择。
+- [x] 修复动作价值旧字段与现行 `xt_per_90`/`vaep_per_90` 契约错配及未定义变量异常。
+- [x] 动作价值增加 xT/VAEP 切换、赛事/分钟/搜索筛选、摘要、小样本提示和战术板能力门控。
+- [x] 修复纯静态服务器 404 阻断 `frontend/data/` 回退的问题。
+- [x] 增加 `test_frontend_feature_contracts.py`，覆盖入口、字段、静态回退和工作台控件。
+- [ ] 将球探/动作价值真实浏览器流程加入 CI，覆盖 API、静态、空数据和移动断点。
+- [ ] review queue 增加分页或虚拟列表，避免一次渲染 200+ 卡片。
+- [ ] 建立版本化 scouting workspace 导入/导出和审计字段；正式回灌前不增加生产写 API。
+- [ ] 补齐 VAEP `player_id -> player_name/team/season` 映射与未映射覆盖率。
 
 验收：
 
@@ -310,7 +326,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 支持动画事件标记：press/pass/shot/turnover/overlap/underlap/third-man/cover 8 种类型已实现。
 - [x] 支持战术片段结构：phase/trigger/roles 字段 + phase 图标 + phase 过滤已实现。
 - [x] 支持演示模式：全屏播放、自动播放动画、帧备注叠加、ESC 退出已实现。
-- [ ] 动画只在浏览器里播放；不在浏览器里运行训练、爬虫、批量视频转码或模型推理。
+- [x] 动画只在浏览器里播放；浏览器不运行训练、爬虫、批量视频转码或模型推理。
 
 ### 第三切片：导出、报告和后端契约
 
@@ -318,7 +334,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 支持 PDF 导出：通过浏览器打印窗口导出当前画布为可打印 PDF。
 - [x] 支持 WebM 动画导出：优先用 `canvas.captureStream` + `MediaRecorder`；导出失败时给出清晰降级提示。
 - [x] MP4 导出只作为可选本地后端能力：需检测 ffmpeg 是否存在，输出到 `data/reports/tactical_exports/`，没有 ffmpeg 时不报错，只保留 WebM。（已实现 `/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）
-- [ ] GIF 导出作为低优先级增强，只有 WebM 稳定后再评估体积、画质和浏览器兼容性。
+- [x] GIF 导出已通过 gif.js 实现，并保留 WebM 为主要动画格式。
 - [x] 导出裁切和版式：full/half-left/half-right/center-16:9/square-1:1 裁切 + 透明背景已实现。
 - [x] 打印模式：多帧 PDF + 备注 + 球员图例 + source attribution 已实现。
 - [ ] 分享方式：本地 JSON 文件、浏览器下载、剪贴板图片、只读演示链接（后置）、报告页嵌入；云同步和公开分享默认不做。
@@ -332,7 +348,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 - [x] 从球员画像页发送球员到战术板，自动带入姓名、号码、位置和评分数据已实现。
 - [x] 从比赛预测页创建赛前方案：主客队阵型、预测比分矩阵、模型版本和 coverage 作为战术板元数据已实现。
-- [ ] 从 P2 动作价值产物读取样例热区或 xT 区域，仅作为背景参考；P2 稳定前不能写成全量动作价值战术建议。
+- [x] 从 P2 动作价值产物读取样例 xT 热区作为背景参考，并保留 StatsBomb attribution；不写成全量动作价值战术建议。
 - [x] 从 watchlist/shortlist 读取备注，生成战术角色说明（位置/层级/工作量）已实现。
 - [x] 从国家队/世界杯页创建队伍模板：4-3-3 阵型 + 球员姓名/号码已实现。
 - [x] 支持战术板上显示球员评分 badge（颜色编码：绿/黄/红），可通过按钮切换显示/隐藏。
@@ -395,7 +411,7 @@ player_rating =
 ```
 
 - [x] 把 xT 聚合结果接入评分解释层：xT_per_90、percentile、contribution 已实现。
-- [ ] VAEP 在 xT 稳定后再做，不抢先实现。
+- [x] VAEP 已在 xT 稳定后实现；当前 6,771 行球员赛季数据，身份映射与前端下钻仍需继续完善。
 - [x] 各维度置信度：position_explanation 每维度包含 confidence level 已实现。
 - [x] 按位置输出进攻/防守/控球/出勤/质量解释：position_explanation API 字段已实现。
 - [x] 新增第一版神经网络候选模型入口：`src/scoutfootball/models/player_rating_nn.py` 使用现有 scikit-learn MLPRegressor，读取 `rating_feature_matrix.parquet` 和 `player_truth_labels.parquet`，按赛季时间切分，并与 `player_ratings_optimized` baseline 对比。
@@ -484,7 +500,7 @@ player_rating =
 - [x] 新增人工审阅队列：低置信度球员、弱联赛顶端样本、位置重判不确定样本、误差案例球员自动进入 review queue；审阅状态流转（review_status）已实现。
 - [x] 设计 watchlist/shortlist 数据契约，字段包括 `player_id`、`reason_code`、`rating_snapshot_id`、`confidence_level`、`review_status`、`reviewer_note`、`as_of_date`；默认放在 `data/reports/scouting/*.parquet`，缺失时可由评分产物派生只读结果。
 - [x] 将 Transfermarkt 手动导入、奖项、专家分档、人工校准集统一进入 `player_truth_labels.parquet`，并保留标签来源和置信度。（transfermarkt_manual.py 已实现 `snapshot_to_truth_labels()`）
-- [ ] Streamlit 后续只读展示 review queue；写入型人工标注先用本地 CSV/Parquet 管理，不直接放进生产页面。
+- [x] Streamlit 已只读展示 review queue；写入型人工标注继续使用本地 CSV/Parquet，不直接放进生产页面。
 - [x] 每轮评分优化后输出 watchlist diff：新增、移除、置信度变化、排名变化和触发原因。
 
 验收：

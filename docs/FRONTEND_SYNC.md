@@ -1,90 +1,75 @@
-# 前后端三组件统一同步分析
+# 前端、API 与静态快照同步规范
 
-## 1. 架构现状
+> 更新日期：2026-06-23。本文件规定同步方式，不记录任务完成状态。
 
-### 三个组件关系图
+## 1. 组件边界
 
+| 组件 | 读取方式 | 允许职责 | 禁止职责 |
+| --- | --- | --- | --- |
+| Liquid Glass `frontend/` | FastAPI 优先，静态 JSON 回退 | 只读分析、筛选、导出、localStorage 轻量状态、战术板 | 训练、爬取、批处理、把样本写成全量结论 |
+| Streamlit | `data_loader.py` 读取本地产物 | 研究页面、诊断、模型报告 | 隐式修改训练产物 |
+| FastAPI | `api.py` + `data_loader.py` | typed read-only endpoints、能力探测、可选本地导出 | 未版本化的任意写入 |
+| 静态快照 | `frontend/data/` | 发布演示、离线/静态回退 | 作为实时数据或用户写入存储 |
+| 数据层 | DuckDB + Parquet | 数据真源、模型与报告产物 | 依赖浏览器状态作为真源 |
+
+## 2. 视图契约
+
+| 视图 | API | 静态文件 | 关键边界 |
+| --- | --- | --- | --- |
+| 总览 | `/artifacts`, `/health`, `/ratings/meta` | `artifacts.json`, `health.json`, `ratings_meta.json` | 行数、更新时间、来源、coverage 必须同时展示 |
+| 球员 | `/ratings`, `/players/{name}` | `ratings.json`, `player_profiles/*.json` | 位置内比较；缺字段不能当作 0 |
+| 身价 | `/value-summary` | `value_summary.json` | OOF 与估算值必须区分 |
+| 预测 | `/predictions/*`, `/predictions/calibration` | `predictions_*.json` | 模型版本、coverage、Brier/RPS |
+| 球探 | `/review-queue`, `/watchlist`, `/shortlist` | 对应三个 JSON | 服务端只读；浏览器状态不是正式审计记录 |
+| 动作价值 | `/action-values` | `action_values.json` | xT/VAEP schema、样本量、分钟门槛、StatsBomb attribution |
+| 报告 | `/reports/model-runs` | `model_runs.json` | 输入 hash、随机种子、参数、指标 |
+| 世界杯 | `/world-cup/*`, `/worldcup/teams` | `data/worldcup/**` | 真实/估算/缺失状态必须明确 |
+
+## 3. API 与静态回退规则
+
+1. 本地/LAN 默认 API-first；Vercel 和桌面包可以 static-first。
+2. `_staticUrlFor()` 有映射时，API 网络失败、5xx 或纯静态服务器产生的 404 都可以回退。
+3. 无静态映射的 4xx 必须保留错误语义，不得用不相关 JSON 掩盖。
+4. 回退数据必须与 API 返回使用同一字段名和空值语义。
+5. 页面必须显示 API 在线/离线以及静态缓存提示，不能把静态快照称为实时数据。
+
+## 4. 契约变更流程
+
+任何 payload 字段新增、改名或删除都必须同时完成：
+
+1. 更新 `src/scoutfootball/api.py` 或对应 typed model。
+2. 更新 `scripts/export_static_frontend_data.py`。
+3. 重新生成或验证 `frontend/data/` 快照。
+4. 更新前端读取与空状态。
+5. 更新 `docs/DATA_CONTRACTS.md` 和本文件的映射。
+6. 增加契约测试；字段迁移期同时兼容新旧键，并记录移除期限。
+
+当前动作价值兼容策略：主契约使用 `xt_per_90` / `vaep_per_90`，仅对 legacy `player_value_metrics` 保留 `xT_per_90` 读取。当前球探主契约使用 `player_name`，不得再次退回 `player`。
+
+## 5. 前端状态与持久化
+
+- 服务端队列、模型运行和动作价值为只读数据。
+- 复核状态、备注、手动 watchlist/shortlist 和战术板工程可以先存 localStorage，但 UI 必须标记“本地状态”。
+- localStorage schema 改动必须提供版本和迁移；重要人工结果需要显式导出，不能承诺跨设备或永久保存。
+- 正式回灌模型的人工标签必须经过命令行导入和 schema 校验，进入 Parquet 产物并记录来源。
+
+## 6. 视觉与交互规范
+
+- 沿用现有 Liquid Glass token，不在单页引入第二套色板、圆角或阴影体系。
+- 信息层级优先：来源/覆盖边界、筛选、主要结论、明细、空状态。
+- 交互必须有键盘焦点、44px 移动触控目标、可读标签和 `aria-live` 状态反馈。
+- 不用 hover 作为唯一提示；不使用 emoji 作为导航图标；动态图表必须有文本摘要。
+- 小样本、低覆盖和未映射实体必须显式显示，不能静默参与强排序。
+
+## 7. 最低验证集
+
+```bash
+node --check frontend/app.js
+node --check frontend/tactical-board.js
+node --check frontend/tactical-renderer.js
+uv run pytest tests/unit/test_frontend_feature_contracts.py -q
+uv run pytest tests/unit/test_frontend_security.py -q
+uv run pytest tests/integration/test_api_endpoints.py -q
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    ScoutFootball 项目                     │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────────────┐      ┌───────────────────────┐ │
-│  │   Streamlit 前端      │      │  Liquid Glass 前端    │ │
-│  │   (12个页面)          │      │   (7个视图)           │ │
-│  │   直接读本地数据      │      │   通过API/mock        │ │
-│  └──────────────┬───────┘      └───────────┬───────────┘ │
-│                 │                           │            │
-│                 └──────────────┬────────────┘            │
-│                                │                         │
-│                  ┌─────────────▼─────────────┐          │
-│                  │    FastAPI 后端服务       │          │
-│                  │  api_server.py + api.py   │          │
-│                  │     + data_loader.py      │          │
-│                  └─────────────┬─────────────┘          │
-│                                │                         │
-│                  ┌─────────────▼─────────────┐          │
-│                  │    本地数据仓库           │          │
-│                  │  Parquet / DuckDB        │          │
-│                  └───────────────────────────┘          │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
 
-## 2. 视图映射关系
-
-### 两个前端与后端的对应表
-
-| Liquid Glass 视图 | Streamlit 页面 | 后端 API | 状态 |
-|------------------|--------------|---------|------|
-| 总览 | 无 | `/artifacts`, `/health`, `/ratings/meta` | ✅ API 已有 |
-| 球员 | Player Comparison, Position Percentiles, Player Rankings | `/ratings`, `/player/{name}/profile` | ✅ API 已有 |
-| 身价 | Value Scatter, Value Deviation | `/value-summary` | ✅ API 已有 |
-| 预测 | Score Matrix, Match Prediction | `/prediction/{home}/{away}` | ✅ API 已有 |
-| 球探 | 无 | `/review-queue`, `/teams` | ✅ API 已有 |
-| 动作价值 | 无 | 待定 | ⚠️ 待实现 |
-| 报告 | 无 | `/model-runs` | ✅ API 已有 |
-| - | World Cup Schedule/Squads/Compare/Probability | 待定 | 🆕 世界杯模块 |
-
-## 3. 发现的冲突点
-
-### 3.1 数据源不一致
-
-| 组件 | 数据源 | 问题 |
-|-----|--------|-----|
-| Streamlit | 直接调用 `data_loader.py` | 需要同时兼容 demo/真实数据 |
-| Liquid Glass | Mock 数据 + API 占位 | 需要正确连接到 API |
-| 后端 API | 统一 `data_loader.py` | 已有，但需要完善端点 |
-
-### 3.2 功能覆盖差异
-
-- **Streamlit 独有功能**：世界杯 4 个页面、Player Comparison、Trends
-- **Liquid Glass 独有布局**：7 视图分析工作台、数据健康看板
-- **API 已有但未完全使用**：Model Runs、Review Queue
-
-### 3.3 命名不一致
-
-| Streamlit | Liquid Glass | 说明 |
-|-----------|--------------|-----|
-| Value vs Performance | 身价偏离 | 同一功能 |
-| Score Matrix | 比分矩阵 | 同一功能 |
-| Player Rankings | 球员池 | 同一功能 |
-
-## 4. 统一解决方案
-
-### 4.1 数据源统一
-
-1. **Streamlit 保持现状**：直接使用 `data_loader.py`，这是最直接高效的方式
-2. **Liquid Glass 完善 API 连接**：让它真正连接到 `/api/*` 端点
-3. **数据加载统一**：两个前端最终都通过 `data_loader.py` 的逻辑
-
-### 4.2 功能双向补充
-
-1. **Streamlit 增加**：Model Runs 页面、Review Queue 页面
-2. **Liquid Glass 增加**：世界杯相关视图（或标记为 beta）
-3. **API 端点完善**：补充世界杯数据接口
-
-### 4.3 启动方式统一
-
-1. **统一启动脚本**：可以选择启动 API + Liquid Glass，或者只启动 Streamlit
-2. **API 服务同时提供**：FastAPI 提供数据 + 静态文件服务
+浏览器至少验证：API 在线、纯静态回退、球探筛选与状态流转、xT/VAEP 切换、760px 以下布局、空数据和 StatsBomb attribution。
