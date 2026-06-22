@@ -3288,6 +3288,7 @@ function bindEvents() {
     document.getElementById("theme-toggle").addEventListener("click", () => {
         document.body.classList.toggle("dark-mode");
         document.getElementById("theme-toggle").textContent = document.body.classList.contains("dark-mode") ? "☾" : "☀";
+        localStorage.setItem("sf-theme", document.body.classList.contains("dark-mode") ? "dark" : "light");
         refreshAllChartColors();
         renderActiveView();
     });
@@ -5399,6 +5400,12 @@ function renderTacticalFrameList() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // Restore theme preference
+    const savedTheme = localStorage.getItem("sf-theme");
+    if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        document.body.classList.add("dark-mode");
+        document.getElementById("theme-toggle").textContent = "☾";
+    }
     applyLocale();
     renderMatchSelectors();
     // Start WC init early — it runs in parallel with other API calls
