@@ -35,10 +35,8 @@ _STATIC_FILES: list[tuple[str, list[str]]] = [
     ("ratings_meta.json", ["model_meta", "league_metrics"]),
     ("model_runs.json", ["runs"]),
     ("value_summary.json", ["status", "sample_count", "fairness_distribution"]),
-    # NOTE: health.json and players_list.json are currently Python repr strings,
-    # not valid JSON dicts. This is a known export bug — see BUG-001 below.
-    # ("health.json", []),
-    # ("players_list.json", ["player_count", "players"]),
+    ("health.json", []),
+    ("players_list.json", ["player_count", "players"]),
     ("teams.json", ["teams"]),
 ]
 
@@ -96,55 +94,3 @@ class TestStaticJsonNoNullTopLevel:
             return
         non_null_count = sum(1 for v in data.values() if v is not None)
         assert non_null_count > 0, f"{filename} has all null values — likely broken export"
-
-
-# ---------------------------------------------------------------------------
-# BUG-001: health.json and players_list.json are Python repr, not JSON
-# ---------------------------------------------------------------------------
-
-
-class TestKnownExportBugs:
-    """Track known bugs in static JSON export.
-
-    These tests document bugs that exist in the current export pipeline.
-    When the bugs are fixed, these tests should be updated and the files
-    re-added to _STATIC_FILES above.
-    """
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "BUG-001: health.json is a Python repr string "
-            "(HealthResponse(...)), not a valid JSON dict. "
-            "Root cause: export_static_frontend_data.py uses "
-            "str(response) instead of response.model_dump() "
-            "for Pydantic dataclass responses. "
-            "Fix: change serialization in export script, then re-export."
-        ),
-    )
-    def test_health_json_is_valid_dict(self) -> None:
-        path = _FRONTEND_DATA / "health.json"
-        if not path.exists():
-            pytest.skip("health.json not found")
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        assert isinstance(data, dict), "health.json should be a JSON dict"
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "BUG-001: players_list.json is a Python repr string "
-            "(PlayerListResponse(...)), not a valid JSON dict. "
-            "Root cause: export_static_frontend_data.py uses "
-            "str(response) instead of response.model_dump() "
-            "for Pydantic dataclass responses. "
-            "Fix: change serialization in export script, then re-export."
-        ),
-    )
-    def test_players_list_json_is_valid_dict(self) -> None:
-        path = _FRONTEND_DATA / "players_list.json"
-        if not path.exists():
-            pytest.skip("players_list.json not found")
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        assert isinstance(data, dict), "players_list.json should be a JSON dict"
