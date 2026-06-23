@@ -1,14 +1,16 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub release after build'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 permissions:
   contents: write
@@ -94,7 +96,7 @@ jobs:
   create-release:
     needs: release
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true'
 
     steps:
       - uses: actions/checkout@v4
