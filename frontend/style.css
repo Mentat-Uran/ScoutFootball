@@ -409,6 +409,20 @@ body.dark-mode .mesh-bg {
     background: var(--glass-bg-hover);
 }
 
+.scout-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    gap: 8px;
+}
+
+.scout-page-btns {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .scout-badge {
     display: inline-flex;
     align-items: center;
