@@ -5,11 +5,6 @@ on:
     # Every day at 00:00 UTC (08:00 Beijing time)
     - cron: "0 0 * * *"
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "src/scoutfootball/**"
-      - "data/**"
 
 permissions:
   issues: write

@@ -2,11 +2,6 @@ name: Optimize ratings GPU artifacts
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/optimize-ratings-gpu.yml"
 
 permissions:
   contents: write

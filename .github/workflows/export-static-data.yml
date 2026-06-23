@@ -1,14 +1,6 @@
 name: Export static frontend data
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/scoutfootball/**"
-      - "data/**"
-      - "scripts/export_static_frontend_data.py"
-      - "frontend/**"
-      - ".github/workflows/export-static-data.yml"
   workflow_dispatch:
   schedule:
     # Every day at 05:00 UTC (13:00 Beijing time) — before daily-data-sync at 06:00
