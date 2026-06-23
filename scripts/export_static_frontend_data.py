@@ -55,11 +55,13 @@ def _team_slug(team_name: str) -> str:
 
 
 def _clean(obj: object) -> object:
-    """Recursively convert numpy scalars / NaN / inf to JSON-safe values.
+    """Recursively convert objects to JSON-safe values.
 
-    Re-implements a safe subset of scoutfootball.api._clean_json_value so the
-    script can run without importing the full package from a subprocess.
+    Handles Pydantic v1/v2 models, dataclasses, numpy/pandas scalars,
+    NaN/inf, and standard containers.  Raises TypeError for objects
+    that cannot be safely serialized instead of falling back to str().
     """
+    import dataclasses
     try:
         import numpy as np
     except ImportError:
@@ -100,8 +102,19 @@ def _clean(obj: object) -> object:
     if pd is not None:
         if obj is pd.NA or getattr(obj, "name", None) == "NaT":
             return None
-    # Fallback: try string representation
-    return str(obj)
+    # Pydantic v2 model
+    if hasattr(obj, "model_dump"):
+        return _clean(obj.model_dump(mode="json"))
+    # Pydantic v1 model
+    if hasattr(obj, "dict") and hasattr(obj, "__fields__"):
+        return _clean(obj.dict())
+    # dataclass
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return _clean(dataclasses.asdict(obj))
+    raise TypeError(
+        f"Cannot safely serialize {type(obj).__name__!r} object to JSON. "
+        f"Add a handler or convert before passing to _clean()."
+    )
 
 
 def _write_json(path: Path, payload: object) -> None:
