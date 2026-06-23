@@ -429,6 +429,7 @@ const API_BASE = window.__SCOUTFOOTBALL_API__
         ? "https://scoutfootball-for-world-cup.onrender.com"
         : window.location.origin);
 let apiOnline = null; // null=unknown, true=online, false=offline
+let usingStaticData = false; // true when static fallback was used
 
 // Team name → filename slug (must match scripts/export_static_frontend_data.py)
 function _teamSlug(name) {
@@ -545,12 +546,14 @@ async function _fetchJsonApiFirst(apiPath, params, fetchOpts) {
             const resp = await fetch(staticUrl, fetchOpts);
             if (resp.ok) {
                 apiOnline = false;
+                usingStaticData = true;
                 return resp.json();
             }
         } catch (_) {}
     }
 
     apiOnline = false;
+    usingStaticData = false;
     throw new Error("api_and_static_unavailable");
 }
 
@@ -565,6 +568,7 @@ let modelRuns = { count: 0, runs: [] };
 let watchlistData = [];
 let shortlistData = [];
 let actionValueSummary = { status: "no_data", players: [], metrics: {} };
+let dataLoadErrors = new Set(); // tracks which data sources failed to load
 
 async function fetchRatings(position, league) {
     const params = new URLSearchParams();
@@ -622,6 +626,7 @@ async function fetchRatings(position, league) {
         return rawPlayers;
     } catch (err) {
         console.warn("Failed to fetch ratings:", err);
+        dataLoadErrors.add("ratings");
         return getDemoPlayers();
     }
 }
@@ -696,6 +701,7 @@ async function fetchActionValues() {
         return await fetchJson("/action-values");
     } catch (err) {
         console.warn("Failed to fetch action values:", err);
+        dataLoadErrors.add("action-values");
         return { status: "no_data", players: [], metrics: {} };
     }
 }
@@ -779,6 +785,12 @@ function csvCell(value) {
     const raw = String(value ?? "");
     const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
     return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function safeNum(value, decimals) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "–";
+    return n.toFixed(decimals != null ? decimals : 1);
 }
 
 function confidenceClass(confidence) {
@@ -1433,17 +1445,17 @@ function renderValue() {
             fhtml += '<div class="wc-metric-row" style="display:flex;flex-wrap:wrap;gap:0.8rem;padding:0.5rem 0">';
             if (metrics.oof_residual != null || metrics.mae != null) {
                 const val = metrics.oof_residual ?? metrics.mae;
-                fhtml += `<div class="wc-metric"><span class="metric-value">${Number(val).toFixed(3)}</span><span>${escapeHtml(t('oof_residual_label'))}</span></div>`;
+                fhtml += `<div class="wc-metric"><span class="metric-value">${safeNum(val, 3)}</span><span>${escapeHtml(t('oof_residual_label'))}</span></div>`;
             }
             if (metrics.league_bias != null) {
-                fhtml += `<div class="wc-metric"><span class="metric-value">${Number(metrics.league_bias).toFixed(3)}</span><span>${escapeHtml(t('league_bias_label'))}</span></div>`;
+                fhtml += `<div class="wc-metric"><span class="metric-value">${safeNum(metrics.league_bias, 3)}</span><span>${escapeHtml(t('league_bias_label'))}</span></div>`;
             }
             if (metrics.position_bias != null) {
-                fhtml += `<div class="wc-metric"><span class="metric-value">${Number(metrics.position_bias).toFixed(3)}</span><span>${escapeHtml(t('position_bias_label'))}</span></div>`;
+                fhtml += `<div class="wc-metric"><span class="metric-value">${safeNum(metrics.position_bias, 3)}</span><span>${escapeHtml(t('position_bias_label'))}</span></div>`;
             }
             if (metrics.age_curve_coeff != null || metrics.age_curve != null) {
                 const val = metrics.age_curve_coeff ?? metrics.age_curve;
-                fhtml += `<div class="wc-metric"><span class="metric-value">${Number(val).toFixed(3)}</span><span>${escapeHtml(t('age_curve_label'))}</span></div>`;
+                fhtml += `<div class="wc-metric"><span class="metric-value">${safeNum(val, 3)}</span><span>${escapeHtml(t('age_curve_label'))}</span></div>`;
             }
             if (sampleCount) {
                 fhtml += `<div class="wc-metric"><span class="metric-value">${sampleCount}</span><span>samples</span></div>`;
@@ -2042,6 +2054,7 @@ async function fetchReviewQueue() {
         }));
     } catch (err) {
         console.warn("Failed to fetch review queue:", err);
+        dataLoadErrors.add("review-queue");
         return [];
     }
 }
@@ -2052,6 +2065,7 @@ async function fetchWatchlist() {
         return data.players || [];
     } catch (err) {
         console.warn("Failed to fetch watchlist:", err);
+        dataLoadErrors.add("watchlist");
         return [];
     }
 }
@@ -2062,6 +2076,7 @@ async function fetchShortlist() {
         return data.players || [];
     } catch (err) {
         console.warn("Failed to fetch shortlist:", err);
+        dataLoadErrors.add("shortlist");
         return [];
     }
 }
@@ -2097,10 +2112,16 @@ function renderScouting() {
     }
     sortBarHtml += "</div>";
 
-    // Review queue
+    // Review queue (paginated)
+    const totalPages = Math.max(1, Math.ceil(sortedQueue.length / SCOUT_PAGE_SIZE));
+    if (scoutCurrentPage > totalPages) scoutCurrentPage = totalPages;
+    const pageStart = (scoutCurrentPage - 1) * SCOUT_PAGE_SIZE;
+    const pageEnd = Math.min(pageStart + SCOUT_PAGE_SIZE, sortedQueue.length);
+    const pageItems = sortedQueue.slice(pageStart, pageEnd);
+
     let reviewHtml = sortBarHtml;
     if (sortedQueue.length > 0) {
-        for (const p of sortedQueue) {
+        for (const p of pageItems) {
             const pKey = p.player_name || p.name || "";
             const statusKey = queueStatusKey(p);
             const status = getQueueStatus(p);
@@ -2117,12 +2138,27 @@ function renderScouting() {
                     </div>
                     <div style="display:flex;gap:6px;align-items:center">
                         <button class="status-pill status-clickable ${statusClass}" data-queue-status="${escapeAttr(statusKey)}" title="${escapeHtml(t("status_" + status))}" type="button">${icon} ${escapeHtml(t("status_" + status))}</button>
-                        <span class="status-pill ${confidenceClass(conf)}">${Number(p.optimized_score || p.score || 0).toFixed(1)} · ${escapeHtml(conf)}</span>
+                        <span class="status-pill ${confidenceClass(conf)}">${safeNum(p.optimized_score || p.score || 0)} · ${escapeHtml(conf)}</span>
                     </div>
                 </div>`;
         }
+        // Pagination controls
+        if (totalPages > 1) {
+            reviewHtml += `<div class="scout-pagination">
+                <span class="rank-meta">${pageStart + 1}-${pageEnd} / ${sortedQueue.length}</span>
+                <div class="scout-page-btns">
+                    <button class="text-button" id="scout-prev-page" type="button" ${scoutCurrentPage <= 1 ? 'disabled style="opacity:0.4"' : ''}>&#9664;</button>
+                    <span class="rank-meta">${scoutCurrentPage} / ${totalPages}</span>
+                    <button class="text-button" id="scout-next-page" type="button" ${scoutCurrentPage >= totalPages ? 'disabled style="opacity:0.4"' : ''}>&#9654;</button>
+                </div>
+            </div>`;
+        }
     } else {
-        reviewHtml += `<div style="color:var(--text-muted);text-align:center;padding:1rem">${escapeHtml(appState.lang === "zh" ? "当前筛选没有复核对象" : "No review items match the current filters")}</div>`;
+        const loadFailed = dataLoadErrors.has("review-queue");
+        const emptyMsg = loadFailed
+            ? (appState.lang === "zh" ? "数据加载失败（API 和静态缓存均不可用）" : "Data load failed (both API and static cache unavailable)")
+            : (appState.lang === "zh" ? "当前筛选没有复核对象" : "No review items match the current filters");
+        reviewHtml += `<div style="color:var(--text-muted);text-align:center;padding:1rem">${escapeHtml(emptyMsg)}</div>`;
     }
     document.getElementById("review-list").innerHTML = reviewHtml;
 
@@ -2150,7 +2186,7 @@ function renderScouting() {
                 <strong>${escapeHtml(pName)}</strong>
                 <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
             </div>
-            <span class="status-pill ${confidenceClass(conf)}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
+            <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
             <div class="watch-card-extra">
                 ${wlNote ? `<div class="scout-note-display">\u25B8 ${escapeHtml(wlNote)}</div>` : ""}
                 <textarea class="scout-note-textarea" data-wl-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(wlNote)}</textarea>
@@ -2170,7 +2206,7 @@ function renderScouting() {
                 <strong>${escapeHtml(pName)}</strong>
                 <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
             </div>
-            <span class="status-pill ${confidenceClass(conf)}">${Number(player.optimized_score || player.rating || 0).toFixed(1)}</span>
+            <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
             <div class="watch-card-extra">
                 ${note ? `<div class="scout-note-display">\u25B8 ${escapeHtml(note)}</div>` : ""}
                 <textarea class="scout-note-textarea" data-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(note)}</textarea>
@@ -2381,7 +2417,7 @@ function renderOverview() {
 
 function _fmtMetric(value, decimals) {
     if (value == null) return "–";
-    return Number(value).toFixed(decimals != null ? decimals : 3);
+    return safeNum(value, decimals != null ? decimals : 3);
 }
 
 function _metricColor(metricKey, value) {
@@ -2800,7 +2836,7 @@ function renderActions() {
         metricsEl.innerHTML = `
             <div><span class="metric-value">${Number(metrics.total_rows || actionValueSummary.count || sourceRows.length).toLocaleString()}</span><span>${escapeHtml(appState.lang === "zh" ? "动作价值行" : "action-value rows")}</span></div>
             <div><span class="metric-value">${Number(coverage || 0).toLocaleString()}</span><span>${escapeHtml(mode === "vaep" ? "VAEP coverage" : "xT coverage")}</span></div>
-            <div><span class="metric-value">${mean == null ? "–" : Number(mean).toFixed(3)}</span><span>${escapeHtml(appState.lang === "zh" ? "样本均值 / 90" : "sample mean / 90")}</span></div>`;
+            <div><span class="metric-value">${mean == null ? "–" : safeNum(mean, 3)}</span><span>${escapeHtml(appState.lang === "zh" ? "样本均值 / 90" : "sample mean / 90")}</span></div>`;
     }
 
     actionList.innerHTML = players.length > 0
@@ -2811,10 +2847,16 @@ function renderActions() {
                     <span class="rank-meta">${escapeHtml(actionPlayerMeta(player, mode))}</span>
                     ${Number(player.estimated_minutes || player.minutes || 0) < 900 ? `<div class="sample-warning">${escapeHtml(appState.lang === "zh" ? "小样本，仅供研究" : "Small sample; research use only")}</div>` : ""}
                 </div>
-                <span class="status-pill status-medium">${Number(player[metricKey] ?? player[legacyMetricKey] ?? 0).toFixed(3)}</span>
+                <span class="status-pill status-medium">${safeNum(player[metricKey] ?? player[legacyMetricKey] ?? 0, 3)}</span>
             </div>
         `).join("")
-        : `<div style="color:var(--text-muted);text-align:center;padding:1rem">${escapeHtml(appState.lang === "zh" ? "当前筛选没有动作价值样本" : "No action-value samples match the current filters")}</div>`;
+        : (() => {
+            const loadFailed = dataLoadErrors.has("action-values");
+            const msg = loadFailed
+                ? (appState.lang === "zh" ? "数据加载失败（API 和静态缓存均不可用）" : "Data load failed (both API and static cache unavailable)")
+                : (appState.lang === "zh" ? "当前筛选没有动作价值样本" : "No action-value samples match the current filters");
+            return `<div style="color:var(--text-muted);text-align:center;padding:1rem">${escapeHtml(msg)}</div>`;
+        })();
 
     // StatsBomb Open Data attribution
     const attrEl = document.getElementById('action-attribution');
@@ -4163,6 +4205,16 @@ function bindEvents() {
         const sortBtn = e.target.closest("[data-scout-sort]");
         if (sortBtn) {
             scoutSortMode = sortBtn.dataset.scoutSort;
+            scoutCurrentPage = 1;
+            renderScouting();
+        }
+        // Scouting pagination
+        if (e.target.id === "scout-prev-page" && scoutCurrentPage > 1) {
+            scoutCurrentPage--;
+            renderScouting();
+        }
+        if (e.target.id === "scout-next-page") {
+            scoutCurrentPage++;
             renderScouting();
         }
     });
@@ -4171,6 +4223,7 @@ function bindEvents() {
     if (scoutSearch) {
         scoutSearch.addEventListener("input", (e) => {
             appState.scoutingQuery = e.target.value;
+            scoutCurrentPage = 1;
             renderScouting();
         });
     }
@@ -4178,6 +4231,7 @@ function bindEvents() {
     if (scoutStatusFilter) {
         scoutStatusFilter.addEventListener("change", (e) => {
             appState.scoutingStatus = e.target.value;
+            scoutCurrentPage = 1;
             renderScouting();
         });
     }
@@ -5012,6 +5066,10 @@ async function initWorldCup() {
             el.textContent = "LIVE DATA";
             el.className = "status-pill status-high wc-data-status";
             el.style.fontSize = "0.65rem";
+        } else if (usingStaticData) {
+            el.textContent = "STATIC";
+            el.className = "status-pill status-medium wc-data-status";
+            el.style.fontSize = "0.65rem";
         } else {
             el.textContent = "API OFFLINE";
             el.className = "status-pill status-low wc-data-status";
@@ -5529,6 +5587,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     apiPill.textContent = "API OK";
                     apiPill.className = "status-pill status-high";
                     apiOnline = true;
+                    usingStaticData = false;
                 } else {
                     apiPill.textContent = "API ERR";
                     apiPill.className = "status-pill status-low";
@@ -5537,7 +5596,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 syncApiOfflineBanner();
             })
             .catch(() => {
-                apiPill.textContent = "OFFLINE";
+                apiPill.textContent = usingStaticData ? "STATIC" : "OFFLINE";
                 apiPill.className = "status-pill status-medium";
                 apiOnline = false;
                 syncApiOfflineBanner();
@@ -5566,6 +5625,8 @@ let scoutShortlistNotes = {};
 let watchlistNotes = {};
 let scoutSortMode = "priority";
 let watchlistDiffCount = 0;
+const SCOUT_PAGE_SIZE = 50;
+let scoutCurrentPage = 1;
 
 /* ── Player Watchlist / Shortlist (localStorage) ─────────────────── */
 function getPlayerWatchlist() {
