@@ -11,6 +11,21 @@ All notable changes to ScoutFootball will be documented in this file.
 - Action Value now supports the current xT/VAEP payloads, model/search/competition/minutes filters, sample summaries, low-sample warnings, and guarded tactical-board handoff.
 - Plain static servers now fall back to mapped `frontend/data/` snapshots after API-route 404 responses.
 - Added frontend feature contract tests and synchronized the roadmap, status, API/static sync, task, agent, and user documentation.
+- API status pill now distinguishes LIVE (API online), STATIC (fallback from snapshot), and OFFLINE (neither available).
+- Review queue is now paginated at 50 items per page to avoid rendering thousands of cards at once.
+- NaN/undefined numeric values are now guarded and display as "N/A" instead of raw strings.
+- World Cup page status pill is now dynamic based on actual data source.
+- Loading failure is shown when both API and static cache are unavailable.
+
+### Fixed
+
+- Static export no longer writes Python repr strings for dataclass/Pydantic responses (`health.json`, `players_list.json` were affected). The export script now requires JSON-safe serialization and fails loudly on non-serializable objects instead of falling back to `str()`.
+
+### Testing
+
+- Added API JSON cleaning regression tests covering `_clean_json_value` for numpy types, inf, and NaN.
+- Added static frontend JSON contract tests validating that `frontend/data/` files are valid JSON dicts/lists without repr strings.
+- Added empty data handling tests for API and frontend degradation.
 
 ## [1.0.2] - 2026-06-13
 

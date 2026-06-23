@@ -25,7 +25,7 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - mplsoccer 集成：`src/scoutfootball/viz/pitch.py` 封装球场、shot map、pass map、heatmap、pizza chart。
 - 低置信度提示：分钟不足、数据缺失、位置重判不确定、联赛 coverage 低。
 - Streamlit 当前为 15 页工作台：总览、5 个分析页、3 个 P1 展示页、4 个世界杯页、1 个球探队列页和 1 个动作价值样本页；总览页已接入 artifact/model-run 读取，球探页已接入 review queue/watchlist/shortlist 读取，动作价值页已接入 xT + VAEP 产物。
-- `frontend/` 静态 Liquid Glass 前端已重构为分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告、战术板、世界杯和治理视图。球探与动作价值入口已于 2026-06-23 恢复：球探支持真实队列字段、筛选、状态流转、快照和 CSV；动作价值支持 xT/VAEP、赛事/分钟筛选、样本摘要和 StatsBomb attribution。API 在线时读取 FastAPI，有映射端点在纯静态服务器 404 时回退 `frontend/data/`。所有导航图标统一使用几何 Unicode 符号，无 emoji；API/本地 JSON 字符串进入 HTML 前统一转义，CSV 导出有公式注入防护。
+- `frontend/` 静态 Liquid Glass 前端已重构为分析工作台：总览、球员、身价、比赛预测、球探、动作价值、报告、战术板、世界杯和治理视图。球探与动作价值入口已于 2026-06-23 恢复：球探支持真实队列字段、筛选、状态流转、快照和 CSV；动作价值支持 xT/VAEP、赛事/分钟筛选、样本摘要和 StatsBomb attribution。API 在线时读取 FastAPI，有映射端点在纯静态服务器 404 时回退 `frontend/data/`。所有导航图标统一使用几何 Unicode 符号，无 emoji；API/本地 JSON 字符串进入 HTML 前统一转义，CSV 导出有公式注入防护。前端第一轮稳定化已完成：API 状态 pill 区分 LIVE/STATIC/OFFLINE，review queue 已分页（每页 50 条），NaN/undefined 数值显示已加防护，静态 fallback 成功时明确标识 STATIC，API 和静态缓存均不可用时显示加载失败，世界杯页状态 pill 已动态化。静态快照导出已修复 BUG-001：dataclass/Pydantic response 不再被 `str(obj)` 写成 repr 字符串。
 - `data_loader.py` 已加固：DuckDB 读取异常时正确 fallback 到 Parquet；新增 `_safe_read_parquet` 辅助函数，corrupt Parquet 文件不会导致 500；6 个数据加载函数已改用安全读取。
 - `api.py` 已加固：`_clean_json_value` 支持 numpy.int64/float64/bool_ 和 inf；`get_match_prediction` 捕获所有异常类型；内联 NaN 清理代码已合并到 `_clean_json_value`。
 - 电子战术板 P1.5 已落地：`frontend/` 本地画布、归一化坐标、基础对象、阵型预设、本地 JSON 工程、localStorage 保存和 schema 清洗后的导入/导出。新增：绘图工具（自由画笔/线条/矩形/椭圆）、文字注释、曲线箭头、触摸手势支持、循环动画、对象删除按钮。PNG 静态导出、WebM 动画导出、PDF 导出和版本迁移已实现。MP4 导出通过后端 ffmpeg 转换实现（`/tactical-board/capabilities` 和 `/tactical-board/export/mp4` 端点）。GIF 导出已通过 gif.js 实现浏览器端生成。
@@ -130,6 +130,9 @@ Pipeline 端到端可运行：`scoutfootball ingest` -> `scoutfootball build-fea
 - 新增电子战术板导出前，必须明确导出物是否包含真实数据、StatsBomb Open Data 或模型衍生产物；包含时必须保留 source attribution。
 - 电子战术板第一阶段只允许浏览器本地画布、JSON 工程和轻量导出；不要在浏览器端执行训练、爬取、批量视频转码或重型模型推理。
 - 前端凡是把 API、Parquet 派生 JSON、本地 JSON、demo 字符串或用户导入字段写入 `innerHTML`，必须先使用现有 escaping/sanitizer；CSV 导出必须走 `csvCell()`；战术板导入/保存/读取必须走 `TACTICAL_BOARD.sanitizeProject()`。
+- 不允许把不可 JSON 序列化对象静默 `str()` 写入静态快照；`scripts/export_static_frontend_data.py` 必须使用 JSON-safe serializer，遇到不可序列化对象时报错终止。
+- 静态 fallback 必须显式标注 STATIC；API 和静态缓存均不可用时必须显示加载失败，不能显示空白或错误数据。
+- browser-local 状态（watchlist/shortlist/review 备注）不得描述为后端审计或跨设备同步；UI 必须标记"本地状态"。
 - `goals - xG` 不能直接当射术；必须用样本量 shrinkage 或低置信度标记。
 - Top N 位置配额不能替代真实影响力校准。
 - availability 只是可靠性/样本量信号，不是球员能力本身；未经真实标签验证，不要把 availability cap 提回 0.25 以上。

@@ -233,17 +233,30 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 ### P1.1：球探与动作价值恢复和稳定化（2026-06-23）
 
-- [x] 恢复侧栏“球探”和“动作价值”入口，移除临时 `display:none`。
+- [x] 恢复侧栏"球探"和"动作价值"入口，移除临时 `display:none`。
 - [x] 修复球探 `player_name` 契约错配，保留 reason/status/note/date/snapshot 字段。
 - [x] 球探增加搜索、状态筛选、显式快照、复核队列 CSV 导出，并合并球员页 localStorage 手动选择。
 - [x] 修复动作价值旧字段与现行 `xt_per_90`/`vaep_per_90` 契约错配及未定义变量异常。
 - [x] 动作价值增加 xT/VAEP 切换、赛事/分钟/搜索筛选、摘要、小样本提示和战术板能力门控。
 - [x] 修复纯静态服务器 404 阻断 `frontend/data/` 回退的问题。
 - [x] 增加 `test_frontend_feature_contracts.py`，覆盖入口、字段、静态回退和工作台控件。
+- [x] review queue 已分页，每页 50 条，避免一次渲染 9000+ 条记录。
+- [x] API 状态 pill 区分 LIVE / STATIC / OFFLINE；静态 fallback 成功时明确标识 STATIC。
+- [x] API 和静态缓存均不可用时显示加载失败。
+- [x] NaN/undefined 数值显示已加防护。
+- [x] 世界杯页状态 pill 已动态化。
 - [ ] 将球探/动作价值真实浏览器流程加入 CI，覆盖 API、静态、空数据和移动断点。
-- [ ] review queue 增加分页或虚拟列表，避免一次渲染 200+ 卡片。
 - [ ] 建立版本化 scouting workspace 导入/导出和审计字段；正式回灌前不增加生产写 API。
 - [ ] 补齐 VAEP `player_id -> player_name/team/season` 映射与未映射覆盖率。
+
+### P1.2：测试与静态导出可靠性（2026-06-23）
+
+- [x] 新增 API JSON 清理回归测试：覆盖 `_clean_json_value` 对 numpy.int64/float64/bool_/inf/NaN 的序列化。
+- [x] 新增静态 frontend JSON 契约测试：验证 `frontend/data/` 下各 JSON 文件为合法 JSON dict/list，不含 repr 字符串。
+- [x] 新增空数据处理测试：验证 API 和前端对空数据集的降级显示。
+- [x] 修复 BUG-001：`scripts/export_static_frontend_data.py` 不再静默使用 `str(obj)` fallback 写入非法 JSON；dataclass/Pydantic response 必须经过 JSON-safe serializer。
+- [x] `frontend/data/health.json` 和 `frontend/data/players_list.json` 已从 repr 字符串修复为合法 JSON dict。
+- [ ] 完整浏览器 CI 未完成（当前仅有 Node 语法检查和单元测试，无 Selenium/Playwright）。
 
 验收：
 

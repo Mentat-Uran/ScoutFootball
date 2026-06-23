@@ -21,6 +21,7 @@
 - 修复 `player_name` 被错误读取为 `player` 的契约错配，保留 reason、status、note、date、snapshot ID。
 - 支持搜索、状态筛选、优先级/日期/姓名排序、状态流转、显式 watchlist 快照和复核队列 CSV 导出。
 - 服务端 watchlist/shortlist 与球员页 localStorage 手动选择合并展示。
+- review queue 已分页，每页 50 条，避免一次渲染 9000+ 条记录。
 - 边界：API 队列只读；状态和备注仅保存在当前浏览器，尚未形成正式审计产物。
 
 ### 动作价值
@@ -31,11 +32,20 @@
 - xT 模式可把带 StatsBomb attribution 的样例热区发送到战术板；VAEP 模式禁用该动作。
 - 边界：部分 VAEP 产物只有 `player_id`，当前明确显示 ID；动作价值只代表 StatsBomb Open Data 覆盖样本。
 
+### 前端稳定化（2026-06-23）
+
+- API 状态 pill 区分三种状态：LIVE（API 在线）、STATIC（回退到 `frontend/data/` 快照）、OFFLINE（API 和静态缓存均不可用）。
+- 静态 fallback 成功时，pill 明确标识 STATIC，不会误导用户以为是实时数据。
+- API 和静态缓存都不可用时，视图显示加载失败提示，而非空白或错误数据。
+- NaN/undefined 数值显示已加防护：数值字段遇到 NaN/undefined 时显示为 "N/A" 或空，不会渲染为原始字符串。
+- 世界杯页状态 pill 已动态化：根据实际数据来源显示 LIVE/STATIC/OFFLINE，而非硬编码。
+
 ### 静态模式
 
 - API 在线时优先读取 FastAPI。
 - 对有静态映射的端点，纯静态服务器返回 404 时继续回退到 `frontend/data/`。
 - `frontend/data/` 是跟踪的发布快照；`frontend/local-data/` 是忽略的本地快照。
+- 静态快照导出已修复 BUG-001：dataclass/Pydantic response 不再被 `str(obj)` 写成 repr 字符串，必须经过 JSON-safe serializer。
 
 ## 质量基线
 
@@ -48,10 +58,9 @@
 ## 下一步
 
 1. 把球探/动作价值浏览器流程加入 CI，覆盖 API、静态、空数据和移动断点。
-2. review queue 增加分页或虚拟列表。
-3. 建立版本化 scouting workspace 导入/导出和审计字段。
-4. 完成 VAEP 球员身份映射与覆盖率报告。
-5. 增加动作类型、比赛、球队和球员三级下钻；在任何评分融合前完成独立评估。
+2. 建立版本化 scouting workspace 导入/导出和审计字段。
+3. 完成 VAEP 球员身份映射与覆盖率报告。
+4. 增加动作类型、比赛、球队和球员三级下钻；在任何评分融合前完成独立评估。
 
 ## 启动与验收
 

@@ -18,13 +18,14 @@
 2. **球探 payload 字段错配**：前端已从 `player_name` 读取姓名，并保留 reason/status/note/date/snapshot 字段。
 3. **动作价值 payload 字段错配与运行时异常**：现行主字段改为 `xt_per_90`/`vaep_per_90`，移除未定义 `actionData` 引用。
 4. **纯静态启动无数据**：有静态映射的 API 路径在 404 时继续回退 `frontend/data/`。
+5. **BUG-001：静态快照包含 repr 字符串**：`scripts/export_static_frontend_data.py` 之前对 dataclass/Pydantic response 使用 `str(obj)` fallback，导致 `frontend/data/health.json` 和 `frontend/data/players_list.json` 包含 Python repr 字符串而非合法 JSON dict。已修复：dataclass/Pydantic response 必须经过 JSON-safe serializer（`dataclasses.asdict()` 或 `model.model_dump()`），遇到不可序列化对象时报错终止而非静默写入 repr。验证：静态 JSON 契约测试覆盖 `frontend/data/` 下各文件。
 
 ### 仍未解决，必须保留
 
 1. **球探状态不是正式审计记录**：复核状态、备注和手动选择仍保存在 localStorage；清理浏览器数据会丢失，也不能跨设备同步。正式回灌前必须建立版本化 workspace、导入校验和来源字段。
 2. **VAEP 身份映射不完整**：部分产物只有 `player_id`，前端只能显示 ID。完成稳定实体映射前，不应把这些行与姓名级球探结论自动合并。
-3. **review queue 首屏渲染量偏大**：当前静态快照可一次显示 200 条；后续需分页或虚拟列表，并加入浏览器 CI 性能边界。
-4. **动作价值不是全量联赛能力**：15,062 行只代表当前 StatsBomb Open Data 产物。任何公开结论必须显示样本量、分钟门槛、覆盖范围和 StatsBomb attribution。
+3. **动作价值不是全量联赛能力**：15,062 行只代表当前 StatsBomb Open Data 产物。任何公开结论必须显示样本量、分钟门槛、覆盖范围和 StatsBomb attribution。
+4. **完整浏览器 CI 未完成**：当前仅有 Node 语法检查和单元测试，无 Selenium/Playwright 端到端测试覆盖。
 
 
 
