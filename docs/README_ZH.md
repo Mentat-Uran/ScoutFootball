@@ -32,7 +32,7 @@ ScoutFootball 是本地优先的足球分析平台，把公开数据、手动导
 - **神经网络候选模型:** `scoutfootball train-rating-nn` 使用 `rating_feature_matrix.parquet` + `player_truth_labels.parquet` 训练监督式 sklearn MLP 候选模型，并写入 `data/models/player_rating_nn/`；除非同切分下优于当前优化器和 baseline，否则不替换 `player_ratings_optimized.parquet`。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界和已知偏差。
 - **比分预测:** Independent Poisson baseline，含比分概率矩阵。
-- **产品与可视化:** 15 页 Streamlit 工作台（含产物总览页、球探队列页和动作价值样本页）。Liquid Glass 静态前端含 7 个分析视图（总览、球员、身价、预测、球探、动作价值、报告）、4 个世界杯视图（赛程、名单、对比、出线）和电子战术板第一切片。面向 artifact、球员画像、评分快照、预测、复核队列、watchlist、shortlist、动作价值样本和模型运行的 FastAPI 只读入口。集成 mplsoccer 绘制球员雷达、pizza chart、shot map。低覆盖和样本不足有醒目提示。前端渲染已对 API/本地 JSON 字符串做转义，CSV 导出已防表格公式注入，战术板 JSON 导入已走 schema sanitizer。
+- **产品与可视化:** 15 页 Streamlit 工作台（含产物总览页、球探队列页和动作价值样本页）。Liquid Glass 静态前端含 7 个分析视图（总览、球员、身价、预测、球探、动作价值、报告）、4 个世界杯视图（赛程、名单、对比、出线）和电子战术板第一切片。面向 artifact、球员画像、评分快照、预测、复核队列、watchlist、shortlist、动作价值样本和模型运行的 FastAPI 只读入口。集成 mplsoccer 绘制球员雷达、pizza chart、shot map。低覆盖和样本不足有醒目提示。前端渲染已对 API/本地 JSON 字符串做转义，CSV 导出已防表格公式注入，战术板 JSON 导入已走 schema sanitizer。API 状态 pill 区分 LIVE / STATIC / OFFLINE；review queue 已分页（每页 50 条）；NaN/undefined 数值显示已加防护；静态导出不再把 dataclass/Pydantic response 写成 repr 字符串。
 
 ## Liquid Glass 前端
 
@@ -113,6 +113,8 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 
 **前端：**
 - API 不可用时，有映射的视图回退到跟踪静态快照；静态快照不是实时数据
+- API 状态 pill 显示 LIVE（API 在线）、STATIC（回退到快照）或 OFFLINE（均不可用）
+- review queue 已分页，每页 50 条，避免一次渲染大量卡片
 - 球探复核状态和备注仍只保存在浏览器，尚未形成版本化审计 workspace
 - 部分 VAEP 行只有 `player_id`，身份映射尚未完成
 - 战术板 MP4 导出需要系统安装 ffmpeg

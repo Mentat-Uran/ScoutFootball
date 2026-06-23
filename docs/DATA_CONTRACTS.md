@@ -463,6 +463,48 @@ Match prediction model metadata.
 
 ---
 
+## 9.5 Static Snapshot Contracts
+
+`frontend/data/` contains tracked release snapshots consumed by the static demo and Vercel deployment. Each file must be valid JSON (dict or list); Python repr strings are not allowed.
+
+### health.json
+
+**File**: `frontend/data/health.json`
+**Source**: `GET /health` response
+
+```json
+{
+  "status": "ok",
+  "data_source": "local",
+  "version": "1.0.2"
+}
+```
+
+### players_list.json
+
+**File**: `frontend/data/players_list.json`
+**Source**: `GET /ratings` response
+
+```json
+{
+  "count": 1234,
+  "players": [
+    { "player": "string", "team": "string", "league": "string",
+      "season": "string", "position_group": "string",
+      "optimized_score": 85.0, "minutes": 2500 }
+  ]
+}
+```
+
+### Static Snapshot Serialization Rules
+
+1. All values must be JSON-serializable types: `str`, `int`, `float`, `bool`, `None`, `list`, `dict`.
+2. dataclass and Pydantic response objects must be serialized via `dataclasses.asdict()` or `model.model_dump()`, not `str(obj)`.
+3. `numpy.int64`, `numpy.float64`, `numpy.bool_`, `float('inf')`, and `float('nan')` must be converted to native Python types before serialization.
+4. The export script must fail loudly on non-serializable objects rather than falling back to `str()`.
+
+---
+
 ## 10. Cross-Provider Schema Reference
 
 ### 10.1 SPADL / atomic-SPADL Compatibility

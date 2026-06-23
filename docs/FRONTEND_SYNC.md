@@ -32,6 +32,8 @@
 3. 无静态映射的 4xx 必须保留错误语义，不得用不相关 JSON 掩盖。
 4. 回退数据必须与 API 返回使用同一字段名和空值语义。
 5. 页面必须显示 API 在线/离线以及静态缓存提示，不能把静态快照称为实时数据。
+6. API 状态 pill 区分三种状态：LIVE（API 在线）、STATIC（回退到 `frontend/data/` 快照）、OFFLINE（API 和静态缓存均不可用）。
+7. 静态 fallback 成功时，pill 明确标识 STATIC；API 和静态缓存都不可用时，视图显示加载失败提示。
 
 ## 4. 契约变更流程
 
@@ -45,6 +47,13 @@
 6. 增加契约测试；字段迁移期同时兼容新旧键，并记录移除期限。
 
 当前动作价值兼容策略：主契约使用 `xt_per_90` / `vaep_per_90`，仅对 legacy `player_value_metrics` 保留 `xT_per_90` 读取。当前球探主契约使用 `player_name`，不得再次退回 `player`。
+
+## 4.5 静态快照序列化规则
+
+1. `frontend/data/` 下的所有 JSON 文件必须是合法 JSON（dict 或 list），不允许包含 Python repr 字符串。
+2. `scripts/export_static_frontend_data.py` 中 dataclass/Pydantic response 必须经过 JSON-safe serializer（如 `model.model_dump()` 或 `dataclasses.asdict()`），不允许静默使用 `str(obj)` fallback。
+3. 静态快照导出脚本遇到不可 JSON 序列化的对象时必须报错终止，不能把 repr 字符串写入文件。
+4. NaN/inf 值在序列化前必须被清理为 `null` 或移除，不允许写入非法 JSON 值。
 
 ## 5. 前端状态与持久化
 
