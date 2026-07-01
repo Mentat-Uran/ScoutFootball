@@ -2,9 +2,6 @@ name: Export static frontend data
 
 on:
   workflow_dispatch:
-  schedule:
-    # Every day at 05:00 UTC (13:00 Beijing time) — before daily-data-sync at 06:00
-    - cron: "0 5 * * *"
 
 permissions:
   contents: write
