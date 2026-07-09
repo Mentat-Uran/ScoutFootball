@@ -14,8 +14,31 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - name: Generate version tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="v$(date -u +%Y%m%d.%H%M%S)-$(echo "$GITHUB_SHA" | cut -c1-7)"
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Generated version: $VERSION"
+
+      - name: Generate GHCR image name
+        id: image
+        shell: bash
+        run: |
+          REPO="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/$REPO" >> "$GITHUB_OUTPUT"
+          echo "Generated image: ghcr.io/$REPO"
+
   release:
     strategy:
       matrix:
@@ -93,20 +116,67 @@ jobs:
             desktop/dist/latest*.yml
           retention-days: 7
 
+  docker:
+    needs: version
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event.inputs.create_release == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: github.event.inputs.create_release == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ needs.version.outputs.image }}:${{ needs.version.outputs.tag }}
+            ${{ needs.version.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.version.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Docker archive
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          tags: scoutfootball:${{ needs.version.outputs.tag }}
+          outputs: type=docker,dest=/tmp/scoutfootball-docker-${{ needs.version.outputs.tag }}-linux-amd64.tar
+          cache-from: type=gha
+
+      - name: Upload Docker artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-linux-amd64
+          path: /tmp/scoutfootball-docker-${{ needs.version.outputs.tag }}-linux-amd64.tar
+          retention-days: 7
+
   create-release:
-    needs: release
+    needs: [version, release, docker]
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true'
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Generate version tag
-        id: version
-        run: |
-          VERSION="v$(date +%Y%m%d.%H%M%S)-$(echo ${{ github.sha }} | cut -c1-7)"
-          echo "tag=$VERSION" >> $GITHUB_OUTPUT
-          echo "Generated version: $VERSION"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -120,27 +190,32 @@ jobs:
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "Release ${{ steps.version.outputs.tag }}"
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: "Release ${{ needs.version.outputs.tag }}"
           body: |
-            ## ScoutFootball Desktop ${{ steps.version.outputs.tag }}
+            ## ScoutFootball ${{ needs.version.outputs.tag }}
 
             Automated release from main branch merge.
 
             ### Changes
             - Commit: ${{ github.sha }}
-            - Merged by: ${{ github.actor }}
-            - PR: #${{ github.event.pull_request.number }}
+            - Triggered by: ${{ github.actor }}
 
             ### Assets
             - Windows: `.exe` installer
             - macOS: `.dmg` disk image
+            - Docker: `docker load` archive plus GHCR image
+
+            ### Docker Image
+            `${{ needs.version.outputs.image }}:${{ needs.version.outputs.tag }}`
+            `${{ needs.version.outputs.image }}:latest`
           files: |
             artifacts/**/*.exe
             artifacts/**/*.dmg
             artifacts/**/*.zip
             artifacts/**/*.blockmap
             artifacts/**/latest*.yml
+            artifacts/**/*.tar
             docs/USER_GUIDE.md
           prerelease: false
           generate_release_notes: true
