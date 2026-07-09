@@ -92,6 +92,48 @@ Notes:
 - A plain static server falls back to the tracked JSON snapshot under `frontend/data/` when mapped API routes return 404.
 - Allow TCP `8000` through Windows Firewall, or choose another port if needed.
 
+### Docker Deployment
+
+Build and run the API plus static frontend in one container:
+
+```bash
+docker build -t scoutfootball:local .
+docker run --rm -p 8000:8000 scoutfootball:local
+```
+
+Open `http://localhost:8000` and verify the backend with:
+
+```bash
+curl http://localhost:8000/health
+```
+
+For local development with your full `data/` directory mounted into the
+container:
+
+```bash
+docker compose up --build
+```
+
+If Docker Hub or apt mirrors are blocked on your local network, override the
+build image and skip optional system packages for a smoke test:
+
+```powershell
+$env:SCOUTFOOTBALL_PYTHON_IMAGE="mcr.microsoft.com/devcontainers/python:1-3.11-bookworm"
+$env:SCOUTFOOTBALL_INSTALL_SYSTEM_PACKAGES="0"
+docker compose up --build
+```
+
+The container reads `SCOUTFOOTBALL_DATA_ROOT` and defaults it to `/app/data`.
+Mounting `./data:/app/data` lets Docker use local Parquet/model artifacts and
+write tactical-board exports under `data/reports/tactical_exports/`.
+
+Release builds publish a GHCR image and upload a Docker archive:
+
+```bash
+docker pull ghcr.io/mentaturan/scoutfootball_for_world_cup:latest
+docker run --rm -p 8000:8000 ghcr.io/mentaturan/scoutfootball_for_world_cup:latest
+```
+
 ### Static Snapshot Layout
 
 - `frontend/data/` is the tracked release snapshot used by the static demo and refreshed by GitHub Actions.
