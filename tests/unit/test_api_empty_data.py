@@ -12,6 +12,7 @@ All tests use mock/monkeypatch or tiny temporary files — no real data dependen
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -63,6 +64,35 @@ class TestSafeReadParquet:
                     "gold/feature_store/corrupt.parquet"
                 )
         assert result is None
+
+    def test_parallel_reads_use_isolated_duckdb_connections(self, tmp_path: Path) -> None:
+        from scoutfootball.app.data_loader import _safe_read_parquet
+
+        parquet_file = tmp_path / "parallel.parquet"
+        pd.DataFrame({"value": range(25)}).to_parquet(parquet_file, index=False)
+        with patch(
+            "scoutfootball.app.data_loader._parquet_path",
+            return_value=parquet_file,
+        ):
+            with patch(
+                "scoutfootball.app.data_loader._parquet_exists",
+                return_value=True,
+            ):
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    frames = list(pool.map(_safe_read_parquet, ["parallel.parquet"] * 24))
+
+        assert all(frame is not None for frame in frames)
+        assert all(len(frame) == 25 for frame in frames if frame is not None)
+
+    def test_api_parallel_reads_use_isolated_duckdb_connections(self, tmp_path: Path) -> None:
+        from scoutfootball.api import _read_parquet
+
+        parquet_file = tmp_path / "api-parallel.parquet"
+        pd.DataFrame({"value": range(25)}).to_parquet(parquet_file, index=False)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            frames = list(pool.map(_read_parquet, [parquet_file] * 24))
+
+        assert all(len(frame) == 25 for frame in frames)
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +163,21 @@ class TestApiEmptyDataResponses:
         assert result["players"] == []
         # Must be JSON-serializable
         json.dumps(result)
+
+    def test_get_value_summary_marks_synthetic_fallback_as_demo(self) -> None:
+        from scoutfootball.api import get_value_summary
+
+        frame = pd.DataFrame({
+            "player_name": ["Demo Player"],
+            "team_name": ["Demo FC"],
+            "fairness_label": ["fair"],
+            "is_synthetic": [True],
+        })
+        with patch("scoutfootball.api.load_oof_predictions", return_value=frame):
+            result = get_value_summary()
+
+        assert result["status"] == "demo"
+        assert result["data_mode"] == "synthetic"
 
     def test_get_player_ratings_empty(self) -> None:
         from scoutfootball.api import get_player_ratings

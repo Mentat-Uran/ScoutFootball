@@ -11,12 +11,14 @@ from scoutfootball.evaluation.backtests import (
     DCDecayComparisonResult,
     DixonColesBacktestResult,
     PoissonBacktestResult,
+    _build_fixture_frame,
     run_dc_backtest_with_calibration,
+    run_dc_calibration_backtest,
     run_dc_decay_comparison,
     run_dixon_coles_backtest,
     run_poisson_backtest,
 )
-from scoutfootball.models import TimeSplitConfig
+from scoutfootball.models import TimeSplitConfig, fit_dixon_coles
 
 
 def _make_team_match_df(n_teams: int = 6, n_seasons: int = 3) -> pd.DataFrame:
@@ -51,6 +53,47 @@ def _make_team_match_df(n_teams: int = 6, n_seasons: int = 3) -> pd.DataFrame:
                 })
                 match_id += 1
     return pd.DataFrame(rows)
+
+
+def test_build_fixture_frame_drops_unfinished_matches() -> None:
+    df = _make_team_match_df()
+    unfinished_id = df.iloc[0]["match_id"]
+    df.loc[df["match_id"] == unfinished_id, ["goals_for", "goals_against"]] = np.nan
+
+    fixtures = _build_fixture_frame(df)
+
+    assert unfinished_id not in fixtures["match_id"].astype(str).tolist()
+    assert fixtures[["home_goals", "away_goals"]].notna().all().all()
+
+
+def test_dc_calibration_detail_preserves_competition_id(tmp_path) -> None:
+    df = _make_team_match_df()
+    df["competition_id"] = "Synthetic League"
+    model = fit_dixon_coles(df)
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    pd.DataFrame([
+        {
+            "model_type": "dixon_coles",
+            "num_matches": model.num_matches,
+            "rho": model.rho,
+            "home_advantage": model.home_advantage,
+            "league_mean_goals": model.league_mean_goals,
+            "num_teams": len(model.team_attack),
+            "half_life_days": model.half_life_days,
+            "decay": model.decay,
+        },
+    ]).to_parquet(artifact_dir / "dixon_coles_results.parquet", index=False)
+    pd.DataFrame({
+        "team_id": sorted(model.team_attack),
+        "attack_strength": [model.team_attack[t] for t in sorted(model.team_attack)],
+        "defense_strength": [model.team_defense[t] for t in sorted(model.team_attack)],
+    }).to_parquet(artifact_dir / "dc_team_strengths.parquet", index=False)
+
+    run_dc_calibration_backtest(df, tmp_path, save_detail=True)
+    detail = pd.read_parquet(artifact_dir / "dc_calibration_detail.parquet")
+
+    assert set(detail["league"]) == {"Synthetic League"}
 
 
 class TestRunPoissonBacktest:

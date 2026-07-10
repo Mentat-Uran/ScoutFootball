@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +45,12 @@ _STATSBOMB_ATTRIBUTION = (
 def _read_parquet(path: Path):
     """Read a Parquet file via DuckDB (avoids pyarrow dependency)."""
     import duckdb
-    return duckdb.read_parquet(str(path)).fetchdf()
+
+    con = duckdb.connect()
+    try:
+        return con.execute("SELECT * FROM read_parquet(?)", [str(path)]).fetchdf()
+    finally:
+        con.close()
 
 
 # ── World Cup data cache ──────────────────────────────────────────
@@ -175,10 +181,41 @@ def list_players() -> PlayerListResponse:
 
 
 def list_teams() -> list[str]:
-    """Return team names from ratings data (covers all 5 leagues)."""
+    """Return teams supported by the active match-prediction artifacts.
+
+    Player-rating rows can contain comma-joined club histories for transferred
+    players. Those values are useful in the rating dataset, but they are not
+    valid team identifiers for the prediction model. Prefer the exact team ids
+    saved with Dixon-Coles/Poisson and only fall back to ratings data when no
+    prediction artifact is available.
+    """
+    artifact_dir = _settings().model_root / "artifacts"
+    for filename in ("dc_team_strengths.parquet", "team_strengths.parquet"):
+        path = artifact_dir / filename
+        if not path.exists():
+            continue
+        try:
+            frame = _read_parquet(path)
+        except Exception:
+            continue
+        if "team_id" not in frame.columns:
+            continue
+        teams = {
+            str(team).strip()
+            for team in frame["team_id"].dropna().tolist()
+            if str(team).strip()
+        }
+        if teams:
+            return sorted(teams)
+
     df = load_player_ratings()
     if "team" in df.columns:
-        return sorted(df["team"].dropna().unique().tolist())
+        teams = {
+            str(team).strip()
+            for team in df["team"].dropna().tolist()
+            if str(team).strip() and "," not in str(team)
+        }
+        return sorted(teams)
     # Fallback to team_match
     tm = load_team_match()
     if "team_name" in tm.columns:
@@ -241,6 +278,21 @@ def _prediction_calibration() -> dict[str, Any]:
                 )
         except Exception:
             pass
+
+    # Full calibration detail is produced by the training backtest. Prefer
+    # those evaluated metrics when available; the model-summary parquet only
+    # stores fitted parameters and therefore cannot populate Brier/RPS.
+    try:
+        detail = get_prediction_calibration()
+        detail_metrics = detail.get("dixon_coles", {})
+        if detail_metrics.get("status") != "ok":
+            detail_metrics = detail.get("poisson", {})
+        if detail_metrics.get("status") == "ok":
+            calibration["brier"] = detail_metrics.get("brier_1x2")
+            calibration["rps"] = detail_metrics.get("rps_1x2")
+            calibration["log_loss"] = detail_metrics.get("log_loss_exact")
+    except Exception:
+        pass
 
     return calibration
 
@@ -415,6 +467,10 @@ def get_value_summary() -> dict:
     oof = load_oof_predictions()
     if oof.empty:
         return {"status": "no_data", "players": [], "metrics": {}}
+    is_synthetic = (
+        "is_synthetic" in oof.columns
+        and bool(oof["is_synthetic"].fillna(False).all())
+    )
 
     # Filter out records with suspiciously low market values (Transfermarkt placeholder)
     # Values <= 200k are almost certainly data errors, not real valuations
@@ -458,7 +514,8 @@ def get_value_summary() -> dict:
             mean_residual = None
 
     return _clean_json_value({
-        "status": "ok",
+        "status": "demo" if is_synthetic else "ok",
+        "data_mode": "synthetic" if is_synthetic else "artifact",
         "sample_count": len(oof),
         "fairness_distribution": oof["fairness_label"].value_counts().to_dict()
         if "fairness_label" in oof.columns
@@ -550,20 +607,26 @@ def get_prediction_summary() -> dict[str, Any]:
         except Exception:
             dc_info["status"] = "error"
 
+    poisson_ready = poisson_info.get("status") == "ok"
+    dc_ready = dc_info.get("status") == "ok"
+    preferred = dc_info if dc_ready else poisson_info
+
     return _clean_json_value({
-        "status": poisson_info.get("status", "no_data"),
-        "model_type": poisson_info.get("model_type", "independent_poisson"),
-        "num_teams": poisson_info.get("num_teams"),
+        "status": "ok" if (poisson_ready or dc_ready) else "no_data",
+        "model_type": preferred.get("model_type", "independent_poisson"),
+        "num_teams": preferred.get("num_teams"),
         "train_rows": poisson_info.get("train_rows"),
         "coverage": poisson_info.get("coverage"),
         "poisson": poisson_info,
         "dixon_coles": dc_info,
         "available_models": (
-            ["poisson"] + (["dixon_coles"] if dc_info.get("status") == "ok" else [])
+            (["poisson"] if poisson_ready else [])
+            + (["dixon_coles"] if dc_ready else [])
         ),
     })
 
 
+@lru_cache(maxsize=1)
 def get_prediction_calibration() -> dict[str, Any]:
     """Return calibration metrics for match prediction models.
 
@@ -969,8 +1032,15 @@ def get_artifacts_summary() -> dict:
         except Exception:
             events_count = 0
 
-    # Data health flags
-    has_oof = not oof.empty
+    # Data health flags. Demo fallback rows keep the UI usable, but must never
+    # be presented as a real trained artifact.
+    oof_path = settings.data_root / "models" / "oof_predictions" / "value_fairness_oof.parquet"
+    oof_is_synthetic = (
+        "is_synthetic" in oof.columns
+        and bool(oof["is_synthetic"].fillna(False).all())
+    )
+    has_oof = oof_path.exists() and not oof.empty and not oof_is_synthetic
+    oof_rows = len(oof) if has_oof else 0
     has_truth = False
     truth_rows = 0
     truth_path = settings.data_root / "gold" / "feature_store" / "player_truth_labels.parquet"
@@ -1016,9 +1086,9 @@ def get_artifacts_summary() -> dict:
             display_root=settings.project_root,
         ),
         _artifact_file_info(
-            settings.data_root / "models" / "oof_predictions" / "value_fairness_oof.parquet",
+            oof_path,
             "value_fairness_oof",
-            rows=len(oof),
+            rows=oof_rows,
             display_root=settings.project_root,
         ),
         _artifact_file_info(

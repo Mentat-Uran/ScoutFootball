@@ -55,7 +55,19 @@ def _safe_read_parquet(relative_path: str) -> pd.DataFrame | None:
         return None
     try:
         import duckdb
-        return duckdb.read_parquet(str(_parquet_path(relative_path))).fetchdf()
+
+        # The module-level ``duckdb.read_parquet`` helper uses a shared default
+        # connection. Concurrent FastAPI requests can close each other's
+        # pending result and incorrectly trigger the synthetic-data fallback.
+        # Give every read its own short-lived connection instead.
+        con = duckdb.connect()
+        try:
+            return con.execute(
+                "SELECT * FROM read_parquet(?)",
+                [str(_parquet_path(relative_path))],
+            ).fetchdf()
+        finally:
+            con.close()
     except Exception:
         logger.warning("Failed to read %s", relative_path, exc_info=True)
         return None

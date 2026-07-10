@@ -163,6 +163,12 @@ def _build_fixture_frame(team_match_df: pd.DataFrame) -> pd.DataFrame:
             "goals_for_away": "away_goals",
         },
     )
+    fixtures["home_goals"] = pd.to_numeric(fixtures["home_goals"], errors="coerce")
+    fixtures["away_goals"] = pd.to_numeric(fixtures["away_goals"], errors="coerce")
+    fixtures = fixtures.dropna(subset=["home_goals", "away_goals"])
+    fixtures = fixtures.loc[
+        (fixtures["home_goals"] >= 0) & (fixtures["away_goals"] >= 0),
+    ]
     return (
         fixtures.loc[
             :,
@@ -279,12 +285,18 @@ def run_dc_calibration_backtest(
     model = _load_dc_artifacts(model_root)
     fixtures = _build_fixture_frame(team_match_df)
 
-    # Merge league info if available
-    has_league = "league" in team_match_df.columns
+    # Merge competition info if available. The canonical team-match contract
+    # uses ``competition_id`` while a few legacy fixtures still expose
+    # ``league``.
+    league_column = (
+        "league" if "league" in team_match_df.columns
+        else ("competition_id" if "competition_id" in team_match_df.columns else None)
+    )
+    has_league = league_column is not None
     league_lookup: dict[str, str] = {}
     if has_league:
         for _, row in team_match_df.iterrows():
-            league_lookup[str(row["match_id"])] = str(row.get("league", ""))
+            league_lookup[str(row["match_id"])] = str(row.get(league_column, ""))
 
     prediction_rows: list[dict] = []
     for _, fixture in fixtures.iterrows():
