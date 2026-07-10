@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-torch = pytest.importorskip("torch")
+torch = pytest.importorskip("torch", exc_type=ImportError)
 
 
 def _load_optimizer_module():

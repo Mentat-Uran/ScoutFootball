@@ -563,6 +563,7 @@ let matches = [];
 let ratingsMeta = { model_meta: {}, league_metrics: [] };
 let artifactSummary = { data_health: {}, artifacts: [] };
 let predictionMeta = { status: "no_data" };
+let predictionCalibration = {};
 let valueSummaryMeta = { sample_count: 0, metrics: {} };
 let modelRuns = { count: 0, runs: [] };
 let watchlistData = [];
@@ -791,6 +792,31 @@ function safeNum(value, decimals) {
     const n = Number(value);
     if (!Number.isFinite(n)) return "–";
     return n.toFixed(decimals != null ? decimals : 1);
+}
+
+async function fetchPredictionCalibration() {
+    try {
+        return await fetchJson("/predictions/calibration");
+    } catch (err) {
+        console.warn("Failed to fetch prediction calibration:", err);
+        return {};
+    }
+}
+
+function formatTimestamp(value) {
+    if (value == null || value === "") return "";
+    const numeric = Number(value);
+    const date = Number.isFinite(numeric)
+        ? new Date(numeric < 1e12 ? numeric * 1000 : numeric)
+        : new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString(appState.lang === "zh" ? "zh-CN" : "en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 }
 
 function confidenceClass(confidence) {
@@ -1720,6 +1746,19 @@ function renderSameCohortComparison(data) {
 
 let currentPrediction = null;
 
+function selectedPredictionCalibration() {
+    const direct = (currentPrediction && currentPrediction.calibration) || {};
+    const detail = predictionCalibration.dixon_coles?.status === "ok"
+        ? predictionCalibration.dixon_coles
+        : (predictionCalibration.poisson || {});
+    const merged = {
+        brier: direct.brier ?? detail.brier_1x2,
+        rps: direct.rps ?? detail.rps_1x2,
+        log_loss: direct.log_loss ?? detail.log_loss_exact,
+    };
+    return Object.values(merged).some((value) => value != null) ? merged : null;
+}
+
 function selectedMatch() {
     if (currentPrediction && !currentPrediction.error) {
         return {
@@ -1731,7 +1770,7 @@ function selectedMatch() {
             xh: currentPrediction.home_lambda || 1.32,
             xa: currentPrediction.away_lambda || 1.42,
             score_matrix: currentPrediction.score_matrix || null,
-            calibration: currentPrediction.calibration || null,
+            calibration: selectedPredictionCalibration(),
             model_version: currentPrediction.model_version || "",
             model_type: currentPrediction.model_type || "poisson",
         };
@@ -2316,6 +2355,12 @@ function renderOverview() {
         const oofBadge = healthItems[0].querySelector(".status-pill");
         oofBadge.className = `status-pill ${health.oof_available ? "status-high" : "status-low"}`;
         oofBadge.textContent = health.oof_available ? "HIGH" : "LOW";
+        const oofText = healthItems[0].querySelector("span[data-i18n='health_oof']");
+        if (oofText) {
+            oofText.textContent = health.oof_available
+                ? (appState.lang === "zh" ? "身价 OOF 可用" : "Value OOF available")
+                : (appState.lang === "zh" ? "身价 OOF 未生成" : "Value OOF not generated");
+        }
 
         const proxyBadge = healthItems[1].querySelector(".status-pill");
         proxyBadge.className = `status-pill ${health.player_match_coverage ? "status-medium" : "status-low"}`;
@@ -2325,6 +2370,12 @@ function renderOverview() {
         const truthBadge = healthItems[2].querySelector(".status-pill");
         truthBadge.className = `status-pill ${health.truth_labels_available ? "status-high" : "status-low"}`;
         truthBadge.textContent = health.truth_labels_available ? "HIGH" : "LOW";
+        const truthText = healthItems[2].querySelector("span[data-i18n='health_truth']");
+        if (truthText) {
+            truthText.textContent = health.truth_labels_available
+                ? (appState.lang === "zh" ? "真实标签可用" : "Truth labels available")
+                : (appState.lang === "zh" ? "真实标签未生成" : "Truth labels not generated");
+        }
     }
 
     const overallBadge = document.querySelector("#view-overview .compact-panel .panel-head .status-pill");
@@ -2563,9 +2614,12 @@ function renderReports() {
 
     const valueMetrics = valueSummaryMeta.metrics || {};
     const valueImprovement = valueMetrics.mae_improvement_vs_baseline;
+    const valueIsDemo = valueSummaryMeta.status === "demo";
     document.getElementById("report-value-title").textContent = valueMetrics.estimator || "value_fairness_oof";
-    document.getElementById("report-value-status").textContent = valueImprovement ? `+${Math.round(valueImprovement).toLocaleString()} MAE` : "ready";
-    document.getElementById("report-value-status").className = `status-pill ${valueSummaryMeta.sample_count > 0 ? "status-high" : "status-low"}`;
+    document.getElementById("report-value-status").textContent = valueIsDemo
+        ? "DEMO"
+        : (valueImprovement ? `+${Math.round(valueImprovement).toLocaleString()} MAE` : "ready");
+    document.getElementById("report-value-status").className = `status-pill ${valueIsDemo ? "status-medium" : (valueSummaryMeta.sample_count > 0 ? "status-high" : "status-low")}`;
 
     const predictionReady = predictionMeta.status === "ok";
     const dcReady = (predictionMeta.dixon_coles || {}).status === "ok";
@@ -2588,6 +2642,7 @@ function renderReports() {
     const runs = (modelRuns.runs || []).slice(0, 12);
     runList.innerHTML = runs.length > 0
         ? runs.map((run) => {
+            const z = appState.lang === "zh";
             const metrics = run.metrics || {};
             const args = run.args || {};
             const hs = run.holdout_summary || {};
@@ -3030,17 +3085,18 @@ function renderLicense() {
     }).join("");
     tbody.innerHTML = rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">' + (appState.lang === "zh" ? "无数据" : "No data") + "</td></tr>";
 
+    const timestamp = formatTimestamp(licenseData.updated_at);
     const updatedPill = document.getElementById("license-updated");
     if (updatedPill) {
-        updatedPill.textContent = licenseData.updated_at
-            ? escapeHtml(String(licenseData.updated_at))
+        updatedPill.textContent = timestamp
+            ? timestamp
             : (appState.lang === "zh" ? "无时间戳" : "No timestamp");
     }
 
     const updatedText = document.getElementById("license-last-updated");
     if (updatedText) {
-        updatedText.textContent = licenseData.updated_at
-            ? (appState.lang === "zh" ? "最后更新: " : "Last updated: ") + escapeHtml(String(licenseData.updated_at))
+        updatedText.textContent = timestamp
+            ? (appState.lang === "zh" ? "最后更新: " : "Last updated: ") + timestamp
             : "";
     }
 }
@@ -3188,7 +3244,10 @@ async function renderActiveView() {
 async function renderCalibration() {
     const statusPill = document.getElementById("calibration-status");
     try {
-        const data = await fetchJson("/predictions/calibration");
+        const data = Object.keys(predictionCalibration).length > 0
+            ? predictionCalibration
+            : await fetchPredictionCalibration();
+        predictionCalibration = data;
 
         // Status
         const dcStatus = data.dixon_coles ? data.dixon_coles.status : "not_available";
@@ -4373,6 +4432,7 @@ let wcApiData = {
     matchPredictionCache: {}, // home|away -> single-match prediction
     teams: null,        // from /worldcup/teams
     apiOnline: false,
+    squadLoading: new Set(),
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -4416,6 +4476,7 @@ async function fetchWcSchedule(group, matchday) {
 
 async function fetchWcSquad(team) {
     if (wcApiData.squadCache[team]) return wcApiData.squadCache[team];
+    wcApiData.squadLoading.add(team);
     try {
         const data = await fetchJson(`/world-cup/squads/${encodeURIComponent(team)}`, { fetchOpts: { signal: AbortSignal.timeout(60000) } });
         wcApiData.squadCache[team] = data;
@@ -4424,6 +4485,11 @@ async function fetchWcSquad(team) {
     } catch (e) {
         console.warn("[WC] fetchWcSquad failed:", e.message);
         return null;
+    } finally {
+        wcApiData.squadLoading.delete(team);
+        if (appState.view === "wc_squads" && appState.wcSquadTeam === team) {
+            renderWcSquads();
+        }
     }
 }
 
@@ -4756,6 +4822,23 @@ function renderWcSchedule() {
 function renderWcSquads() {
     const team = appState.wcSquadTeam;
     const rawSquad = wcGetSquad(team);
+    const tbody = document.getElementById("wc-squad-table");
+    const summary = document.getElementById("wc-squad-summary");
+    if (rawSquad.length === 0) {
+        const loading = wcApiData.squadLoading.has(team);
+        const message = loading
+            ? (appState.lang === "zh" ? "正在加载球队名单..." : "Loading squad...")
+            : (appState.lang === "zh" ? "球队名单暂不可用" : "Squad unavailable");
+        if (summary) {
+            summary.innerHTML = `<div class="wc-metric"><span class="metric-value">${loading ? "…" : "—"}</span><span>${escapeHtml(message)}</span></div>`;
+        }
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">${escapeHtml(message)}</td></tr>`;
+        }
+        const chart = getChart("wc-squad-chart");
+        if (chart) chart.clear();
+        return;
+    }
     // Enrich squad with real ratings from /ratings API data
     const squad = matchSquadWithRatings(rawSquad);
     const rated = squad.filter((p) => p.hasRating);
@@ -4795,7 +4878,6 @@ function renderWcSquads() {
         <div class="wc-metric"><span class="metric-value">${escapeHtml(coverageLabel)}</span><span>\u25CE ${escapeHtml(t("coverage"))}</span></div>
     `;
 
-    const tbody = document.getElementById("wc-squad-table");
     tbody.innerHTML = squad.map((p) => {
         const confClass = p.hasRating
             ? (p.confidence === "HIGH" ? "status-high" : "status-medium")
@@ -5477,7 +5559,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadWatchlistNotes();
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, runs, watchlistRows, shortlistRows, actionValues, licenseResp] = await Promise.all([
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, watchlistRows, shortlistRows, actionValues, licenseResp] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
         fetchArtifacts(),
@@ -5485,6 +5567,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fetchValueReport(),
         fetchReviewQueue(),
         fetchPredictionMeta(),
+        fetchPredictionCalibration(),
         fetchModelRuns(),
         fetchWatchlist(),
         fetchShortlist(),
@@ -5498,6 +5581,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     valuePlayers = valueData;
     reviewQueue = reviewData;
     predictionMeta = predictionArtifact;
+    predictionCalibration = predictionCalibrationData;
     modelRuns = runs;
     watchlistData = watchlistRows;
     shortlistData = shortlistRows;
@@ -5553,8 +5637,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     const topOofPill = document.getElementById("top-oof-pill");
     if (topOofPill) {
-        topOofPill.textContent = valueSummaryMeta.sample_count ? `OOF ${valueSummaryMeta.sample_count}` : "OOF none";
-        topOofPill.className = `status-pill ${valueSummaryMeta.sample_count ? "status-high" : "status-low"}`;
+        const valueIsDemo = valueSummaryMeta.status === "demo";
+        topOofPill.textContent = valueIsDemo
+            ? `DEMO ${valueSummaryMeta.sample_count || 0}`
+            : (valueSummaryMeta.sample_count ? `OOF ${valueSummaryMeta.sample_count}` : "OOF none");
+        topOofPill.className = `status-pill ${valueIsDemo ? "status-medium" : (valueSummaryMeta.sample_count ? "status-high" : "status-low")}`;
     }
 
     renderActiveView();

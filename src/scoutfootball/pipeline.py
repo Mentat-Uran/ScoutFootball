@@ -229,7 +229,7 @@ def run_weekly_train(
             from scoutfootball.evaluation.backtests import run_dc_calibration_backtest
 
             cal_result = run_dc_calibration_backtest(
-                team_match, resolved.model_root,
+                team_match, resolved.model_root, save_detail=True,
             )
             ll = cal_result.metrics["log_loss_exact"]
             brier = cal_result.metrics["brier_1x2"]

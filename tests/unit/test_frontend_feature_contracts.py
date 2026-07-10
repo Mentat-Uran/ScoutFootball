@@ -86,3 +86,34 @@ def test_league_coverage_counts_rated_teams_not_player_rows() -> None:
     assert "ratedTeams: new Set()" in app_js
     assert "ratedTeams.add(p.team)" in app_js
     assert "entry.ratedTeams.size" in app_js
+
+
+def test_broken_view_regressions_are_guarded() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    html = _read(FRONTEND / "index.html")
+
+    assert 'const z = appState.lang === "zh";' in app_js
+    assert "formatTimestamp(licenseData.updated_at)" in app_js
+    assert "squadLoading: new Set()" in app_js
+    assert "正在加载球队名单" in app_js
+    assert "selectedPredictionCalibration" in app_js
+    assert 'fetchJson("/predictions/calibration")' in app_js
+    assert 'valueSummaryMeta.status === "demo"' in app_js
+    assert "真实标签可用" in app_js
+    assert "github.com/Mentaturan/ScoutFootball_for_World_Cup" in html
+    assert 'rel="icon" href="favicon.svg"' in html
+    assert (FRONTEND / "favicon.svg").exists()
+
+
+def test_static_prediction_teams_are_not_joined_histories() -> None:
+    team_data = json.loads(_read(FRONTEND / "data" / "teams.json"))
+    teams = team_data.get("teams", [])
+
+    assert teams
+    assert all("," not in team for team in teams)
+
+
+def test_training_exports_calibration_detail_for_frontend() -> None:
+    pipeline = _read(PROJECT_ROOT / "src" / "scoutfootball" / "pipeline.py")
+
+    assert "resolved.model_root, save_detail=True" in pipeline
