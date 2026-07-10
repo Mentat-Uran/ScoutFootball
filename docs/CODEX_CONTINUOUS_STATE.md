@@ -3,29 +3,20 @@
 ## Last Updated
 2026-07-10
 
-## Recently Merged
-- **Team Strength Analysis** (PR #38, 2026-07-10): New `GET /teams/strength` API endpoint and frontend "Teams" view with minutes-weighted team ratings, position group breakdowns (GK/DEF/MID/ATT), top players per team, and ECharts stacked bar chart.
-- **Scouting queue caching** (PR #38): Fixed redundant `build_scouting_queues()` calls across review/watchlist/shortlist endpoints.
-- **MP4 upload limit** (PR #38): Added 50MB size limit on tactical board MP4 export endpoint.
-- **Pipeline dead code fix** (PR #38): Implemented actual score log-loss tracking in DC calibration report (was a `pass` placeholder).
-- **Import fix** (PR #38): Moved `Path` import to top of `api_server.py`.
+## Recently Merged (3 PRs in this session)
+- **PR #38 - Team Strength Analysis**: New `GET /teams/strength` API and frontend "Teams" view with minutes-weighted team ratings, position group breakdowns, top players, and ECharts stacked bar chart. Also fixed scouting queue caching, MP4 upload limit, pipeline dead code, and Path import.
+- **PR #39 - Player Comparison + VAEP + Calibration**: New `GET /players/compare` API and frontend "Compare" view with dual-player radar overlay and metric diff tables. Fixed VAEP player_id→name mapping via xT bridge. Replaced permanent lru_cache with 5-minute TTL cache on calibration.
+- **PR #40 - Team Comparison**: New `GET /teams/compare` API and frontend team comparison section with dual-team radar overlay, position group diff table, and top player comparison.
 
-## Currently In Development
-- Branch: `codex/player-comparison-vaep-mapping`
-- Status: Ready for PR
-- Contents:
-  - New Feature: Player comparison API (`GET /players/compare`) with radar overlay, position percentile diff, and stats comparison
-  - New Feature: Frontend "Compare" view with dual-input search, ECharts radar chart, and comparison tables
-  - Bug Fix: VAEP player_id → player_name mapping via xT bridge and events_all.parquet
-  - Bug Fix: Calibration cache invalidation (replaced `@lru_cache(maxsize=1)` with 5-minute TTL cache)
-
-## Known Blockers
-- None currently.
+## Test Status
+- Full test suite: 745+ tests passing
+- ruff check: clean
+- Frontend syntax: clean
 
 ## Next Round Candidates
-1. **Action value three-level drill-down**: Transform the flat action value leaderboard into player → team → match drill-down with pass/carry/shot breakdowns.
+1. **Action value three-level drill-down**: Transform flat action value leaderboard into player → team → match drill-down with pass/carry/shot breakdowns.
 2. **Server-side scouting write-back**: Add POST endpoints for scouting workspace persistence (ROADMAP Phase B).
-3. **Duplicate endpoint cleanup**: Remove `/prediction/{home}/{away}`, `/ratings/snapshots`, `/reports/model-runs` aliases.
-4. **Team comparison tool**: Extend team strength analysis with head-to-head team comparison view.
-5. **Player search enhancement**: Add autocomplete/suggestions to player search inputs.
-6. **Static data export for compare endpoint**: Generate static fallback data for player comparisons.
+3. **Duplicate endpoint cleanup**: Remove `/prediction/{home}/{away}`, `/ratings/snapshots` aliases if no longer used by frontend.
+4. **Player search autocomplete**: Add typeahead/suggestions to player and team search inputs.
+5. **Static data export for compare endpoints**: Generate static fallback data for player/team comparisons.
+6. **Cache TTL for other loaders**: Apply TTL cache pattern to `_load_all_player_ratings()`, `load_model_meta()`, `load_league_metrics()`, etc.
