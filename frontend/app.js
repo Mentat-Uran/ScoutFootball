@@ -1,4 +1,4 @@
-const APP_VERSION = "1.0.2";
+const APP_VERSION = "1.0.3";
 const i18n = {
     zh: {
         nav_overview: "总览",
@@ -66,7 +66,7 @@ const i18n = {
         snapshot: "快照",
         scouting_kicker: "本地优先决策台",
         scouting_title: "复核、观察与候选闭环",
-        scouting_boundary: "服务端队列只读；复核状态、备注和球员页手动选择保存在当前浏览器。",
+        scouting_boundary: "服务端队列只读；决策默认保存在当前浏览器，可显式启用本地 API 持久化。",
         teams_kicker: "球队实力分析",
         teams_title: "球队评分聚合与位置组实力",
         teams_note: "基于球员评分的分钟加权聚合，展示球队整体实力、位置组分布和核心球员。",
@@ -95,6 +95,8 @@ const i18n = {
         scouting_local_state: "本地状态",
         scout_workspace_export: "导出工作区",
         scout_workspace_import: "导入工作区",
+        scout_workspace_server_save: "保存到本地 API",
+        scout_workspace_server_load: "从本地 API 加载",
         scout_workspace_preview_kicker: "安全导入",
         scout_workspace_preview_title: "球探工作区预览",
         scout_workspace_merge: "安全合并",
@@ -312,7 +314,7 @@ const i18n = {
         snapshot: "Snapshot",
         scouting_kicker: "Local-first decision desk",
         scouting_title: "Review, monitor, decide",
-        scouting_boundary: "Server queues are read-only; review states, notes, and manual player selections stay in this browser.",
+        scouting_boundary: "Server queues are read-only. Decisions stay in this browser unless local API persistence is explicitly enabled.",
         teams_kicker: "Team Strength Analysis",
         teams_title: "Aggregated Ratings & Position Group Strength",
         teams_note: "Minutes-weighted aggregation of player ratings, showing overall team strength, position group distribution and key players.",
@@ -341,6 +343,8 @@ const i18n = {
         scouting_local_state: "Local state",
         scout_workspace_export: "Export workspace",
         scout_workspace_import: "Import workspace",
+        scout_workspace_server_save: "Save to local API",
+        scout_workspace_server_load: "Load from local API",
         scout_workspace_preview_kicker: "Safe import",
         scout_workspace_preview_title: "Scouting workspace preview",
         scout_workspace_merge: "Safe merge",
@@ -663,6 +667,13 @@ let modelRuns = { count: 0, runs: [] };
 let watchlistData = [];
 let shortlistData = [];
 let actionValueSummary = { status: "no_data", players: [], metrics: {} };
+let scoutingWorkspaceCapabilities = {
+    enabled: false,
+    configured: false,
+    local_only: true,
+};
+let scoutingWorkspaceServerId = null;
+let scoutingWorkspaceServerRevision = null;
 let actionValueEvidenceIndex = {
     status: "no_data",
     coverage: {},
@@ -1325,7 +1336,10 @@ async function renderPlayerProfile() {
             return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(sources.join(', '))}</strong></div>`;
         })()}
         ${/* Position percentile */ (() => {
-            const pct = profile ? (profile.position_percentile ?? profile.percentile_rank ?? null) : null;
+            const pcts = profile ? (profile.position_percentiles || null) : null;
+            if (!pcts) return '';
+            const overall = pcts.overall_score || {};
+            const pct = overall.percentile;
             if (pct == null) return '';
             const label = appState.lang === 'zh' ? '位置百分位' : 'Position percentile';
             return `<div><span>${escapeHtml(label)}</span><strong>\u25C6 ${escapeHtml(String(Math.round(pct)))}pct</strong></div>`;
@@ -1377,7 +1391,7 @@ async function renderPlayerProfile() {
     const tacticalActionsEl = document.getElementById("player-tactical-actions");
     if (tacticalActionsEl) {
         const zT = appState.lang === 'zh';
-        tacticalActionsEl.innerHTML = `<button class="text-button" id="btn-send-tactical" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">\u25C6 ${zT ? '发送到战术板' : 'Send to tactical board'}</button> <button class="text-button" id="btn-export-csv" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">${zT ? '导出 CSV' : 'Export CSV'}</button>`;
+        tacticalActionsEl.innerHTML = `<button class="text-button" id="btn-send-tactical" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">\u25C6 ${zT ? '发送到战术板' : 'Send to tactical board'}</button> <button class="text-button" id="btn-export-csv" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">${zT ? '导出报告 CSV' : 'Export report CSV'}</button> <button class="text-button" id="btn-export-json" type="button" style="font-size:0.82rem;padding:0.3rem 0.6rem">${zT ? '导出 JSON' : 'Export JSON'}</button>`;
         const sendBtn = document.getElementById("btn-send-tactical");
         if (sendBtn) {
             sendBtn.addEventListener("click", () => {
@@ -1407,40 +1421,236 @@ async function renderPlayerProfile() {
         const csvBtn = document.getElementById("btn-export-csv");
         if (csvBtn) {
             csvBtn.addEventListener("click", () => {
-                exportPlayerProfileCSV(player, profile, detailScore, detailPosition, detailMinutes, detailMatches, detailConfidence, detailLeague);
+                exportPlayerScoutingReportCSV(player, profile, {
+                    score: detailScore, position: detailPosition, minutes: detailMinutes,
+                    matches: detailMatches, confidence: detailConfidence, league: detailLeague,
+                });
+            });
+        }
+        const jsonBtn = document.getElementById("btn-export-json");
+        if (jsonBtn) {
+            jsonBtn.addEventListener("click", () => {
+                exportPlayerScoutingReportJSON(player, profile, {
+                    score: detailScore, position: detailPosition, minutes: detailMinutes,
+                    matches: detailMatches, confidence: detailConfidence, league: detailLeague,
+                });
             });
         }
     }
 }
 
-function exportPlayerProfileCSV(player, profile, detailScore, detailPosition, detailMinutes, detailMatches, detailConfidence, detailLeague) {
+function _radarLabels() {
+    return ["Attack", "Possession", "Defense", "Reliability", "Impact"];
+}
+
+function _buildScoutingReport(player, profile, detail) {
     const radar = (profile && profile.radar) ? profile.radar : (player.radar || []);
-    const radarLabels = ["Attack", "Possession", "Defense", "Volume", "Overall"];
-    const header = [
-        "name", "team", "position", "rating", "confidence", "season",
-        "minutes", "matches", "league",
-        ...radarLabels.map(l => `radar_${l.toLowerCase()}`),
-    ];
-    const row = [
-        player.name,
-        player.team,
-        detailPosition,
-        detailScore,
-        detailConfidence,
-        player.season,
-        detailMinutes,
-        detailMatches,
-        detailLeague || "",
-        ...radar.map(v => v != null ? Math.round(v) : ""),
-    ];
-    const csv = [header, row].map(r => r.map(csvCell).join(",")).join("\n");
+    const radarLabels = _radarLabels();
+    const radarEntries = radarLabels.map((label, i) => ({
+        label,
+        value: radar[i] != null ? Math.round(radar[i]) : null,
+    }));
+
+    const percentiles = [];
+    if (profile && profile.position_percentiles && typeof profile.position_percentiles === "object") {
+        for (const [key, val] of Object.entries(profile.position_percentiles)) {
+            if (val && val.percentile != null) {
+                percentiles.push({ dimension: key, label: val.label || key, percentile: Math.round(val.percentile) });
+            }
+        }
+    }
+
+    const xtSummary = (profile && profile.xt_summary) ? profile.xt_summary : {};
+    const trend = (profile && profile.trend_3seasons) ? profile.trend_3seasons : {};
+    const trendSeasons = Array.isArray(trend.seasons) ? trend.seasons : [];
+    const trendDelta = trend.delta || {};
+    const lowConfReasons = Array.isArray(profile && profile.low_confidence_reasons) ? profile.low_confidence_reasons : [];
+    const seasonsHistory = Array.isArray(profile && profile.seasons) ? profile.seasons : [];
+
+    return {
+        player: player.name || "",
+        team: player.team || "",
+        position: detail.position || player.position || "",
+        rating: detail.score != null ? Math.round(detail.score * 10) / 10 : (player.rating || ""),
+        confidence: detail.confidence || (profile ? profile.confidence_level : "") || "",
+        season: player.season || (profile ? profile.season : "") || "",
+        minutes: detail.minutes ?? (profile ? profile.minutes : "") ?? "",
+        matches: detail.matches ?? (profile ? profile.matches : "") ?? "",
+        league: detail.league || (profile ? profile.league : "") || "",
+        npg_p90: profile ? profile.npg_p90 : null,
+        assists_p90: profile ? profile.assists_p90 : null,
+        defense_composite: profile ? profile.defense_composite : null,
+        possession_composite: profile ? profile.possession_composite : null,
+        radar: radarEntries,
+        position_percentiles: percentiles,
+        xt_summary: {
+            available: xtSummary.available || false,
+            xT_per_90: xtSummary.xT_per_90 ?? null,
+            xT_total: xtSummary.xT_total ?? null,
+            xT_percentile: xtSummary.xT_percentile ?? null,
+            coverage_note: xtSummary.coverage_note || "",
+        },
+        trend_3seasons: trendSeasons.map(s => ({
+            season: s.season || "",
+            team: s.team || "",
+            score: s.optimized_score ?? null,
+            minutes: s.minutes ?? null,
+        })),
+        trend_delta: {
+            season_from: trendDelta.season_from || "",
+            season_to: trendDelta.season_to || "",
+            score_change: trendDelta.score_change ?? null,
+            goals_change: trendDelta.goals_change ?? null,
+            assists_change: trendDelta.assists_change ?? null,
+            minutes_change: trendDelta.minutes_change ?? null,
+        },
+        low_confidence_reasons: lowConfReasons,
+        seasons_history: seasonsHistory.map(s => ({
+            season: s.season || "",
+            team: s.team || "",
+            league: s.league || "",
+            position_group: s.position_group || "",
+            score: s.optimized_score ?? null,
+            minutes: s.minutes ?? null,
+        })),
+        watchlist_note: watchlistNotes[player.name] || "",
+        shortlist_note: scoutShortlistNotes[player.name] || "",
+        exported_at: new Date().toISOString(),
+        app_version: APP_VERSION,
+    };
+}
+
+function exportPlayerScoutingReportCSV(player, profile, detail) {
+    const report = _buildScoutingReport(player, profile, detail);
+    const lines = [];
+    const safeName = (player.name || "player").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+
+    // Section 1: Profile
+    lines.push(["# Scouting Report"]);
+    lines.push(["field", "value"]);
+    lines.push(["player", report.player]);
+    lines.push(["team", report.team]);
+    lines.push(["position", report.position]);
+    lines.push(["rating", report.rating]);
+    lines.push(["confidence", report.confidence]);
+    lines.push(["season", report.season]);
+    lines.push(["minutes", report.minutes]);
+    lines.push(["matches", report.matches]);
+    lines.push(["league", report.league]);
+    lines.push(["npg_p90", report.npg_p90 ?? ""]);
+    lines.push(["assists_p90", report.assists_p90 ?? ""]);
+    lines.push(["defense_composite", report.defense_composite ?? ""]);
+    lines.push(["possession_composite", report.possession_composite ?? ""]);
+    lines.push([]);
+
+    // Section 2: Radar
+    lines.push(["# Radar (0-100 percentile)"]);
+    lines.push(["dimension", "value"]);
+    for (const r of report.radar) {
+        lines.push([r.label, r.value ?? ""]);
+    }
+    lines.push([]);
+
+    // Section 3: Position percentiles
+    if (report.position_percentiles.length > 0) {
+        lines.push(["# Position Percentiles"]);
+        lines.push(["dimension_key", "label", "percentile"]);
+        for (const p of report.position_percentiles) {
+            lines.push([p.dimension, p.label, p.percentile]);
+        }
+        lines.push([]);
+    }
+
+    // Section 4: xT summary
+    if (report.xt_summary.available || report.xt_summary.xT_per_90 != null) {
+        lines.push(["# xT Summary"]);
+        lines.push(["field", "value"]);
+        lines.push(["available", report.xt_summary.available]);
+        lines.push(["xT_per_90", report.xt_summary.xT_per_90 ?? ""]);
+        lines.push(["xT_total", report.xt_summary.xT_total ?? ""]);
+        lines.push(["xT_percentile", report.xt_summary.xT_percentile ?? ""]);
+        if (report.xt_summary.coverage_note) lines.push(["coverage_note", report.xt_summary.coverage_note]);
+        lines.push([]);
+    }
+
+    // Section 5: 3-season trend
+    if (report.trend_3seasons.length > 0) {
+        lines.push(["# 3-Season Trend"]);
+        lines.push(["season", "team", "score", "minutes"]);
+        for (const s of report.trend_3seasons) {
+            lines.push([s.season, s.team, s.score ?? "", s.minutes ?? ""]);
+        }
+        const d = report.trend_delta;
+        if (d.season_from) {
+            lines.push(["delta_from", d.season_from, "", ""]);
+            lines.push(["delta_to", d.season_to, "", ""]);
+            lines.push(["score_change", d.score_change ?? "", "", ""]);
+            lines.push(["goals_change", d.goals_change ?? "", "", ""]);
+            lines.push(["assists_change", d.assists_change ?? "", "", ""]);
+            lines.push(["minutes_change", d.minutes_change ?? "", "", ""]);
+        }
+        lines.push([]);
+    }
+
+    // Section 6: Low confidence reasons
+    if (report.low_confidence_reasons.length > 0) {
+        lines.push(["# Low Confidence Reasons"]);
+        lines.push(["reason"]);
+        for (const r of report.low_confidence_reasons) {
+            lines.push([r]);
+        }
+        lines.push([]);
+    }
+
+    // Section 7: Scouting notes
+    if (report.watchlist_note || report.shortlist_note) {
+        lines.push(["# Scouting Notes"]);
+        lines.push(["type", "note"]);
+        if (report.watchlist_note) lines.push(["watchlist", report.watchlist_note]);
+        if (report.shortlist_note) lines.push(["shortlist", report.shortlist_note]);
+        lines.push([]);
+    }
+
+    // Section 8: Season history
+    if (report.seasons_history.length > 0) {
+        lines.push(["# Season History"]);
+        lines.push(["season", "team", "league", "position_group", "score", "minutes"]);
+        for (const s of report.seasons_history) {
+            lines.push([s.season, s.team, s.league, s.position_group, s.score ?? "", s.minutes ?? ""]);
+        }
+        lines.push([]);
+    }
+
+    lines.push(["# Exported", report.exported_at, "ScoutFootball v" + report.app_version]);
+
+    const csv = lines.map(r => r.map(csvCell).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${(player.name || "player").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_")}_profile.csv`;
+    link.download = `${safeName}_scouting_report.csv`;
     link.click();
     URL.revokeObjectURL(url);
+}
+
+function exportPlayerScoutingReportJSON(player, profile, detail) {
+    const report = _buildScoutingReport(player, profile, detail);
+    const json = JSON.stringify(report, null, 2);
+    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(player.name || "player").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_")}_scouting_report.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportPlayerProfileCSV(player, profile, detailScore, detailPosition, detailMinutes, detailMatches, detailConfidence, detailLeague) {
+    // Legacy entry point: delegates to the new report exporter.
+    exportPlayerScoutingReportCSV(player, profile, {
+        score: detailScore, position: detailPosition, minutes: detailMinutes,
+        matches: detailMatches, confidence: detailConfidence, league: detailLeague,
+    });
 }
 
 function getChart(id) {
@@ -1816,6 +2026,80 @@ function _renderFormColumn(teamName, formSummary, formList) {
     return html;
 }
 
+function _trendLabel(label) {
+    const labels = {
+        improving: "上升",
+        declining: "下滑",
+        stable: "平稳",
+        insufficient: "样本不足",
+        no_data: "无数据",
+    };
+    return labels[label] || label;
+}
+
+function _trendLabelClass(label) {
+    if (label === "improving") return "trend-up";
+    if (label === "declining") return "trend-down";
+    return "trend-flat";
+}
+
+function _renderFormTrendCard(teamName, trend) {
+    if (!trend || !trend.matches) {
+        return `<div class="h2h-form-card"><div class="h2h-form-team">${teamName}</div><p class="h2h-message h2h-message-inline">无近期趋势数据</p></div>`;
+    }
+    const rating = Number(trend.form_rating) || 0;
+    const momentum = Number(trend.momentum) || 0;
+    const ppg = Number(trend.ppg) || 0;
+    const gfPg = Number(trend.gf_per_game) || 0;
+    const gaPg = Number(trend.ga_per_game) || 0;
+    const cleanSheets = Number(trend.clean_sheets) || 0;
+    const failedToScore = Number(trend.failed_to_score) || 0;
+    const label = trend.trend_label || "no_data";
+    const pointsTrend = Array.isArray(trend.points_trend) ? trend.points_trend : [];
+
+    let html = `<div class="h2h-form-card">`;
+    html += `<div class="h2h-form-team">${teamName}</div>`;
+
+    // Form rating bar (0-100)
+    const ratingColor = rating >= 60 ? "var(--accent,#5fd4a8)" : rating >= 35 ? "var(--warn,#f0c869)" : "var(--danger,#f0877a)";
+    html += `<div class="trend-rating">`;
+    html += `<div class="trend-rating-bar" role="img" aria-label="状态评分 ${rating.toFixed(0)}">`;
+    html += `<span style="width:${Math.max(2, Math.min(100, rating))}%;background:${ratingColor}"></span>`;
+    html += `</div>`;
+    html += `<span class="trend-rating-value">${rating.toFixed(0)}</span>`;
+    html += `</div>`;
+
+    // Trend label badge
+    html += `<div class="trend-label-row"><span class="trend-badge ${_trendLabelClass(label)}">${_trendLabel(label)}</span>`;
+    html += `<span class="trend-momentum">势头 ${momentum >= 0 ? "+" : ""}${momentum.toFixed(2)}</span></div>`;
+
+    // Key metrics
+    html += `<div class="trend-metrics">`;
+    html += `<span>场均 ${ppg.toFixed(2)} 分</span>`;
+    html += `<span>进 ${gfPg.toFixed(2)} / 失 ${gaPg.toFixed(2)}</span>`;
+    html += `<span>零封 ${cleanSheets} · 未进球 ${failedToScore}</span>`;
+    html += `</div>`;
+
+    // Sparkline (cumulative points, oldest -> newest)
+    if (pointsTrend.length >= 2) {
+        const max = pointsTrend[pointsTrend.length - 1] || 1;
+        const w = 100, h = 24;
+        const step = w / (pointsTrend.length - 1);
+        let path = `M0,${h}`;
+        for (let i = 0; i < pointsTrend.length; i++) {
+            const x = i * step;
+            const y = h - (pointsTrend[i] / max) * h;
+            path += ` L${x.toFixed(1)},${y.toFixed(1)}`;
+        }
+        html += `<svg class="trend-sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="积分趋势">`;
+        html += `<path d="${path}" fill="none" stroke="${ratingColor}" stroke-width="1.5"/>`;
+        html += `</svg>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -1913,7 +2197,18 @@ async function renderHeadToHead(home, away) {
     html += _renderFormColumn(awayName, awayFormSummary, awayForm);
     html += `</div>`;
 
-    // 4. Data coverage note
+    // 4. Form trend comparison (momentum, rating, goals trend)
+    const homeTrend = data.home_form_trend || null;
+    const awayTrend = data.away_form_trend || null;
+    if (homeTrend || awayTrend) {
+        html += `<div class="h2h-eyebrow">近期趋势</div>`;
+        html += `<div class="h2h-form-grid">`;
+        html += _renderFormTrendCard(homeName, homeTrend);
+        html += _renderFormTrendCard(awayName, awayTrend);
+        html += `</div>`;
+    }
+
+    // 5. Data coverage note
     const coverage = data.data_coverage || {};
     const seasons = Array.isArray(coverage.seasons_covered) ? coverage.seasons_covered : [];
     const source = escapeHtml(String(coverage.source || "Football-Data"));
@@ -1996,10 +2291,76 @@ async function renderCompare() {
         if (inputA) inputA.addEventListener("keydown", handler);
         if (inputB) inputB.addEventListener("keydown", handler);
     }
+
+    // Wire the CSV export button
+    const exportBtn = document.getElementById("btn-compare-export-csv");
+    if (exportBtn && !exportBtn.dataset.bound) {
+        exportBtn.dataset.bound = "1";
+        exportBtn.addEventListener("click", exportPlayerComparisonCSV);
+    }
+}
+
+function exportPlayerComparisonCSV() {
+    const data = appState.lastCompareData;
+    if (!data || data.error) return;
+    const nameA = data.player_a ? data.player_a.name : "A";
+    const nameB = data.player_b ? data.player_b.name : "B";
+    const safeA = (nameA || "player_a").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+    const safeB = (nameB || "player_b").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+    const lines = [];
+
+    // Section 1: Player profiles
+    lines.push(["# Player Comparison"]);
+    lines.push(["field", "player_a", "player_b"]);
+    const pa = data.player_a || {};
+    const pb = data.player_b || {};
+    for (const key of ["name", "team", "position_group", "position", "season", "league", "rating", "minutes"]) {
+        lines.push([key, pa[key] ?? "", pb[key] ?? ""]);
+    }
+    lines.push([]);
+
+    // Section 2: Radar values
+    lines.push(["# Radar (0-100 percentile)"]);
+    lines.push(["dimension", nameA, nameB]);
+    const labels = data.radar_labels || [];
+    const radarA = data.radar_a || [];
+    const radarB = data.radar_b || [];
+    for (let i = 0; i < labels.length; i++) {
+        lines.push([labels[i], radarA[i] ?? "", radarB[i] ?? ""]);
+    }
+    lines.push([]);
+
+    // Section 3: Stats comparison
+    lines.push(["# Stats Comparison"]);
+    lines.push(["metric", nameA, nameB, "diff"]);
+    for (const s of (data.stats_comparison || [])) {
+        lines.push([s.metric, s.player_a ?? "", s.player_b ?? "", s.diff ?? ""]);
+    }
+    lines.push([]);
+
+    // Section 4: Position percentile comparison
+    lines.push(["# Position Percentile Comparison"]);
+    lines.push(["dimension", nameA, nameB, "diff"]);
+    for (const p of (data.position_percentile_comparison || [])) {
+        lines.push([p.dimension, p.player_a ?? "", p.player_b ?? "", p.diff ?? ""]);
+    }
+    lines.push([]);
+
+    lines.push(["# Exported", new Date().toISOString(), "ScoutFootball v" + APP_VERSION]);
+
+    const csv = lines.map(r => r.map(csvCell).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `compare_${safeA}_vs_${safeB}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
 }
 
 async function _renderCompareResult(a, b) {
     const data = await fetchPlayerComparison(a, b);
+    appState.lastCompareData = data;
     const wrap = document.getElementById("compare-result-wrap");
     const pctPanel = document.getElementById("compare-pct-panel");
 
@@ -2804,6 +3165,18 @@ async function fetchShortlist() {
         console.warn("Failed to fetch shortlist:", err);
         dataLoadErrors.add("shortlist");
         return [];
+    }
+}
+
+async function fetchScoutingWorkspaceCapabilities() {
+    try {
+        const data = await fetchJson("/scouting-workspaces/capabilities");
+        return data && typeof data === "object"
+            ? data
+            : { enabled: false, configured: false, local_only: true };
+    } catch (err) {
+        console.warn("Scouting workspace persistence is unavailable:", err);
+        return { enabled: false, configured: false, local_only: true };
     }
 }
 
@@ -5490,6 +5863,14 @@ function bindEvents() {
             if (file) await previewScoutingWorkspaceImport(file);
         });
     }
+    const scoutServerSaveButton = document.getElementById("scout-server-save");
+    if (scoutServerSaveButton) {
+        scoutServerSaveButton.addEventListener("click", saveScoutingWorkspaceToServer);
+    }
+    const scoutServerLoadButton = document.getElementById("scout-server-load");
+    if (scoutServerLoadButton) {
+        scoutServerLoadButton.addEventListener("click", loadLatestScoutingWorkspaceFromServer);
+    }
     const scoutWorkspaceDialog = document.getElementById("scout-workspace-dialog");
     const scoutWorkspaceCancel = document.getElementById("scout-workspace-cancel");
     const scoutWorkspaceMerge = document.getElementById("scout-workspace-merge");
@@ -6787,7 +7168,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadWatchlistNotes();
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, licenseResp] = await Promise.all([
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, workspaceCapabilities, licenseResp] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
         fetchArtifacts(),
@@ -6801,6 +7182,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fetchShortlist(),
         fetchActionValues(),
         fetchActionValueEvidenceIndex(),
+        fetchScoutingWorkspaceCapabilities(),
         fetchLicense(),
     ]);
 
@@ -6816,7 +7198,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     shortlistData = shortlistRows;
     actionValueSummary = actionValues;
     actionValueEvidenceIndex = actionEvidenceIndex;
+    scoutingWorkspaceCapabilities = workspaceCapabilities;
     licenseData = licenseResp;
+    applyScoutingWorkspaceCapabilities();
     if (players.length > 0) {
         appState.selectedPlayerKey = players[0].key;
     }
@@ -7055,15 +7439,144 @@ function renderScoutingWorkspaceStatus() {
     const summary = SCOUTING_WORKSPACE.summarizeWorkspace(workspace);
     const locale = appState.lang === "zh" ? "zh-CN" : "en-US";
     const updated = new Date(summary.updated_at).toLocaleString(locale);
-    const scope = appState.lang === "zh" ? "仅当前浏览器" : "this browser only";
+    const serverScope = scoutingWorkspaceCapabilities.enabled
+        ? (
+            scoutingWorkspaceServerRevision == null
+            || scoutingWorkspaceServerId !== workspace.audit.workspace_id
+            ? (appState.lang === "zh" ? "本地 API 可用" : "local API ready")
+            : `${appState.lang === "zh" ? "本地 API" : "local API"} rev ${scoutingWorkspaceServerRevision}`
+        )
+        : (appState.lang === "zh" ? "仅当前浏览器" : "this browser only");
     const label = document.createElement("strong");
     label.textContent = `Workspace v${SCOUTING_WORKSPACE.VERSION}`;
     status.replaceChildren(
         label,
         document.createTextNode(
-            ` · rev ${summary.revision} · ${summary.decision_count} ${appState.lang === "zh" ? "项决策" : "decisions"} · ${updated} · ${scope}`,
+            ` · rev ${summary.revision} · ${summary.decision_count} ${appState.lang === "zh" ? "项决策" : "decisions"} · ${updated} · ${serverScope}`,
         ),
     );
+}
+
+function applyScoutingWorkspaceCapabilities() {
+    const enabled = Boolean(scoutingWorkspaceCapabilities.enabled);
+    for (const id of ["scout-server-save", "scout-server-load"]) {
+        const button = document.getElementById(id);
+        if (button) button.hidden = !enabled;
+    }
+    renderScoutingWorkspaceStatus();
+}
+
+async function scoutingWorkspaceBackendRequest(path, options = {}) {
+    const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        signal: AbortSignal.timeout(8_000),
+    });
+    let data = {};
+    try {
+        data = await response.json();
+    } catch {
+        data = {};
+    }
+    if (!response.ok) {
+        const detail = data && typeof data.detail === "object" ? data.detail : {};
+        const error = new Error(detail.code || `workspace_http_${response.status}`);
+        error.status = response.status;
+        error.currentRevision = detail.current_revision;
+        throw error;
+    }
+    return data;
+}
+
+function workspaceForServerSave() {
+    const current = buildCurrentScoutingWorkspace();
+    const state = SCOUTING_WORKSPACE.toLocalState(current);
+    const now = new Date().toISOString();
+    return SCOUTING_WORKSPACE.createWorkspace({
+        workspace_id: current.audit.workspace_id,
+        created_at: current.audit.created_at,
+        updated_at: now,
+        exported_at: now,
+        revision: current.audit.revision + 1,
+        last_action: "server-save",
+        imported_from: current.audit.imported_from,
+        app_version: APP_VERSION,
+        rating_snapshot_ids: current.source.rating_snapshot_ids,
+        review_statuses: state.review_statuses,
+        shortlist_notes: state.shortlist_notes,
+        watchlist_notes: state.watchlist_notes,
+        watchlist: state.watchlist,
+        shortlist: state.shortlist,
+        snapshot_player_keys: state.snapshot_player_keys,
+        snapshot_saved_at: state.snapshot_saved_at,
+    });
+}
+
+async function saveScoutingWorkspaceToServer() {
+    try {
+        const workspace = workspaceForServerSave();
+        const headers = { "Content-Type": "application/json" };
+        if (
+            scoutingWorkspaceServerRevision != null
+            && scoutingWorkspaceServerId === workspace.audit.workspace_id
+        ) {
+            headers["If-Match"] = `"${scoutingWorkspaceServerRevision}"`;
+        }
+        const result = await scoutingWorkspaceBackendRequest(
+            `/scouting-workspaces/${encodeURIComponent(workspace.audit.workspace_id)}`,
+            {
+                method: "PUT",
+                headers,
+                body: SCOUTING_WORKSPACE.serializeWorkspace(workspace),
+            },
+        );
+        persistScoutingWorkspace(workspace);
+        scoutingWorkspaceServerId = workspace.audit.workspace_id;
+        scoutingWorkspaceServerRevision = Number(result.server_revision);
+        renderScouting();
+        setScoutingWorkspaceMessage(
+            appState.lang === "zh"
+                ? `已保存到本地 API · rev ${scoutingWorkspaceServerRevision}`
+                : `Saved to local API · rev ${scoutingWorkspaceServerRevision}`,
+        );
+    } catch (error) {
+        if (error.status === 409 || error.status === 428) {
+            try {
+                const workspaceId = buildCurrentScoutingWorkspace().audit.workspace_id;
+                const remote = await scoutingWorkspaceBackendRequest(
+                    `/scouting-workspaces/${encodeURIComponent(workspaceId)}`,
+                );
+                showScoutingWorkspacePreview(
+                    SCOUTING_WORKSPACE.normalizeWorkspace(remote.workspace),
+                    appState.lang === "zh" ? "本地 API 冲突版本" : "Conflicting local API version",
+                    remote,
+                );
+                setScoutingWorkspaceMessage(
+                    appState.lang === "zh"
+                        ? "检测到服务器版本冲突；请预览合并后再次保存"
+                        : "Server revision conflict; preview and merge before saving again",
+                    true,
+                );
+                return;
+            } catch (loadError) {
+                setScoutingWorkspaceMessage(workspaceErrorMessage(loadError), true);
+                return;
+            }
+        }
+        setScoutingWorkspaceMessage(workspaceErrorMessage(error), true);
+    }
+}
+
+async function loadLatestScoutingWorkspaceFromServer() {
+    try {
+        const record = await scoutingWorkspaceBackendRequest("/scouting-workspaces/latest");
+        showScoutingWorkspacePreview(
+            SCOUTING_WORKSPACE.normalizeWorkspace(record.workspace),
+            appState.lang === "zh" ? "本地 API 最新版本" : "Latest local API workspace",
+            record,
+        );
+    } catch (error) {
+        setScoutingWorkspaceMessage(workspaceErrorMessage(error), true);
+    }
 }
 
 function setScoutingWorkspaceMessage(message, isError = false) {
@@ -7086,6 +7599,11 @@ function workspaceErrorMessage(error) {
         workspace_not_object: zh ? "工作区根节点必须是对象" : "Workspace root must be an object",
         workspace_schema_invalid: zh ? "工作区 schema 不匹配" : "Workspace schema does not match",
         workspace_version_unsupported: zh ? "不支持该工作区版本" : "Workspace version is unsupported",
+        workspace_not_found: zh ? "本地 API 中还没有工作区" : "No workspace is stored in the local API",
+        workspace_persistence_disabled: zh ? "本地 API 持久化未启用" : "Local API persistence is disabled",
+        workspace_remote_access_denied: zh ? "本地 API 拒绝远程工作区访问" : "Local API denied remote workspace access",
+        workspace_revision_conflict: zh ? "服务器版本冲突" : "Server revision conflict",
+        workspace_precondition_required: zh ? "保存前必须加载服务器版本" : "Load the server revision before saving",
     };
     return messages[code] || (zh ? `导入失败：${code}` : `Import failed: ${code}`);
 }
@@ -7130,29 +7648,39 @@ function workspaceSummaryCard(title, summary) {
     </div>`;
 }
 
+function showScoutingWorkspacePreview(incoming, label, serverRecord = null) {
+    const local = buildCurrentScoutingWorkspace();
+    const analysis = SCOUTING_WORKSPACE.analyzeConflict(local, incoming);
+    pendingScoutingWorkspaceImport = { incoming, local, analysis, serverRecord };
+    const preview = document.getElementById("scout-workspace-preview");
+    const dialog = document.getElementById("scout-workspace-dialog");
+    if (!preview || !dialog) throw new Error("workspace_dialog_unavailable");
+    const conflictText = analysis.total_conflicts > 0
+        ? (appState.lang === "zh"
+            ? `检测到 ${analysis.status_conflicts} 个状态冲突和 ${analysis.note_conflicts} 个备注冲突。安全合并会保留两边条目，并以更新时间较新的工作区解决同键冲突。`
+            : `Found ${analysis.status_conflicts} status conflicts and ${analysis.note_conflicts} note conflicts. Safe merge keeps entries from both sides and uses the newer workspace for same-key conflicts.`)
+        : (appState.lang === "zh"
+            ? "未检测到同键冲突。仍会先预览，不会自动覆盖当前浏览器状态。"
+            : "No same-key conflicts detected. The import is still previewed and never overwrites browser state automatically.");
+    const serverText = serverRecord
+        ? ` · ${appState.lang === "zh" ? "服务器" : "server"} rev ${Number(serverRecord.server_revision)}`
+        : "";
+    preview.innerHTML = `<div class="workspace-preview-grid">
+        ${workspaceSummaryCard(appState.lang === "zh" ? "当前浏览器" : "Current browser", analysis.local)}
+        ${workspaceSummaryCard(`${label}${serverText}`, analysis.incoming)}
+    </div><p class="workspace-conflict-note">${escapeHtml(conflictText)}</p>`;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+}
+
 async function previewScoutingWorkspaceImport(file) {
     try {
         if (file.size > SCOUTING_WORKSPACE.MAX_BYTES) throw new Error("workspace_too_large");
         const incoming = SCOUTING_WORKSPACE.parseWorkspace(await file.text());
-        const local = buildCurrentScoutingWorkspace();
-        const analysis = SCOUTING_WORKSPACE.analyzeConflict(local, incoming);
-        pendingScoutingWorkspaceImport = { incoming, local, analysis };
-        const preview = document.getElementById("scout-workspace-preview");
-        const dialog = document.getElementById("scout-workspace-dialog");
-        if (!preview || !dialog) throw new Error("workspace_dialog_unavailable");
-        const conflictText = analysis.total_conflicts > 0
-            ? (appState.lang === "zh"
-                ? `检测到 ${analysis.status_conflicts} 个状态冲突和 ${analysis.note_conflicts} 个备注冲突。安全合并会保留两边条目，并以更新时间较新的工作区解决同键冲突。`
-                : `Found ${analysis.status_conflicts} status conflicts and ${analysis.note_conflicts} note conflicts. Safe merge keeps entries from both sides and uses the newer workspace for same-key conflicts.`)
-            : (appState.lang === "zh"
-                ? "未检测到同键冲突。仍会先预览，不会自动覆盖当前浏览器状态。"
-                : "No same-key conflicts detected. The import is still previewed and never overwrites browser state automatically.");
-        preview.innerHTML = `<div class="workspace-preview-grid">
-            ${workspaceSummaryCard(appState.lang === "zh" ? "当前浏览器" : "Current browser", analysis.local)}
-            ${workspaceSummaryCard(file.name || (appState.lang === "zh" ? "导入文件" : "Import file"), analysis.incoming)}
-        </div><p class="workspace-conflict-note">${escapeHtml(conflictText)}</p>`;
-        if (typeof dialog.showModal === "function") dialog.showModal();
-        else dialog.setAttribute("open", "");
+        showScoutingWorkspacePreview(
+            incoming,
+            file.name || (appState.lang === "zh" ? "导入文件" : "Import file"),
+        );
     } catch (error) {
         pendingScoutingWorkspaceImport = null;
         setScoutingWorkspaceMessage(workspaceErrorMessage(error), true);
@@ -7221,12 +7749,20 @@ function persistScoutingWorkspace(workspace) {
 
 function applyScoutingWorkspaceImport(mode) {
     if (!pendingScoutingWorkspaceImport) return;
-    const { local, incoming } = pendingScoutingWorkspaceImport;
+    const { local, incoming, serverRecord } = pendingScoutingWorkspaceImport;
     try {
         const result = mode === "replace"
             ? replaceWorkspaceAudit(incoming)
-            : SCOUTING_WORKSPACE.mergeWorkspaces(local, incoming);
+            : SCOUTING_WORKSPACE.mergeWorkspaces(
+                local,
+                incoming,
+                serverRecord ? { workspaceId: incoming.audit.workspace_id } : undefined,
+            );
         persistScoutingWorkspace(result);
+        if (serverRecord) {
+            scoutingWorkspaceServerId = incoming.audit.workspace_id;
+            scoutingWorkspaceServerRevision = Number(serverRecord.server_revision);
+        }
         pendingScoutingWorkspaceImport = null;
         const dialog = document.getElementById("scout-workspace-dialog");
         if (dialog) dialog.close();
@@ -7234,8 +7770,12 @@ function applyScoutingWorkspaceImport(mode) {
         renderScouting();
         setScoutingWorkspaceMessage(
             appState.lang === "zh"
-                ? (mode === "replace" ? "已替换本地工作区" : "工作区已安全合并")
-                : (mode === "replace" ? "Local workspace replaced" : "Workspace safely merged"),
+                ? (serverRecord
+                    ? "本地 API 工作区已载入；后续保存将检查服务器版本"
+                    : (mode === "replace" ? "已替换本地工作区" : "工作区已安全合并"))
+                : (serverRecord
+                    ? "Local API workspace loaded; the next save will check its server revision"
+                    : (mode === "replace" ? "Local workspace replaced" : "Workspace safely merged")),
         );
     } catch (error) {
         setScoutingWorkspaceMessage(workspaceErrorMessage(error), true);

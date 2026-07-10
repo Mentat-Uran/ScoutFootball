@@ -34,8 +34,8 @@ The focus right now: upgrading the rating system into an interpretable, evaluabl
 - **Truth Label Contracts:** Schema and validation for `player_truth_labels.parquet` — transfermarkt value, awards, expert tiers, manual calibration. The current local table has 41,389 rows, but label independence and temporal evaluation remain release gates.
 - **Neural Rating Candidate:** `scoutfootball train-rating-nn` trains a supervised sklearn MLP candidate from `rating_feature_matrix.parquet` + `player_truth_labels.parquet` and writes artifacts to `data/models/player_rating_nn/`; it does not replace `player_ratings_optimized.parquet` unless it beats the current optimizer on the same holdout and baseline checks.
 - **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `docs/MODEL_CARD.md`.
-- **Match Prediction:** Independent Poisson baseline with score probability matrices, plus Football-Data head-to-head history and recent-form comparison with offline snapshots.
-- **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages. Liquid Glass static frontend with 7 analysis views (Overview, Players, Value, Matches, Scouting, Action Values, Reports), 4 World Cup views (Schedule, Squads, Compare, Probability), and a first-slice local tactical board. FastAPI read-only backend serves artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, and model runs. `mplsoccer` powers pitch plots, pizza charts, and shot maps. The scouting desk exports and imports a versioned browser-local workspace with revision/timestamp audit fields, import previews, conflict detection, safe merge, and explicit replacement. Frontend rendering escapes API/local JSON strings, CSV exports guard against spreadsheet formula injection, and tactical-board JSON imports pass through a schema sanitizer. API status pill distinguishes LIVE / STATIC / OFFLINE; review queue is paginated (50 per page); NaN/undefined values are guarded; static export no longer writes repr strings for dataclass/Pydantic responses.
+- **Match Prediction:** Independent Poisson baseline with score probability matrices, plus Football-Data head-to-head history and recent-form comparison with form-trend momentum ratings and offline snapshots.
+- **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages. Liquid Glass static frontend with 7 analysis views (Overview, Players, Value, Matches, Scouting, Action Values, Reports), 4 World Cup views (Schedule, Squads, Compare, Probability), and a first-slice local tactical board. FastAPI read-only backend serves artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, and model runs. `mplsoccer` powers pitch plots, pizza charts, and shot maps. The scouting desk exports and imports a versioned browser-local workspace with revision/timestamp audit fields, import previews, conflict detection, safe merge, and explicit replacement. Player profiles export multi-section scouting reports (CSV/JSON); player comparison results export to CSV. Frontend rendering escapes API/local JSON strings, CSV exports guard against spreadsheet formula injection, and tactical-board JSON imports pass through a schema sanitizer. API status pill distinguishes LIVE / STATIC / OFFLINE; review queue is paginated (50 per page); NaN/undefined values are guarded; static export no longer writes repr strings for dataclass/Pydantic responses.
 
 ### Liquid Glass Frontend
 
@@ -46,10 +46,10 @@ The `frontend/` directory contains a static analysis workbench with a consistent
 | View | Description | Data Source |
 | --- | --- | --- |
 | **Overview** (◎) | Artifact registry, data health, coverage metrics | `/artifacts` API |
-| **Players** (◇) | Player pool, radar charts, position percentiles | `/ratings`, `/players/{name}` API |
+| **Players** (◇) | Player pool, radar charts, position percentiles, multi-section scouting report export (CSV/JSON) | `/ratings`, `/players/{name}` API |
 | **Value** (€) | Value deviation scatter, over/under-valued rankings | `/value-summary` API |
-| **Matches** (△) | Match prediction, score probability matrix, head-to-head history and recent form | `/predictions/{home}/{away}`, `/predictions/{home}/{away}/h2h` API |
-| **Scouting** (□) | Review queue filters, local status/notes, watchlist snapshots, CSV plus versioned workspace import/export | `/review-queue`, `/watchlist`, `/shortlist` API + browser-local workspace JSON |
+| **Matches** (△) | Match prediction, score probability matrix, head-to-head history, recent form, and form-trend momentum cards | `/predictions/{home}/{away}`, `/predictions/{home}/{away}/h2h` API |
+| **Scouting** (□) | Review queue filters, local status/notes, versioned workspace import/export, optional conflict-safe local API persistence | `/review-queue`, `/watchlist`, `/shortlist`, `/scouting-workspaces/*` |
 | **Actions** (⌁) | xT/VAEP ranking, sample filters, 3-match player→match action evidence, tactical heatmap handoff | `/action-values`, `/action-values/evidence/{player_id}` API |
 | **Reports** (▣) | Model runs, backend contracts, metrics | `/reports/model-runs` API |
 
@@ -91,6 +91,22 @@ Notes:
 - Local/LAN deployments now default to same-origin API mode.
 - A plain static server falls back to the tracked JSON snapshot under `frontend/data/` when mapped API routes return 404.
 - Allow TCP `8000` through Windows Firewall, or choose another port if needed.
+
+### Optional local scouting workspace persistence
+
+Scouting decisions stay in browser storage by default. To explicitly enable
+audited save/load through a backend running on the same machine:
+
+```powershell
+$env:SCOUTFOOTBALL_ENABLE_WORKSPACE_WRITES="1"
+uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
+```
+
+The API validates the v1.x workspace contract, requires `If-Match` server
+revisions for updates, writes atomically, and keeps the previous record as an
+immutable backup under `data/reports/scouting/workspaces/backups/`. Non-loopback
+access remains denied unless `SCOUTFOOTBALL_ALLOW_REMOTE_WORKSPACE_WRITES=1` is
+also set deliberately. This is local persistence, not cloud or multi-user sync.
 
 ### Docker Deployment
 

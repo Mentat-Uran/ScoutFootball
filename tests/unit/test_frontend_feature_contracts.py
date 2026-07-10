@@ -64,6 +64,8 @@ def test_restored_workbenches_expose_filters_and_boundaries() -> None:
         "scout-export-csv",
         "scout-export-workspace",
         "scout-import-workspace",
+        "scout-server-save",
+        "scout-server-load",
         "scout-workspace-dialog",
         "action-search",
         "action-competition-filter",
@@ -88,6 +90,9 @@ def test_scouting_workspace_is_loaded_before_the_app_and_has_a_versioned_contrac
     assert "mergeWorkspaces" in workspace_js
     assert 'if (typeof SCOUTING_WORKSPACE !== "undefined") ensureScoutingWorkspaceMeta();' in app_js
     assert "Number.MAX_SAFE_INTEGER" in app_js
+    assert "saveScoutingWorkspaceToServer" in app_js
+    assert "loadLatestScoutingWorkspaceFromServer" in app_js
+    assert 'headers["If-Match"]' in app_js
 
 
 def test_static_server_404_continues_to_mapped_json_fallback() -> None:
@@ -120,6 +125,53 @@ def test_broken_view_regressions_are_guarded() -> None:
     assert "真实标签可用" in app_js
     assert "github.com/Mentaturan/ScoutFootball_for_World_Cup" in html
     assert 'rel="icon" href="favicon.svg"' in html
+
+
+def test_player_scouting_report_export_buttons_exist() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert 'id="btn-export-csv"' in app_js
+    assert 'id="btn-export-json"' in app_js
+    assert "exportPlayerScoutingReportCSV" in app_js
+    assert "exportPlayerScoutingReportJSON" in app_js
+    assert "_buildScoutingReport" in app_js
+    # Radar labels must match the API's _RADAR_LABELS.
+    assert '"Reliability"' in app_js
+    assert '"Impact"' in app_js
+    # Old wrong labels must be gone.
+    assert '"Volume"' not in app_js
+    assert '"Overall"' not in app_js
+
+
+def test_player_position_percentiles_field_name_matches_api() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    # API returns position_percentiles (plural dict); the old code read
+    # position_percentile (singular) which was always undefined.
+    assert "profile.position_percentiles" in app_js
+    assert "profile.position_percentile " not in app_js  # no stale singular read
+    assert "overall_score" in app_js
+
+
+def test_player_comparison_export_button_and_function_exist() -> None:
+    html = _read(FRONTEND / "index.html")
+    app_js = _read(FRONTEND / "app.js")
+
+    assert 'id="btn-compare-export-csv"' in html
+    assert "exportPlayerComparisonCSV" in app_js
+    assert "lastCompareData" in app_js
+    assert "exportPlayerComparisonCSV" in app_js
+
+
+def test_form_trend_rendering_is_present() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "home_form_trend" in app_js
+    assert "away_form_trend" in app_js
+    assert "_renderFormTrendCard" in app_js
+    assert "trend-sparkline" in app_js
+    assert "form_rating" in app_js
+    assert "momentum" in app_js
     assert (FRONTEND / "favicon.svg").exists()
 
 
