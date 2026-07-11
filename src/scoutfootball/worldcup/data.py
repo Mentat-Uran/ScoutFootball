@@ -2323,6 +2323,539 @@ def project_knockout_probabilities(
     }
 
 
+def compute_knockout_scenarios(
+    knockout_overview: dict,
+    team_strengths: dict[str, float],
+    team: str,
+    *,
+    num_simulations: int = 5000,
+    seed: int = 42,
+) -> dict:
+    """Compute knockout advancement scenarios for a specific team.
+
+    Given the live knockout bracket and a team in it, produces a what-if
+    analysis showing the team's championship probability at each stage:
+    current baseline, and conditional on winning/losing their next match.
+
+    Returns a dict with:
+        - ``status``: "ok" or "error".
+        - ``team``: the team name.
+        - ``current_championship_probability``: baseline MC win prob (0 if
+          not in bracket or bracket not ready).
+        - ``next_match``: dict describing the team's next scheduled match
+          (match_id, round, opponent, win_probability) or None if the team
+          is not in the bracket or has been eliminated.
+        - ``scenarios``: list of dicts, one per remaining stage the team
+          could reach. Each entry has ``round``, ``match_id``,
+          ``opponent`` (or None for TBD), ``match_win_probability``,
+          ``championship_if_win``, ``championship_if_lose`` (always 0 —
+          eliminated). Only the next match is concrete; later stages show
+          projected championship probability if the team keeps winning.
+        - ``disclaimer``: limitations notice.
+    """
+    # Flatten matches from the rounds dict (overview structure) or matches list
+    rounds_dict = knockout_overview.get("rounds", {})
+    if rounds_dict:
+        all_matches: list[dict] = []
+        for rd_data in rounds_dict.values():
+            all_matches.extend(rd_data.get("matches", []))
+    else:
+        all_matches = knockout_overview.get("matches", [])
+
+    # Find the team's current match in the bracket
+    team_match: dict | None = None
+    for m in all_matches:
+        if m.get("status") == "completed":
+            continue
+        if m.get("home") == team or m.get("away") == team:
+            team_match = m
+            break
+
+    if team_match is None:
+        # Check if team is already eliminated (lost a completed match) or not in bracket
+        eliminated = False
+        for m in all_matches:
+            if m.get("status") != "completed":
+                continue
+            winner = m.get("winner")
+            loser = m.get("home") if winner == m.get("away") else m.get("away")
+            if loser == team:
+                eliminated = True
+                break
+        if eliminated:
+            return {
+                "status": "ok",
+                "team": team,
+                "current_championship_probability": 0.0,
+                "next_match": None,
+                "scenarios": [],
+                "disclaimer": _knockout_scenario_disclaimer(),
+            }
+        return {
+            "status": "error",
+            "message": (
+                f"Team '{team}' is not in the knockout bracket. "
+                "Generate the bracket first or the team did not advance."
+            ),
+            "team": team,
+        }
+
+    # ── Baseline championship probability ──
+    baseline = _mc_championship_probability(
+        all_matches, team_strengths, team, num_simulations, seed
+    )
+
+    # ── Next match details ──
+    mid = team_match.get("match_id", "")
+    round_code = team_match.get("round", "")
+    home = team_match.get("home")
+    away = team_match.get("away")
+    opponent = away if home == team else home
+
+    if team_match.get("status") == "completed":
+        # Should not reach here (we skip completed above), but guard anyway
+        return {
+            "status": "ok",
+            "team": team,
+            "current_championship_probability": baseline,
+            "next_match": None,
+            "scenarios": [],
+            "disclaimer": _knockout_scenario_disclaimer(),
+        }
+
+    # Win probability for the next match
+    ts = team_strengths.get(team, 0.2)
+    os = team_strengths.get(opponent, 0.2) if opponent else 0.2
+    if opponent is None:
+        match_win_prob = None
+    else:
+        # Bradley-Terry from team's perspective
+        match_win_prob = round(_knockout_match_prob(ts, os), 4)
+
+    # Conditional championship probability if team wins the next match
+    champ_if_win = _mc_championship_probability(
+        all_matches, team_strengths, team, num_simulations, seed,
+        force_winner={mid: team},
+    )
+
+    # Build the scenario for the next match
+    scenarios = [{
+        "round": round_code,
+        "match_id": mid,
+        "opponent": opponent,
+        "match_win_probability": match_win_prob,
+        "championship_if_win": round(champ_if_win, 4),
+        "championship_if_lose": 0.0,
+    }]
+
+    # ── Projected later-round scenarios ──
+    # For each subsequent round, show what championship prob would be if
+    # the team reaches that round (wins all prior matches).
+    rounds_chain = ["r32", "r16", "qf", "sf", "final"]
+    try:
+        start_idx = rounds_chain.index(round_code)
+    except ValueError:
+        start_idx = 0
+
+    # Force team to win through to each subsequent round and compute championship prob
+    force_wins: dict[str, str] = {mid: team}
+    for rc in rounds_chain[start_idx + 1:]:
+        # Find the team's match in this round (by searching for matches where
+        # the team could be home or away based on the bracket structure)
+        # We use a simplified approach: force the team to win all prior matches,
+        # then find their next match in round rc
+        team_match_rc: dict | None = None
+        for m in all_matches:
+            if m.get("round") != rc:
+                continue
+            if m.get("status") == "completed":
+                if m.get("winner") == team:
+                    team_match_rc = m
+                    break
+                continue
+            # Check if team could be in this match (home or away slot)
+            # For not-yet-played matches, we look at the seed label or position
+            # Simplified: if home or away is already set to team, it's their match
+            if m.get("home") == team or m.get("away") == team:
+                team_match_rc = m
+                break
+
+        if team_match_rc is None:
+            # Can't determine the match — likely TBD. Report projected champ prob.
+            champ_proj = _mc_championship_probability(
+                all_matches, team_strengths, team, num_simulations, seed,
+                force_winner=force_wins,
+            )
+            scenarios.append({
+                "round": rc,
+                "match_id": None,
+                "opponent": None,
+                "match_win_probability": None,
+                "championship_if_reach": round(champ_proj, 4),
+                "note": "Opponent TBD — projected championship probability if team reaches this round.",
+            })
+            continue
+
+        rc_mid = team_match_rc.get("match_id", "")
+        rc_opponent = None
+        rc_home = team_match_rc.get("home")
+        rc_away = team_match_rc.get("away")
+        if rc_home == team:
+            rc_opponent = rc_away
+        elif rc_away == team:
+            rc_opponent = rc_home
+
+        # Force team to win this round's match too, then compute champ prob
+        force_wins[rc_mid] = team
+        champ_if_win_rc = _mc_championship_probability(
+            all_matches, team_strengths, team, num_simulations, seed,
+            force_winner=force_wins,
+        )
+
+        if rc_opponent is not None:
+            rc_os = team_strengths.get(rc_opponent, 0.2)
+            rc_win_prob = round(_knockout_match_prob(ts, rc_os), 4)
+        else:
+            rc_win_prob = None
+
+        scenarios.append({
+            "round": rc,
+            "match_id": rc_mid,
+            "opponent": rc_opponent,
+            "match_win_probability": rc_win_prob,
+            "championship_if_win": round(champ_if_win_rc, 4),
+            "championship_if_lose": 0.0,
+        })
+
+    return {
+        "status": "ok",
+        "team": team,
+        "current_championship_probability": round(baseline, 4),
+        "next_match": {
+            "match_id": mid,
+            "round": round_code,
+            "opponent": opponent,
+            "win_probability": match_win_prob,
+        },
+        "scenarios": scenarios,
+        "disclaimer": _knockout_scenario_disclaimer(),
+    }
+
+
+def _knockout_scenario_disclaimer() -> str:
+    return (
+        "Scenario probabilities are Monte Carlo estimates from a "
+        "Bradley-Terry strength model. Conditional probabilities force "
+        "the team to win specified matches and re-simulate the rest. "
+        "Real outcomes depend on form, injuries, tactics and home-field "
+        "advantage not captured by the model."
+    )
+
+
+def _mc_championship_probability(
+    all_matches: list[dict],
+    team_strengths: dict[str, float],
+    target_team: str,
+    num_simulations: int,
+    seed: int,
+    *,
+    force_winner: dict[str, str] | None = None,
+) -> float:
+    """Run Monte Carlo and return championship probability for *target_team*.
+
+    *force_winner* maps match_id → team name to force as the winner of that
+    match (used for conditional/scenario analysis).
+    """
+    import random
+
+    rng = random.Random(seed)
+    force_winner = force_winner or {}
+
+    # Build R32 list
+    r32_matches = [m for m in all_matches if m.get("round") == "r32"]
+    if not r32_matches:
+        return 0.0
+    if not all(m.get("home") and m.get("away") for m in r32_matches):
+        return 0.0
+
+    # Build later-round lookup
+    later_matches: dict[str, dict] = {}
+    for m in all_matches:
+        rc = m.get("round", "")
+        if rc != "r32":
+            pos = m.get("position", 0)
+            later_matches[f"{rc}-{pos}"] = m
+
+    win_count = 0
+    sim_count = 0
+    for _ in range(num_simulations):
+        current_teams: list[tuple[str, float]] = []
+        for m in r32_matches:
+            mid = m.get("match_id", "")
+            home = m["home"]
+            away = m["away"]
+            # Check forced winner first
+            if mid in force_winner:
+                fw = force_winner[mid]
+                s = team_strengths.get(fw, 0.2)
+                current_teams.append((fw, s))
+                continue
+            status = m.get("status", "scheduled")
+            if status == "completed":
+                winner = m.get("winner")
+                s = team_strengths.get(winner, 0.2)
+                current_teams.append((winner, s))
+            else:
+                hs = team_strengths.get(home, 0.2)
+                as_ = team_strengths.get(away, 0.2)
+                p_home = _knockout_match_prob(hs, as_)
+                if rng.random() < p_home:
+                    current_teams.append((home, hs))
+                else:
+                    current_teams.append((away, as_))
+
+        rounds_chain = ["r16", "qf", "sf", "final"]
+        for rc in rounds_chain:
+            next_round: list[tuple[str, float]] = []
+            for i in range(0, len(current_teams) - 1, 2):
+                t1, s1 = current_teams[i]
+                t2, s2 = current_teams[i + 1]
+                pos = i // 2 + 1
+                key = f"{rc}-{pos}"
+                lm = later_matches.get(key, {})
+                lm_id = lm.get("match_id", "")
+                if lm_id in force_winner:
+                    fw = force_winner[lm_id]
+                    s = team_strengths.get(fw, 0.2)
+                    next_round.append((fw, s))
+                    continue
+                if lm.get("status") == "completed":
+                    winner = lm.get("winner")
+                    s = team_strengths.get(winner, 0.2)
+                    next_round.append((winner, s))
+                else:
+                    p1 = _knockout_match_prob(s1, s2)
+                    if rng.random() < p1:
+                        next_round.append((t1, s1))
+                    else:
+                        next_round.append((t2, s2))
+            current_teams = next_round
+
+        if current_teams:
+            winner = current_teams[0][0]
+            if winner == target_team:
+                win_count += 1
+            sim_count += 1
+
+    return win_count / sim_count if sim_count > 0 else 0.0
+
+
+def simulate_group_stage(
+    state,
+    team_strengths: dict[str, float] | None = None,
+    *,
+    num_simulations: int = 1000,
+    seed: int = 42,
+    mode: str = "random",
+) -> dict:
+    """Simulate remaining group-stage matches and report outcome frequencies.
+
+    For each simulation, applies random or strength-weighted outcomes to all
+    unplayed group matches, then computes final standings and advancing teams.
+
+    Parameters
+    ----------
+    state:
+        Current :class:`TournamentState`.
+    team_strengths:
+        Mapping of team name → strength. Required when ``mode="strength"``;
+        ignored when ``mode="random"``.
+    num_simulations:
+        Number of Monte Carlo iterations.
+    seed:
+        Random seed for reproducibility.
+    mode:
+        ``"random"`` (uniform 1/3 win/draw/loss) or ``"strength"``
+        (Bradley-Terry-biased outcomes).
+
+    Returns a dict with:
+        - ``mode``: simulation mode used.
+        - ``num_simulations``: iterations run.
+        - ``remaining_matches``: count of unplayed group matches.
+        - ``advancement_probability``: list of {team, group, advance_prob,
+          win_group_prob} sorted by advance_prob descending.
+        - ``most_likely_group_winners``: list of {group, team, frequency,
+          probability} — the most frequent winner per group.
+        - ``disclaimer``: limitations notice.
+    """
+    import random
+
+    from scoutfootball.worldcup.tournament import (
+        compute_all_standings,
+        determine_advancing_teams,
+        get_team_group,
+    )
+
+    rng = random.Random(seed)
+
+    import copy
+
+    # Collect unplayed group matches
+    remaining: list[dict] = []
+    for m in state.matches:
+        if m.get("group") and m.get("group") in ("r32", "r16", "qf", "sf", "final"):
+            continue
+        result = state.results.get(m["match_id"])
+        if result and result.get("status") == "completed":
+            continue
+        remaining.append(m)
+
+    if not remaining:
+        # No remaining matches — report current state as deterministic
+        standings = compute_all_standings(state)
+        advancing = determine_advancing_teams(state)
+        adv_list = []
+        for s in advancing["all_advancing"]:
+            adv_list.append({
+                "team": s,
+                "group": get_team_group(s) or "",
+                "advance_prob": 1.0 if s in advancing["all_advancing"] else 0.0,
+                "win_group_prob": 1.0 if s in advancing.get("winners", []) else 0.0,
+            })
+        return {
+            "status": "ok",
+            "mode": mode,
+            "num_simulations": 1,
+            "remaining_matches": 0,
+            "advancement_probability": adv_list,
+            "most_likely_group_winners": [
+                {"group": g, "team": standings[g][0].team if standings[g] else None,
+                 "frequency": 1, "probability": 1.0}
+                for g in sorted(standings.keys())
+            ],
+            "disclaimer": _group_sim_disclaimer(),
+        }
+
+    # Tally per-team advancement and group-win counts
+    advance_counts: dict[str, int] = {}
+    group_win_counts: dict[str, dict[str, int]] = {}  # group → team → count
+
+    for _ in range(num_simulations):
+        # Build a simulated state by applying outcomes to remaining matches
+        sim_state = copy.deepcopy(state)
+        for m in remaining:
+            mid = m["match_id"]
+            home = m.get("home", "")
+            away = m.get("away", "")
+            if mode == "strength" and team_strengths:
+                hs = team_strengths.get(home, 0.2)
+                as_ = team_strengths.get(away, 0.2)
+                # Use Bradley-Terry to determine win, then assign a scoreline
+                # Group matches can draw (~28% baseline), so split probability:
+                #   home_win = p_bt * 0.72, draw = 0.28, away_win = (1-p_bt) * 0.72
+                p_home = _knockout_match_prob(hs, as_)
+                r = rng.random()
+                draw_prob = 0.28
+                home_win_prob = p_home * (1 - draw_prob)
+                if r < home_win_prob:
+                    # Home win
+                    hg, ag = 1, 0
+                elif r < home_win_prob + draw_prob:
+                    # Draw
+                    hg, ag = 0, 0
+                else:
+                    # Away win
+                    hg, ag = 0, 1
+            else:
+                # Random: 1/3 win, 1/3 draw, 1/3 loss
+                r = rng.randint(0, 2)
+                if r == 0:
+                    hg, ag = 1, 0
+                elif r == 1:
+                    hg, ag = 0, 0
+                else:
+                    hg, ag = 0, 1
+            sim_state.results[mid] = {
+                "home_goals": hg,
+                "away_goals": ag,
+                "status": "completed",
+            }
+
+        advancing = determine_advancing_teams(sim_state)
+        for t in advancing["all_advancing"]:
+            advance_counts[t] = advance_counts.get(t, 0) + 1
+
+        standings = compute_all_standings(sim_state)
+        for g, g_standings in standings.items():
+            if not g_standings:
+                continue
+            winner = g_standings[0].team
+            if g not in group_win_counts:
+                group_win_counts[g] = {}
+            group_win_counts[g][winner] = group_win_counts[g].get(winner, 0) + 1
+
+    # Build advancement probability list — collect all group-stage teams
+    all_teams: set[str] = set()
+    for g_teams in GROUPS.values():
+        all_teams.update(g_teams)
+    if not all_teams:
+        # Fall back to extracting from matches
+        for m in state.matches:
+            g = m.get("group", "")
+            if g and g not in ("r32", "r16", "qf", "sf", "final"):
+                all_teams.add(m.get("home", ""))
+                all_teams.add(m.get("away", ""))
+
+    adv_list = []
+    for t in sorted(all_teams):
+        if not t:
+            continue
+        adv_prob = advance_counts.get(t, 0) / num_simulations
+        grp = get_team_group(t) or ""
+        # Group win prob
+        gwc = group_win_counts.get(grp, {}).get(t, 0) / num_simulations
+        adv_list.append({
+            "team": t,
+            "group": grp,
+            "advance_prob": round(adv_prob, 4),
+            "win_group_prob": round(gwc, 4),
+        })
+    adv_list.sort(key=lambda x: -x["advance_prob"])
+
+    # Most likely group winners
+    likely_winners = []
+    for g in sorted(group_win_counts.keys()):
+        teams = group_win_counts[g]
+        if not teams:
+            continue
+        best = max(teams.items(), key=lambda x: x[1])
+        likely_winners.append({
+            "group": g,
+            "team": best[0],
+            "frequency": best[1],
+            "probability": round(best[1] / num_simulations, 4),
+        })
+
+    return {
+        "status": "ok",
+        "mode": mode,
+        "num_simulations": num_simulations,
+        "remaining_matches": len(remaining),
+        "advancement_probability": adv_list,
+        "most_likely_group_winners": likely_winners,
+        "disclaimer": _group_sim_disclaimer(),
+    }
+
+
+def _group_sim_disclaimer() -> str:
+    return (
+        "Group-stage simulation uses simplified outcome models (uniform "
+        "random or Bradley-Terry-biased). Real match outcomes depend on "
+        "form, injuries, tactics, home-field advantage and other factors "
+        "not captured. Advancement probabilities are illustrative estimates."
+    )
+
+
 def compute_team_outlook(
     team: str,
     team_strengths: dict[str, float],

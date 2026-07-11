@@ -47,10 +47,12 @@ from scoutfootball.api import (
     get_team_strength,
     get_value_summary,
     get_watchlist,
+    get_wc_group_stage_simulation,
     get_wc_groups,
     get_wc_knockout,
     get_wc_knockout_bracket,
     get_wc_knockout_probabilities,
+    get_wc_knockout_scenarios,
     get_wc_predictions,
     get_wc_schedule,
     get_wc_squad,
@@ -584,6 +586,18 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/tournament/knockout/probabilities")
     def wc_knockout_probabilities():
         return get_wc_knockout_probabilities()
+
+    @app.get("/world-cup/tournament/knockout/scenarios/{team}")
+    def wc_knockout_scenarios(team: str, num_simulations: int = 5000):
+        return get_wc_knockout_scenarios(team, num_simulations=num_simulations)
+
+    @app.get("/world-cup/tournament/group-simulation")
+    def wc_group_stage_simulation(
+        mode: str = "random", num_simulations: int = 1000
+    ):
+        return get_wc_group_stage_simulation(
+            mode=mode, num_simulations=num_simulations
+        )
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")

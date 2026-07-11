@@ -826,6 +826,68 @@ Return per-match win probabilities and Monte Carlo tournament championship odds 
 
 **Response** (when no bracket generated): `{ "status": "error", "message": "No knockout bracket generated yet..." }`
 
+### GET /world-cup/tournament/knockout/scenarios/{team}
+Return per-stage championship probability scenarios for a specific team in the knockout bracket. Shows current baseline championship probability and what-if analysis for each remaining knockout stage (conditional on winning each match). Uses Monte Carlo simulation (5,000 iterations, seeded) with force-winner logic for conditional analysis.
+
+**Response** (when team is in bracket):
+```json
+{
+  "status": "ok",
+  "team": "Argentina",
+  "current_championship_probability": 0.234,
+  "next_match": {
+    "match_id": "r32-01",
+    "round": "r32",
+    "opponent": "Panama",
+    "win_probability": 0.92
+  },
+  "scenarios": [
+    {
+      "round": "r32",
+      "match_id": "r32-01",
+      "opponent": "Panama",
+      "match_win_probability": 0.92,
+      "championship_if_win": 0.255,
+      "championship_if_lose": 0.0
+    },
+    {
+      "round": "r16",
+      "match_id": null,
+      "opponent": null,
+      "match_win_probability": null,
+      "championship_if_reach": 0.255,
+      "note": "Opponent TBD — projected championship probability if team reaches this round."
+    }
+  ],
+  "disclaimer": "Scenario probabilities are Monte Carlo estimates..."
+}
+```
+
+**Response** (when team eliminated): `{ "status": "ok", "team": "...", "current_championship_probability": 0.0, "next_match": null, "scenarios": [] }`
+
+**Response** (when no bracket): `{ "status": "error", "message": "No knockout bracket generated..." }`
+
+### GET /world-cup/tournament/group-simulation?mode=random&num_simulations=1000
+Batch-simulate all remaining group-stage matches and report advancement odds. `mode` is `random` (uniform 1/3 win/draw/loss) or `strength` (Bradley-Terry-weighted with 28% draw baseline).
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "mode": "strength",
+  "num_simulations": 1000,
+  "remaining_matches": 48,
+  "advancement_probability": [
+    { "team": "Argentina", "group": "A", "advance_prob": 0.95, "win_group_prob": 0.82 },
+    { "team": "France", "group": "B", "advance_prob": 0.88, "win_group_prob": 0.65 }
+  ],
+  "most_likely_group_winners": [
+    { "group": "A", "team": "Argentina", "frequency": 820, "probability": 0.82 }
+  ],
+  "disclaimer": "Group-stage simulation uses simplified outcome models..."
+}
+```
+
 ### GET /license
 Data source license attribution.
 
