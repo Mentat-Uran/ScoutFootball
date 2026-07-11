@@ -1036,6 +1036,13 @@ def get_team_comparison(team_a: str, team_b: str) -> dict:
     overall_b = b.get("overall_rating", 0)
     overall_diff = round(overall_a - overall_b, 2)
 
+    # Depth dimension: normalize squad_size to 0-100 scale relative to both teams
+    squad_a = a.get("squad_size", 0)
+    squad_b = b.get("squad_size", 0)
+    max_squad = max(squad_a, squad_b, 1)
+    depth_a = round(float(squad_a) / max_squad * 100, 1)
+    depth_b = round(float(squad_b) / max_squad * 100, 1)
+
     return _clean_json_value({
         "team_a": {
             "name": a["team"],
@@ -1057,13 +1064,14 @@ def get_team_comparison(team_a: str, team_b: str) -> dict:
         "overall_advantage": "a" if overall_diff > 0 else ("b" if overall_diff < 0 else "tie"),
         "position_group_comparison": pos_comparison,
         "top_players_comparison": top_comparison,
-        "radar_labels": ["GK", "DEF", "MID", "ATT", "Overall"],
+        "radar_labels": ["GK", "DEF", "MID", "ATT", "Overall", "Depth"],
         "radar_a": [
             (a.get("position_groups") or {}).get("GK", {}).get("rating", 0),
             (a.get("position_groups") or {}).get("DEF", {}).get("rating", 0),
             (a.get("position_groups") or {}).get("MID", {}).get("rating", 0),
             (a.get("position_groups") or {}).get("ATT", {}).get("rating", 0),
             overall_a,
+            depth_a,
         ],
         "radar_b": [
             (b.get("position_groups") or {}).get("GK", {}).get("rating", 0),
@@ -1071,6 +1079,7 @@ def get_team_comparison(team_a: str, team_b: str) -> dict:
             (b.get("position_groups") or {}).get("MID", {}).get("rating", 0),
             (b.get("position_groups") or {}).get("ATT", {}).get("rating", 0),
             overall_b,
+            depth_b,
         ],
     })
 
@@ -2482,26 +2491,22 @@ def get_player_comparison(player_a: str, player_b: str) -> dict:
         })
 
     # Position percentiles comparison
+    # position_percentiles is a dict: {dim_key: {label, percentile}}
     pp_a = profile_a.get("position_percentiles", {})
     pp_b = profile_b.get("position_percentiles", {})
 
-    # Merge dimension keys from both
+    # Merge dimension keys from both (dict keys, preserving order)
     all_dims = list(dict.fromkeys(
-        list(pp_a.get("dimensions", [])) + list(pp_b.get("dimensions", []))
+        list(pp_a.keys()) + list(pp_b.keys())
     ))
 
     pct_comparison = []
     for dim in all_dims:
-        val_a = None
-        val_b = None
-        for d in pp_a.get("dimensions", []):
-            if d.get("name") == dim:
-                val_a = d.get("percentile")
-                break
-        for d in pp_b.get("dimensions", []):
-            if d.get("name") == dim:
-                val_b = d.get("percentile")
-                break
+        entry_a = pp_a.get(dim, {})
+        entry_b = pp_b.get(dim, {})
+        val_a = entry_a.get("percentile") if isinstance(entry_a, dict) else None
+        val_b = entry_b.get("percentile") if isinstance(entry_b, dict) else None
+        label = entry_a.get("label") or entry_b.get("label") or dim
         diff = None
         advantage = "tie"
         if val_a is not None and val_b is not None:
@@ -2509,6 +2514,7 @@ def get_player_comparison(player_a: str, player_b: str) -> dict:
             advantage = "a" if val_a > val_b else ("b" if val_b > val_a else "tie")
         pct_comparison.append({
             "dimension": dim,
+            "label": label,
             "player_a": val_a,
             "player_b": val_b,
             "diff": diff,
@@ -2565,6 +2571,203 @@ def get_player_comparison(player_a: str, player_b: str) -> dict:
         "same_position": (
             profile_a.get("position_group", "") == profile_b.get("position_group", "")
         ),
+    })
+
+
+# ── Player similarity search ─────────────────────────────────────────────
+
+_SIMILARITY_FEATURES = [
+    ("npg_p90", "Attack"),
+    ("assists_p90", "Creation"),
+    ("defense_composite", "Defense"),
+    ("possession_composite", "Possession"),
+    ("optimized_score", "Overall"),
+    ("minutes", "Availability"),
+]
+
+
+def find_similar_players(
+    player_name: str,
+    season: str | None = None,
+    limit: int = 10,
+) -> dict:
+    """Find players with similar profiles within the same position group.
+
+    Uses z-scored feature vectors (attack/creation/defense/possession/
+    overall/availability) and cosine similarity. Returns top-N comparable
+    players with similarity score, shared strengths and weaknesses.
+    """
+    df = load_player_ratings(season=season)
+    if df.empty:
+        return {"count": 0, "target": None, "similar": [], "error": "no_data"}
+
+    # Resolve position_group column
+    if "position_group" not in df.columns:
+        if "sub_position" in df.columns:
+            df["position_group"] = df["sub_position"]
+        else:
+            return {"count": 0, "target": None, "similar": [], "error": "no_position"}
+
+    name_col = "player_name" if "player_name" in df.columns else "player"
+    if name_col not in df.columns:
+        name_col = "player"
+
+    # Fuzzy match target player
+    exact_mask = df["player"] == player_name
+    if exact_mask.any():
+        mask = exact_mask
+    else:
+        mask = df["player"].str.contains(player_name, case=False, na=False)
+    if season:
+        mask = mask & (df["season"] == season)
+    target_rows = df[mask]
+    if target_rows.empty:
+        return {"count": 0, "target": None, "similar": [], "error": "not_found"}
+
+    # Pick best season for target
+    try:
+        target_row = target_rows.loc[target_rows["optimized_score"].idxmax()]
+    except (ValueError, TypeError):
+        target_row = target_rows.iloc[0]
+
+    target_pos = str(target_row.get("position_group", ""))
+    target_player = str(target_row.get("player", player_name))
+    target_season = str(target_row.get("season", ""))
+
+    # Filter to same position group
+    pool = df[df["position_group"] == target_pos].copy()
+    if len(pool) < 2:
+        return {
+            "count": 0,
+            "target": {
+                "name": target_player,
+                "team": str(target_row.get("team", "")),
+                "league": str(target_row.get("league", "")),
+                "season": target_season,
+                "position_group": target_pos,
+                "optimized_score": round(float(target_row.get("optimized_score", 0) or 0), 1),
+            },
+            "similar": [],
+            "error": "pool_too_small",
+        }
+
+    # Build feature matrix: z-scored within position pool
+    feature_cols = [fc[0] for fc in _SIMILARITY_FEATURES]
+    for col in feature_cols:
+        if col not in pool.columns:
+            pool[col] = 0.0
+        pool[col] = pd.to_numeric(pool[col], errors="coerce").fillna(0.0)
+
+    # Z-score within pool
+    means = pool[feature_cols].mean()
+    stds = pool[feature_cols].std(ddof=0)
+    stds = stds.replace(0, 1.0)  # avoid div-by-zero
+    z_matrix = (pool[feature_cols] - means) / stds
+    z_values = z_matrix.values
+
+    # Find target index in pool
+    target_idx_in_pool = None
+    for idx, row in pool.iterrows():
+        if (
+            str(row.get("player", "")) == target_player
+            and str(row.get("season", "")) == target_season
+        ):
+            target_idx_in_pool = idx
+            break
+    if target_idx_in_pool is None:
+        # Fallback: first matching name
+        name_matches = pool[pool["player"] == target_player]
+        if not name_matches.empty:
+            target_idx_in_pool = name_matches.index[0]
+        else:
+            target_idx_in_pool = pool.index[0]
+
+    target_pos_in_array = list(pool.index).index(target_idx_in_pool)
+    target_vec = z_values[target_pos_in_array]
+
+    # Cosine similarity
+    target_norm = float(np.linalg.norm(target_vec))
+    if target_norm == 0:
+        return {
+            "count": 0,
+            "target": {
+                "name": target_player,
+                "team": str(target_row.get("team", "")),
+                "league": str(target_row.get("league", "")),
+                "season": target_season,
+                "position_group": target_pos,
+                "optimized_score": round(float(target_row.get("optimized_score", 0) or 0), 1),
+            },
+            "similar": [],
+            "error": "zero_vector",
+        }
+
+    norms = np.linalg.norm(z_values, axis=1)
+    safe_norms = np.where(norms == 0, 1.0, norms)
+    similarities = (z_values @ target_vec) / (safe_norms * target_norm)
+    # Clamp to [0, 1] — negative cosine similarity means "opposite" profile,
+    # which is not meaningful as a similarity score for users
+    similarities = np.clip(similarities, 0, 1)
+
+    # Also compute percentile ranks for strengths/weaknesses analysis
+    pct_ranks = pool[feature_cols].rank(pct=True) * 100
+
+    # Exclude target from results
+    pool_indices = list(pool.index)
+    candidates = []
+    for i, idx in enumerate(pool_indices):
+        if idx == target_idx_in_pool:
+            continue
+        row = pool.loc[idx]
+        pname = str(row.get("player", ""))
+        if pname == target_player:
+            continue  # exclude same player other seasons
+        candidates.append((i, idx, pname, row, similarities[i]))
+
+    # Sort by similarity descending
+    candidates.sort(key=lambda c: c[4], reverse=True)
+    candidates = candidates[:limit]
+
+    target_pcts = pct_ranks.loc[target_idx_in_pool]
+    similar_list = []
+    for _i, idx, pname, row, sim in candidates:
+        cand_pcts = pct_ranks.loc[idx]
+        # Shared strengths: both > 70th percentile
+        shared_strengths = []
+        shared_weaknesses = []
+        for col, label in _SIMILARITY_FEATURES:
+            t_pct = float(target_pcts.get(col, 50))
+            c_pct = float(cand_pcts.get(col, 50))
+            if t_pct > 70 and c_pct > 70:
+                shared_strengths.append(label)
+            elif t_pct < 30 and c_pct < 30:
+                shared_weaknesses.append(label)
+
+        similar_list.append(_clean_json_value({
+            "name": pname,
+            "team": str(row.get("team", "")),
+            "league": str(row.get("league", "")),
+            "season": str(row.get("season", "")),
+            "position_group": str(row.get("position_group", "")),
+            "optimized_score": round(float(row.get("optimized_score", 0) or 0), 1),
+            "similarity": round(float(sim) * 100, 1),
+            "shared_strengths": shared_strengths,
+            "shared_weaknesses": shared_weaknesses,
+            "minutes": round(float(row.get("minutes", 0) or 0)),
+        }))
+
+    return _clean_json_value({
+        "count": len(similar_list),
+        "target": {
+            "name": target_player,
+            "team": str(target_row.get("team", "")),
+            "league": str(target_row.get("league", "")),
+            "season": target_season,
+            "position_group": target_pos,
+            "optimized_score": round(float(target_row.get("optimized_score", 0) or 0), 1),
+        },
+        "features": [fc[1] for fc in _SIMILARITY_FEATURES],
+        "similar": similar_list,
     })
 
 

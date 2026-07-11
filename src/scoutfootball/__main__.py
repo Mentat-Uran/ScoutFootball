@@ -77,6 +77,67 @@ def _cmd_validate(_args: argparse.Namespace) -> None:
     print(report.summary())
 
 
+def _cmd_import_truth_labels(args: argparse.Namespace) -> None:
+    """Import scouting workspace review decisions as truth labels."""
+    import json as _json
+    from pathlib import Path as _Path
+
+    from scoutfootball.evaluation.truth_labels import (
+        validate_truth_labels,
+        workspace_to_truth_labels,
+    )
+
+    workspace_path = _Path(args.workspace).resolve()
+    if not workspace_path.exists():
+        print(f"Error: workspace file not found: {workspace_path}")
+        sys.exit(1)
+
+    with open(workspace_path, encoding="utf-8") as f:
+        workspace = _json.load(f)
+
+    new_labels = workspace_to_truth_labels(
+        workspace,
+        default_season=args.season or "",
+        default_position_scope=args.position_scope or "all",
+    )
+
+    if new_labels.empty:
+        print("No approved/rejected decisions found in workspace. Nothing to import.")
+        return
+
+    # Merge with existing truth labels if present
+    output_path = _Path(args.output).resolve()
+    if output_path.exists():
+        existing = pd.read_parquet(output_path)
+        # Remove old scouting_review labels for the same player_ids to avoid duplicates
+        if not existing.empty:
+            new_ids = set(new_labels["player_id"].unique())
+            mask = ~(
+                (existing["label_source"] == "scouting_review")
+                & (existing["player_id"].isin(new_ids))
+            )
+            existing = existing[mask]
+            combined = pd.concat([existing, new_labels], ignore_index=True)
+        else:
+            combined = new_labels
+    else:
+        combined = new_labels
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    errors = validate_truth_labels(combined)
+    if errors:
+        print("Validation errors:")
+        for err in errors:
+            print(f"  - {err}")
+        sys.exit(1)
+
+    combined.to_parquet(output_path, index=False)
+    print(f"Imported {len(new_labels)} scouting review labels to {output_path}")
+    print(f"  Approved: {(new_labels['label_value'] == 1.0).sum()}")
+    print(f"  Rejected: {(new_labels['label_value'] == 0.0).sum()}")
+    print(f"  Total labels in file: {len(combined)}")
+
+
 def _cmd_serve(args: argparse.Namespace) -> None:
     try:
         import uvicorn
@@ -441,6 +502,28 @@ def main() -> None:
 
     sub.add_parser("export-ratings", help="Export ratings to DuckDB database")
 
+    truth_p = sub.add_parser(
+        "import-truth-labels",
+        help="Import scouting workspace review decisions as truth labels",
+    )
+    truth_p.add_argument(
+        "--workspace", type=str, required=True,
+        help="Path to scouting workspace JSON file",
+    )
+    truth_p.add_argument(
+        "--output", type=str,
+        default="data/gold/feature_store/player_truth_labels.parquet",
+        help="Output truth labels parquet path",
+    )
+    truth_p.add_argument(
+        "--season", type=str, default="",
+        help="Season override (auto-detected from workspace if omitted)",
+    )
+    truth_p.add_argument(
+        "--position-scope", type=str, default="all",
+        help="Position scope for labels (default: all)",
+    )
+
     bt_p = sub.add_parser(
         "backtest",
         help="Run probability calibration backtest (Poisson vs Dixon-Coles)",
@@ -473,6 +556,7 @@ def main() -> None:
         "validate": _cmd_validate,
         "action-value": _cmd_action_value,
         "export-ratings": _cmd_export_ratings,
+        "import-truth-labels": _cmd_import_truth_labels,
         "backtest": _cmd_backtest,
         "serve": _cmd_serve,
     }

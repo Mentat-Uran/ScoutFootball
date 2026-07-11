@@ -199,14 +199,24 @@ Coordinate transformation: `x_internal = x_statsbomb / 120 * 100`
 |---|---|---|
 | player_id | str | Player identifier |
 | season | str | Season code |
-| label_source | str | Source of truth label |
+| label_source | str | Source of truth label (see allowed values below) |
 | label_confidence | str | Confidence in label (low/medium/high) |
 | label_value | float | Label value |
-| as_of_date | str | Date label was assigned |
+| as_of_date | str | Date label was assigned (YYYY-MM-DD) |
 | position_scope | str | Position scope for label |
 | manual_review_flag | bool | Requires manual review |
 
-**Status**: Schema exists; data rows are currently empty.
+**Allowed `label_source` values**:
+- `transfermarkt_value` — Transfermarkt market value tiers
+- `award` — individual awards (Ballon d'Or, best XI, etc.)
+- `expert_tier` — expert/analyst tier classification
+- `manual_calibration` — manual calibration set
+- `scouting_review` — labels derived from scouting workspace review decisions
+  (approved → 1.0/high, rejected → 0.0/medium). Populated via
+  `workspace_to_truth_labels()` + CLI `import-truth-labels --workspace`.
+
+**Status**: Schema exists; populated with expert_tier + award labels (~7,857
+rows). Scouting-review labels are injected on demand from workspace exports.
 
 ---
 
@@ -747,6 +757,49 @@ Side-by-side comparison of two players with radar overlay and metric diffs.
 Radar values are position-pool percentiles (0-100). Position percentile comparison
 uses position-specific dimensions from `POSITION_DIMENSIONS`. Players in different
 position groups will have different dimension sets.
+
+### GET /players/{player_name}/similar
+
+Returns the most similar players to the target player based on a 6-dimensional
+z-scored feature vector (Attack, Creation, Defense, Possession, Overall,
+Availability) compared via cosine similarity. The target player is excluded
+from results.
+
+**Query params**:
+- `limit` (int, default=8, max=20): Maximum number of similar players to return.
+- `season` (str, optional): Filter the comparison pool by season. When omitted,
+  the player's own season is used.
+- `same_position_only` (bool, default=false): When true, restrict the pool to
+  players sharing the target's position group.
+
+**Response**:
+```json
+{
+  "player": "string",
+  "found": true,
+  "season": "2526",
+  "position_group": "ST",
+  "features": ["Attack", "Creation", "Defense", "Possession", "Overall", "Availability"],
+  "target_profile": { "Attack": 0.8, "Creation": 0.3, "Defense": -0.5 },
+  "similar_players": [
+    {
+      "player_name": "string",
+      "team": "string",
+      "league": "string",
+      "position_group": "ST",
+      "optimized_score": 78.0,
+      "similarity": 0.92,
+      "shared_strengths": ["Attack", "Overall"]
+    }
+  ]
+}
+```
+
+**Edge cases**:
+- Unknown player returns `{"player": "...", "found": false, "similar_players": []}`.
+- A pool with fewer than 2 rated players returns an empty `similar_players` list.
+- Similarity values are clamped to [0, 1] (negative cosine similarities are
+  treated as zero dissimilarity).
 
 ### GET /search
 

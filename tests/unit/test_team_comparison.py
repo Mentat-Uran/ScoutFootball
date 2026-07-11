@@ -86,11 +86,12 @@ def test_comparison_position_group_values(_mock_ratings):
 
 
 def test_comparison_radar(_mock_ratings):
-    """Radar should have 5 dimensions (GK, DEF, MID, ATT, Overall)."""
+    """Radar should have 6 dimensions (GK, DEF, MID, ATT, Overall, Depth)."""
     result = get_team_comparison("Team Alpha", "Team Beta")
-    assert len(result["radar_labels"]) == 5
-    assert len(result["radar_a"]) == 5
-    assert len(result["radar_b"]) == 5
+    assert len(result["radar_labels"]) == 6
+    assert len(result["radar_a"]) == 6
+    assert len(result["radar_b"]) == 6
+    assert "Depth" in result["radar_labels"]
 
 
 def test_comparison_top_players(_mock_ratings):
