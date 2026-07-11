@@ -224,6 +224,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 在 Streamlit 增加"位置内榜单"和"跨位置总榜"切换。
 - [x] 修复 Streamlit `st.Page` 入口路径，支持从仓库根目录执行 `uv run streamlit run src/scoutfootball/app/streamlit_app.py`。
 - [x] 用 `frontend/index.html`、`frontend/style.css`、`frontend/app.js` 重构静态前端，保留 Liquid Glass 风格并补齐主要产品视图。
+- [x] **统一分析台前端风格**（2026-07-12）：将浅/深主题、导航、筛选控件、数据卡、表格、排行榜和状态 pill 收敛到统一的场地数据台 Liquid Glass token；新增可见焦点环、跳至主内容链接、`aria-current="page"` 活动导航、语义化主题状态和 `prefers-reduced-motion` 降级；纯静态服务、前端语法、Node 测试和 Python 契约验证通过，发布前仍需在目标浏览器做最终视觉回归。
 - [x] 增加低置信度提示：分钟不足、数据源缺失、位置重判不确定、事件样本不足。
 - [x] 前端图标统一为几何 Unicode 符号（◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞），无 emoji。
 - [x] 身价页 API 无数据时显示 DEMO 标记，避免静默展示假数据。

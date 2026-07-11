@@ -1279,7 +1279,13 @@ async function setView(view) {
         element.classList.toggle("active", element.id === `view-${view}`);
     });
     document.querySelectorAll(".nav-action[data-view]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.view === view);
+        const isActive = button.dataset.view === view;
+        button.classList.toggle("active", isActive);
+        if (isActive) {
+            button.setAttribute("aria-current", "page");
+        } else {
+            button.removeAttribute("aria-current");
+        }
     });
     requestAnimationFrame(renderActiveView);
 }
@@ -6319,9 +6325,13 @@ function bindEvents() {
         card.addEventListener("click", () => setView(card.dataset.jump));
     });
     document.getElementById("theme-toggle").addEventListener("click", () => {
+        const toggle = document.getElementById("theme-toggle");
         document.body.classList.toggle("dark-mode");
-        document.getElementById("theme-toggle").textContent = document.body.classList.contains("dark-mode") ? "☾" : "☀";
-        localStorage.setItem("sf-theme", document.body.classList.contains("dark-mode") ? "dark" : "light");
+        const darkMode = document.body.classList.contains("dark-mode");
+        toggle.textContent = darkMode ? "☾" : "☀";
+        toggle.setAttribute("aria-pressed", darkMode ? "true" : "false");
+        toggle.setAttribute("aria-label", darkMode ? "切换为浅色主题" : "切换为深色主题");
+        localStorage.setItem("sf-theme", darkMode ? "dark" : "light");
         refreshAllChartColors();
         renderActiveView();
     });
@@ -8877,6 +8887,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.body.classList.add("dark-mode");
         document.getElementById("theme-toggle").textContent = "☾";
     }
+    const themeToggle = document.getElementById("theme-toggle");
+    const startsDark = document.body.classList.contains("dark-mode");
+    themeToggle.setAttribute("aria-pressed", startsDark ? "true" : "false");
+    themeToggle.setAttribute("aria-label", startsDark ? "切换为浅色主题" : "切换为深色主题");
     applyLocale();
     renderMatchSelectors();
     // Start WC init early — it runs in parallel with other API calls
