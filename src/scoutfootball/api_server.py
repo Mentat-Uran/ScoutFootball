@@ -20,6 +20,7 @@ from scoutfootball.api import (
     get_action_value_summary,
     get_artifacts_summary,
     get_backtest_comparison,
+    get_decay_tuning,
     get_head_to_head,
     get_match_prediction,
     get_match_prediction_dc,
@@ -250,6 +251,10 @@ def create_app() -> FastAPI:
     @app.get("/predictions/backtest")
     def predictions_backtest():
         return get_backtest_comparison()
+
+    @app.get("/predictions/tuning")
+    def predictions_tuning():
+        return get_decay_tuning()
 
     @app.get("/value-summary")
     def value_summary():

@@ -1475,6 +1475,62 @@ def get_backtest_comparison(force_refresh: bool = False) -> dict[str, Any]:
     return result
 
 
+def get_decay_tuning(force_refresh: bool = False) -> dict[str, Any]:
+    """Return Dixon-Coles decay tuning results.
+
+    Reads ``data/reports/calibration_backtest/decay_tuning_results.json``
+    produced by ``scoutfootball tune-predictions``. Returns the best decay,
+    selection metric, and per-candidate comparison table. If no tuning
+    artifacts exist, returns a ``not_available`` status with instructions.
+
+    Results are cached for 5 minutes.
+    """
+    import time
+
+    now = time.time()
+    if (
+        not force_refresh
+        and _BACKTEST_CACHE.get("tuning_data") is not None
+        and now - _BACKTEST_CACHE.get("tuning_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return _BACKTEST_CACHE["tuning_data"]
+
+    settings = _settings()
+    tuning_path = settings.report_root / "calibration_backtest" / "decay_tuning_results.json"
+
+    if not tuning_path.exists():
+        result = {
+            "status": "not_available",
+            "tuning_path": str(tuning_path).replace("\\", "/"),
+            "instructions": (
+                "Run `PYTHONPATH=src uv run python -m scoutfootball tune-predictions` "
+                "to generate decay tuning results."
+            ),
+        }
+    else:
+        try:
+            data = _read_json(tuning_path)
+            result = _clean_json_value({
+                "status": "ok",
+                "tuning_path": str(tuning_path).replace("\\", "/"),
+                "best_decay": data.get("best_decay"),
+                "selection_metric": data.get("selection_metric"),
+                "n_folds": data.get("n_folds"),
+                "n_matches": data.get("n_matches"),
+                "candidates": data.get("candidates", []),
+            })
+        except Exception as exc:
+            result = {
+                "status": "error",
+                "error": str(exc),
+                "tuning_path": str(tuning_path).replace("\\", "/"),
+            }
+
+    _BACKTEST_CACHE["tuning_data"] = result
+    _BACKTEST_CACHE["tuning_timestamp"] = time.time()
+    return result
+
+
 def get_action_value_summary(
     limit: int = 20,
     offset: int = 0,

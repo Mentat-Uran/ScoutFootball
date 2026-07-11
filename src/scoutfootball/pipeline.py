@@ -163,6 +163,36 @@ def run_build_features(
     return results
 
 
+def _resolve_dc_decay(project_root: Path) -> float:
+    """Resolve the Dixon-Coles decay parameter.
+
+    If a tuning results file exists at
+    ``data/reports/calibration_backtest/decay_tuning_results.json``, read the
+    best decay from it. Otherwise fall back to the Dixon-Coles (1997) paper
+    recommended value of 0.005.
+    """
+    tuning_path = (
+        project_root
+        / "data"
+        / "reports"
+        / "calibration_backtest"
+        / "decay_tuning_results.json"
+    )
+    if tuning_path.exists():
+        try:
+            import json
+
+            with open(tuning_path, encoding="utf-8") as f:
+                data = json.load(f)
+            best = data.get("best_decay")
+            if isinstance(best, (int, float)) and best >= 0:
+                logger.info("Using tuned DC decay=%s from %s", best, tuning_path)
+                return float(best)
+        except (json.JSONDecodeError, OSError, KeyError):
+            logger.warning("Failed to read tuning results, falling back to default decay")
+    return 0.005  # Dixon-Coles (1997) paper recommended value
+
+
 def run_weekly_train(
     *,
     skip_if_validation_fails: bool = True,
@@ -214,7 +244,7 @@ def run_weekly_train(
 
         # --- Dixon-Coles training (with time decay) ---
         try:
-            dc_decay = 0.005  # Dixon-Coles (1997) paper recommended value
+            dc_decay = _resolve_dc_decay(resolved.project_root)
             dc_model = fit_dixon_coles(team_match, decay=dc_decay)
             _save_dixon_coles_artifacts(dc_model, team_match, resolved)
             results["dixon_coles"] = (

@@ -288,6 +288,13 @@ const i18n = {
         backtest_n_matches: "比赛数",
         backtest_no_calibration: "暂无 isotonic 校准报告",
         backtest_fold_chart: "分折指标趋势",
+        backtest_tuning: "Decay 参数调优",
+        backtest_tuning_desc: "Dixon-Coles 时间衰减网格搜索",
+        backtest_best_decay: "最优 Decay",
+        backtest_selection_metric: "选择指标",
+        backtest_half_life: "半衰期(天)",
+        backtest_tuning_not_available: "暂无调优数据",
+        backtest_tuning_instructions: "运行 `PYTHONPATH=src uv run python -m scoutfootball tune-predictions` 生成调优结果。",
         data_attribution: "数据归属与合规",
         run_comparison: "模型运行对比",
         run_compare_btn: "对比",
@@ -586,6 +593,13 @@ const i18n = {
         backtest_n_matches: "Matches",
         backtest_no_calibration: "No isotonic calibration report available",
         backtest_fold_chart: "Per-Fold Metric Trends",
+        backtest_tuning: "Decay Parameter Tuning",
+        backtest_tuning_desc: "Dixon-Coles time-decay grid search",
+        backtest_best_decay: "Best Decay",
+        backtest_selection_metric: "Selection Metric",
+        backtest_half_life: "Half-Life (days)",
+        backtest_tuning_not_available: "No tuning data available",
+        backtest_tuning_instructions: "Run `PYTHONPATH=src uv run python -m scoutfootball tune-predictions` to generate tuning results.",
         data_attribution: "Data Attribution & Compliance",
         run_comparison: "Model Run Comparison",
         run_compare_btn: "Compare",
@@ -5487,6 +5501,7 @@ async function renderCalibration() {
 // ── Backtest Comparison ─────────────────────────────────────────────────
 
 let backtestComparisonData = null;
+let decayTuningData = null;
 
 async function fetchBacktestComparison() {
     try {
@@ -5495,6 +5510,17 @@ async function fetchBacktestComparison() {
         });
     } catch (err) {
         console.warn("Failed to fetch backtest comparison:", err);
+        return null;
+    }
+}
+
+async function fetchDecayTuning() {
+    try {
+        return await fetchJson("/predictions/tuning", {
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
+    } catch (err) {
+        console.warn("Failed to fetch decay tuning:", err);
         return null;
     }
 }
@@ -5614,6 +5640,15 @@ async function renderBacktest() {
 
         // Per-fold chart (ECharts)
         _renderBacktestFoldChart(data, models, folds);
+
+        // Decay tuning panel
+        try {
+            const tuning = decayTuningData || await fetchDecayTuning();
+            decayTuningData = tuning;
+            _renderDecayTuning(tuning);
+        } catch (e) {
+            console.warn("Failed to render decay tuning:", e);
+        }
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -5621,6 +5656,69 @@ async function renderBacktest() {
         }
         console.warn("Failed to render backtest:", err);
     }
+}
+
+function _renderDecayTuning(data) {
+    const panel = document.getElementById("backtest-tuning-panel");
+    if (!panel) return;
+    const body = document.getElementById("backtest-tuning-body");
+    if (!body) return;
+
+    if (!data || data.status === "not_available") {
+        panel.style.display = "block";
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("backtest_tuning_not_available"))}</p>
+            <p style="font-size:0.75rem;margin-top:0.5rem;font-family:monospace;color:var(--text-muted)">${escapeHtml((data && data.instructions) || t("backtest_tuning_instructions"))}</p>`;
+        return;
+    }
+
+    if (data.status === "error") {
+        panel.style.display = "block";
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">Error: ${escapeHtml(data.error || "unknown")}</p>`;
+        return;
+    }
+
+    panel.style.display = "block";
+    const candidates = data.candidates || [];
+    const bestDecay = data.best_decay;
+    const selMetric = data.selection_metric || "rps_1x2";
+
+    // Highlight best decay in the table
+    const rows = candidates.map((c) => {
+        const isBest = c.decay === bestDecay;
+        const hl = c.half_life_days === Infinity || c.half_life_days === "inf"
+            ? "∞"
+            : fmtMetric(c.half_life_days);
+        const cls = isBest ? ' style="background:var(--accent-alpha, rgba(100,180,255,0.12))"' : "";
+        const badge = isBest
+            ? ` <span class="status-pill status-high" style="font-size:0.6rem">BEST</span>`
+            : "";
+        return `<tr${cls}>
+            <td>${escapeHtml(String(c.decay))}${badge}</td>
+            <td>${escapeHtml(String(hl))}</td>
+            <td>${fmtMetric(c.log_loss_exact)}</td>
+            <td>${fmtMetric(c.brier_1x2)}</td>
+            <td>${fmtMetric(c.rps_1x2)}</td>
+        </tr>`;
+    }).join("");
+
+    body.innerHTML = `
+        <div class="detail-grid" style="margin-bottom:1rem">
+            <div><span>${escapeHtml(t("backtest_best_decay"))}</span><strong style="font-size:1.1rem;color:var(--accent)">${escapeHtml(String(bestDecay ?? "—"))}</strong></div>
+            <div><span>${escapeHtml(t("backtest_selection_metric"))}</span><strong>${escapeHtml(String(selMetric))}</strong></div>
+            <div><span>${escapeHtml(t("backtest_n_matches"))}</span><strong>${escapeHtml(String(data.n_matches ?? "—"))}</strong></div>
+        </div>
+        <table class="data-table" style="width:100%;font-size:0.8rem">
+            <thead>
+                <tr>
+                    <th>Decay</th>
+                    <th>${escapeHtml(t("backtest_half_life"))}</th>
+                    <th>Log Loss</th>
+                    <th>Brier</th>
+                    <th>RPS</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>`;
 }
 
 function _renderBacktestFoldChart(data, models, folds) {
