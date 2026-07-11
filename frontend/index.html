@@ -84,6 +84,10 @@
                     <span class="nav-icon">◆</span>
                     <span data-i18n="nav_wc_knockout">淘汰赛</span>
                 </button>
+                <button class="nav-action" data-view="wc_tournament" type="button">
+                    <span class="nav-icon">◍</span>
+                    <span data-i18n="nav_wc_tournament">锦标赛</span>
+                </button>
                 <div class="nav-divider"></div>
                 <button class="nav-action" data-view="license" type="button">
                     <span class="nav-icon">⊛</span>
@@ -1292,6 +1296,25 @@
                         </table>
                     </div>
                 </article>
+            </section>
+
+            <!-- Tournament Simulator -->
+            <section class="view" id="view-wc_tournament" aria-label="wc_tournament">
+                <div class="wc-header">
+                    <article class="liquid-panel hero-panel compact">
+                        <div class="hero-copy">
+                            <p class="eyebrow" data-i18n="wc_kicker">2026 美加墨世界杯</p>
+                            <h2 data-i18n="wc_tournament_title">锦标赛模拟器</h2>
+                            <span class="status-pill status-low" id="wc-tournament-status" style="font-size:0.65rem">API OFFLINE</span>
+                        </div>
+                        <div class="coverage-strip">
+                            <div><span class="metric-value">◍</span><span data-i18n="wc_tournament_desc">录入比赛结果，查看出线情景</span></div>
+                        </div>
+                    </article>
+                </div>
+                <div id="wc-tournament-root">
+                    <p style="color:var(--text-muted);text-align:center;padding:2rem">Loading tournament data...</p>
+                </div>
             </section>
 
             <!-- License & Data Sources -->

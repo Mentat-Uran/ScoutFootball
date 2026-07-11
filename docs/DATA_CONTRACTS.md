@@ -689,6 +689,90 @@ per-match win probabilities and Monte Carlo tournament win probabilities.
 
 **Static fallback**: `/data/worldcup/knockout.json`
 
+### GET /world-cup/tournament/summary
+Tournament-wide summary: completion rate, all 12 group standings, best thirds, and advancing teams.
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "schema_version": "1.0.0",
+  "tournament_start": "2026-06-11",
+  "tournament_end": "2026-07-19",
+  "total_matches": 72,
+  "completed_matches": 0,
+  "completion_rate": 0.0,
+  "groups_complete": 0,
+  "total_groups": 12,
+  "is_complete": false,
+  "hosts": ["USA", "Canada", "Mexico"],
+  "standings": { "A": [GroupStanding, ...], ... },
+  "best_thirds": [ { group, team, played, points, goal_difference, goals_for, goals_against, provisional }, ... ],
+  "advancing": {
+    "winners": [ { team, group, position, played, won, drawn, lost, goals_for, goals_against, goal_difference, points }, ... ],
+    "runners_up": [ { ... }, ... ],
+    "best_thirds": [ { ... }, ... ],
+    "all_advancing": ["team1", "team2", ...],
+    "provisional": true
+  }
+}
+```
+
+### GET /world-cup/tournament/standings?group=A
+Standings for a single group (or all groups when `group` is omitted).
+
+**Response** (single group): `{ "status": "ok", "standings": [GroupStanding, ...] }`
+**Response** (all groups): `{ "status": "ok", "standings": { "A": [...], "B": [...], ... } }`
+
+`GroupStanding` shape: `{ team, played, won, drawn, lost, goals_for, goals_against, goal_difference, points }`
+
+### GET /world-cup/tournament/matches?group=A&pending=true
+List group-stage matches. `group` filters to one group; `pending=true` returns only matches without a recorded result.
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "matches": [
+    { "match_id", "matchday", "date", "time_et", "home", "away", "venue", "city", "group", "stage", "completed": false }
+  ]
+}
+```
+
+### GET /world-cup/tournament/scenarios/{team}?max_scenarios=30
+Qualification scenarios for a team based on its remaining group-stage fixtures.
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Mexico",
+  "group": "A",
+  "current_standing": { "team", "played", "won", "drawn", "lost", "goals_for", "goals_against", "goal_difference", "points" },
+  "remaining_matches": [ { match_id, home, away, matchday, group }, ... ],
+  "advance_probability": 0.75,
+  "scenarios": [
+    { "description", "results": [ {match_id, home_goals, away_goals}, ... ], "final_position": 1, "advances": true, "advance_path": "winner" }
+  ],
+  "summary": "Mexico advances in 75% of remaining scenarios."
+}
+```
+
+### POST /world-cup/tournament/result?match_id=...&home_goals=...&away_goals=...
+Record a group-stage match result. Persists state to `data/reports/worldcup/tournament_state.json`.
+
+**Response**: `{ "status": "ok", "match_id", "home_goals", "away_goals", "saved_to": "data/reports/worldcup/tournament_state.json" }`
+
+### DELETE /world-cup/tournament/result?match_id=...
+Clear a recorded match result.
+
+**Response**: `{ "status": "ok", "match_id", "cleared": true, "saved_to": "..." }`
+
+### POST /world-cup/tournament/reset
+Reset all tournament results to a fresh state (keeps the 72-match schedule).
+
+**Response**: `{ "status": "ok", "reset": true, "saved_to": "..." }`
+
 ### GET /license
 Data source license attribution.
 
