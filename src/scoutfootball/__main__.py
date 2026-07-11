@@ -215,6 +215,69 @@ def _cmd_action_value(args: argparse.Namespace) -> None:
         print(f"    {name}: composite={score:.1f}, total_xT={xt:.4f}")
 
 
+def _cmd_action_value_matches(args: argparse.Namespace) -> None:
+    """Create the explicitly sample-bounded player-team-match xT artifact."""
+    from scoutfootball.action_value.match_artifact import (
+        build_player_match_action_values,
+        save_player_match_action_values,
+    )
+    from scoutfootball.action_value.spadl_adapter import convert_all_events
+    from scoutfootball.action_value.xt import compute_xt_values
+
+    project_root = Path(__file__).resolve().parents[2]
+    events_path = Path(args.events_path) if args.events_path else (
+        project_root / "data" / "raw" / "statsbomb_open" / "events_sample.parquet"
+    )
+    matches_path = Path(args.matches_path) if args.matches_path else (
+        project_root / "data" / "raw" / "statsbomb_open" / "big5_matches.parquet"
+    )
+    output_path = Path(args.output_path) if args.output_path else (
+        project_root
+        / "data"
+        / "gold"
+        / "feature_store"
+        / "player_match_action_value_sample.parquet"
+    )
+    if not events_path.exists():
+        print(f"Error: Events file not found: {events_path}")
+        sys.exit(1)
+    if not matches_path.exists():
+        print(f"Error: Match metadata file not found: {matches_path}")
+        sys.exit(1)
+
+    events = pd.read_parquet(events_path)
+    names = (
+        events.dropna(subset=["player_id", "player_name"])
+        .drop_duplicates("player_id")
+        if {"player_id", "player_name"}.issubset(events.columns)
+        else pd.DataFrame(columns=["player_id", "player_name"])
+    )
+    player_names = {
+        str(int(float(row.player_id))): str(row.player_name)
+        for row in names.itertuples(index=False)
+    }
+    actions = convert_all_events(events_path)
+    if actions.empty:
+        print("Error: No convertible actions in events file.")
+        sys.exit(1)
+    _, valued_actions = compute_xt_values(actions)
+    artifact, manifest = build_player_match_action_values(
+        valued_actions,
+        pd.read_parquet(matches_path),
+        coverage_scope=args.coverage_scope,
+        player_names=player_names,
+    )
+    if artifact.empty:
+        print("Error: No player-match xT rows computed.")
+        sys.exit(1)
+    save_player_match_action_values(artifact, manifest, output_path)
+    print(f"Saved {len(artifact)} player-team-match rows to {output_path}")
+    print(
+        f"  coverage={manifest['coverage_scope']}; matches={manifest['match_count']}; "
+        f"valued_actions={manifest['input_action_rows']}"
+    )
+
+
 def _cmd_export_ratings(_args: argparse.Namespace) -> None:
     from scoutfootball.storage.duckdb_io import create_ratings_database
 
@@ -688,6 +751,19 @@ def main() -> None:
         "--output-path", type=str, default=None,
         help="Path to output player_value_metrics Parquet",
     )
+    avm_p = sub.add_parser(
+        "action-value-matches",
+        help="Build sample-bounded player-team-match xT rows with match context",
+    )
+    avm_p.add_argument("--events-path", type=str, default=None)
+    avm_p.add_argument("--matches-path", type=str, default=None)
+    avm_p.add_argument("--output-path", type=str, default=None)
+    avm_p.add_argument(
+        "--coverage-scope",
+        choices=["sample"],
+        default="sample",
+        help="Coverage declaration for the bundled three-match event sample",
+    )
 
     sub.add_parser("export-ratings", help="Export ratings to DuckDB database")
 
@@ -766,6 +842,7 @@ def main() -> None:
         "train-rating-nn": _cmd_train_rating_nn,
         "validate": _cmd_validate,
         "action-value": _cmd_action_value,
+        "action-value-matches": _cmd_action_value_matches,
         "export-ratings": _cmd_export_ratings,
         "import-truth-labels": _cmd_import_truth_labels,
         "backtest": _cmd_backtest,

@@ -24,6 +24,7 @@ _FRONTEND_DATA = _PROJECT_ROOT / "frontend" / "data"
 # If the file is a list, we only check it's non-empty.
 _STATIC_FILES: list[tuple[str, list[str]]] = [
     ("action_values.json", ["status", "count", "metrics", "players"]),
+    ("action_value_matches.json", ["status", "count", "rows"]),
     ("action_value_evidence.json", ["status", "schema_version", "coverage", "players"]),
     ("artifacts.json", ["artifacts", "data_source_label", "license_attribution"]),
     ("ratings.json", ["count", "players"]),

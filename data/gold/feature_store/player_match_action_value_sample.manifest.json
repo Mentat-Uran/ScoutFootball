@@ -1,0 +1,12 @@
+{
+  "comparability_note": "xT is computed on this artifact input only; do not compare or add it to a differently scoped xT grid.",
+  "competition_count": 1,
+  "coverage_scope": "sample",
+  "input_action_rows": 11792,
+  "input_hash": "6b135544e5cc5569622079314c0e1cf293674f2f05676273acf99bae9a0aa92b",
+  "match_count": 3,
+  "player_match_rows": 94,
+  "schema_version": "scoutfootball.player-match-action-value.v1",
+  "source": "StatsBomb Open Data",
+  "status": "ok"
+}

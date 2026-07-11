@@ -217,12 +217,13 @@ def export_predictions_meta() -> None:
 
 def export_action_values(limit: int) -> None:
     from scoutfootball.action_value.evidence import get_action_value_evidence_snapshot
-    from scoutfootball.api import get_action_value_summary
+    from scoutfootball.api import get_action_value_summary, get_player_match_action_values
 
     # The API pages xT and VAEP independently, so one call exports the top-N
     # rows for both granularities without a synthetic cross-model offset.
     data = get_action_value_summary(limit=limit, full=True)
     _write_json(DATA_DIR / "action_values.json", data)
+    _write_json(DATA_DIR / "action_value_matches.json", get_player_match_action_values(limit=2_000))
     evidence = get_action_value_evidence_snapshot()
     _write_json(DATA_DIR / "action_value_evidence.json", evidence)
     xt_n = len(data.get("xt_players", data.get("players", [])))

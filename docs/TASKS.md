@@ -430,6 +430,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 输出 `data/gold/feature_store/player_action_value.parquet`。
 - [x] 生成球员 xT 排行榜、球队 xT 热区图、球员传球/带球推进价值图。
 - [x] 基于仓库跟踪的 3 场事件样本提供比赛级证据 API、静态快照和前端下钻；明确样本重算 xT 与完整聚合产物不可直接比较。
+- [x] 新增版本化 `player_match_action_value_sample.parquet`（94 条 player-team-match 行）及 manifest：保留比赛日期、赛事、赛季、比分、动作数、估算分钟、正负 xT 与输入 hash；通过 `scoutfootball action-value-matches` 可复算，`/action-values/matches` 和 `frontend/data/action_value_matches.json` 只公开当前 3 场样本，不能代表完整赛事覆盖。
 - [x] 评估 socceraction 作为依赖的可维护性，优先复用其 SPADL/xT/VAEP 能力。（评估结果写入 DATA_CONTRACTS.md Section 11）
 - [x] 明确 StatsBomb 数据引用要求：公开展示研究或图表时必须注明数据源。（api.py `_STATSBOMB_ATTRIBUTION` + 前端 `attribution_required` 已实现）
 
