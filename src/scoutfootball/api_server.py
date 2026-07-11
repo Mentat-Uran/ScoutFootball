@@ -19,6 +19,7 @@ from scoutfootball.api import (
     apply_wc_tournament_result,
     clear_wc_knockout_result,
     clear_wc_tournament_result,
+    export_wc_tournament_state,
     generate_wc_knockout_bracket,
     get_action_value_evidence,
     get_action_value_evidence_index,
@@ -64,6 +65,7 @@ from scoutfootball.api import (
     get_wc_tournament_summary,
     get_world_cup_match_prediction,
     health_check,
+    import_wc_tournament_state,
     list_players,
     list_teams,
     reset_wc_tournament,
@@ -598,6 +600,21 @@ def create_app() -> FastAPI:
         return get_wc_group_stage_simulation(
             mode=mode, num_simulations=num_simulations
         )
+
+    @app.get("/world-cup/tournament/export")
+    def wc_tournament_export():
+        return export_wc_tournament_state()
+
+    @app.post("/world-cup/tournament/import")
+    async def wc_tournament_import(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        body = _json.loads(raw.decode("utf-8")) if raw else {}
+        encoded = body.get("encoded", "")
+        if not encoded:
+            raise HTTPException(status_code=400, detail={"code": "missing_encoded"})
+        return import_wc_tournament_state(encoded)
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")

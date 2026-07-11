@@ -888,6 +888,52 @@ Batch-simulate all remaining group-stage matches and report advancement odds. `m
 }
 ```
 
+### GET /world-cup/tournament/export
+Export the full tournament state (matches + results + knockout) as a base64-URL-safe encoded JSON string for sharing/importing.
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "format": "base64url-json-v1",
+  "schema_version": "1.0.0",
+  "state_size": 12345,
+  "encoded": "eyJzY2hlbWFfdmVyc2lvbiI6...",
+  "exported_at": "2026-07-12T12:00:00Z"
+}
+```
+
+### POST /world-cup/tournament/import
+Import a shared tournament state and persist it to disk. Overwrites the current state.
+
+**Request body**:
+```json
+{ "encoded": "eyJzY2hlbWFfdmVyc2lvbiI6..." }
+```
+
+**Response (success)**:
+```json
+{
+  "status": "ok",
+  "imported": true,
+  "schema_version": "1.0.0",
+  "matches": 72,
+  "results": 5,
+  "has_knockout": true,
+  "saved_to": "data/reports/worldcup/tournament_state.json"
+}
+```
+
+**Response (error)**:
+```json
+{
+  "status": "error",
+  "code": "decode_failed",
+  "message": "Failed to decode state: ..."
+}
+```
+Error codes: `decode_failed` (invalid base64 or JSON), `invalid_state` (incompatible schema version).
+
 ### GET /license
 Data source license attribution.
 

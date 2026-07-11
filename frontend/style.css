@@ -2756,3 +2756,115 @@ tbody tr.selected {
 .skip-link:focus {
     left: 12px;
 }
+
+/* ── Print/PDF export for knockout bracket ─────────────────────────────── */
+
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 1cm;
+    }
+
+    /* Hide everything by default */
+    body * {
+        visibility: hidden;
+    }
+
+    /* Show only the bracket panel and its descendants */
+    #wc-ko-bracket-panel,
+    #wc-ko-bracket-panel * {
+        visibility: visible;
+    }
+
+    /* Reset bracket panel positioning for print */
+    #wc-ko-bracket-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+        background: #fff !important;
+        color: #1a1a1a !important;
+    }
+
+    /* Print-only header */
+    #wc-ko-bracket-panel::before {
+        content: "ScoutFootball — World Cup Knockout Bracket";
+        display: block;
+        font-size: 1rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.3rem;
+        border-bottom: 2px solid #333;
+        color: #1a1a1a;
+    }
+
+    /* Force horizontal scroll container to expand fully */
+    #wc-ko-bracket-panel > div[style*="overflow-x"],
+    #wc-ko-bracket-panel > div[style*="overflow-x"] > div {
+        overflow: visible !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* Expand round columns to fit page */
+    #wc-ko-bracket-panel > div[style*="overflow-x"] > div > div {
+        min-width: 0 !important;
+        flex: 1 !important;
+        page-break-inside: avoid;
+    }
+
+    /* Print-friendly colors for match cards */
+    #wc-ko-bracket-panel * {
+        background: #fff !important;
+        color: #1a1a1a !important;
+        border-color: #ccc !important;
+    }
+
+    /* Show completed match winners in bold */
+    #wc-ko-bracket-panel .text-button,
+    #wc-ko-bracket-panel button {
+        display: none !important;
+    }
+
+    /* Hide input fields */
+    #wc-ko-bracket-panel input {
+        display: none !important;
+    }
+
+    /* Champion banner print style */
+    #wc-ko-bracket-panel > div[style*="text-align:center"] {
+        border: 2px solid #333 !important;
+        padding: 0.5rem !important;
+    }
+
+    /* Match card borders for print clarity */
+    #wc-ko-bracket-panel > div[style*="overflow-x"] > div > div > div > div {
+        border: 1px solid #999 !important;
+        padding: 0.3rem !important;
+        page-break-inside: avoid;
+    }
+
+    /* Round headers */
+    #wc-ko-bracket-panel h4 {
+        color: #333 !important;
+        font-size: 0.75rem !important;
+        border-bottom: 1px solid #999 !important;
+        padding-bottom: 0.2rem !important;
+    }
+
+    /* Tournament win odds table for print */
+    #wc-ko-bracket-panel > div[style*="margin-bottom:1rem;padding:0.6rem"] {
+        border: 1px solid #999 !important;
+        page-break-inside: avoid;
+    }
+
+    /* Hide share/import/print dialogs in print */
+    #wc-ko-share-dialog,
+    #wc-ko-import-dialog,
+    #wc-ko-scenarios-display {
+        display: none !important;
+    }
+}
+
