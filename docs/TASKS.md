@@ -70,17 +70,18 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - **强队/降级队偏差仍需复盘**：当前模型仍记录强队系统性低估和降级队高估，不能只用整体 Spearman/Pearson 宣称球员真实水平已解决。
 - **世界杯模块仍是混合/样例视图**：世界杯赛程、名单、对比和出线页还没有全量官方阵容、更多联赛评分覆盖、国家队阵容 API 和低覆盖分层说明，不能写成完整真实后端能力。
 - **前端 API 联调不完整**：球员页还缺搜索、分页、完整 player profile 指标、报告导出；身价页还缺 value-fairness OOF report 细分；比赛预测页还缺统一 prediction service、模型版本、Brier/log loss/RPS 和校准状态。
-- **报告页信息不足**：model-run registry 当前只展示基础指标，仍缺完整参数、随机种子、依赖版本、输入 hash、误差案例摘要和可复现命令。
+- **报告页信息不足**：model-run registry 列表端点展示基础指标、依赖版本、输入 hash、误差案例和复现命令；详情端点提供 feature_importance parquet 级数据、params_summary min/max 和 data_attribution；前端展开时异步加载详情端点。数据归属面板展示 /license 端点的归属信息，模型运行对比视图支持选择两个 run 对比 holdout 指标。
 - **动作价值仍是样本能力**：`player_value_metrics.parquet` 只代表 StatsBomb 事件价值样本；P2 产物尚未完成全量 internal actions/xT/VAEP 管线、socceraction 依赖评估和公开图表 attribution。
 - **数据合规和 license manifest 不完整**：所有本地 Parquet/报告/导出物仍需要统一记录来源、许可、可公开展示边界、更新时间和 StatsBomb Open Data 引用要求。
 - **安全和部署边界未闭环**：前端已做 escaping/sanitizer、CSP meta tag、SRI（echarts CDN）、X-Content-Type-Options 安全头、浏览器级 XSS/CSV 回归测试；可配置 CORS 和非本机部署说明仍待实现。
-- **球探工作流增强中**：watchlist/shortlist/review queue 只读契约已存在，审阅状态流转和 watchlist diff 已实现；真实标签回灌、shortlist notes 和导出报告仍待实现。
-- **比分预测仍是 baseline**：Independent Poisson 和 Dixon-Coles 可用，回测对比页（`/predictions/backtest`）已实现 log_loss/brier/rps 指标对比和 isotonic 校准效果展示，但时间衰减参数调优、低比分校准细化和前端 per-fold 可视化仍待做。
+- **球探工作流增强中**：watchlist/shortlist/review queue 只读契约已存在，审阅状态流转、watchlist diff、shortlist notes 持久化（前端 localStorage + 后端 opt-in ScoutingWorkspaceStore）和球探报告导出（CSV/JSON 8 段）已实现；真实标签回灌仍待实现。
+- **比分预测仍是 baseline**：Independent Poisson 和 Dixon-Coles 可用，回测对比页（`/predictions/backtest`）已实现 log_loss/brier/rps 指标对比、isotonic 校准效果展示和 per-fold 趋势图（ECharts），但时间衰减参数调优和低比分校准细化仍待做。
 - **跨供应商标准化仍停留在规划**：internal event/tracking schema、DATA_CONTRACTS、kloppy/floodlight/CDF 对照、schema validation fixture 和空数据行为测试仍待补。
 - **空间/视频/离球研究没有进入默认能力**：StatsBomb 360、Metrica/open tracking、space control、off-ball value、xG+、GCN/Transformer/RL 都只能在有合规样例、baseline 和模型卡后启动。
 
 ## 已完成
 
+- [x] **模型信任与数据归属套件**（2026-07-11）：4 个相互关联的功能：(1) 报告页接入详情端点（`fetchModelRunDetail` 异步加载 `/reports/model-runs/{run_id}`，首次展开时渲染 feature_importance parquet 级数据、params_summary 含 min/max、data_attribution 含 StatsBomb 归属）；(2) 数据归属合规面板（`_renderDataAttributionPanel` 渲染 `/license` 端点返回的 `license_attribution` dict，展示数据源标签、StatsBomb 归属高亮、各数据源许可和链接）；(3) 模型运行对比视图（`_populateRunComparisonSelects` + `renderRunComparison` 支持选择两个 run 对比 holdout 指标，含 optimized/baseline × test/train 四组 split、delta 着色和 overfit gap 对比）；(4) Backtest per-fold 可视化（`_renderBacktestFoldChart` 使用 ECharts 折线图展示各模型各折的 log_loss/brier/rps 趋势）。i18n 中英文同步。
 - [x] **模型评估与赛事前景套件**（2026-07-11）：5 个相互关联的功能：(1) World Cup team outlook 前端接线完成（`renderWcOutlook` 渲染小组名次概率、淘汰赛投影路径、夺冠概率、阵容强度分解；修复 `projected_opponent`→`opponent`、`advance_probability`→`win_probability`、`quarter_final`→`quarter_finals`、`group_teams` dict 列表字段名不匹配）；(2) Prediction backtest comparison 全栈实现（`get_backtest_comparison` API 读取 CLI 回测产物，构建 log_loss/brier/rps 指标对比表含 winner 选取、分折明细、isotonic 校准报告；`GET /predictions/backtest` 端点；前端 backtest 视图含指标对比表、分折明细、校准效果面板；5 分钟 TTL 缓存）；(3) Model-run provenance 测试补全（依赖版本、train/test seasons、position_metrics、error_cases）；(4) 修复 matches 视图模型对比死代码；(5) 修复 wc_knockout 视图接线。21 个新测试，975+ 总测试通过。
 - [x] **世界杯淘汰赛对阵表预测器**（2026-07-11）：新增 `simulate_knockout()` 函数，使用 Bradley-Terry 强度模型和 Monte Carlo 模拟（10,000 次迭代）预测从 32 强到决赛的完整淘汰赛对阵表。包括每场比赛的胜率、逐轮晋级预测和夺冠概率排名。新增 `GET /world-cup/knockout` API 端点；前端新增"淘汰赛"视图含对阵表卡片（5 轮纵列，高亮预测胜者）和夺冠概率表（Top 16）。支持中英双语和移动端单列降级。24 个单元测试覆盖胜率计算、种子配对、模拟可复现性和空数据路径。
 - [x] **球探工作区服务端持久化**（2026-07-11，v1.0.3）：新增 `ScoutingWorkspaceStore` 服务端持久化层，支持 `PUT/GET /scouting-workspaces/{id}`、`/scouting-workspaces/latest`、`/scouting-workspaces/capabilities` 端点。使用 If-Match 乐观并发控制（revision 版本号）、原子写入、不可变备份和 loopback 访问控制。
