@@ -7544,6 +7544,7 @@ let wcApiData = {
     tournamentScenarios: null, // team -> scenarios
     tournamentSelectedGroup: "A",
     tournamentLoading: false,
+    knockoutBracket: null,  // from /world-cup/tournament/knockout
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -8131,6 +8132,21 @@ function renderWcTournament() {
                 </p>
             </div>
         </article>
+
+        <article class="liquid-panel compact" style="margin-top:1rem">
+            <div class="panel-head">
+                <h3>${z ? "淘汰赛对阵图" : "Knockout Bracket"}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <button class="text-button" id="wc-ko-generate" type="button" style="font-size:0.75rem">${z ? "生成对阵" : "Generate Bracket"}</button>
+                    <button class="text-button" id="wc-ko-refresh" type="button" style="font-size:0.75rem">↻</button>
+                </div>
+            </div>
+            <div id="wc-ko-bracket-panel">
+                <p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">
+                    ${z ? "点击「生成对阵」从小组赛成绩创建淘汰赛对阵图" : "Click \"Generate Bracket\" to create the knockout bracket from group results"}
+                </p>
+            </div>
+        </article>
     `;
 
     // Bind event listeners
@@ -8214,6 +8230,36 @@ function renderWcTournament() {
             renderWcTournamentScenarios(team);
         });
     }
+
+    // Knockout bracket buttons
+    const koGenBtn = document.getElementById("wc-ko-generate");
+    if (koGenBtn && !koGenBtn.dataset.bound) {
+        koGenBtn.dataset.bound = "1";
+        koGenBtn.addEventListener("click", async () => {
+            koGenBtn.disabled = true;
+            koGenBtn.textContent = z ? "生成中..." : "Generating...";
+            await generateKnockoutBracket();
+            koGenBtn.disabled = false;
+            koGenBtn.textContent = z ? "生成对阵" : "Generate Bracket";
+        });
+    }
+
+    const koRefreshBtn = document.getElementById("wc-ko-refresh");
+    if (koRefreshBtn && !koRefreshBtn.dataset.bound) {
+        koRefreshBtn.dataset.bound = "1";
+        koRefreshBtn.addEventListener("click", async () => {
+            await fetchWcKnockoutBracket();
+            renderWcKnockoutBracket();
+        });
+    }
+
+    // Auto-render knockout bracket if data is available
+    if (wcApiData.knockoutBracket) {
+        renderWcKnockoutBracket();
+    } else {
+        // Try fetching silently
+        fetchWcKnockoutBracket().then(() => renderWcKnockoutBracket());
+    }
 }
 
 function renderWcTournamentScenarios(team) {
@@ -8279,6 +8325,196 @@ function renderWcTournamentScenarios(team) {
             </div>
         `}
     `;
+}
+
+async function fetchWcKnockoutBracket() {
+    try {
+        const data = await fetchJson("/world-cup/tournament/knockout");
+        if (data && data.status === "ok") {
+            wcApiData.knockoutBracket = data;
+        }
+    } catch (e) {
+        // Silent fail — bracket may not be generated yet
+    }
+}
+
+async function generateKnockoutBracket() {
+    try {
+        const data = await fetchJson("/world-cup/tournament/knockout/generate", {
+            method: "POST",
+        });
+        if (data && data.status === "ok") {
+            await fetchWcKnockoutBracket();
+            renderWcKnockoutBracket();
+        } else if (data && data.message) {
+            alert(data.message);
+        }
+    } catch (e) {
+        alert((currentLang === "zh" ? "生成失败: " : "Generate failed: ") + e.message);
+    }
+}
+
+async function applyKnockoutResult(matchId, homeGoals, awayGoals, penaltiesWinner) {
+    let url = `/world-cup/tournament/knockout/result?match_id=${encodeURIComponent(matchId)}&home_goals=${homeGoals}&away_goals=${awayGoals}`;
+    if (penaltiesWinner) url += `&penalties_winner=${encodeURIComponent(penaltiesWinner)}`;
+    try {
+        const data = await fetchJson(url, { method: "POST" });
+        if (data && data.status === "ok") {
+            await fetchWcKnockoutBracket();
+            renderWcKnockoutBracket();
+        } else if (data && data.message) {
+            alert(data.message);
+        }
+    } catch (e) {
+        alert((currentLang === "zh" ? "录入失败: " : "Apply failed: ") + e.message);
+    }
+}
+
+async function clearKnockoutResult(matchId) {
+    const url = `/world-cup/tournament/knockout/result?match_id=${encodeURIComponent(matchId)}`;
+    try {
+        const data = await fetchJson(url, { method: "DELETE" });
+        if (data && data.status === "ok") {
+            await fetchWcKnockoutBracket();
+            renderWcKnockoutBracket();
+        }
+    } catch (e) {
+        // Silent fail
+    }
+}
+
+function renderWcKnockoutBracket() {
+    const z = currentLang === "zh";
+    const panel = document.getElementById("wc-ko-bracket-panel");
+    if (!panel) return;
+
+    const data = wcApiData.knockoutBracket;
+    if (!data || !data.generated) {
+        panel.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">
+            ${z ? "尚未生成对阵图。点击上方「生成对阵」按钮。" : "No bracket generated yet. Click \"Generate Bracket\" above."}
+        </p>`;
+        return;
+    }
+
+    const rounds = data.rounds || {};
+    const roundOrder = ["r32", "r16", "qf", "sf", "final"];
+    const roundLabels = z ? {
+        r32: "32 强", r16: "16 强", qf: "四分之一决赛", sf: "半决赛", final: "决赛",
+    } : {
+        r32: "Round of 32", r16: "Round of 16", qf: "Quarter-Finals", sf: "Semi-Finals", final: "Final",
+    };
+
+    const champ = data.champion;
+    const prov = data.provisional;
+
+    let html = "";
+
+    if (champ) {
+        html += `<div style="text-align:center;padding:0.8rem;margin-bottom:1rem;background:var(--panel-bg,rgba(255,255,255,0.05));border-radius:8px">
+            <span style="font-size:1.2rem">🏆</span>
+            <span style="font-size:1.1rem;font-weight:bold;margin-left:0.5rem">${escapeHtml(champ)}</span>
+            <span style="color:var(--text-muted);margin-left:0.5rem">${z ? "冠军" : "Champion"}</span>
+        </div>`;
+    }
+
+    if (prov && !champ) {
+        html += `<p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">${z ? "(暂定——小组赛未完赛)" : "(Provisional — group stage incomplete)"}</p>`;
+    }
+
+    // Render bracket as horizontal scroll with columns per round
+    html += `<div style="overflow-x:auto;padding-bottom:0.5rem"><div style="display:flex;gap:1rem;min-width:max-content">`;
+
+    for (const code of roundOrder) {
+        const rd = rounds[code];
+        if (!rd || !rd.matches || rd.matches.length === 0) continue;
+        html += `<div style="min-width:240px">
+            <h4 style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.05em">${roundLabels[code] || code}</h4>
+            <div style="display:flex;flex-direction:column;gap:0.4rem">`;
+        for (const m of rd.matches) {
+            html += renderKnockoutMatchCard(m, z);
+        }
+        html += `</div></div>`;
+    }
+
+    html += `</div></div>`;
+    panel.innerHTML = html;
+
+    // Bind event listeners
+    panel.querySelectorAll(".wc-ko-apply").forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", async (e) => {
+            const matchId = e.target.dataset.matchId;
+            const card = panel.querySelector(`[data-ko-card="${CSS.escape(matchId)}"]`);
+            const hgInput = card && card.querySelector(".wc-ko-hg");
+            const agInput = card && card.querySelector(".wc-ko-ag");
+            const penSelect = card && card.querySelector(".wc-ko-pen");
+            const hg = hgInput ? parseInt(hgInput.value, 10) : NaN;
+            const ag = agInput ? parseInt(agInput.value, 10) : NaN;
+            if (isNaN(hg) || isNaN(ag) || hg < 0 || ag < 0 || hg > 30 || ag > 30) {
+                alert(z ? "请输入 0-30 的有效比分" : "Enter valid scores (0-30)");
+                return;
+            }
+            const pen = (hg === ag && penSelect) ? penSelect.value : null;
+            await applyKnockoutResult(matchId, hg, ag, pen);
+        });
+    });
+
+    panel.querySelectorAll(".wc-ko-clear").forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", async (e) => {
+            const matchId = e.target.dataset.matchId;
+            await clearKnockoutResult(matchId);
+        });
+    });
+}
+
+function renderKnockoutMatchCard(m, z) {
+    const home = m.home || "TBD";
+    const away = m.away || "TBD";
+    const hasResult = m.winner != null;
+    const hg = m.home_goals;
+    const ag = m.away_goals;
+    const isReady = m.home != null && m.away != null;
+    const decidedByPen = m.decided_by === "penalties";
+
+    if (hasResult) {
+        const winnerCls = m.winner === m.home ? "status-high" : "status-medium";
+        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-weight:${m.winner === m.home ? 'bold' : 'normal'}">${escapeHtml(home)}</span>
+                <span style="font-weight:bold;margin:0 0.3rem">${hg}-${ag}${decidedByPen ? " (pen)" : ""}</span>
+                <span style="font-weight:${m.winner === m.away ? 'bold' : 'normal'}">${escapeHtml(away)}</span>
+            </div>
+            <button class="text-button wc-ko-clear" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem;margin-top:0.2rem;color:var(--status-low)">${z ? "清除" : "Clear"}</button>
+        </div>`;
+    }
+
+    if (!isReady) {
+        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;opacity:0.6;background:var(--panel-bg,rgba(255,255,255,0.03))">
+            <div style="display:flex;justify-content:space-between">
+                <span>${escapeHtml(home)}</span>
+                <span style="color:var(--text-muted)">vs</span>
+                <span>${escapeHtml(away)}</span>
+            </div>
+        </div>`;
+    }
+
+    // Ready for input
+    return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+            <span>${escapeHtml(home)}</span>
+            <span style="color:var(--text-muted);font-size:0.7rem">vs</span>
+            <span>${escapeHtml(away)}</span>
+        </div>
+        <div style="display:flex;gap:0.3rem;align-items:center">
+            <input type="number" min="0" max="30" class="wc-ko-hg" style="width:2rem;font-size:0.75rem;text-align:center" placeholder="-">
+            <span>:</span>
+            <input type="number" min="0" max="30" class="wc-ko-ag" style="width:2rem;font-size:0.75rem;text-align:center" placeholder="-">
+            <button class="text-button wc-ko-apply" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.4rem">${z ? "录入" : "Apply"}</button>
+        </div>
+    </div>`;
 }
 
 async function fetchWcMatchPrediction(teamA, teamB) {

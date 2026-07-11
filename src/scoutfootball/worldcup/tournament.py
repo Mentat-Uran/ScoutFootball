@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -113,6 +114,7 @@ class TournamentState:
     tournament_end: str = TOURNAMENT_END
     matches: list[dict[str, Any]] = field(default_factory=list)
     results: dict[str, dict[str, Any]] = field(default_factory=dict)
+    knockout: dict[str, Any] = field(default_factory=dict)
     notes: str = ""
     created_at: str = ""
     updated_at: str = ""
@@ -120,6 +122,12 @@ class TournamentState:
     def match_by_id(self, match_id: str) -> dict[str, Any] | None:
         for m in self.matches:
             if m["match_id"] == match_id:
+                return m
+        return None
+
+    def knockout_match_by_id(self, match_id: str) -> dict[str, Any] | None:
+        for m in self.knockout.get("matches", []):
+            if m.get("match_id") == match_id:
                 return m
         return None
 
@@ -465,8 +473,9 @@ def clear_result(state: TournamentState, match_id: str) -> bool:
 
 
 def reset_state(state: TournamentState) -> None:
-    """Clear all recorded results but keep the schedule."""
+    """Clear all recorded results (group stage and knockout) but keep the schedule."""
     state.results = {}
+    state.knockout = {}
 
 
 # ── Qualification scenarios ──────────────────────────────────────────────
@@ -737,6 +746,7 @@ def state_to_dict(state: TournamentState) -> dict[str, Any]:
         "tournament_end": state.tournament_end,
         "matches": state.matches,
         "results": state.results,
+        "knockout": state.knockout,
         "notes": state.notes,
         "created_at": state.created_at,
         "updated_at": state.updated_at,
@@ -763,6 +773,7 @@ def state_from_dict(data: dict[str, Any]) -> TournamentState:
         tournament_end=data.get("tournament_end", TOURNAMENT_END),
         matches=matches,
         results=results,
+        knockout=data.get("knockout") or {},
         notes=data.get("notes", ""),
         created_at=data.get("created_at", ""),
         updated_at=data.get("updated_at", ""),
@@ -822,4 +833,438 @@ def tournament_summary(state: TournamentState) -> dict[str, Any]:
         "best_thirds": compute_best_thirds(state, limit=8),
         "is_complete": completed >= total_matches,
         "hosts": list(HOSTS),
+        "knockout": get_knockout_overview(state),
     }
+
+
+# ── Knockout stage ───────────────────────────────────────────────────────
+
+
+# Round labels and match counts for the 2026 World Cup knockout stage.
+KNOCKOUT_ROUNDS: list[tuple[str, str, int]] = [
+    ("r32", "Round of 32", 16),
+    ("r16", "Round of 16", 8),
+    ("qf", "Quarter-Finals", 4),
+    ("sf", "Semi-Finals", 2),
+    ("final", "Final", 1),
+]
+
+
+def _seed_knockout_r32(
+    advancing: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Build 16 Round-of-32 matchups from advancing teams.
+
+    Seeding logic: 12 group winners are sorted by (points, goal_difference,
+    goals_for) and seeded 1-12. 12 runners-up are sorted the same way and
+    paired against winners so that the strongest winner faces the weakest
+    runner-up. 8 best thirds are then distributed to the remaining slots.
+
+    Each matchup dict has: match_id, round, position, home, away,
+    home_seed, away_seed, home_group, away_group.
+    """
+    winners = sorted(
+        advancing.get("winners", []),
+        key=lambda w: (-w.get("points", 0), -w.get("goal_difference", 0), -w.get("goals_for", 0)),
+    )
+    runners = sorted(
+        advancing.get("runners_up", []),
+        key=lambda r: (-r.get("points", 0), -r.get("goal_difference", 0), -r.get("goals_for", 0)),
+    )
+    thirds = list(advancing.get("best_thirds", []))
+
+    matchups: list[dict[str, Any]] = []
+    # First 12 matchups: winner[i] vs runner-up[11-i] (strong vs weak)
+    for i in range(12):
+        w = winners[i] if i < len(winners) else None
+        r = runners[11 - i] if (11 - i) < len(runners) else None
+        if not w or not r:
+            continue
+        matchups.append({
+            "match_id": f"r32-{i + 1:02d}",
+            "round": "r32",
+            "position": i + 1,
+            "home": w.get("team"),
+            "away": r.get("team"),
+            "home_seed": f"1st-{w.get('group', '?')}",
+            "away_seed": f"2nd-{r.get('group', '?')}",
+            "home_group": w.get("group"),
+            "away_group": r.get("group"),
+        })
+
+    # Remaining 4 matchups: best thirds paired against remaining runners-up
+    # We pair third[j] with runner-up[j] (strongest third vs strongest remaining runner)
+    for j in range(4):
+        t = thirds[j] if j < len(thirds) else None
+        r = runners[j] if j < len(runners) else None
+        if not t or not r:
+            continue
+        pos = 13 + j
+        matchups.append({
+            "match_id": f"r32-{pos:02d}",
+            "round": "r32",
+            "position": pos,
+            "home": r.get("team"),
+            "away": t.get("team"),
+            "home_seed": f"2nd-{r.get('group', '?')}",
+            "away_seed": f"3rd-{t.get('group', '?')}",
+            "home_group": r.get("group"),
+            "away_group": t.get("group"),
+        })
+
+    return matchups
+
+
+def _build_knockout_rounds(
+    r32_matchups: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build all knockout matches (R32 through Final) with empty slots for
+    later rounds. R32 is populated from *r32_matchups*; later rounds have
+    home/away set to None until winners are determined.
+    """
+    matches: list[dict[str, Any]] = []
+    for m in r32_matchups:
+        matches.append({
+            **m,
+            "home_goals": None,
+            "away_goals": None,
+            "winner": None,
+            "status": "scheduled",
+        })
+
+    # R16: 8 matches, each fed by 2 consecutive R32 matches
+    for i in range(8):
+        matches.append({
+            "match_id": f"r16-{i + 1:02d}",
+            "round": "r16",
+            "position": i + 1,
+            "home": None,
+            "away": None,
+            "home_seed": f"Winner R32-{2 * i + 1:02d}",
+            "away_seed": f"Winner R32-{2 * i + 2:02d}",
+            "home_group": None,
+            "away_group": None,
+            "home_goals": None,
+            "away_goals": None,
+            "winner": None,
+            "status": "scheduled",
+        })
+
+    # QF: 4 matches
+    for i in range(4):
+        matches.append({
+            "match_id": f"qf-{i + 1:02d}",
+            "round": "qf",
+            "position": i + 1,
+            "home": None,
+            "away": None,
+            "home_seed": f"Winner R16-{2 * i + 1:02d}",
+            "away_seed": f"Winner R16-{2 * i + 2:02d}",
+            "home_group": None,
+            "away_group": None,
+            "home_goals": None,
+            "away_goals": None,
+            "winner": None,
+            "status": "scheduled",
+        })
+
+    # SF: 2 matches
+    for i in range(2):
+        matches.append({
+            "match_id": f"sf-{i + 1:02d}",
+            "round": "sf",
+            "position": i + 1,
+            "home": None,
+            "away": None,
+            "home_seed": f"Winner QF-{2 * i + 1:02d}",
+            "away_seed": f"Winner QF-{2 * i + 2:02d}",
+            "home_group": None,
+            "away_group": None,
+            "home_goals": None,
+            "away_goals": None,
+            "winner": None,
+            "status": "scheduled",
+        })
+
+    # Final: 1 match
+    matches.append({
+        "match_id": "final-01",
+        "round": "final",
+        "position": 1,
+        "home": None,
+        "away": None,
+        "home_seed": "Winner SF-01",
+        "away_seed": "Winner SF-02",
+        "home_group": None,
+        "away_group": None,
+        "home_goals": None,
+        "away_goals": None,
+        "winner": None,
+        "status": "scheduled",
+    })
+
+    return matches
+
+
+def generate_knockout_bracket(state: TournamentState) -> dict[str, Any]:
+    """Generate the full knockout bracket from current group standings.
+
+    Returns a dict with ``matches`` (list of all 31 knockout matches from R32
+    through Final) and ``generated`` (timestamp). If the group stage is not
+    yet complete, the bracket is marked as ``provisional``.
+
+    Raises ValueError if fewer than 32 advancing teams can be determined
+    (e.g. group stage has no results at all and no provisional advancement
+    can be computed).
+    """
+    advancing = determine_advancing_teams(state)
+    r32 = _seed_knockout_r32(advancing)
+    if len(r32) < 16:
+        raise ValueError(
+            f"Cannot generate knockout bracket: only {len(r32)} R32 matchups "
+            f"could be seeded. Need 16 (32 teams)."
+        )
+    all_matches = _build_knockout_rounds(r32)
+    return {
+        "matches": all_matches,
+        "generated": _now_iso(),
+        "provisional": advancing.get("provisional", True),
+        "champion": None,
+    }
+
+
+def apply_knockout_result(
+    state: TournamentState,
+    match_id: str,
+    home_goals: int,
+    away_goals: int,
+    *,
+    penalties_winner: str | None = None,
+) -> TournamentState:
+    """Record a knockout match result and auto-advance the winner.
+
+    If the score is level after regulation, *penalties_winner* must be
+    provided to determine the winner. The winner is automatically placed into
+    the next round's matchup.
+
+    Raises ValueError if the match is not found, already has a result, or
+    if a draw is recorded without a penalties winner.
+    """
+    if not state.knockout:
+        raise ValueError(
+            "No knockout bracket has been generated. "
+            "Run `generate_knockout_bracket` first."
+        )
+
+    match = state.knockout_match_by_id(match_id)
+    if not match:
+        raise ValueError(f"Knockout match {match_id!r} not found.")
+
+    if match.get("winner"):
+        raise ValueError(f"Match {match_id!r} already has a result (winner: {match['winner']}).")
+
+    if match.get("home") is None or match.get("away") is None:
+        raise ValueError(
+            f"Match {match_id!r} is not ready: one or both teams have not been determined."
+        )
+
+    if home_goals < 0 or away_goals < 0:
+        raise ValueError("Goals must be non-negative.")
+
+    home = match["home"]
+    away = match["away"]
+
+    # Determine winner
+    if home_goals > away_goals:
+        winner = home
+    elif away_goals > home_goals:
+        winner = away
+    else:
+        # Draw — penalties required
+        if penalties_winner not in (home, away):
+            raise ValueError(
+                f"Drawn match requires penalties_winner to be '{home}' or '{away}', "
+                f"got {penalties_winner!r}."
+            )
+        winner = penalties_winner
+
+    # Update the match in-place
+    match["home_goals"] = home_goals
+    match["away_goals"] = away_goals
+    match["winner"] = winner
+    match["status"] = "completed"
+    if home_goals == away_goals:
+        match["decided_by"] = "penalties"
+        match["penalties_winner"] = penalties_winner
+    else:
+        match["decided_by"] = "regular"
+
+    # Advance winner to next round
+    _advance_winner(state, match)
+
+    # If this was the final, set champion
+    if match["round"] == "final":
+        state.knockout["champion"] = winner
+
+    return state
+
+
+def clear_knockout_result(state: TournamentState, match_id: str) -> TournamentState:
+    """Clear a knockout match result and cascade-clear downstream matches.
+
+    Clearing a result also clears any results in later rounds that depended
+    on this match's winner, since those matchups would no longer be valid.
+    """
+    if not state.knockout:
+        raise ValueError("No knockout bracket has been generated.")
+
+    match = state.knockout_match_by_id(match_id)
+    if not match:
+        raise ValueError(f"Knockout match {match_id!r} not found.")
+
+    if not match.get("winner"):
+        raise ValueError(f"Match {match_id!r} has no recorded result to clear.")
+
+    # Find and clear all downstream matches that this winner fed into
+    _cascade_clear_downstream(state, match)
+
+    # Clear this match
+    match["home_goals"] = None
+    match["away_goals"] = None
+    match["winner"] = None
+    match["status"] = "scheduled"
+    match.pop("decided_by", None)
+    match.pop("penalties_winner", None)
+
+    if match["round"] == "final":
+        state.knockout.pop("champion", None)
+
+    return state
+
+
+def _advance_winner(state: TournamentState, match: dict[str, Any]) -> None:
+    """Place the winner of *match* into the next round's matchup."""
+    round_code = match["round"]
+    pos = match["position"]
+
+    round_order = [r[0] for r in KNOCKOUT_ROUNDS]
+    if round_code not in round_order:
+        return
+    idx = round_order.index(round_code)
+    if idx >= len(round_order) - 1:
+        return  # Final — no next round
+
+    next_round = round_order[idx + 1]
+    # Next round position: ceil(pos / 2)
+    next_pos = (pos + 1) // 2
+    # Is the winner home or away in the next match?
+    is_home = (pos % 2 == 1)
+
+    next_match = None
+    for m in state.knockout.get("matches", []):
+        if m.get("round") == next_round and m.get("position") == next_pos:
+            next_match = m
+            break
+
+    if next_match:
+        if is_home:
+            next_match["home"] = match["winner"]
+        else:
+            next_match["away"] = match["winner"]
+
+
+def _cascade_clear_downstream(state: TournamentState, match: dict[str, Any]) -> None:
+    """Clear all downstream matches whose team slot was fed by *match*."""
+    round_code = match["round"]
+    pos = match["position"]
+
+    round_order = [r[0] for r in KNOCKOUT_ROUNDS]
+    if round_code not in round_order:
+        return
+    idx = round_order.index(round_code)
+    if idx >= len(round_order) - 1:
+        return
+
+    next_round = round_order[idx + 1]
+    next_pos = (pos + 1) // 2
+    is_home = (pos % 2 == 1)
+
+    next_match = None
+    for m in state.knockout.get("matches", []):
+        if m.get("round") == next_round and m.get("position") == next_pos:
+            next_match = m
+            break
+
+    if not next_match:
+        return
+
+    # If the next match has a result, clear it first (recursive)
+    if next_match.get("winner"):
+        _cascade_clear_downstream(state, next_match)
+        next_match["home_goals"] = None
+        next_match["away_goals"] = None
+        next_match["winner"] = None
+        next_match["status"] = "scheduled"
+        next_match.pop("decided_by", None)
+        next_match.pop("penalties_winner", None)
+        if next_match["round"] == "final":
+            state.knockout.pop("champion", None)
+
+    # Clear the team slot
+    if is_home:
+        next_match["home"] = None
+    else:
+        next_match["away"] = None
+
+
+def get_knockout_overview(state: TournamentState) -> dict[str, Any]:
+    """Return a summary of the knockout stage state.
+
+    If no bracket has been generated, returns ``{"generated": False}``.
+    """
+    ko = state.knockout
+    if not ko or not ko.get("matches"):
+        return {"generated": False}
+
+    matches = ko.get("matches", [])
+    by_round: dict[str, list[dict[str, Any]]] = {}
+    for code, _label, _count in KNOCKOUT_ROUNDS:
+        round_matches = [m for m in matches if m.get("round") == code]
+        by_round[code] = round_matches
+
+    completed = sum(1 for m in matches if m.get("status") == "completed")
+    total = len(matches)
+
+    # Determine current round (first round with unplayed matches)
+    current_round = None
+    for code, _label, _ in KNOCKOUT_ROUNDS:
+        round_matches = by_round.get(code, [])
+        has_unplayed = any(m.get("status") != "completed" for m in round_matches)
+        if has_unplayed and round_matches:
+            current_round = code
+            break
+
+    return {
+        "generated": True,
+        "provisional": ko.get("provisional", True),
+        "generated_at": ko.get("generated"),
+        "champion": ko.get("champion"),
+        "current_round": current_round,
+        "completed_matches": completed,
+        "total_matches": total,
+        "rounds": {
+            code: {
+                "label": label,
+                "matches": round_matches,
+            }
+            for code, label, _ in KNOCKOUT_ROUNDS
+            for round_matches in [by_round.get(code, [])]
+        },
+    }
+
+
+def _now_iso() -> str:
+    """Return current UTC time as ISO 8601 string."""
+    from datetime import datetime
+
+    return datetime.now(UTC).isoformat()

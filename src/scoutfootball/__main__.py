@@ -428,9 +428,150 @@ def _cmd_tournament_matches(args: argparse.Namespace) -> None:
     print(f"\n{len(rows)} matches shown.")
 
 
+def _cmd_tournament_knockout_generate(args: argparse.Namespace) -> None:
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        generate_knockout_bracket,
+        save_state,
+    )
+
+    state = _tournament_load_state(args)
+    try:
+        ko = generate_knockout_bracket(state)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+    state.knockout = ko
+    out_path = args.state_path or DEFAULT_STATE_PATH
+    save_state(state, out_path)
+    provisional = "(provisional — group stage incomplete)" if ko["provisional"] else ""
+    print(f"Knockout bracket generated. {provisional}")
+    print(f"  {len(ko['matches'])} matches (R32 → Final)")
+    print(f"  Saved to {out_path}")
+
+
+def _cmd_tournament_knockout_show(args: argparse.Namespace) -> None:
+    state = _tournament_load_state(args)
+    ko = state.knockout
+    if not ko or not ko.get("matches"):
+        print("No knockout bracket generated. Run `tournament knockout generate` first.")
+        return
+
+    overview = _get_knockout_overview(state)
+    if args.json:
+        print(json.dumps(overview, indent=2, ensure_ascii=False, default=str))
+        return
+
+    champ = ko.get("champion")
+    if champ:
+        print(f"🏆 Champion: {champ}\n")
+    else:
+        prov = "(provisional)" if ko.get("provisional") else ""
+        print(f"Knockout bracket {prov}\n")
+
+    round_labels = {
+        "r32": "Round of 32",
+        "r16": "Round of 16",
+        "qf": "Quarter-Finals",
+        "sf": "Semi-Finals",
+        "final": "Final",
+    }
+    for code in ["r32", "r16", "qf", "sf", "final"]:
+        matches = [m for m in ko["matches"] if m.get("round") == code]
+        if not matches:
+            continue
+        print(f"  {round_labels.get(code, code)}:")
+        for m in matches:
+            home = m.get("home") or "TBD"
+            away = m.get("away") or "TBD"
+            hg = m.get("home_goals")
+            ag = m.get("away_goals")
+            if hg is not None:
+                score = f"{hg}-{ag}"
+                winner = m.get("winner", "")
+                pen = " (pen)" if m.get("decided_by") == "penalties" else ""
+                print(f"    {m['match_id']}: {home} {score} {away}{pen} → {winner}")
+            else:
+                print(f"    {m['match_id']}: {home} vs {away}")
+
+
+def _get_knockout_overview(state):
+    from scoutfootball.worldcup.tournament import get_knockout_overview
+
+    return get_knockout_overview(state)
+
+
+def _cmd_tournament_knockout_apply(args: argparse.Namespace) -> None:
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        apply_knockout_result,
+        save_state,
+    )
+
+    state = _tournament_load_state(args)
+    try:
+        apply_knockout_result(
+            state,
+            args.match_id,
+            args.home_goals,
+            args.away_goals,
+            penalties_winner=args.penalties_winner,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+    out_path = args.state_path or DEFAULT_STATE_PATH
+    save_state(state, out_path)
+
+    match = state.knockout_match_by_id(args.match_id)
+    print(f"Recorded {match['home']} {args.home_goals}-{args.away_goals} {match['away']}")
+    if args.home_goals == args.away_goals and args.penalties_winner:
+        print(f"  (Penalties: {args.penalties_winner})")
+    print(f"  Winner: {match['winner']}")
+    print(f"  Saved to {out_path}")
+
+
+def _cmd_tournament_knockout_clear(args: argparse.Namespace) -> None:
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        clear_knockout_result,
+        save_state,
+    )
+
+    state = _tournament_load_state(args)
+    try:
+        clear_knockout_result(state, args.match_id)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+    out_path = args.state_path or DEFAULT_STATE_PATH
+    save_state(state, out_path)
+    print(f"Cleared knockout result for {args.match_id}")
+    print("  (Downstream matches also cleared)")
+    print(f"  Saved to {out_path}")
+
+
+def _cmd_tournament_knockout(args: argparse.Namespace) -> None:
+    """Dispatch to knockout sub-actions."""
+    action = args.knockout_action
+    handler = {
+        "generate": _cmd_tournament_knockout_generate,
+        "show": _cmd_tournament_knockout_show,
+        "apply": _cmd_tournament_knockout_apply,
+        "clear": _cmd_tournament_knockout_clear,
+    }.get(action)
+    if handler is None:
+        print(f"Unknown knockout action: {action}")
+        sys.exit(1)
+    handler(args)
+
+
 def _cmd_tournament(args: argparse.Namespace) -> None:
     """Dispatch to tournament sub-actions."""
     action = args.tournament_action
+    if action == "knockout":
+        _cmd_tournament_knockout(args)
+        return
     handler = {
         "show": _cmd_tournament_show,
         "standings": _cmd_tournament_standings,
@@ -1175,6 +1316,36 @@ def main() -> None:
     tour_matches.add_argument("--pending", action="store_true", help="Only unplayed matches")
     tour_matches.add_argument("--state-path", type=str, default=None)
     tour_matches.add_argument("--json", action="store_true")
+
+    # ── tournament knockout ──
+    tour_ko = tour_sub.add_parser("knockout", help="Manage knockout bracket")
+    tour_ko_sub = tour_ko.add_subparsers(
+        dest="knockout_action",
+        title="knockout actions",
+        required=True,
+    )
+    tour_ko_gen = tour_ko_sub.add_parser(
+        "generate", help="Generate knockout bracket from group standings"
+    )
+    tour_ko_gen.add_argument("--state-path", type=str, default=None)
+
+    tour_ko_show = tour_ko_sub.add_parser("show", help="Show knockout bracket")
+    tour_ko_show.add_argument("--state-path", type=str, default=None)
+    tour_ko_show.add_argument("--json", action="store_true")
+
+    tour_ko_apply = tour_ko_sub.add_parser("apply", help="Apply a knockout match result")
+    tour_ko_apply.add_argument("match_id", type=str, help="Knockout match ID (e.g. r32-01)")
+    tour_ko_apply.add_argument("home_goals", type=int)
+    tour_ko_apply.add_argument("away_goals", type=int)
+    tour_ko_apply.add_argument(
+        "--penalties-winner", type=str, default=None,
+        help="Team that won on penalties (required if draw)",
+    )
+    tour_ko_apply.add_argument("--state-path", type=str, default=None)
+
+    tour_ko_clear = tour_ko_sub.add_parser("clear", help="Clear a knockout match result (cascades)")
+    tour_ko_clear.add_argument("match_id", type=str)
+    tour_ko_clear.add_argument("--state-path", type=str, default=None)
 
     args = parser.parse_args()
 

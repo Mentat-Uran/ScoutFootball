@@ -3802,3 +3802,99 @@ def reset_wc_tournament() -> dict:
         "reset": True,
         "summary": tournament_summary(state),
     })
+
+
+def get_wc_knockout_bracket() -> dict:
+    """Return the current knockout bracket state."""
+    from scoutfootball.worldcup.tournament import get_knockout_overview
+
+    state = _wc_tournament_state()
+    overview = get_knockout_overview(state)
+    overview["status"] = "ok"
+    return _clean_json_value(overview)
+
+
+def generate_wc_knockout_bracket() -> dict:
+    """Generate the knockout bracket from current group standings and persist."""
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        generate_knockout_bracket,
+        save_state,
+    )
+
+    state = _wc_tournament_state()
+    try:
+        ko = generate_knockout_bracket(state)
+    except ValueError as exc:
+        return _clean_json_value({"status": "error", "message": str(exc)})
+    state.knockout = ko
+    save_state(state, DEFAULT_STATE_PATH)
+    return _clean_json_value({
+        "status": "ok",
+        "generated": True,
+        "provisional": ko["provisional"],
+        "total_matches": len(ko["matches"]),
+        "saved_to": DEFAULT_STATE_PATH,
+    })
+
+
+def apply_wc_knockout_result(
+    match_id: str,
+    home_goals: int,
+    away_goals: int,
+    penalties_winner: str | None = None,
+) -> dict:
+    """Record a knockout match result and auto-advance the winner."""
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        apply_knockout_result,
+        save_state,
+    )
+
+    state = _wc_tournament_state()
+    try:
+        apply_knockout_result(
+            state,
+            match_id,
+            home_goals,
+            away_goals,
+            penalties_winner=penalties_winner,
+        )
+    except ValueError as exc:
+        return _clean_json_value({"status": "error", "message": str(exc)})
+    save_state(state, DEFAULT_STATE_PATH)
+
+    match = state.knockout_match_by_id(match_id)
+    return _clean_json_value({
+        "status": "ok",
+        "match_id": match_id,
+        "home": match["home"],
+        "away": match["away"],
+        "home_goals": home_goals,
+        "away_goals": away_goals,
+        "winner": match["winner"],
+        "decided_by": match.get("decided_by"),
+        "saved_to": DEFAULT_STATE_PATH,
+    })
+
+
+def clear_wc_knockout_result(match_id: str) -> dict:
+    """Clear a knockout match result (cascades to downstream matches)."""
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        clear_knockout_result,
+        save_state,
+    )
+
+    state = _wc_tournament_state()
+    try:
+        clear_knockout_result(state, match_id)
+    except ValueError as exc:
+        return _clean_json_value({"status": "error", "message": str(exc)})
+    save_state(state, DEFAULT_STATE_PATH)
+    return _clean_json_value({
+        "status": "ok",
+        "match_id": match_id,
+        "cleared": True,
+        "saved_to": DEFAULT_STATE_PATH,
+    })

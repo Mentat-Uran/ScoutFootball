@@ -773,6 +773,24 @@ Reset all tournament results to a fresh state (keeps the 72-match schedule).
 
 **Response**: `{ "status": "ok", "reset": true, "saved_to": "..." }`
 
+### GET /world-cup/tournament/knockout
+Return the knockout bracket overview (generated flag, provisional flag, champion, current_round, completed_matches, total_matches=31, rounds dict keyed by r32/r16/qf/sf/final with label + matches). Returns `{ "generated": false }` when no bracket has been generated yet.
+
+### POST /world-cup/tournament/knockout/generate
+Generate the full 31-match knockout bracket from current group standings (12 winners + 12 runners-up + 8 best thirds) and persist to `DEFAULT_STATE_PATH`. Later rounds have home/away=None with seed labels like "Winner R32-01".
+
+**Response**: `{ "status": "ok", "generated": true, "provisional": bool, "total_matches": 31, "saved_to": "..." }`
+
+### POST /world-cup/tournament/knockout/result?match_id=r32-01&home_goals=2&away_goals=1&penalties_winner=...
+Record a knockout match result. Draws require `penalties_winner` (must be home or away team). Winner auto-advances to the next round's home (odd position) or away (even position) slot. Sets champion when the final is completed.
+
+**Response**: `{ "status": "ok", "match_id", "winner", "decided_by": "regular"|"penalties", "saved_to": "..." }`
+
+### DELETE /world-cup/tournament/knockout/result?match_id=...
+Clear a knockout match result. Cascades: clearing a result recursively clears all downstream matches that depended on that winner (and clears champion if the final is cleared).
+
+**Response**: `{ "status": "ok", "cleared": true, "saved_to": "..." }`
+
 ### GET /license
 Data source license attribution.
 
