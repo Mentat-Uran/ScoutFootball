@@ -3931,3 +3931,65 @@ def get_wc_knockout_probabilities() -> dict:
 
     result = project_knockout_probabilities(overview, strengths)
     return _clean_json_value(result)
+
+
+def get_wc_knockout_scenarios(team: str, num_simulations: int = 5000) -> dict:
+    """Return knockout advancement scenarios for a specific team.
+
+    Shows the team's current championship probability and what-if analysis
+    for each remaining knockout stage (win/lose championship impact).
+    """
+    from scoutfootball.worldcup.data import compute_knockout_scenarios
+    from scoutfootball.worldcup.tournament import get_knockout_overview
+
+    state = _wc_tournament_state()
+    overview = get_knockout_overview(state)
+    if not overview.get("generated"):
+        return _clean_json_value({
+            "status": "error",
+            "message": (
+                "No knockout bracket generated. "
+                "Call /world-cup/tournament/knockout/generate first."
+            ),
+        })
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads:
+        return _clean_json_value({
+            "status": "error",
+            "message": "World Cup squad data not available for strength model.",
+        })
+
+    result = compute_knockout_scenarios(
+        overview, strengths, team, num_simulations=num_simulations
+    )
+    return _clean_json_value(result)
+
+
+def get_wc_group_stage_simulation(
+    mode: str = "random", num_simulations: int = 1000
+) -> dict:
+    """Simulate remaining group-stage matches and report advancement odds.
+
+    *mode* is ``"random"`` (uniform) or ``"strength"`` (Bradley-Terry-biased).
+    """
+    from scoutfootball.worldcup.data import simulate_group_stage
+
+    state = _wc_tournament_state()
+
+    strengths: dict[str, float] | None = None
+    if mode == "strength":
+        enriched_squads, strengths = _get_wc_enriched_squads()
+        if not enriched_squads:
+            return _clean_json_value({
+                "status": "error",
+                "message": "World Cup squad data not available for strength model.",
+            })
+
+    result = simulate_group_stage(
+        state,
+        team_strengths=strengths,
+        num_simulations=num_simulations,
+        mode=mode,
+    )
+    return _clean_json_value(result)

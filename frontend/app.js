@@ -7546,6 +7546,8 @@ let wcApiData = {
     tournamentLoading: false,
     knockoutBracket: null,  // from /world-cup/tournament/knockout
     knockoutProbabilities: null,  // from /world-cup/tournament/knockout/probabilities
+    knockoutScenarios: {},  // team → scenario data from /world-cup/tournament/knockout/scenarios/{team}
+    groupStageSimulation: null,  // from /world-cup/tournament/group-simulation
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -8119,6 +8121,24 @@ function renderWcTournament() {
 
         <article class="liquid-panel compact">
             <div class="panel-head">
+                <h3>${z ? "小组赛模拟" : "Group Stage Simulation"}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <select id="wc-tournament-sim-mode" class="filter-select" style="min-width:100px">
+                        <option value="random">${z ? "随机" : "Random"}</option>
+                        <option value="strength">${z ? "实力加权" : "Strength"}</option>
+                    </select>
+                    <button class="text-button" id="wc-tournament-sim-btn" type="button">${z ? "模拟" : "Simulate"}</button>
+                </div>
+            </div>
+            <div id="wc-tournament-sim-panel">
+                <p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">
+                    ${z ? "点击「模拟」批量模拟剩余小组赛" : "Click \"Simulate\" to bulk-simulate remaining group matches"}
+                </p>
+            </div>
+        </article>
+
+        <article class="liquid-panel compact">
+            <div class="panel-head">
                 <h3>${z ? "出线情景分析" : "Qualification Scenarios"}</h3>
                 <div style="display:flex;gap:0.5rem;align-items:center">
                     <select id="wc-tournament-scenario-team" class="filter-select" style="min-width:200px">
@@ -8134,12 +8154,39 @@ function renderWcTournament() {
             </div>
         </article>
 
+        <article class="liquid-panel compact">
+            <div class="panel-head">
+                <h3>${z ? "小组赛模拟器" : "Group Stage Simulator"}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <select id="wc-grpsim-mode" class="filter-select" style="min-width:100px">
+                        <option value="random">${z ? "随机" : "Random"}</option>
+                        <option value="strength">${z ? "实力加权" : "Strength"}</option>
+                    </select>
+                    <select id="wc-grpsim-iter" class="filter-select" style="min-width:80px">
+                        <option value="500">500</option>
+                        <option value="1000" selected>1000</option>
+                        <option value="3000">3000</option>
+                    </select>
+                    <button class="text-button" id="wc-grpsim-btn" type="button">${z ? "模拟" : "Simulate"}</button>
+                </div>
+            </div>
+            <div id="wc-grpsim-panel">
+                <p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">
+                    ${z ? "点击「模拟」批量模拟剩余小组赛，查看出线概率" : "Click \"Simulate\" to run remaining group matches and see advancement odds"}
+                </p>
+            </div>
+        </article>
+
         <article class="liquid-panel compact" style="margin-top:1rem">
             <div class="panel-head">
                 <h3>${z ? "淘汰赛对阵图" : "Knockout Bracket"}</h3>
-                <div style="display:flex;gap:0.5rem;align-items:center">
+                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
                     <button class="text-button" id="wc-ko-generate" type="button" style="font-size:0.75rem">${z ? "生成对阵" : "Generate Bracket"}</button>
                     <button class="text-button" id="wc-ko-refresh" type="button" style="font-size:0.75rem">↻</button>
+                    <select id="wc-ko-scenario-team" class="filter-select" style="min-width:160px;font-size:0.7rem" data-placeholder="${z ? "夺冠情景" : "Championship Scenarios"}">
+                        <option value="">${z ? "— 夺冠情景 —" : "— Scenarios —"}</option>
+                    </select>
+                    <button class="text-button" id="wc-ko-scenario-btn" type="button" style="font-size:0.75rem">${z ? "分析" : "Analyze"}</button>
                 </div>
             </div>
             <div id="wc-ko-bracket-panel">
@@ -8252,6 +8299,55 @@ function renderWcTournament() {
             await fetchWcKnockoutBracket();
             renderWcKnockoutBracket();
         });
+    }
+
+    // Group stage simulator button
+    const grpSimBtn = document.getElementById("wc-grpsim-btn");
+    if (grpSimBtn && !grpSimBtn.dataset.bound) {
+        grpSimBtn.dataset.bound = "1";
+        grpSimBtn.addEventListener("click", async () => {
+            const mode = document.getElementById("wc-grpsim-mode").value;
+            const iter = parseInt(document.getElementById("wc-grpsim-iter").value, 10) || 1000;
+            grpSimBtn.disabled = true;
+            grpSimBtn.textContent = z ? "模拟中..." : "Simulating...";
+            await fetchWcGroupStageSimulation(mode, iter);
+            renderWcGroupStageSimulation();
+            grpSimBtn.disabled = false;
+            grpSimBtn.textContent = z ? "模拟" : "Simulate";
+        });
+    }
+
+    // Knockout scenarios analyze button
+    const koScenBtn = document.getElementById("wc-ko-scenario-btn");
+    if (koScenBtn && !koScenBtn.dataset.bound) {
+        koScenBtn.dataset.bound = "1";
+        koScenBtn.addEventListener("click", async () => {
+            const team = document.getElementById("wc-ko-scenario-team").value;
+            if (!team) return;
+            koScenBtn.disabled = true;
+            koScenBtn.textContent = z ? "分析中..." : "Analyzing...";
+            await fetchWcKnockoutScenarios(team);
+            renderWcKnockoutScenarios(team);
+            koScenBtn.disabled = false;
+            koScenBtn.textContent = z ? "分析" : "Analyze";
+        });
+    }
+
+    // Populate knockout scenario team dropdown from bracket R32 teams
+    const koScenTeam = document.getElementById("wc-ko-scenario-team");
+    if (koScenTeam && wcApiData.knockoutBracket && wcApiData.knockoutBracket.rounds) {
+        const r32Teams = [];
+        const r32 = wcApiData.knockoutBracket.rounds.r32;
+        if (r32 && r32.matches) {
+            for (const m of r32.matches) {
+                if (m.home) r32Teams.push(m.home);
+                if (m.away) r32Teams.push(m.away);
+            }
+        }
+        const currentVal = koScenTeam.value;
+        koScenTeam.innerHTML = `<option value="">${z ? "— 夺冠情景 —" : "— Scenarios —"}</option>` +
+            r32Teams.map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("");
+        if (currentVal) koScenTeam.value = currentVal;
     }
 
     // Auto-render knockout bracket if data is available
@@ -8398,6 +8494,176 @@ async function fetchWcKnockoutProbabilities() {
     } catch (e) {
         wcApiData.knockoutProbabilities = null;
     }
+}
+
+async function fetchWcKnockoutScenarios(team) {
+    try {
+        const data = await fetchJson(`/world-cup/tournament/knockout/scenarios/${encodeURIComponent(team)}?num_simulations=5000`);
+        if (data) {
+            wcApiData.knockoutScenarios[team] = data;
+        }
+    } catch (e) {
+        wcApiData.knockoutScenarios[team] = { status: "error", message: String(e) };
+    }
+}
+
+async function fetchWcGroupStageSimulation(mode, iterations) {
+    try {
+        const data = await fetchJson(`/world-cup/tournament/group-simulation?mode=${mode}&num_simulations=${iterations}`);
+        if (data && data.status === "ok") {
+            wcApiData.groupStageSimulation = data;
+        } else {
+            wcApiData.groupStageSimulation = null;
+        }
+    } catch (e) {
+        wcApiData.groupStageSimulation = null;
+    }
+}
+
+function renderWcKnockoutScenarios(team) {
+    const z = currentLang === "zh";
+    const data = wcApiData.knockoutScenarios[team];
+    if (!data || data.status !== "ok") {
+        alert(data && data.message ? data.message : (z ? "无法获取情景数据" : "Failed to load scenario data"));
+        return;
+    }
+
+    // Render scenario panel as an overlay inserted before the bracket panel
+    const bracketPanel = document.getElementById("wc-ko-bracket-panel");
+    if (!bracketPanel) return;
+
+    let scenPanel = document.getElementById("wc-ko-scenarios-display");
+    if (!scenPanel) {
+        scenPanel = document.createElement("div");
+        scenPanel.id = "wc-ko-scenarios-display";
+        bracketPanel.parentElement.insertBefore(scenPanel, bracketPanel);
+    }
+
+    const basePct = (data.current_championship_probability * 100).toFixed(2);
+    const nm = data.next_match;
+    const scenarios = data.scenarios || [];
+
+    let html = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
+            <h4 style="font-size:0.9rem">${escapeHtml(team)} ${z ? "夺冠情景分析" : "Championship Scenarios"}</h4>
+            <button class="text-button" onclick="document.getElementById('wc-ko-scenarios-display').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
+        </div>
+        <div style="font-size:0.8rem;margin-bottom:0.6rem">
+            <span style="color:var(--text-muted)">${z ? "当前夺冠概率" : "Current Championship Prob"}:</span>
+            <span style="font-weight:bold;margin-left:0.5rem;color:var(--accent-color,#4a9eff)">${basePct}%</span>
+        </div>`;
+
+    if (nm) {
+        const winPct = nm.win_probability !== null ? (nm.win_probability * 100).toFixed(1) + "%" : "—";
+        html += `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem">
+            ${z ? "下一场" : "Next match"}: ${escapeHtml(nm.round).toUpperCase()} ${nm.match_id || ""}
+            ${nm.opponent ? ` — ${z ? "对手" : "vs"} <span style="color:var(--text)">${escapeHtml(nm.opponent)}</span>` : ` (${z ? "对手待定" : "TBD"})`}
+            ${nm.win_probability !== null ? ` (${z ? "胜率" : "Win"} ${winPct})` : ""}
+        </div>`;
+    }
+
+    if (scenarios.length > 0) {
+        const roundLabels = z ? {
+            r32: "32强", r16: "16强", qf: "四分之一", sf: "半决赛", final: "决赛",
+        } : {
+            r32: "R32", r16: "R16", qf: "QF", sf: "SF", final: "Final",
+        };
+        html += `<table style="width:100%;font-size:0.75rem;border-collapse:collapse">
+            <thead><tr style="border-bottom:1px solid var(--border-color,rgba(255,255,255,0.1))">
+                <th style="text-align:left;padding:0.3rem">${z ? "轮次" : "Round"}</th>
+                <th style="text-align:left;padding:0.3rem">${z ? "对手" : "Opponent"}</th>
+                <th style="text-align:right;padding:0.3rem">${z ? "胜率" : "Win Prob"}</th>
+                <th style="text-align:right;padding:0.3rem">${z ? "夺冠(若胜)" : "Champ If Win"}</th>
+            </tr></thead><tbody>`;
+        for (const s of scenarios) {
+            const label = roundLabels[s.round] || s.round;
+            const opp = s.opponent ? escapeHtml(s.opponent) : `<span style="color:var(--text-muted)">TBD</span>`;
+            const wp = s.match_win_probability !== null && s.match_win_probability !== undefined
+                ? (s.match_win_probability * 100).toFixed(1) + "%" : "—";
+            const champIfWin = s.championship_if_win !== undefined
+                ? (s.championship_if_win * 100).toFixed(2) + "%" : "—";
+            const champIfReach = s.championship_if_reach !== undefined
+                ? (s.championship_if_reach * 100).toFixed(2) + "%" : null;
+            html += `<tr style="border-bottom:1px solid var(--border-color,rgba(255,255,255,0.05))">
+                <td style="padding:0.3rem">${label}</td>
+                <td style="padding:0.3rem">${opp}</td>
+                <td style="text-align:right;padding:0.3rem">${wp}</td>
+                <td style="text-align:right;padding:0.3rem;color:var(--accent-color,#4a9eff)">${champIfWin}</td>
+            </tr>`;
+            if (champIfReach) {
+                html += `<tr style="font-size:0.65rem;color:var(--text-muted)">
+                    <td colspan="4" style="padding:0.1rem 0.3rem 0.3rem">${z ? "若到达此轮，夺冠概率" : "If reach this round"}: ${champIfReach}</td>
+                </tr>`;
+            }
+        }
+        html += `</tbody></table>`;
+    }
+
+    if (data.disclaimer) {
+        html += `<p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem">${escapeHtml(data.disclaimer)}</p>`;
+    }
+    html += `</div>`;
+
+    scenPanel.innerHTML = html;
+}
+
+function renderWcGroupStageSimulation() {
+    const z = currentLang === "zh";
+    const panel = document.getElementById("wc-grpsim-panel");
+    if (!panel) return;
+
+    const data = wcApiData.groupStageSimulation;
+    if (!data) {
+        panel.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">${z ? "模拟失败" : "Simulation failed"}</p>`;
+        return;
+    }
+
+    const adv = data.advancement_probability || [];
+    const winners = data.most_likely_group_winners || [];
+    const top20 = adv.slice(0, 20);
+
+    let html = `<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">
+        ${z ? "模式" : "Mode"}: ${data.mode} | ${z ? "模拟次数" : "Simulations"}: ${data.num_simulations} | ${z ? "剩余比赛" : "Remaining"}: ${data.remaining_matches}
+    </div>`;
+
+    // Most likely group winners
+    if (winners.length > 0) {
+        html += `<h4 style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem;text-transform:uppercase">${z ? "最可能小组第一" : "Most Likely Group Winners"}</h4>
+        <div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-bottom:0.8rem">`;
+        for (const w of winners) {
+            const pct = (w.probability * 100).toFixed(0);
+            html += `<span class="status-pill status-high" style="font-size:0.7rem">${escapeHtml(w.group)}: ${escapeHtml(w.team)} (${pct}%)</span>`;
+        }
+        html += `</div>`;
+    }
+
+    // Top 20 advancement probabilities
+    if (top20.length > 0) {
+        html += `<h4 style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem;text-transform:uppercase">${z ? "出线概率 Top 20" : "Advancement Probability Top 20"}</h4>
+        <div style="display:flex;flex-direction:column;gap:0.2rem">`;
+        for (const t of top20) {
+            const advPct = (t.advance_prob * 100).toFixed(1);
+            const winPct = (t.win_group_prob * 100).toFixed(1);
+            const barWidth = Math.max(1, t.advance_prob * 100);
+            const barColor = t.advance_prob >= 0.8 ? "var(--status-high-color,#4caf50)" :
+                             t.advance_prob >= 0.4 ? "var(--status-medium-color,#ff9800)" :
+                             "var(--status-low-color,#f44336)";
+            html += `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.7rem">
+                <span style="min-width:30px;color:var(--text-muted)">${escapeHtml(t.group)}</span>
+                <span style="min-width:100px">${escapeHtml(t.team)}</span>
+                <div style="flex:1;background:var(--border-color,rgba(255,255,255,0.1));border-radius:3px;height:6px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:${barColor}"></div></div>
+                <span style="min-width:45px;text-align:right">${advPct}%</span>
+                <span style="min-width:60px;text-align:right;color:var(--text-muted)">${z ? "小组第一" : "Win"} ${winPct}%</span>
+            </div>`;
+        }
+        html += `</div>`;
+    }
+
+    if (data.disclaimer) {
+        html += `<p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem">${escapeHtml(data.disclaimer)}</p>`;
+    }
+
+    panel.innerHTML = html;
 }
 
 function renderWcKnockoutBracket() {
