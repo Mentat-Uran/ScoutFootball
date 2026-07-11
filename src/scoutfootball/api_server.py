@@ -15,8 +15,11 @@ from scoutfootball import __version__
 from scoutfootball.api import (
     _clean_json_value,
     _settings,
+    apply_wc_knockout_result,
     apply_wc_tournament_result,
+    clear_wc_knockout_result,
     clear_wc_tournament_result,
+    generate_wc_knockout_bracket,
     get_action_value_evidence,
     get_action_value_evidence_index,
     get_action_value_summary,
@@ -46,6 +49,7 @@ from scoutfootball.api import (
     get_watchlist,
     get_wc_groups,
     get_wc_knockout,
+    get_wc_knockout_bracket,
     get_wc_predictions,
     get_wc_schedule,
     get_wc_squad,
@@ -551,6 +555,30 @@ def create_app() -> FastAPI:
     @app.post("/world-cup/tournament/reset")
     def wc_tournament_reset():
         return reset_wc_tournament()
+
+    # ── Knockout bracket endpoints ─────────────────────────────────
+    @app.get("/world-cup/tournament/knockout")
+    def wc_knockout_bracket():
+        return get_wc_knockout_bracket()
+
+    @app.post("/world-cup/tournament/knockout/generate")
+    def wc_knockout_generate():
+        return generate_wc_knockout_bracket()
+
+    @app.post("/world-cup/tournament/knockout/result")
+    def wc_knockout_apply_result(
+        match_id: str = Query(...),
+        home_goals: int = Query(..., ge=0, le=30),
+        away_goals: int = Query(..., ge=0, le=30),
+        penalties_winner: str | None = Query(None),
+    ):
+        return apply_wc_knockout_result(
+            match_id, home_goals, away_goals, penalties_winner=penalties_winner
+        )
+
+    @app.delete("/world-cup/tournament/knockout/result")
+    def wc_knockout_clear_result(match_id: str = Query(...)):
+        return clear_wc_knockout_result(match_id)
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")
