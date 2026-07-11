@@ -1437,12 +1437,152 @@ async function renderPlayerProfile() {
             const note = xt.coverage_note ? ` (${escapeHtml(xt.coverage_note)})` : '';
             return `<div><span>${escapeHtml(t('xT_label'))}</span><strong style="font-size:0.82rem">${parts.join(' | ')}${note}</strong></div>`;
         })()}
-        ${/* Rating snapshot history */ (() => {
+        ${/* Per-90 metrics */ (() => {
+            if (!profile) return '';
+            const z = appState.lang === 'zh';
+            const metrics = [
+                { key: 'npg_p90', label: z ? '非点球进球/90' : 'Non-pen goals/90' },
+                { key: 'assists_p90', label: z ? '助攻/90' : 'Assists/90' },
+                { key: 'defense_composite', label: z ? '防守综合' : 'Defense composite' },
+                { key: 'possession_composite', label: z ? '控球综合' : 'Possession composite' },
+            ];
+            const cells = metrics.map(m => {
+                const v = profile[m.key];
+                if (v === undefined || v === null) return '';
+                const display = typeof v === 'number' ? v.toFixed(3) : escapeHtml(String(v));
+                return `<div><span>${escapeHtml(m.label)}</span><strong style="font-size:1rem">${display}</strong></div>`;
+            }).join('');
+            if (!cells) return '';
+            return `<div style="grid-column:1/-1"><span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${z ? '每90分钟指标' : 'Per-90 Metrics'}</span><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${cells}</div></div>`;
+        })()}
+        ${/* Position percentiles (all dimensions) */ (() => {
+            const pcts = profile ? (profile.position_percentiles || null) : null;
+            if (!pcts || typeof pcts !== 'object') return '';
+            const z = appState.lang === 'zh';
+            const entries = Object.entries(pcts)
+                .filter(([k, v]) => v && typeof v === 'object' && v.percentile !== undefined && v.percentile !== null);
+            if (entries.length === 0) return '';
+            const cells = entries.map(([key, info]) => {
+                const label = info.label || key;
+                const pct = Math.round(info.percentile);
+                const color = pct >= 80 ? '#57d68d' : pct >= 60 ? '#4f9cff' : pct >= 40 ? '#f5a623' : '#ff6b6b';
+                const isOverall = key === 'overall_score';
+                const highlight = isOverall ? 'border:1px solid var(--accent, #4f9cff);background:rgba(79,156,255,0.08)' : 'background:rgba(255,255,255,0.03)';
+                return `<div style="text-align:center;padding:6px 4px;${highlight};border-radius:6px">
+                    <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:2px">${escapeHtml(label)}</div>
+                    <div style="font-size:1.1rem;font-weight:700;color:${color}">${pct}<span style="font-size:0.65rem;color:var(--text-muted)">pct</span></div>
+                </div>`;
+            }).join('');
+            const header = z ? '位置各维度百分位' : 'Position Dimension Percentiles';
+            return `<div style="grid-column:1/-1"><span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(header)}</span><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px">${cells}</div></div>`;
+        })()}
+        ${/* Position explanation (contribution breakdown) */ (() => {
+            const pe = profile ? (profile.position_explanation || null) : null;
+            if (!pe || typeof pe !== 'object') return '';
+            const z = appState.lang === 'zh';
+            const dimLabels = {
+                attack: z ? '进攻' : 'Attack',
+                defense: z ? '防守' : 'Defense',
+                possession: z ? '控球' : 'Possession',
+                availability: z ? '出勤' : 'Availability',
+                quality: z ? '质量' : 'Quality',
+                xT: 'xT',
+            };
+            const rows = Object.entries(pe)
+                .filter(([k, v]) => v && typeof v === 'object')
+                .map(([key, info]) => {
+                    const label = dimLabels[key] || key;
+                    const pct = info.percentile_rank;
+                    const contrib = info.contribution;
+                    const conf = info.confidence || '';
+                    const pctStr = (pct !== undefined && pct !== null) ? Math.round(pct) + '%' : '—';
+                    const contribStr = (contrib !== undefined && contrib !== null) ? Math.round(contrib * 10) / 10 + '' : '—';
+                    const confColor = conf === 'HIGH' ? '#57d68d' : conf === 'MEDIUM' ? '#f5a623' : '#ff6b6b';
+                    return `<tr>
+                        <td style="padding:3px 6px;font-size:0.78rem">${escapeHtml(label)}</td>
+                        <td style="padding:3px 6px;font-size:0.78rem;text-align:right">${pctStr}</td>
+                        <td style="padding:3px 6px;font-size:0.78rem;text-align:right">${contribStr}</td>
+                        <td style="padding:3px 6px;font-size:0.72rem;text-align:right;color:${confColor}">${escapeHtml(conf)}</td>
+                    </tr>`;
+                }).join('');
+            if (!rows) return '';
+            const header = z ? '评分维度拆解' : 'Rating Dimension Breakdown';
+            return `<div style="grid-column:1/-1">
+                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(header)}</span>
+                <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+                    <thead><tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.08))">
+                        <th style="padding:3px 6px;text-align:left;font-weight:500;color:var(--text-muted)">${z ? '维度' : 'Dimension'}</th>
+                        <th style="padding:3px 6px;text-align:right;font-weight:500;color:var(--text-muted)">${z ? '百分位' : 'Percentile'}</th>
+                        <th style="padding:3px 6px;text-align:right;font-weight:500;color:var(--text-muted)">${z ? '贡献' : 'Contrib'}</th>
+                        <th style="padding:3px 6px;text-align:right;font-weight:500;color:var(--text-muted)">${z ? '置信度' : 'Conf'}</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+        })()}
+        ${/* 3-season trend */ (() => {
+            const trend = profile ? (profile.trend_3seasons || null) : null;
+            if (!trend || !trend.seasons || trend.seasons.length === 0) return '';
+            const z = appState.lang === 'zh';
+            const seasons = trend.seasons;
+            const delta = trend.delta;
+            const cells = seasons.map(s => {
+                return `<div style="text-align:center;padding:6px 4px;background:rgba(255,255,255,0.03);border-radius:6px">
+                    <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:2px">${escapeHtml(String(s.season))}</div>
+                    <div style="font-size:1rem;font-weight:600">${escapeHtml(String(s.optimized_score))}</div>
+                    <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(String(s.minutes))}min</div>
+                </div>`;
+            }).join('');
+            let deltaHtml = '';
+            if (delta) {
+                const sc = delta.score_change;
+                const scColor = sc > 0 ? '#57d68d' : sc < 0 ? '#ff6b6b' : 'var(--text-muted)';
+                const scSym = sc > 0 ? '\u25B2' : sc < 0 ? '\u25BC' : '\u25CB';
+                deltaHtml = `<div style="margin-top:6px;font-size:0.75rem;color:var(--text-muted)">
+                    ${escapeHtml(delta.season_from)} \u2192 ${escapeHtml(delta.season_to)}:
+                    <span style="color:${scColor}">${scSym} ${Math.abs(sc).toFixed(1)}</span>
+                    <span style="margin-left:6px">G ${escapeHtml(String(delta.goals_change >= 0 ? '+' : ''))}${delta.goals_change.toFixed(3)}</span>
+                    <span style="margin-left:6px">A ${escapeHtml(String(delta.assists_change >= 0 ? '+' : ''))}${delta.assists_change.toFixed(3)}</span>
+                </div>`;
+            }
+            const header = z ? '近3赛季趋势' : '3-Season Trend';
+            return `<div style="grid-column:1/-1">
+                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(header)}</span>
+                <div style="display:grid;grid-template-columns:repeat(${seasons.length},1fr);gap:6px">${cells}</div>
+                ${deltaHtml}
+            </div>`;
+        })()}
+        ${/* Season history table */ (() => {
             const seasons = profile ? (profile.seasons || []) : [];
-            if (seasons.length < 2) return '';
-            const label = t('rating_snapshot');
-            const dots = seasons.map(s => `${escapeHtml(String(s.season))}: ${escapeHtml(String(s.optimized_score))}`).join(', ');
-            return `<div><span>${escapeHtml(label)}</span><strong style="font-size:0.82rem;color:var(--text-muted)">${dots}</strong></div>`;
+            if (seasons.length === 0) return '';
+            const z = appState.lang === 'zh';
+            const rows = seasons.map(s => {
+                return `<tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.05))">
+                    <td style="padding:3px 6px;font-size:0.75rem">${escapeHtml(String(s.season || ''))}</td>
+                    <td style="padding:3px 6px;font-size:0.75rem">${escapeHtml(String(s.team || ''))}</td>
+                    <td style="padding:3px 6px;font-size:0.75rem">${escapeHtml(String(s.league || ''))}</td>
+                    <td style="padding:3px 6px;font-size:0.75rem">${escapeHtml(String(s.position_group || ''))}</td>
+                    <td style="padding:3px 6px;font-size:0.75rem;text-align:right">${escapeHtml(String(s.minutes || ''))}</td>
+                    <td style="padding:3px 6px;font-size:0.75rem;text-align:right;font-weight:600">${escapeHtml(String(s.optimized_score || ''))}</td>
+                </tr>`;
+            }).join('');
+            const header = z ? '赛季历史' : 'Season History';
+            return `<div style="grid-column:1/-1">
+                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(header)}</span>
+                <div style="overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+                    <thead><tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.08))">
+                        <th style="padding:3px 6px;text-align:left;font-weight:500;color:var(--text-muted)">${z ? '赛季' : 'Season'}</th>
+                        <th style="padding:3px 6px;text-align:left;font-weight:500;color:var(--text-muted)">${z ? '球队' : 'Team'}</th>
+                        <th style="padding:3px 6px;text-align:left;font-weight:500;color:var(--text-muted)">${z ? '联赛' : 'League'}</th>
+                        <th style="padding:3px 6px;text-align:left;font-weight:500;color:var(--text-muted)">${z ? '位置' : 'Pos'}</th>
+                        <th style="padding:3px 6px;text-align:right;font-weight:500;color:var(--text-muted)">${z ? '分钟' : 'Min'}</th>
+                        <th style="padding:3px 6px;text-align:right;font-weight:500;color:var(--text-muted)">${z ? '评分' : 'Score'}</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                </div>
+            </div>`;
         })()}
         ${/* Data sources */ (() => {
             const sources = profile ? (profile.data_sources || profile.sources || []) : [];
@@ -1450,14 +1590,16 @@ async function renderPlayerProfile() {
             const label = appState.lang === 'zh' ? '数据来源' : 'Data sources';
             return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(sources.join(', '))}</strong></div>`;
         })()}
-        ${/* Position percentile */ (() => {
-            const pcts = profile ? (profile.position_percentiles || null) : null;
-            if (!pcts) return '';
-            const overall = pcts.overall_score || {};
-            const pct = overall.percentile;
-            if (pct == null) return '';
-            const label = appState.lang === 'zh' ? '位置百分位' : 'Position percentile';
-            return `<div><span>${escapeHtml(label)}</span><strong>\u25C6 ${escapeHtml(String(Math.round(pct)))}pct</strong></div>`;
+        ${/* Low confidence reasons */ (() => {
+            const reasons = profile ? (profile.low_confidence_reasons || []) : [];
+            if (!reasons || reasons.length === 0) return '';
+            const z = appState.lang === 'zh';
+            const header = z ? '低置信度原因' : 'Low Confidence Reasons';
+            const items = reasons.map(r => `<li style="font-size:0.75rem;color:#f5a623;margin:2px 0">${escapeHtml(String(r))}</li>`).join('');
+            return `<div style="grid-column:1/-1">
+                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">${escapeHtml(header)}</span>
+                <ul style="margin:0;padding-left:1.2rem;list-style:none">${items}</ul>
+            </div>`;
         })()}
         ${/* Missing fields */ (() => {
             const missing = [];
@@ -6821,6 +6963,17 @@ function renderWcOutlook(outlook) {
     const shrunkAvg = sb.shrunk_avg_rating;
     const coreAvg = sb.core_avg_rating;
 
+    function _sbRow(label, value, fmt) {
+        if (value === undefined || value === null) return "";
+        const display = fmt ? fmt(value) : escapeHtml(String(value));
+        return `<div><span style="color:var(--text-muted)">${escapeHtml(label)}: </span><strong>${display}</strong></div>`;
+    }
+    const rated = sb.rated_players;
+    const total = sb.total_players;
+    const ratedStr = (rated !== undefined && rated !== null && total !== undefined && total !== null)
+        ? `${rated}/${total}` : null;
+    const scorePct = (v) => (v === undefined || v === null) ? null : `${Math.round((v || 0) * 100)}%`;
+
     const disclaimer = data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);margin-top:0.8rem;line-height:1.5">${escapeHtml(data.disclaimer)}</p>` : "";
 
     panel.innerHTML = `<div class="wc-outlook-content" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
@@ -6844,8 +6997,23 @@ function renderWcOutlook(outlook) {
             <h4 style="font-size:0.85rem;margin:0.8rem 0 0.5rem;color:var(--text-secondary, #ccc)">${z ? "阵容强度分解" : "Squad Strength Breakdown"}</h4>
             <div style="font-size:0.8rem;line-height:1.8">
                 <div><span style="color:var(--text-muted)">${z ? "名单覆盖率" : "Squad Coverage"}: </span><strong>${coveragePct === null ? "—" : coveragePct + "%"}</strong></div>
-                <div><span style="color:var(--text-muted)">${z ? "收缩后平均评分" : "Shrunk Avg Rating"}: </span><strong>${shrunkAvg !== undefined && shrunkAvg !== null ? Number(shrunkAvg).toFixed(3) : "—"}</strong></div>
-                <div><span style="color:var(--text-muted)">${z ? "核心球员平均评分" : "Core Players Avg Rating"}: </span><strong>${coreAvg !== undefined && coreAvg !== null ? Number(coreAvg).toFixed(3) : "—"}</strong></div>
+                ${ratedStr ? _sbRow(z ? "已评分球员" : "Rated Players", ratedStr) : ""}
+                ${_sbRow(z ? "收缩后平均评分" : "Shrunk Avg Rating", shrunkAvg, (v) => Number(v).toFixed(3))}
+                ${_sbRow(z ? "核心球员平均评分" : "Core Avg Rating", coreAvg, (v) => Number(v).toFixed(3))}
+                ${_sbRow(z ? "轮换球员平均评分" : "Depth Avg Rating", sb.depth_avg_rating, (v) => Number(v).toFixed(3))}
+                ${_sbRow(z ? "替补球员平均评分" : "Reserve Avg Rating", sb.reserve_avg_rating, (v) => Number(v).toFixed(3))}
+                ${_sbRow(z ? "阵容质量评分" : "Squad Quality Rating", sb.squad_quality_rating, (v) => Number(v).toFixed(3))}
+                ${_sbRow(z ? "观察平均评分" : "Observed Avg Rating", sb.observed_avg_rating, (v) => Number(v).toFixed(3))}
+                ${_sbRow(z ? "代理平均评分" : "Proxy Avg Rating", sb.proxy_avg_rating, (v) => Number(v).toFixed(3))}
+            </div>
+            <h4 style="font-size:0.8rem;margin:0.8rem 0 0.4rem;color:var(--text-secondary, #ccc)">${z ? "强度分量" : "Strength Components"}</h4>
+            <div style="font-size:0.8rem;line-height:1.8">
+                ${_sbRow(z ? "评分分量" : "Rating Score", scorePct(sb.rating_score))}
+                ${_sbRow(z ? "Opta 分量" : "Opta Score", scorePct(sb.opta_score))}
+                ${_sbRow(z ? "联赛分量" : "League Score", scorePct(sb.league_score))}
+                ${_sbRow(z ? "覆盖分量" : "Coverage Score", scorePct(sb.coverage_score))}
+                ${_sbRow(z ? "五大联赛分量" : "Big5 Score", scorePct(sb.big5_score))}
+                ${_sbRow(z ? "五大联赛占比" : "Big5 Ratio", scorePct(sb.big5_ratio))}
             </div>
         </div>
     </div>
