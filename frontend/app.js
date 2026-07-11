@@ -58,6 +58,7 @@ const i18n = {
         undervalued: "低估",
         overvalued: "高估",
         match_selector: "比赛选择",
+        model_label: "模型",
         home_team: "主队",
         away_team: "客队",
         score_matrix: "比分矩阵",
@@ -363,6 +364,7 @@ const i18n = {
         undervalued: "Undervalued",
         overvalued: "Overvalued",
         match_selector: "Match selector",
+        model_label: "Model",
         home_team: "Home",
         away_team: "Away",
         score_matrix: "Score matrix",
@@ -906,9 +908,10 @@ async function fetchTeamStrength(league) {
     }
 }
 
-async function fetchPrediction(homeTeam, awayTeam) {
+async function fetchPrediction(homeTeam, awayTeam, model) {
     try {
-        const data = await fetchJson(`/predictions/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}`);
+        const modelParam = model || appState.predictionModel || "poisson";
+        const data = await fetchJson(`/predictions/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}?model=${encodeURIComponent(modelParam)}`);
         if (data) {
             data.home_team = data.home_team || homeTeam;
             data.away_team = data.away_team || awayTeam;
@@ -998,6 +1001,7 @@ const appState = {
     valuePriceBand: "all",
     home: "Arsenal",
     away: "Barcelona",
+    predictionModel: "dixon_coles",
     charts: {},
     playerPage: 1,
     playerPageSize: 50,
@@ -3175,9 +3179,11 @@ function selectedMatch() {
             calibration: selectedPredictionCalibration(),
             model_version: currentPrediction.model_version || "",
             model_type: currentPrediction.model_type || "poisson",
+            confidence_intervals: currentPrediction.confidence_intervals || null,
+            form_config: currentPrediction.form_config || null,
         };
     }
-    return { home: appState.home, away: appState.away, hw: 0.34, draw: 0.28, aw: 0.38, xh: 1.32, xa: 1.42, score_matrix: null, calibration: null, model_version: "", model_type: "poisson" };
+    return { home: appState.home, away: appState.away, hw: 0.34, draw: 0.28, aw: 0.38, xh: 1.32, xa: 1.42, score_matrix: null, calibration: null, model_version: "", model_type: "poisson", confidence_intervals: null, form_config: null };
 }
 
 function renderMatchSelectors() {
@@ -3201,16 +3207,23 @@ async function renderMatches() {
         ? `${predictionMeta.num_teams} teams`
         : "artifact pending";
     document.getElementById("match-title").textContent = `${match.home} vs ${match.away}`;
+    const ci = match.confidence_intervals;
+    const ciLabels = ci ? {
+        home: ci.home_win ? `[${(ci.home_win[0] * 100).toFixed(1)}%, ${(ci.home_win[1] * 100).toFixed(1)}%]` : "",
+        draw: ci.draw ? `[${(ci.draw[0] * 100).toFixed(1)}%, ${(ci.draw[1] * 100).toFixed(1)}%]` : "",
+        away: ci.away_win ? `[${(ci.away_win[0] * 100).toFixed(1)}%, ${(ci.away_win[1] * 100).toFixed(1)}%]` : "",
+    } : null;
     const probabilityRows = [
-        [t("home"), match.hw],
-        [t("draw"), match.draw],
-        [t("away"), match.aw],
+        [t("home"), match.hw, ciLabels ? ciLabels.home : ""],
+        [t("draw"), match.draw, ciLabels ? ciLabels.draw : ""],
+        [t("away"), match.aw, ciLabels ? ciLabels.away : ""],
     ];
-    document.getElementById("match-probabilities").innerHTML = probabilityRows.map(([label, value]) => `
+    document.getElementById("match-probabilities").innerHTML = probabilityRows.map(([label, value, ciText]) => `
         <div class="probability-row">
             <span class="probability-label">${escapeHtml(label)}</span>
             <div class="probability-track"><div class="probability-fill" style="width:${sanitizeCssPercent(value * 100)}%"></div></div>
             <strong>${sanitizeCssPercent(value * 100)}%</strong>
+            ${ciText ? `<span style="font-size:0.65rem;color:var(--text-muted);min-width:90px;text-align:right">${escapeHtml(ciText)}</span>` : ""}
         </div>
     `).join("");
     document.getElementById("match-detail").innerHTML = `
@@ -3352,6 +3365,47 @@ async function renderMatches() {
         if (match.model_version) {
             calibHtml += `<div style="margin-top:0.3rem;font-size:0.72rem;color:var(--text-muted)">`;
             calibHtml += `${z ? '模型版本' : 'Model version'}: <strong>${escapeHtml(match.model_version)}</strong>`;
+            calibHtml += `</div>`;
+        }
+
+        // Bootstrap confidence intervals
+        if (match.confidence_intervals) {
+            const ciData = match.confidence_intervals;
+            const ciLevel = ciData.confidence_level ? `${(ciData.confidence_level * 100).toFixed(0)}%` : '90%';
+            const ciN = ciData.n_bootstrap || '?';
+            const ciFailed = ciData.failed_iterations || 0;
+            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px">`;
+            calibHtml += `<p style="margin:0 0 0.3rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">`;
+            calibHtml += `${z ? '置信区间' : 'Confidence Intervals'} (${escapeHtml(ciLevel)}, n=${escapeHtml(String(ciN))})`;
+            if (ciFailed > 0) calibHtml += ` <span style="opacity:0.6">(${ciFailed} ${z ? '失败' : 'failed'})</span>`;
+            calibHtml += `</p>`;
+            const ciRows = [
+                [z ? '主胜' : 'Home Win', ciData.home_win],
+                [z ? '平局' : 'Draw', ciData.draw],
+                [z ? '客胜' : 'Away Win', ciData.away_win],
+                [z ? '主队λ' : 'Home λ', ciData.home_lambda],
+                [z ? '客队λ' : 'Away λ', ciData.away_lambda],
+            ];
+            calibHtml += `<div style="display:grid;grid-template-columns:1fr auto;gap:0.15rem 0.5rem;font-size:0.72rem">`;
+            for (const [label, range] of ciRows) {
+                if (range && Array.isArray(range)) {
+                    const fmt = (v) => Number(v).toFixed(3);
+                    calibHtml += `<div style="color:var(--text-muted)">${escapeHtml(label)}</div>`;
+                    calibHtml += `<div><strong>[${fmt(range[0])}, ${fmt(range[1])}]</strong></div>`;
+                }
+            }
+            calibHtml += `</div>`;
+            calibHtml += `</div>`;
+        }
+
+        // Form-weighted model config
+        if (match.form_config) {
+            const fc = match.form_config;
+            calibHtml += `<div style="margin-top:0.3rem;font-size:0.72rem;color:var(--text-muted)">`;
+            calibHtml += `${z ? '状态权重' : 'Form weighting'}: `;
+            calibHtml += `${z ? '回看' : 'lookback'}=<strong>${escapeHtml(String(fc.lookback))}</strong>, `;
+            calibHtml += `${z ? '因子' : 'factor'}=<strong>${escapeHtml(String(fc.form_factor))}</strong>`;
+            if (fc.decay != null) calibHtml += `, decay=<strong>${escapeHtml(String(fc.decay))}</strong>`;
             calibHtml += `</div>`;
         }
 
@@ -4539,31 +4593,72 @@ async function _renderTeamCompareResult(a, b) {
         const chart = echarts.init(chartEl);
         appState.charts.teamCompare = chart;
 
+        const radarA = data.radar_a || [];
+        const radarB = data.radar_b || [];
+        const labels = data.radar_labels || [];
+        const z = appState.lang === "zh";
+
         chart.setOption({
             tooltip: { trigger: "item" },
             legend: { data: [nameA, nameB], bottom: 0 },
             radar: {
-                indicator: (data.radar_labels || []).map(l => ({ name: l, max: 100 })),
+                indicator: labels.map(l => ({ name: l, max: 100 })),
                 shape: "polygon",
+                splitArea: { areaStyle: { color: ["rgba(100,180,255,0.02)", "rgba(100,180,255,0.05)"] } },
             },
             series: [{
                 type: "radar",
                 data: [
                     {
-                        value: data.radar_a || [],
+                        value: radarA,
                         name: nameA,
-                        areaStyle: { opacity: 0.2 },
-                        lineStyle: { width: 2 },
+                        areaStyle: { opacity: 0.15, color: "#4a90d9" },
+                        lineStyle: { width: 2, color: "#4a90d9" },
+                        itemStyle: { color: "#4a90d9" },
                     },
                     {
-                        value: data.radar_b || [],
+                        value: radarB,
                         name: nameB,
-                        areaStyle: { opacity: 0.2 },
-                        lineStyle: { width: 2 },
+                        areaStyle: { opacity: 0.15, color: "#ff9f43" },
+                        lineStyle: { width: 2, color: "#ff9f43" },
+                        itemStyle: { color: "#ff9f43" },
                     },
                 ],
             }],
         });
+
+        // Dimension difference table
+        const diffEl = document.getElementById("team-compare-diff-table");
+        if (diffEl) {
+            const rows = labels.map((label, i) => {
+                const valA = radarA[i] != null ? radarA[i] : null;
+                const valB = radarB[i] != null ? radarB[i] : null;
+                const diff = (valA != null && valB != null) ? valA - valB : null;
+                const diffText = diff != null ? (diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)) : "—";
+                const cls = diff > 0 ? "status-high" : diff < 0 ? "status-low" : "";
+                const winner = diff > 0 ? nameA : diff < 0 ? nameB : z ? "持平" : "Tie";
+                return `<tr>
+                    <td style="font-weight:600">${escapeHtml(label)}</td>
+                    <td>${valA != null ? valA.toFixed(1) : "—"}</td>
+                    <td>${valB != null ? valB.toFixed(1) : "—"}</td>
+                    <td><span class="status-pill ${cls}">${diffText}</span></td>
+                    <td style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(winner)}</td>
+                </tr>`;
+            }).join("");
+            diffEl.innerHTML = `
+                <table style="width:100%;font-size:0.75rem;border-collapse:collapse">
+                    <thead>
+                        <tr style="color:var(--text-muted);text-align:left">
+                            <th style="padding:0.2rem">${z ? "维度" : "Dimension"}</th>
+                            <th style="padding:0.2rem">${escapeHtml(nameA)}</th>
+                            <th style="padding:0.2rem">${escapeHtml(nameB)}</th>
+                            <th style="padding:0.2rem">Δ</th>
+                            <th style="padding:0.2rem">${z ? "优势" : "Edge"}</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+        }
     }
 }
 
@@ -5915,6 +6010,14 @@ function bindEvents() {
         }
         renderMatches();
     });
+    const modelSelect = document.getElementById("prediction-model");
+    if (modelSelect) {
+        modelSelect.addEventListener("change", (event) => {
+            appState.predictionModel = event.target.value;
+            renderMatches();
+        });
+        modelSelect.value = appState.predictionModel;
+    }
     document.getElementById("export-players").addEventListener("click", exportPlayers);
     // World Cup events
     document.getElementById("wc-group-filter").addEventListener("change", () => renderWcSchedule());

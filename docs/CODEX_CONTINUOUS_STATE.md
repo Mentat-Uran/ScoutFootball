@@ -2,6 +2,13 @@
 
 ## Recently Merged
 
+- **Match Prediction Enhancement Suite (2026-07-12):**
+  1. **Bootstrap confidence intervals:** `bootstrap_prediction_confidence()` in `match_prediction.py` — resamples fixture-level data with replacement, refits Dixon-Coles per bootstrap sample, collects distributions of home_win/draw/away_win/home_lambda/away_lambda, returns `PredictionConfidenceInterval` with percentile bounds. `_build_bootstrap_fixtures()` helper converts team-match rows to fixture-level for resampling.
+  2. **Form-based match weighting:** `compute_form_weights()` computes per-match weights from rolling team form (points per game in preceding N matches). `fit_dixon_coles_with_form()` convenience wrapper applies form weights on top of time-decay. `fit_dixon_coles()` gains `match_weights` parameter for arbitrary per-match weighting.
+  3. **Form-weighted prediction API:** `GET /predictions/{home}/{away}?model=form` endpoint via `get_form_weighted_prediction()` — uses form-weighted DC with tuned decay, returns prediction + form_config metadata + confidence intervals. Frontend model selector (Poisson / Dixon-Coles / DC+Form) in matches view.
+  4. **Confidence intervals in API + frontend:** DC prediction endpoint now includes `confidence_intervals` field (10-minute TTL cache per team pair, 90% CI, n_bootstrap=50). Frontend renders CI ranges inline with probability bars and as a detailed block in the calibration section (home_win/draw/away_win/home_lambda/away_lambda intervals with n and failed_iterations).
+  5. **Team comparison radar enhancement:** Radar chart now uses color-coded area fills (blue vs orange), split area styling, and a dimension difference table below the chart showing per-dimension values, delta with status pills, and edge winner.
+  6. **Tests:** 24 new tests (bootstrap CI, form weights, form-weighted DC fit, fixture builder). All pass, ruff + node check clean.
 - **Prediction Calibration & Tuning Suite (2026-07-11):**
   1. **Decay grid search:** `tune_dixon_coles_decay()` in `backtests.py` — evaluates 9 decay candidates (0.0 to 0.02) via time-series cross-validation, collects log_loss/brier/rps per candidate, selects best by configurable metric (default: RPS). Returns `DecayTuningResult` with comparison table, per-candidate metrics, and half-life conversions.
   2. **CLI `tune-predictions` command:** `--metric`, `--n-splits`, `--run-backtest` flags. With `--run-backtest`, generates full backtest artifacts (Poisson + DC no-decay + DC best-decay predictions/metrics JSON + isotonic calibration report) using the tuned optimal decay. Shared `_load_team_match_from_raw()` helper extracted to avoid duplication.
@@ -50,7 +57,7 @@
 
 ## Current Development
 
-- Prediction Calibration & Tuning Suite complete on branch `codex/prediction-calibration-tuning`. All code, tests (18 new), ruff, and node checks pass. Merging to `codex/integration` next.
+- Match Prediction Enhancement Suite complete on branch `codex/match-prediction-enhancement`. All code, tests (24 new), ruff, and node checks pass. Merging to `codex/integration` next.
 
 ## Known Blockers
 
@@ -63,7 +70,7 @@
 3. Add cross-provider schema validation fixtures and empty-data behavior tests.
 4. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
 5. Similar-player search enhancement: position-weighted feature vector and per-position similarity pools.
-6. Team strength radar chart frontend (visualize 6-dim component scores across two teams with ECharts overlay).
-7. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
-8. Prediction confidence intervals: bootstrap-based scoreline probability bands for the match prediction view.
-9. Form-based match weighting: incorporate recent form rating into Dixon-Coles attack/defense estimation.
+6. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+7. Prediction calibration drift monitoring: track RPS/Brier over time windows and alert on degradation.
+8. Ensemble prediction: blend Poisson, DC, and form-weighted DC predictions with optimal weighting.
+9. Match momentum prediction: in-play win probability update model based on elapsed time and scoreline.

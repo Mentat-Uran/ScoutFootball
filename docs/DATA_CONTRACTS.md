@@ -415,8 +415,23 @@ Returns calibration metrics for match prediction models.
 ### GET /predictions/{home_team}/{away_team}
 Match prediction between two teams.
 
-**Query params**: `model` ("poisson" or "dixon_coles")
-**Response**: `{ home_team, away_team, model_type, home_lambda, away_lambda, home_win, draw, away_win, over_2_5, btts_yes }`
+**Query params**: `model` ("poisson", "dixon_coles", or "form")
+**Response (poisson/dixon_coles)**: `{ home_team, away_team, model_type, home_lambda, away_lambda, home_win, draw, away_win, over_2_5, btts_yes, score_matrix, calibration, confidence_intervals? }`
+**Response (form)**: Same as dixon_coles plus `{ form_config: { lookback, form_factor, decay }, rho, home_advantage }`
+
+**`confidence_intervals` field** (when available, dixon_coles/form models only):
+```json
+{
+  "n_bootstrap": 50,
+  "confidence_level": 0.90,
+  "failed_iterations": 0,
+  "home_win": [0.25, 0.55],
+  "draw": [0.20, 0.40],
+  "away_win": [0.15, 0.45],
+  "home_lambda": [0.8, 1.8],
+  "away_lambda": [0.9, 2.0]
+}
+```
 
 > 注：`/prediction/{home}/{away}`（单数）别名端点已删除，`/predictions/{home}/{away}`（复数）为唯一路由。
 
