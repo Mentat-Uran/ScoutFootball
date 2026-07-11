@@ -833,6 +833,43 @@ substring matches so that common short queries surface relevant entries first.
 - Empty underlying data returns `{"players": [], "teams": []}` rather than an error.
 - `limit` values above 25 are clamped to 25; non-positive values fall back to the default of 10.
 
+### GET /predictions/tuning
+
+Returns Dixon-Coles time-decay parameter tuning results from
+`data/reports/calibration_backtest/decay_tuning_results.json` (produced by
+`scoutfootball tune-predictions`).
+
+**Response** (when artifacts exist):
+```json
+{
+  "status": "ok",
+  "best_decay": 0.005,
+  "selection_metric": "rps_1x2",
+  "n_folds": 3,
+  "n_matches": 45000,
+  "candidates": [
+    {
+      "decay": 0.0,
+      "half_life_days": "inf",
+      "log_loss_exact": 2.45,
+      "brier_1x2": 0.631,
+      "rps_1x2": 0.215
+    },
+    {
+      "decay": 0.005,
+      "half_life_days": 138.6,
+      "log_loss_exact": 2.41,
+      "brier_1x2": 0.625,
+      "rps_1x2": 0.212
+    }
+  ]
+}
+```
+
+**Edge cases**:
+- No tuning file: returns `{"status": "not_available", "instructions": "..."}`
+- Results are cached for 5 minutes.
+
 ### Cache Configuration
 
 The following data loaders and helpers use TTL caches (replacing the previous

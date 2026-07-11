@@ -882,3 +882,127 @@ def run_dc_backtest_with_calibration(
         calibration=cal_report,
         metrics=metrics,
     )
+
+
+# ---------------------------------------------------------------------------
+# Decay parameter tuning
+# ---------------------------------------------------------------------------
+
+DEFAULT_DECAY_CANDIDATES: tuple[float, ...] = (
+    0.0,    # no decay
+    0.001,  # very slow decay (~693-day half-life)
+    0.002,  # slow decay (~347-day half-life)
+    0.003,  # moderate-slow (~231-day half-life)
+    0.005,  # Dixon-Coles paper recommended (~139-day half-life)
+    0.008,  # moderate-fast (~87-day half-life)
+    0.010,  # fast (~69-day half-life)
+    0.015,  # very fast (~46-day half-life)
+    0.020,  # aggressive (~35-day half-life)
+)
+
+
+@dataclass(frozen=True)
+class DecayTuningResult:
+    """Result of Dixon-Coles time-decay parameter grid search.
+
+    ``candidate_metrics`` maps each decay value to its backtest metrics
+    (log_loss_exact, brier_1x2, rps_1x2). ``best_decay`` is the candidate
+    that minimises ``selection_metric``. ``selection_metric`` is one of
+    ``log_loss_exact``, ``brier_1x2``, ``rps_1x2`` (default: ``rps_1x2``).
+    """
+
+    best_decay: float
+    selection_metric: str
+    candidate_metrics: dict[float, dict[str, float]]
+    comparison_table: pd.DataFrame
+    n_folds: int
+    n_matches: int
+
+
+def tune_dixon_coles_decay(
+    team_match_df: pd.DataFrame,
+    *,
+    decay_candidates: tuple[float, ...] | list[float] | None = None,
+    split_cfg: TimeSplitConfig | None = None,
+    selection_metric: str = "rps_1x2",
+    max_goals: int = 10,
+) -> DecayTuningResult:
+    """Grid-search the Dixon-Coles time-decay parameter via past-only backtest.
+
+    For each candidate decay value, runs a full time-series cross-validation
+    backtest and collects ``log_loss_exact``, ``brier_1x2``, and ``rps_1x2``.
+    The candidate with the lowest ``selection_metric`` is returned as best.
+
+    Parameters
+    ----------
+    team_match_df : DataFrame with match data (must include ``match_date``).
+    decay_candidates : Sequence of decay values to evaluate. Defaults to
+        :data:`DEFAULT_DECAY_CANDIDATES`.
+    split_cfg : Time split configuration (default: 3 folds, no gap).
+    selection_metric : Metric to minimise — one of ``log_loss_exact``,
+        ``brier_1x2``, ``rps_1x2`` (default: ``rps_1x2``).
+    max_goals : Maximum goals for score matrix.
+
+    Returns
+    -------
+    DecayTuningResult with best decay, per-candidate metrics, and comparison.
+    """
+    valid_metrics = {"log_loss_exact", "brier_1x2", "rps_1x2"}
+    if selection_metric not in valid_metrics:
+        raise ValueError(
+            f"selection_metric must be one of {valid_metrics}, got {selection_metric!r}"
+        )
+
+    candidates = (
+        list(decay_candidates)
+        if decay_candidates is not None
+        else list(DEFAULT_DECAY_CANDIDATES)
+    )
+    if not candidates:
+        raise ValueError("decay_candidates must not be empty")
+
+    config = split_cfg or TimeSplitConfig()
+    candidate_metrics: dict[float, dict[str, float]] = {}
+    n_folds = config.n_splits
+    n_matches = 0
+
+    for decay_val in candidates:
+        try:
+            result = run_dixon_coles_backtest(
+                team_match_df, config,
+                max_goals=max_goals, decay=decay_val if decay_val > 0 else None,
+            )
+            candidate_metrics[decay_val] = result.metrics
+            n_matches = len(result.predictions)
+        except (ValueError, RuntimeError, OverflowError, ArithmeticError, FloatingPointError):
+            # If a particular decay fails, record NaN metrics
+            candidate_metrics[decay_val] = {
+                "log_loss_exact": float("inf"),
+                "brier_1x2": float("inf"),
+                "rps_1x2": float("inf"),
+            }
+
+    # Build comparison table
+    rows = []
+    for decay_val in candidates:
+        m = candidate_metrics[decay_val]
+        rows.append({
+            "decay": decay_val,
+            "half_life_days": round(np.log(2) / decay_val, 1) if decay_val > 0 else float("inf"),
+            "log_loss_exact": round(m["log_loss_exact"], 6),
+            "brier_1x2": round(m["brier_1x2"], 6),
+            "rps_1x2": round(m["rps_1x2"], 6),
+        })
+    comparison = pd.DataFrame(rows)
+
+    # Select best decay by the chosen metric
+    best_decay = min(candidates, key=lambda d: candidate_metrics[d][selection_metric])
+
+    return DecayTuningResult(
+        best_decay=best_decay,
+        selection_metric=selection_metric,
+        candidate_metrics=candidate_metrics,
+        comparison_table=comparison,
+        n_folds=n_folds,
+        n_matches=n_matches,
+    )

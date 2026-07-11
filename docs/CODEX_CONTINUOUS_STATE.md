@@ -2,6 +2,13 @@
 
 ## Recently Merged
 
+- **Prediction Calibration & Tuning Suite (2026-07-11):**
+  1. **Decay grid search:** `tune_dixon_coles_decay()` in `backtests.py` — evaluates 9 decay candidates (0.0 to 0.02) via time-series cross-validation, collects log_loss/brier/rps per candidate, selects best by configurable metric (default: RPS). Returns `DecayTuningResult` with comparison table, per-candidate metrics, and half-life conversions.
+  2. **CLI `tune-predictions` command:** `--metric`, `--n-splits`, `--run-backtest` flags. With `--run-backtest`, generates full backtest artifacts (Poisson + DC no-decay + DC best-decay predictions/metrics JSON + isotonic calibration report) using the tuned optimal decay. Shared `_load_team_match_from_raw()` helper extracted to avoid duplication.
+  3. **`GET /predictions/tuning` endpoint:** Reads `decay_tuning_results.json`, 5-minute TTL cache, not_available status with instructions when no artifacts. `get_decay_tuning()` in `api.py`.
+  4. **Frontend tuning panel:** `_renderDecayTuning()` in backtest view — candidate comparison table with highlighted BEST decay, half-life days, per-metric values, and summary grid (best decay, selection metric, match count). Bilingual i18n.
+  5. **Pipeline fix:** `_resolve_dc_decay()` in `pipeline.py` replaces hardcoded `0.005` — reads best decay from tuning results if available, falls back to paper default. Fixes doc-code inconsistency (TASKS.md claimed `half_life_days=180` but code used `decay=0.005`).
+  6. **Tests:** 18 new tests (tuning function, API not_available/ok states, pipeline resolver with fallback/invalid/negative cases). All pass, ruff + node check clean.
 - **Scouting Intelligence & Player Similarity Suite (2026-07-11):**
   1. **Player similarity search (full stack):** `find_similar_players()` in `api.py` builds a 6-dimensional z-scored feature vector (npg_p90/Attack, assists_p90/Creation, defense_composite/Defense, possession_composite/Possession, optimized_score/Overall, minutes/Availability) and ranks pool players by cosine similarity (clamped to [0,1]). `GET /players/{player_name}/similar` endpoint with `limit`/`season`/`same_position_only` params. Frontend `_fetchAndRenderSimilarPlayers()` panel at the bottom of player profile with color-coded similarity cards, CSV export (formula-injection-safe via `csvCell()`), and click-to-switch-player navigation.
   2. **Truth label feedback loop:** `LabelSource.SCOUTING_REVIEW` enum value added. `workspace_to_truth_labels()` converts a scouting workspace's `review.statuses` (approved→1.0/high, rejected→0.0/medium; pending/reviewing skipped) into a truth-labels DataFrame, auto-detecting season from `source.rating_snapshot_ids` and falling back to `selections.shortlist` keys. CLI `import-truth-labels --workspace <path>` command merges workspace-derived labels into `player_truth_labels.parquet`, removing same-player prior `scouting_review` rows to avoid duplicates.
@@ -43,7 +50,7 @@
 
 ## Current Development
 
-- Scouting Intelligence & Player Similarity Suite complete; merging to `codex/integration`. Preparing next round.
+- Prediction Calibration & Tuning Suite complete on branch `codex/prediction-calibration-tuning`. All code, tests (18 new), ruff, and node checks pass. Merging to `codex/integration` next.
 
 ## Known Blockers
 
@@ -53,9 +60,10 @@
 
 1. Generate a versioned full match-action artifact with dates, minutes, competition coverage, and independent evaluation.
 2. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-3. Add Dixon-Coles time decay parameter tuning and low-score calibration refinement.
-4. Add cross-provider schema validation fixtures and empty-data behavior tests.
-5. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
-6. Similar-player search enhancement: position-weighted feature vector and per-position similarity pools.
-7. Team strength radar chart frontend (visualize 6-dim component scores across two teams with ECharts overlay).
-8. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+3. Add cross-provider schema validation fixtures and empty-data behavior tests.
+4. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
+5. Similar-player search enhancement: position-weighted feature vector and per-position similarity pools.
+6. Team strength radar chart frontend (visualize 6-dim component scores across two teams with ECharts overlay).
+7. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+8. Prediction confidence intervals: bootstrap-based scoreline probability bands for the match prediction view.
+9. Form-based match weighting: incorporate recent form rating into Dixon-Coles attack/defense estimation.

@@ -458,6 +458,195 @@ def _cmd_backtest(args: argparse.Namespace) -> None:
     print(f"\nResults saved to {out_dir}")
 
 
+def _load_team_match_from_raw() -> pd.DataFrame:
+    """Load and prepare team_match frame from combined_results.parquet.
+
+    Shared by ``backtest`` and ``tune-predictions`` commands.
+    """
+    project_root = Path(__file__).resolve().parents[2]
+    raw_path = project_root / "data" / "raw" / "football_data" / "combined_results.parquet"
+    if not raw_path.exists():
+        print(f"Error: Football-Data file not found: {raw_path}")
+        sys.exit(1)
+
+    raw = pd.read_parquet(raw_path)
+    from scoutfootball.entities.normalize import normalize_team_name
+
+    df = raw[["HomeTeam", "AwayTeam", "FTHG", "FTAG", "Date", "season", "league"]].copy()
+    df["match_date"] = pd.to_datetime(df["Date"], format="mixed", dayfirst=True, errors="coerce")
+    df = df.dropna(subset=["match_date"])
+    df["home_team"] = df["HomeTeam"].apply(normalize_team_name)
+    df["away_team"] = df["AwayTeam"].apply(normalize_team_name)
+    df = df.dropna(subset=["FTHG", "FTAG"])
+    df["FTHG"] = df["FTHG"].astype(int)
+    df["FTAG"] = df["FTAG"].astype(int)
+    df["match_id"] = (
+        df["home_team"] + "_v_" + df["away_team"] + "_" + df["match_date"].dt.strftime("%Y%m%d")
+    )
+
+    home_rows = pd.DataFrame({
+        "match_id": df["match_id"], "match_date": df["match_date"],
+        "team_id": df["home_team"], "is_home": True,
+        "goals_for": df["FTHG"], "goals_against": df["FTAG"],
+    })
+    away_rows = pd.DataFrame({
+        "match_id": df["match_id"], "match_date": df["match_date"],
+        "team_id": df["away_team"], "is_home": False,
+        "goals_for": df["FTAG"], "goals_against": df["FTHG"],
+    })
+    team_match = pd.concat([home_rows, away_rows], ignore_index=True)
+    team_match = team_match.sort_values(["match_date", "match_id"]).reset_index(drop=True)
+    return team_match
+
+
+def _cmd_tune_predictions(args: argparse.Namespace) -> None:
+    """Grid-search Dixon-Coles decay parameter and optionally run backtest."""
+    from scoutfootball.evaluation.backtests import tune_dixon_coles_decay
+    from scoutfootball.models import TimeSplitConfig
+
+    project_root = Path(__file__).resolve().parents[2]
+    out_dir = Path(args.output_dir).resolve() if args.output_dir else (
+        project_root / "data" / "reports" / "calibration_backtest"
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    team_match = _load_team_match_from_raw()
+    print(f"  Loaded {len(team_match)} rows, {team_match['match_id'].nunique()} matches")
+
+    split_cfg = TimeSplitConfig(n_splits=args.n_splits, gap=0)
+    selection_metric = args.metric
+
+    print(f"\n=== Dixon-Coles Decay Tuning (metric: {selection_metric}) ===")
+    tuning = tune_dixon_coles_decay(
+        team_match,
+        split_cfg=split_cfg,
+        selection_metric=selection_metric,
+    )
+
+    print(f"\n{'Decay':>8} {'HalfLife':>10} {'LogLoss':>10} {'Brier':>10} {'RPS':>10}")
+    print("-" * 52)
+    for _, row in tuning.comparison_table.iterrows():
+        hl = f"{row['half_life_days']:.0f}" if row["half_life_days"] != float("inf") else "inf"
+        print(
+            f"  {row['decay']:>6.4f} {hl:>10} {row['log_loss_exact']:>10.4f} "
+            f"{row['brier_1x2']:>10.4f} {row['rps_1x2']:>10.4f}"
+        )
+
+    print(f"\n  Best decay: {tuning.best_decay} (by {selection_metric})")
+
+    # Save tuning results
+    tuning_data = {
+        "best_decay": tuning.best_decay,
+        "selection_metric": tuning.selection_metric,
+        "n_folds": tuning.n_folds,
+        "n_matches": tuning.n_matches,
+        "candidates": tuning.comparison_table.to_dict(orient="records"),
+        "candidate_metrics": {
+            str(k): v for k, v in tuning.candidate_metrics.items()
+        },
+    }
+    tuning_path = out_dir / "decay_tuning_results.json"
+    with open(tuning_path, "w", encoding="utf-8") as f:
+        json.dump(tuning_data, f, indent=2, default=str, ensure_ascii=False)
+    print(f"  Saved to {tuning_path}")
+
+    # Optionally run full backtest with the best decay
+    if args.run_backtest:
+        print(f"\n=== Running full backtest with best decay={tuning.best_decay} ===")
+        from scoutfootball.evaluation.backtests import (
+            run_dc_backtest_with_calibration,
+            run_dixon_coles_backtest,
+            run_poisson_backtest,
+        )
+
+        # Poisson
+        print("\n--- Independent Poisson ---")
+        p_result = run_poisson_backtest(team_match, split_cfg)
+        p_result.predictions.to_parquet(
+            out_dir / "poisson_backtest_predictions.parquet", index=False,
+        )
+        p_metrics = {
+            "model": "independent_poisson", "n_splits": args.n_splits,
+            "total_predictions": len(p_result.predictions),
+            "overall": p_result.metrics,
+            "folds": p_result.fold_metrics.to_dict(orient="records"),
+        }
+        with open(out_dir / "poisson_backtest_metrics.json", "w", encoding="utf-8") as f:
+            json.dump(p_metrics, f, indent=2, default=str, ensure_ascii=False)
+        print(f"  RPS: {p_result.metrics['rps_1x2']:.4f}")
+
+        # DC no-decay
+        print("\n--- Dixon-Coles (no decay) ---")
+        dc_result = run_dixon_coles_backtest(team_match, split_cfg)
+        dc_result.predictions.to_parquet(
+            out_dir / "dixon_coles_backtest_predictions.parquet", index=False,
+        )
+        dc_metrics = {
+            "model": "dixon_coles", "decay": None, "n_splits": args.n_splits,
+            "total_predictions": len(dc_result.predictions),
+            "overall": dc_result.metrics,
+            "folds": dc_result.fold_metrics.to_dict(orient="records"),
+        }
+        with open(out_dir / "dixon_coles_backtest_metrics.json", "w", encoding="utf-8") as f:
+            json.dump(dc_metrics, f, indent=2, default=str, ensure_ascii=False)
+        print(f"  RPS: {dc_result.metrics['rps_1x2']:.4f}")
+
+        # DC with best decay
+        best_decay = tuning.best_decay
+        print(f"\n--- Dixon-Coles (decay={best_decay}) ---")
+        dc_decay_result = run_dixon_coles_backtest(
+            team_match, split_cfg,
+            decay=best_decay if best_decay > 0 else None,
+        )
+        dc_decay_result.predictions.to_parquet(
+            out_dir / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+        dc_decay_metrics = {
+            "model": "dixon_coles", "decay": best_decay, "n_splits": args.n_splits,
+            "total_predictions": len(dc_decay_result.predictions),
+            "overall": dc_decay_result.metrics,
+            "folds": dc_decay_result.fold_metrics.to_dict(orient="records"),
+        }
+        with open(out_dir / "dixon_coles_decay_backtest_metrics.json", "w", encoding="utf-8") as f:
+            json.dump(dc_decay_metrics, f, indent=2, default=str, ensure_ascii=False)
+        print(f"  RPS: {dc_decay_result.metrics['rps_1x2']:.4f}")
+
+        # Calibration
+        print(f"\n--- Calibration (decay={best_decay}, isotonic) ---")
+        try:
+            cal_bt = run_dc_backtest_with_calibration(
+                team_match, split_cfg,
+                decay=best_decay if best_decay > 0 else None,
+                calibration_method="isotonic",
+            )
+            cal_report_data = {
+                "method": "isotonic", "decay": best_decay,
+                "brier_before": cal_bt.metrics["brier_1x2_before"],
+                "brier_after": cal_bt.metrics["brier_1x2_after"],
+                "rps_before": cal_bt.metrics["rps_before"],
+                "rps_after": cal_bt.metrics["rps_after"],
+                "n_matches": cal_bt.metrics["n_matches"],
+            }
+            with open(out_dir / "dc_calibration_report.json", "w", encoding="utf-8") as f:
+                json.dump(cal_report_data, f, indent=2, default=str, ensure_ascii=False)
+            if cal_bt.calibration.calibrated_predictions is not None:
+                cal_bt.calibration.calibrated_predictions.to_parquet(
+                    out_dir / "dc_calibrated_predictions.parquet", index=False,
+                )
+            print(
+                f"  Brier: {cal_bt.metrics['brier_1x2_before']:.4f}"
+                f" -> {cal_bt.metrics['brier_1x2_after']:.4f}"
+            )
+            print(
+                f"  RPS:   {cal_bt.metrics['rps_before']:.4f}"
+                f" -> {cal_bt.metrics['rps_after']:.4f}"
+            )
+        except Exception as exc:
+            print(f"  Calibration failed: {exc}")
+
+    print(f"\nResults saved to {out_dir}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="scoutfootball",
@@ -541,6 +730,28 @@ def main() -> None:
         help="Output directory for backtest results",
     )
 
+    tune_p = sub.add_parser(
+        "tune-predictions",
+        help="Grid-search Dixon-Coles time-decay parameter via backtest",
+    )
+    tune_p.add_argument(
+        "--n-splits", type=int, default=3,
+        help="Number of time-series folds (default: 3)",
+    )
+    tune_p.add_argument(
+        "--metric", type=str, default="rps_1x2",
+        choices=["log_loss_exact", "brier_1x2", "rps_1x2"],
+        help="Selection metric to minimise (default: rps_1x2)",
+    )
+    tune_p.add_argument(
+        "--run-backtest", action="store_true",
+        help="Also run full backtest with the best decay to generate all artifacts",
+    )
+    tune_p.add_argument(
+        "--output-dir", type=str, default=None,
+        help="Output directory for tuning results",
+    )
+
     serve_p = sub.add_parser("serve", help="Start FastAPI server")
     serve_p.add_argument("--host", default="0.0.0.0")
     serve_p.add_argument("--port", type=int, default=8000)
@@ -558,6 +769,7 @@ def main() -> None:
         "export-ratings": _cmd_export_ratings,
         "import-truth-labels": _cmd_import_truth_labels,
         "backtest": _cmd_backtest,
+        "tune-predictions": _cmd_tune_predictions,
         "serve": _cmd_serve,
     }
 
