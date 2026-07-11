@@ -20,7 +20,9 @@ from scoutfootball.api import (
     get_action_value_summary,
     get_artifacts_summary,
     get_backtest_comparison,
+    get_calibration_drift,
     get_decay_tuning,
+    get_ensemble_prediction,
     get_form_weighted_prediction,
     get_head_to_head,
     get_match_prediction,
@@ -232,6 +234,8 @@ def create_app() -> FastAPI:
             return get_match_prediction_dc(home_team, away_team)
         if model == "form":
             return get_form_weighted_prediction(home_team, away_team)
+        if model == "ensemble":
+            return get_ensemble_prediction(home_team, away_team)
         return get_match_prediction(home_team, away_team)
 
     @app.get("/predictions/{home_team}/{away_team}/h2h")
@@ -258,6 +262,10 @@ def create_app() -> FastAPI:
     @app.get("/predictions/tuning")
     def predictions_tuning():
         return get_decay_tuning()
+
+    @app.get("/predictions/drift")
+    def predictions_drift():
+        return get_calibration_drift()
 
     @app.get("/value-summary")
     def value_summary():

@@ -432,6 +432,7 @@
                                 <option value="poisson">Poisson</option>
                                 <option value="dixon_coles" selected>Dixon-Coles</option>
                                 <option value="form">DC + Form</option>
+                                <option value="ensemble">Ensemble</option>
                             </select>
                         </div>
                         <div id="match-probabilities" class="probability-stack"></div>
@@ -1477,6 +1478,14 @@
                         <span class="kicker" data-i18n="backtest_tuning_desc">Dixon-Coles 时间衰减网格搜索</span>
                     </div>
                     <div id="backtest-tuning-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+                <article class="liquid-panel compact" id="backtest-drift-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <h3 data-i18n="backtest_drift">校准漂移监控</h3>
+                        <span class="kicker" data-i18n="backtest_drift_desc">按时间窗口追踪 RPS/Brier/LogLoss 漂移</span>
+                        <span class="status-pill status-medium" id="drift-status-pill" style="font-size:0.65rem">–</span>
+                    </div>
+                    <div id="backtest-drift-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
             </section>
 

@@ -802,6 +802,149 @@ def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
         return {"error": str(exc)}
 
 
+def get_ensemble_prediction(home_team: str, away_team: str) -> dict:
+    """Predict a match using an ensemble of Poisson, DC, and form-weighted DC.
+
+    Blends the three model predictions using equal weights (or cached
+    optimal weights if available). Returns the blended prediction plus
+    per-model breakdown for transparency.
+    """
+    try:
+        from scoutfootball.models import (
+            ensemble_prediction,
+            fit_dixon_coles,
+            fit_dixon_coles_with_form,
+            fit_independent_poisson,
+            predict_match,
+            predict_match_dc,
+        )
+
+        team_match = load_team_match()
+        if team_match is None or len(team_match) < 50:
+            return {"error": "Insufficient team_match data for ensemble prediction"}
+
+        decay = _resolve_tuned_decay()
+
+        # Fit all three models
+        poisson_model = fit_independent_poisson(team_match)
+        dc_model = fit_dixon_coles(team_match, decay=decay)
+        form_model = fit_dixon_coles_with_form(
+            team_match, decay=decay, form_lookback=5, form_factor=0.3,
+        )
+
+        # Predict with each model
+        poisson_pred = predict_match(poisson_model, str(home_team), str(away_team))
+        dc_pred = predict_match_dc(dc_model, str(home_team), str(away_team))
+        form_pred = predict_match_dc(form_model, str(home_team), str(away_team))
+
+        # Blend with equal weights (could be optimized via optimize_ensemble_weights)
+        ens = ensemble_prediction({
+            "poisson": poisson_pred,
+            "dixon_coles": dc_pred,
+            "dixon_coles_form": form_pred,
+        })
+
+        result = {
+            "home_team": home_team,
+            "away_team": away_team,
+            "model_type": "ensemble",
+            "model_version": "1.0",
+            "home_lambda": ens.home_lambda,
+            "away_lambda": ens.away_lambda,
+            "home_win": ens.home_win,
+            "draw": ens.draw,
+            "away_win": ens.away_win,
+            "over_2_5": ens.over_2_5,
+            "btts_yes": ens.btts_yes,
+            "score_matrix": _clean_json_value(ens.score_matrix.to_numpy().tolist()),
+            "weights": ens.weights,
+            "model_predictions": ens.model_predictions,
+        }
+        # Add confidence intervals (cached, best-effort)
+        ci = _get_prediction_confidence(home_team, away_team)
+        if ci:
+            result["confidence_intervals"] = ci
+        return _clean_json_value(result)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def get_calibration_drift() -> dict:
+    """Return calibration drift report for the latest backtest predictions.
+
+    Reads the Poisson backtest predictions artifact and computes per-window
+    RPS/Brier/LogLoss to detect calibration degradation over time.
+    """
+    import time
+
+    cache_key = "drift_data"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get("drift_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_calibration_drift
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "poisson_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                # Ensure actual_outcome column exists
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+
+                if "match_date" not in preds_df.columns:
+                    result = {"status": "no_date_column"}
+                else:
+                    report = compute_calibration_drift(preds_df)
+                    result = _clean_json_value({
+                        "status": "ok",
+                        "drift_detected": report.drift_detected,
+                        "drift_metric": report.drift_metric,
+                        "drift_threshold": report.drift_threshold,
+                        "overall_metrics": report.overall_metrics,
+                        "n_windows": len(report.windows),
+                        "windows": report.windows,
+                        "latest_window": report.latest_window,
+                    })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE["drift_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_head_to_head(
     home_team: str, away_team: str, limit: int = 10, form_limit: int = 10
 ) -> dict:

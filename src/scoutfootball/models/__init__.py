@@ -2,15 +2,18 @@
 
 from .match_prediction import (
     DixonColesModel,
+    EnsemblePrediction,
     IndependentPoissonModel,
     MatchProbabilitySummary,
     PoissonPrediction,
     PredictionConfidenceInterval,
     bootstrap_prediction_confidence,
     compute_form_weights,
+    ensemble_prediction,
     fit_dixon_coles,
     fit_dixon_coles_with_form,
     fit_independent_poisson,
+    optimize_ensemble_weights,
     predict_match,
     predict_match_dc,
 )
@@ -29,6 +32,7 @@ from .value_fairness import (
 
 __all__ = [
     "DixonColesModel",
+    "EnsemblePrediction",
     "IndependentPoissonModel",
     "MatchProbabilitySummary",
     "PlayerRatingNNConfig",
@@ -40,10 +44,12 @@ __all__ = [
     "bootstrap_prediction_confidence",
     "classify_fairness",
     "compute_form_weights",
+    "ensemble_prediction",
     "fit_dixon_coles",
     "fit_dixon_coles_with_form",
     "fit_independent_poisson",
     "fit_regressor",
+    "optimize_ensemble_weights",
     "predict_match",
     "predict_match_dc",
     "train_player_rating_nn",

@@ -2,6 +2,14 @@
 
 ## Recently Merged
 
+- **Ensemble Prediction & Calibration Monitoring Suite (2026-07-12):**
+  1. **Ensemble prediction:** `EnsemblePrediction` dataclass and `ensemble_prediction()` in `match_prediction.py` — blends multiple PoissonPrediction score matrices and lambdas by configurable weights, normalizes blended matrix, derives summary from blended matrix. `optimize_ensemble_weights()` grid-searches Poisson/DC/Form weights to minimize RPS on holdout.
+  2. **Calibration drift monitoring:** `CalibrationDriftReport` dataclass and `compute_calibration_drift()` in `backtests.py` — splits predictions into time windows (default 90D), computes RPS/Brier/LogLoss per window, detects drift when latest window's metric exceeds historical average by > threshold (default 5% relative). `_compute_window_metrics()` helper computes per-window metrics.
+  3. **Ensemble API endpoint:** `GET /predictions/{home}/{away}?model=ensemble` via `get_ensemble_prediction()` — fits Poisson + DC + form-weighted DC, blends with equal weights, returns blended prediction + per-model breakdown (`weights` and `model_predictions` fields). Includes cached confidence intervals.
+  4. **Drift API endpoint:** `GET /predictions/drift` via `get_calibration_drift()` — reads Poisson backtest predictions parquet, computes per-window drift report, returns windows list + overall metrics + drift_detected flag + latest_window. 5-minute TTL cache.
+  5. **Frontend ensemble display:** Model selector now includes "Ensemble" option. When selected, calibration section shows an "Ensemble Breakdown" table with per-model weights and home_win/draw/away_win/home_lambda/away_lambda for each model.
+  6. **Frontend drift panel:** New "Calibration Drift Monitoring" panel in backtest view — shows drift detected status pill (STABLE/DRIFT), drift metric, threshold, window count, overall metrics, per-window table (start/end/matches/RPS/Brier/LogLoss) with LATEST window highlighted, and latest window relative change vs historical average. Bilingual i18n.
+  7. **Tests:** 29 new tests (ensemble blending, weight optimization, drift detection). All pass, ruff + node check clean.
 - **Match Prediction Enhancement Suite (2026-07-12):**
   1. **Bootstrap confidence intervals:** `bootstrap_prediction_confidence()` in `match_prediction.py` — resamples fixture-level data with replacement, refits Dixon-Coles per bootstrap sample, collects distributions of home_win/draw/away_win/home_lambda/away_lambda, returns `PredictionConfidenceInterval` with percentile bounds. `_build_bootstrap_fixtures()` helper converts team-match rows to fixture-level for resampling.
   2. **Form-based match weighting:** `compute_form_weights()` computes per-match weights from rolling team form (points per game in preceding N matches). `fit_dixon_coles_with_form()` convenience wrapper applies form weights on top of time-decay. `fit_dixon_coles()` gains `match_weights` parameter for arbitrary per-match weighting.
@@ -57,7 +65,7 @@
 
 ## Current Development
 
-- Match Prediction Enhancement Suite complete on branch `codex/match-prediction-enhancement`. All code, tests (24 new), ruff, and node checks pass. Merging to `codex/integration` next.
+- Ensemble Prediction & Calibration Monitoring Suite complete on branch `codex/ensemble-drift`. All code, tests (29 new), ruff, and node checks pass. Merging to `codex/integration` next.
 
 ## Known Blockers
 
@@ -71,6 +79,6 @@
 4. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
 5. Similar-player search enhancement: position-weighted feature vector and per-position similarity pools.
 6. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
-7. Prediction calibration drift monitoring: track RPS/Brier over time windows and alert on degradation.
-8. Ensemble prediction: blend Poisson, DC, and form-weighted DC predictions with optimal weighting.
-9. Match momentum prediction: in-play win probability update model based on elapsed time and scoreline.
+7. Match momentum prediction: in-play win probability update model based on elapsed time and scoreline.
+8. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
+9. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
