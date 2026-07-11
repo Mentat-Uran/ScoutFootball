@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from scoutfootball.action_value.evidence import (
     build_action_value_evidence_snapshot,
 )
+from scoutfootball.action_value.match_artifact import build_player_match_action_values
 from scoutfootball.action_value.xt import compute_xt_values
 from scoutfootball.api_server import create_app
 
@@ -121,6 +122,27 @@ def test_compute_xt_values_is_in_memory_and_does_not_mutate_input() -> None:
     assert "xt_delta" in valued.columns
     assert len(valued) == len(actions)
     assert actions.columns.tolist() == original_columns
+
+
+def test_player_match_artifact_keeps_match_metadata_and_sample_boundary() -> None:
+    matches = pd.DataFrame(
+        [
+            {
+                "match_id": 100,
+                "match_date": "2024-01-01",
+                "competition_name": "Example League",
+                "season_name": "2023/2024",
+            }
+        ]
+    )
+    artifact, manifest = build_player_match_action_values(
+        _valued_actions(), matches, player_names={"7": "Ada"}
+    )
+    assert artifact.iloc[0]["player_name"] == "Ada"
+    assert artifact.iloc[0]["match_date"] == "2024-01-01"
+    assert artifact.iloc[0]["n_actions"] == 5
+    assert manifest["schema_version"] == "scoutfootball.player-match-action-value.v1"
+    assert manifest["coverage_scope"] == "sample"
 
 
 def test_evidence_api_index_detail_and_missing_player() -> None:

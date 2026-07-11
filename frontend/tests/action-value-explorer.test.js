@@ -88,3 +88,12 @@ test("core action evidence keeps pass carry shot in product order", () => {
         "shot",
     ]);
 });
+
+test("player-match rows are isolated by player and ordered by match date", () => {
+    const result = explorer.playerMatchRows([
+        { player_id: "10", match_date: "2024-01-02" },
+        { player_id: "11", match_date: "2024-01-03" },
+        { player_id: 10, match_date: "2024-01-01" },
+    ], "10");
+    assert.deepEqual(result.map((row) => row.match_date), ["2024-01-02", "2024-01-01"]);
+});

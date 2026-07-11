@@ -2,6 +2,16 @@
 
 ## Recently Merged
 
+- **Versioned Player-Match Action Value Artifact (2026-07-12, Round 8):**
+  1. Added `player_match_action_value_sample.parquet` and a schema-versioned manifest derived from the three bundled StatsBomb Open Data matches. Each of the 94 player-team-match rows retains match date, competition, season, scoreline, estimated minutes, action counts, positive/negative xT, xT per 90 and input hash.
+  2. Added `scoutfootball action-value-matches`, `GET /action-values/matches`, and the release-static `frontend/data/action_value_matches.json` snapshot. The CLI deliberately only permits `coverage_scope=sample`; current evidence must never be described as complete competition coverage.
+  3. Extended the action-value player detail with versioned match context (date, fixture, score, xT, actions and minutes), retaining explicit non-additivity and three-match sample warnings. API and static deployments use the same contract.
+  4. Targeted Ruff, 35 Node tests, 87 Python action-value/static/API tests, direct API smoke checks, and the release static action-value export passed.
+- **Unified Analyst Console Foundation (2026-07-12, Round 7):**
+  1. Consolidated the static Liquid Glass workbench around shared pitch-data tokens for light/dark themes, panel hierarchy, controls, tables, ranking cards, confidence pills, and active navigation.
+  2. Added keyboard skip navigation, visible focus treatment, `aria-current="page"` view state, semantic theme toggle state, and reduced-motion handling; the mobile navigation now preserves the active view label.
+  3. Added frontend contract coverage for the accessibility and theme invariants. Lint, 34 Node frontend tests, 104 frontend security/contract tests, 9 API endpoint tests, and CLI info/validate passed. Full-suite commands exceed the local timeout in existing data-heavy pipeline tests and are not represented as passing.
+  4. Squash-merged as `d1af20d` into `codex/integration`, fast-forwarded to `main`, and backed up as a local Git bundle.
 - **Similar-Player Search Enhancement Suite (2026-07-12, Round 6):**
   1. **Position-weighted feature vector:** `_POSITION_FEATURE_WEIGHTS` table in `api.py` defines per-position weights for all 8 position groups (GK/CB/FB/DM/CM/AM/W/ST). Weights scale the z-scored feature vector before cosine similarity, so dimensions more relevant to a position carry more signal (e.g. ST weights Attack at 3.0, Defense at 0.5; CB weights Defense at 3.0, Attack at 0.5; GK weights Attack/Creation at 0.0). `_position_weights()` helper falls back to uniform weights for unknown positions. The active weights are surfaced in the response as `feature_weights`.
   2. **Cross-position similarity mode:** New `same_position_only` parameter (default True for backward compat). When False, each player is z-scored against their own position group first, then merged into a cross-position pool. This makes profiles comparable across positions (a CM with above-average CM attack output can be compared to an ST with above-average ST attack output). Percentile ranks for strengths/weaknesses also use per-position ranks in cross-position mode.
@@ -78,7 +88,7 @@
 
 ## Current Development
 
-- Similar-Player Search Enhancement Suite (Round 6) complete on `codex/integration`. All code, tests (25 new, 38 total in similarity file), ruff, and node checks pass. Continuing to Round 7.
+- Round 8 is merged on `codex/integration`; next round will start from a clean integration branch. The broader xT artifact remains player-team-season (9,951 rows) and VAEP remains player-team-career (6,771 rows), while player-match xT is deliberately limited to the versioned three-match sample.
 
 ## Known Blockers
 
@@ -86,10 +96,9 @@
 
 ## Next Round Candidates
 
-1. Generate a versioned full match-action artifact with dates, minutes, competition coverage, and independent evaluation.
-2. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-3. Add cross-provider schema validation fixtures and empty-data behavior tests.
-4. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
-5. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
-6. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
-7. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
+1. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
+2. Add cross-provider schema validation fixtures and empty-data behavior tests.
+3. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
+4. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+5. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
+6. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.

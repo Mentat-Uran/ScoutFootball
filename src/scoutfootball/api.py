@@ -2013,6 +2013,54 @@ def get_action_value_evidence(player_id: str) -> dict[str, Any]:
     return _clean_json_value(_get_action_value_evidence(player_id))
 
 
+def get_player_match_action_values(limit: int = 100, offset: int = 0) -> dict[str, Any]:
+    """Read the generated, sample-bounded player-match xT artifact."""
+    import json
+
+    limit, offset = max(0, min(int(limit), 2_000)), max(0, int(offset))
+    path = (
+        _settings().data_root
+        / "gold"
+        / "feature_store"
+        / "player_match_action_value_sample.parquet"
+    )
+    manifest_path = path.with_suffix(".manifest.json")
+    if not path.exists() or not manifest_path.exists():
+        return _clean_json_value(
+            {
+                "status": "not_generated",
+                "rows": [],
+                "count": 0,
+                "build_command": "scoutfootball action-value-matches",
+                "coverage_scope": "sample",
+                "attribution_required": _STATSBOMB_ATTRIBUTION,
+            }
+        )
+    try:
+        frame = _read_parquet(path)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return _clean_json_value(
+            {"status": "error", "rows": [], "count": 0, "error": str(exc)}
+        )
+    if frame.empty:
+        return _clean_json_value(
+            {"status": "no_data", "rows": [], "count": 0, "manifest": manifest}
+        )
+    frame = frame.sort_values("xt_total", ascending=False)
+    return _clean_json_value(
+        {
+            "status": "ok",
+            "count": len(frame),
+            "offset": offset,
+            "limit": limit,
+            "rows": frame.iloc[offset : offset + limit].to_dict(orient="records"),
+            "manifest": manifest,
+            "attribution_required": _STATSBOMB_ATTRIBUTION,
+        }
+    )
+
+
 def get_artifacts_summary() -> dict:
     """Return artifact counts and data health for the overview page."""
     ratings = load_player_ratings()

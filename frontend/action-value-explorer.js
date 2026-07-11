@@ -104,6 +104,14 @@
         return evidencePlayerIds(index).includes(text(playerId));
     }
 
+    function playerMatchRows(rows, playerId) {
+        const id = text(playerId);
+        return (Array.isArray(rows) ? rows : [])
+            .filter((row) => text(row && row.player_id) === id)
+            .slice()
+            .sort((a, b) => text(b.match_date).localeCompare(text(a.match_date)));
+    }
+
     function coreActionTypes(detail) {
         const order = new Map([["pass", 0], ["carry", 1], ["shot", 2]]);
         return (Array.isArray(detail && detail.action_types) ? detail.action_types : [])
@@ -119,10 +127,11 @@
         filterRows,
         hasEvidence,
         identitySummary,
+        playerMatchRows,
         rowCompetitions,
         rowSeasons,
         rowTeam,
         splitContext,
-        version: "1.0.0",
+        version: "1.1.0",
     });
 });

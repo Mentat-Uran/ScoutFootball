@@ -43,6 +43,17 @@ def test_action_values_endpoint(client: TestClient):
     assert response.status_code == 200
 
 
+def test_player_match_action_values_endpoint_is_explicit_before_generation(client: TestClient):
+    response = client.get("/action-values/matches")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"ok", "not_generated", "no_data"}
+    assert "rows" in payload
+    if payload["status"] == "not_generated":
+        assert payload["coverage_scope"] == "sample"
+        assert "action-value-matches" in payload["build_command"]
+
+
 def test_health_endpoint(client: TestClient):
     """/health should return 200."""
     response = client.get("/health")

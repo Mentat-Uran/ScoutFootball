@@ -675,6 +675,7 @@ function _staticUrlFor(apiPath) {
         "/value-summary": "/data/value_summary.json",
         "/action-values": "/data/action_values.json",
         "/action-values/evidence": "/data/action_value_evidence.json",
+        "/action-values/matches": "/data/action_value_matches.json",
         "/review-queue": "/data/review_queue.json",
         "/watchlist": "/data/watchlist.json",
         "/shortlist": "/data/shortlist.json",
@@ -813,6 +814,7 @@ let actionValueEvidenceIndex = {
     player_index: [],
     available_player_ids: [],
 };
+let actionValueMatchSummary = { status: "no_data", rows: [], manifest: {} };
 let teamStrengthData = { count: 0, teams: [] };
 let dataLoadErrors = new Set(); // tracks which data sources failed to load
 
@@ -977,6 +979,15 @@ async function fetchActionValues() {
         console.warn("Failed to fetch action values:", err);
         dataLoadErrors.add("action-values");
         return { status: "no_data", players: [], metrics: {} };
+    }
+}
+
+async function fetchPlayerMatchActionValues() {
+    try {
+        return await fetchJson("/action-values/matches");
+    } catch (err) {
+        console.warn("Failed to fetch player-match action values:", err);
+        return { status: "no_data", rows: [], manifest: {} };
     }
 }
 
@@ -5459,6 +5470,33 @@ function actionEvidenceBreakdown(title, rows) {
         : `<p class="action-evidence-message">–</p>`}</section>`;
 }
 
+function renderPlayerMatchValueRows(playerId) {
+    const explorer = typeof ACTION_VALUE_EXPLORER !== "undefined" ? ACTION_VALUE_EXPLORER : null;
+    const rows = explorer
+        ? explorer.playerMatchRows(actionValueMatchSummary.rows, playerId)
+        : (actionValueMatchSummary.rows || []).filter(
+            (row) => String(row.player_id || "") === String(playerId)
+        );
+    const manifest = actionValueMatchSummary.manifest || {};
+    if (actionValueMatchSummary.status !== "ok") {
+        return `<div class="action-detail-boundary">${escapeHtml(
+            "The versioned player-match xT artifact is not loaded; match evidence remains available."
+        )}</div>`;
+    }
+    if (!rows.length) return "";
+    const scope = manifest.coverage_scope || "sample";
+    return `<section class="action-evidence-versioned" aria-label="Versioned player match xT">
+        <div class="action-evidence-head"><div><p class="eyebrow">Versioned player-match xT</p><h5>Match context and value rows</h5></div><span class="status-pill status-medium">${escapeHtml(scope.toUpperCase())}</span></div>
+        <p class="action-evidence-message">Current three-match StatsBomb sample only; not full competition coverage and not additive with differently scoped xT grids.</p>
+        <div class="action-evidence-match-grid">${rows.map((row) => {
+            const score = row.home_score == null || row.away_score == null
+                ? ""
+                : ` ${row.home_score}-${row.away_score}`;
+            const fixture = `${row.home_team_name || "Home"} v ${row.away_team_name || "Away"}${score}`;
+            return `<article class="action-evidence-match-card"><div><strong>${escapeHtml(row.match_date || `Match ${row.match_id || ""}`)}</strong><span>${escapeHtml(fixture)}</span></div><div class="action-evidence-match-score"><span>xT / 90</span><strong>${safeNum(row.xt_per_90 || 0, 3)}</strong></div><dl><div><dt>xT</dt><dd>${safeNum(row.xt_total || 0, 3)}</dd></div><div><dt>actions</dt><dd>${Number(row.n_actions || 0)}</dd></div><div><dt>minutes</dt><dd>${Math.round(Number(row.estimated_minutes || 0))}</dd></div></dl></article>`;
+        }).join("")}</div></section>`;
+}
+
 async function renderActionValueEvidence(player) {
     const target = document.getElementById("action-evidence-content");
     const status = document.getElementById("action-evidence-status");
@@ -5497,6 +5535,7 @@ async function renderActionValueEvidence(player) {
 
     target.innerHTML = `
         <div class="action-evidence-scope"><strong>${matches.length}</strong> ${escapeHtml(appState.lang === "zh" ? "场比赛" : "matches")} · <strong>${Number(data.n_actions || 0).toLocaleString()}</strong> ${escapeHtml(appState.lang === "zh" ? "个动作" : "actions")} · xT ${safeNum(data.xt_total || 0, 3)}<span>${escapeHtml(coverage.scope_note || "StatsBomb Open Data sample only")}</span></div>
+        ${renderPlayerMatchValueRows(playerId)}
         <div class="action-evidence-match-grid">${matchCards}</div>
         <div class="action-evidence-breakdown-grid">
             ${actionEvidenceBreakdown(appState.lang === "zh" ? "动作类型" : "Action types", actionTypes)}
@@ -8905,7 +8944,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadWatchlistNotes();
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, workspaceCapabilities, licenseResp] = await Promise.all([
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
         fetchArtifacts(),
@@ -8919,6 +8958,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fetchShortlist(),
         fetchActionValues(),
         fetchActionValueEvidenceIndex(),
+        fetchPlayerMatchActionValues(),
         fetchScoutingWorkspaceCapabilities(),
         fetchLicense(),
     ]);
@@ -8935,6 +8975,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     shortlistData = shortlistRows;
     actionValueSummary = actionValues;
     actionValueEvidenceIndex = actionEvidenceIndex;
+    actionValueMatchSummary = actionValueMatches;
     scoutingWorkspaceCapabilities = workspaceCapabilities;
     licenseData = licenseResp;
     applyScoutingWorkspaceCapabilities();

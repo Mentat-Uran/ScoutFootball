@@ -297,6 +297,11 @@ def create_app() -> FastAPI:
     def action_value_evidence(player_id: str):
         return get_action_value_evidence(player_id)
 
+    @app.get("/action-values/matches")
+    def player_match_action_values(limit: int = 100, offset: int = 0):
+        from scoutfootball.api import get_player_match_action_values
+        return get_player_match_action_values(limit=limit, offset=offset)
+
     @app.get("/ratings")
     def ratings(
         position: str | None = None,
