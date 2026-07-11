@@ -2,6 +2,12 @@
 
 ## Recently Merged
 
+- **Model Trust & Data Attribution Suite (2026-07-11):**
+  1. **Report detail endpoint integration:** `fetchModelRunDetail()` async loads `/reports/model-runs/{run_id}` on first expand; `_renderRunDetailExtra()` renders feature_importance (parquet-level, top 10), params_summary (shape/mean/std/min/max), and data_attribution (primary_source, license_note, StatsBomb attribution callout).
+  2. **Data attribution compliance panel:** `_renderDataAttributionPanel()` renders `/license` endpoint's `license_attribution` dict — data source label, update timestamp, per-source license notes with links, StatsBomb attribution highlight.
+  3. **Model run comparison view:** `_populateRunComparisonSelects()` + `renderRunComparison()` — select two runs, compare holdout metrics across optimized/baseline × test/train splits with delta coloring and overfit gap comparison.
+  4. **Backtest per-fold visualization:** `_renderBacktestFoldChart()` ECharts line chart showing per-fold log_loss/brier/rps trends across all models.
+  5. **Tests:** 7 new tests for `get_model_run_detail` API (data_attribution, params_summary, feature_importance, holdout_summary, reproduce_command, nonexistent run, fallback to latest).
 - **Model Evaluation & Tournament Outlook Suite (2026-07-11):**
   1. **World Cup team outlook (frontend wiring):** `renderWcOutlook()` frontend with group finish probability bars, knockout projection path, championship probability, and strength breakdown; `fetchWcTeamOutlook()` with per-team caching; `initWorldCup()` select population and event binding. Fixed field name mismatches (`projected_opponent`→`opponent`, `advance_probability`→`win_probability`, `quarter_final`→`quarter_finals`, `group_teams` dict-list handling).
   2. **Prediction backtest comparison:** `get_backtest_comparison()` API reading CLI backtest artifacts (`poisson_backtest_metrics.json`, `dixon_coles_backtest_metrics.json`, `dixon_coles_decay_backtest_metrics.json`), building metric comparison table (log_loss_exact/brier_1x2/rps_1x2 with winner selection), folds breakdown, and isotonic calibration report; `GET /predictions/backtest` endpoint; frontend backtest view with metric comparison table, per-fold details, and calibration effect panel. 5-minute TTL cache.
@@ -25,7 +31,7 @@
 
 ## Current Development
 
-- Model Evaluation & Tournament Outlook Suite complete; merged to `codex/integration`. Preparing next round.
+- Model Trust & Data Attribution Suite complete; merged to `codex/integration`. Preparing next round.
 
 ## Known Blockers
 
@@ -33,9 +39,9 @@
 
 ## Next Round Candidates
 
-1. Add shortlist notes persistence and watchlist diff in the scouting workflow.
-2. Generate a versioned full match-action artifact with dates, minutes, competition coverage, and independent evaluation.
-3. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-4. Enrich team outlook with strength_details wiring from team_strength API (currently coverage is None without details).
-5. Add per-fold backtest visualization (line charts of log_loss/brier/rps across folds) to the backtest view.
-6. Surface model-run registry provenance (dependency versions, error cases) in the frontend report page.
+1. Generate a versioned full match-action artifact with dates, minutes, competition coverage, and independent evaluation.
+2. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
+3. Enrich team outlook with strength_details wiring from team_strength API (currently coverage is None without details).
+4. Add Dixon-Coles time decay parameter tuning and low-score calibration refinement.
+5. Add real label feedback loop for scouting workflow (truth label re-injection).
+6. Add cross-provider schema validation fixtures and empty-data behavior tests.

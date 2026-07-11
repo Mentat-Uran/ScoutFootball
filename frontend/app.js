@@ -287,6 +287,10 @@ const i18n = {
         backtest_rps_after: "校准后 RPS",
         backtest_n_matches: "比赛数",
         backtest_no_calibration: "暂无 isotonic 校准报告",
+        backtest_fold_chart: "分折指标趋势",
+        data_attribution: "数据归属与合规",
+        run_comparison: "模型运行对比",
+        run_compare_btn: "对比",
         xT_label: "xT 每90分钟",
         xT_percentile: "xT 百分位",
         xT_contribution: "xT 贡献",
@@ -581,6 +585,10 @@ const i18n = {
         backtest_rps_after: "RPS After",
         backtest_n_matches: "Matches",
         backtest_no_calibration: "No isotonic calibration report available",
+        backtest_fold_chart: "Per-Fold Metric Trends",
+        data_attribution: "Data Attribution & Compliance",
+        run_comparison: "Model Run Comparison",
+        run_compare_btn: "Compare",
         xT_label: "xT per 90",
         xT_percentile: "xT percentile",
         xT_contribution: "xT contribution",
@@ -912,6 +920,20 @@ async function fetchModelRuns() {
     } catch (err) {
         console.warn("Failed to fetch model runs:", err);
         return { count: 0, runs: [] };
+    }
+}
+
+const modelRunDetailCache = {};
+
+async function fetchModelRunDetail(runId) {
+    if (modelRunDetailCache[runId]) return modelRunDetailCache[runId];
+    try {
+        const data = await fetchJson(`/reports/model-runs/${encodeURIComponent(runId)}`);
+        modelRunDetailCache[runId] = data;
+        return data;
+    } catch (err) {
+        console.warn("Failed to fetch model run detail:", err);
+        return null;
     }
 }
 
@@ -3756,6 +3778,244 @@ function _renderErrorCases(errorCases) {
     <div style="font-size:0.75rem;line-height:1.5">${parts.join("")}</div>`;
 }
 
+function _renderRunDetailExtra(detail) {
+    if (!detail) return "";
+    const z = appState.lang === "zh";
+    const sections = [];
+
+    // Feature importance from parquet (only available via detail endpoint)
+    const fi = detail.feature_importance;
+    if (Array.isArray(fi) && fi.length > 0) {
+        const rows = fi.slice(0, 10).map((e, i) => {
+            const name = e.name || e.feature || `f${i}`;
+            const val = e.importance ?? e.value ?? 0;
+            const pct = typeof val === "number" && val <= 1 && val >= 0
+                ? (val * 100).toFixed(2) + "%"
+                : Number(val).toFixed(4);
+            return `<div>\u25C6 ${escapeHtml(String(name))} <span style="color:var(--text-muted)">${escapeHtml(pct)}</span></div>`;
+        }).join("");
+        sections.push(`<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "特征重要性（完整）" : "Feature Importance (full)"}</p>
+        <div style="font-size:0.75rem;line-height:1.6">${rows}</div>`);
+    }
+
+    // Params summary with min/max (only available via detail endpoint)
+    const ps = detail.params_summary;
+    if (ps && typeof ps === "object") {
+        const shape = Array.isArray(ps.shape) ? ps.shape.join("×") : String(ps.shape || "—");
+        const cells = [
+            `<span style="color:var(--text-muted)">shape</span> ${escapeHtml(shape)}`,
+            `<span style="color:var(--text-muted)">mean</span> ${ps.mean != null ? Number(ps.mean).toFixed(6) : "—"}`,
+            `<span style="color:var(--text-muted)">std</span> ${ps.std != null ? Number(ps.std).toFixed(6) : "—"}`,
+            `<span style="color:var(--text-muted)">min</span> ${ps.min != null ? Number(ps.min).toFixed(6) : "—"}`,
+            `<span style="color:var(--text-muted)">max</span> ${ps.max != null ? Number(ps.max).toFixed(6) : "—"}`,
+        ];
+        sections.push(`<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "参数统计" : "Params Summary"}</p>
+        <div style="font-size:0.75rem;line-height:1.6">${cells.join(" · ")}</div>`);
+    }
+
+    // Data attribution (only available via detail endpoint)
+    const da = detail.data_attribution;
+    if (da && typeof da === "object") {
+        const parts = [];
+        if (da.primary_source) {
+            parts.push(`<div><span style="color:var(--text-muted)">${z ? "主要数据源" : "Primary source"}:</span> ${escapeHtml(da.primary_source)}</div>`);
+        }
+        if (da.license_note) {
+            parts.push(`<div style="margin-top:0.2rem;font-size:0.72rem;line-height:1.5">${escapeHtml(da.license_note)}</div>`);
+        }
+        if (da.statsbomb_attribution_required) {
+            parts.push(`<div style="margin-top:0.3rem;padding:0.3rem 0.4rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.72rem;line-height:1.5"><strong>StatsBomb:</strong> ${escapeHtml(da.statsbomb_attribution_required)}</div>`);
+        }
+        if (parts.length > 0) {
+            sections.push(`<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "数据归属" : "Data Attribution"}</p>
+            <div style="font-size:0.75rem;line-height:1.5">${parts.join("")}</div>`);
+        }
+    }
+
+    if (sections.length === 0) return "";
+    return sections.join("<hr style=\"border:none;border-top:1px solid var(--border,#333);margin:0.35rem 0\">");
+}
+
+function _populateRunComparisonSelects() {
+    const selA = document.getElementById("compare-run-a");
+    const selB = document.getElementById("compare-run-b");
+    if (!selA || !selB) return;
+    const runs = (modelRuns.runs || []).slice(0, 20);
+    const z = appState.lang === "zh";
+    const prevA = selA.value;
+    const prevB = selB.value;
+
+    const options = runs.map((r) => {
+        const id = r.run_id || "";
+        const sp = r.holdout_summary?.optimized_test?.spearman ?? r.spearman;
+        const label = sp != null ? `${id} (sp ${Number(sp).toFixed(3)})` : id;
+        return `<option value="${escapeAttr(id)}">${escapeHtml(label)}</option>`;
+    }).join("");
+
+    selA.innerHTML = `<option value="">${z ? "— 选择 —" : "— Select —"}</option>` + options;
+    selB.innerHTML = `<option value="">${z ? "— 选择 —" : "— Select —"}</option>` + options;
+    if (prevA) selA.value = prevA;
+    if (prevB) selB.value = prevB;
+
+    const btn = document.getElementById("compare-runs-btn");
+    if (btn && !btn.dataset.bound) {
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", () => {
+            const a = selA.value;
+            const b = selB.value;
+            if (!a || !b || a === b) return;
+            renderRunComparison(a, b);
+        });
+    }
+}
+
+async function renderRunComparison(runIdA, runIdB) {
+    const body = document.getElementById("run-comparison-body");
+    const statusEl = document.getElementById("run-comparison-status");
+    if (!body) return;
+    const z = appState.lang === "zh";
+    body.innerHTML = `<p style="color:var(--text-muted)">${z ? "加载中..." : "Loading..."}</p>`;
+
+    const [detailA, detailB] = await Promise.all([
+        fetchModelRunDetail(runIdA),
+        fetchModelRunDetail(runIdB),
+    ]);
+
+    if (!detailA || !detailB) {
+        body.innerHTML = `<p style="color:var(--text-muted)">${z ? "无法加载运行详情" : "Failed to load run details"}</p>`;
+        if (statusEl) { statusEl.textContent = z ? "加载失败" : "failed"; statusEl.className = "status-pill status-low"; }
+        return;
+    }
+
+    const hsA = detailA.holdout_summary || {};
+    const hsB = detailB.holdout_summary || {};
+    const metricKeys = ["spearman", "pearson", "rank_loss", "calibration_mae", "points_mae", "points_rmse", "points_bias", "points_spread_ratio", "raw_spread_ratio", "team_coverage"];
+    const splitKeys = ["optimized_test", "baseline_test", "optimized_train", "baseline_train"];
+    const splitLabels = z
+        ? { optimized_test: "优化(测试)", baseline_test: "基线(测试)", optimized_train: "优化(训练)", baseline_train: "基线(训练)" }
+        : { optimized_test: "Opt (test)", baseline_test: "Base (test)", optimized_train: "Opt (train)", baseline_train: "Base (train)" };
+
+    function fmtVal(v) {
+        if (v === undefined || v === null) return "—";
+        if (typeof v === "number") return v.toFixed(4);
+        return String(v);
+    }
+
+    let tableHtml = `<div class="table-scroll"><table style="width:100%;font-size:0.75rem"><thead><tr>
+        <th style="text-align:left">${z ? "指标" : "Metric"}</th>
+        <th>${escapeHtml(runIdA)}</th>
+        <th>${escapeHtml(runIdB)}</th>
+        <th>${z ? "差异" : "Delta"}</th>
+    </tr></thead><tbody>`;
+
+    splitKeys.forEach((sk) => {
+        const splitA = hsA[sk] || {};
+        const splitB = hsB[sk] || {};
+        if (Object.keys(splitA).length === 0 && Object.keys(splitB).length === 0) return;
+        tableHtml += `<tr><td colspan="4" style="font-weight:700;padding-top:0.4rem;color:var(--text-secondary,#ccc)">${escapeHtml(splitLabels[sk] || sk)}</td></tr>`;
+        metricKeys.forEach((mk) => {
+            const va = splitA[mk];
+            const vb = splitB[mk];
+            if (va === undefined && vb === undefined) return;
+            let delta = "";
+            let deltaClass = "";
+            if (typeof va === "number" && typeof vb === "number") {
+                const d = vb - va;
+                delta = (d >= 0 ? "+" : "") + d.toFixed(4);
+                // For error metrics (rank_loss, calibration_mae, points_*), lower is better
+                const lowerIsBetter = mk !== "spearman" && mk !== "pearson" && mk !== "team_coverage";
+                if (lowerIsBetter) {
+                    deltaClass = d < 0 ? "status-high" : (d > 0 ? "status-low" : "status-medium");
+                } else {
+                    deltaClass = d > 0 ? "status-high" : (d < 0 ? "status-low" : "status-medium");
+                }
+            }
+            tableHtml += `<tr>
+                <td style="padding-left:0.8rem">${escapeHtml(mk)}</td>
+                <td style="text-align:center">${fmtVal(va)}</td>
+                <td style="text-align:center">${fmtVal(vb)}</td>
+                <td style="text-align:center">${delta ? `<span class="status-pill ${deltaClass}" style="font-size:0.62rem">${escapeHtml(delta)}</span>` : "—"}</td>
+            </tr>`;
+        });
+    });
+    tableHtml += `</tbody></table></div>`;
+
+    // Overfit gap comparison
+    const ogA = hsA.overfit_rank_loss_gap;
+    const ogB = hsB.overfit_rank_loss_gap;
+    let ogHtml = "";
+    if (ogA != null && ogB != null) {
+        const z2 = z;
+        ogHtml = `<div style="margin-top:0.5rem;font-size:0.75rem">
+            <span style="color:var(--text-muted)">${z2 ? "过拟合差距" : "Overfit gap"}: </span>
+            <strong>${escapeHtml(runIdA)}</strong> ${Number(ogA).toFixed(4)} →
+            <strong>${escapeHtml(runIdB)}</strong> ${Number(ogB).toFixed(4)}
+            ${(ogB - ogA) < 0 ? `<span class="status-pill status-high" style="font-size:0.62rem">${z2 ? "改善" : "improved"}</span>` : ""}
+        </div>`;
+    }
+
+    body.innerHTML = tableHtml + ogHtml;
+    if (statusEl) {
+        statusEl.textContent = `${runIdA} vs ${runIdB}`;
+        statusEl.className = "status-pill status-high";
+    }
+}
+
+function _renderDataAttributionPanel() {
+    const panel = document.getElementById("data-attribution-content");
+    if (!panel) return;
+    const z = appState.lang === "zh";
+    const la = licenseData.license_attribution || {};
+    const dsLabel = licenseData.data_source_label || "—";
+    const updatedAt = licenseData.updated_at;
+
+    let html = "";
+
+    // Primary source summary
+    html += `<div style="margin-bottom:0.5rem">
+        <span style="color:var(--text-muted)">${z ? "数据源标签" : "Data source label"}: </span>
+        <strong>${escapeHtml(dsLabel)}</strong>
+        ${updatedAt ? `<span style="color:var(--text-muted);font-size:0.72rem;margin-left:0.5rem">${z ? "更新于" : "updated"} ${new Date(updatedAt * 1000).toLocaleDateString()}</span>` : ""}
+    </div>`;
+
+    // license_attribution is a simple key→string dict from /license endpoint
+    const sourceKeys = Object.keys(la).filter((k) =>
+        k !== "statsbomb_attribution_required" && k !== "license_note" && k !== "sources",
+    );
+    if (sourceKeys.length > 0) {
+        html += `<p style="margin:0.5rem 0 0.25rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "数据源归属" : "Source Attribution"}</p>`;
+        html += `<div style="font-size:0.75rem;line-height:1.6">`;
+        sourceKeys.forEach((key) => {
+            const note = la[key];
+            if (!note) return;
+            // Find matching LICENSE_SOURCES entry for URL
+            const meta = LICENSE_SOURCES.find((s) => s.key === key);
+            const name = meta ? meta.name : key;
+            const url = meta ? meta.url : "";
+            html += `<div style="display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.2rem;flex-wrap:wrap">
+                <strong>${escapeHtml(name)}</strong>
+                <span style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(note)}</span>
+                ${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--accent,#4f9cff)">${z ? "链接" : "link"}</a>` : ""}
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    // StatsBomb special callout
+    const statsbombAttr = la.statsbomb_attribution_required;
+    if (statsbombAttr) {
+        html += `<div style="margin:0.4rem 0;padding:0.4rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.75rem;line-height:1.5">
+            <strong>StatsBomb Open Data:</strong> ${escapeHtml(statsbombAttr)}
+        </div>`;
+    }
+
+    if (html === "") {
+        html = `<p style="color:var(--text-muted)">${z ? "暂无归属信息" : "No attribution data available"}</p>`;
+    }
+
+    panel.innerHTML = html;
+}
+
 function _posGroupRating(team, group) {
     const pg = (team.position_groups || {})[group];
     return pg ? pg.rating : null;
@@ -4254,6 +4514,12 @@ function renderReports() {
             </div>`;
         }).join("")
         : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No model runs found</div>';
+
+    // Data attribution panel
+    _renderDataAttributionPanel();
+
+    // Run comparison: populate selects
+    _populateRunComparisonSelects();
 
     // Board Snapshots section
     var snapshotsList = document.getElementById("board-snapshots-list");
@@ -5117,6 +5383,9 @@ async function renderBacktest() {
                 calBody.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("backtest_no_calibration"))}</p>`;
             }
         }
+
+        // Per-fold chart (ECharts)
+        _renderBacktestFoldChart(data, models, folds);
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -5124,6 +5393,82 @@ async function renderBacktest() {
         }
         console.warn("Failed to render backtest:", err);
     }
+}
+
+function _renderBacktestFoldChart(data, models, folds) {
+    const container = document.getElementById("backtest-fold-chart");
+    if (!container) return;
+    const panel = document.getElementById("backtest-fold-chart-panel");
+    if (!folds || folds.length === 0 || !models || models.length === 0) {
+        if (panel) panel.style.display = "none";
+        return;
+    }
+    if (panel) panel.style.display = "";
+    const chart = getChart("backtest-fold-chart");
+    if (!chart) return;
+    const z = currentLang === "zh";
+
+    const metricKeys = ["log_loss", "brier", "rps"];
+    const metricLabels = z
+        ? { log_loss: "Log Loss", brier: "Brier", rps: "RPS" }
+        : { log_loss: "Log Loss", brier: "Brier", rps: "RPS" };
+    const modelColors = ["#4f9cff", "#6bcf7f", "#f5a623"];
+
+    const foldLabels = folds.map((f) => String(f.fold));
+
+    const series = [];
+    models.forEach((m, mi) => {
+        metricKeys.forEach((mk) => {
+            const seriesData = folds.map((f) => {
+                const v = f[`${m.model}_${mk}`];
+                return v != null ? Number(v) : null;
+            });
+            series.push({
+                name: `${m.model} ${metricLabels[mk]}`,
+                type: "line",
+                data: seriesData,
+                smooth: true,
+                symbol: "circle",
+                symbolSize: 6,
+                lineStyle: { width: 2 },
+                itemStyle: { color: modelColors[mi % modelColors.length] },
+                emphasis: { focus: "series" },
+            });
+        });
+    });
+
+    chart.setOption({
+        tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "cross" },
+        },
+        legend: {
+            top: 5,
+            textStyle: { fontSize: 10, color: "#aaa" },
+            type: "scroll",
+        },
+        grid: {
+            left: "8%",
+            right: "5%",
+            bottom: "8%",
+            top: "18%",
+        },
+        xAxis: {
+            type: "category",
+            data: foldLabels,
+            name: z ? "折" : "Fold",
+            nameTextStyle: { color: "#888", fontSize: 10 },
+            axisLabel: { color: "#aaa", fontSize: 10 },
+        },
+        yAxis: {
+            type: "value",
+            name: z ? "指标值（越低越好）" : "Metric (lower=better)",
+            nameTextStyle: { color: "#888", fontSize: 10 },
+            axisLabel: { color: "#aaa", fontSize: 10 },
+            splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
+        },
+        series,
+    }, true);
 }
 
 function exportPlayers() {
@@ -5995,13 +6340,37 @@ function bindEvents() {
     }
 
     // Reports: expand/collapse run details
-    document.addEventListener("click", (e) => {
+    document.addEventListener("click", async (e) => {
         const toggleBtn = e.target.closest("[data-toggle-run]");
         if (toggleBtn) {
             const runId = toggleBtn.dataset.toggleRun;
             const detailsEl = document.querySelector(`[data-run-details="${runId}"]`);
             if (detailsEl) {
                 const isHidden = detailsEl.style.display === "none";
+                if (isHidden && !detailsEl.dataset.detailLoaded) {
+                    // First expand: load detail endpoint for feature_importance, params_summary, data_attribution
+                    const z = appState.lang === "zh";
+                    const loadingHint = document.createElement("div");
+                    loadingHint.style.cssText = "font-size:0.75rem;color:var(--text-muted);padding:0.3rem 0";
+                    loadingHint.textContent = z ? "加载详情..." : "Loading details...";
+                    detailsEl.appendChild(loadingHint);
+                    detailsEl.style.display = "block";
+                    toggleBtn.textContent = z ? "\u25BC 收起详情" : "\u25BC Collapse";
+
+                    const detail = await fetchModelRunDetail(runId);
+                    loadingHint.remove();
+                    if (detail) {
+                        const extraHtml = _renderRunDetailExtra(detail);
+                        if (extraHtml) {
+                            const wrapper = document.createElement("div");
+                            wrapper.innerHTML = extraHtml;
+                            detailsEl.appendChild(wrapper.firstElementChild || wrapper);
+                        }
+                        detailsEl.dataset.detailLoaded = "1";
+                    }
+                    // Keep expanded after loading
+                    return;
+                }
                 detailsEl.style.display = isHidden ? "block" : "none";
                 toggleBtn.textContent = isHidden
                     ? (appState.lang === "zh" ? "\u25BC \u6536\u8d77\u8be6\u60c5" : "\u25BC Collapse")

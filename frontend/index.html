@@ -756,12 +756,34 @@
                         <li><span>/reports/model-runs</span><strong>live</strong></li>
                     </ul>
                 </article>
+                <article class="liquid-panel table-panel" id="data-attribution-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="data_attribution">数据归属与合规</h3>
+                        <span class="status-pill status-high" id="attribution-source-badge">live</span>
+                    </div>
+                    <div id="data-attribution-content" style="font-size:0.8rem;line-height:1.6">
+                        <p style="color:var(--text-muted)">Loading...</p>
+                    </div>
+                </article>
                 <article class="liquid-panel table-panel" id="model-runs-panel">
                     <div class="panel-head">
                         <h3>Model Runs</h3>
                         <span class="status-pill status-medium" id="model-runs-count">0</span>
                     </div>
                     <div id="model-runs-list" class="rank-list"></div>
+                </article>
+                <article class="liquid-panel table-panel" id="run-comparison-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="run_comparison">模型运行对比</h3>
+                        <span class="status-pill status-low" id="run-comparison-status">select 2 runs</span>
+                    </div>
+                    <div style="padding:0.5rem 0.8rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                        <select id="compare-run-a" class="glass-control" style="min-width:140px"></select>
+                        <span style="color:var(--text-muted)">vs</span>
+                        <select id="compare-run-b" class="glass-control" style="min-width:140px"></select>
+                        <button class="text-button" id="compare-runs-btn" type="button" data-i18n="run_compare_btn">对比</button>
+                    </div>
+                    <div id="run-comparison-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
                 <article class="liquid-panel table-panel" id="board-snapshots-panel">
                     <div class="panel-head">
@@ -1433,6 +1455,12 @@
                         <h3 data-i18n="backtest_calibration">Isotonic 校准效果</h3>
                     </div>
                     <div id="backtest-calibration-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+                <article class="liquid-panel chart-panel" id="backtest-fold-chart-panel" style="margin-top:1rem">
+                    <div class="panel-head">
+                        <h3 data-i18n="backtest_fold_chart">分折指标趋势</h3>
+                    </div>
+                    <div id="backtest-fold-chart" style="height:320px;padding:0.5rem"></div>
                 </article>
             </section>
 
