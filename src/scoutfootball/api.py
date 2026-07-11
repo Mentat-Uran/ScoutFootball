@@ -45,6 +45,9 @@ from scoutfootball.worldcup.data import (
     get_team_group,
 )
 from scoutfootball.worldcup.data import (
+    compute_team_outlook as _compute_team_outlook,
+)
+from scoutfootball.worldcup.data import (
     simulate_knockout as _simulate_knockout,
 )
 
@@ -554,6 +557,37 @@ def get_world_cup_match_prediction(home_team: str, away_team: str) -> dict[str, 
     return _clean_json_value(result)
 
 
+def _match_model_comparison(home_team: str, away_team: str) -> dict[str, Any] | None:
+    """Return 1x2 probabilities from both Poisson and Dixon-Coles for a match.
+
+    Used to populate the ``model_comparison`` field in per-match prediction
+    responses so the frontend can render a side-by-side comparison without
+    making two separate API calls.
+    """
+    comparison: dict[str, Any] = {}
+    try:
+        prediction = load_score_prediction(home_team, away_team)
+        if not isinstance(prediction, dict):
+            comparison["poisson"] = {
+                "home": round(float(prediction.summary.home_win), 4),
+                "draw": round(float(prediction.summary.draw), 4),
+                "away": round(float(prediction.summary.away_win), 4),
+            }
+    except Exception:
+        pass
+    try:
+        prediction = load_score_prediction_dc(home_team, away_team)
+        if not isinstance(prediction, dict):
+            comparison["dixon_coles"] = {
+                "home": round(float(prediction.summary.home_win), 4),
+                "draw": round(float(prediction.summary.draw), 4),
+                "away": round(float(prediction.summary.away_win), 4),
+            }
+    except Exception:
+        pass
+    return comparison if len(comparison) >= 2 else None
+
+
 def get_match_prediction(home_team: str, away_team: str) -> dict:
     try:
         prediction = load_score_prediction(home_team, away_team)
@@ -576,6 +610,9 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
         "score_matrix": _score_matrix_to_list(prediction),
         "calibration": _prediction_calibration(),
     }
+    model_cmp = _match_model_comparison(home_team, away_team)
+    if model_cmp:
+        result["model_comparison"] = model_cmp
     return _clean_json_value(result)
 
 
@@ -625,6 +662,9 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
                     result["home_advantage"] = _clean_json_value(dc_row["home_advantage"])
     except Exception:
         pass  # enrichment is optional
+    model_cmp = _match_model_comparison(home_team, away_team)
+    if model_cmp:
+        result["model_comparison"] = model_cmp
     return _clean_json_value(result)
 
 
@@ -1263,6 +1303,166 @@ def get_prediction_calibration(force_refresh: bool = False) -> dict[str, Any]:
     })
     _calibration_cache["data"] = result
     _calibration_cache["timestamp"] = time.time()
+    return result
+
+
+_BACKTEST_CACHE: dict[str, Any] = {"data": None, "timestamp": 0.0}
+_BACKTEST_TTL_SECONDS = 300
+
+
+def get_backtest_comparison(force_refresh: bool = False) -> dict[str, Any]:
+    """Return a side-by-side comparison of Poisson vs Dixon-Coles backtests.
+
+    Reads the metrics JSON files produced by ``scoutfootball backtest`` from
+    ``data/reports/calibration_backtest/``. Returns a structured comparison
+    including overall metrics (log_loss_exact, brier_1x2, rps_1x2), per-fold
+    metrics, and a winner per metric. If no backtest artifacts exist, returns
+    a status of ``not_available`` with instructions on how to generate them.
+
+    Results are cached for 5 minutes.
+    """
+    import time
+
+    now = time.time()
+    if (
+        not force_refresh
+        and _BACKTEST_CACHE["data"] is not None
+        and now - _BACKTEST_CACHE["timestamp"] < _BACKTEST_TTL_SECONDS
+    ):
+        return _BACKTEST_CACHE["data"]
+
+    settings = _settings()
+    bt_dir = settings.report_root / "calibration_backtest"
+
+    models: list[dict[str, Any]] = []
+    metric_files = [
+        ("independent_poisson", "poisson_backtest_metrics.json"),
+        ("dixon_coles", "dixon_coles_backtest_metrics.json"),
+        ("dixon_coles_decay", "dixon_coles_decay_backtest_metrics.json"),
+    ]
+
+    available = False
+    for model_key, filename in metric_files:
+        path = bt_dir / filename
+        if not path.exists():
+            continue
+        try:
+            data = _read_json(path)
+        except Exception:
+            continue
+        available = True
+        overall = data.get("overall", {}) or {}
+        folds = data.get("folds", []) or []
+        models.append({
+            "model": model_key,
+            "label": data.get("model", model_key),
+            "decay": data.get("decay"),
+            "n_splits": data.get("n_splits"),
+            "total_predictions": data.get("total_predictions"),
+            "overall": {
+                "log_loss_exact": overall.get("log_loss_exact"),
+                "brier_1x2": overall.get("brier_1x2"),
+                "rps_1x2": overall.get("rps_1x2"),
+            },
+            "folds": [
+                {
+                    "fold": f.get("fold"),
+                    "train_start": str(f.get("train_start", "")),
+                    "train_end": str(f.get("train_end", "")),
+                    "test_start": str(f.get("test_start", "")),
+                    "test_end": str(f.get("test_end", "")),
+                    "train_matches": f.get("train_matches"),
+                    "test_matches": f.get("test_matches"),
+                    "log_loss_exact": f.get("log_loss_exact"),
+                    "brier_1x2": f.get("brier_1x2"),
+                    "rps_1x2": f.get("rps_1x2"),
+                }
+                for f in folds
+            ],
+        })
+
+    # Calibration report (isotonic) if present
+    cal_path = bt_dir / "dc_calibration_report.json"
+    calibration: dict[str, Any] = {"status": "not_available"}
+    if cal_path.exists():
+        try:
+            cal_data = _read_json(cal_path)
+            calibration = {
+                "status": "ok",
+                "method": cal_data.get("method"),
+                "decay": cal_data.get("decay"),
+                "brier_before": cal_data.get("brier_before"),
+                "brier_after": cal_data.get("brier_after"),
+                "rps_before": cal_data.get("rps_before"),
+                "rps_after": cal_data.get("rps_after"),
+                "n_matches": cal_data.get("n_matches"),
+            }
+        except Exception:
+            pass
+
+    if not available:
+        result = {
+            "status": "not_available",
+            "backtest_dir": str(bt_dir).replace("\\", "/"),
+            "models": [],
+            "metric_comparison": [],
+            "folds": [],
+            "calibration": calibration,
+            "instructions": (
+                "Run `PYTHONPATH=src uv run python -m scoutfootball backtest` "
+                "to generate backtest artifacts."
+            ),
+        }
+    else:
+        # Build metric comparison table — pick winner (lower is better)
+        metric_keys = ["log_loss_exact", "brier_1x2", "rps_1x2"]
+        metric_comparison: list[dict[str, Any]] = []
+        for mk in metric_keys:
+            row: dict[str, Any] = {"metric": mk}
+            values: list[tuple[str, float]] = []
+            for m in models:
+                v = m["overall"].get(mk)
+                row[m["model"]] = v
+                if v is not None:
+                    values.append((m["model"], float(v)))
+            if values:
+                winner = min(values, key=lambda x: x[1])[0]
+                row["winner"] = winner
+            else:
+                row["winner"] = None
+            metric_comparison.append(row)
+
+        # Collect all fold timelines (union of folds across models)
+        max_folds = max((len(m["folds"]) for m in models), default=0)
+        folds_table: list[dict[str, Any]] = []
+        for i in range(max_folds):
+            row: dict[str, Any] = {"fold": i + 1}
+            for m in models:
+                prefix = m["model"]
+                if i < len(m["folds"]):
+                    f = m["folds"][i]
+                    row[f"{prefix}_test_matches"] = f.get("test_matches")
+                    row[f"{prefix}_log_loss"] = f.get("log_loss_exact")
+                    row[f"{prefix}_brier"] = f.get("brier_1x2")
+                    row[f"{prefix}_rps"] = f.get("rps_1x2")
+                else:
+                    row[f"{prefix}_test_matches"] = None
+                    row[f"{prefix}_log_loss"] = None
+                    row[f"{prefix}_brier"] = None
+                    row[f"{prefix}_rps"] = None
+            folds_table.append(row)
+
+        result = _clean_json_value({
+            "status": "ok",
+            "backtest_dir": str(bt_dir).replace("\\", "/"),
+            "models": models,
+            "metric_comparison": metric_comparison,
+            "folds": folds_table,
+            "calibration": calibration,
+        })
+
+    _BACKTEST_CACHE["data"] = result
+    _BACKTEST_CACHE["timestamp"] = time.time()
     return result
 
 
@@ -2566,6 +2766,27 @@ def get_wc_knockout() -> dict:
     group_preds = compute_group_predictions(strengths)
     bracket = _simulate_knockout(strengths, group_preds, num_simulations=10000)
     return _clean_json_value(bracket)
+
+
+def get_wc_team_outlook(team: str) -> dict:
+    """Return a comprehensive tournament outlook for a single World Cup team.
+
+    Aggregates group finish probabilities, projected knockout path,
+    championship probability, and squad strength breakdown.
+    """
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads:
+        return {"status": "error", "error": "World Cup squad data not available"}
+    if team not in strengths:
+        return {"status": "error", "error": f"Team '{team}' not found in World Cup data"}
+
+    strength_details = _get_wc_strength_details()
+    group_preds = compute_group_predictions(strengths)
+    bracket = _simulate_knockout(strengths, group_preds, num_simulations=10000)
+    outlook = _compute_team_outlook(
+        team, strengths, group_preds, bracket, strength_details,
+    )
+    return _clean_json_value(outlook)
 
 
 def get_wc_teams() -> dict:

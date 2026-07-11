@@ -75,12 +75,13 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - **数据合规和 license manifest 不完整**：所有本地 Parquet/报告/导出物仍需要统一记录来源、许可、可公开展示边界、更新时间和 StatsBomb Open Data 引用要求。
 - **安全和部署边界未闭环**：前端已做 escaping/sanitizer、CSP meta tag、SRI（echarts CDN）、X-Content-Type-Options 安全头、浏览器级 XSS/CSV 回归测试；可配置 CORS 和非本机部署说明仍待实现。
 - **球探工作流增强中**：watchlist/shortlist/review queue 只读契约已存在，审阅状态流转和 watchlist diff 已实现；真实标签回灌、shortlist notes 和导出报告仍待实现。
-- **比分预测仍是 baseline**：Independent Poisson 可用，但 Dixon-Coles、时间衰减、低比分校准、概率校准回测和模型对比页仍未实现。
+- **比分预测仍是 baseline**：Independent Poisson 和 Dixon-Coles 可用，回测对比页（`/predictions/backtest`）已实现 log_loss/brier/rps 指标对比和 isotonic 校准效果展示，但时间衰减参数调优、低比分校准细化和前端 per-fold 可视化仍待做。
 - **跨供应商标准化仍停留在规划**：internal event/tracking schema、DATA_CONTRACTS、kloppy/floodlight/CDF 对照、schema validation fixture 和空数据行为测试仍待补。
 - **空间/视频/离球研究没有进入默认能力**：StatsBomb 360、Metrica/open tracking、space control、off-ball value、xG+、GCN/Transformer/RL 都只能在有合规样例、baseline 和模型卡后启动。
 
 ## 已完成
 
+- [x] **模型评估与赛事前景套件**（2026-07-11）：5 个相互关联的功能：(1) World Cup team outlook 前端接线完成（`renderWcOutlook` 渲染小组名次概率、淘汰赛投影路径、夺冠概率、阵容强度分解；修复 `projected_opponent`→`opponent`、`advance_probability`→`win_probability`、`quarter_final`→`quarter_finals`、`group_teams` dict 列表字段名不匹配）；(2) Prediction backtest comparison 全栈实现（`get_backtest_comparison` API 读取 CLI 回测产物，构建 log_loss/brier/rps 指标对比表含 winner 选取、分折明细、isotonic 校准报告；`GET /predictions/backtest` 端点；前端 backtest 视图含指标对比表、分折明细、校准效果面板；5 分钟 TTL 缓存）；(3) Model-run provenance 测试补全（依赖版本、train/test seasons、position_metrics、error_cases）；(4) 修复 matches 视图模型对比死代码；(5) 修复 wc_knockout 视图接线。21 个新测试，975+ 总测试通过。
 - [x] **世界杯淘汰赛对阵表预测器**（2026-07-11）：新增 `simulate_knockout()` 函数，使用 Bradley-Terry 强度模型和 Monte Carlo 模拟（10,000 次迭代）预测从 32 强到决赛的完整淘汰赛对阵表。包括每场比赛的胜率、逐轮晋级预测和夺冠概率排名。新增 `GET /world-cup/knockout` API 端点；前端新增"淘汰赛"视图含对阵表卡片（5 轮纵列，高亮预测胜者）和夺冠概率表（Top 16）。支持中英双语和移动端单列降级。24 个单元测试覆盖胜率计算、种子配对、模拟可复现性和空数据路径。
 - [x] **球探工作区服务端持久化**（2026-07-11，v1.0.3）：新增 `ScoutingWorkspaceStore` 服务端持久化层，支持 `PUT/GET /scouting-workspaces/{id}`、`/scouting-workspaces/latest`、`/scouting-workspaces/capabilities` 端点。使用 If-Match 乐观并发控制（revision 版本号）、原子写入、不可变备份和 loopback 访问控制。
 - [x] **H2H 近期状态趋势增强**（2026-07-11，v1.0.3）：新增 `compute_form_trend()` 函数，计算 momentum（近期 vs 较早期 PPG 差值）、form_rating（0-100 综合评分）、trend_label（improving/declining/stable）、进球/失球趋势、clean_sheets、failed_to_score 和累积积分 sparkline 数据。前端新增 form trend 卡片含评分条、趋势徽章和 SVG sparkline。空数据和异常路径均有零状态降级。

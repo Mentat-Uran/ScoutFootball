@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
+import pandas as pd
 
 # Save the real torch module before mocking (if it exists)
 _real_torch = sys.modules.get("torch", None)
@@ -69,6 +70,76 @@ class TestSaveModelRun:
         run_dir = save_model_run(params, metrics, output_dir=tmp_path)
         loaded = np.load(run_dir / "optimized_params.npy")
         np.testing.assert_allclose(loaded, params, rtol=1e-5)
+
+    def test_dependency_versions_present(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        metrics = {"spearman": 0.65}
+        run_dir = save_model_run(params, metrics, output_dir=tmp_path)
+        with open(run_dir / "meta.json") as f:
+            meta = json.load(f)
+        assert "dependency_versions" in meta
+        dep = meta["dependency_versions"]
+        assert "python" in dep
+        assert "numpy" in dep
+        assert "pandas" in dep
+
+    def test_train_test_seasons_from_args(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        metrics = {"spearman": 0.65}
+        args = argparse.Namespace(
+            pop=32, steps=500, lr=0.05, patience=80, seed=42,
+            train_seasons="2021,2022,2023",
+            test_seasons="2024",
+        )
+        run_dir = save_model_run(params, metrics, args=args, output_dir=tmp_path)
+        with open(run_dir / "meta.json") as f:
+            meta = json.load(f)
+        assert meta["train_seasons"] == ["2021,2022,2023"]
+        assert meta["test_seasons"] == ["2024"]
+
+    def test_position_metrics_persisted(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        metrics = {
+            "spearman": 0.65,
+            "position_metrics": {
+                "GK": {"spearman": 0.70, "n": 50},
+                "DF": {"spearman": 0.63, "n": 120},
+            },
+        }
+        run_dir = save_model_run(params, metrics, output_dir=tmp_path)
+        with open(run_dir / "meta.json") as f:
+            meta = json.load(f)
+        assert "position_metrics" in meta
+        assert meta["position_metrics"]["GK"]["spearman"] == 0.70
+
+    def test_error_cases_computed_when_holdout_exists(self, tmp_path):
+        # Create a holdout predictions parquet in the expected location
+        feature_store_dir = tmp_path / "gold" / "feature_store"
+        feature_store_dir.mkdir(parents=True)
+        holdout_df = pd.DataFrame({
+            "team": ["TeamA", "TeamB", "TeamC", "TeamD", "TeamE",
+                     "TeamF", "TeamG", "TeamH", "TeamI", "TeamJ"],
+            "predicted_points": [80, 70, 60, 50, 40, 30, 20, 10, 5, 1],
+            "actual_points": [60, 75, 50, 55, 30, 40, 10, 20, 2, 5],
+        })
+        holdout_df.to_parquet(feature_store_dir / "rating_holdout_predictions.parquet", index=False)
+
+        params = np.random.randn(77).astype(np.float32)
+        metrics = {"spearman": 0.65}
+        # output_dir is tmp_path / "models" / "runs", so output_dir.parent = tmp_path / "models"
+        # and output_dir.parent.parent = tmp_path. _compute_error_cases searches output_dir.parent
+        # (gold/feature_store) and output_dir.parent.parent (gold/). We need the holdout file
+        # to be findable. Let's place output_dir inside tmp_path/gold so parent paths match.
+        out_dir = feature_store_dir / "runs"
+        run_dir = save_model_run(params, metrics, output_dir=out_dir)
+        with open(run_dir / "meta.json") as f:
+            meta = json.load(f)
+        assert "error_cases" in meta
+        ec = meta["error_cases"]
+        assert "over_estimated" in ec
+        assert "under_estimated" in ec
+        assert len(ec["over_estimated"]) <= 5
+        assert len(ec["under_estimated"]) <= 5
 
 
 class TestComputeInputHash:

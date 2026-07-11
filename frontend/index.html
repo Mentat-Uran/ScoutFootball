@@ -96,6 +96,10 @@
                     <span class="nav-icon">⊜</span>
                     <span data-i18n="nav_calibration">校准</span>
                 </button>
+                <button class="nav-action" data-view="backtest" type="button">
+                    <span class="nav-icon">⊞</span>
+                    <span data-i18n="nav_backtest">回测</span>
+                </button>
                 <button class="nav-action" data-view="help" type="button">
                     <span class="nav-icon">⊛</span>
                     <span data-i18n="nav_help">帮助</span>
@@ -1199,6 +1203,16 @@
                     </article>
                 </div>
                 <div id="wc-knockout-bracket"></div>
+                <article class="liquid-panel compact" style="margin-top:1rem">
+                    <div class="panel-head">
+                        <h3 data-i18n="wc_team_outlook">球队前景</h3>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.8rem">
+                        <select id="wc-outlook-team" class="filter-select" style="min-width:200px"></select>
+                        <button class="text-button" id="wc-outlook-btn" type="button" data-i18n="wc_view_outlook">查看前景</button>
+                    </div>
+                    <div id="wc-outlook-panel"></div>
+                </article>
                 <article class="liquid-panel table-panel">
                     <div class="panel-head">
                         <h3 data-i18n="wc_tournament_win">夺冠概率 (Top 16)</h3>
@@ -1369,6 +1383,57 @@
                         <div id="calibration-brier" style="padding:0.4rem 0.8rem"></div>
                     </article>
                 </div>
+            </section>
+
+            <!-- Backtest Comparison -->
+            <section class="view" id="view-backtest" aria-label="backtest">
+                <article class="liquid-panel hero-panel compact">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="backtest_kicker">模型回测对比</p>
+                        <h2 data-i18n="backtest_title">Poisson vs Dixon-Coles 回测</h2>
+                        <span class="status-pill status-medium" id="backtest-status" style="font-size:0.65rem">loading</span>
+                    </div>
+                    <div class="coverage-strip">
+                        <div><span class="metric-value">📐</span><span data-i18n="backtest_metric_desc">Log Loss / Brier / RPS</span></div>
+                    </div>
+                </article>
+                <div id="backtest-instructions" style="display:none;margin:1rem 0"></div>
+                <article class="liquid-panel table-panel" id="backtest-comparison-panel" style="margin-top:1rem">
+                    <div class="panel-head">
+                        <h3 data-i18n="backtest_metric_comparison">指标对比</h3>
+                    </div>
+                    <div class="table-scroll">
+                        <table id="backtest-metric-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="backtest_metric">指标</th>
+                                    <th>Poisson</th>
+                                    <th>Dixon-Coles</th>
+                                    <th data-i18n="backtest_dc_decay">DC (decay)</th>
+                                    <th data-i18n="backtest_winner">胜出</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </article>
+                <article class="liquid-panel table-panel" id="backtest-folds-panel" style="margin-top:1rem">
+                    <div class="panel-head">
+                        <h3 data-i18n="backtest_folds">分折明细</h3>
+                    </div>
+                    <div class="table-scroll">
+                        <table id="backtest-folds-table">
+                            <thead></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </article>
+                <article class="liquid-panel compact" id="backtest-calibration-panel" style="margin-top:1rem">
+                    <div class="panel-head">
+                        <h3 data-i18n="backtest_calibration">Isotonic 校准效果</h3>
+                    </div>
+                    <div id="backtest-calibration-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->

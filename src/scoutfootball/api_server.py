@@ -19,6 +19,7 @@ from scoutfootball.api import (
     get_action_value_evidence_index,
     get_action_value_summary,
     get_artifacts_summary,
+    get_backtest_comparison,
     get_head_to_head,
     get_match_prediction,
     get_match_prediction_dc,
@@ -41,6 +42,7 @@ from scoutfootball.api import (
     get_wc_predictions,
     get_wc_schedule,
     get_wc_squad,
+    get_wc_team_outlook,
     get_wc_teams,
     get_world_cup_match_prediction,
     health_check,
@@ -245,6 +247,10 @@ def create_app() -> FastAPI:
     def predictions_calibration():
         return get_prediction_calibration()
 
+    @app.get("/predictions/backtest")
+    def predictions_backtest():
+        return get_backtest_comparison()
+
     @app.get("/value-summary")
     def value_summary():
         return get_value_summary()
@@ -436,6 +442,10 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/knockout")
     def wc_knockout():
         return get_wc_knockout()
+
+    @app.get("/world-cup/outlook/{team}")
+    def wc_team_outlook(team: str):
+        return get_wc_team_outlook(team)
 
     @app.get("/world-cup/predictions/{home_team}/{away_team}")
     def wc_match_prediction(home_team: str, away_team: str):
