@@ -2,6 +2,14 @@
 
 ## Recently Merged
 
+- **Bracket Share/Import + Print/PDF Export (2026-07-12, Round 13):**
+  1. Added `export_wc_tournament_state()` in `scoutfootball.api` — serializes the full `TournamentState` (matches + results + knockout) to compact JSON, then encodes as base64-URL-safe string. Returns `status`, `format` ("base64url-json-v1"), `schema_version`, `state_size` (bytes), `encoded` (the shareable string), and `exported_at`. Uses `state_to_dict()` for serialization.
+  2. Added `import_wc_tournament_state(encoded)` in `scoutfootball.api` — decodes the base64-URL-safe JSON string (auto-handles missing padding), validates schema version (must be 1.x via `state_from_dict()`), reconstructs `TournamentState`, and persists to `DEFAULT_STATE_PATH`. Returns `status`, `imported`, `schema_version`, `matches` count, `results` count, `has_knockout` flag, and `saved_to` path. Error codes: `decode_failed` (invalid base64/JSON), `invalid_state` (incompatible schema).
+  3. Added 2 FastAPI endpoints: `GET /world-cup/tournament/export` (returns encoded state), `POST /world-cup/tournament/import` (accepts `{"encoded": "..."}` body, persists and returns import result).
+  4. Added frontend Share/Import/Print buttons to the knockout bracket panel header. Share button fetches export data and shows a dismissible dialog with the encoded string in a readonly textarea, a "Copy Code" button (uses `document.execCommand("copy")`), and a "Download JSON" button (Blob + download link). Import button shows a dialog with a textarea for pasting encoded strings, a "Load File" button (reads `.json`/`.txt` files and extracts the `encoded` field if JSON), and an Import button that POSTs to the import endpoint and auto-refreshes all tournament data (summary + matches + bracket) on success. Error messages are localized for known error codes. Print button calls `window.print()`.
+  5. Added `@media print` CSS rules in `style.css` — A4 landscape with 1cm margins, hides all non-bracket content via `body * { visibility: hidden }` + `#wc-ko-bracket-panel * { visibility: visible }`, expands horizontal scroll container to full width, forces white background with dark text for print readability, hides buttons and input fields, adds `page-break-inside: avoid` on match cards, and shows a print-only header "ScoutFootball — World Cup Knockout Bracket". Share/import/scenario dialogs are hidden during print.
+  6. Added 19 unit tests in `tests/unit/test_tournament_export_import.py` covering export (ok status, required fields, base64url format, encoded is decodable, schema version matches state, state size matches JSON, contains 72 matches, captures applied results, captures knockout bracket) and import (export→import round-trip, persists to disk, returns match count, returns schema version, invalid base64 error, invalid JSON error, incompatible schema error, empty string error, knockout round-trip, no-padding compatibility). All 97 knockout-related tests pass, ruff + node --check clean.
+
 - **Knockout Scenarios + Group Stage Simulator (2026-07-12, Round 12):**
   1. Added `compute_knockout_scenarios()` in `scoutfootball.worldcup.data` — given the knockout bracket overview, team strengths, and a target team, computes championship probability at each knockout stage (current baseline + conditional "if win next match" + projected "if reach later round"). Uses Monte Carlo simulation (5,000 iterations, seeded) with `force_winner` parameter to force the team to win specified matches and re-simulate the rest. Auto-detects eliminated teams (lost a completed match) and returns 0 probability with empty scenarios. Returns `status`, `team`, `current_championship_probability`, `next_match` (match_id/round/opponent/win_probability), `scenarios` (list of per-round dicts with round/match_id/opponent/match_win_probability/championship_if_win/championship_if_lose), and `disclaimer`.
   2. Added `simulate_group_stage()` in `scoutfootball.worldcup.data` — batch-simulates all unplayed group-stage matches (random mode: uniform 1/3 win/draw/loss; strength mode: Bradley-Terry-weighted with 28% draw baseline), computes final standings and advancing teams per simulation, and tallies per-team advancement probability and group-win probability across all simulations. Returns `mode`, `num_simulations`, `remaining_matches`, `advancement_probability` (all 48 teams sorted by advance_prob descending), `most_likely_group_winners` (one per group), and `disclaimer`. When no remaining matches, returns deterministic current-state results.
@@ -114,7 +122,7 @@
 
 ## Current Development
 
-- Round 12 (Knockout Scenarios + Group Stage Simulator) is ready to merge on `codex/tournament-scenarios`. Once squash-merged into `codex/integration` and fast-forwarded to `main`, the next round will focus on knockout bracket share/export and print/PDF features (see Next Round Candidates).
+- Round 13 (Bracket Share/Import + Print/PDF Export) is ready to merge on `codex/tournament-share`. Once squash-merged into `codex/integration` and fast-forwarded to `main`, the next round will focus on browser integration coverage and player shortlist notes persistence (see Next Round Candidates).
 
 ## Known Blockers
 
@@ -122,12 +130,8 @@
 
 ## Next Round Candidates
 
-1. Knockout bracket share/export: add a "Share Bracket" button that serializes the current bracket state (with results) into a compact URL-encoded string or downloadable JSON file, plus a "Import Bracket" flow to load shared brackets. Enables users to save and share their tournament predictions.
-2. Tournament scenario deep-dive: extend `compute_team_scenarios()` to show "what-if" paths for knockout advancement — e.g., "if Team X wins R32, their championship probability becomes Y%". Integrate with the projection engine from Round 11.
-3. Group stage final-day simulator: add a UI for simulating remaining group matches in bulk (e.g., "simulate all remaining Group A matches randomly") and see how standings/projections change. Useful for the final matchday scenarios.
-4. Knockout bracket print/PDF export: add a print-optimized layout for the bracket (single-page, landscape) with CSS @media print rules, so users can print or save as PDF.
-5. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-6. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
-7. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
-8. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
-9. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
+1. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
+2. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
+3. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+4. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
+5. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.

@@ -7548,6 +7548,7 @@ let wcApiData = {
     knockoutProbabilities: null,  // from /world-cup/tournament/knockout/probabilities
     knockoutScenarios: {},  // team → scenario data from /world-cup/tournament/knockout/scenarios/{team}
     groupStageSimulation: null,  // from /world-cup/tournament/group-simulation
+    tournamentExport: null,  // from /world-cup/tournament/export
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -8187,6 +8188,9 @@ function renderWcTournament() {
                         <option value="">${z ? "— 夺冠情景 —" : "— Scenarios —"}</option>
                     </select>
                     <button class="text-button" id="wc-ko-scenario-btn" type="button" style="font-size:0.75rem">${z ? "分析" : "Analyze"}</button>
+                    <button class="text-button" id="wc-ko-share" type="button" style="font-size:0.75rem">${z ? "分享" : "Share"}</button>
+                    <button class="text-button" id="wc-ko-import" type="button" style="font-size:0.75rem">${z ? "导入" : "Import"}</button>
+                    <button class="text-button" id="wc-ko-print" type="button" style="font-size:0.75rem">🖨</button>
                 </div>
             </div>
             <div id="wc-ko-bracket-panel">
@@ -8348,6 +8352,38 @@ function renderWcTournament() {
         koScenTeam.innerHTML = `<option value="">${z ? "— 夺冠情景 —" : "— Scenarios —"}</option>` +
             r32Teams.map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("");
         if (currentVal) koScenTeam.value = currentVal;
+    }
+
+    // Share button — export tournament state as base64url-encoded string
+    const koShareBtn = document.getElementById("wc-ko-share");
+    if (koShareBtn && !koShareBtn.dataset.bound) {
+        koShareBtn.dataset.bound = "1";
+        koShareBtn.addEventListener("click", async () => {
+            koShareBtn.disabled = true;
+            koShareBtn.textContent = z ? "导出中..." : "Exporting...";
+            await fetchWcTournamentExport();
+            renderWcShareDialog();
+            koShareBtn.disabled = false;
+            koShareBtn.textContent = z ? "分享" : "Share";
+        });
+    }
+
+    // Import button — show import dialog for encoded state string
+    const koImportBtn = document.getElementById("wc-ko-import");
+    if (koImportBtn && !koImportBtn.dataset.bound) {
+        koImportBtn.dataset.bound = "1";
+        koImportBtn.addEventListener("click", () => {
+            renderWcImportDialog();
+        });
+    }
+
+    // Print button — trigger print/PDF export of bracket
+    const koPrintBtn = document.getElementById("wc-ko-print");
+    if (koPrintBtn && !koPrintBtn.dataset.bound) {
+        koPrintBtn.dataset.bound = "1";
+        koPrintBtn.addEventListener("click", () => {
+            window.print();
+        });
     }
 
     // Auto-render knockout bracket if data is available
@@ -8605,6 +8641,208 @@ function renderWcKnockoutScenarios(team) {
     html += `</div>`;
 
     scenPanel.innerHTML = html;
+}
+
+async function fetchWcTournamentExport() {
+    try {
+        const data = await fetchJson(`/world-cup/tournament/export`);
+        if (data && data.status === "ok") {
+            wcApiData.tournamentExport = data;
+        } else {
+            wcApiData.tournamentExport = null;
+        }
+    } catch (e) {
+        wcApiData.tournamentExport = null;
+    }
+}
+
+async function fetchWcTournamentImport(encoded) {
+    try {
+        const resp = await fetch(`${API_BASE}/world-cup/tournament/import`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ encoded }),
+        });
+        const data = await resp.json();
+        return data;
+    } catch (e) {
+        return { status: "error", code: "request_failed", message: String(e) };
+    }
+}
+
+function renderWcShareDialog() {
+    const z = currentLang === "zh";
+    const data = wcApiData.tournamentExport;
+    if (!data || data.status !== "ok") {
+        alert(z ? "导出失败，请检查 API 是否在线" : "Export failed. Check if API is online.");
+        return;
+    }
+
+    const bracketPanel = document.getElementById("wc-ko-bracket-panel");
+    if (!bracketPanel) return;
+
+    let dlg = document.getElementById("wc-ko-share-dialog");
+    if (!dlg) {
+        dlg = document.createElement("div");
+        dlg.id = "wc-ko-share-dialog";
+        bracketPanel.parentElement.insertBefore(dlg, bracketPanel);
+    }
+
+    const encoded = data.encoded || "";
+    const sizeKb = ((data.state_size || 0) / 1024).toFixed(1);
+    const fullJson = JSON.stringify({
+        format: data.format,
+        schema_version: data.schema_version,
+        encoded,
+        exported_at: data.exported_at,
+    }, null, 2);
+
+    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
+            <h4 style="font-size:0.9rem">${z ? "分享锦标赛状态" : "Share Tournament State"}</h4>
+            <button class="text-button" onclick="document.getElementById('wc-ko-share-dialog').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem">
+            ${z ? "格式" : "Format"}: ${escapeHtml(data.format || "")} · ${z ? "大小" : "Size"}: ${sizeKb} KB · ${z ? "导出时间" : "Exported"}: ${escapeHtml(data.exported_at || "")}
+        </div>
+        <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "复制下方编码字符串，在其他设备粘贴到「导入」对话框即可恢复锦标赛状态。" : "Copy the encoded string below and paste it into the Import dialog on another device to restore the tournament state."}</p>
+        <textarea id="wc-ko-share-code" readonly style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:4px;background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical" onclick="this.select()">${escapeHtml(encoded)}</textarea>
+        <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+            <button class="text-button" id="wc-ko-share-copy" type="button" style="font-size:0.75rem">${z ? "复制编码" : "Copy Code"}</button>
+            <button class="text-button" id="wc-ko-share-download" type="button" style="font-size:0.75rem">${z ? "下载 JSON" : "Download JSON"}</button>
+        </div>
+    </div>`;
+
+    const copyBtn = dlg.querySelector("#wc-ko-share-copy");
+    if (copyBtn) {
+        copyBtn.addEventListener("click", () => {
+            const ta = dlg.querySelector("#wc-ko-share-code");
+            if (ta) {
+                ta.select();
+                try {
+                    document.execCommand("copy");
+                    copyBtn.textContent = z ? "已复制!" : "Copied!";
+                    setTimeout(() => { copyBtn.textContent = z ? "复制编码" : "Copy Code"; }, 1500);
+                } catch (e) {
+                    alert(z ? "复制失败，请手动选择复制" : "Copy failed. Please select and copy manually.");
+                }
+            }
+        });
+    }
+
+    const dlBtn = dlg.querySelector("#wc-ko-share-download");
+    if (dlBtn) {
+        dlBtn.addEventListener("click", () => {
+            const blob = new Blob([fullJson], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `wc_tournament_state_${(data.exported_at || "export").replace(/[:.]/g, "-")}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    }
+}
+
+function renderWcImportDialog() {
+    const z = currentLang === "zh";
+    const bracketPanel = document.getElementById("wc-ko-bracket-panel");
+    if (!bracketPanel) return;
+
+    let dlg = document.getElementById("wc-ko-import-dialog");
+    if (!dlg) {
+        dlg = document.createElement("div");
+        dlg.id = "wc-ko-import-dialog";
+        bracketPanel.parentElement.insertBefore(dlg, bracketPanel);
+    }
+
+    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
+            <h4 style="font-size:0.9rem">${z ? "导入锦标赛状态" : "Import Tournament State"}</h4>
+            <button class="text-button" onclick="document.getElementById('wc-ko-import-dialog').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
+        </div>
+        <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "粘贴分享编码字符串到下方文本框，点击导入将覆盖当前锦标赛状态。" : "Paste the shared encoded string into the box below. Importing will overwrite the current tournament state."}</p>
+        <textarea id="wc-ko-import-code" placeholder="${z ? "粘贴编码..." : "Paste encoded string..."}" style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:4px;background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical"></textarea>
+        <div id="wc-ko-import-msg" style="font-size:0.7rem;margin-top:0.4rem;min-height:1rem"></div>
+        <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+            <button class="text-button" id="wc-ko-import-confirm" type="button" style="font-size:0.75rem">${z ? "导入" : "Import"}</button>
+            <button class="text-button" id="wc-ko-import-file" type="button" style="font-size:0.75rem">${z ? "从文件加载" : "Load File"}</button>
+        </div>
+        <input type="file" id="wc-ko-import-file-input" accept=".json,.txt" style="display:none">
+    </div>`;
+
+    const confirmBtn = dlg.querySelector("#wc-ko-import-confirm");
+    const msgEl = dlg.querySelector("#wc-ko-import-msg");
+    if (confirmBtn) {
+        confirmBtn.addEventListener("click", async () => {
+            const ta = dlg.querySelector("#wc-ko-import-code");
+            const encoded = ta ? ta.value.trim() : "";
+            if (!encoded) {
+                msgEl.textContent = z ? "请输入编码字符串" : "Please enter the encoded string";
+                msgEl.style.color = "var(--status-low-color,#f44336)";
+                return;
+            }
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = z ? "导入中..." : "Importing...";
+            msgEl.textContent = "";
+            const result = await fetchWcTournamentImport(encoded);
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = z ? "导入" : "Import";
+            if (result && result.status === "ok") {
+                msgEl.textContent = z ? "导入成功！正在刷新..." : "Import successful! Refreshing...";
+                msgEl.style.color = "var(--status-high-color,#4caf50)";
+                setTimeout(async () => {
+                    wcApiData.knockoutBracket = null;
+                    wcApiData.knockoutProbabilities = null;
+                    wcApiData.knockoutScenarios = {};
+                    wcApiData.tournamentExport = null;
+                    await fetchWcTournamentSummary();
+                    await fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup || "A");
+                    await fetchWcKnockoutBracket();
+                    renderWcTournament();
+                    dlg.remove();
+                }, 1200);
+            } else {
+                const code = (result && result.code) || "unknown";
+                const knownCodes = {
+                    decode_failed: z ? "解码失败：编码格式无效" : "Decode failed: invalid encoding",
+                    invalid_state: z ? "状态数据无效：schema 不兼容" : "Invalid state: incompatible schema",
+                    request_failed: z ? "请求失败：API 不可用" : "Request failed: API unavailable",
+                };
+                msgEl.textContent = knownCodes[code] || (z ? "导入失败" : "Import failed") + ` (${code})`;
+                msgEl.style.color = "var(--status-low-color,#f44336)";
+            }
+        });
+    }
+
+    const fileBtn = dlg.querySelector("#wc-ko-import-file");
+    const fileInput = dlg.querySelector("#wc-ko-import-file-input");
+    if (fileBtn && fileInput) {
+        fileBtn.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const text = String(ev.target.result || "");
+                    let encoded = text;
+                    try {
+                        const parsed = JSON.parse(text);
+                        if (parsed && parsed.encoded) encoded = parsed.encoded;
+                    } catch (_) { /* not JSON, use raw text */ }
+                    const ta = dlg.querySelector("#wc-ko-import-code");
+                    if (ta) ta.value = encoded;
+                } catch (err) {
+                    msgEl.textContent = z ? "文件读取失败" : "File read failed";
+                    msgEl.style.color = "var(--status-low-color,#f44336)";
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
 }
 
 function renderWcGroupStageSimulation() {

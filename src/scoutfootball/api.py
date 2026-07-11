@@ -3993,3 +3993,77 @@ def get_wc_group_stage_simulation(
         mode=mode,
     )
     return _clean_json_value(result)
+
+
+def export_wc_tournament_state() -> dict:
+    """Export the full tournament state as a shareable JSON string.
+
+    Returns the complete state (matches + results + knockout) encoded as
+    a base64-URL-safe string that can be shared via URL or saved to a file.
+    The importing side uses ``import_wc_tournament_state`` to reconstruct.
+    """
+    import base64
+    import json
+
+    from scoutfootball.worldcup.tournament import state_to_dict
+
+    state = _wc_tournament_state()
+    state_dict = state_to_dict(state)
+    json_bytes = json.dumps(state_dict, separators=(",", ":")).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(json_bytes).decode("ascii")
+    return _clean_json_value({
+        "status": "ok",
+        "format": "base64url-json-v1",
+        "schema_version": state_dict.get("schema_version", "1.0.0"),
+        "state_size": len(json_bytes),
+        "encoded": encoded,
+        "exported_at": state_dict.get("updated_at", ""),
+    })
+
+
+def import_wc_tournament_state(encoded: str) -> dict:
+    """Import a shared tournament state and persist it.
+
+    Decodes the base64-URL-safe JSON string, validates the schema version,
+    reconstructs the state, and saves it to ``DEFAULT_STATE_PATH``.
+    """
+    import base64
+    import json
+
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        save_state,
+        state_from_dict,
+    )
+
+    try:
+        # Add padding if missing
+        padded = encoded + "=" * (4 - len(encoded) % 4) if len(encoded) % 4 else encoded
+        json_bytes = base64.urlsafe_b64decode(padded)
+        state_dict = json.loads(json_bytes.decode("utf-8"))
+    except Exception as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decode_failed",
+            "message": f"Failed to decode state: {exc}",
+        })
+
+    try:
+        state = state_from_dict(state_dict)
+    except ValueError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_state",
+            "message": str(exc),
+        })
+
+    save_state(state, DEFAULT_STATE_PATH)
+    return _clean_json_value({
+        "status": "ok",
+        "imported": True,
+        "schema_version": state.schema_version,
+        "matches": len(state.matches),
+        "results": len(state.results),
+        "has_knockout": bool(state.knockout),
+        "saved_to": str(DEFAULT_STATE_PATH),
+    })
