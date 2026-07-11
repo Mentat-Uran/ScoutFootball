@@ -9,6 +9,7 @@ from scoutfootball.evaluation.truth_labels import (
     LabelSource,
     create_empty_truth_labels,
     validate_truth_labels,
+    workspace_to_truth_labels,
 )
 
 
@@ -18,6 +19,7 @@ class TestLabelEnums:
         assert LabelSource.AWARD.value == "award"
         assert LabelSource.EXPERT_TIER.value == "expert_tier"
         assert LabelSource.MANUAL_CALIBRATION.value == "manual_calibration"
+        assert LabelSource.SCOUTING_REVIEW.value == "scouting_review"
 
     def test_label_confidence_values(self) -> None:
         assert LabelConfidence.HIGH.value == "high"
@@ -121,3 +123,135 @@ class TestValidateTruthLabels:
         df = create_empty_truth_labels()
         errors = validate_truth_labels(df)
         assert errors == []
+
+
+class TestWorkspaceToTruthLabels:
+    """Tests for converting scouting workspace decisions to truth labels."""
+
+    def _make_workspace(self, statuses=None, shortlist=None, snapshot_ids=None):
+        """Build a minimal valid workspace payload."""
+        return {
+            "schema": "scoutfootball.scouting-workspace",
+            "version": "1.0",
+            "audit": {
+                "workspace_id": "test-ws",
+                "revision": 1,
+                "created_at": "2026-07-11T10:00:00Z",
+                "updated_at": "2026-07-11T12:00:00Z",
+            },
+            "review": {
+                "statuses": statuses or {},
+                "shortlist_notes": {},
+                "watchlist_notes": {},
+            },
+            "selections": {
+                "watchlist": [],
+                "shortlist": shortlist or [],
+            },
+            "source": {
+                "rating_snapshot_ids": snapshot_ids or [],
+            },
+            "watchlist_snapshot": {
+                "player_keys": [],
+                "saved_at": "2026-07-11T10:00:00Z",
+            },
+            "exported_at": "2026-07-11T12:00:00Z",
+        }
+
+    def test_approved_becomes_high_confidence_label(self) -> None:
+        ws = self._make_workspace(
+            statuses={"player-1": "approved"},
+            shortlist=[{"key": "player-1", "player_id": "pid-1", "name": "Alice"}],
+        )
+        df = workspace_to_truth_labels(ws)
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["player_id"] == "pid-1"
+        assert row["label_source"] == "scouting_review"
+        assert row["label_value"] == 1.0
+        assert row["label_confidence"] == "high"
+        assert bool(row["manual_review_flag"]) is True
+
+    def test_rejected_becomes_medium_confidence_label(self) -> None:
+        ws = self._make_workspace(
+            statuses={"player-2": "rejected"},
+            shortlist=[{"key": "player-2", "player_id": "pid-2", "name": "Bob"}],
+        )
+        df = workspace_to_truth_labels(ws)
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["label_value"] == 0.0
+        assert row["label_confidence"] == "medium"
+
+    def test_pending_and_reviewing_skipped(self) -> None:
+        ws = self._make_workspace(
+            statuses={
+                "p1": "approved",
+                "p2": "pending",
+                "p3": "reviewing",
+                "p4": "rejected",
+            },
+            shortlist=[
+                {"key": "p1", "player_id": "pid-1", "name": "A"},
+                {"key": "p2", "player_id": "pid-2", "name": "B"},
+                {"key": "p3", "player_id": "pid-3", "name": "C"},
+                {"key": "p4", "player_id": "pid-4", "name": "D"},
+            ],
+        )
+        df = workspace_to_truth_labels(ws)
+        assert len(df) == 2  # only approved and rejected
+        ids = set(df["player_id"])
+        assert ids == {"pid-1", "pid-4"}
+
+    def test_no_decisions_returns_empty(self) -> None:
+        ws = self._make_workspace(statuses={"p1": "pending"})
+        df = workspace_to_truth_labels(ws)
+        assert len(df) == 0
+        assert list(df.columns) == TRUTH_LABELS_COLUMNS
+
+    def test_season_auto_detected_from_snapshot(self) -> None:
+        ws = self._make_workspace(
+            statuses={"p1": "approved"},
+            shortlist=[{"key": "p1", "player_id": "pid-1", "name": "A"}],
+            snapshot_ids=["2526-run-001"],
+        )
+        df = workspace_to_truth_labels(ws)
+        assert df.iloc[0]["season"] == "2526"
+
+    def test_season_override(self) -> None:
+        ws = self._make_workspace(
+            statuses={"p1": "approved"},
+            shortlist=[{"key": "p1", "player_id": "pid-1", "name": "A"}],
+        )
+        df = workspace_to_truth_labels(ws, default_season="2425")
+        assert df.iloc[0]["season"] == "2425"
+
+    def test_player_id_falls_back_to_key(self) -> None:
+        """When shortlist doesn't have explicit player_id, use key."""
+        ws = self._make_workspace(
+            statuses={"my-key": "approved"},
+            shortlist=[{"key": "my-key", "name": "Test"}],
+        )
+        df = workspace_to_truth_labels(ws)
+        assert df.iloc[0]["player_id"] == "my-key"
+
+    def test_output_validates(self) -> None:
+        """Output should pass validate_truth_labels."""
+        ws = self._make_workspace(
+            statuses={"p1": "approved", "p2": "rejected"},
+            shortlist=[
+                {"key": "p1", "player_id": "pid-1", "name": "A"},
+                {"key": "p2", "player_id": "pid-2", "name": "B"},
+            ],
+        )
+        df = workspace_to_truth_labels(ws, default_season="2526")
+        errors = validate_truth_labels(df)
+        assert errors == []
+
+    def test_as_of_date_from_audit(self) -> None:
+        ws = self._make_workspace(
+            statuses={"p1": "approved"},
+            shortlist=[{"key": "p1", "player_id": "pid-1", "name": "A"}],
+        )
+        df = workspace_to_truth_labels(ws)
+        assert "2026-07-11" in df.iloc[0]["as_of_date"]

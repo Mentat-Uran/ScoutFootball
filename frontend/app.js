@@ -1622,6 +1622,13 @@ async function renderPlayerProfile() {
             if (slNote) noteHtml += (noteHtml ? " | " : "") + (appState.lang === "zh" ? "候选: " : "Short: ") + escapeHtml(slNote);
             return `<div><span>${escapeHtml(label)}</span><strong style="font-size:0.82rem;color:var(--text-muted)">${noteHtml}</strong></div>`;
         })()}
+        ${/* Similar players panel container */ (() => {
+            const label = appState.lang === 'zh' ? '相似球员' : 'Similar Players';
+            return `<div style="grid-column:1/-1;margin-top:0.5rem" id="similar-players-panel">
+                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(label)}</span>
+                <div id="similar-players-list" style="font-size:0.78rem;color:var(--text-muted)">—</div>
+            </div>`;
+        })()}
     `;
     // Always remove existing warning before conditionally inserting new one
     const existing = document.getElementById("player-detail").nextElementSibling;
@@ -1694,10 +1701,89 @@ async function renderPlayerProfile() {
             });
         }
     }
+
+    // Async fetch similar players
+    _fetchAndRenderSimilarPlayers(player.name, profile);
 }
 
 function _radarLabels() {
     return ["Attack", "Possession", "Defense", "Reliability", "Impact"];
+}
+
+async function _fetchAndRenderSimilarPlayers(playerName, profile) {
+    const container = document.getElementById("similar-players-list");
+    if (!container) return;
+    const z = appState.lang === 'zh';
+    try {
+        const season = profile && profile.season ? `&season=${encodeURIComponent(profile.season)}` : '';
+        const data = await fetchJson(`/players/${encodeURIComponent(playerName)}/similar?limit=8${season}`);
+        if (data.error || !data.similar || data.similar.length === 0) {
+            container.textContent = z ? '无相似球员数据' : 'No similar players found';
+            return;
+        }
+        const target = data.target || {};
+        let html = '<div style="display:flex;flex-wrap:wrap;gap:0.4rem">';
+        for (const p of data.similar) {
+            const simColor = p.similarity >= 80 ? 'var(--accent)' : p.similarity >= 60 ? '#5b9fd6' : 'var(--text-muted)';
+            const strengths = (p.shared_strengths || []).length > 0
+                ? `<span style="font-size:0.65rem;color:var(--accent)">+${escapeHtml(p.shared_strengths.join('/'))}</span>` : '';
+            const weaknesses = (p.shared_weaknesses || []).length > 0
+                ? `<span style="font-size:0.65rem;color:#ff6b6b">-${escapeHtml(p.shared_weaknesses.join('/'))}</span>` : '';
+            html += `<div class="similar-player-card" data-player="${escapeAttr(p.name)}" style="cursor:pointer;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:0.4rem 0.5rem;min-width:120px;background:rgba(255,255,255,0.03)">
+                <div style="font-weight:600;font-size:0.8rem">${escapeHtml(p.name)}</div>
+                <div style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(p.team || '')} · ${escapeHtml(p.position_group || '')}</div>
+                <div style="font-size:0.75rem;color:${simColor};font-weight:600">${p.similarity.toFixed(0)}% ${z ? '相似' : 'sim.'}</div>
+                <div style="font-size:0.68rem;color:var(--text-muted)">${z ? '评分' : 'Rating'} ${p.optimized_score != null ? p.optimized_score.toFixed(1) : '—'}</div>
+                ${strengths}${weaknesses}
+            </div>`;
+        }
+        html += '</div>';
+        const csvLabel = z ? '导出 CSV' : 'Export CSV';
+        html += `<button class="text-button" id="btn-export-similar-csv" type="button" style="font-size:0.72rem;padding:0.2rem 0.5rem;margin-top:0.4rem">${csvLabel}</button>`;
+        container.innerHTML = html;
+
+        // Click to view player
+        container.querySelectorAll('.similar-player-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const name = card.getAttribute('data-player');
+                if (!name) return;
+                const match = players.find(p => p.name === name || p.key === name);
+                if (match) {
+                    appState.selectedPlayerKey = match.key;
+                    renderPlayerProfile();
+                } else {
+                    // If not in current list, try searching via compare input
+                    const compareA = document.getElementById('compare-input-a');
+                    if (compareA) compareA.value = name;
+                }
+            });
+        });
+
+        // CSV export
+        const csvBtn = document.getElementById('btn-export-similar-csv');
+        if (csvBtn) {
+            csvBtn.addEventListener('click', () => {
+                const headers = ['name', 'team', 'league', 'season', 'position_group', 'optimized_score', 'similarity', 'shared_strengths', 'shared_weaknesses', 'minutes'];
+                const rows = [headers.join(',')];
+                for (const p of data.similar) {
+                    rows.push(headers.map(h => {
+                        let val = p[h];
+                        if (Array.isArray(val)) val = val.join(';');
+                        return csvCell(String(val != null ? val : ''));
+                    }).join(','));
+                }
+                const targetName = target.name || playerName;
+                const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `similar_${targetName.replace(/\s+/g, '_')}.csv`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            });
+        }
+    } catch (err) {
+        container.textContent = z ? '加载失败' : 'Load failed';
+    }
 }
 
 function _buildScoutingReport(player, profile, detail) {

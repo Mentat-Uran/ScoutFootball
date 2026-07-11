@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+from typing import Any
 
 import pandas as pd
 
@@ -14,6 +15,7 @@ class LabelSource(enum.Enum):
     AWARD = "award"
     EXPERT_TIER = "expert_tier"
     MANUAL_CALIBRATION = "manual_calibration"
+    SCOUTING_REVIEW = "scouting_review"
 
 
 class LabelConfidence(enum.Enum):
@@ -97,3 +99,85 @@ def create_empty_truth_labels() -> pd.DataFrame:
             "manual_review_flag": pd.Series(dtype="bool"),
         }
     )
+
+
+def workspace_to_truth_labels(
+    workspace: dict[str, Any],
+    *,
+    default_season: str = "",
+    default_position_scope: str = "all",
+) -> pd.DataFrame:
+    """Convert a scouting workspace's review decisions to truth labels.
+
+    Reads ``review.statuses`` (approved/rejected) and ``selections.shortlist``
+    to build truth labels with ``label_source='scouting_review'``. Approved
+    players get ``label_value=1.0`` (HIGH confidence), rejected get
+    ``label_value=0.0`` (MEDIUM confidence). Players with only notes but no
+    explicit decision are skipped — only explicit approved/rejected decisions
+    become truth labels.
+
+    The returned DataFrame follows ``TRUTH_LABELS_SCHEMA`` and can be
+    validated with ``validate_truth_labels()``. Model prediction fields are
+    never mixed in — this is a pure human-label extraction.
+    """
+    review = workspace.get("review") or {}
+    selections = workspace.get("selections") or {}
+    audit = workspace.get("audit") or {}
+    source = workspace.get("source") or {}
+
+    statuses: dict[str, str] = review.get("statuses") or {}
+    shortlist: list[dict[str, Any]] = selections.get("shortlist") or []
+    rating_snapshot_ids: list[str] = source.get("rating_snapshot_ids") or []
+
+    # Resolve season from snapshot IDs or audit timestamp
+    season = default_season
+    if not season and rating_snapshot_ids:
+        # Snapshot IDs may contain season info (e.g., "2425-run-xxx")
+        for sid in rating_snapshot_ids:
+            parts = str(sid).split("-")
+            for part in parts:
+                if len(part) == 4 and part.isdigit():
+                    season = part
+                    break
+            if season:
+                break
+
+    as_of_date = str(audit.get("updated_at") or audit.get("created_at") or "")
+
+    # Build player_id -> info map from shortlist
+    player_info: dict[str, dict[str, Any]] = {}
+    for row in shortlist:
+        key = str(row.get("key") or row.get("player_id") or row.get("name") or "")
+        if not key:
+            continue
+        player_info[key] = {
+            "player_id": str(row.get("player_id") or key),
+            "name": str(row.get("name") or ""),
+        }
+
+    records: list[dict[str, Any]] = []
+    for key, status in statuses.items():
+        if status not in ("approved", "rejected"):
+            continue  # only explicit decisions become labels
+        info = player_info.get(key, {})
+        player_id = info.get("player_id", key)
+        label_value = 1.0 if status == "approved" else 0.0
+        if status == "approved":
+            label_confidence = LabelConfidence.HIGH.value
+        else:
+            label_confidence = LabelConfidence.MEDIUM.value
+        records.append({
+            "player_id": player_id,
+            "season": season,
+            "label_source": LabelSource.SCOUTING_REVIEW.value,
+            "label_confidence": label_confidence,
+            "label_value": label_value,
+            "as_of_date": as_of_date,
+            "position_scope": default_position_scope,
+            "manual_review_flag": True,
+        })
+
+    if not records:
+        return create_empty_truth_labels()
+
+    return pd.DataFrame(records, columns=TRUTH_LABELS_COLUMNS)

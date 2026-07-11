@@ -137,7 +137,7 @@ def test_comparison_radar_values_in_range(_mock_ratings):
 
 
 def test_comparison_position_percentiles(_mock_ratings):
-    """Position percentile comparison should have dimensions."""
+    """Position percentile comparison should have dimensions with dict-based data."""
     result = get_player_comparison("Alice Star", "Bob Champ")
     pcts = result.get("position_percentile_comparison", [])
     # May or may not have dimensions depending on position data
@@ -147,3 +147,18 @@ def test_comparison_position_percentiles(_mock_ratings):
             assert "player_a" in p
             assert "player_b" in p
             assert "advantage" in p
+            assert "label" in p  # should include label from percentile dict
+
+
+def test_comparison_same_position_percentiles(_mock_ratings):
+    """Players in same position should have matching percentile dimensions."""
+    # Alice is ST — compare with herself to get ST percentile dimensions
+    result = get_player_comparison("Alice Star", "Alice Star")
+    pcts = result.get("position_percentile_comparison", [])
+    if pcts:
+        # All dimensions should have values for both players
+        for p in pcts:
+            assert p["player_a"] is not None
+            assert p["player_b"] is not None
+            assert p["diff"] == 0.0  # same player
+            assert p["advantage"] == "tie"

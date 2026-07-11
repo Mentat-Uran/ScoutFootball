@@ -299,6 +299,11 @@ def create_app() -> FastAPI:
     def players_compare(a: str, b: str):
         return get_player_comparison(a, b)
 
+    @app.get("/players/{player_name}/similar")
+    def players_similar(player_name: str, season: str | None = None, limit: int = 10):
+        from scoutfootball.api import find_similar_players
+        return find_similar_players(player_name, season=season, limit=limit)
+
     @app.get("/player/{player_name}/profile")
     def player_profile(player_name: str, season: str | None = None):
         return get_player_profile(player_name, season=season)

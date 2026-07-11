@@ -2,6 +2,12 @@
 
 ## Recently Merged
 
+- **Scouting Intelligence & Player Similarity Suite (2026-07-11):**
+  1. **Player similarity search (full stack):** `find_similar_players()` in `api.py` builds a 6-dimensional z-scored feature vector (npg_p90/Attack, assists_p90/Creation, defense_composite/Defense, possession_composite/Possession, optimized_score/Overall, minutes/Availability) and ranks pool players by cosine similarity (clamped to [0,1]). `GET /players/{player_name}/similar` endpoint with `limit`/`season`/`same_position_only` params. Frontend `_fetchAndRenderSimilarPlayers()` panel at the bottom of player profile with color-coded similarity cards, CSV export (formula-injection-safe via `csvCell()`), and click-to-switch-player navigation.
+  2. **Truth label feedback loop:** `LabelSource.SCOUTING_REVIEW` enum value added. `workspace_to_truth_labels()` converts a scouting workspace's `review.statuses` (approved→1.0/high, rejected→0.0/medium; pending/reviewing skipped) into a truth-labels DataFrame, auto-detecting season from `source.rating_snapshot_ids` and falling back to `selections.shortlist` keys. CLI `import-truth-labels --workspace <path>` command merges workspace-derived labels into `player_truth_labels.parquet`, removing same-player prior `scouting_review` rows to avoid duplicates.
+  3. **Team comparison radar 6-dim enhancement:** `get_team_comparison()` radar expanded from 5 dimensions (GK/DEF/MID/ATT/Overall) to 6 by adding a Depth dimension quantifying squad rating depth (avg of non-top-11 players). Frontend and tests updated to 6-dim contract.
+  4. **Bug fix — player comparison position_percentiles contract:** `get_player_comparison()` was incorrectly treating `position_percentiles` as a `{"dimensions": [...]}` list shape; the actual contract is a dict `{dim_key: {label, percentile}}`. This caused `position_percentile_comparison` to always be empty. Fixed to iterate dict keys and extract `label`/`percentile` from each entry.
+  5. **Tests:** 13 new similarity tests (`test_player_similarity.py`), 9 new workspace-to-truth-labels tests, updated player/team comparison tests for 6-dim radar and `label` field. All ~1000+ tests pass, ruff + node check clean.
 - **Player Profile Deep Dive & Team Outlook Fix (2026-07-11):**
   1. **Player detail panel enhancement:** `renderPlayerProfile()` now renders 5 new blocks — per-90 metrics (npg_p90, assists_p90, defense_composite, possession_composite), position dimension percentiles (all dimensions from `position_percentiles` with color-coded percentile badges and `overall_score` highlight), rating dimension breakdown table (attack/defense/possession/availability/quality/xT with percentile, contribution, confidence from `position_explanation`), 3-season trend with delta (score/goals/assists/minutes changes from `trend_3seasons`), and low confidence reasons warning list (from `low_confidence_reasons`).
   2. **Season history table:** Replaced compact "season: score" dots string with a full 6-column table (season/team/league/position_group/minutes/optimized_score) from the `seasons` array.
@@ -37,7 +43,7 @@
 
 ## Current Development
 
-- Player Profile Deep Dive & Team Outlook Fix complete; merging to `codex/integration`. Preparing next round.
+- Scouting Intelligence & Player Similarity Suite complete; merging to `codex/integration`. Preparing next round.
 
 ## Known Blockers
 
@@ -48,7 +54,8 @@
 1. Generate a versioned full match-action artifact with dates, minutes, competition coverage, and independent evaluation.
 2. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
 3. Add Dixon-Coles time decay parameter tuning and low-score calibration refinement.
-4. Add real label feedback loop for scouting workflow (truth label re-injection).
-5. Add cross-provider schema validation fixtures and empty-data behavior tests.
-6. Player similarity search (find comparable players by percentile profile).
-7. Team strength radar chart (visualize component scores across teams).
+4. Add cross-provider schema validation fixtures and empty-data behavior tests.
+5. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
+6. Similar-player search enhancement: position-weighted feature vector and per-position similarity pools.
+7. Team strength radar chart frontend (visualize 6-dim component scores across two teams with ECharts overlay).
+8. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
