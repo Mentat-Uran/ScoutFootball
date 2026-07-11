@@ -464,6 +464,33 @@
                         <p style="color:var(--text-muted);font-size:0.85rem">加载中...</p>
                     </div>
                 </article>
+
+                <article class="liquid-panel chart-panel" id="match-momentum-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <div>
+                            <p class="eyebrow" data-i18n="momentum_kicker">比赛动量预测</p>
+                            <h3 data-i18n="momentum_title">实时胜率时间线</h3>
+                        </div>
+                        <span class="status-pill status-medium" id="momentum-status" style="font-size:0.65rem">–</span>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;align-items:center;padding:0.5rem 0.8rem;flex-wrap:wrap">
+                        <label style="font-size:0.72rem;color:var(--text-muted)">
+                            <span data-i18n="momentum_home_goals">主队进球</span>
+                            <input id="momentum-home-goals" type="number" min="0" max="20" value="0" class="glass-control" style="width:50px;font-size:0.78rem;padding:0.15rem 0.3rem">
+                        </label>
+                        <label style="font-size:0.72rem;color:var(--text-muted)">
+                            <span data-i18n="momentum_away_goals">客队进球</span>
+                            <input id="momentum-away-goals" type="number" min="0" max="20" value="0" class="glass-control" style="width:50px;font-size:0.78rem;padding:0.15rem 0.3rem">
+                        </label>
+                        <label style="font-size:0.72rem;color:var(--text-muted)">
+                            <span data-i18n="momentum_minute">当前分钟</span>
+                            <input id="momentum-minute" type="number" min="0" max="120" value="0" class="glass-control" style="width:55px;font-size:0.78rem;padding:0.15rem 0.3rem">
+                        </label>
+                        <button class="text-button" id="btn-momentum-update" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="momentum_update">更新</button>
+                    </div>
+                    <div id="momentum-summary" style="padding:0 0.8rem"></div>
+                    <div id="momentum-chart" class="chart-box" style="height:280px"></div>
+                </article>
             </section>
 
             <section class="view" id="view-teams" aria-label="teams">

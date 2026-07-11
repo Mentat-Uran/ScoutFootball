@@ -869,6 +869,65 @@ def get_ensemble_prediction(home_team: str, away_team: str) -> dict:
         return {"error": str(exc)}
 
 
+def get_match_momentum(
+    home_team: str,
+    away_team: str,
+    *,
+    home_goals: int = 0,
+    away_goals: int = 0,
+    minute: int = 0,
+) -> dict:
+    """Return in-play win probability timeline for a match.
+
+    Computes momentum based on pre-match Dixon-Coles prediction lambdas and
+    the current scoreline/minute. Returns a timeline of win/draw/loss
+    probabilities at 5-minute intervals from the current minute to 90'.
+    """
+    try:
+        from scoutfootball.models import compute_momentum
+
+        # Get pre-match prediction to extract lambdas
+        dc_pred = get_match_prediction_dc(home_team, away_team)
+        if "error" in dc_pred:
+            return dc_pred
+
+        home_lambda = float(dc_pred.get("home_lambda", 1.3))
+        away_lambda = float(dc_pred.get("away_lambda", 1.1))
+
+        momentum = compute_momentum(
+            home_team,
+            away_team,
+            home_lambda,
+            away_lambda,
+            current_home_goals=home_goals,
+            current_away_goals=away_goals,
+            current_minute=minute,
+        )
+
+        return _clean_json_value({
+            "home_team": home_team,
+            "away_team": away_team,
+            "home_lambda": home_lambda,
+            "away_lambda": away_lambda,
+            "current_minute": minute,
+            "current_home_goals": home_goals,
+            "current_away_goals": away_goals,
+            "timeline": [
+                {
+                    "minute": p.minute,
+                    "home_win": p.home_win,
+                    "draw": p.draw,
+                    "away_win": p.away_win,
+                    "remaining_home_lambda": p.remaining_home_lambda,
+                    "remaining_away_lambda": p.remaining_away_lambda,
+                }
+                for p in momentum.timeline
+            ],
+        })
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 def get_calibration_drift() -> dict:
     """Return calibration drift report for the latest backtest predictions.
 

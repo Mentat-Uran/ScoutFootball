@@ -2,6 +2,11 @@
 
 ## Recently Merged
 
+- **Match Momentum Prediction Suite (2026-07-12):**
+  1. **In-play win probability model:** `MatchMomentum` and `MomentumPoint` dataclasses + `compute_momentum()` in `match_prediction.py` — scales pre-match lambdas by remaining time, uses independent Poisson for remaining goals, computes win/draw/loss at each 5-minute interval. `update_probability_at_scoreline()` convenience wrapper for single-point queries. `_compute_inplay_probabilities()` helper sums over all remaining goal combinations.
+  2. **Momentum API endpoint:** `GET /predictions/{home}/{away}/momentum` with `home_goals`, `away_goals`, `minute` query params via `get_match_momentum()` — fetches DC pre-match lambdas, computes momentum timeline from current minute to 90'.
+  3. **Frontend momentum visualization:** New momentum panel in matches view with scoreline/minute input controls, "Update" button, current probability summary (score, minute, home/draw/away %), and ECharts line chart showing home_win/draw/away_win probability timeline (0-100% y-axis, minutes x-axis). Bilingual i18n.
+  4. **Tests:** 31 new tests (compute_momentum timeline, probability validation, scoreline sensitivity, minute 90 determinism, custom duration/step, update_probability_at_scoreline). All pass, ruff + node check clean.
 - **Ensemble Prediction & Calibration Monitoring Suite (2026-07-12):**
   1. **Ensemble prediction:** `EnsemblePrediction` dataclass and `ensemble_prediction()` in `match_prediction.py` — blends multiple PoissonPrediction score matrices and lambdas by configurable weights, normalizes blended matrix, derives summary from blended matrix. `optimize_ensemble_weights()` grid-searches Poisson/DC/Form weights to minimize RPS on holdout.
   2. **Calibration drift monitoring:** `CalibrationDriftReport` dataclass and `compute_calibration_drift()` in `backtests.py` — splits predictions into time windows (default 90D), computes RPS/Brier/LogLoss per window, detects drift when latest window's metric exceeds historical average by > threshold (default 5% relative). `_compute_window_metrics()` helper computes per-window metrics.

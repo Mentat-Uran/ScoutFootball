@@ -293,6 +293,12 @@ const i18n = {
         backtest_tuning_desc: "Dixon-Coles 时间衰减网格搜索",
         backtest_drift: "校准漂移监控",
         backtest_drift_desc: "按时间窗口追踪 RPS/Brier/LogLoss 漂移",
+        momentum_kicker: "比赛动量预测",
+        momentum_title: "实时胜率时间线",
+        momentum_home_goals: "主队进球",
+        momentum_away_goals: "客队进球",
+        momentum_minute: "当前分钟",
+        momentum_update: "更新",
         backtest_best_decay: "最优 Decay",
         backtest_selection_metric: "选择指标",
         backtest_half_life: "半衰期(天)",
@@ -601,6 +607,12 @@ const i18n = {
         backtest_tuning_desc: "Dixon-Coles time-decay grid search",
         backtest_drift: "Calibration Drift Monitoring",
         backtest_drift_desc: "Track RPS/Brier/LogLoss drift across time windows",
+        momentum_kicker: "Match Momentum Prediction",
+        momentum_title: "Live Win Probability Timeline",
+        momentum_home_goals: "Home Goals",
+        momentum_away_goals: "Away Goals",
+        momentum_minute: "Current Minute",
+        momentum_update: "Update",
         backtest_best_decay: "Best Decay",
         backtest_selection_metric: "Selection Metric",
         backtest_half_life: "Half-Life (days)",
@@ -2465,6 +2477,136 @@ function _renderFormTrendCard(teamName, trend) {
     return html;
 }
 
+async function fetchMomentum(home, away, homeGoals, awayGoals, minute) {
+    try {
+        const hg = homeGoals || 0;
+        const ag = awayGoals || 0;
+        const m = minute || 0;
+        return await fetchJson(
+            `/predictions/${encodeURIComponent(home)}/${encodeURIComponent(away)}/momentum`
+            + `?home_goals=${hg}&away_goals=${ag}&minute=${m}`,
+            { fetchOpts: { signal: AbortSignal.timeout(60000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch momentum:", err);
+        return null;
+    }
+}
+
+async function renderMomentum(home, away) {
+    const statusPill = document.getElementById("momentum-status");
+    const summaryEl = document.getElementById("momentum-summary");
+    const chartEl = document.getElementById("momentum-chart");
+    if (!statusPill || !summaryEl || !chartEl) return;
+
+    const hgInput = document.getElementById("momentum-home-goals");
+    const agInput = document.getElementById("momentum-away-goals");
+    const minInput = document.getElementById("momentum-minute");
+    const hg = parseInt(hgInput?.value || "0", 10) || 0;
+    const ag = parseInt(agInput?.value || "0", 10) || 0;
+    const minute = parseInt(minInput?.value || "0", 10) || 0;
+    const z = currentLang === "zh";
+
+    statusPill.textContent = z ? "加载中" : "loading";
+    statusPill.className = "status-pill status-medium";
+
+    const data = await fetchMomentum(home, away, hg, ag, minute);
+    if (!data || data.error) {
+        statusPill.textContent = z ? "错误" : "error";
+        statusPill.className = "status-pill status-low";
+        summaryEl.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${z ? "动量预测不可用" : "Momentum unavailable"}</p>`;
+        return;
+    }
+
+    const timeline = data.timeline || [];
+    if (timeline.length === 0) {
+        statusPill.textContent = z ? "无数据" : "no data";
+        statusPill.className = "status-pill status-low";
+        summaryEl.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${z ? "无时间线数据" : "No timeline data"}</p>`;
+        return;
+    }
+
+    statusPill.textContent = z ? "可用" : "OK";
+    statusPill.className = "status-pill status-high";
+
+    // Current probabilities (first timeline point = current minute)
+    const current = timeline[0];
+    summaryEl.innerHTML = `
+        <div class="detail-grid" style="margin-bottom:0.5rem">
+            <div><span>${escapeHtml(z ? "当前比分" : "Score")}</span><strong>${escapeHtml(String(data.current_home_goals))} - ${escapeHtml(String(data.current_away_goals))}</strong></div>
+            <div><span>${escapeHtml(z ? "分钟" : "Minute")}</span><strong>${escapeHtml(String(data.current_minute))}'</strong></div>
+            <div><span>${escapeHtml(z ? "主胜" : "Home")}</span><strong style="color:var(--accent)">${(current.home_win * 100).toFixed(1)}%</strong></div>
+            <div><span>${escapeHtml(z ? "平" : "Draw")}</span><strong>${(current.draw * 100).toFixed(1)}%</strong></div>
+            <div><span>${escapeHtml(z ? "客胜" : "Away")}</span><strong style="color:var(--warn, #f59e0b)">${(current.away_win * 100).toFixed(1)}%</strong></div>
+        </div>`;
+
+    // ECharts timeline chart
+    const chart = getChart("momentum-chart");
+    if (!chart) return;
+
+    const minutes = timeline.map((p) => p.minute + "'");
+    const homeWinData = timeline.map((p) => +(p.home_win * 100).toFixed(2));
+    const drawData = timeline.map((p) => +(p.draw * 100).toFixed(2));
+    const awayWinData = timeline.map((p) => +(p.away_win * 100).toFixed(2));
+
+    chart.setOption({
+        tooltip: { trigger: "axis" },
+        legend: {
+            data: [z ? "主胜" : "Home Win", z ? "平局" : "Draw", z ? "客胜" : "Away Win"],
+            top: 0,
+            textStyle: { fontSize: 10 },
+        },
+        grid: { left: 48, right: 24, top: 36, bottom: 38 },
+        xAxis: {
+            type: "category",
+            data: minutes,
+            name: z ? "分钟" : "Minute",
+            nameTextStyle: { fontSize: 10 },
+            axisLabel: { fontSize: 9 },
+        },
+        yAxis: {
+            type: "value",
+            min: 0,
+            max: 100,
+            axisLabel: { fontSize: 9, formatter: "{value}%" },
+        },
+        series: [
+            {
+                name: z ? "主胜" : "Home Win",
+                type: "line",
+                data: homeWinData,
+                smooth: true,
+                symbol: "circle",
+                symbolSize: 4,
+                lineStyle: { width: 2 },
+                itemStyle: { color: "#64b5f6" },
+                areaStyle: { opacity: 0.1 },
+            },
+            {
+                name: z ? "平局" : "Draw",
+                type: "line",
+                data: drawData,
+                smooth: true,
+                symbol: "circle",
+                symbolSize: 4,
+                lineStyle: { width: 2 },
+                itemStyle: { color: "#9e9e9e" },
+            },
+            {
+                name: z ? "客胜" : "Away Win",
+                type: "line",
+                data: awayWinData,
+                smooth: true,
+                symbol: "circle",
+                symbolSize: 4,
+                lineStyle: { width: 2 },
+                itemStyle: { color: "#ff9800" },
+                areaStyle: { opacity: 0.1 },
+            },
+        ],
+    });
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -3447,6 +3589,7 @@ async function renderMatches() {
 
     // Head-to-head section (loads independently — failures don't affect prediction display)
     renderHeadToHead(appState.home, appState.away).catch((e) => console.warn("H2H render failed:", e));
+    renderMomentum(appState.home, appState.away).catch((e) => console.warn("Momentum render failed:", e));
 }
 
 function poisson(lambda, k) {
@@ -6232,6 +6375,14 @@ function bindEvents() {
     if (prematchBtn) {
         prematchBtn.addEventListener("click", () => {
             createPrematchPlan();
+        });
+    }
+
+    // Momentum update button: re-fetch momentum with current scoreline/minute
+    const momentumBtn = document.getElementById("btn-momentum-update");
+    if (momentumBtn) {
+        momentumBtn.addEventListener("click", () => {
+            renderMomentum(appState.home, appState.away).catch((e) => console.warn("Momentum update failed:", e));
         });
     }
 

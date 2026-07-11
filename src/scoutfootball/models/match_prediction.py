@@ -1136,3 +1136,212 @@ def optimize_ensemble_weights(
                 }
 
     return best_weights
+
+
+# ---------------------------------------------------------------------------
+# Match momentum prediction (in-play win probability)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MomentumPoint:
+    """In-play win probability at a specific minute and scoreline."""
+
+    minute: int
+    home_win: float
+    draw: float
+    away_win: float
+    remaining_home_lambda: float
+    remaining_away_lambda: float
+
+
+@dataclass(frozen=True)
+class MatchMomentum:
+    """In-play momentum timeline for a match.
+
+    Given pre-match expected goals (lambdas) and a current scoreline,
+    computes the updated win/draw/loss probability at each minute.
+    """
+
+    home_team: str
+    away_team: str
+    home_lambda: float
+    away_lambda: float
+    current_minute: int
+    current_home_goals: int
+    current_away_goals: int
+    timeline: list[MomentumPoint]
+
+
+def compute_momentum(
+    home_team: str,
+    away_team: str,
+    home_lambda: float,
+    away_lambda: float,
+    *,
+    current_home_goals: int = 0,
+    current_away_goals: int = 0,
+    current_minute: int = 0,
+    max_goals: int = 10,
+    minute_step: int = 5,
+    match_duration: int = 90,
+) -> MatchMomentum:
+    """Compute in-play win probability timeline.
+
+    Uses independent Poisson for remaining goals: at each minute, the
+    remaining expected goals are proportional to remaining time. The
+    final outcome is determined by current scoreline + remaining goals.
+
+    Parameters
+    ----------
+    home_team, away_team : team names.
+    home_lambda, away_lambda : pre-match expected goals (full match).
+    current_home_goals, current_away_goals : scoreline at ``current_minute``.
+    current_minute : minute at which the scoreline applies (0-90+).
+    max_goals : maximum goals to consider per team in remaining-time Poisson.
+    minute_step : interval between timeline points (default 5 minutes).
+    match_duration : total match duration in minutes (default 90).
+
+    Returns
+    -------
+    MatchMomentum with timeline from current_minute to match_duration.
+    """
+    if home_lambda < 0 or away_lambda < 0:
+        raise ValueError("Lambdas must be non-negative")
+    if current_minute < 0 or current_minute > match_duration + 10:
+        raise ValueError(f"current_minute must be in [0, {match_duration + 10}]")
+    if current_home_goals < 0 or current_away_goals < 0:
+        raise ValueError("Goals must be non-negative")
+    if minute_step < 1:
+        raise ValueError("minute_step must be at least 1")
+
+    timeline: list[MomentumPoint] = []
+    for minute in range(current_minute, match_duration + 1, minute_step):
+        remaining_minutes = max(0, match_duration - minute)
+        if remaining_minutes == 0:
+            # Match is over — outcome is determined by current scoreline
+            if current_home_goals > current_away_goals:
+                hw, dw, aw = 1.0, 0.0, 0.0
+            elif current_home_goals == current_away_goals:
+                hw, dw, aw = 0.0, 1.0, 0.0
+            else:
+                hw, dw, aw = 0.0, 0.0, 1.0
+            timeline.append(MomentumPoint(
+                minute=minute,
+                home_win=hw,
+                draw=dw,
+                away_win=aw,
+                remaining_home_lambda=0.0,
+                remaining_away_lambda=0.0,
+            ))
+            break
+
+        remaining_home_lambda = home_lambda * (remaining_minutes / match_duration)
+        remaining_away_lambda = away_lambda * (remaining_minutes / match_duration)
+
+        hw, dw, aw = _compute_inplay_probabilities(
+            current_home_goals,
+            current_away_goals,
+            remaining_home_lambda,
+            remaining_away_lambda,
+            max_goals=max_goals,
+        )
+
+        timeline.append(MomentumPoint(
+            minute=minute,
+            home_win=hw,
+            draw=dw,
+            away_win=aw,
+            remaining_home_lambda=remaining_home_lambda,
+            remaining_away_lambda=remaining_away_lambda,
+        ))
+
+    return MatchMomentum(
+        home_team=home_team,
+        away_team=away_team,
+        home_lambda=home_lambda,
+        away_lambda=away_lambda,
+        current_minute=current_minute,
+        current_home_goals=current_home_goals,
+        current_away_goals=current_away_goals,
+        timeline=timeline,
+    )
+
+
+def _compute_inplay_probabilities(
+    current_home_goals: int,
+    current_away_goals: int,
+    remaining_home_lambda: float,
+    remaining_away_lambda: float,
+    *,
+    max_goals: int = 10,
+) -> tuple[float, float, float]:
+    """Compute win/draw/loss probabilities from current scoreline and remaining lambdas.
+
+    Uses independent Poisson for remaining goals. Returns (home_win, draw, away_win).
+    """
+    if remaining_home_lambda <= 0 and remaining_away_lambda <= 0:
+        # No time remaining — outcome is determined
+        if current_home_goals > current_away_goals:
+            return 1.0, 0.0, 0.0
+        if current_home_goals == current_away_goals:
+            return 0.0, 1.0, 0.0
+        return 0.0, 0.0, 1.0
+
+    home_probs = poisson.pmf(np.arange(max_goals + 1), remaining_home_lambda)
+    away_probs = poisson.pmf(np.arange(max_goals + 1), remaining_away_lambda)
+
+    home_win = 0.0
+    draw = 0.0
+    away_win = 0.0
+
+    for rh in range(max_goals + 1):
+        for ra in range(max_goals + 1):
+            prob = float(home_probs[rh] * away_probs[ra])
+            final_home = current_home_goals + rh
+            final_away = current_away_goals + ra
+            if final_home > final_away:
+                home_win += prob
+            elif final_home == final_away:
+                draw += prob
+            else:
+                away_win += prob
+
+    total = home_win + draw + away_win
+    if total > 0:
+        home_win /= total
+        draw /= total
+        away_win /= total
+
+    return home_win, draw, away_win
+
+
+def update_probability_at_scoreline(
+    home_lambda: float,
+    away_lambda: float,
+    current_home_goals: int,
+    current_away_goals: int,
+    current_minute: int,
+    *,
+    max_goals: int = 10,
+    match_duration: int = 90,
+) -> tuple[float, float, float]:
+    """Compute updated win/draw/loss probabilities at a given minute and scoreline.
+
+    Convenience wrapper around :func:`_compute_inplay_probabilities` that
+    scales lambdas by remaining time.
+
+    Returns
+    -------
+    (home_win, draw, away_win) tuple of probabilities.
+    """
+    remaining_minutes = max(0, match_duration - current_minute)
+    remaining_home_lambda = home_lambda * (remaining_minutes / match_duration)
+    remaining_away_lambda = away_lambda * (remaining_minutes / match_duration)
+    return _compute_inplay_probabilities(
+        current_home_goals,
+        current_away_goals,
+        remaining_home_lambda,
+        remaining_away_lambda,
+        max_goals=max_goals,
+    )

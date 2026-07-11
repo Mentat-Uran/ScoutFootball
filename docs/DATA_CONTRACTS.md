@@ -461,6 +461,27 @@ Match prediction between two teams.
 
 **缓存：** 源比赛表和规范化球队名使用统一 TTL 缓存（默认 300 秒，可由 `SCOUTFOOTBALL_CACHE_TTL_SECONDS` 调整）；`force_refresh=True` 可供离线重导出绕过缓存。
 
+### GET /predictions/{home_team}/{away_team}/momentum
+
+返回比赛中实时胜率时间线。基于赛前 Dixon-Coles 预测的 lambdas 和当前比分/分钟，使用独立 Poisson 计算剩余时间内的进球分布，推导出每分钟的胜/平/负概率。
+
+**查询参数：**
+- `home_goals` (int, default=0, range=0–20): 当前主队进球数
+- `away_goals` (int, default=0, range=0–20): 当前客队进球数
+- `minute` (int, default=0, range=0–120): 当前比赛分钟
+
+**响应字段：**
+- `home_team`, `away_team` (str): 球队名
+- `home_lambda`, `away_lambda` (float): 赛前预期进球（全场比赛）
+- `current_minute` (int): 当前分钟
+- `current_home_goals`, `current_away_goals` (int): 当前比分
+- `timeline` (list[dict]): 时间线，每 5 分钟一个点，含 `minute`/`home_win`/`draw`/`away_win`/`remaining_home_lambda`/`remaining_away_lambda`
+
+**边缘情况：**
+- 第 90 分钟时，结果由当前比分决定（确定性）
+- 球队数据不足时返回 `{"error": "..."}`
+- 前端提供比分和分钟输入控件，点击"更新"重新获取时间线
+
 ### GET /ratings/meta
 Model metadata and league metrics.
 
