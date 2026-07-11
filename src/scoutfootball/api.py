@@ -2977,17 +2977,67 @@ _SIMILARITY_FEATURES = [
     ("minutes", "Availability"),
 ]
 
+# Per-position feature weights. Each weight scales the corresponding z-scored
+# feature before cosine similarity is computed, so that dimensions more
+# relevant to a position carry more signal. Weights are normalised inside
+# ``find_similar_players`` so absolute magnitude does not matter, only ratios.
+_POSITION_FEATURE_WEIGHTS: dict[str, dict[str, float]] = {
+    "GK": {"npg_p90": 0.0, "assists_p90": 0.0, "defense_composite": 3.0,
+           "possession_composite": 1.0, "optimized_score": 2.0, "minutes": 1.0},
+    "CB": {"npg_p90": 0.5, "assists_p90": 0.5, "defense_composite": 3.0,
+           "possession_composite": 1.5, "optimized_score": 1.5, "minutes": 1.0},
+    "FB": {"npg_p90": 0.5, "assists_p90": 1.0, "defense_composite": 2.0,
+           "possession_composite": 2.0, "optimized_score": 1.5, "minutes": 1.0},
+    "DM": {"npg_p90": 0.5, "assists_p90": 1.0, "defense_composite": 2.5,
+           "possession_composite": 2.5, "optimized_score": 1.5, "minutes": 1.0},
+    "CM": {"npg_p90": 1.0, "assists_p90": 1.5, "defense_composite": 1.5,
+           "possession_composite": 3.0, "optimized_score": 1.5, "minutes": 1.0},
+    "AM": {"npg_p90": 2.0, "assists_p90": 2.5, "defense_composite": 0.5,
+           "possession_composite": 2.5, "optimized_score": 1.5, "minutes": 1.0},
+    "W":  {"npg_p90": 2.5, "assists_p90": 2.5, "defense_composite": 0.5,
+           "possession_composite": 1.5, "optimized_score": 1.5, "minutes": 1.0},
+    "ST": {"npg_p90": 3.0, "assists_p90": 1.5, "defense_composite": 0.5,
+           "possession_composite": 1.0, "optimized_score": 1.5, "minutes": 1.0},
+}
+_DEFAULT_FEATURE_WEIGHTS = {fc[0]: 1.0 for fc in _SIMILARITY_FEATURES}
+
+
+def _position_weights(position_group: str) -> dict[str, float]:
+    """Return feature weights for a position group, falling back to uniform."""
+    pos = (position_group or "").strip().upper()
+    return _POSITION_FEATURE_WEIGHTS.get(pos, _DEFAULT_FEATURE_WEIGHTS)
+
 
 def find_similar_players(
     player_name: str,
     season: str | None = None,
     limit: int = 10,
+    *,
+    same_position_only: bool = True,
+    league: str | None = None,
+    min_minutes: float | None = None,
 ) -> dict:
-    """Find players with similar profiles within the same position group.
+    """Find players with similar profiles.
 
     Uses z-scored feature vectors (attack/creation/defense/possession/
-    overall/availability) and cosine similarity. Returns top-N comparable
-    players with similarity score, shared strengths and weaknesses.
+    overall/availability), position-weighted before cosine similarity is
+    computed. Returns top-N comparable players with similarity score, shared
+    strengths and weaknesses.
+
+    Parameters
+    ----------
+    same_position_only:
+        When ``True`` (default), only compare within the target player's
+        position group, z-scoring against that pool. When ``False``, build a
+        cross-position pool where each player is z-scored against their own
+        position group first, so profiles stay comparable across positions.
+    league:
+        Optional league filter applied to the candidate pool. The target
+        player is still resolved from the full dataset (ignoring this filter
+        if necessary) so a known player is never hidden by a league filter.
+    min_minutes:
+        Optional minimum minutes threshold applied to the candidate pool.
+        Players below this threshold are excluded as low-reliability.
     """
     df = load_player_ratings(season=season)
     if df.empty:
@@ -3026,70 +3076,118 @@ def find_similar_players(
     target_player = str(target_row.get("player", player_name))
     target_season = str(target_row.get("season", ""))
 
-    # Filter to same position group
-    pool = df[df["position_group"] == target_pos].copy()
-    if len(pool) < 2:
-        return {
-            "count": 0,
-            "target": {
-                "name": target_player,
-                "team": str(target_row.get("team", "")),
-                "league": str(target_row.get("league", "")),
-                "season": target_season,
-                "position_group": target_pos,
-                "optimized_score": round(float(target_row.get("optimized_score", 0) or 0), 1),
-            },
-            "similar": [],
-            "error": "pool_too_small",
-        }
-
-    # Build feature matrix: z-scored within position pool
     feature_cols = [fc[0] for fc in _SIMILARITY_FEATURES]
+    # Coerce feature columns to numeric across the full frame once.
     for col in feature_cols:
-        if col not in pool.columns:
-            pool[col] = 0.0
-        pool[col] = pd.to_numeric(pool[col], errors="coerce").fillna(0.0)
+        if col not in df.columns:
+            df[col] = 0.0
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-    # Z-score within pool
-    means = pool[feature_cols].mean()
-    stds = pool[feature_cols].std(ddof=0)
-    stds = stds.replace(0, 1.0)  # avoid div-by-zero
-    z_matrix = (pool[feature_cols] - means) / stds
-    z_values = z_matrix.values
+    # Build candidate pool with optional filters.
+    pool = df.copy()
+    if min_minutes is not None and min_minutes > 0:
+        pool = pool[pool["minutes"].fillna(0.0) >= float(min_minutes)]
+    if league:
+        pool = pool[pool["league"].astype(str).str.lower() == str(league).lower()]
 
-    # Find target index in pool
-    target_idx_in_pool = None
-    for idx, row in pool.iterrows():
-        if (
-            str(row.get("player", "")) == target_player
-            and str(row.get("season", "")) == target_season
-        ):
-            target_idx_in_pool = idx
-            break
-    if target_idx_in_pool is None:
-        # Fallback: first matching name
-        name_matches = pool[pool["player"] == target_player]
-        if not name_matches.empty:
-            target_idx_in_pool = name_matches.index[0]
+    # Resolve target feature vector (raw, before z-scoring).
+    target_features = np.array(
+        [float(target_row.get(col, 0.0) or 0.0) for col in feature_cols],
+        dtype=float,
+    )
+
+    if same_position_only:
+        pool = pool[pool["position_group"] == target_pos]
+        if len(pool) < 2:
+            return {
+                "count": 0,
+                "target": _target_payload(target_row, target_player, target_season, target_pos),
+                "similar": [],
+                "error": "pool_too_small",
+            }
+        # Z-score within the single-position pool. The target's z-score is
+        # computed using the same pool statistics even when filters excluded
+        # the target row from the pool (cross-league scouting use case).
+        means = pool[feature_cols].mean()
+        stds = pool[feature_cols].std(ddof=0).replace(0, 1.0)
+        z_matrix = (pool[feature_cols] - means) / stds
+        weights = _position_weights(target_pos)
+        weight_vec = np.array([weights.get(col, 1.0) for col in feature_cols], dtype=float)
+        z_values = z_matrix.values * weight_vec
+        pool_indices = list(pool.index)
+        # Compute target z-score against pool statistics (target may be absent
+        # from pool when league/min_minutes filters exclude it).
+        target_z = (target_features - means.values) / stds.values
+        target_vec = target_z * weight_vec
+        # Percentile ranks for the pool (used for strengths/weaknesses).
+        pct_ranks = pool[feature_cols].rank(pct=True) * 100
+        # Target percentile ranks: rank target against the pool by counting
+        # how many pool members fall below the target's raw value.
+        target_pcts_series = pd.Series(index=feature_cols, dtype=float)
+        for col in feature_cols:
+            col_vals = pool[col]
+            target_val = float(target_row.get(col, 0.0) or 0.0)
+            target_pcts_series[col] = (
+                (col_vals < target_val).sum() / max(len(col_vals), 1) * 100
+            )
+    else:
+        # Cross-position pool: z-score each player against their own position
+        # group first, so profiles stay comparable across positions.
+        if len(pool) < 2:
+            return {
+                "count": 0,
+                "target": _target_payload(target_row, target_player, target_season, target_pos),
+                "similar": [],
+                "error": "pool_too_small",
+            }
+        # Compute per-position means/stds from the full df (not the filtered
+        # pool) so z-scores are stable regardless of league/minute filters.
+        z_full = pd.DataFrame(index=df.index, columns=feature_cols, dtype=float)
+        pct_full = pd.DataFrame(index=df.index, columns=feature_cols, dtype=float)
+        per_pos_stats: dict[str, tuple[pd.Series, pd.Series]] = {}
+        for pos, pos_frame in df.groupby("position_group"):
+            means = pos_frame[feature_cols].mean()
+            stds = pos_frame[feature_cols].std(ddof=0).replace(0, 1.0)
+            per_pos_stats[pos] = (means, stds)
+            z_full.loc[pos_frame.index] = (
+                (pos_frame[feature_cols] - means) / stds
+            ).values
+            pct_full.loc[pos_frame.index] = (
+                pos_frame[feature_cols].rank(pct=True) * 100
+            ).values
+        # Apply target player's position weights (consistent comparison axis).
+        weights = _position_weights(target_pos)
+        weight_vec = np.array([weights.get(col, 1.0) for col in feature_cols], dtype=float)
+        z_full_weighted = z_full.values * weight_vec
+        # Restrict to filtered pool (preserving pool row order).
+        pool_indices = list(pool.index)
+        pool_pos_in_df = [list(df.index).index(i) for i in pool_indices]
+        z_values = z_full_weighted[pool_pos_in_df]
+        # Re-resolve pool from df for downstream metadata access.
+        pool = df.loc[pool_indices].copy()
+        # Compute target z-score against target's own position group stats.
+        target_pos_stats = per_pos_stats.get(target_pos)
+        if target_pos_stats is None:
+            # Position group had only the target row (no groupby entry with
+            # others); fall back to pool statistics.
+            t_means = pool[feature_cols].mean()
+            t_stds = pool[feature_cols].std(ddof=0).replace(0, 1.0)
         else:
-            target_idx_in_pool = pool.index[0]
-
-    target_pos_in_array = list(pool.index).index(target_idx_in_pool)
-    target_vec = z_values[target_pos_in_array]
+            t_means, t_stds = target_pos_stats
+        target_z = (target_features - t_means.values) / t_stds.values
+        target_vec = target_z * weight_vec
+        pct_ranks = pct_full.loc[pool_indices]
+        target_pcts_series = pd.Series(index=feature_cols, dtype=float)
+        for col in feature_cols:
+            target_pcts_series[col] = float(pct_full.loc[target_row.name, col]) \
+                if target_row.name in pct_full.index else 50.0
 
     # Cosine similarity
     target_norm = float(np.linalg.norm(target_vec))
     if target_norm == 0:
         return {
             "count": 0,
-            "target": {
-                "name": target_player,
-                "team": str(target_row.get("team", "")),
-                "league": str(target_row.get("league", "")),
-                "season": target_season,
-                "position_group": target_pos,
-                "optimized_score": round(float(target_row.get("optimized_score", 0) or 0), 1),
-            },
+            "target": _target_payload(target_row, target_player, target_season, target_pos),
             "similar": [],
             "error": "zero_vector",
         }
@@ -3101,26 +3199,20 @@ def find_similar_players(
     # which is not meaningful as a similarity score for users
     similarities = np.clip(similarities, 0, 1)
 
-    # Also compute percentile ranks for strengths/weaknesses analysis
-    pct_ranks = pool[feature_cols].rank(pct=True) * 100
-
-    # Exclude target from results
-    pool_indices = list(pool.index)
+    # Exclude target from results. Target may or may not be in the pool
+    # (filtered out by league/min_minutes). When present, skip that row.
     candidates = []
     for i, idx in enumerate(pool_indices):
-        if idx == target_idx_in_pool:
-            continue
         row = pool.loc[idx]
         pname = str(row.get("player", ""))
         if pname == target_player:
-            continue  # exclude same player other seasons
+            continue  # exclude target and same-player other-season rows
         candidates.append((i, idx, pname, row, similarities[i]))
 
     # Sort by similarity descending
     candidates.sort(key=lambda c: c[4], reverse=True)
     candidates = candidates[:limit]
 
-    target_pcts = pct_ranks.loc[target_idx_in_pool]
     similar_list = []
     for _i, idx, pname, row, sim in candidates:
         cand_pcts = pct_ranks.loc[idx]
@@ -3128,7 +3220,7 @@ def find_similar_players(
         shared_strengths = []
         shared_weaknesses = []
         for col, label in _SIMILARITY_FEATURES:
-            t_pct = float(target_pcts.get(col, 50))
+            t_pct = float(target_pcts_series.get(col, 50))
             c_pct = float(cand_pcts.get(col, 50))
             if t_pct > 70 and c_pct > 70:
                 shared_strengths.append(label)
@@ -3148,18 +3240,34 @@ def find_similar_players(
             "minutes": round(float(row.get("minutes", 0) or 0)),
         }))
 
+    # Surface the active weights + filters in the response so callers can
+    # explain why a given candidate ranked where it did.
+    weights_out = {label: round(float(weights.get(col, 1.0)), 3)
+                   for col, label in _SIMILARITY_FEATURES}
+
     return _clean_json_value({
         "count": len(similar_list),
-        "target": {
-            "name": target_player,
-            "team": str(target_row.get("team", "")),
-            "league": str(target_row.get("league", "")),
-            "season": target_season,
-            "position_group": target_pos,
-            "optimized_score": round(float(target_row.get("optimized_score", 0) or 0), 1),
-        },
+        "target": _target_payload(target_row, target_player, target_season, target_pos),
         "features": [fc[1] for fc in _SIMILARITY_FEATURES],
+        "feature_weights": weights_out,
+        "filters": {
+            "same_position_only": bool(same_position_only),
+            "league": league,
+            "min_minutes": min_minutes,
+            "season": season,
+        },
         "similar": similar_list,
+    })
+
+
+def _target_payload(target_row, target_player: str, target_season: str, target_pos: str) -> dict:
+    return _clean_json_value({
+        "name": target_player,
+        "team": str(target_row.get("team", "")),
+        "league": str(target_row.get("league", "")),
+        "season": target_season,
+        "position_group": target_pos,
+        "optimized_score": round(float(target_row.get("optimized_score", 0) or 0), 1),
     })
 
 
