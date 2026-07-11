@@ -50,6 +50,7 @@ from scoutfootball.api import (
     get_wc_groups,
     get_wc_knockout,
     get_wc_knockout_bracket,
+    get_wc_knockout_probabilities,
     get_wc_predictions,
     get_wc_schedule,
     get_wc_squad,
@@ -579,6 +580,10 @@ def create_app() -> FastAPI:
     @app.delete("/world-cup/tournament/knockout/result")
     def wc_knockout_clear_result(match_id: str = Query(...)):
         return clear_wc_knockout_result(match_id)
+
+    @app.get("/world-cup/tournament/knockout/probabilities")
+    def wc_knockout_probabilities():
+        return get_wc_knockout_probabilities()
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")

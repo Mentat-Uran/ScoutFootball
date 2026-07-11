@@ -2,6 +2,13 @@
 
 ## Recently Merged
 
+- **Tournament Projection + Static Snapshot Export (2026-07-12, Round 11):**
+  1. Added `project_knockout_probabilities()` in `scoutfootball.worldcup.data` — feeds the live knockout bracket into the Bradley-Terry strength model to produce per-match win probabilities and Monte Carlo tournament championship odds (10,000 iterations, seeded). Flattens matches from the `rounds` dict structure returned by `get_knockout_overview()`. Per-match probabilities: completed matches return 1.0/0.0 for the known winner/loser; ready-for-input matches use Bradley-Terry with amplification exponent k=2.8 (consistent with `simulate_knockout()`); TBD matches return null. Tournament win probabilities are only computed when all 16 R32 matches have both teams filled; the Monte Carlo simulation respects completed matches in later rounds by looking up known winners instead of simulating. Returns `match_probabilities` (list of dicts with match_id/home/away/home_win_prob/away_win_prob/status), `tournament_win_probability` (top 16 teams sorted descending), `num_simulations`, and a `disclaimer` string. Reproducible via the `seed` parameter (default 42).
+  2. Added `get_wc_knockout_probabilities()` API function and `GET /world-cup/tournament/knockout/probabilities` FastAPI endpoint — returns error status if no bracket generated or no enriched squads available; otherwise returns the projection result. Cache-invalidated on bracket mutations (generate/apply/clear).
+  3. Added static tournament snapshot export in `export_static_frontend_data.py` — `export_worldcup()` now writes `tournament_summary.json` and `knockout_bracket.json` to the worldcup data directory for offline frontend fallback when the API server is unavailable.
+  4. Updated frontend `renderWcKnockoutBracket()` to fetch and display per-match win probability bars (home% vs away% dual-color) on ready-for-input match cards, plus a tournament championship odds table (top 8 teams with progress bars). All three mutation operations (generate/apply/clear) invalidate the probabilities cache and trigger auto-refetch. Disclaimer text shown below the odds table.
+  5. Added 12 unit tests in `tests/unit/test_knockout_probabilities.py` covering: no bracket returns empty, per-match probabilities for ready matches (31 matches, R32 filled, sum≈1.0), equal strengths give 50/50, varied strengths favor stronger team, TBD matches have null probabilities, completed match has known winner (1.0/0.0), tournament win probability when R32 ready (positive, sorted desc), tournament win probability respects completed matches (only R32 winners appear), reproducible with seed, disclaimer present, match probabilities have required fields, no tournament odds when R32 not ready. All 51 knockout-related tests pass, ruff + node --check clean.
+
 - **World Cup Knockout Bracket Suite (2026-07-12, Round 10):**
   1. Extended `scoutfootball.worldcup.tournament` with full knockout stage engine. Added `TournamentState.knockout` field + `knockout_match_by_id()` method. `KNOCKOUT_ROUNDS` constant defines 5 rounds (R32 16 → R16 8 → QF 4 → SF 2 → Final 1 = 31 matches). `_seed_knockout_r32()` pairs 12 group winners (sorted by points/GD/GF) against 12 runners-up in complementary order (strong-vs-weak), then 4 remaining matchups pair best thirds vs strongest remaining runners-up. `_build_knockout_rounds()` builds all 31 matches with R32 teams populated and later rounds home/away=None carrying seed labels like "Winner R32-01". `generate_knockout_bracket(state)` generates the full bracket from `determine_advancing_teams()` with `provisional` flag and `champion=None`. `apply_knockout_result()` records score and determines winner (draws require `penalties_winner`; supports `decided_by` = regular/penalties). `_advance_winner()` auto-fills winner into next round's home (odd position) or away (even position) slot. `clear_knockout_result()` + `_cascade_clear_downstream()` recursively clears downstream matches that depended on the cleared winner. `get_knockout_overview()` returns generated/provisional/champion/current_round/completed_matches/total_matches/rounds summary. `state_to_dict`/`state_from_dict` serialize the knockout field; `reset_state()` clears it.
   2. Added `scoutfootball tournament knockout` CLI with 4 subcommands (`generate`, `show`, `apply`, `clear`) supporting `--state-path`, `--json`, `--penalties-winner`. `show` prints the bracket grouped by round with scores and winners; `apply` persists results and prints winner confirmation; `clear` cascades downstream clears.
@@ -100,7 +107,7 @@
 
 ## Current Development
 
-- Round 10 (Knockout Bracket) is ready to merge on `codex/knockout-bracket`. Once squash-merged into `codex/integration`, the next round will add a static tournament snapshot export for offline fallback, plus tournament seed/projection integration with the existing Bradley-Terry `simulate_knockout()` predictor so the live bracket can optionally pre-fill win probabilities per matchup.
+- Round 11 (Tournament Projection + Static Snapshot Export) is ready to merge on `codex/tournament-projection`. Once squash-merged into `codex/integration` and fast-forwarded to `main`, the next round will focus on tournament scenario analysis enhancements and/or knockout bracket export/share features (see Next Round Candidates).
 
 ## Known Blockers
 
@@ -108,10 +115,12 @@
 
 ## Next Round Candidates
 
-1. Static tournament snapshot export: add `tournament_summary` + `get_knockout_overview` to `export_static_frontend_data.py` for offline fallback when the API is unavailable.
-2. Tournament projection integration: feed the live knockout bracket into `simulate_knockout()` to pre-fill per-matchup win probabilities and championship odds alongside user-recorded results.
-3. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-4. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
-5. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
-6. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
-7. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
+1. Knockout bracket share/export: add a "Share Bracket" button that serializes the current bracket state (with results) into a compact URL-encoded string or downloadable JSON file, plus a "Import Bracket" flow to load shared brackets. Enables users to save and share their tournament predictions.
+2. Tournament scenario deep-dive: extend `compute_team_scenarios()` to show "what-if" paths for knockout advancement — e.g., "if Team X wins R32, their championship probability becomes Y%". Integrate with the projection engine from Round 11.
+3. Group stage final-day simulator: add a UI for simulating remaining group matches in bulk (e.g., "simulate all remaining Group A matches randomly") and see how standings/projections change. Useful for the final matchday scenarios.
+4. Knockout bracket print/PDF export: add a print-optimized layout for the bracket (single-page, landscape) with CSS @media print rules, so users can print or save as PDF.
+5. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
+6. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
+7. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+8. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
+9. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
