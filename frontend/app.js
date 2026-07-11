@@ -1660,6 +1660,7 @@ async function renderPlayerProfile() {
             const label = appState.lang === 'zh' ? '相似球员' : 'Similar Players';
             return `<div style="grid-column:1/-1;margin-top:0.5rem" id="similar-players-panel">
                 <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(label)}</span>
+                <div id="similar-players-controls" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;margin-bottom:0.4rem;font-size:0.72rem"></div>
                 <div id="similar-players-list" style="font-size:0.78rem;color:var(--text-muted)">—</div>
             </div>`;
         })()}
@@ -1746,13 +1747,82 @@ function _radarLabels() {
 
 async function _fetchAndRenderSimilarPlayers(playerName, profile) {
     const container = document.getElementById("similar-players-list");
+    const controlsEl = document.getElementById("similar-players-controls");
     if (!container) return;
     const z = appState.lang === 'zh';
+
+    // Per-player similarity filter state (persists across refetches within
+    // the same player profile view).
+    if (!appState.similarFilters) {
+        appState.similarFilters = {
+            same_position_only: true,
+            league: '',
+            min_minutes: '',
+        };
+    }
+
+    function _buildQueryString() {
+        const f = appState.similarFilters;
+        const params = [`limit=8`];
+        if (profile && profile.season) params.push(`season=${encodeURIComponent(profile.season)}`);
+        if (!f.same_position_only) params.push(`same_position_only=false`);
+        if (f.league) params.push(`league=${encodeURIComponent(f.league)}`);
+        if (f.min_minutes) {
+            const mm = parseFloat(f.min_minutes);
+            if (!isNaN(mm) && mm > 0) params.push(`min_minutes=${mm}`);
+        }
+        return params.join('&');
+    }
+
+    function _renderControls() {
+        if (!controlsEl) return;
+        const f = appState.similarFilters;
+        const posLabel = z ? '同位置' : 'Same pos';
+        const leagueLabel = z ? '联赛' : 'League';
+        const minMinLabel = z ? '最少分钟' : 'Min min';
+        const refreshLabel = z ? '刷新' : 'Apply';
+        const tPos = (profile && profile.position_group) || '';
+        const posHint = tPos ? ` (${tPos})` : '';
+        controlsEl.innerHTML = `
+            <label style="display:inline-flex;align-items:center;gap:0.2rem;cursor:pointer">
+                <input type="checkbox" id="sim-same-pos" ${f.same_position_only ? 'checked' : ''} style="margin:0">
+                <span>${escapeHtml(posLabel)}${escapeHtml(posHint)}</span>
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:0.2rem">
+                <span>${escapeHtml(leagueLabel)}</span>
+                <input type="text" id="sim-league" value="${escapeAttr(f.league || '')}" placeholder="${z ? '如 La Liga' : 'e.g. La Liga'}" style="width:90px;font-size:0.72rem;padding:0.15rem 0.3rem">
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:0.2rem">
+                <span>${escapeHtml(minMinLabel)}</span>
+                <input type="number" id="sim-min-min" value="${escapeAttr(f.min_minutes || '')}" placeholder="0" min="0" step="100" style="width:60px;font-size:0.72rem;padding:0.15rem 0.3rem">
+            </label>
+            <button class="text-button" id="sim-apply" type="button" style="font-size:0.7rem;padding:0.15rem 0.5rem">${escapeHtml(refreshLabel)}</button>
+        `;
+        const applyBtn = document.getElementById('sim-apply');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', () => {
+                const samePos = document.getElementById('sim-same-pos');
+                const league = document.getElementById('sim-league');
+                const minMin = document.getElementById('sim-min-min');
+                appState.similarFilters.same_position_only = samePos ? samePos.checked : true;
+                appState.similarFilters.league = league ? league.value.trim() : '';
+                appState.similarFilters.min_minutes = minMin ? minMin.value.trim() : '';
+                _fetchAndRenderSimilarPlayers(playerName, profile);
+            });
+        }
+    }
+
+    _renderControls();
+
     try {
-        const season = profile && profile.season ? `&season=${encodeURIComponent(profile.season)}` : '';
-        const data = await fetchJson(`/players/${encodeURIComponent(playerName)}/similar?limit=8${season}`);
+        const data = await fetchJson(`/players/${encodeURIComponent(playerName)}/similar?${_buildQueryString()}`);
         if (data.error || !data.similar || data.similar.length === 0) {
-            container.textContent = z ? '无相似球员数据' : 'No similar players found';
+            const errMsg = data.error === 'pool_too_small'
+                ? (z ? '候选池过小' : 'Candidate pool too small')
+                : data.error === 'zero_vector'
+                    ? (z ? '目标特征向量为零' : 'Target feature vector is zero')
+                    : (z ? '无相似球员数据' : 'No similar players found');
+            container.textContent = errMsg;
             return;
         }
         const target = data.target || {};
@@ -1763,15 +1833,27 @@ async function _fetchAndRenderSimilarPlayers(playerName, profile) {
                 ? `<span style="font-size:0.65rem;color:var(--accent)">+${escapeHtml(p.shared_strengths.join('/'))}</span>` : '';
             const weaknesses = (p.shared_weaknesses || []).length > 0
                 ? `<span style="font-size:0.65rem;color:#ff6b6b">-${escapeHtml(p.shared_weaknesses.join('/'))}</span>` : '';
+            const posBadge = p.position_group && p.position_group !== (target.position_group || '')
+                ? `<span style="font-size:0.6rem;background:rgba(91,159,214,0.2);padding:0.05rem 0.3rem;border-radius:4px;margin-left:0.2rem">${escapeHtml(p.position_group)}</span>` : '';
             html += `<div class="similar-player-card" data-player="${escapeAttr(p.name)}" style="cursor:pointer;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:0.4rem 0.5rem;min-width:120px;background:rgba(255,255,255,0.03)">
-                <div style="font-weight:600;font-size:0.8rem">${escapeHtml(p.name)}</div>
-                <div style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(p.team || '')} · ${escapeHtml(p.position_group || '')}</div>
+                <div style="font-weight:600;font-size:0.8rem">${escapeHtml(p.name)}${posBadge}</div>
+                <div style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(p.team || '')} · ${escapeHtml(p.league || '')}</div>
                 <div style="font-size:0.75rem;color:${simColor};font-weight:600">${p.similarity.toFixed(0)}% ${z ? '相似' : 'sim.'}</div>
                 <div style="font-size:0.68rem;color:var(--text-muted)">${z ? '评分' : 'Rating'} ${p.optimized_score != null ? p.optimized_score.toFixed(1) : '—'}</div>
                 ${strengths}${weaknesses}
             </div>`;
         }
         html += '</div>';
+
+        // Feature weights disclosure (collapsed by default).
+        if (data.feature_weights) {
+            const weightsLabel = z ? '位置权重' : 'Position weights';
+            const weightsEntries = Object.entries(data.feature_weights)
+                .map(([k, v]) => `<span style="display:inline-block;margin-right:0.4rem;font-size:0.65rem"><strong>${escapeHtml(k)}</strong>: ${v.toFixed(2)}</span>`)
+                .join('');
+            html += `<details style="margin-top:0.4rem"><summary style="font-size:0.7rem;color:var(--text-muted);cursor:pointer">${escapeHtml(weightsLabel)}</summary><div style="margin-top:0.2rem">${weightsEntries}</div></details>`;
+        }
+
         const csvLabel = z ? '导出 CSV' : 'Export CSV';
         html += `<button class="text-button" id="btn-export-similar-csv" type="button" style="font-size:0.72rem;padding:0.2rem 0.5rem;margin-top:0.4rem">${csvLabel}</button>`;
         container.innerHTML = html;

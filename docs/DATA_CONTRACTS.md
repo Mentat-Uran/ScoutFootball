@@ -799,44 +799,77 @@ position groups will have different dimension sets.
 
 Returns the most similar players to the target player based on a 6-dimensional
 z-scored feature vector (Attack, Creation, Defense, Possession, Overall,
-Availability) compared via cosine similarity. The target player is excluded
-from results.
+Availability) compared via cosine similarity. Features are position-weighted
+before similarity is computed, so dimensions more relevant to the target's
+position carry more signal. The target player is excluded from results.
 
 **Query params**:
-- `limit` (int, default=8, max=20): Maximum number of similar players to return.
+- `limit` (int, default=10): Maximum number of similar players to return.
 - `season` (str, optional): Filter the comparison pool by season. When omitted,
   the player's own season is used.
-- `same_position_only` (bool, default=false): When true, restrict the pool to
-  players sharing the target's position group.
+- `same_position_only` (bool, default=true): When true, restrict the pool to
+  players sharing the target's position group and z-score within that pool.
+  When false, build a cross-position pool where each player is z-scored
+  against their own position group first, so profiles stay comparable across
+  positions.
+- `league` (str, optional): Restrict the candidate pool to a single league
+  (case-insensitive). The target player is still resolved from the full
+  dataset, enabling cross-league scouting use cases (e.g. "find La Liga
+  players similar to this Premier League player"). When the target is not in
+  the filtered league, its z-score is computed using the filtered pool's
+  statistics.
+- `min_minutes` (float, optional): Exclude candidates with fewer than this
+  many minutes played, to filter out low-reliability comparisons.
 
 **Response**:
 ```json
 {
-  "player": "string",
-  "found": true,
-  "season": "2526",
-  "position_group": "ST",
+  "count": 8,
+  "target": {
+    "name": "string",
+    "team": "string",
+    "league": "string",
+    "season": "2526",
+    "position_group": "ST",
+    "optimized_score": 80.0
+  },
   "features": ["Attack", "Creation", "Defense", "Possession", "Overall", "Availability"],
-  "target_profile": { "Attack": 0.8, "Creation": 0.3, "Defense": -0.5 },
-  "similar_players": [
+  "feature_weights": { "Attack": 3.0, "Creation": 1.5, "Defense": 0.5, "Possession": 1.0, "Overall": 1.5, "Availability": 1.0 },
+  "filters": {
+    "same_position_only": true,
+    "league": null,
+    "min_minutes": null,
+    "season": null
+  },
+  "similar": [
     {
-      "player_name": "string",
+      "name": "string",
       "team": "string",
       "league": "string",
+      "season": "2526",
       "position_group": "ST",
       "optimized_score": 78.0,
-      "similarity": 0.92,
-      "shared_strengths": ["Attack", "Overall"]
+      "similarity": 92.0,
+      "shared_strengths": ["Attack", "Overall"],
+      "shared_weaknesses": ["Defense"],
+      "minutes": 2500
     }
   ]
 }
 ```
 
+**Per-position feature weights**: The `feature_weights` field exposes the
+active weights used for the target's position group. Weights for the eight
+position groups (GK/CB/FB/DM/CM/AM/W/ST) are predefined; unknown positions
+fall back to uniform weights (all 1.0). For example, ST weights Attack (npg_p90)
+at 3.0 and Defense at 0.5, while CB weights Defense at 3.0 and Attack at 0.5.
+
 **Edge cases**:
-- Unknown player returns `{"player": "...", "found": false, "similar_players": []}`.
-- A pool with fewer than 2 rated players returns an empty `similar_players` list.
-- Similarity values are clamped to [0, 1] (negative cosine similarities are
-  treated as zero dissimilarity).
+- Unknown player returns `{"count": 0, "target": null, "similar": [], "error": "not_found"}`.
+- A pool with fewer than 2 rated players returns `{"count": 0, "target": {...}, "similar": [], "error": "pool_too_small"}`.
+- A target whose weighted z-vector is zero (e.g. all features identical to pool mean) returns `{"count": 0, "target": {...}, "similar": [], "error": "zero_vector"}`.
+- Similarity values are clamped to [0, 1] (negative cosine similarities are treated as zero similarity).
+- The target player is always excluded from results, including same-player rows from other seasons.
 
 ### GET /search
 

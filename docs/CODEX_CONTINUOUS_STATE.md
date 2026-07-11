@@ -2,6 +2,14 @@
 
 ## Recently Merged
 
+- **Similar-Player Search Enhancement Suite (2026-07-12, Round 6):**
+  1. **Position-weighted feature vector:** `_POSITION_FEATURE_WEIGHTS` table in `api.py` defines per-position weights for all 8 position groups (GK/CB/FB/DM/CM/AM/W/ST). Weights scale the z-scored feature vector before cosine similarity, so dimensions more relevant to a position carry more signal (e.g. ST weights Attack at 3.0, Defense at 0.5; CB weights Defense at 3.0, Attack at 0.5; GK weights Attack/Creation at 0.0). `_position_weights()` helper falls back to uniform weights for unknown positions. The active weights are surfaced in the response as `feature_weights`.
+  2. **Cross-position similarity mode:** New `same_position_only` parameter (default True for backward compat). When False, each player is z-scored against their own position group first, then merged into a cross-position pool. This makes profiles comparable across positions (a CM with above-average CM attack output can be compared to an ST with above-average ST attack output). Percentile ranks for strengths/weaknesses also use per-position ranks in cross-position mode.
+  3. **League + min_minutes filters:** New `league` (case-insensitive) and `min_minutes` parameters scope the candidate pool. The target player is always resolved from the full dataset, enabling cross-league scouting ("find La Liga players similar to this Premier League player"). When the target is filtered out of the pool, its z-score is computed using the pool's statistics (same_position_only mode) or the target's own position-group statistics (cross-position mode), so similarity is computed correctly.
+  4. **Target vector decoupled from pool membership:** Refactored target z-score computation to no longer depend on the target being in the filtered pool. Fixes a latent bug where league/min_minutes filters could exclude the target and cause the fallback to use the first pool row's vector as the target.
+  5. **API endpoint:** `GET /players/{player_name}/similar` now accepts `same_position_only`, `league`, `min_minutes` query params. Response includes `feature_weights` and `filters` fields for transparency.
+  6. **Frontend controls:** Similarity panel now has a controls bar with same-position checkbox (showing target's position group), league text input, min-minutes number input, and Apply button. Cross-position candidates display a position badge. Feature weights disclosure widget (collapsed by default) shows the active position-weighted dimensions. Error messages distinguish pool_too_small / zero_vector / no_data states.
+  7. **Tests:** 25 new tests (38 total in `test_player_similarity.py`) covering position weights (ST/GK/W/unknown), cross-position mode (sorted, excludes target, includes other positions), league filter (case-insensitive, target-still-found, cross-league correctness), min_minutes filter, combined filters, filter echoing, target exclusion, zero-vector edge case, and pool-too-small with strict filters. All 1059 unit tests pass, ruff + node check clean.
 - **Match Momentum Prediction Suite (2026-07-12):**
   1. **In-play win probability model:** `MatchMomentum` and `MomentumPoint` dataclasses + `compute_momentum()` in `match_prediction.py` — scales pre-match lambdas by remaining time, uses independent Poisson for remaining goals, computes win/draw/loss at each 5-minute interval. `update_probability_at_scoreline()` convenience wrapper for single-point queries. `_compute_inplay_probabilities()` helper sums over all remaining goal combinations.
   2. **Momentum API endpoint:** `GET /predictions/{home}/{away}/momentum` with `home_goals`, `away_goals`, `minute` query params via `get_match_momentum()` — fetches DC pre-match lambdas, computes momentum timeline from current minute to 90'.
@@ -70,7 +78,7 @@
 
 ## Current Development
 
-- Ensemble Prediction & Calibration Monitoring Suite complete on branch `codex/ensemble-drift`. All code, tests (29 new), ruff, and node checks pass. Merging to `codex/integration` next.
+- Similar-Player Search Enhancement Suite (Round 6) complete on `codex/integration`. All code, tests (25 new, 38 total in similarity file), ruff, and node checks pass. Continuing to Round 7.
 
 ## Known Blockers
 
@@ -82,8 +90,6 @@
 2. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
 3. Add cross-provider schema validation fixtures and empty-data behavior tests.
 4. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
-5. Similar-player search enhancement: position-weighted feature vector and per-position similarity pools.
-6. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
-7. Match momentum prediction: in-play win probability update model based on elapsed time and scoreline.
-8. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
-9. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
+5. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+6. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
+7. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
