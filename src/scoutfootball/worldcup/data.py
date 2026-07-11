@@ -2157,6 +2157,172 @@ def simulate_knockout(
     }
 
 
+def project_knockout_probabilities(
+    knockout_overview: dict,
+    team_strengths: dict[str, float],
+    *,
+    num_simulations: int = 10000,
+    seed: int = 42,
+) -> dict:
+    """Project per-matchup win probabilities for the live knockout bracket.
+
+    For each match in *knockout_overview* that has both teams filled and is
+    not yet completed, computes ``home_win_probability`` and
+    ``away_win_probability`` using the same Bradley-Terry model as
+    :func:`simulate_knockout`. Completed matches return the known winner
+    with probability 1.0.
+
+    When all Round of 32 matches have both teams filled, also runs a Monte
+    Carlo simulation (respecting already-completed matches) to estimate
+    tournament win probability for each remaining team.
+
+    Returns a dict with:
+        - ``match_probabilities``: list of dicts with match_id, round,
+          home, away, home_win_probability, away_win_probability, status.
+        - ``tournament_win_probability``: list of {team, strength,
+          win_probability} sorted descending (empty if R32 not fully filled).
+        - ``num_simulations``: number of MC iterations.
+        - ``disclaimer``: limitations notice.
+    """
+    import random
+
+    rng = random.Random(seed)
+
+    # Flatten matches from the rounds dict (overview structure) or matches list
+    rounds_dict = knockout_overview.get("rounds", {})
+    if rounds_dict:
+        matches = []
+        for rd_data in rounds_dict.values():
+            matches.extend(rd_data.get("matches", []))
+    else:
+        matches = knockout_overview.get("matches", [])
+
+    # ── Per-match probabilities ──
+    match_probs: list[dict] = []
+    for m in matches:
+        mid = m.get("match_id", "")
+        round_code = m.get("round", "")
+        home = m.get("home")
+        away = m.get("away")
+        status = m.get("status", "scheduled")
+
+        entry: dict = {
+            "match_id": mid,
+            "round": round_code,
+            "home": home,
+            "away": away,
+            "status": status,
+        }
+
+        if status == "completed":
+            winner = m.get("winner")
+            entry["home_win_probability"] = 1.0 if winner == home else 0.0
+            entry["away_win_probability"] = 1.0 if winner == away else 0.0
+            entry["winner"] = winner
+        elif home is not None and away is not None:
+            hs = team_strengths.get(home, 0.2)
+            as_ = team_strengths.get(away, 0.2)
+            p_home = _knockout_match_prob(hs, as_)
+            entry["home_win_probability"] = round(p_home, 4)
+            entry["away_win_probability"] = round(1 - p_home, 4)
+        else:
+            entry["home_win_probability"] = None
+            entry["away_win_probability"] = None
+
+        match_probs.append(entry)
+
+    # ── Monte Carlo tournament win probability ──
+    # Only feasible when all R32 matches have both teams filled.
+    r32_matches = [m for m in matches if m.get("round") == "r32"]
+    r32_ready = (
+        len(r32_matches) > 0
+        and all(m.get("home") is not None and m.get("away") is not None for m in r32_matches)
+    )
+
+    tournament_win_prob: list[dict] = []
+    if r32_ready and r32_matches:
+        win_counts: dict[str, int] = {}
+        sim_count = 0
+
+        for _ in range(num_simulations):
+            current_teams: list[tuple[str, float]] = []
+            for m in r32_matches:
+                home = m["home"]
+                away = m["away"]
+                status = m.get("status", "scheduled")
+                if status == "completed":
+                    winner = m.get("winner")
+                    s = team_strengths.get(winner, 0.2)
+                    current_teams.append((winner, s))
+                else:
+                    hs = team_strengths.get(home, 0.2)
+                    as_ = team_strengths.get(away, 0.2)
+                    p_home = _knockout_match_prob(hs, as_)
+                    if rng.random() < p_home:
+                        current_teams.append((home, hs))
+                    else:
+                        current_teams.append((away, as_))
+
+            # Simulate subsequent rounds
+            # Build a lookup of later-round matches to check for completed results
+            later_matches: dict[str, dict] = {}
+            for m in matches:
+                rc = m.get("round", "")
+                if rc != "r32":
+                    pos = m.get("position", 0)
+                    later_matches[f"{rc}-{pos}"] = m
+
+            rounds_chain = ["r16", "qf", "sf", "final"]
+            for rc in rounds_chain:
+                next_round: list[tuple[str, float]] = []
+                for i in range(0, len(current_teams) - 1, 2):
+                    t1, s1 = current_teams[i]
+                    t2, s2 = current_teams[i + 1]
+                    pos = i // 2 + 1
+                    key = f"{rc}-{pos}"
+                    lm = later_matches.get(key, {})
+                    if lm.get("status") == "completed":
+                        winner = lm.get("winner")
+                        s = team_strengths.get(winner, 0.2)
+                        next_round.append((winner, s))
+                    else:
+                        p1 = _knockout_match_prob(s1, s2)
+                        if rng.random() < p1:
+                            next_round.append((t1, s1))
+                        else:
+                            next_round.append((t2, s2))
+                current_teams = next_round
+
+            if current_teams:
+                winner = current_teams[0][0]
+                win_counts[winner] = win_counts.get(winner, 0) + 1
+                sim_count += 1
+
+        for team, strength in sorted(team_strengths.items(), key=lambda x: -x[1]):
+            p = win_counts.get(team, 0) / sim_count if sim_count > 0 else 0.0
+            if p > 0:
+                tournament_win_prob.append({
+                    "team": team,
+                    "group": get_team_group(team),
+                    "strength": round(strength, 4),
+                    "win_probability": round(p, 4),
+                })
+        tournament_win_prob.sort(key=lambda x: -x["win_probability"])
+
+    return {
+        "status": "ok",
+        "match_probabilities": match_probs,
+        "tournament_win_probability": tournament_win_prob[:16],
+        "num_simulations": num_simulations if r32_ready else 0,
+        "disclaimer": (
+            "Per-match probabilities use a Bradley-Terry strength model. "
+            "Tournament win probabilities are Monte Carlo estimates that "
+            "respect already-completed matches. Real outcomes depend on "
+            "form, injuries, tactics and home-field advantage not captured."
+        ),
+    }
+
+
 def compute_team_outlook(
     team: str,
     team_strengths: dict[str, float],

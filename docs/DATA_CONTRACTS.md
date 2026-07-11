@@ -791,6 +791,41 @@ Clear a knockout match result. Cascades: clearing a result recursively clears al
 
 **Response**: `{ "status": "ok", "cleared": true, "saved_to": "..." }`
 
+### GET /world-cup/tournament/knockout/probabilities
+Return per-match win probabilities and Monte Carlo tournament championship odds for the current knockout bracket. Uses Bradley-Terry strength model with amplification exponent k=2.8 for ready matches; completed matches return 1.0/0.0 for the known winner/loser; TBD matches return null probabilities. Tournament win probabilities are only computed when all 16 R32 matches have both teams filled (10,000 simulations, seeded).
+
+**Response** (when bracket generated and squads available):
+```json
+{
+  "match_probabilities": [
+    {
+      "match_id": "r32-01",
+      "home": "Argentina",
+      "away": "Panama",
+      "home_win_prob": 0.92,
+      "away_win_prob": 0.08,
+      "status": "ready"
+    },
+    {
+      "match_id": "r16-01",
+      "home": null,
+      "away": null,
+      "home_win_prob": null,
+      "away_win_prob": null,
+      "status": "tbd"
+    }
+  ],
+  "tournament_win_probability": [
+    { "team": "Argentina", "win_probability": 0.234 },
+    { "team": "France", "win_probability": 0.187 }
+  ],
+  "num_simulations": 10000,
+  "disclaimer": "Probabilities are model estimates for illustrative purposes..."
+}
+```
+
+**Response** (when no bracket generated): `{ "status": "error", "message": "No knockout bracket generated yet..." }`
+
 ### GET /license
 Data source license attribution.
 

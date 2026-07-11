@@ -256,10 +256,12 @@ def export_worldcup() -> int:
     from scoutfootball.api import (
         get_wc_groups,
         get_wc_knockout,
+        get_wc_knockout_bracket,
         get_wc_predictions,
         get_wc_schedule,
         get_wc_squad,
         get_wc_teams,
+        get_wc_tournament_summary,
     )
     from scoutfootball.worldcup.data import GROUPS
 
@@ -268,6 +270,10 @@ def export_worldcup() -> int:
     _write_json(WORLDCUP_DIR / "schedule.json", get_wc_schedule())
     _write_json(WORLDCUP_DIR / "predictions.json", get_wc_predictions())
     _write_json(WORLDCUP_DIR / "knockout.json", get_wc_knockout())
+
+    # Tournament state snapshot (summary + knockout bracket overview)
+    _write_json(WORLDCUP_DIR / "tournament_summary.json", get_wc_tournament_summary())
+    _write_json(WORLDCUP_DIR / "knockout_bracket.json", get_wc_knockout_bracket())
 
     # 48 team squads
     squad_count = 0
@@ -278,6 +284,7 @@ def export_worldcup() -> int:
         squad_count += 1
 
     print("  worldcup/teams.json, groups.json, schedule.json, predictions.json, knockout.json")
+    print("  worldcup/tournament_summary.json, knockout_bracket.json")
     print(f"  worldcup/squads/*.json ({squad_count} teams)")
     return squad_count
 

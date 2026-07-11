@@ -3898,3 +3898,36 @@ def clear_wc_knockout_result(match_id: str) -> dict:
         "cleared": True,
         "saved_to": DEFAULT_STATE_PATH,
     })
+
+
+def get_wc_knockout_probabilities() -> dict:
+    """Project per-matchup win probabilities for the live knockout bracket.
+
+    Uses the Bradley-Terry strength model to compute home/away win
+    probabilities for each match with both teams filled. When all R32
+    matches have teams, also runs Monte Carlo tournament win odds
+    respecting already-completed matches.
+    """
+    from scoutfootball.worldcup.data import project_knockout_probabilities
+    from scoutfootball.worldcup.tournament import get_knockout_overview
+
+    state = _wc_tournament_state()
+    overview = get_knockout_overview(state)
+    if not overview.get("generated"):
+        return _clean_json_value({
+            "status": "error",
+            "message": (
+                "No knockout bracket generated. "
+                "Call /world-cup/tournament/knockout/generate first."
+            ),
+        })
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads:
+        return _clean_json_value({
+            "status": "error",
+            "message": "World Cup squad data not available for strength model.",
+        })
+
+    result = project_knockout_probabilities(overview, strengths)
+    return _clean_json_value(result)

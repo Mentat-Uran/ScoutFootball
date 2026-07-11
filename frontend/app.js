@@ -7545,6 +7545,7 @@ let wcApiData = {
     tournamentSelectedGroup: "A",
     tournamentLoading: false,
     knockoutBracket: null,  // from /world-cup/tournament/knockout
+    knockoutProbabilities: null,  // from /world-cup/tournament/knockout/probabilities
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -8344,6 +8345,7 @@ async function generateKnockoutBracket() {
             method: "POST",
         });
         if (data && data.status === "ok") {
+            wcApiData.knockoutProbabilities = null;  // invalidate cache
             await fetchWcKnockoutBracket();
             renderWcKnockoutBracket();
         } else if (data && data.message) {
@@ -8360,6 +8362,7 @@ async function applyKnockoutResult(matchId, homeGoals, awayGoals, penaltiesWinne
     try {
         const data = await fetchJson(url, { method: "POST" });
         if (data && data.status === "ok") {
+            wcApiData.knockoutProbabilities = null;  // invalidate cache
             await fetchWcKnockoutBracket();
             renderWcKnockoutBracket();
         } else if (data && data.message) {
@@ -8375,11 +8378,25 @@ async function clearKnockoutResult(matchId) {
     try {
         const data = await fetchJson(url, { method: "DELETE" });
         if (data && data.status === "ok") {
+            wcApiData.knockoutProbabilities = null;  // invalidate cache
             await fetchWcKnockoutBracket();
             renderWcKnockoutBracket();
         }
     } catch (e) {
         // Silent fail
+    }
+}
+
+async function fetchWcKnockoutProbabilities() {
+    try {
+        const data = await fetchJson("/world-cup/tournament/knockout/probabilities");
+        if (data && data.status === "ok") {
+            wcApiData.knockoutProbabilities = data;
+        } else {
+            wcApiData.knockoutProbabilities = null;
+        }
+    } catch (e) {
+        wcApiData.knockoutProbabilities = null;
     }
 }
 
@@ -8407,6 +8424,15 @@ function renderWcKnockoutBracket() {
     const champ = data.champion;
     const prov = data.provisional;
 
+    // Build a lookup of probabilities by match_id
+    const probsData = wcApiData.knockoutProbabilities;
+    const probsMap = {};
+    if (probsData && probsData.match_probabilities) {
+        for (const p of probsData.match_probabilities) {
+            if (p.match_id) probsMap[p.match_id] = p;
+        }
+    }
+
     let html = "";
 
     if (champ) {
@@ -8421,6 +8447,24 @@ function renderWcKnockoutBracket() {
         html += `<p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">${z ? "(暂定——小组赛未完赛)" : "(Provisional — group stage incomplete)"}</p>`;
     }
 
+    // Tournament win odds table
+    if (probsData && probsData.tournament_win_probability && probsData.tournament_win_probability.length > 0) {
+        const odds = probsData.tournament_win_probability.slice(0, 8);
+        html += `<div style="margin-bottom:1rem;padding:0.6rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03))">
+            <h4 style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em">${z ? "夺冠概率" : "Tournament Win Odds"} <span style="font-weight:normal;text-transform:none">(${z ? "蒙特卡洛 " + probsData.num_simulations + " 次模拟" : "MC " + probsData.num_simulations + " sims"})</span></h4>
+            <div style="display:flex;flex-wrap:wrap;gap:0.4rem">`;
+        for (const t of odds) {
+            const pct = (t.win_probability * 100).toFixed(1);
+            const barWidth = Math.max(2, t.win_probability * 100);
+            html += `<div style="min-width:110px;flex:1">
+                <div style="font-size:0.7rem;margin-bottom:0.1rem">${escapeHtml(t.team)}</div>
+                <div style="background:var(--border-color,rgba(255,255,255,0.1));border-radius:3px;height:4px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:var(--accent-color,#4a9eff)"></div></div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${pct}%</div>
+            </div>`;
+        }
+        html += `</div></div>`;
+    }
+
     // Render bracket as horizontal scroll with columns per round
     html += `<div style="overflow-x:auto;padding-bottom:0.5rem"><div style="display:flex;gap:1rem;min-width:max-content">`;
 
@@ -8431,12 +8475,17 @@ function renderWcKnockoutBracket() {
             <h4 style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.05em">${roundLabels[code] || code}</h4>
             <div style="display:flex;flex-direction:column;gap:0.4rem">`;
         for (const m of rd.matches) {
-            html += renderKnockoutMatchCard(m, z);
+            html += renderKnockoutMatchCard(m, z, probsMap[m.match_id]);
         }
         html += `</div></div>`;
     }
 
     html += `</div></div>`;
+
+    if (probsData && probsData.disclaimer) {
+        html += `<p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem">${escapeHtml(probsData.disclaimer)}</p>`;
+    }
+
     panel.innerHTML = html;
 
     // Bind event listeners
@@ -8468,9 +8517,16 @@ function renderWcKnockoutBracket() {
             await clearKnockoutResult(matchId);
         });
     });
+
+    // Auto-fetch probabilities if not yet loaded
+    if (!wcApiData.knockoutProbabilities) {
+        fetchWcKnockoutProbabilities().then(() => {
+            if (wcApiData.knockoutProbabilities) renderWcKnockoutBracket();
+        });
+    }
 }
 
-function renderKnockoutMatchCard(m, z) {
+function renderKnockoutMatchCard(m, z, prob) {
     const home = m.home || "TBD";
     const away = m.away || "TBD";
     const hasResult = m.winner != null;
@@ -8479,8 +8535,19 @@ function renderKnockoutMatchCard(m, z) {
     const isReady = m.home != null && m.away != null;
     const decidedByPen = m.decided_by === "penalties";
 
+    // Probability bar HTML (for ready-for-input matches)
+    const probBar = (prob && prob.home_win_probability != null && prob.away_win_probability != null)
+        ? `<div style="display:flex;align-items:center;gap:0.2rem;margin-top:0.2rem;font-size:0.6rem;color:var(--text-muted)">
+              <span style="font-weight:bold;color:var(--text-secondary)">${(prob.home_win_probability * 100).toFixed(0)}%</span>
+              <div style="flex:1;height:3px;border-radius:2px;overflow:hidden;display:flex">
+                  <div style="width:${prob.home_win_probability * 100}%;background:var(--accent-color,#4a9eff)"></div>
+                  <div style="width:${prob.away_win_probability * 100}%;background:var(--border-color,rgba(255,255,255,0.2))"></div>
+              </div>
+              <span style="font-weight:bold;color:var(--text-secondary)">${(prob.away_win_probability * 100).toFixed(0)}%</span>
+          </div>`
+        : "";
+
     if (hasResult) {
-        const winnerCls = m.winner === m.home ? "status-high" : "status-medium";
         return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
             <div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-weight:${m.winner === m.home ? 'bold' : 'normal'}">${escapeHtml(home)}</span>
@@ -8514,6 +8581,7 @@ function renderKnockoutMatchCard(m, z) {
             <input type="number" min="0" max="30" class="wc-ko-ag" style="width:2rem;font-size:0.75rem;text-align:center" placeholder="-">
             <button class="text-button wc-ko-apply" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.4rem">${z ? "录入" : "Apply"}</button>
         </div>
+        ${probBar}
     </div>`;
 }
 
