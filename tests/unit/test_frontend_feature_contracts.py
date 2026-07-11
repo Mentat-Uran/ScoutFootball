@@ -23,6 +23,19 @@ def test_scouting_and_action_navigation_are_visible() -> None:
         assert "display:none" not in button.replace(" ", "")
 
 
+def test_frontend_foundation_keeps_keyboard_navigation_and_theme_state_explicit() -> None:
+    html = _read(FRONTEND / "index.html")
+    app_js = _read(FRONTEND / "app.js")
+    css = _read(FRONTEND / "style.css")
+
+    assert 'class="skip-link" href="#main-content"' in html
+    assert 'id="main-content" tabindex="-1"' in html
+    assert 'button.setAttribute("aria-current", "page")' in app_js
+    assert 'toggle.setAttribute("aria-pressed", darkMode ? "true" : "false")' in app_js
+    assert "--focus-ring" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
+
+
 def test_scouting_adapter_preserves_queue_contract_fields() -> None:
     app_js = _read(FRONTEND / "app.js")
 
