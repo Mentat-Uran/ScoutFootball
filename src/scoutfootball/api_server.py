@@ -25,6 +25,7 @@ from scoutfootball.api import (
     get_ensemble_prediction,
     get_form_weighted_prediction,
     get_head_to_head,
+    get_match_momentum,
     get_match_prediction,
     get_match_prediction_dc,
     get_model_run_detail,
@@ -246,6 +247,19 @@ def create_app() -> FastAPI:
         form_limit: int = Query(10, ge=1, le=50),
     ):
         return get_head_to_head(home_team, away_team, limit=limit, form_limit=form_limit)
+
+    @app.get("/predictions/{home_team}/{away_team}/momentum")
+    def predictions_momentum(
+        home_team: str,
+        away_team: str,
+        home_goals: int = Query(0, ge=0, le=20),
+        away_goals: int = Query(0, ge=0, le=20),
+        minute: int = Query(0, ge=0, le=120),
+    ):
+        return get_match_momentum(
+            home_team, away_team,
+            home_goals=home_goals, away_goals=away_goals, minute=minute,
+        )
 
     @app.get("/predictions/meta")
     def predictions_meta():
