@@ -181,6 +181,7 @@ def fit_dixon_coles(
     maxiter: int = 500,
     half_life_days: float | None = None,
     decay: float | None = None,
+    match_weights: np.ndarray | None = None,
 ) -> DixonColesModel:
     """Fit a Dixon-Coles (1997) model via maximum likelihood estimation.
 
@@ -194,6 +195,9 @@ def fit_dixon_coles(
     decay : If set, apply exponential time decay weighting. Each match is
         weighted by exp(-decay * days_since_match_i). The Dixon-Coles (1997)
         paper recommends decay ≈ 0.005. Takes precedence over ``half_life_days``.
+    match_weights : Optional per-match weights (aligned to the merged
+        home-away match pairs). When provided, these multiply the time-decay
+        weights. Useful for form-based or confidence-based weighting.
 
     Returns
     -------
@@ -238,6 +242,15 @@ def fit_dixon_coles(
             # Alternative: half-life formulation
             decay_weights = 0.5 ** (days_since / half_life_days)
             effective_decay = float(np.log(2) / half_life_days)
+
+    # Apply optional per-match weights (e.g. form-based) on top of decay
+    if match_weights is not None:
+        if len(match_weights) != len(decay_weights):
+            raise ValueError(
+                f"match_weights length {len(match_weights)} does not match "
+                f"number of fixtures {len(decay_weights)}"
+            )
+        decay_weights = decay_weights * np.asarray(match_weights, dtype=float)
 
     teams = sorted(df["team_id"].dropna().astype(str).unique())
     n_teams = len(teams)
@@ -588,3 +601,339 @@ def _compute_rps(probs: np.ndarray, actual_onehot: np.ndarray) -> float:
     cumulative_probs = np.cumsum(probs, axis=1)
     cumulative_actual = np.cumsum(actual_onehot, axis=1)
     return float(np.mean(np.sum((cumulative_probs - cumulative_actual) ** 2, axis=1) / 2.0))
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap confidence intervals for match predictions
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PredictionConfidenceInterval:
+    """Bootstrap confidence intervals for match prediction quantities.
+
+    Each interval is a (low, high) tuple representing the percentile bounds
+    of the bootstrap distribution.
+    """
+
+    n_bootstrap: int
+    home_win_low: float
+    home_win_high: float
+    draw_low: float
+    draw_high: float
+    away_win_low: float
+    away_win_high: float
+    home_lambda_low: float
+    home_lambda_high: float
+    away_lambda_low: float
+    away_lambda_high: float
+    failed_iterations: int = 0
+
+
+def bootstrap_prediction_confidence(
+    team_match_df: pd.DataFrame,
+    home_team_id: str,
+    away_team_id: str,
+    *,
+    n_bootstrap: int = 200,
+    confidence_level: float = 0.95,
+    max_goals: int = 10,
+    decay: float | None = None,
+    half_life_days: float | None = None,
+    random_seed: int = 42,
+) -> PredictionConfidenceInterval:
+    """Estimate confidence intervals for match predictions via bootstrap.
+
+    Resamples the team-match data with replacement, refits a Dixon-Coles model
+    on each bootstrap sample, and predicts the match. The distribution of
+    home_win / draw / away_win / lambdas across bootstrap iterations yields
+    percentile-based confidence intervals.
+
+    Parameters
+    ----------
+    team_match_df : DataFrame with columns match_id, match_date, team_id,
+        is_home, goals_for, goals_against.
+    home_team_id, away_team_id : team identifiers present in team_match_df.
+    n_bootstrap : number of bootstrap iterations (default 200).
+    confidence_level : confidence level for the interval (default 0.95).
+    max_goals : max goals for score matrix (default 10).
+    decay, half_life_days : forwarded to fit_dixon_coles.
+    random_seed : reproducibility seed.
+
+    Returns
+    -------
+    PredictionConfidenceInterval with percentile-based bounds.
+    """
+    if n_bootstrap < 10:
+        raise ValueError("n_bootstrap must be at least 10")
+    if not (0.0 < confidence_level < 1.0):
+        raise ValueError("confidence_level must be between 0 and 1")
+
+    rng = np.random.default_rng(random_seed)
+    alpha = (1.0 - confidence_level) / 2.0 * 100.0
+    beta = (1.0 - alpha / 100.0) * 100.0
+
+    # Build fixture-level data (one row per match) for resampling
+    fixtures = _build_bootstrap_fixtures(team_match_df)
+    n_fixtures = len(fixtures)
+    if n_fixtures < 20:
+        raise ValueError(
+            f"Need at least 20 fixtures for bootstrap, got {n_fixtures}"
+        )
+
+    home_wins: list[float] = []
+    draws: list[float] = []
+    away_wins: list[float] = []
+    home_lambdas: list[float] = []
+    away_lambdas: list[float] = []
+    failed = 0
+
+    for _ in range(n_bootstrap):
+        # Resample fixture indices with replacement
+        sample_indices = rng.integers(0, n_fixtures, size=n_fixtures)
+        sampled = fixtures.iloc[sample_indices]
+
+        # Reconstruct team-match format (two rows per fixture)
+        rows = []
+        for _, fixture in sampled.iterrows():
+            rows.append({
+                "match_id": str(fixture["match_id"]),
+                "match_date": str(fixture["match_date"]),
+                "team_id": str(fixture["home_team"]),
+                "is_home": True,
+                "goals_for": int(fixture["home_goals"]),
+                "goals_against": int(fixture["away_goals"]),
+            })
+            rows.append({
+                "match_id": str(fixture["match_id"]),
+                "match_date": str(fixture["match_date"]),
+                "team_id": str(fixture["away_team"]),
+                "is_home": False,
+                "goals_for": int(fixture["away_goals"]),
+                "goals_against": int(fixture["home_goals"]),
+            })
+        boot_df = pd.DataFrame(rows)
+
+        try:
+            model = fit_dixon_coles(
+                boot_df,
+                decay=decay,
+                half_life_days=half_life_days,
+                maxiter=300,
+            )
+            pred = predict_match_dc(
+                model, home_team_id, away_team_id, max_goals=max_goals
+            )
+            home_wins.append(pred.summary.home_win)
+            draws.append(pred.summary.draw)
+            away_wins.append(pred.summary.away_win)
+            home_lambdas.append(pred.home_lambda)
+            away_lambdas.append(pred.away_lambda)
+        except Exception:
+            failed += 1
+            continue
+
+    if len(home_wins) < 5:
+        raise RuntimeError(
+            f"Bootstrap failed: only {len(home_wins)}/{n_bootstrap} iterations succeeded"
+        )
+
+    def _pct(arr: list[float]) -> tuple[float, float]:
+        a = np.array(arr)
+        return float(np.percentile(a, alpha)), float(np.percentile(a, beta))
+
+    hw_lo, hw_hi = _pct(home_wins)
+    d_lo, d_hi = _pct(draws)
+    aw_lo, aw_hi = _pct(away_wins)
+    hl_lo, hl_hi = _pct(home_lambdas)
+    al_lo, al_hi = _pct(away_lambdas)
+
+    return PredictionConfidenceInterval(
+        n_bootstrap=n_bootstrap,
+        home_win_low=hw_lo,
+        home_win_high=hw_hi,
+        draw_low=d_lo,
+        draw_high=d_hi,
+        away_win_low=aw_lo,
+        away_win_high=aw_hi,
+        home_lambda_low=hl_lo,
+        home_lambda_high=hl_hi,
+        away_lambda_low=al_lo,
+        away_lambda_high=al_hi,
+        failed_iterations=failed,
+    )
+
+
+def _build_bootstrap_fixtures(team_match_df: pd.DataFrame) -> pd.DataFrame:
+    """Convert team-match rows (two per match) into fixture-level rows (one per match).
+
+    Returns a DataFrame with columns: match_id, match_date, home_team,
+    away_team, home_goals, away_goals.
+    """
+    df = team_match_df.copy()
+    df["team_id"] = df["team_id"].astype(str)
+    df["match_id"] = df["match_id"].astype(str)
+
+    home_rows = df[df["is_home"]].rename(columns={
+        "team_id": "home_team",
+        "goals_for": "home_goals",
+        "goals_against": "away_goals",
+    })
+    away_rows = df[~df["is_home"]].rename(columns={
+        "team_id": "away_team",
+        "goals_for": "away_goals",
+        "goals_against": "home_goals",
+    })
+
+    merge_cols = ["match_id"]
+    if "match_date" in df.columns:
+        merge_cols.append("match_date")
+
+    fixtures = home_rows[merge_cols + ["home_team", "home_goals", "away_goals"]].merge(
+        away_rows[merge_cols + ["away_team", "away_goals", "home_goals"]],
+        on=merge_cols,
+        suffixes=("_h", "_a"),
+    )
+    # Resolve duplicate columns from merge
+    for col in ["home_goals", "away_goals"]:
+        h_col = f"{col}_h"
+        a_col = f"{col}_a"
+        if h_col in fixtures.columns and a_col in fixtures.columns:
+            fixtures[col] = fixtures[h_col].where(fixtures[h_col].notna(), fixtures[a_col])
+            fixtures = fixtures.drop(columns=[h_col, a_col])
+
+    return fixtures.reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Form-based match weighting
+# ---------------------------------------------------------------------------
+
+
+def compute_form_weights(
+    team_match_df: pd.DataFrame,
+    *,
+    lookback: int = 5,
+    form_factor: float = 0.3,
+) -> np.ndarray:
+    """Compute per-match form-based weights for Dixon-Coles fitting.
+
+    For each match, the weight is based on the rolling form (points per game)
+    of both teams in the preceding ``lookback`` matches. Teams in good recent
+    form receive higher weight, reflecting that their recent performances are
+    more predictive of current strength.
+
+    Parameters
+    ----------
+    team_match_df : DataFrame with columns match_id, match_date, team_id,
+        is_home, goals_for, goals_against.
+    lookback : number of recent matches to compute rolling form (default 5).
+    form_factor : controls the strength of form weighting (default 0.3).
+        0.0 means no form weighting (all weights = 1.0).
+        1.0 means strong form weighting.
+
+    Returns
+    -------
+    np.ndarray of per-match weights aligned to the fixture-level ordering
+    produced by _build_bootstrap_fixtures.
+    """
+    if form_factor <= 0.0:
+        fixtures = _build_bootstrap_fixtures(team_match_df)
+        return np.ones(len(fixtures))
+
+    df = team_match_df.copy()
+    df["team_id"] = df["team_id"].astype(str)
+    df["match_id"] = df["match_id"].astype(str)
+    if "match_date" in df.columns:
+        df = df.sort_values("match_date").reset_index(drop=True)
+
+    # Compute rolling form (points per game) for each team
+    form_records: dict[str, list[float]] = {}
+    for _, row in df.iterrows():
+        tid = str(row["team_id"])
+        gf = float(row["goals_for"])
+        ga = float(row["goals_against"])
+        pts = 3.0 if gf > ga else (1.0 if gf == ga else 0.0)
+        if tid not in form_records:
+            form_records[tid] = []
+        form_records[tid].append(pts)
+
+    # Compute rolling average form for each team at each match index
+    rolling_form: dict[str, list[float]] = {}
+    for tid, pts_list in form_records.items():
+        arr = np.array(pts_list, dtype=float)
+        rolling = np.full(len(arr), 1.0)  # default form = 1.0 (average)
+        for i in range(1, len(arr)):
+            start = max(0, i - lookback)
+            rolling[i] = arr[start:i].mean() if i > 0 else 1.0
+        rolling_form[tid] = rolling.tolist()
+
+    # Build fixtures and compute per-fixture form weight
+    fixtures = _build_bootstrap_fixtures(team_match_df)
+    if "match_date" in fixtures.columns:
+        fixtures = fixtures.sort_values("match_date").reset_index(drop=True)
+
+    # Track per-team match index for rolling form lookup
+    team_match_counter: dict[str, int] = {}
+    weights = np.ones(len(fixtures))
+
+    for idx, row in fixtures.iterrows():
+        home_team = str(row["home_team"])
+        away_team = str(row["away_team"])
+
+        # Get current form index for each team
+        h_idx = team_match_counter.get(home_team, 0)
+        a_idx = team_match_counter.get(away_team, 0)
+
+        # Get rolling form (0-3 scale, normalize to 0-1)
+        h_form = 1.0
+        a_form = 1.0
+        if home_team in rolling_form and h_idx < len(rolling_form[home_team]):
+            h_form = rolling_form[home_team][h_idx] / 3.0  # normalize 0-3 → 0-1
+        if away_team in rolling_form and a_idx < len(rolling_form[away_team]):
+            a_form = rolling_form[away_team][a_idx] / 3.0
+
+        # Form weight: blend base weight (1.0) with form-adjusted weight
+        # Good form (1.0) → weight > 1, bad form (0.0) → weight < 1
+        h_weight = 1.0 + form_factor * (h_form - 0.5)
+        a_weight = 1.0 + form_factor * (a_form - 0.5)
+        weights[idx] = (h_weight + a_weight) / 2.0
+
+        # Increment match counters
+        team_match_counter[home_team] = h_idx + 1
+        team_match_counter[away_team] = a_idx + 1
+
+    # Normalize weights to mean 1.0 to preserve overall likelihood scale
+    mean_w = float(np.mean(weights))
+    if mean_w > 0:
+        weights = weights / mean_w
+
+    return weights
+
+
+def fit_dixon_coles_with_form(
+    team_match_df: pd.DataFrame,
+    *,
+    maxiter: int = 500,
+    half_life_days: float | None = None,
+    decay: float | None = None,
+    form_lookback: int = 5,
+    form_factor: float = 0.3,
+) -> DixonColesModel:
+    """Fit Dixon-Coles with form-based match weighting.
+
+    Convenience wrapper that computes form weights via :func:`compute_form_weights`
+    and passes them to :func:`fit_dixon_coles`.
+    """
+    form_weights = compute_form_weights(
+        team_match_df,
+        lookback=form_lookback,
+        form_factor=form_factor,
+    )
+    return fit_dixon_coles(
+        team_match_df,
+        maxiter=maxiter,
+        half_life_days=half_life_days,
+        decay=decay,
+        match_weights=form_weights,
+    )

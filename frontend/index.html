@@ -426,6 +426,14 @@
                                 <select id="away-team" class="glass-control"></select>
                             </label>
                         </div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.4rem">
+                            <label style="font-size:0.72rem;color:var(--text-muted)" data-i18n="model_label">模型</label>
+                            <select id="prediction-model" class="glass-control" style="font-size:0.78rem;padding:0.2rem 0.4rem">
+                                <option value="poisson">Poisson</option>
+                                <option value="dixon_coles" selected>Dixon-Coles</option>
+                                <option value="form">DC + Form</option>
+                            </select>
+                        </div>
                         <div id="match-probabilities" class="probability-stack"></div>
                         <div class="detail-grid" id="match-detail"></div>
                         <div id="outcome-bar-chart" class="chart-box" style="height:200px;margin-top:0.5rem"></div>
@@ -544,6 +552,7 @@
                                 <span id="team-compare-pill" class="status-pill status-medium"></span>
                             </div>
                             <div id="team-compare-radar-chart" style="width:100%;height:400px"></div>
+                            <div id="team-compare-diff-table" style="margin-top:0.5rem;padding:0.3rem 0.5rem"></div>
                         </article>
 
                         <article class="liquid-panel compact-panel">

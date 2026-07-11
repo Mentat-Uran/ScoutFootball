@@ -665,7 +665,141 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
     model_cmp = _match_model_comparison(home_team, away_team)
     if model_cmp:
         result["model_comparison"] = model_cmp
+    # Add bootstrap confidence intervals (cached, best-effort)
+    ci = _get_prediction_confidence(home_team, away_team)
+    if ci:
+        result["confidence_intervals"] = ci
     return _clean_json_value(result)
+
+
+# --- Prediction confidence interval cache ---
+_PREDICTION_CI_CACHE: dict[str, Any] = {}
+_PREDICTION_CI_TTL_SECONDS = 600  # 10 minutes
+
+
+def _resolve_tuned_decay() -> float | None:
+    """Read the tuned DC decay from calibration backtest results, if available."""
+    try:
+        tuning_path = (
+            _settings().report_root
+            / "calibration_backtest"
+            / "decay_tuning_results.json"
+        )
+        if tuning_path.exists():
+            data = _read_json(tuning_path)
+            best = data.get("best_decay")
+            if isinstance(best, (int, float)) and best >= 0:
+                return float(best)
+    except Exception:
+        pass
+    return None
+
+
+def _get_prediction_confidence(
+    home_team: str, away_team: str, *, force_refresh: bool = False
+) -> dict[str, Any] | None:
+    """Return cached bootstrap confidence intervals for a match prediction.
+
+    Uses n_bootstrap=50 for API-friendly latency. Returns None on failure.
+    """
+    import time as _time
+
+    cache_key = f"{home_team}__{away_team}"
+    now = _time.time()
+    cached = _PREDICTION_CI_CACHE.get(cache_key)
+    if (
+        not force_refresh
+        and cached is not None
+        and now - cached.get("timestamp", 0) < _PREDICTION_CI_TTL_SECONDS
+    ):
+        return cached.get("data")
+
+    try:
+        from scoutfootball.models import bootstrap_prediction_confidence
+
+        team_match = load_team_match()
+        if team_match is None or len(team_match) < 50:
+            return None
+
+        decay = _resolve_tuned_decay()
+        ci = bootstrap_prediction_confidence(
+            team_match,
+            str(home_team),
+            str(away_team),
+            n_bootstrap=50,
+            confidence_level=0.90,
+            decay=decay,
+        )
+        result = _clean_json_value({
+            "n_bootstrap": ci.n_bootstrap,
+            "confidence_level": 0.90,
+            "failed_iterations": ci.failed_iterations,
+            "home_win": [ci.home_win_low, ci.home_win_high],
+            "draw": [ci.draw_low, ci.draw_high],
+            "away_win": [ci.away_win_low, ci.away_win_high],
+            "home_lambda": [ci.home_lambda_low, ci.home_lambda_high],
+            "away_lambda": [ci.away_lambda_low, ci.away_lambda_high],
+        })
+        _PREDICTION_CI_CACHE[cache_key] = {"data": result, "timestamp": now}
+        return result
+    except Exception:
+        return None
+
+
+def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
+    """Predict a match using form-weighted Dixon-Coles.
+
+    Uses :func:`fit_dixon_coles_with_form` to apply form-based match weights
+    on top of the tuned time-decay parameter. Returns the same structure as
+    :func:`get_match_prediction_dc` plus form-specific metadata.
+    """
+    try:
+        from scoutfootball.models import (
+            fit_dixon_coles_with_form,
+            predict_match_dc,
+        )
+
+        team_match = load_team_match()
+        if team_match is None or len(team_match) < 50:
+            return {"error": "Insufficient team_match data for form-weighted prediction"}
+
+        decay = _resolve_tuned_decay()
+        model = fit_dixon_coles_with_form(
+            team_match,
+            decay=decay,
+            form_lookback=5,
+            form_factor=0.3,
+        )
+        pred = predict_match_dc(model, str(home_team), str(away_team))
+
+        result = {
+            "home_team": home_team,
+            "away_team": away_team,
+            "model_type": "dixon_coles_form",
+            "model_version": "1.0",
+            "home_lambda": pred.home_lambda,
+            "away_lambda": pred.away_lambda,
+            "home_win": pred.summary.home_win,
+            "draw": pred.summary.draw,
+            "away_win": pred.summary.away_win,
+            "over_2_5": pred.summary.over_2_5,
+            "btts_yes": pred.summary.btts_yes,
+            "score_matrix": _score_matrix_to_list(pred),
+            "form_config": {
+                "lookback": 5,
+                "form_factor": 0.3,
+                "decay": decay,
+            },
+            "rho": model.rho,
+            "home_advantage": model.home_advantage,
+        }
+        # Add confidence intervals (cached, best-effort)
+        ci = _get_prediction_confidence(home_team, away_team)
+        if ci:
+            result["confidence_intervals"] = ci
+        return _clean_json_value(result)
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 def get_head_to_head(

@@ -21,6 +21,7 @@ from scoutfootball.api import (
     get_artifacts_summary,
     get_backtest_comparison,
     get_decay_tuning,
+    get_form_weighted_prediction,
     get_head_to_head,
     get_match_prediction,
     get_match_prediction_dc,
@@ -229,6 +230,8 @@ def create_app() -> FastAPI:
     def predictions(home_team: str, away_team: str, model: str = "poisson"):
         if model == "dixon_coles":
             return get_match_prediction_dc(home_team, away_team)
+        if model == "form":
+            return get_form_weighted_prediction(home_team, away_team)
         return get_match_prediction(home_team, away_team)
 
     @app.get("/predictions/{home_team}/{away_team}/h2h")
