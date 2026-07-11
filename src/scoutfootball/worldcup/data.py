@@ -1837,6 +1837,8 @@ def compute_team_strength_details(
             "coverage_score": round(coverage_score, 4),
             "big5_score": round(big5_score, 4),
             "big5_ratio": round(big5_ratio, 4),
+            "rated_players": len(rated),
+            "total_players": len(squad),
         }
 
     return strengths
@@ -2299,12 +2301,21 @@ def compute_team_outlook(
         "championship_probability": round(championship_prob, 4),
         "strength_breakdown": {
             "coverage": details.get("coverage"),
-            "shrunk_avg_rating": details.get("shrunk_avg_rating"),
-            "core_avg_rating": details.get("core_avg_rating"),
-            "opta_score": details.get("opta_score"),
-            "league_score": details.get("league_score"),
             "rated_players": details.get("rated_players"),
             "total_players": details.get("total_players"),
+            "observed_avg_rating": details.get("observed_avg_rating"),
+            "proxy_avg_rating": details.get("proxy_avg_rating"),
+            "shrunk_avg_rating": details.get("shrunk_avg_rating"),
+            "core_avg_rating": details.get("core_avg_rating"),
+            "depth_avg_rating": details.get("depth_avg_rating"),
+            "reserve_avg_rating": details.get("reserve_avg_rating"),
+            "squad_quality_rating": details.get("squad_quality_rating"),
+            "rating_score": details.get("rating_score"),
+            "opta_score": details.get("opta_score"),
+            "league_score": details.get("league_score"),
+            "coverage_score": details.get("coverage_score"),
+            "big5_score": details.get("big5_score"),
+            "big5_ratio": details.get("big5_ratio"),
         },
         "disclaimer": (
             "Outlook probabilities use a simplified strength-ratio and "

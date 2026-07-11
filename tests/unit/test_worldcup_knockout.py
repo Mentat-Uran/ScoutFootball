@@ -6,11 +6,13 @@ import pytest
 
 from scoutfootball.worldcup.data import (
     GROUPS,
+    SquadPlayer,
     _knockout_match_prob,
     _predict_group_finishes,
     _seed_round_of_32,
     compute_group_predictions,
     compute_team_outlook,
+    compute_team_strength_details,
     simulate_knockout,
 )
 
@@ -277,9 +279,108 @@ class TestComputeTeamOutlook:
         assert sb["shrunk_avg_rating"] == 0.82
         assert sb["core_avg_rating"] == 0.88
 
+    def test_strength_breakdown_forwards_all_fields(self, full_strengths, bracket_and_preds):
+        """Verify outlook forwards the full strength breakdown, including
+        previously-missing rated_players/total_players and component scores."""
+        bracket, preds = bracket_and_preds
+        details = {
+            "Spain": {
+                "coverage": 0.9,
+                "rated_players": 20,
+                "total_players": 23,
+                "observed_avg_rating": 70.5,
+                "proxy_avg_rating": 55.0,
+                "shrunk_avg_rating": 68.0,
+                "core_avg_rating": 75.0,
+                "depth_avg_rating": 65.0,
+                "reserve_avg_rating": 55.0,
+                "squad_quality_rating": 71.0,
+                "rating_score": 0.85,
+                "opta_score": 0.9,
+                "league_score": 0.7,
+                "coverage_score": 0.92,
+                "big5_score": 0.8,
+                "big5_ratio": 0.6,
+            },
+        }
+        outlook = compute_team_outlook(
+            "Spain", full_strengths, preds, bracket,
+            strength_details=details,
+        )
+        sb = outlook["strength_breakdown"]
+        # Previously-missing fields now forwarded
+        assert sb["rated_players"] == 20
+        assert sb["total_players"] == 23
+        # Newly-forwarded component scores
+        assert sb["depth_avg_rating"] == 65.0
+        assert sb["reserve_avg_rating"] == 55.0
+        assert sb["squad_quality_rating"] == 71.0
+        assert sb["rating_score"] == 0.85
+        assert sb["opta_score"] == 0.9
+        assert sb["league_score"] == 0.7
+        assert sb["coverage_score"] == 0.92
+        assert sb["big5_score"] == 0.8
+        assert sb["big5_ratio"] == 0.6
+        assert sb["observed_avg_rating"] == 70.5
+        assert sb["proxy_avg_rating"] == 55.0
+
     def test_host_flag(self, full_strengths, bracket_and_preds):
         bracket, preds = bracket_and_preds
         outlook_us = compute_team_outlook("United States", full_strengths, preds, bracket)
         outlook_brazil = compute_team_outlook("Brazil", full_strengths, preds, bracket)
         assert outlook_us["is_host"] is True
         assert outlook_brazil["is_host"] is False
+
+
+class TestComputeTeamStrengthDetails:
+    """Verify compute_team_strength_details returns rated_players/total_players
+    and all expected component fields."""
+
+    def _squad(self):
+        """Build a small 5-player squad: 3 rated, 2 unrated."""
+        return [
+            SquadPlayer(name="Rated A", position="ST", club="X", club_league="La Liga",
+                        has_rating=True, rating=75.0, rating_confidence="high"),
+            SquadPlayer(name="Rated B", position="CM", club="Y", club_league="Premier League",
+                        has_rating=True, rating=70.0, rating_confidence="high"),
+            SquadPlayer(name="Rated C", position="CB", club="Z", club_league="Serie A",
+                        has_rating=True, rating=65.0, rating_confidence="medium"),
+            SquadPlayer(name="Unrated D", position="GK", club="W", club_league="Ligue 1",
+                        has_rating=False, rating=None, rating_confidence="none"),
+            SquadPlayer(name="Unrated E", position="FB", club="V", club_league="Bundesliga",
+                        has_rating=False, rating=None, rating_confidence="none"),
+        ]
+
+    def test_rated_and_total_players_present(self):
+        squads = {"TestTeam": self._squad()}
+        result = compute_team_strength_details(enriched_squads=squads)
+        details = result["TestTeam"]
+        assert details["rated_players"] == 3
+        assert details["total_players"] == 5
+
+    def test_coverage_matches_rated_total(self):
+        squads = {"TestTeam": self._squad()}
+        result = compute_team_strength_details(enriched_squads=squads)
+        details = result["TestTeam"]
+        assert abs(details["coverage"] - 3 / 5) < 0.001
+
+    def test_all_component_fields_present(self):
+        squads = {"TestTeam": self._squad()}
+        result = compute_team_strength_details(enriched_squads=squads)
+        details = result["TestTeam"]
+        expected_keys = {
+            "strength", "coverage", "observed_avg_rating", "proxy_avg_rating",
+            "shrunk_avg_rating", "core_avg_rating", "depth_avg_rating",
+            "reserve_avg_rating", "squad_quality_rating", "rating_score",
+            "opta_score", "league_score", "coverage_score", "big5_score",
+            "big5_ratio", "rated_players", "total_players",
+        }
+        assert expected_keys.issubset(set(details.keys()))
+
+    def test_empty_squad(self):
+        squads = {"EmptyTeam": []}
+        result = compute_team_strength_details(enriched_squads=squads)
+        details = result["EmptyTeam"]
+        assert details["rated_players"] == 0
+        assert details["total_players"] == 0
+        assert details["coverage"] == 0.0

@@ -2,6 +2,12 @@
 
 ## Recently Merged
 
+- **Player Profile Deep Dive & Team Outlook Fix (2026-07-11):**
+  1. **Player detail panel enhancement:** `renderPlayerProfile()` now renders 5 new blocks — per-90 metrics (npg_p90, assists_p90, defense_composite, possession_composite), position dimension percentiles (all dimensions from `position_percentiles` with color-coded percentile badges and `overall_score` highlight), rating dimension breakdown table (attack/defense/possession/availability/quality/xT with percentile, contribution, confidence from `position_explanation`), 3-season trend with delta (score/goals/assists/minutes changes from `trend_3seasons`), and low confidence reasons warning list (from `low_confidence_reasons`).
+  2. **Season history table:** Replaced compact "season: score" dots string with a full 6-column table (season/team/league/position_group/minutes/optimized_score) from the `seasons` array.
+  3. **Team outlook strength_breakdown bug fix:** `compute_team_strength_details()` now returns `rated_players` and `total_players` fields (previously missing — caused `strength_breakdown.rated_players`/`total_players` to be always None in the outlook API).
+  4. **Extended strength_breakdown forwarding + frontend display:** `compute_team_outlook()` now forwards all 17 fields from strength details (added depth_avg_rating, reserve_avg_rating, squad_quality_rating, observed_avg_rating, proxy_avg_rating, rating_score, coverage_score, big5_score, big5_ratio). Frontend `renderWcOutlook()` now displays rated/total players, all rating tiers (core/depth/reserve/squad quality/observed/proxy), and a "Strength Components" section showing all 6 component scores as percentages.
+  5. **Tests:** 5 new tests — `test_strength_breakdown_forwards_all_fields` (outlook forwarding), `test_rated_and_total_players_present`, `test_coverage_matches_rated_total`, `test_all_component_fields_present`, `test_empty_squad` (compute_team_strength_details).
 - **Model Trust & Data Attribution Suite (2026-07-11):**
   1. **Report detail endpoint integration:** `fetchModelRunDetail()` async loads `/reports/model-runs/{run_id}` on first expand; `_renderRunDetailExtra()` renders feature_importance (parquet-level, top 10), params_summary (shape/mean/std/min/max), and data_attribution (primary_source, license_note, StatsBomb attribution callout).
   2. **Data attribution compliance panel:** `_renderDataAttributionPanel()` renders `/license` endpoint's `license_attribution` dict — data source label, update timestamp, per-source license notes with links, StatsBomb attribution highlight.
@@ -31,7 +37,7 @@
 
 ## Current Development
 
-- Model Trust & Data Attribution Suite complete; merged to `codex/integration`. Preparing next round.
+- Player Profile Deep Dive & Team Outlook Fix complete; merging to `codex/integration`. Preparing next round.
 
 ## Known Blockers
 
@@ -41,7 +47,8 @@
 
 1. Generate a versioned full match-action artifact with dates, minutes, competition coverage, and independent evaluation.
 2. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-3. Enrich team outlook with strength_details wiring from team_strength API (currently coverage is None without details).
-4. Add Dixon-Coles time decay parameter tuning and low-score calibration refinement.
-5. Add real label feedback loop for scouting workflow (truth label re-injection).
-6. Add cross-provider schema validation fixtures and empty-data behavior tests.
+3. Add Dixon-Coles time decay parameter tuning and low-score calibration refinement.
+4. Add real label feedback loop for scouting workflow (truth label re-injection).
+5. Add cross-provider schema validation fixtures and empty-data behavior tests.
+6. Player similarity search (find comparable players by percentile profile).
+7. Team strength radar chart (visualize component scores across teams).
