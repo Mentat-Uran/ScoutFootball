@@ -1133,8 +1133,10 @@ def save_model_run(
     Saves:
     - optimized_params.npy
     - meta.json with: params summary, seed, input hash, metrics, position metrics,
-      error case summary, composite objective weights
+      error case summary, dependency versions, train/test season split,
+      composite objective weights
     """
+    import platform
     from datetime import UTC, datetime
 
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -1145,7 +1147,7 @@ def save_model_run(
     np.save(run_dir / "optimized_params.npy", params)
 
     # Build meta
-    meta = {
+    meta: dict = {
         "timestamp": timestamp,
         "params_shape": list(params.shape),
         "params_mean": float(params.mean()),
@@ -1156,6 +1158,50 @@ def save_model_run(
             for k, v in metrics.items()
         },
     }
+
+    # Dependency versions for reproducibility
+    dep_versions: dict[str, str] = {
+        "python": platform.python_version(),
+        "numpy": np.__version__,
+        "pandas": pd.__version__,
+    }
+    try:
+        dep_versions["torch"] = torch.__version__
+    except Exception:
+        pass
+    for mod_name in ("sklearn", "scipy", "duckdb"):
+        try:
+            mod = __import__(mod_name)
+            dep_versions[mod_name] = getattr(mod, "__version__", "unknown")
+        except Exception:
+            pass
+    meta["dependency_versions"] = dep_versions
+
+    # Train/test season split
+    if args is not None:
+        train_seasons = getattr(args, "train_seasons", None)
+        test_seasons = getattr(args, "test_seasons", None)
+        if train_seasons:
+            meta["train_seasons"] = (
+                [train_seasons] if isinstance(train_seasons, str)
+                else list(train_seasons)
+            )
+        if test_seasons:
+            meta["test_seasons"] = (
+                [test_seasons] if isinstance(test_seasons, str)
+                else list(test_seasons)
+            )
+
+    # Position-level metrics (if provided in metrics dict)
+    for pos_key in ("position_metrics", "position_metrics_by_group"):
+        if pos_key in metrics and isinstance(metrics[pos_key], dict):
+            meta[pos_key] = _json_ready(metrics[pos_key])
+            break
+
+    # Error cases: load holdout predictions and find biggest residuals
+    error_cases = _compute_error_cases(output_dir)
+    if error_cases:
+        meta["error_cases"] = error_cases
 
     if args is not None:
         meta["args"] = {
@@ -1189,6 +1235,82 @@ def save_model_run(
 
     print(f"  模型运行登记已保存: {run_dir}")
     return run_dir
+
+
+def _compute_error_cases(output_dir: Path | None) -> dict | None:
+    """Load holdout predictions and compute top over/under-estimated teams.
+
+    Returns ``{"over_estimated": [...], "under_estimated": [...]}`` or ``None``
+    if the holdout predictions file is not available.
+    """
+    # The holdout predictions parquet is saved alongside optimized_params
+    # in data/gold/feature_store/rating_holdout_predictions.parquet
+    search_dirs: list[Path] = []
+    if output_dir is not None:
+        search_dirs.append(output_dir.parent)  # gold/feature_store/
+        search_dirs.append(output_dir.parent.parent)  # gold/
+    search_dirs.append(Path("data/gold/feature_store"))
+    search_dirs.append(Path("data/models"))
+
+    holdout_path: Path | None = None
+    for d in search_dirs:
+        candidate = d / "rating_holdout_predictions.parquet"
+        if candidate.exists():
+            holdout_path = candidate
+            break
+
+    if holdout_path is None:
+        return None
+
+    try:
+        df = pd.read_parquet(holdout_path)
+    except Exception:
+        return None
+
+    # Identify team and residual columns (names vary across optimizer versions)
+    team_col = None
+    for c in ("team", "team_name", "squad"):
+        if c in df.columns:
+            team_col = c
+            break
+    if team_col is None:
+        return None
+
+    residual_col = None
+    for c in ("residual", "points_residual", "error", "points_error"):
+        if c in df.columns:
+            residual_col = c
+            break
+    if residual_col is None:
+        # Try to compute residual from predicted vs actual
+        pred_candidates = ("predicted_points", "pred_points", "calibrated_points")
+        actual_candidates = ("actual_points", "true_points", "points")
+        pred_col = next(
+            (c for c in pred_candidates if c in df.columns), None,
+        )
+        actual_col = next(
+            (c for c in actual_candidates if c in df.columns), None,
+        )
+        if pred_col and actual_col:
+            df = df.copy()
+            df["__residual"] = df[pred_col] - df[actual_col]
+            residual_col = "__residual"
+        else:
+            return None
+
+    # Aggregate by team (a team may appear in multiple seasons)
+    agg = df.groupby(team_col)[residual_col].mean().sort_values()
+    over_estimated = [
+        {"team": str(team), "residual": round(float(val), 1)}
+        for team, val in agg.tail(5).items()
+    ]
+    under_estimated = [
+        {"team": str(team), "residual": round(float(val), 1)}
+        for team, val in agg.head(5).items()
+    ]
+    # over_estimated = model predicts too high (positive residual)
+    # under_estimated = model predicts too low (negative residual)
+    return {"over_estimated": over_estimated, "under_estimated": under_estimated}
 
 
 def _json_ready(value):

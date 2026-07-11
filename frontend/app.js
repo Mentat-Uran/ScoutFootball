@@ -131,6 +131,28 @@ const i18n = {
         wc_knockout_title: "淘汰赛对阵表",
         wc_tournament_win: "夺冠概率 (Top 16)",
         wc_win_prob: "夺冠概率",
+        wc_team_outlook: "球队前景",
+        wc_view_outlook: "查看前景",
+        wc_outlook_group_finish: "小组名次概率",
+        wc_outlook_group_rank: "小组排名",
+        wc_outlook_knockout_path: "淘汰赛投影路径",
+        wc_outlook_championship: "夺冠概率",
+        wc_outlook_strength: "阵容强度分解",
+        wc_outlook_coverage: "名单覆盖率",
+        wc_outlook_shrunk_avg: "收缩后平均评分",
+        wc_outlook_core_avg: "核心球员平均评分",
+        wc_outlook_disclaimer: "说明",
+        wc_outlook_loading: "加载中...",
+        wc_outlook_select_team: "选择球队",
+        wc_outlook_no_data: "暂无该球队的前景数据",
+        wc_outlook_r32: "32强",
+        wc_outlook_r16: "16强",
+        wc_outlook_qf: "四分之一决赛",
+        wc_outlook_sf: "半决赛",
+        wc_outlook_final: "决赛",
+        wc_outlook_projected_opponent: "投影对手",
+        wc_outlook_advance_prob: "晋级概率",
+        wc_outlook_no_opponent: "未投影",
         wc_teams: "球队",
         wc_groups: "小组",
         wc_group_matches: "小组赛",
@@ -239,12 +261,32 @@ const i18n = {
         tactical_role_label: "战术角色分析",
         nav_calibration: "校准",
         nav_help: "帮助",
+        nav_backtest: "回测",
         calibration_kicker: "模型校准",
         calibration_title: "预测 vs 实际",
         calibration_plot: "校准图",
         calibration_brier: "Brier 分解",
         calibration_low_score: "低分桶分析",
         calibration_league: "联赛校准",
+        backtest_kicker: "模型回测对比",
+        backtest_title: "Poisson vs Dixon-Coles 回测",
+        backtest_metric_desc: "Log Loss / Brier / RPS",
+        backtest_metric_comparison: "指标对比",
+        backtest_metric: "指标",
+        backtest_dc_decay: "DC (衰减)",
+        backtest_winner: "胜出",
+        backtest_folds: "分折明细",
+        backtest_calibration: "Isotonic 校准效果",
+        backtest_fold: "折",
+        backtest_test_matches: "测试比赛",
+        backtest_not_available: "暂无回测数据",
+        backtest_instructions: "运行 `PYTHONPATH=src uv run python -m scoutfootball backtest` 生成回测产物。",
+        backtest_brier_before: "校准前 Brier",
+        backtest_brier_after: "校准后 Brier",
+        backtest_rps_before: "校准前 RPS",
+        backtest_rps_after: "校准后 RPS",
+        backtest_n_matches: "比赛数",
+        backtest_no_calibration: "暂无 isotonic 校准报告",
         xT_label: "xT 每90分钟",
         xT_percentile: "xT 百分位",
         xT_contribution: "xT 贡献",
@@ -383,6 +425,28 @@ const i18n = {
         wc_knockout_title: "Knockout Bracket",
         wc_tournament_win: "Tournament Win Probability (Top 16)",
         wc_win_prob: "Win Prob.",
+        wc_team_outlook: "Team Outlook",
+        wc_view_outlook: "View Outlook",
+        wc_outlook_group_finish: "Group Finish Probability",
+        wc_outlook_group_rank: "Group Rank",
+        wc_outlook_knockout_path: "Projected Knockout Path",
+        wc_outlook_championship: "Championship Probability",
+        wc_outlook_strength: "Squad Strength Breakdown",
+        wc_outlook_coverage: "Squad Coverage",
+        wc_outlook_shrunk_avg: "Shrunk Avg Rating",
+        wc_outlook_core_avg: "Core Players Avg Rating",
+        wc_outlook_disclaimer: "Note",
+        wc_outlook_loading: "Loading...",
+        wc_outlook_select_team: "Select Team",
+        wc_outlook_no_data: "No outlook data available for this team",
+        wc_outlook_r32: "Round of 32",
+        wc_outlook_r16: "Round of 16",
+        wc_outlook_qf: "Quarter-Finals",
+        wc_outlook_sf: "Semi-Finals",
+        wc_outlook_final: "Final",
+        wc_outlook_projected_opponent: "Projected Opponent",
+        wc_outlook_advance_prob: "Advance Probability",
+        wc_outlook_no_opponent: "Not projected",
         wc_teams: "Teams",
         wc_groups: "Groups",
         wc_group_matches: "Group Matches",
@@ -491,12 +555,32 @@ const i18n = {
         tactical_role_label: "Tactical Role Analysis",
         nav_calibration: "Calibration",
         nav_help: "Help",
+        nav_backtest: "Backtest",
         calibration_kicker: "Model calibration",
         calibration_title: "Predicted vs Actual",
         calibration_plot: "Calibration plot",
         calibration_brier: "Brier decomposition",
         calibration_low_score: "Low-score bucket analysis",
         calibration_league: "Per-league calibration",
+        backtest_kicker: "Model Backtest Comparison",
+        backtest_title: "Poisson vs Dixon-Coles Backtest",
+        backtest_metric_desc: "Log Loss / Brier / RPS",
+        backtest_metric_comparison: "Metric Comparison",
+        backtest_metric: "Metric",
+        backtest_dc_decay: "DC (decay)",
+        backtest_winner: "Winner",
+        backtest_folds: "Per-Fold Breakdown",
+        backtest_calibration: "Isotonic Calibration Effect",
+        backtest_fold: "Fold",
+        backtest_test_matches: "Test Matches",
+        backtest_not_available: "No backtest data available",
+        backtest_instructions: "Run `PYTHONPATH=src uv run python -m scoutfootball backtest` to generate backtest artifacts.",
+        backtest_brier_before: "Brier Before",
+        backtest_brier_after: "Brier After",
+        backtest_rps_before: "RPS Before",
+        backtest_rps_after: "RPS After",
+        backtest_n_matches: "Matches",
+        backtest_no_calibration: "No isotonic calibration report available",
         xT_label: "xT per 90",
         xT_percentile: "xT percentile",
         xT_contribution: "xT contribution",
@@ -2957,8 +3041,9 @@ async function renderMatches() {
         }
 
         // Model comparison section (Poisson vs Dixon-Coles side by side)
-        const poissonPred = predictionMeta.poisson_prediction ?? predictionMeta.poisson_pred ?? null;
-        const dcPred = predictionMeta.dixon_coles_prediction ?? predictionMeta.dc_pred ?? null;
+        const modelCmp = match.model_comparison ?? null;
+        const poissonPred = modelCmp?.poisson ?? null;
+        const dcPred = modelCmp?.dixon_coles ?? null;
         if (poissonPred && dcPred) {
             calibHtml += `<p style="margin:0.5rem 0 0.2rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? '模型对比' : 'Model comparison'}</p>`;
             calibHtml += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.2rem 0.6rem;font-size:0.75rem">`;
@@ -2968,8 +3053,8 @@ async function renderMatches() {
             const outcomes = ['home', 'draw', 'away'];
             const labels = [z ? '主胜' : 'Home', z ? '平局' : 'Draw', z ? '客胜' : 'Away'];
             for (let i = 0; i < outcomes.length; i++) {
-                const pVal = poissonPred[outcomes[i]] ?? poissonPred[i] ?? null;
-                const dcVal = dcPred[outcomes[i]] ?? dcPred[i] ?? null;
+                const pVal = poissonPred[outcomes[i]] ?? null;
+                const dcVal = dcPred[outcomes[i]] ?? null;
                 calibHtml += `<div>${escapeHtml(labels[i])}</div>`;
                 calibHtml += `<div>${pVal != null ? (Number(pVal) * 100).toFixed(1) + '%' : '–'}</div>`;
                 calibHtml += `<div>${dcVal != null ? (Number(dcVal) * 100).toFixed(1) + '%' : '–'}</div>`;
@@ -4779,9 +4864,11 @@ async function renderActiveView() {
     if (appState.view === "wc_squads") renderWcSquads();
     if (appState.view === "wc_compare") renderWcCompare();
     if (appState.view === "wc_probability") renderWcProbability();
+    if (appState.view === "wc_knockout") renderWcKnockout();
     if (appState.view === "license") renderLicense();
     if (appState.view === "data") renderData();
     if (appState.view === "calibration") renderCalibration();
+    if (appState.view === "backtest") renderBacktest();
     // Resize charts after layout paint to ensure correct dimensions
     requestAnimationFrame(() => {
         Object.values(appState.charts).forEach((chart) => {
@@ -4900,6 +4987,142 @@ async function renderCalibration() {
             statusPill.className = "status-pill status-low";
         }
         console.warn("Failed to fetch calibration:", err);
+    }
+}
+
+// ── Backtest Comparison ─────────────────────────────────────────────────
+
+let backtestComparisonData = null;
+
+async function fetchBacktestComparison() {
+    try {
+        return await fetchJson("/predictions/backtest", {
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
+    } catch (err) {
+        console.warn("Failed to fetch backtest comparison:", err);
+        return null;
+    }
+}
+
+function fmtMetric(v) {
+    if (v === null || v === undefined || v === "") return "—";
+    const n = Number(v);
+    return Number.isFinite(n) ? n.toFixed(4) : String(v);
+}
+
+async function renderBacktest() {
+    const z = currentLang === "zh";
+    const statusPill = document.getElementById("backtest-status");
+    try {
+        const data = backtestComparisonData || await fetchBacktestComparison();
+        backtestComparisonData = data;
+
+        if (!data) {
+            if (statusPill) {
+                statusPill.textContent = z ? "错误" : "error";
+                statusPill.className = "status-pill status-low";
+            }
+            return;
+        }
+
+        if (data.status === "not_available") {
+            if (statusPill) {
+                statusPill.textContent = z ? "无数据" : "NO DATA";
+                statusPill.className = "status-pill status-low";
+            }
+            const instrEl = document.getElementById("backtest-instructions");
+            if (instrEl) {
+                instrEl.style.display = "block";
+                instrEl.innerHTML = `<article class="liquid-panel compact" style="padding:1rem;color:var(--text-muted)">
+                    <p>${escapeHtml(t("backtest_not_available"))}</p>
+                    <p style="font-size:0.8rem;margin-top:0.5rem;font-family:monospace">${escapeHtml(data.instructions || t("backtest_instructions"))}</p>
+                </article>`;
+            }
+            // Hide data panels
+            ["backtest-comparison-panel", "backtest-folds-panel", "backtest-calibration-panel"].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = "none";
+            });
+            return;
+        }
+
+        if (statusPill) {
+            statusPill.textContent = z ? "可用" : "OK";
+            statusPill.className = "status-pill status-high";
+        }
+        const instrEl = document.getElementById("backtest-instructions");
+        if (instrEl) instrEl.style.display = "none";
+
+        // Metric comparison table
+        const metricTableBody = document.querySelector("#backtest-metric-table tbody");
+        if (metricTableBody) {
+            const mc = data.metric_comparison || [];
+            metricTableBody.innerHTML = mc.map((row) => {
+                const winner = row.winner;
+                const cells = [
+                    `<td>${escapeHtml(row.metric)}</td>`,
+                    `<td>${fmtMetric(row.independent_poisson)}</td>`,
+                    `<td>${fmtMetric(row.dixon_coles)}</td>`,
+                    `<td>${fmtMetric(row.dixon_coles_decay)}</td>`,
+                    `<td><span class="status-pill status-high" style="font-size:0.65rem">${escapeHtml(winner || "—")}</span></td>`,
+                ];
+                return `<tr>${cells.join("")}</tr>`;
+            }).join("");
+        }
+
+        // Folds table
+        const foldsHead = document.querySelector("#backtest-folds-table thead");
+        const foldsBody = document.querySelector("#backtest-folds-table tbody");
+        const folds = data.folds || [];
+        const models = data.models || [];
+        if (foldsHead && foldsBody) {
+            // Build header dynamically based on available models
+            let head = `<tr><th>${escapeHtml(t("backtest_fold"))}</th>`;
+            for (const m of models) {
+                head += `<th>${escapeHtml(m.model)}<br><span style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("backtest_test_matches"))}</span></th>`;
+                head += `<th>${escapeHtml(m.model)}<br><span style="font-size:0.65rem;color:var(--text-muted)">Log Loss</span></th>`;
+                head += `<th>${escapeHtml(m.model)}<br><span style="font-size:0.65rem;color:var(--text-muted)">Brier</span></th>`;
+                head += `<th>${escapeHtml(m.model)}<br><span style="font-size:0.65rem;color:var(--text-muted)">RPS</span></th>`;
+            }
+            head += "</tr>";
+            foldsHead.innerHTML = head;
+            foldsBody.innerHTML = folds.map((f) => {
+                let row = `<tr><td>${escapeHtml(String(f.fold))}</td>`;
+                for (const m of models) {
+                    const prefix = m.model;
+                    row += `<td>${escapeHtml(String(f[`${prefix}_test_matches`] ?? "—"))}</td>`;
+                    row += `<td>${fmtMetric(f[`${prefix}_log_loss`])}</td>`;
+                    row += `<td>${fmtMetric(f[`${prefix}_brier`])}</td>`;
+                    row += `<td>${fmtMetric(f[`${prefix}_rps`])}</td>`;
+                }
+                row += "</tr>";
+                return row;
+            }).join("");
+        }
+
+        // Calibration panel
+        const calBody = document.getElementById("backtest-calibration-body");
+        if (calBody) {
+            const cal = data.calibration || {};
+            if (cal.status === "ok") {
+                calBody.innerHTML = `<div class="detail-grid">
+                    <div><span>${escapeHtml(t("backtest_brier_before"))}</span><strong>${fmtMetric(cal.brier_before)}</strong></div>
+                    <div><span>${escapeHtml(t("backtest_brier_after"))}</span><strong>${fmtMetric(cal.brier_after)}</strong></div>
+                    <div><span>${escapeHtml(t("backtest_rps_before"))}</span><strong>${fmtMetric(cal.rps_before)}</strong></div>
+                    <div><span>${escapeHtml(t("backtest_rps_after"))}</span><strong>${fmtMetric(cal.rps_after)}</strong></div>
+                    <div><span>${escapeHtml(t("backtest_n_matches"))}</span><strong>${escapeHtml(String(cal.n_matches ?? "—"))}</strong></div>
+                </div>`;
+            } else {
+                calBody.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("backtest_no_calibration"))}</p>`;
+            }
+        }
+    } catch (err) {
+        if (statusPill) {
+            statusPill.textContent = z ? "错误" : "error";
+            statusPill.className = "status-pill status-low";
+        }
+        console.warn("Failed to render backtest:", err);
     }
 }
 
@@ -6048,9 +6271,11 @@ let wcApiData = {
     predictions: null,  // from /world-cup/predictions
     knockout: null,     // from /world-cup/knockout
     matchPredictionCache: {}, // home|away -> single-match prediction
+    outlookCache: {},   // team -> from /world-cup/outlook/{team}
     teams: null,        // from /worldcup/teams
     apiOnline: false,
     squadLoading: new Set(),
+    outlookLoading: new Set(),
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -6134,6 +6359,142 @@ async function fetchWcKnockout() {
         console.warn("[WC] fetchWcKnockout failed:", e.message);
         return null;
     }
+}
+
+// ── World Cup Team Outlook ──────────────────────────────────────────────
+
+async function fetchWcTeamOutlook(team) {
+    if (!team) return null;
+    if (wcApiData.outlookCache[team]) return wcApiData.outlookCache[team];
+    wcApiData.outlookLoading.add(team);
+    try {
+        const data = await fetchJson(`/world-cup/outlook/${encodeURIComponent(team)}`, {
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
+        if (data && data.status === "ok") {
+            wcApiData.outlookCache[team] = data;
+        }
+        wcApiData.apiOnline = true;
+        return data;
+    } catch (e) {
+        console.warn("[WC] fetchWcTeamOutlook failed:", e.message);
+        return null;
+    } finally {
+        wcApiData.outlookLoading.delete(team);
+    }
+}
+
+function renderWcOutlook(outlook) {
+    const z = currentLang === "zh";
+    const panel = document.getElementById("wc-outlook-panel");
+    if (!panel) return;
+    if (!outlook || outlook.status !== "ok") {
+        panel.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem">${z ? "暂无该球队的前景数据" : "No outlook data available for this team"}</p>`;
+        return;
+    }
+    const data = outlook.outlook || outlook;
+
+    function probBar(label, value, color) {
+        const pct = Math.max(0, Math.min(100, (value || 0) * 100));
+        const barColor = color || "var(--accent, #4f9cff)";
+        return `<div class="prob-row" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+            <span style="min-width:60px;font-size:0.8rem;color:var(--text-muted)">${escapeHtml(label)}</span>
+            <div class="probability-track" style="flex:1">
+                <div class="probability-fill" style="width:${sanitizeCssPercent(pct)}%;background:${barColor}"></div>
+            </div>
+            <strong style="min-width:50px;text-align:right;font-size:0.85rem">${pct.toFixed(1)}%</strong>
+        </div>`;
+    }
+
+    const gf = data.group_finish || {};
+    const finishBars = ["p1st", "p2nd", "p3rd", "p4th", "p_advance"]
+        .map((key, i) => {
+            const label = z ? ["第1", "第2", "第3", "第4", "出线"][i] : ["1st", "2nd", "3rd", "4th", "Advance"][i];
+            const colors = ["#4f9cff", "#6bcf7f", "#f5a623", "#e0556a", "#9b6cf5"];
+            if (gf[key] === undefined || gf[key] === null) return "";
+            return probBar(label, gf[key], colors[i]);
+        })
+        .join("");
+
+    const groupRank = data.group_rank;
+    const groupTeams = (data.group_teams || []).map((t, i) => {
+        const rank = i + 1;
+        const name = typeof t === "string" ? t : (t.team || t.name || "");
+        const isCurrent = name === data.team;
+        return `<span class="status-pill ${isCurrent ? "status-high" : "status-low"}" style="font-size:0.7rem;margin:0.1rem">${rank}. ${escapeHtml(name)}</span>`;
+    }).join("");
+
+    const kp = data.knockout_path || [];
+    const roundLabels = z
+        ? { round_of_32: "32强", round_of_16: "16强", quarter_finals: "四分之一决赛", semi_finals: "半决赛", final: "决赛" }
+        : { round_of_32: "Round of 32", round_of_16: "Round of 16", quarter_finals: "Quarter-Final", semi_finals: "Semi-Final", final: "Final" };
+    const pathHtml = kp.map((step) => {
+        const opp = step.opponent;
+        const advP = step.win_probability;
+        const advPct = (advP === undefined || advP === null) ? null : Math.round(advP * 100);
+        const oppName = opp ? escapeHtml(opp) : (z ? "未投影" : "Not projected");
+        const advBadge = (advPct === null)
+            ? ""
+            : `<span class="status-pill ${advPct >= 50 ? "status-high" : "status-medium"}" style="font-size:0.65rem">${advPct}%</span>`;
+        return `<div class="ko-path-step" style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid var(--border, rgba(255,255,255,0.08))">
+            <span style="font-size:0.8rem;color:var(--text-muted)">${escapeHtml(roundLabels[step.round] || step.round)}</span>
+            <span style="font-size:0.85rem;font-weight:600">${oppName}</span>
+            ${advBadge}
+        </div>`;
+    }).join("");
+
+    const champProb = data.championship_probability;
+    const champPct = (champProb === undefined || champProb === null) ? null : (champProb * 100);
+
+    const sb = data.strength_breakdown || {};
+    const coverage = sb.coverage;
+    const coveragePct = (coverage === undefined || coverage === null) ? null : Math.round(coverage * 100);
+    const shrunkAvg = sb.shrunk_avg_rating;
+    const coreAvg = sb.core_avg_rating;
+
+    const disclaimer = data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);margin-top:0.8rem;line-height:1.5">${escapeHtml(data.disclaimer)}</p>` : "";
+
+    panel.innerHTML = `<div class="wc-outlook-content" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div>
+            <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-secondary, #ccc)">${z ? "小组名次概率" : "Group Finish Probability"}</h4>
+            ${finishBars || `<p style="color:var(--text-muted);font-size:0.8rem">—</p>`}
+            <div style="margin-top:0.6rem">
+                <span style="font-size:0.75rem;color:var(--text-muted)">${z ? "小组排名" : "Group Rank"}: </span>
+                <strong>${groupRank !== undefined && groupRank !== null ? `#${groupRank}` : "—"}</strong>
+            </div>
+            <div style="margin-top:0.4rem">${groupTeams}</div>
+        </div>
+        <div>
+            <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-secondary, #ccc)">${z ? "夺冠概率" : "Championship Probability"}</h4>
+            ${champPct === null
+                ? `<p style="color:var(--text-muted);font-size:0.8rem">—</p>`
+                : `<div style="display:flex;align-items:baseline;gap:0.3rem">
+                    <span style="font-size:1.8rem;font-weight:700;color:var(--accent, #4f9cff)">${champPct.toFixed(2)}%</span>
+                </div>`
+            }
+            <h4 style="font-size:0.85rem;margin:0.8rem 0 0.5rem;color:var(--text-secondary, #ccc)">${z ? "阵容强度分解" : "Squad Strength Breakdown"}</h4>
+            <div style="font-size:0.8rem;line-height:1.8">
+                <div><span style="color:var(--text-muted)">${z ? "名单覆盖率" : "Squad Coverage"}: </span><strong>${coveragePct === null ? "—" : coveragePct + "%"}</strong></div>
+                <div><span style="color:var(--text-muted)">${z ? "收缩后平均评分" : "Shrunk Avg Rating"}: </span><strong>${shrunkAvg !== undefined && shrunkAvg !== null ? Number(shrunkAvg).toFixed(3) : "—"}</strong></div>
+                <div><span style="color:var(--text-muted)">${z ? "核心球员平均评分" : "Core Players Avg Rating"}: </span><strong>${coreAvg !== undefined && coreAvg !== null ? Number(coreAvg).toFixed(3) : "—"}</strong></div>
+            </div>
+        </div>
+    </div>
+    <div style="margin-top:1rem">
+        <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-secondary, #ccc)">${z ? "淘汰赛投影路径" : "Projected Knockout Path"}</h4>
+        ${pathHtml || `<p style="color:var(--text-muted);font-size:0.8rem">${z ? "未投影" : "Not projected"}</p>`}
+    </div>
+    ${disclaimer}`;
+}
+
+async function loadAndRenderWcOutlook(team) {
+    const panel = document.getElementById("wc-outlook-panel");
+    const z = currentLang === "zh";
+    if (panel && wcApiData.outlookLoading.has(team)) {
+        panel.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem">${z ? "加载中..." : "Loading..."}</p>`;
+    }
+    const data = await fetchWcTeamOutlook(team);
+    renderWcOutlook(data);
 }
 
 async function fetchWcMatchPrediction(teamA, teamB) {
@@ -6838,6 +7199,27 @@ async function initWorldCup() {
     selB.value = "France";
     appState.wcCompareA = "Argentina";
     appState.wcCompareB = "France";
+    // Populate outlook team selector
+    const outlookSelect = document.getElementById("wc-outlook-team");
+    if (outlookSelect) {
+        outlookSelect.innerHTML = teams.map((tm) => `<option value="${escapeAttr(tm)}">${escapeHtml(tm)}</option>`).join("");
+        outlookSelect.value = "Argentina";
+        const outlookBtn = document.getElementById("wc-outlook-btn");
+        if (outlookBtn && !outlookBtn.dataset.bound) {
+            outlookBtn.dataset.bound = "1";
+            outlookBtn.addEventListener("click", () => {
+                const tm = document.getElementById("wc-outlook-team").value;
+                if (tm) loadAndRenderWcOutlook(tm);
+            });
+        }
+        if (outlookSelect && !outlookSelect.dataset.bound) {
+            outlookSelect.dataset.bound = "1";
+            outlookSelect.addEventListener("change", () => {
+                const tm = outlookSelect.value;
+                if (tm) loadAndRenderWcOutlook(tm);
+            });
+        }
+    }
 
     // Fetch API data in background, then re-render
     const [groupsData, scheduleData, predictionsData, teamsData, knockoutData] = await Promise.all([
@@ -6853,6 +7235,7 @@ async function initWorldCup() {
         fetchWcSquad("Argentina"),
         fetchWcSquad("France"),
         fetchWcMatchPrediction("Argentina", "France"),
+        fetchWcTeamOutlook("Argentina"),
     ]);
 
     // Re-render all WC views with API data
@@ -6861,6 +7244,8 @@ async function initWorldCup() {
     renderWcCompare();
     renderWcProbability();
     renderWcKnockout();
+    // Render initial team outlook for the default selection
+    renderWcOutlook(wcApiData.outlookCache["Argentina"]);
 
     // Update WC data status pills based on API availability
     document.querySelectorAll(".wc-data-status").forEach((el) => {

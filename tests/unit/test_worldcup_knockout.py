@@ -10,6 +10,7 @@ from scoutfootball.worldcup.data import (
     _predict_group_finishes,
     _seed_round_of_32,
     compute_group_predictions,
+    compute_team_outlook,
     simulate_knockout,
 )
 
@@ -186,3 +187,99 @@ class TestSimulateKnockout:
             full_strengths, group_predictions=preds, num_simulations=50, seed=42
         )
         assert result["status"] == "ok"
+
+
+class TestComputeTeamOutlook:
+    @pytest.fixture()
+    def bracket_and_preds(self, full_strengths):
+        preds = compute_group_predictions(full_strengths)
+        bracket = simulate_knockout(
+            full_strengths, group_predictions=preds,
+            num_simulations=100, seed=42,
+        )
+        return bracket, preds
+
+    def test_returns_valid_structure(self, full_strengths, bracket_and_preds):
+        bracket, preds = bracket_and_preds
+        outlook = compute_team_outlook("Spain", full_strengths, preds, bracket)
+        assert outlook["status"] == "ok"
+        assert outlook["team"] == "Spain"
+        assert outlook["group"] == "H"
+        assert "strength" in outlook
+        assert "is_host" in outlook
+        assert "group_finish" in outlook
+        assert "group_rank" in outlook
+        assert "group_teams" in outlook
+        assert "knockout_path" in outlook
+        assert "championship_probability" in outlook
+        assert "strength_breakdown" in outlook
+        assert "disclaimer" in outlook
+
+    def test_group_finish_has_probability_keys(self, full_strengths, bracket_and_preds):
+        bracket, preds = bracket_and_preds
+        outlook = compute_team_outlook("Argentina", full_strengths, preds, bracket)
+        gf = outlook["group_finish"]
+        for key in ("p1st", "p2nd", "p3rd", "p4th", "p_advance"):
+            assert key in gf
+
+    def test_group_teams_includes_team(self, full_strengths, bracket_and_preds):
+        bracket, preds = bracket_and_preds
+        outlook = compute_team_outlook("France", full_strengths, preds, bracket)
+        names = [t["team"] for t in outlook["group_teams"]]
+        assert "France" in names
+
+    def test_group_rank_is_valid(self, full_strengths, bracket_and_preds):
+        bracket, preds = bracket_and_preds
+        outlook = compute_team_outlook("Brazil", full_strengths, preds, bracket)
+        assert outlook["group_rank"] is not None
+        assert 1 <= outlook["group_rank"] <= 4
+
+    def test_knockout_path_starts_with_r32(self, full_strengths, bracket_and_preds):
+        bracket, preds = bracket_and_preds
+        outlook = compute_team_outlook("Spain", full_strengths, preds, bracket)
+        path = outlook["knockout_path"]
+        assert len(path) >= 1
+        assert path[0]["round"] == "round_of_32"
+        assert "opponent" in path[0]
+        assert "win_probability" in path[0]
+
+    def test_championship_probability_nonneg(self, full_strengths):
+        preds = compute_group_predictions(full_strengths)
+        bracket = simulate_knockout(
+            full_strengths, group_predictions=preds,
+            num_simulations=200, seed=42,
+        )
+        outlook = compute_team_outlook("Spain", full_strengths, preds, bracket)
+        assert outlook["championship_probability"] >= 0.0
+
+    def test_strength_breakdown_empty_without_details(self, full_strengths, bracket_and_preds):
+        bracket, preds = bracket_and_preds
+        outlook = compute_team_outlook("Spain", full_strengths, preds, bracket)
+        sb = outlook["strength_breakdown"]
+        assert "coverage" in sb
+        assert sb["coverage"] is None  # no strength_details passed
+
+    def test_strength_breakdown_with_details(self, full_strengths, bracket_and_preds):
+        bracket, preds = bracket_and_preds
+        details = {
+            "Spain": {
+                "coverage": 0.95,
+                "shrunk_avg_rating": 0.82,
+                "core_avg_rating": 0.88,
+            },
+        }
+        outlook = compute_team_outlook(
+            "Spain", full_strengths, preds, bracket,
+            strength_details=details,
+        )
+        sb = outlook["strength_breakdown"]
+        assert sb["coverage"] == 0.95
+        assert sb["shrunk_avg_rating"] == 0.82
+        assert sb["core_avg_rating"] == 0.88
+
+    def test_host_flag(self, full_strengths, bracket_and_preds):
+        bracket, preds = bracket_and_preds
+        outlook_us = compute_team_outlook("United States", full_strengths, preds, bracket)
+        outlook_brazil = compute_team_outlook("Brazil", full_strengths, preds, bracket)
+        assert outlook_us["is_host"] is True
+        assert outlook_brazil["is_host"] is False

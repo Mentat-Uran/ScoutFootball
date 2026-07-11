@@ -2153,3 +2153,162 @@ def simulate_knockout(
             "team strengths may be underestimated."
         ),
     }
+
+
+def compute_team_outlook(
+    team: str,
+    team_strengths: dict[str, float],
+    group_predictions: list[dict],
+    knockout_bracket: dict,
+    strength_details: dict[str, dict] | None = None,
+) -> dict:
+    """Compute a comprehensive tournament outlook for a single World Cup team.
+
+    Aggregates group-stage finish probabilities, the projected knockout path
+    (R32 → Final), championship probability, and squad strength breakdown
+    into a single response suitable for the team outlook view.
+
+    Parameters
+    ----------
+    team:
+        Team name (must be one of the 48 World Cup teams).
+    team_strengths:
+        Mapping of team name → strength score.
+    group_predictions:
+        Output of :func:`compute_group_predictions`.
+    knockout_bracket:
+        Output of :func:`simulate_knockout`.
+    strength_details:
+        Optional output of :func:`compute_team_strength_details` for the
+        squad strength breakdown.
+
+    Returns
+    -------
+    dict with group info, finish probabilities, projected knockout path,
+    championship probability, and strength breakdown.
+    """
+    group = get_team_group(team)
+    strength = team_strengths.get(team, 0.0)
+
+    # ── Group finish probabilities ──
+    group_info: dict = {}
+    for gp in group_predictions:
+        if gp["group"] == group:
+            for t in gp["teams"]:
+                if t["team"] == team:
+                    group_info = t
+                    break
+            break
+
+    # Group standings context (where this team ranks in its group)
+    group_teams = []
+    for gp in group_predictions:
+        if gp["group"] == group:
+            group_teams = list(gp["teams"])
+            break
+
+    # ── Projected knockout path ──
+    # Find the team's R32 matchup
+    r32_match = None
+    for m in knockout_bracket.get("round_of_32", []):
+        if m["home_team"] == team or m["away_team"] == team:
+            r32_match = m
+            break
+
+    # Trace the team's projected path through subsequent rounds
+    knockout_path: list[dict] = []
+    if r32_match:
+        is_home = r32_match["home_team"] == team
+        win_prob = r32_match["home_win_probability"] if is_home else r32_match["away_win_probability"]
+        opponent = r32_match["away_team"] if is_home else r32_match["home_team"]
+        knockout_path.append({
+            "round": "round_of_32",
+            "opponent": opponent,
+            "win_probability": win_prob,
+            "is_home": is_home,
+        })
+
+        # Project through R16, QF, SF, Final
+        current_team = team if win_prob >= 0.5 else opponent
+        round_names = [
+            ("round_of_16", "Round of 16"),
+            ("quarter_finals", "Quarter-Finals"),
+            ("semi_finals", "Semi-Finals"),
+            ("final", "Final"),
+        ]
+        for round_key, round_label in round_names:
+            round_matches = knockout_bracket.get(round_key, [])
+            next_match = None
+            for m in round_matches:
+                if m["home_team"] == current_team or m["away_team"] == current_team:
+                    next_match = m
+                    break
+            if not next_match:
+                break
+            is_home = next_match["home_team"] == current_team
+            win_prob = (
+                next_match["home_win_probability"] if is_home
+                else next_match["away_win_probability"]
+            )
+            opponent = (
+                next_match["away_team"] if is_home
+                else next_match["home_team"]
+            )
+            knockout_path.append({
+                "round": round_key,
+                "round_label": round_label,
+                "opponent": opponent,
+                "win_probability": win_prob,
+                "is_home": is_home,
+            })
+            # Advance the most likely winner
+            current_team = current_team if win_prob >= 0.5 else opponent
+
+    # ── Championship probability ──
+    championship_prob = 0.0
+    for t in knockout_bracket.get("tournament_win_probability", []):
+        if t["team"] == team:
+            championship_prob = t["win_probability"]
+            break
+
+    # ── Strength breakdown ──
+    details = (strength_details or {}).get(team, {})
+
+    return {
+        "status": "ok",
+        "team": team,
+        "group": group,
+        "strength": round(strength, 4),
+        "is_host": team in HOSTS,
+        "group_finish": {
+            "p1st": group_info.get("p1st", 0),
+            "p2nd": group_info.get("p2nd", 0),
+            "p3rd": group_info.get("p3rd", 0),
+            "p4th": group_info.get("p4th", 0),
+            "p_advance": group_info.get("p_advance", 0),
+        },
+        "group_rank": next(
+            (i + 1 for i, t in enumerate(group_teams) if t["team"] == team),
+            None,
+        ),
+        "group_teams": [
+            {"team": t["team"], "strength": t.get("strength", 0)}
+            for t in group_teams
+        ],
+        "knockout_path": knockout_path,
+        "championship_probability": round(championship_prob, 4),
+        "strength_breakdown": {
+            "coverage": details.get("coverage"),
+            "shrunk_avg_rating": details.get("shrunk_avg_rating"),
+            "core_avg_rating": details.get("core_avg_rating"),
+            "opta_score": details.get("opta_score"),
+            "league_score": details.get("league_score"),
+            "rated_players": details.get("rated_players"),
+            "total_players": details.get("total_players"),
+        },
+        "disclaimer": (
+            "Outlook probabilities use a simplified strength-ratio and "
+            "Bradley-Terry model. Real outcomes depend on form, injuries, "
+            "tactics and home-field advantage not captured here."
+        ),
+    }
