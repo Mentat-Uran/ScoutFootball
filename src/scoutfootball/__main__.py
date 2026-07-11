@@ -151,6 +151,301 @@ def _cmd_serve(args: argparse.Namespace) -> None:
     uvicorn.run(app, host=args.host, port=args.port)
 
 
+# ── Tournament subcommands ───────────────────────────────────────────────
+
+
+def _tournament_load_state(args: argparse.Namespace):
+    """Load tournament state from path or default location."""
+    from scoutfootball.worldcup.tournament import DEFAULT_STATE_PATH, init_state, load_state
+
+    path = args.state_path or DEFAULT_STATE_PATH
+    try:
+        return load_state(path)
+    except FileNotFoundError:
+        if args.state_path:
+            print(f"Error: state file not found: {path}")
+            sys.exit(1)
+        # No default state file yet — return a fresh one
+        return init_state()
+
+
+def _cmd_tournament_show(args: argparse.Namespace) -> None:
+
+    from scoutfootball.worldcup.tournament import tournament_summary
+
+    state = _tournament_load_state(args)
+    summary = tournament_summary(state)
+
+    print(
+        f"Tournament state: {summary['completed_matches']}/{summary['total_matches']} "
+        f"matches played ({summary['completion_rate']:.1%})"
+    )
+    print(
+        f"  Groups complete: {summary['groups_complete']}/{summary['total_groups']}  "
+        f"Schema: {summary['schema_version']}"
+    )
+    adv = summary["advancing"]
+    print(
+        f"  Advancing: {len(adv['winners'])} winners, "
+        f"{len(adv['runners_up'])} runners-up, "
+        f"{len(adv['best_thirds'])} best thirds"
+    )
+    if adv.get("provisional"):
+        print("  (Provisional — group stage not yet complete)")
+
+    if args.json:
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+        return
+
+    print("\nStandings:")
+    for letter in sorted(summary["standings"]):
+        rows = summary["standings"][letter]
+        print(f"\n  Group {letter}:")
+        header = (
+            f"    {'#':<3}{'Team':<24}{'P':>3}{'W':>3}{'D':>3}{'L':>3}"
+            f"{'GF':>4}{'GA':>4}{'GD':>4}{'Pts':>4}"
+        )
+        print(header)
+        for i, s in enumerate(rows, 1):
+            print(
+                f"    {i:<3}{s['team']:<24}{s['played']:>3}{s['won']:>3}"
+                f"{s['drawn']:>3}{s['lost']:>3}{s['goals_for']:>4}"
+                f"{s['goals_against']:>4}{s['goal_difference']:>4}{s['points']:>4}"
+            )
+
+    thirds = summary["best_thirds"]
+    if thirds:
+        print("\nBest third-placed teams:")
+        for i, t in enumerate(thirds, 1):
+            tag = " (qualified)" if i <= 8 else ""
+            prov = " [provisional]" if t.get("provisional") else ""
+            print(
+                f"  {i}. {t['team']:<24} pts={t['points']} gd={t['goal_difference']} "
+                f"gf={t['goals_for']}{tag}{prov}"
+            )
+        if summary["advancing"].get("provisional"):
+            print("  (Provisional — group stage not yet complete)")
+
+
+def _cmd_tournament_standings(args: argparse.Namespace) -> None:
+    from dataclasses import asdict
+
+    from scoutfootball.worldcup.tournament import compute_all_standings, compute_group_standings
+
+    state = _tournament_load_state(args)
+    if args.group:
+        letter = args.group.upper()
+        try:
+            standings = compute_group_standings(state, letter)
+        except KeyError:
+            print(f"Error: unknown group '{letter}'. Valid: A-L")
+            sys.exit(1)
+        groups = {letter: standings}
+    else:
+        groups = compute_all_standings(state)
+
+    if args.json:
+        out = {k: [asdict(s) for s in v] for k, v in groups.items()}
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+
+    for letter in sorted(groups):
+        print(f"\nGroup {letter}:")
+        print(
+            f"  {'#':<3}{'Team':<24}{'P':>3}{'W':>3}{'D':>3}{'L':>3}"
+            f"{'GF':>4}{'GA':>4}{'GD':>4}{'Pts':>4}"
+        )
+        for i, s in enumerate(groups[letter], 1):
+            print(
+                f"  {i:<3}{s.team:<24}{s.played:>3}{s.won:>3}{s.drawn:>3}"
+                f"{s.lost:>3}{s.goals_for:>4}{s.goals_against:>4}"
+                f"{s.goal_difference:>4}{s.points:>4}"
+            )
+
+
+def _cmd_tournament_apply(args: argparse.Namespace) -> None:
+
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        apply_result,
+        compute_group_standings,
+        save_state,
+    )
+
+    state = _tournament_load_state(args)
+    match_id = args.match_id
+    match = state.match_by_id(match_id)
+    if not match:
+        print(f"Error: match id '{match_id}' not found")
+        sys.exit(1)
+
+    ok = apply_result(state, match_id, args.home_goals, args.away_goals)
+    if not ok:
+        print(
+            f"Error: failed to apply result {args.home_goals}-{args.away_goals} "
+            f"to {match_id}"
+        )
+        sys.exit(1)
+
+    out_path = args.state_path or DEFAULT_STATE_PATH
+    save_state(state, out_path)
+    print(
+        f"Recorded {match['home']} {args.home_goals}-{args.away_goals} "
+        f"{match['away']}  ({match_id})"
+    )
+    print(f"State saved to {out_path}")
+
+    if not args.quiet:
+        group = match.get("group")
+        if group:
+            standings = compute_group_standings(state, group)
+            print(f"\nGroup {group} standings:")
+            for i, s in enumerate(standings, 1):
+                marker = " *" if s.team in (match["home"], match["away"]) else "  "
+                print(
+                    f"{marker}{i}. {s.team:<22} P{s.played} W{s.won} D{s.drawn} "
+                    f"L{s.lost} GD{s.goal_difference:+d} Pts{s.points}"
+                )
+
+
+def _cmd_tournament_clear(args: argparse.Namespace) -> None:
+    from scoutfootball.worldcup.tournament import DEFAULT_STATE_PATH, clear_result, save_state
+
+    state = _tournament_load_state(args)
+    if not clear_result(state, args.match_id):
+        print(f"No result recorded for {args.match_id}")
+        return
+    out_path = args.state_path or DEFAULT_STATE_PATH
+    save_state(state, out_path)
+    print(f"Cleared result for {args.match_id}")
+    print(f"State saved to {out_path}")
+
+
+def _cmd_tournament_reset(args: argparse.Namespace) -> None:
+    from scoutfootball.worldcup.tournament import DEFAULT_STATE_PATH, init_state, save_state
+
+    if not args.force:
+        confirm = input("Reset all tournament results? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Aborted.")
+            return
+    state = init_state()
+    out_path = args.state_path or DEFAULT_STATE_PATH
+    save_state(state, out_path)
+    print(f"Tournament state reset. Saved to {out_path}")
+
+
+def _cmd_tournament_scenarios(args: argparse.Namespace) -> None:
+    from dataclasses import asdict
+
+    from scoutfootball.worldcup.tournament import compute_team_scenarios
+
+    state = _tournament_load_state(args)
+    team = args.team
+    try:
+        result = compute_team_scenarios(state, team, max_scenarios=args.max_scenarios)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    if args.json:
+        out = {
+            "team": result.team,
+            "group": result.group,
+            "current_standing": result.current_standing,
+            "remaining_matches": result.remaining_matches,
+            "advance_probability": result.advance_probability,
+            "scenarios": [asdict(s) for s in result.scenarios],
+            "summary": result.summary,
+        }
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+
+    print(f"Scenarios for {result.team} (Group {result.group})")
+    cs = result.current_standing
+    print(
+        f"  Current: P{cs.get('played', 0)} W{cs.get('won', 0)} D{cs.get('drawn', 0)} "
+        f"L{cs.get('lost', 0)} GD{cs.get('goal_difference', 0):+d} Pts{cs.get('points', 0)}"
+    )
+    print(f"  Remaining matches: {len(result.remaining_matches)}")
+    for m in result.remaining_matches:
+        print(f"    - {m['home']} vs {m['away']} (md{m['matchday']})")
+    print(f"\n  Advance probability: {result.advance_probability:.1%}")
+    print(f"  {result.summary}")
+
+    if result.scenarios:
+        print(f"\n  Sample scenarios (up to {len(result.scenarios)}):")
+        for i, sc in enumerate(result.scenarios, 1):
+            tag = "ADVANCES" if sc.advances else "eliminated"
+            print(f"    {i}. [{sc.advance_path}] {tag}")
+            print(f"       {sc.description}")
+            for r in sc.results[:3]:
+                print(
+                    f"         {r['home']} {r.get('home_outcome', '?')} vs "
+                    f"{r.get('away_outcome', '?')} {r['away']}"
+                )
+            if len(sc.results) > 3:
+                print(f"         ... and {len(sc.results) - 3} more")
+
+
+def _cmd_tournament_matches(args: argparse.Namespace) -> None:
+    from scoutfootball.worldcup.tournament import _match_completed
+
+    state = _tournament_load_state(args)
+    group = args.group.upper() if args.group else None
+    only_pending = args.pending
+
+    rows = []
+    for m in state.matches:
+        if group and m.get("group") != group:
+            continue
+        result = state.results.get(m["match_id"])
+        is_done = _match_completed(result)
+        if only_pending and is_done:
+            continue
+        rows.append((m, result, is_done))
+
+    if args.json:
+        out = []
+        for m, result, _ in rows:
+            entry = {"match_id": m["match_id"], **m}
+            if result:
+                entry["result"] = result
+            out.append(entry)
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+
+    print(f"{'Match ID':<42}{'Group':<6}{'MD':<4}{'Home':<22}{'Away':<22}{'Score':<8}")
+    print("-" * 104)
+    for m, result, is_done in rows:
+        score = (
+            f"{result['home_goals']}-{result['away_goals']}" if is_done else "  -  "
+        )
+        print(
+            f"{m['match_id']:<42}{m.get('group', '-'):<6}{m.get('matchday', '-'):<4}"
+            f"{m['home']:<22}{m['away']:<22}{score:<8}"
+        )
+    print(f"\n{len(rows)} matches shown.")
+
+
+def _cmd_tournament(args: argparse.Namespace) -> None:
+    """Dispatch to tournament sub-actions."""
+    action = args.tournament_action
+    handler = {
+        "show": _cmd_tournament_show,
+        "standings": _cmd_tournament_standings,
+        "apply": _cmd_tournament_apply,
+        "clear": _cmd_tournament_clear,
+        "reset": _cmd_tournament_reset,
+        "scenarios": _cmd_tournament_scenarios,
+        "matches": _cmd_tournament_matches,
+    }.get(action)
+    if handler is None:
+        print(f"Unknown tournament action: {action}")
+        sys.exit(1)
+    handler(args)
+
+
 def _cmd_action_value(args: argparse.Namespace) -> None:
     from scoutfootball.action_value.aggregate import (
         build_player_action_value,
@@ -832,6 +1127,55 @@ def main() -> None:
     serve_p.add_argument("--host", default="0.0.0.0")
     serve_p.add_argument("--port", type=int, default=8000)
 
+    # Tournament state management (2026 World Cup)
+    tour_p = sub.add_parser(
+        "tournament",
+        help="Manage 2026 World Cup tournament state, standings, and scenarios",
+    )
+    tour_sub = tour_p.add_subparsers(
+        dest="tournament_action",
+        required=True,
+    )
+
+    tour_show = tour_sub.add_parser("show", help="Show tournament summary and all standings")
+    tour_show.add_argument("--state-path", type=str, default=None)
+    tour_show.add_argument("--json", action="store_true", help="Emit full JSON summary")
+
+    tour_stand = tour_sub.add_parser("standings", help="Show group standings")
+    tour_stand.add_argument("--group", type=str, default=None, help="Group letter A-L")
+    tour_stand.add_argument("--state-path", type=str, default=None)
+    tour_stand.add_argument("--json", action="store_true")
+
+    tour_apply = tour_sub.add_parser("apply", help="Apply a match result")
+    tour_apply.add_argument("match_id", type=str, help="Match ID (see `matches`)")
+    tour_apply.add_argument("home_goals", type=int)
+    tour_apply.add_argument("away_goals", type=int)
+    tour_apply.add_argument("--state-path", type=str, default=None)
+    tour_apply.add_argument("--quiet", action="store_true", help="Skip standings print")
+
+    tour_clear = tour_sub.add_parser("clear", help="Clear a recorded match result")
+    tour_clear.add_argument("match_id", type=str)
+    tour_clear.add_argument("--state-path", type=str, default=None)
+
+    tour_reset = tour_sub.add_parser("reset", help="Reset all results to fresh state")
+    tour_reset.add_argument("--state-path", type=str, default=None)
+    tour_reset.add_argument("--force", action="store_true", help="Skip confirmation")
+
+    tour_scen = tour_sub.add_parser(
+        "scenarios",
+        help="Show qualification scenarios for a team",
+    )
+    tour_scen.add_argument("team", type=str)
+    tour_scen.add_argument("--max-scenarios", type=int, default=30)
+    tour_scen.add_argument("--state-path", type=str, default=None)
+    tour_scen.add_argument("--json", action="store_true")
+
+    tour_matches = tour_sub.add_parser("matches", help="List matches (optionally pending)")
+    tour_matches.add_argument("--group", type=str, default=None)
+    tour_matches.add_argument("--pending", action="store_true", help="Only unplayed matches")
+    tour_matches.add_argument("--state-path", type=str, default=None)
+    tour_matches.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
 
     handlers = {
@@ -848,6 +1192,7 @@ def main() -> None:
         "backtest": _cmd_backtest,
         "tune-predictions": _cmd_tune_predictions,
         "serve": _cmd_serve,
+        "tournament": _cmd_tournament,
     }
 
     handler = handlers.get(args.command)

@@ -15,6 +15,8 @@ from scoutfootball import __version__
 from scoutfootball.api import (
     _clean_json_value,
     _settings,
+    apply_wc_tournament_result,
+    clear_wc_tournament_result,
     get_action_value_evidence,
     get_action_value_evidence_index,
     get_action_value_summary,
@@ -49,10 +51,15 @@ from scoutfootball.api import (
     get_wc_squad,
     get_wc_team_outlook,
     get_wc_teams,
+    get_wc_tournament_matches,
+    get_wc_tournament_scenarios,
+    get_wc_tournament_standings,
+    get_wc_tournament_summary,
     get_world_cup_match_prediction,
     health_check,
     list_players,
     list_teams,
+    reset_wc_tournament,
     search_players_and_teams,
 )
 from scoutfootball.storage.scouting_workspace import (
@@ -508,6 +515,42 @@ def create_app() -> FastAPI:
     @app.get("/worldcup/teams")
     def wc_teams():
         return get_wc_teams()
+
+    # ── Tournament state endpoints ──────────────────────────────────────
+    @app.get("/world-cup/tournament/summary")
+    def wc_tournament_summary():
+        return get_wc_tournament_summary()
+
+    @app.get("/world-cup/tournament/standings")
+    def wc_tournament_standings(group: str | None = None):
+        return get_wc_tournament_standings(group=group)
+
+    @app.get("/world-cup/tournament/matches")
+    def wc_tournament_matches(
+        group: str | None = None,
+        pending: bool = False,
+    ):
+        return get_wc_tournament_matches(group=group, pending=pending)
+
+    @app.get("/world-cup/tournament/scenarios/{team}")
+    def wc_tournament_scenarios(team: str, max_scenarios: int = Query(30, ge=1, le=200)):
+        return get_wc_tournament_scenarios(team, max_scenarios=max_scenarios)
+
+    @app.post("/world-cup/tournament/result")
+    def wc_tournament_apply_result(
+        match_id: str = Query(...),
+        home_goals: int = Query(..., ge=0, le=30),
+        away_goals: int = Query(..., ge=0, le=30),
+    ):
+        return apply_wc_tournament_result(match_id, home_goals, away_goals)
+
+    @app.delete("/world-cup/tournament/result")
+    def wc_tournament_clear_result(match_id: str = Query(...)):
+        return clear_wc_tournament_result(match_id)
+
+    @app.post("/world-cup/tournament/reset")
+    def wc_tournament_reset():
+        return reset_wc_tournament()
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")

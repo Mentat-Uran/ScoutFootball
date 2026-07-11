@@ -124,12 +124,15 @@ const i18n = {
         nav_wc_compare: "对比",
         nav_wc_probability: "出线",
         nav_wc_knockout: "淘汰赛",
+        nav_wc_tournament: "锦标赛",
         wc_kicker: "2026 美加墨世界杯",
         wc_schedule_title: "小组赛赛程",
         wc_squads_title: "球队名单 & 评分",
         wc_compare_title: "球队实力对比",
         wc_prob_title: "小组出线概率",
         wc_knockout_title: "淘汰赛对阵表",
+        wc_tournament_title: "锦标赛模拟器",
+        wc_tournament_desc: "录入比赛结果，查看出线情景",
         wc_tournament_win: "夺冠概率 (Top 16)",
         wc_win_prob: "夺冠概率",
         wc_team_outlook: "球队前景",
@@ -438,12 +441,15 @@ const i18n = {
         nav_wc_compare: "Compare",
         nav_wc_probability: "Odds",
         nav_wc_knockout: "Knockout",
+        nav_wc_tournament: "Tournament",
         wc_kicker: "2026 FIFA World Cup",
         wc_schedule_title: "Group Stage Schedule",
         wc_squads_title: "Squad Ratings",
         wc_compare_title: "Team Comparison",
         wc_prob_title: "Advancement Probability",
         wc_knockout_title: "Knockout Bracket",
+        wc_tournament_title: "Tournament Simulator",
+        wc_tournament_desc: "Record match results and explore qualification scenarios",
         wc_tournament_win: "Tournament Win Probability (Top 16)",
         wc_win_prob: "Win Prob.",
         wc_team_outlook: "Team Outlook",
@@ -5771,6 +5777,14 @@ async function renderActiveView() {
     if (appState.view === "wc_compare") renderWcCompare();
     if (appState.view === "wc_probability") renderWcProbability();
     if (appState.view === "wc_knockout") renderWcKnockout();
+    if (appState.view === "wc_tournament") {
+        // Lazy-load tournament data on first view, then render
+        if (!wcApiData.tournament) {
+            loadAndRenderWcTournament();
+        } else {
+            renderWcTournament();
+        }
+    }
     if (appState.view === "license") renderLicense();
     if (appState.view === "data") renderData();
     if (appState.view === "calibration") renderCalibration();
@@ -7525,6 +7539,11 @@ let wcApiData = {
     apiOnline: false,
     squadLoading: new Set(),
     outlookLoading: new Set(),
+    tournament: null,       // from /world-cup/tournament/summary
+    tournamentMatches: null, // from /world-cup/tournament/matches
+    tournamentScenarios: null, // team -> scenarios
+    tournamentSelectedGroup: "A",
+    tournamentLoading: false,
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -7770,6 +7789,496 @@ async function loadAndRenderWcOutlook(team) {
     }
     const data = await fetchWcTeamOutlook(team);
     renderWcOutlook(data);
+}
+
+// ── Tournament Simulator ────────────────────────────────────────────────
+
+async function fetchWcTournamentSummary() {
+    try {
+        const data = await fetchJson("/world-cup/tournament/summary", {
+            fetchOpts: { signal: AbortSignal.timeout(15000) },
+        });
+        if (data && data.status === "ok") {
+            wcApiData.tournament = data;
+            wcApiData.apiOnline = true;
+        }
+        return data;
+    } catch (e) {
+        console.warn("[WC Tournament] fetchWcTournamentSummary failed:", e.message);
+        return null;
+    }
+}
+
+async function fetchWcTournamentMatches(group) {
+    const params = group ? `group=${encodeURIComponent(group)}` : "";
+    try {
+        const data = await fetchJson("/world-cup/tournament/matches", { params });
+        if (data && data.status === "ok") {
+            wcApiData.tournamentMatches = data;
+            wcApiData.apiOnline = true;
+        }
+        return data;
+    } catch (e) {
+        console.warn("[WC Tournament] fetchWcTournamentMatches failed:", e.message);
+        return null;
+    }
+}
+
+async function fetchWcTournamentScenarios(team) {
+    if (!team) return null;
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/scenarios/${encodeURIComponent(team)}`,
+            { params: "max_scenarios=15" },
+        );
+        if (data && data.status === "ok") {
+            if (!wcApiData.tournamentScenarios) wcApiData.tournamentScenarios = {};
+            wcApiData.tournamentScenarios[team] = data;
+            wcApiData.apiOnline = true;
+        }
+        return data;
+    } catch (e) {
+        console.warn("[WC Tournament] fetchWcTournamentScenarios failed:", e.message);
+        return null;
+    }
+}
+
+async function postTournamentResult(matchId, homeGoals, awayGoals) {
+    const z = currentLang === "zh";
+    try {
+        const params = `match_id=${encodeURIComponent(matchId)}&home_goals=${homeGoals}&away_goals=${awayGoals}`;
+        const resp = await fetch(
+            `${API_BASE}/world-cup/tournament/result?${params}`,
+            { method: "POST", signal: AbortSignal.timeout(15000) },
+        );
+        const data = await resp.json();
+        if (data && data.status === "ok") {
+            wcApiData.apiOnline = true;
+            return data;
+        }
+        alert((z ? "录入失败: " : "Apply failed: ") + (data?.message || "unknown"));
+        return null;
+    } catch (e) {
+        alert((z ? "录入失败: " : "Apply failed: ") + e.message);
+        return null;
+    }
+}
+
+async function deleteTournamentResult(matchId) {
+    const z = currentLang === "zh";
+    try {
+        const params = `match_id=${encodeURIComponent(matchId)}`;
+        const resp = await fetch(
+            `${API_BASE}/world-cup/tournament/result?${params}`,
+            { method: "DELETE", signal: AbortSignal.timeout(15000) },
+        );
+        const data = await resp.json();
+        if (data && data.status === "ok") {
+            wcApiData.apiOnline = true;
+            return data;
+        }
+        alert((z ? "清除失败: " : "Clear failed: ") + (data?.message || "unknown"));
+        return null;
+    } catch (e) {
+        alert((z ? "清除失败: " : "Clear failed: ") + e.message);
+        return null;
+    }
+}
+
+async function resetTournament() {
+    const z = currentLang === "zh";
+    if (!confirm(z ? "重置所有比赛结果？" : "Reset all match results?")) return;
+    try {
+        const resp = await fetch(`${API_BASE}/world-cup/tournament/reset`, {
+            method: "POST",
+            signal: AbortSignal.timeout(15000),
+        });
+        const data = await resp.json();
+        if (data && data.status === "ok") {
+            wcApiData.tournament = data.summary;
+            wcApiData.tournamentScenarios = {};
+            wcApiData.apiOnline = true;
+            return data;
+        }
+        return null;
+    } catch (e) {
+        alert((z ? "重置失败: " : "Reset failed: ") + e.message);
+        return null;
+    }
+}
+
+async function loadAndRenderWcTournament() {
+    const z = currentLang === "zh";
+    const statusEl = document.getElementById("wc-tournament-status");
+    if (statusEl) {
+        statusEl.textContent = z ? "加载中..." : "Loading...";
+        statusEl.className = "status-pill status-medium";
+    }
+    wcApiData.tournamentLoading = true;
+    await Promise.all([
+        fetchWcTournamentSummary(),
+        fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+    ]);
+    wcApiData.tournamentLoading = false;
+    renderWcTournament();
+}
+
+function renderWcTournament() {
+    const z = currentLang === "zh";
+    const root = document.getElementById("wc-tournament-root");
+    if (!root) return;
+
+    const data = wcApiData.tournament;
+    const matchesData = wcApiData.tournamentMatches;
+
+    // Status pill
+    const statusEl = document.getElementById("wc-tournament-status");
+    if (statusEl) {
+        if (!data) {
+            statusEl.textContent = "API OFFLINE";
+            statusEl.className = "status-pill status-low";
+        } else if (wcApiData.apiOnline) {
+            statusEl.textContent = "LIVE";
+            statusEl.className = "status-pill status-high";
+        } else {
+            statusEl.textContent = "STATIC";
+            statusEl.className = "status-pill status-medium";
+        }
+        statusEl.style.fontSize = "0.65rem";
+    }
+
+    if (!data) {
+        root.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:2rem">${z ? "锦标赛数据加载中..." : "Loading tournament data..."}</p>`;
+        return;
+    }
+
+    const completed = data.completed_matches || 0;
+    const total = data.total_matches || 72;
+    const pct = total ? Math.round((completed / total) * 100) : 0;
+    const groupsComplete = data.groups_complete || 0;
+
+    // Group selector
+    const groupLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
+    const selectedGroup = wcApiData.tournamentSelectedGroup || "A";
+    const groupOptions = groupLetters.map(
+        (g) => `<option value="${g}"${g === selectedGroup ? " selected" : ""}>${z ? `小组 ${g}` : `Group ${g}`}</option>`,
+    ).join("");
+
+    // Standings for selected group
+    const groupStandings = (data.standings && data.standings[selectedGroup]) || [];
+
+    // Best thirds (list of dicts)
+    const bestThirds = data.best_thirds || [];
+
+    // Advancing (winners/runners_up are lists of dicts with 'team' key)
+    const adv = data.advancing || { winners: [], runners_up: [], best_thirds: [], all_advancing: [], provisional: true };
+    const winnerTeams = (adv.winners || []).map((w) => w.team || w);
+    const runnerUpTeams = (adv.runners_up || []).map((r) => r.team || r);
+    const bestThirdTeams = (bestThirds || []).slice(0, 8);
+
+    // Matches list
+    const matches = (matchesData && matchesData.matches) || [];
+
+    root.innerHTML = `
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
+                <div>
+                    <span class="metric-value">${completed}/${total}</span>
+                    <span>${z ? "比赛已录入" : "matches recorded"}</span>
+                </div>
+                <div>
+                    <span class="metric-value">${pct}%</span>
+                    <span>${z ? "完成度" : "complete"}</span>
+                </div>
+                <div>
+                    <span class="metric-value">${groupsComplete}/12</span>
+                    <span>${z ? "小组完赛" : "groups done"}</span>
+                </div>
+                <div>
+                    <span class="metric-value">${adv.all_advancing ? adv.all_advancing.length : 0}</span>
+                    <span>${z ? "已出线" : "advancing"}</span>
+                </div>
+                <button class="text-button" id="wc-tournament-refresh" type="button">↻ ${z ? "刷新" : "Refresh"}</button>
+                <button class="text-button" id="wc-tournament-reset" type="button" style="color:var(--status-low)">${z ? "重置全部" : "Reset All"}</button>
+            </div>
+        </article>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem" class="wc-tournament-grid">
+            <article class="liquid-panel compact">
+                <div class="panel-head">
+                    <h3>${z ? "小组积分榜" : "Group Standings"}</h3>
+                    <select id="wc-tournament-group-select" class="filter-select" style="min-width:80px">${groupOptions}</select>
+                </div>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>${z ? "球队" : "Team"}</th>
+                                <th>P</th>
+                                <th>W</th>
+                                <th>D</th>
+                                <th>L</th>
+                                <th>GF</th>
+                                <th>GA</th>
+                                <th>GD</th>
+                                <th>Pts</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${groupStandings.map((s, i) => {
+                                const pos = i + 1;
+                                const cls = pos === 1 ? "status-high" : pos === 2 ? "status-medium" : (pos === 3 ? "status-low" : "");
+                                return `<tr>
+                                    <td><span class="status-pill ${cls}" style="font-size:0.6rem">${pos}</span></td>
+                                    <td>${escapeHtml(s.team)}</td>
+                                    <td>${s.played}</td>
+                                    <td>${s.won}</td>
+                                    <td>${s.drawn}</td>
+                                    <td>${s.lost}</td>
+                                    <td>${s.goals_for}</td>
+                                    <td>${s.goals_against}</td>
+                                    <td>${s.goal_difference >= 0 ? "+" : ""}${s.goal_difference}</td>
+                                    <td><strong>${s.points}</strong></td>
+                                </tr>`;
+                            }).join("")}
+                        </tbody>
+                    </table>
+                </div>
+                <p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem">
+                    ${z ? "前 2 名直接出线，第 3 名参与最佳小组第三评比" : "Top 2 advance; 3rd enters best-thirds ranking"}
+                </p>
+            </article>
+
+            <article class="liquid-panel compact">
+                <div class="panel-head">
+                    <h3>${z ? "比赛录入" : "Match Entry"}</h3>
+                </div>
+                <div class="table-scroll" style="max-height:400px;overflow-y:auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>${z ? "比赛日" : "MD"}</th>
+                                <th>${z ? "主队" : "Home"}</th>
+                                <th>${z ? "比分" : "Score"}</th>
+                                <th>${z ? "客队" : "Away"}</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${matches.map((m) => {
+                                if (m.completed) {
+                                    return `<tr>
+                                        <td>${m.matchday}</td>
+                                        <td>${escapeHtml(m.home)}</td>
+                                        <td><strong>${m.result.home_goals}-${m.result.away_goals}</strong></td>
+                                        <td>${escapeHtml(m.away)}</td>
+                                        <td><button class="text-button wc-tournament-clear" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">${z ? "清除" : "Clear"}</button></td>
+                                    </tr>`;
+                                }
+                                return `<tr>
+                                    <td>${m.matchday}</td>
+                                    <td>${escapeHtml(m.home)}</td>
+                                    <td>
+                                        <input type="number" min="0" max="30" class="wc-tournament-input" data-match-id="${escapeAttr(m.match_id)}" data-side="home" style="width:2.5rem" placeholder="-">
+                                        <span style="margin:0 0.2rem">:</span>
+                                        <input type="number" min="0" max="30" class="wc-tournament-input" data-match-id="${escapeAttr(m.match_id)}" data-side="away" style="width:2.5rem" placeholder="-">
+                                    </td>
+                                    <td>${escapeHtml(m.away)}</td>
+                                    <td><button class="text-button wc-tournament-apply" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">${z ? "录入" : "Apply"}</button></td>
+                                </tr>`;
+                            }).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </div>
+
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div class="panel-head">
+                <h3>${z ? "出线球队" : "Advancing Teams"}</h3>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem" class="wc-advancing-grid">
+                <div>
+                    <h4 style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.4rem">${z ? "小组第一" : "Group Winners"}</h4>
+                    <div>${winnerTeams.length ? winnerTeams.map((t) => `<span class="status-pill status-high" style="font-size:0.7rem;margin:0.1rem">${escapeHtml(t)}</span>`).join("") : `<span style="color:var(--text-muted);font-size:0.8rem">${z ? "待定" : "TBD"}</span>`}</div>
+                </div>
+                <div>
+                    <h4 style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.4rem">${z ? "小组第二" : "Runners-Up"}</h4>
+                    <div>${runnerUpTeams.length ? runnerUpTeams.map((t) => `<span class="status-pill status-medium" style="font-size:0.7rem;margin:0.1rem">${escapeHtml(t)}</span>`).join("") : `<span style="color:var(--text-muted);font-size:0.8rem">${z ? "待定" : "TBD"}</span>`}</div>
+                </div>
+                <div>
+                    <h4 style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.4rem">${z ? "最佳小组第三" : "Best Thirds"}</h4>
+                    <div>${bestThirdTeams.length ? bestThirdTeams.map((t) => `<span class="status-pill status-low" style="font-size:0.7rem;margin:0.1rem">${escapeHtml(t.team)}${t.provisional ? "*" : ""}</span>`).join("") : `<span style="color:var(--text-muted);font-size:0.8rem">${z ? "待定" : "TBD"}</span>`}</div>
+                    ${adv.provisional ? `<p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem">${z ? "(暂定，小组赛未完赛)" : "(provisional)"}</p>` : ""}
+                </div>
+            </div>
+        </article>
+
+        <article class="liquid-panel compact">
+            <div class="panel-head">
+                <h3>${z ? "出线情景分析" : "Qualification Scenarios"}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <select id="wc-tournament-scenario-team" class="filter-select" style="min-width:200px">
+                        ${groupStandings.map((s) => `<option value="${escapeAttr(s.team)}">${escapeHtml(s.team)}</option>`).join("")}
+                    </select>
+                    <button class="text-button" id="wc-tournament-scenario-btn" type="button">${z ? "计算" : "Compute"}</button>
+                </div>
+            </div>
+            <div id="wc-tournament-scenarios-panel">
+                <p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">
+                    ${z ? "选择一支球队查看出线情景" : "Select a team to view qualification scenarios"}
+                </p>
+            </div>
+        </article>
+    `;
+
+    // Bind event listeners
+    const groupSelect = document.getElementById("wc-tournament-group-select");
+    if (groupSelect && !groupSelect.dataset.bound) {
+        groupSelect.dataset.bound = "1";
+        groupSelect.addEventListener("change", async (e) => {
+            wcApiData.tournamentSelectedGroup = e.target.value;
+            await fetchWcTournamentMatches(e.target.value);
+            await fetchWcTournamentSummary();
+            renderWcTournament();
+        });
+    }
+
+    const refreshBtn = document.getElementById("wc-tournament-refresh");
+    if (refreshBtn && !refreshBtn.dataset.bound) {
+        refreshBtn.dataset.bound = "1";
+        refreshBtn.addEventListener("click", () => loadAndRenderWcTournament());
+    }
+
+    const resetBtn = document.getElementById("wc-tournament-reset");
+    if (resetBtn && !resetBtn.dataset.bound) {
+        resetBtn.dataset.bound = "1";
+        resetBtn.addEventListener("click", async () => {
+            await resetTournament();
+            await fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup);
+            renderWcTournament();
+        });
+    }
+
+    // Apply result buttons
+    root.querySelectorAll(".wc-tournament-apply").forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", async (e) => {
+            const matchId = e.target.dataset.matchId;
+            const homeInput = root.querySelector(`input[data-match-id="${CSS.escape(matchId)}"][data-side="home"]`);
+            const awayInput = root.querySelector(`input[data-match-id="${CSS.escape(matchId)}"][data-side="away"]`);
+            const hg = homeInput ? parseInt(homeInput.value, 10) : NaN;
+            const ag = awayInput ? parseInt(awayInput.value, 10) : NaN;
+            if (isNaN(hg) || isNaN(ag) || hg < 0 || ag < 0 || hg > 30 || ag > 30) {
+                alert(z ? "请输入 0-30 的有效比分" : "Enter valid scores (0-30)");
+                return;
+            }
+            const result = await postTournamentResult(matchId, hg, ag);
+            if (result && result.status === "ok") {
+                // Refresh summary and matches, then re-render
+                await Promise.all([
+                    fetchWcTournamentSummary(),
+                    fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+                ]);
+                renderWcTournament();
+            }
+        });
+    });
+
+    // Clear result buttons
+    root.querySelectorAll(".wc-tournament-clear").forEach((btn) => {
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", async (e) => {
+            const matchId = e.target.dataset.matchId;
+            const result = await deleteTournamentResult(matchId);
+            if (result && result.status === "ok") {
+                await Promise.all([
+                    fetchWcTournamentSummary(),
+                    fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+                ]);
+                renderWcTournament();
+            }
+        });
+    });
+
+    // Scenario compute button
+    const scenBtn = document.getElementById("wc-tournament-scenario-btn");
+    if (scenBtn && !scenBtn.dataset.bound) {
+        scenBtn.dataset.bound = "1";
+        scenBtn.addEventListener("click", async () => {
+            const team = document.getElementById("wc-tournament-scenario-team").value;
+            await fetchWcTournamentScenarios(team);
+            renderWcTournamentScenarios(team);
+        });
+    }
+}
+
+function renderWcTournamentScenarios(team) {
+    const z = currentLang === "zh";
+    const panel = document.getElementById("wc-tournament-scenarios-panel");
+    if (!panel) return;
+
+    const data = wcApiData.tournamentScenarios && wcApiData.tournamentScenarios[team];
+    if (!data || data.status !== "ok") {
+        panel.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">${z ? "无情景数据" : "No scenario data"}</p>`;
+        return;
+    }
+
+    const prob = data.advance_probability || 0;
+    const probPct = (prob * 100).toFixed(1);
+    const probCls = prob >= 0.7 ? "status-high" : (prob >= 0.3 ? "status-medium" : "status-low");
+
+    const scenarios = data.scenarios || [];
+    const remaining = data.remaining_matches || [];
+
+    panel.innerHTML = `
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:0.8rem">
+            <div>
+                <span class="status-pill ${probCls}" style="font-size:0.8rem">
+                    ${z ? "出线概率" : "Advance prob"}: ${probPct}%
+                </span>
+            </div>
+            <div style="color:var(--text-muted);font-size:0.85rem">
+                ${z ? "剩余比赛" : "Remaining"}: ${remaining.length}  ·  ${z ? "情景数" : "Scenarios"}: ${scenarios.length}
+            </div>
+        </div>
+        <p style="font-size:0.85rem;margin-bottom:0.8rem">${escapeHtml(data.summary || "")}</p>
+        ${scenarios.length === 0 ? "" : `
+            <div class="table-scroll" style="max-height:300px;overflow-y:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>${z ? "路径" : "Path"}</th>
+                            <th>${z ? "结果" : "Result"}</th>
+                            <th>${z ? "描述" : "Description"}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${scenarios.map((sc, i) => {
+                            const tagCls = sc.advances ? "status-high" : "status-low";
+                            const tag = sc.advances ? (z ? "出线" : "ADV") : (z ? "出局" : "OUT");
+                            const pathLabel = {
+                                winner: z ? "小组第一" : "Winner",
+                                "runner-up": z ? "小组第二" : "Runner-up",
+                                "best-third": z ? "最佳第三" : "Best 3rd",
+                                eliminated: z ? "淘汰" : "Eliminated",
+                            }[sc.advance_path] || sc.advance_path;
+                            return `<tr>
+                                <td>${i + 1}</td>
+                                <td><span class="status-pill ${tagCls}" style="font-size:0.65rem">${pathLabel}</span></td>
+                                <td>${tag}</td>
+                                <td style="font-size:0.75rem">${escapeHtml(sc.description || "")}</td>
+                            </tr>`;
+                        }).join("")}
+                    </tbody>
+                </table>
+            </div>
+        `}
+    `;
 }
 
 async function fetchWcMatchPrediction(teamA, teamB) {

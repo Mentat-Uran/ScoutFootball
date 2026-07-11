@@ -2,6 +2,12 @@
 
 ## Recently Merged
 
+- **World Cup Tournament Simulator Suite (2026-07-12, Round 9):**
+  1. Added `scoutfootball.worldcup.tournament` module — a pure-Python, side-effect-free tournament state engine for the 2026 FIFA World Cup (48 teams, 12 groups A-L, 72 group-stage matches, Round of 32 knockout). Implements `TournamentState`/`GroupStanding`/`TeamScenarios` dataclasses, `init_state()`, `apply_result()`/`clear_result()`/`reset_state()`, `compute_group_standings()` with full FIFA tiebreakers (points → GD → GF → H2H points → H2H GD → H2H GF, with H2H only applied when every tied team has played every other tied team), `compute_all_standings()`, `compute_best_thirds()` (returns list of dicts ranked across all 12 groups, top 8), `determine_advancing_teams()` (12 winners + 12 runners-up + 8 best thirds = 32, with `provisional` flag while group stage incomplete), `compute_team_scenarios()` (enumerates remaining fixture permutations and reports advance probability), `state_to_dict()`/`state_from_dict()`/`save_state(path)`/`load_state(path)` with `SCHEMA_VERSION = "1.0.0"` persistence. Default state path: `data/reports/worldcup/tournament_state.json`.
+  2. Added `scoutfootball tournament` CLI with 7 subcommands (`show`, `standings`, `apply`, `clear`, `reset`, `scenarios`, `matches`) supporting `--state-path`, `--json`, `--group`, `--pending`, `--force` flags. The `apply`/`clear` workflow persists results to disk; `reset --force` skips interactive confirmation for automation.
+  3. Added 7 FastAPI endpoints under `/world-cup/tournament/*`: `GET /summary`, `GET /standings?group=`, `GET /matches?group=&pending=`, `GET /scenarios/{team}?max_scenarios=`, `POST /result?match_id=&home_goals=&away_goals=`, `DELETE /result?match_id=`, `POST /reset`. All write operations persist to `DEFAULT_STATE_PATH`; the summary endpoint injects `status: "ok"` for frontend compatibility.
+  4. Added frontend "Tournament" (锦标赛) view with group selector, live standings table, match entry form (apply/clear with score inputs), advancing teams panel (winners/runners-up/best-thirds with provisional flag), and qualification scenarios panel. State persists across page reloads via the server-side JSON file. Bilingual i18n (zh/en).
+  5. Added 57 unit tests in `tests/unit/test_worldcup_tournament.py` covering init_state, apply/clear/reset, group standings (empty/draws/sorting/GD/finished property), tiebreakers (points/GD/GF), advancing teams (winners/runners-up/best-thirds structure, provisional flag), best-thirds (list shape, sorting, limit), team scenarios (probability range, bounding, completed team), tournament summary (structure, after results, all groups), persistence (dict round-trip, save/load, missing file, valid JSON), and edge cases (match_by_id, is_finished property). All 1300+ unit tests and 14 integration tests pass, ruff + node --check clean.
 - **Versioned Player-Match Action Value Artifact (2026-07-12, Round 8):**
   1. Added `player_match_action_value_sample.parquet` and a schema-versioned manifest derived from the three bundled StatsBomb Open Data matches. Each of the 94 player-team-match rows retains match date, competition, season, scoreline, estimated minutes, action counts, positive/negative xT, xT per 90 and input hash.
   2. Added `scoutfootball action-value-matches`, `GET /action-values/matches`, and the release-static `frontend/data/action_value_matches.json` snapshot. The CLI deliberately only permits `coverage_scope=sample`; current evidence must never be described as complete competition coverage.
@@ -88,7 +94,7 @@
 
 ## Current Development
 
-- Round 8 is merged on `codex/integration`; next round will start from a clean integration branch. The broader xT artifact remains player-team-season (9,951 rows) and VAEP remains player-team-career (6,771 rows), while player-match xT is deliberately limited to the versioned three-match sample.
+- Round 9 (Tournament Simulator) is ready to merge on `codex/tournament-simulator`. Once squash-merged into `codex/integration`, the next round will build on the persisted tournament state to add knockout bracket progression (R32 → R16 → QF → SF → Final) driven by user-recorded group results, plus a static export of the tournament summary for offline fallback.
 
 ## Known Blockers
 
@@ -96,9 +102,10 @@
 
 ## Next Round Candidates
 
-1. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-2. Add cross-provider schema validation fixtures and empty-data behavior tests.
-3. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
-4. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
-5. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
-6. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
+1. Knockout bracket progression: extend the tournament module to record R32 → R16 → QF → SF → Final results once group stage completes, seeded from `determine_advancing_teams()`. Frontend bracket view with editable matchups.
+2. Static tournament snapshot export: add `tournament_summary` to `export_static_frontend_data.py` for offline fallback when the API is unavailable.
+3. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
+4. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
+5. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+6. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
+7. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.

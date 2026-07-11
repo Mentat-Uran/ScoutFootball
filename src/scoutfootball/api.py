@@ -3594,3 +3594,211 @@ def get_wc_teams() -> dict:
         ),
         "teams": teams_data,
     })
+
+
+# ── Tournament state endpoints ───────────────────────────────────────────
+
+
+def _wc_tournament_state():
+    """Load the current tournament state (lazy-init if no file exists)."""
+    from scoutfootball.worldcup.tournament import load_state
+
+    # load_state() returns a fresh init_state() if the default file is missing
+    return load_state()
+
+
+def get_wc_tournament_summary() -> dict:
+    """Return a comprehensive summary of the current tournament state."""
+    from scoutfootball.worldcup.tournament import tournament_summary
+
+    state = _wc_tournament_state()
+    summary = tournament_summary(state)
+    summary["status"] = "ok"
+    return _clean_json_value(summary)
+
+
+def get_wc_tournament_standings(group: str | None = None) -> dict:
+    """Return standings for one or all groups."""
+    from dataclasses import asdict
+
+    from scoutfootball.worldcup.tournament import (
+        compute_all_standings,
+        compute_group_standings,
+    )
+
+    state = _wc_tournament_state()
+    if group:
+        letter = group.upper()
+        if letter not in GROUPS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "unknown_group",
+                "message": f"Unknown group '{group}'. Valid: A-L",
+            })
+        standings = {letter: [asdict(s) for s in compute_group_standings(state, letter)]}
+    else:
+        all_standings = compute_all_standings(state)
+        standings = {
+            letter: [asdict(s) for s in rows]
+            for letter, rows in all_standings.items()
+        }
+
+    return _clean_json_value({
+        "status": "ok",
+        "standings": standings,
+    })
+
+
+def get_wc_tournament_matches(
+    group: str | None = None,
+    pending: bool = False,
+) -> dict:
+    """Return matches with optional group filter and pending-only flag."""
+    from scoutfootball.worldcup.tournament import _match_completed
+
+    state = _wc_tournament_state()
+    matches_out = []
+    for m in state.matches:
+        if group and m.get("group") != group.upper():
+            continue
+        result = state.results.get(m["match_id"])
+        is_done = _match_completed(result)
+        if pending and is_done:
+            continue
+        entry = {"match_id": m["match_id"], **m}
+        if is_done:
+            entry["result"] = result
+            entry["completed"] = True
+        else:
+            entry["completed"] = False
+        matches_out.append(entry)
+
+    return _clean_json_value({
+        "status": "ok",
+        "count": len(matches_out),
+        "matches": matches_out,
+    })
+
+
+def get_wc_tournament_scenarios(team: str, max_scenarios: int = 30) -> dict:
+    """Return qualification scenarios for a single team."""
+    from dataclasses import asdict
+
+    from scoutfootball.worldcup.tournament import compute_team_scenarios
+
+    state = _wc_tournament_state()
+    try:
+        result = compute_team_scenarios(state, team, max_scenarios=max_scenarios)
+    except ValueError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_team",
+            "message": str(exc),
+        })
+
+    return _clean_json_value({
+        "status": "ok",
+        "team": result.team,
+        "group": result.group,
+        "current_standing": result.current_standing,
+        "remaining_matches": result.remaining_matches,
+        "advance_probability": result.advance_probability,
+        "scenarios": [asdict(s) for s in result.scenarios],
+        "summary": result.summary,
+    })
+
+
+def apply_wc_tournament_result(
+    match_id: str,
+    home_goals: int,
+    away_goals: int,
+) -> dict:
+    """Record a match result and persist state. Returns updated group standings."""
+    from dataclasses import asdict
+
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        apply_result,
+        compute_group_standings,
+        save_state,
+    )
+
+    state = _wc_tournament_state()
+    match = state.match_by_id(match_id)
+    if not match:
+        return _clean_json_value({
+            "status": "error",
+            "code": "match_not_found",
+            "message": f"Match id '{match_id}' not found",
+        })
+
+    ok = apply_result(state, match_id, home_goals, away_goals)
+    if not ok:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_result",
+            "message": (
+                f"Failed to apply {home_goals}-{away_goals} to {match_id} "
+                "(goals must be 0-30)"
+            ),
+        })
+
+    save_state(state, DEFAULT_STATE_PATH)
+
+    group = match.get("group")
+    standings = (
+        [asdict(s) for s in compute_group_standings(state, group)]
+        if group else []
+    )
+
+    return _clean_json_value({
+        "status": "ok",
+        "match_id": match_id,
+        "home": match["home"],
+        "away": match["away"],
+        "home_goals": home_goals,
+        "away_goals": away_goals,
+        "group": group,
+        "standings": standings,
+    })
+
+
+def clear_wc_tournament_result(match_id: str) -> dict:
+    """Clear a recorded match result and persist state."""
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        clear_result,
+        save_state,
+    )
+
+    state = _wc_tournament_state()
+    if not clear_result(state, match_id):
+        return _clean_json_value({
+            "status": "error",
+            "code": "no_result",
+            "message": f"No result recorded for {match_id}",
+        })
+    save_state(state, DEFAULT_STATE_PATH)
+    return _clean_json_value({
+        "status": "ok",
+        "match_id": match_id,
+        "cleared": True,
+    })
+
+
+def reset_wc_tournament() -> dict:
+    """Reset tournament state to fresh (no results)."""
+    from scoutfootball.worldcup.tournament import (
+        DEFAULT_STATE_PATH,
+        init_state,
+        save_state,
+        tournament_summary,
+    )
+
+    state = init_state()
+    save_state(state, DEFAULT_STATE_PATH)
+    return _clean_json_value({
+        "status": "ok",
+        "reset": True,
+        "summary": tournament_summary(state),
+    })
