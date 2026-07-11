@@ -885,6 +885,164 @@ def run_dc_backtest_with_calibration(
 
 
 # ---------------------------------------------------------------------------
+# Calibration drift monitoring
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CalibrationDriftReport:
+    """Report on calibration drift across time windows.
+
+    Tracks how prediction metrics (RPS, Brier, LogLoss) change over time
+    windows, helping identify when a model's calibration degrades.
+    """
+
+    windows: list[dict[str, Any]]
+    overall_metrics: dict[str, float]
+    drift_detected: bool
+    drift_metric: str
+    drift_threshold: float
+    latest_window: dict[str, Any] | None
+
+
+def compute_calibration_drift(
+    predictions: pd.DataFrame,
+    *,
+    window_col: str = "match_date",
+    window_size: str = "90D",
+    metrics: tuple[str, ...] = ("rps_1x2", "brier_1x2", "log_loss_exact"),
+    drift_metric: str = "rps_1x2",
+    drift_threshold: float = 0.05,
+) -> CalibrationDriftReport:
+    """Compute calibration drift across time windows.
+
+    Parameters
+    ----------
+    predictions : DataFrame with columns home_win_probability, draw_probability,
+        away_win_probability, actual_outcome, and ``window_col``.
+    window_col : column to use for time-based windowing (default match_date).
+    window_size : pandas frequency string for window size (default "90D" = 90 days).
+    metrics : metrics to compute per window.
+    drift_metric : metric to check for drift.
+    drift_threshold : relative change threshold for drift detection.
+        If the latest window's drift_metric exceeds the historical average
+        by more than this fraction, drift is detected.
+
+    Returns
+    -------
+    CalibrationDriftReport with per-window metrics and drift status.
+    """
+    required = {
+        "home_win_probability",
+        "draw_probability",
+        "away_win_probability",
+        "actual_outcome",
+        window_col,
+    }
+    missing = required.difference(predictions.columns)
+    if missing:
+        raise ValueError(f"predictions missing columns: {', '.join(sorted(missing))}")
+
+    df = predictions.copy()
+    df[window_col] = pd.to_datetime(df[window_col], errors="coerce")
+    df = df.dropna(subset=[window_col]).sort_values(window_col)
+
+    if df.empty:
+        return CalibrationDriftReport(
+            windows=[],
+            overall_metrics={},
+            drift_detected=False,
+            drift_metric=drift_metric,
+            drift_threshold=drift_threshold,
+            latest_window=None,
+        )
+
+    # Compute overall metrics
+    overall = _compute_window_metrics(df, metrics)
+
+    # Compute per-window metrics
+    windows: list[dict[str, Any]] = []
+    min_date = df[window_col].min()
+    max_date = df[window_col].max()
+
+    current_start = min_date
+    while current_start <= max_date:
+        current_end = current_start + pd.Timedelta(window_size)
+        window_df = df[
+            (df[window_col] >= current_start) & (df[window_col] < current_end)
+        ]
+        if not window_df.empty:
+            window_metrics = _compute_window_metrics(window_df, metrics)
+            window_entry: dict[str, Any] = {
+                "start_date": current_start.strftime("%Y-%m-%d"),
+                "end_date": current_end.strftime("%Y-%m-%d"),
+                "n_matches": len(window_df),
+                **window_metrics,
+            }
+            windows.append(window_entry)
+        current_start = current_end
+
+    # Detect drift
+    drift_detected = False
+    latest_window = windows[-1] if windows else None
+    if len(windows) >= 2 and latest_window is not None:
+        historical = windows[:-1]
+        avg_metric = float(np.mean([w.get(drift_metric, 0.0) for w in historical]))
+        latest_metric = float(latest_window.get(drift_metric, 0.0))
+        if avg_metric > 0:
+            relative_change = (latest_metric - avg_metric) / avg_metric
+            drift_detected = relative_change > drift_threshold
+
+    return CalibrationDriftReport(
+        windows=windows,
+        overall_metrics=overall,
+        drift_detected=drift_detected,
+        drift_metric=drift_metric,
+        drift_threshold=drift_threshold,
+        latest_window=latest_window,
+    )
+
+
+def _compute_window_metrics(
+    df: pd.DataFrame,
+    metrics: tuple[str, ...] = ("rps_1x2", "brier_1x2", "log_loss_exact"),
+) -> dict[str, float]:
+    """Compute prediction metrics for a window of predictions."""
+    probs = df[
+        ["home_win_probability", "draw_probability", "away_win_probability"]
+    ].to_numpy()
+    actual = df["actual_outcome"].to_numpy()
+
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    actual_idx = np.array([outcome_map.get(o, 1) for o in actual])
+    actual_onehot = np.zeros_like(probs)
+    valid = actual_idx < probs.shape[1]
+    actual_onehot[np.arange(len(actual_idx))[valid], actual_idx[valid]] = 1.0
+
+    result: dict[str, float] = {}
+    result["n_matches"] = len(df)
+
+    if "rps_1x2" in metrics:
+        cum_probs = np.cumsum(probs, axis=1)
+        cum_actual = np.cumsum(actual_onehot, axis=1)
+        rps = float(np.mean(np.sum((cum_probs - cum_actual) ** 2, axis=1) / 2.0))
+        result["rps_1x2"] = rps
+
+    if "brier_1x2" in metrics:
+        brier = float(np.mean(np.sum((probs - actual_onehot) ** 2, axis=1)))
+        result["brier_1x2"] = brier
+
+    if "log_loss_exact" in metrics:
+        # Clip probabilities to avoid log(0)
+        eps = 1e-15
+        clipped = np.clip(probs, eps, 1.0 - eps)
+        ll = -float(np.mean(np.sum(actual_onehot * np.log(clipped), axis=1)))
+        result["log_loss_exact"] = ll
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Decay parameter tuning
 # ---------------------------------------------------------------------------
 

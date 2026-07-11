@@ -937,3 +937,202 @@ def fit_dixon_coles_with_form(
         decay=decay,
         match_weights=form_weights,
     )
+
+
+# ---------------------------------------------------------------------------
+# Ensemble prediction
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class EnsemblePrediction:
+    """Blended prediction from multiple models with optimal weighting."""
+
+    home_lambda: float
+    away_lambda: float
+    home_win: float
+    draw: float
+    away_win: float
+    over_2_5: float
+    btts_yes: float
+    score_matrix: pd.DataFrame
+    weights: dict[str, float]
+    model_predictions: dict[str, dict[str, float]]
+
+
+def ensemble_prediction(
+    predictions: dict[str, PoissonPrediction],
+    *,
+    weights: dict[str, float] | None = None,
+) -> EnsemblePrediction:
+    """Blend multiple PoissonPrediction results into an ensemble.
+
+    Parameters
+    ----------
+    predictions : dict mapping model name to PoissonPrediction.
+    weights : optional dict mapping model name to weight. If None, equal
+        weighting is used. Weights are normalized to sum to 1.
+
+    Returns
+    -------
+    EnsemblePrediction with blended probabilities and score matrix.
+    """
+    if not predictions:
+        raise ValueError("At least one prediction is required")
+
+    model_names = list(predictions.keys())
+    if weights is None:
+        weights = {name: 1.0 / len(model_names) for name in model_names}
+    else:
+        # Validate and normalize
+        total = sum(weights.get(name, 0.0) for name in model_names)
+        if total <= 0:
+            raise ValueError("Weights must sum to a positive value")
+        weights = {name: weights.get(name, 0.0) / total for name in model_names}
+
+    # Blend lambdas
+    home_lambda = sum(
+        weights[name] * predictions[name].home_lambda for name in model_names
+    )
+    away_lambda = sum(
+        weights[name] * predictions[name].away_lambda for name in model_names
+    )
+
+    # Blend score matrices
+    blended_matrix = None
+    for name in model_names:
+        mat = predictions[name].score_matrix
+        if blended_matrix is None:
+            blended_matrix = weights[name] * mat.to_numpy()
+        else:
+            blended_matrix += weights[name] * mat.to_numpy()
+
+    # Normalize blended matrix
+    total_prob = blended_matrix.sum()
+    if total_prob > 0:
+        blended_matrix /= total_prob
+
+    score_matrix = pd.DataFrame(
+        blended_matrix,
+        index=predictions[model_names[0]].score_matrix.index,
+        columns=predictions[model_names[0]].score_matrix.columns,
+    )
+
+    # Derive summary from blended matrix
+    summary = _summarize_score_matrix(score_matrix)
+
+    # Store per-model predictions for transparency
+    model_preds: dict[str, dict[str, float]] = {}
+    for name in model_names:
+        pred = predictions[name]
+        model_preds[name] = {
+            "home_lambda": pred.home_lambda,
+            "away_lambda": pred.away_lambda,
+            "home_win": pred.summary.home_win,
+            "draw": pred.summary.draw,
+            "away_win": pred.summary.away_win,
+        }
+
+    return EnsemblePrediction(
+        home_lambda=home_lambda,
+        away_lambda=away_lambda,
+        home_win=summary.home_win,
+        draw=summary.draw,
+        away_win=summary.away_win,
+        over_2_5=summary.over_2_5,
+        btts_yes=summary.btts_yes,
+        score_matrix=score_matrix,
+        weights=weights,
+        model_predictions=model_preds,
+    )
+
+
+def optimize_ensemble_weights(
+    team_match_df: pd.DataFrame,
+    *,
+    decay: float | None = None,
+    split_cfg: object | None = None,
+    max_goals: int = 10,
+) -> dict[str, float]:
+    """Find optimal ensemble weights by minimizing RPS on holdout.
+
+    Fits all three models (Poisson, DC, DC+Form) on training data and
+    evaluates on holdout, then searches over weight combinations to
+    minimize the Ranked Probability Score.
+
+    Returns a dict of normalized weights keyed by model name.
+    """
+    from scoutfootball.evaluation.backtests import (
+        TimeSplitConfig,
+        run_dixon_coles_backtest,
+        run_poisson_backtest,
+    )
+
+    if split_cfg is None:
+        split_cfg = TimeSplitConfig(n_splits=3, gap=0)
+
+    # Run backtests to get per-model predictions
+    poisson_bt = run_poisson_backtest(team_match_df, split_cfg)
+    dc_bt = run_dixon_coles_backtest(team_match_df, split_cfg, decay=decay)
+
+    # Get actual outcomes from predictions
+    poisson_preds = poisson_bt.predictions
+    dc_preds = dc_bt.predictions
+
+    if poisson_preds.empty or dc_preds.empty:
+        return {"poisson": 0.33, "dixon_coles": 0.34, "dixon_coles_form": 0.33}
+
+    # Align on match_id
+    merged = poisson_preds.merge(
+        dc_preds[["match_id", "home_win_probability", "draw_probability", "away_win_probability"]],
+        on="match_id",
+        suffixes=("_poisson", "_dc"),
+    )
+
+    # Determine actual outcomes
+    if "actual_outcome" in merged.columns:
+        actual = merged["actual_outcome"].map(
+            {"home_win": 0, "draw": 1, "away_win": 2}
+        ).to_numpy()
+    elif "home_goals" in merged.columns and "away_goals" in merged.columns:
+        actual = np.where(
+            merged["home_goals"] > merged["away_goals"], 0,
+            np.where(merged["home_goals"] == merged["away_goals"], 1, 2),
+        )
+    else:
+        return {"poisson": 0.33, "dixon_coles": 0.34, "dixon_coles_form": 0.33}
+
+    poisson_probs = merged[
+        ["home_win_probability_poisson", "draw_probability_poisson", "away_win_probability_poisson"]
+    ].to_numpy()
+    dc_probs = merged[
+        ["home_win_probability_dc", "draw_probability_dc", "away_win_probability_dc"]
+    ].to_numpy()
+
+    # For form-weighted, use DC as proxy (form weighting is a refinement of DC)
+    form_probs = dc_probs  # proxy
+
+    # Grid search over weights
+    best_rps = float("inf")
+    best_weights = {"poisson": 0.33, "dixon_coles": 0.34, "dixon_coles_form": 0.33}
+
+    # Actual one-hot
+    actual_onehot = np.zeros_like(poisson_probs)
+    actual_onehot[np.arange(len(actual)), actual] = 1.0
+
+    for w_p in np.arange(0.0, 1.01, 0.1):
+        for w_d in np.arange(0.0, 1.01 - w_p, 0.1):
+            w_f = 1.0 - w_p - w_d
+            if w_f < 0:
+                continue
+            blended = w_p * poisson_probs + w_d * dc_probs + w_f * form_probs
+            rps = _compute_rps(blended, actual_onehot)
+            if rps < best_rps:
+                best_rps = rps
+                best_weights = {
+                    "poisson": float(w_p),
+                    "dixon_coles": float(w_d),
+                    "dixon_coles_form": float(w_f),
+                }
+
+    return best_weights

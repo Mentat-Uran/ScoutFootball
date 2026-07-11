@@ -415,9 +415,10 @@ Returns calibration metrics for match prediction models.
 ### GET /predictions/{home_team}/{away_team}
 Match prediction between two teams.
 
-**Query params**: `model` ("poisson", "dixon_coles", or "form")
+**Query params**: `model` ("poisson", "dixon_coles", "form", or "ensemble")
 **Response (poisson/dixon_coles)**: `{ home_team, away_team, model_type, home_lambda, away_lambda, home_win, draw, away_win, over_2_5, btts_yes, score_matrix, calibration, confidence_intervals? }`
 **Response (form)**: Same as dixon_coles plus `{ form_config: { lookback, form_factor, decay }, rho, home_advantage }`
+**Response (ensemble)**: `{ home_team, away_team, model_type: "ensemble", home_lambda, away_lambda, home_win, draw, away_win, over_2_5, btts_yes, score_matrix, weights: { poisson, dixon_coles, dixon_coles_form }, model_predictions: { <name>: { home_lambda, away_lambda, home_win, draw, away_win } }, confidence_intervals? }`
 
 **`confidence_intervals` field** (when available, dixon_coles/form models only):
 ```json
@@ -884,6 +885,37 @@ Returns Dixon-Coles time-decay parameter tuning results from
 **Edge cases**:
 - No tuning file: returns `{"status": "not_available", "instructions": "..."}`
 - Results are cached for 5 minutes.
+
+### GET /predictions/drift
+
+Returns calibration drift report tracking RPS/Brier/LogLoss across time
+windows. Reads `poisson_backtest_predictions.parquet` from the calibration
+backtest directory and computes per-window metrics to detect calibration
+degradation over time.
+
+**Response** (when artifacts exist):
+```json
+{
+  "status": "ok",
+  "drift_detected": false,
+  "drift_metric": "rps_1x2",
+  "drift_threshold": 0.05,
+  "overall_metrics": { "rps_1x2": 0.21, "brier_1x2": 0.58, "log_loss_exact": 2.4 },
+  "n_windows": 3,
+  "windows": [
+    { "start_date": "2024-01-01", "end_date": "2024-03-31", "n_matches": 30, "rps_1x2": 0.20, "brier_1x2": 0.57, "log_loss_exact": 2.38 }
+  ],
+  "latest_window": { "start_date": "...", "end_date": "...", "n_matches": 30, "rps_1x2": 0.22, "brier_1x2": 0.59, "log_loss_exact": 2.42 }
+}
+```
+
+**Edge cases**:
+- No backtest artifact: returns `{"status": "not_available", "instructions": "..."}`
+- Empty predictions: returns `{"status": "no_data"}`
+- Missing `match_date` column: returns `{"status": "no_date_column"}`
+- Drift is detected when the latest window's `drift_metric` exceeds the
+  historical average by more than `drift_threshold` (relative change).
+- Results are cached for 5 minutes (shared backtest cache).
 
 ### Cache Configuration
 

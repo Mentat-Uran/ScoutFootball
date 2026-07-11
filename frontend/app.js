@@ -291,6 +291,8 @@ const i18n = {
         backtest_fold_chart: "分折指标趋势",
         backtest_tuning: "Decay 参数调优",
         backtest_tuning_desc: "Dixon-Coles 时间衰减网格搜索",
+        backtest_drift: "校准漂移监控",
+        backtest_drift_desc: "按时间窗口追踪 RPS/Brier/LogLoss 漂移",
         backtest_best_decay: "最优 Decay",
         backtest_selection_metric: "选择指标",
         backtest_half_life: "半衰期(天)",
@@ -597,6 +599,8 @@ const i18n = {
         backtest_fold_chart: "Per-Fold Metric Trends",
         backtest_tuning: "Decay Parameter Tuning",
         backtest_tuning_desc: "Dixon-Coles time-decay grid search",
+        backtest_drift: "Calibration Drift Monitoring",
+        backtest_drift_desc: "Track RPS/Brier/LogLoss drift across time windows",
         backtest_best_decay: "Best Decay",
         backtest_selection_metric: "Selection Metric",
         backtest_half_life: "Half-Life (days)",
@@ -3181,9 +3185,11 @@ function selectedMatch() {
             model_type: currentPrediction.model_type || "poisson",
             confidence_intervals: currentPrediction.confidence_intervals || null,
             form_config: currentPrediction.form_config || null,
+            weights: currentPrediction.weights || null,
+            model_predictions: currentPrediction.model_predictions || null,
         };
     }
-    return { home: appState.home, away: appState.away, hw: 0.34, draw: 0.28, aw: 0.38, xh: 1.32, xa: 1.42, score_matrix: null, calibration: null, model_version: "", model_type: "poisson", confidence_intervals: null, form_config: null };
+    return { home: appState.home, away: appState.away, hw: 0.34, draw: 0.28, aw: 0.38, xh: 1.32, xa: 1.42, score_matrix: null, calibration: null, model_version: "", model_type: "poisson", confidence_intervals: null, form_config: null, weights: null, model_predictions: null };
 }
 
 function renderMatchSelectors() {
@@ -3406,6 +3412,33 @@ async function renderMatches() {
             calibHtml += `${z ? '回看' : 'lookback'}=<strong>${escapeHtml(String(fc.lookback))}</strong>, `;
             calibHtml += `${z ? '因子' : 'factor'}=<strong>${escapeHtml(String(fc.form_factor))}</strong>`;
             if (fc.decay != null) calibHtml += `, decay=<strong>${escapeHtml(String(fc.decay))}</strong>`;
+            calibHtml += `</div>`;
+        }
+
+        // Ensemble model breakdown
+        if (match.model_type === "ensemble" && match.weights && match.model_predictions) {
+            const weights = match.weights;
+            const mp = match.model_predictions;
+            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px">`;
+            calibHtml += `<p style="margin:0 0 0.3rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">`;
+            calibHtml += `${z ? '集成模型分解' : 'Ensemble Breakdown'}</p>`;
+            const modelNames = Object.keys(weights);
+            if (modelNames.length > 0) {
+                calibHtml += `<table class="data-table" style="width:100%;font-size:0.7rem">`;
+                calibHtml += `<thead><tr><th>${z ? '模型' : 'Model'}</th><th>${z ? '权重' : 'Weight'}</th><th>${z ? '主胜' : 'Home'}</th><th>${z ? '平' : 'Draw'}</th><th>${z ? '客胜' : 'Away'}</th><th>${z ? '主λ' : 'Hλ'}</th><th>${z ? '客λ' : 'Aλ'}</th></tr></thead><tbody>`;
+                for (const name of modelNames) {
+                    const w = weights[name];
+                    const p = mp[name] || {};
+                    calibHtml += `<tr><td>${escapeHtml(name)}</td>`;
+                    calibHtml += `<td><strong>${(Number(w) * 100).toFixed(1)}%</strong></td>`;
+                    calibHtml += `<td>${fmtMetric(p.home_win)}</td>`;
+                    calibHtml += `<td>${fmtMetric(p.draw)}</td>`;
+                    calibHtml += `<td>${fmtMetric(p.away_win)}</td>`;
+                    calibHtml += `<td>${fmtMetric(p.home_lambda)}</td>`;
+                    calibHtml += `<td>${fmtMetric(p.away_lambda)}</td></tr>`;
+                }
+                calibHtml += `</tbody></table>`;
+            }
             calibHtml += `</div>`;
         }
 
@@ -5597,6 +5630,7 @@ async function renderCalibration() {
 
 let backtestComparisonData = null;
 let decayTuningData = null;
+let calibrationDriftData = null;
 
 async function fetchBacktestComparison() {
     try {
@@ -5616,6 +5650,17 @@ async function fetchDecayTuning() {
         });
     } catch (err) {
         console.warn("Failed to fetch decay tuning:", err);
+        return null;
+    }
+}
+
+async function fetchCalibrationDrift() {
+    try {
+        return await fetchJson("/predictions/drift", {
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
+    } catch (err) {
+        console.warn("Failed to fetch calibration drift:", err);
         return null;
     }
 }
@@ -5744,6 +5789,15 @@ async function renderBacktest() {
         } catch (e) {
             console.warn("Failed to render decay tuning:", e);
         }
+
+        // Calibration drift panel
+        try {
+            const drift = calibrationDriftData || await fetchCalibrationDrift();
+            calibrationDriftData = drift;
+            _renderCalibrationDrift(drift);
+        } catch (e) {
+            console.warn("Failed to render calibration drift:", e);
+        }
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -5814,6 +5868,121 @@ function _renderDecayTuning(data) {
             </thead>
             <tbody>${rows}</tbody>
         </table>`;
+}
+
+function _renderCalibrationDrift(data) {
+    const panel = document.getElementById("backtest-drift-panel");
+    if (!panel) return;
+    const body = document.getElementById("backtest-drift-body");
+    if (!body) return;
+    const statusPill = document.getElementById("drift-status-pill");
+    const z = currentLang === "zh";
+
+    if (!data) {
+        panel.style.display = "none";
+        return;
+    }
+
+    if (data.status === "not_available" || data.status === "no_data" || data.status === "no_date_column") {
+        panel.style.display = "block";
+        if (statusPill) {
+            statusPill.textContent = z ? "无数据" : "NO DATA";
+            statusPill.className = "status-pill status-low";
+        }
+        const msg = data.status === "not_available"
+            ? (z ? "未生成回测产物，请先运行 tune-predictions --run-backtest。" : "Run 'scoutfootball tune-predictions --run-backtest' to generate backtest artifacts.")
+            : (z ? "回测产物缺少必要字段。" : "Backtest artifact missing required fields.");
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(msg)}</p>`;
+        if (data.instructions) {
+            body.innerHTML += `<p style="font-size:0.75rem;margin-top:0.5rem;font-family:monospace;color:var(--text-muted)">${escapeHtml(data.instructions)}</p>`;
+        }
+        return;
+    }
+
+    if (data.status === "error") {
+        panel.style.display = "block";
+        if (statusPill) {
+            statusPill.textContent = z ? "错误" : "error";
+            statusPill.className = "status-pill status-low";
+        }
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">Error: ${escapeHtml(data.message || "unknown")}</p>`;
+        return;
+    }
+
+    panel.style.display = "block";
+    const driftDetected = !!data.drift_detected;
+    const driftMetric = data.drift_metric || "rps_1x2";
+    const driftThreshold = data.drift_threshold;
+    const nWindows = data.n_windows || 0;
+    const overall = data.overall_metrics || {};
+    const windows = data.windows || [];
+    const latest = data.latest_window;
+
+    if (statusPill) {
+        if (driftDetected) {
+            statusPill.textContent = z ? "漂移" : "DRIFT";
+            statusPill.className = "status-pill status-low";
+        } else {
+            statusPill.textContent = z ? "稳定" : "STABLE";
+            statusPill.className = "status-pill status-high";
+        }
+    }
+
+    const windowRows = windows.map((w) => {
+        const isLatest = latest && w.start_date === latest.start_date && w.end_date === latest.end_date;
+        const cls = isLatest ? ' style="background:var(--accent-alpha, rgba(100,180,255,0.12))"' : "";
+        const badge = isLatest
+            ? ` <span class="status-pill status-medium" style="font-size:0.6rem">${z ? "最新" : "LATEST"}</span>`
+            : "";
+        return `<tr${cls}>
+            <td>${escapeHtml(String(w.start_date || "—"))}${badge}</td>
+            <td>${escapeHtml(String(w.end_date || "—"))}</td>
+            <td>${escapeHtml(String(w.n_matches ?? "—"))}</td>
+            <td>${fmtMetric(w.rps_1x2)}</td>
+            <td>${fmtMetric(w.brier_1x2)}</td>
+            <td>${fmtMetric(w.log_loss_exact)}</td>
+        </tr>`;
+    }).join("");
+
+    // Compute relative change of latest window vs historical average for display
+    let latestRelChange = null;
+    if (latest && windows.length >= 2) {
+        const historical = windows.slice(0, -1);
+        const avgMetric = historical.reduce((s, w) => s + (Number(w[driftMetric]) || 0), 0) / historical.length;
+        const latestMetric = Number(latest[driftMetric]) || 0;
+        if (avgMetric > 0) {
+            latestRelChange = (latestMetric - avgMetric) / avgMetric;
+        }
+    }
+    const latestBlock = latest ? `
+        <div class="detail-grid" style="margin-top:0.8rem">
+            <div><span>${escapeHtml(z ? "最新窗口 RPS" : "Latest RPS")}</span><strong>${fmtMetric(latest.rps_1x2)}</strong></div>
+            <div><span>${escapeHtml(z ? "相对变化" : "Relative change")}</span><strong style="color:${driftDetected ? "var(--warn, #f59e0b)" : "var(--accent)"}">${latestRelChange !== null ? `${(latestRelChange >= 0 ? "+" : "")}${(latestRelChange * 100).toFixed(2)}%` : "—"}</strong></div>
+            <div><span>${escapeHtml(z ? "阈值" : "Threshold")}</span><strong>${(Number(driftThreshold) * 100).toFixed(1)}%</strong></div>
+        </div>` : "";
+
+    body.innerHTML = `
+        <div class="detail-grid" style="margin-bottom:0.8rem">
+            <div><span>${escapeHtml(z ? "漂移检测" : "Drift detected")}</span><strong style="color:${driftDetected ? "var(--warn, #f59e0b)" : "var(--accent)"}">${driftDetected ? (z ? "是" : "YES") : (z ? "否" : "NO")}</strong></div>
+            <div><span>${escapeHtml(z ? "监控指标" : "Drift metric")}</span><strong>${escapeHtml(String(driftMetric))}</strong></div>
+            <div><span>${escapeHtml(z ? "窗口数" : "Windows")}</span><strong>${escapeHtml(String(nWindows))}</strong></div>
+            <div><span>${escapeHtml(z ? "整体 RPS" : "Overall RPS")}</span><strong>${fmtMetric(overall.rps_1x2)}</strong></div>
+            <div><span>${escapeHtml(z ? "整体 Brier" : "Overall Brier")}</span><strong>${fmtMetric(overall.brier_1x2)}</strong></div>
+            <div><span>${escapeHtml(z ? "整体 LogLoss" : "Overall LogLoss")}</span><strong>${fmtMetric(overall.log_loss_exact)}</strong></div>
+        </div>
+        <table class="data-table" style="width:100%;font-size:0.8rem">
+            <thead>
+                <tr>
+                    <th>${escapeHtml(z ? "窗口起" : "Start")}</th>
+                    <th>${escapeHtml(z ? "窗口止" : "End")}</th>
+                    <th>${escapeHtml(z ? "场次数" : "Matches")}</th>
+                    <th>RPS</th>
+                    <th>Brier</th>
+                    <th>Log Loss</th>
+                </tr>
+            </thead>
+            <tbody>${windowRows}</tbody>
+        </table>${latestBlock}`;
 }
 
 function _renderBacktestFoldChart(data, models, folds) {
