@@ -1163,6 +1163,45 @@ def get_calibration_drift() -> dict:
         return {"status": "error", "message": str(exc)}
 
 
+def get_calibration_drift_timeline() -> dict:
+    """Return a chart-ready calibration drift timeline.
+
+    Wraps :func:`get_calibration_drift` and projects the per-window metrics
+    into a flat ``points`` array suitable for a line chart (date + rps/brier/
+    log_loss + n_matches). Includes the drift metric name, threshold, and
+    detected flag so the frontend can draw a threshold reference line.
+    """
+    try:
+        report = get_calibration_drift()
+        if report.get("status") != "ok":
+            return report
+
+        windows = report.get("windows", [])
+        points: list[dict[str, Any]] = []
+        for w in windows:
+            points.append({
+                "date": w.get("end_date") or w.get("start_date") or "",
+                "start_date": w.get("start_date", ""),
+                "end_date": w.get("end_date", ""),
+                "n_matches": w.get("n_matches", 0),
+                "rps_1x2": w.get("rps_1x2"),
+                "brier_1x2": w.get("brier_1x2"),
+                "log_loss_exact": w.get("log_loss_exact"),
+            })
+
+        return _clean_json_value({
+            "status": "ok",
+            "metric": report.get("drift_metric", "rps_1x2"),
+            "threshold": report.get("drift_threshold", 0.05),
+            "drift_detected": report.get("drift_detected", False),
+            "n_points": len(points),
+            "points": points,
+            "overall_metrics": report.get("overall_metrics", {}),
+        })
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 # --- Isotonic calibrator cache ---
 _CALIBRATOR_CACHE: dict[str, Any] = {"calibrator": None, "timestamp": 0.0}
 _CALIBRATOR_TTL_SECONDS = 600  # 10 minutes
@@ -1518,6 +1557,67 @@ def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
                 }
                 for name, attr in ensemble_attr.per_model.items()
             },
+        })
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_ensemble_attribution_ci(
+    home_team: str, away_team: str, *, n_bootstrap: int = 30,
+) -> dict:
+    """Return bootstrap CIs for ensemble attribution blended factor deltas.
+
+    Fits both Dixon-Coles and form-weighted Dixon-Coles, bootstraps the
+    ensemble attribution to produce 90% CIs on each factor's blended delta.
+    """
+    try:
+        from scoutfootball.models import (
+            bootstrap_ensemble_attribution_confidence,
+        )
+
+        team_match = load_team_match()
+        if team_match is None or len(team_match) < 50:
+            return {
+                "status": "not_available",
+                "instructions": "Insufficient team_match data for ensemble CI",
+            }
+
+        decay = _resolve_tuned_decay()
+
+        # Load cached optimal weights if available
+        weights = None
+        try:
+            from scoutfootball.models import load_ensemble_weights
+
+            cached = load_ensemble_weights()
+            if cached and "weights" in cached:
+                w = cached["weights"]
+                weights = {
+                    "dixon_coles": w.get("dixon_coles", 0.5),
+                    "dixon_coles_form": w.get("dixon_coles_form", 0.5),
+                }
+        except Exception:
+            pass
+
+        ci = bootstrap_ensemble_attribution_confidence(
+            team_match,
+            str(home_team),
+            str(away_team),
+            n_bootstrap=n_bootstrap,
+            confidence_level=0.90,
+            decay=decay,
+            weights=weights,
+            seed=42,
+        )
+        return _clean_json_value({
+            "status": "ok",
+            "home_team": ci.home_team,
+            "away_team": ci.away_team,
+            "n_bootstrap": ci.n_bootstrap,
+            "failed_iterations": ci.failed_iterations,
+            "confidence_level": 0.90,
+            "weights_source": "optimized" if weights else "equal",
+            "factor_cis": ci.factor_cis,
         })
     except Exception as exc:
         return {"status": "error", "message": str(exc)}

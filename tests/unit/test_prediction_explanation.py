@@ -7,6 +7,8 @@ Covers:
 - Bootstrap attribution confidence intervals
 - Ensemble attribution (per-model + blended)
 - Prediction diagnostics aggregation endpoint
+- Ensemble attribution bootstrap CI
+- Calibration drift timeline endpoint
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from scoutfootball.models import (
     EnsembleAttribution,
     PredictionAttribution,
     bootstrap_attribution_confidence,
+    bootstrap_ensemble_attribution_confidence,
     compute_ensemble_attribution,
     compute_prediction_attribution,
     fit_dixon_coles,
@@ -687,3 +690,264 @@ class TestAttributionCIAndEnsembleAPI:
         assert "factors" in blended
         assert len(blended["factors"]) == 7
         assert "baseline_home_win" in blended
+
+
+# ---------------------------------------------------------------------------
+# Ensemble attribution bootstrap CI
+# ---------------------------------------------------------------------------
+
+
+class TestBootstrapEnsembleAttributionConfidence:
+    """Tests for bootstrap_ensemble_attribution_confidence producing CIs on
+    blended factor deltas across both DC and form-weighted DC models."""
+
+    def test_returns_attribution_ci(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_ensemble_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=42,
+        )
+        assert isinstance(ci, AttributionConfidenceInterval)
+        assert ci.home_team == "team_0"
+        assert ci.away_team == "team_1"
+
+    def test_n_bootstrap_counts_successful_iterations(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_ensemble_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=6, seed=1,
+        )
+        assert ci.n_bootstrap + ci.failed_iterations == 6
+        assert ci.n_bootstrap >= 1
+
+    def test_factor_cis_have_expected_fields(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_ensemble_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=2,
+        )
+        assert len(ci.factor_cis) > 0
+        for entry in ci.factor_cis:
+            assert "factor" in entry
+            assert "n_samples" in entry
+            assert "delta_mean" in entry
+            assert "delta_low" in entry
+            assert "delta_high" in entry
+
+    def test_ci_bounds_ordered(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_ensemble_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=3,
+        )
+        for entry in ci.factor_cis:
+            assert entry["delta_low"] <= entry["delta_high"]
+
+    def test_seven_factors_present(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_ensemble_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=4,
+        )
+        factor_keys = {e["factor"] for e in ci.factor_cis}
+        assert len(factor_keys) == 7
+
+    def test_invalid_n_bootstrap_raises(self) -> None:
+        df = _make_team_match_df()
+        with pytest.raises(ValueError):
+            bootstrap_ensemble_attribution_confidence(
+                df, "team_0", "team_1", n_bootstrap=1,
+            )
+
+    def test_reproducible_with_seed(self) -> None:
+        df = _make_team_match_df()
+        ci1 = bootstrap_ensemble_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=77,
+        )
+        ci2 = bootstrap_ensemble_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=77,
+        )
+        assert ci1.n_bootstrap == ci2.n_bootstrap
+        m1 = {e["factor"]: e["delta_mean"] for e in ci1.factor_cis}
+        m2 = {e["factor"]: e["delta_mean"] for e in ci2.factor_cis}
+        for k in m1:
+            assert m1[k] == pytest.approx(m2[k], abs=1e-12)
+
+    def test_custom_weights_normalized(self) -> None:
+        """Custom weights should be accepted and normalized internally
+        without changing the CI structure."""
+        df = _make_team_match_df()
+        ci = bootstrap_ensemble_attribution_confidence(
+            df, "team_0", "team_1",
+            n_bootstrap=4, seed=5,
+            weights={"dixon_coles": 3.0, "dixon_coles_form": 1.0},
+        )
+        assert isinstance(ci, AttributionConfidenceInterval)
+        assert len(ci.factor_cis) > 0
+
+
+# ---------------------------------------------------------------------------
+# Ensemble attribution CI API endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestEnsembleAttributionCIAPI:
+    """Smoke tests for the get_ensemble_attribution_ci API wrapper."""
+
+    def test_returns_ok(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+
+        result = api_module.get_ensemble_attribution_ci(
+            "team_0", "team_1", n_bootstrap=5,
+        )
+        assert result.get("status") == "ok"
+        assert result["home_team"] == "team_0"
+        assert result["away_team"] == "team_1"
+        assert "factor_cis" in result
+        assert isinstance(result["factor_cis"], list)
+        assert len(result["factor_cis"]) > 0
+        assert "weights_source" in result
+
+    def test_insufficient_data(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(api_module, "load_team_match", lambda: pd.DataFrame())
+        result = api_module.get_ensemble_attribution_ci(
+            "team_0", "team_1", n_bootstrap=5,
+        )
+        assert result.get("status") == "not_available"
+
+    def test_weights_source_equal_when_no_cache(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+
+        # Ensure load_ensemble_weights returns None (no cached weights)
+        from scoutfootball.models import match_prediction as mp
+
+        original = mp.load_ensemble_weights
+        monkeypatch.setattr(mp, "load_ensemble_weights", lambda *a, **k: None)
+
+        result = api_module.get_ensemble_attribution_ci(
+            "team_0", "team_1", n_bootstrap=4,
+        )
+        assert result.get("status") == "ok"
+        assert result.get("weights_source") == "equal"
+
+        # Restore
+        monkeypatch.setattr(mp, "load_ensemble_weights", original)
+
+
+# ---------------------------------------------------------------------------
+# Calibration drift timeline endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestCalibrationDriftTimeline:
+    """Tests for get_calibration_drift_timeline projecting windows into
+    chart-ready points."""
+
+    def test_returns_timeline_with_points(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        # Build a drift report stub with windows
+        fake_report = {
+            "status": "ok",
+            "drift_detected": False,
+            "drift_metric": "rps_1x2",
+            "drift_threshold": 0.05,
+            "overall_metrics": {"rps_1x2": 0.2},
+            "windows": [
+                {
+                    "start_date": "2024-01-01", "end_date": "2024-04-01",
+                    "n_matches": 50, "rps_1x2": 0.18, "brier_1x2": 0.30,
+                    "log_loss_exact": 0.65,
+                },
+                {
+                    "start_date": "2024-04-01", "end_date": "2024-07-01",
+                    "n_matches": 60, "rps_1x2": 0.22, "brier_1x2": 0.33,
+                    "log_loss_exact": 0.70,
+                },
+            ],
+            "latest_window": {
+                "start_date": "2024-04-01", "end_date": "2024-07-01",
+                "n_matches": 60, "rps_1x2": 0.22,
+            },
+        }
+        monkeypatch.setattr(
+            api_module, "get_calibration_drift", lambda: fake_report,
+        )
+
+        result = api_module.get_calibration_drift_timeline()
+
+        assert result.get("status") == "ok"
+        assert result["metric"] == "rps_1x2"
+        assert result["threshold"] == 0.05
+        assert result["drift_detected"] is False
+        assert result["n_points"] == 2
+        points = result["points"]
+        assert len(points) == 2
+        for p in points:
+            assert "date" in p
+            assert "start_date" in p
+            assert "end_date" in p
+            assert "n_matches" in p
+            assert "rps_1x2" in p
+            assert "brier_1x2" in p
+            assert "log_loss_exact" in p
+
+    def test_date_uses_end_date(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        fake_report = {
+            "status": "ok",
+            "drift_detected": False,
+            "drift_metric": "rps_1x2",
+            "drift_threshold": 0.05,
+            "overall_metrics": {},
+            "windows": [
+                {
+                    "start_date": "2024-01-01", "end_date": "2024-04-01",
+                    "n_matches": 10, "rps_1x2": 0.2, "brier_1x2": 0.3,
+                    "log_loss_exact": 0.6,
+                },
+            ],
+            "latest_window": None,
+        }
+        monkeypatch.setattr(
+            api_module, "get_calibration_drift", lambda: fake_report,
+        )
+
+        result = api_module.get_calibration_drift_timeline()
+        assert result["points"][0]["date"] == "2024-04-01"
+
+    def test_propagates_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "get_calibration_drift",
+            lambda: {"status": "not_available", "instructions": "run backtest"},
+        )
+        result = api_module.get_calibration_drift_timeline()
+        assert result.get("status") == "not_available"
+
+    def test_empty_windows_returns_zero_points(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        fake_report = {
+            "status": "ok",
+            "drift_detected": False,
+            "drift_metric": "rps_1x2",
+            "drift_threshold": 0.05,
+            "overall_metrics": {},
+            "windows": [],
+            "latest_window": None,
+        }
+        monkeypatch.setattr(
+            api_module, "get_calibration_drift", lambda: fake_report,
+        )
+        result = api_module.get_calibration_drift_timeline()
+        assert result.get("status") == "ok"
+        assert result["n_points"] == 0
+        assert result["points"] == []
