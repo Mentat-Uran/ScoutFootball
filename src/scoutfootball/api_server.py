@@ -29,6 +29,7 @@ from scoutfootball.api import (
     get_calibration_comparison,
     get_calibration_drift,
     get_decay_tuning,
+    get_ensemble_attribution,
     get_ensemble_prediction,
     get_ensemble_weights,
     get_form_weighted_prediction,
@@ -42,7 +43,9 @@ from scoutfootball.api import (
     get_player_profile,
     get_player_ratings,
     get_prediction_attribution,
+    get_prediction_attribution_ci,
     get_prediction_calibration,
+    get_prediction_diagnostics,
     get_prediction_summary,
     get_ratings_meta,
     get_review_queue,
@@ -260,6 +263,23 @@ def create_app() -> FastAPI:
     @app.get("/predictions/{home_team}/{away_team}/attribution")
     def predictions_attribution(home_team: str, away_team: str):
         return get_prediction_attribution(home_team, away_team)
+
+    @app.get("/predictions/{home_team}/{away_team}/attribution/ci")
+    def predictions_attribution_ci(
+        home_team: str, away_team: str,
+        n_bootstrap: int = Query(30, ge=5, le=100),
+    ):
+        return get_prediction_attribution_ci(
+            home_team, away_team, n_bootstrap=n_bootstrap,
+        )
+
+    @app.get("/predictions/{home_team}/{away_team}/ensemble-attribution")
+    def predictions_ensemble_attribution(home_team: str, away_team: str):
+        return get_ensemble_attribution(home_team, away_team)
+
+    @app.get("/predictions/{home_team}/{away_team}/diagnostics")
+    def predictions_diagnostics(home_team: str, away_team: str):
+        return get_prediction_diagnostics(home_team, away_team)
 
     @app.get("/predictions/{home_team}/{away_team}")
     def predictions(

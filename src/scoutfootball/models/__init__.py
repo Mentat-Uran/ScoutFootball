@@ -1,7 +1,9 @@
 """Models package for supervised and probabilistic baselines."""
 
 from .match_prediction import (
+    AttributionConfidenceInterval,
     DixonColesModel,
+    EnsembleAttribution,
     EnsemblePrediction,
     IndependentPoissonModel,
     IsotonicCalibrator,
@@ -12,7 +14,9 @@ from .match_prediction import (
     PredictionAttribution,
     PredictionConfidenceInterval,
     apply_recalibration,
+    bootstrap_attribution_confidence,
     bootstrap_prediction_confidence,
+    compute_ensemble_attribution,
     compute_form_weights,
     compute_momentum,
     compute_prediction_attribution,
@@ -42,7 +46,9 @@ from .value_fairness import (
 )
 
 __all__ = [
+    "AttributionConfidenceInterval",
     "DixonColesModel",
+    "EnsembleAttribution",
     "EnsemblePrediction",
     "IndependentPoissonModel",
     "IsotonicCalibrator",
@@ -57,8 +63,10 @@ __all__ = [
     "TimeSplitConfig",
     "ValueFairnessResult",
     "apply_recalibration",
+    "bootstrap_attribution_confidence",
     "bootstrap_prediction_confidence",
     "classify_fairness",
+    "compute_ensemble_attribution",
     "compute_form_weights",
     "compute_momentum",
     "compute_prediction_attribution",
