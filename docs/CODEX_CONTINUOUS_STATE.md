@@ -2,6 +2,14 @@
 
 ## Recently Merged
 
+- **Ensemble Attribution Frontend + Drift Timeline + Ensemble CI (2026-07-12, Round 26):**
+  1. Added `bootstrap_ensemble_attribution_confidence()` in `match_prediction.py` — resamples fixture-level data with replacement, refits both DC and form-weighted DC per bootstrap sample, computes ensemble attribution per sample, and collects blended delta distributions for each of the 7 factors. Returns percentile-based 90% CIs on blended deltas plus `delta_mean`/`delta_std`/`n_samples`. Accepts optional `weights` dict (normalized to sum 1.0). Reproducible via `seed` parameter. Raises `ValueError` when `n_bootstrap < 2` or no fixtures available.
+  2. Added `get_calibration_drift_timeline()` in `api.py` — transforms the existing `get_calibration_drift()` report into a chart-ready time series: `points` array with `date`/`start_date`/`n_matches`/`rps_1x2`/`brier_1x2`/`log_loss_exact` per window, plus `metric`/`threshold`/`drift_detected`/`n_points`/`overall_metrics` summary. Returns `not_available` status when drift report is unavailable.
+  3. Added `get_ensemble_attribution_ci()` in `api.py` — loads cached optimal ensemble weights (falling back to equal 0.5/0.5), bootstraps ensemble attribution CIs via the new model function, and returns factor-level CI table with `weights_source` field ("optimized"/"equal") for transparency.
+  4. Added 2 FastAPI endpoints (registered before the parameterized `/{home_team}/{away_team}` route): `GET /predictions/drift/timeline` (chart-ready calibration drift time series), `GET /predictions/{home}/{away}/ensemble-attribution/ci?n_bootstrap=` (ensemble bootstrap CI, 5–100).
+  5. Frontend: Added "Ensemble Attribution" panel to the matches view — weights header (`weights_source` pill + per-model weight breakdown), blended factor table (baseline/neutralized/delta/abs_delta/rank), and per-model factor tables with weight percentage. Added "Drift Timeline" button to the diagnostics panel header rendering an ECharts line chart (RPS/Brier/LogLoss series with threshold reference line, axis labels, legend, tooltip). Added "Ensemble CI" button to the ensemble panel rendering the blended CI table with crosses-zero color coding. Added 15 bilingual i18n keys (zh/en). Event listeners wired; panels hidden until button click and reset on match change.
+  6. Added 15 unit tests in `test_prediction_explanation.py` across 3 new test classes: `TestBootstrapEnsembleAttributionConfidence` (return type, n_bootstrap counts, factor CI fields, CI bounds ordered, 7 factors, invalid n_bootstrap raises, reproducible with seed, custom weights normalized — 8 tests), `TestEnsembleAttributionCIAPI` (returns ok, insufficient data, weights_source equal when no cache — 3 tests), `TestCalibrationDriftTimeline` (returns timeline with points, date uses end_date, propagates not_available, empty windows returns zero points — 4 tests). All 56 explanation tests pass, ruff + node --check clean.
+
 - **Prediction Diagnostics Enhancement (2026-07-12, Round 25):**
   1. Added `AttributionConfidenceInterval` dataclass and `bootstrap_attribution_confidence()` in `match_prediction.py` — resamples fixture-level data with replacement, refits Dixon-Coles per sample (default `n_bootstrap=50`), computes attribution per sample, and collects delta distributions for each of the 7 factors. Returns percentile-based 90% CIs (`delta_low`/`delta_high` at 5th/95th) plus `delta_mean`/`delta_std`/`n_samples`. Tracks `failed_iterations` for samples that raised. Raises `ValueError` when `n_bootstrap < 2` or no fixtures available. Reproducible via `seed` parameter.
   2. Added `EnsembleAttribution` dataclass and `compute_ensemble_attribution()` in `match_prediction.py` — accepts a `{name: DixonColesModel}` mapping plus optional weights (default equal; auto-normalized), computes per-model `PredictionAttribution`, then blends factor deltas by weight into a single ranked `blended: PredictionAttribution`. Blended baseline probabilities are the weighted average of per-model baselines; blended neutralized probabilities are the weighted average of per-model neutralized values. Blended factors are re-sorted by `abs_delta` descending. Raises `ValueError` on empty models dict.
@@ -167,7 +175,8 @@
 - Round 22 is squash-merged to `codex/integration`: World Cup briefing lineage UI traces model inputs and export provenance.
 - Round 23 is squash-merged to `codex/integration` (`ccb7c01`): ensemble weight optimization, isotonic recalibration, and per-score-line calibration comparison are now fully wired through models → evaluation → API → CLI → frontend. The next branch should run `optimize-ensemble` on real data to populate cached weights, or expand prediction analytics (e.g. per-league calibration, SHAP-style feature attribution).
 - Round 24 is squash-merged to `codex/integration`: per-league calibration breakdown, permutation-based prediction feature attribution, and ensemble CI cache key isolation are now fully wired through models → evaluation → API → frontend. The next branch should run `optimize-ensemble` on real data to populate cached weights, or add browser integration coverage for the new attribution/calibration panels.
-- Round 25 is squash-merged to `codex/integration` (`b703536`): bootstrap attribution confidence intervals, ensemble attribution (per-model + blended), and a prediction diagnostics aggregation endpoint are now fully wired through models → API → frontend. The next branch should surface ensemble attribution in the frontend (currently only DC attribution has a panel), or run `optimize-ensemble` on real data to populate cached weights so ensemble attribution uses optimized rather than equal weights.
+- Round 25 is squash-merged to `codex/integration` (`b703536`): bootstrap attribution confidence intervals, ensemble attribution (per-model + blended), and a prediction diagnostics aggregation endpoint are now fully wired through models → API → frontend.
+- Round 26 is squash-merged to `codex/integration` (`c76cffb`): ensemble attribution frontend panel (weights header + blended + per-model factor tables), calibration drift timeline endpoint with ECharts visualization, and ensemble attribution bootstrap CI are now fully wired through models → API → frontend. The next branch should run `optimize-ensemble` on real data to populate cached weights so ensemble attribution uses optimized rather than equal weights, or add prediction value-betting analysis (e.g. expected value vs market odds, Kelly criterion sizing).
 
 ## Known Blockers
 
@@ -176,15 +185,15 @@
 
 ## Next Round Candidates
 
-1. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-2. Browser integration coverage for workspace export/import conflict previews and mobile dossier layout.
-3. Add browser integration coverage for tactical decision-pack creation, export preview, and `not_loaded` behavior.
-4. Surface a World Cup match briefing from schedule cards, including no-static-briefing states.
-5. Add browser-level regression coverage for schedule-to-briefing navigation and local tactical-plan creation.
-6. Add a display of briefing export provenance in the tactical-board export preview.
-7. Run `optimize-ensemble` on real data to populate cached weights and verify end-to-end workflow.
-8. Add browser integration coverage for the new prediction attribution and per-league calibration panels.
-9. Surface ensemble attribution in the frontend — add a panel/tab that fetches `/predictions/{home}/{away}/ensemble-attribution` and shows per-model factor tables alongside the blended view.
-10. Run `optimize-ensemble` on real data to populate cached weights, then verify ensemble attribution reports `weights_source: "optimized"` instead of `"equal"`.
-11. Add per-factor bootstrap CI display to the ensemble attribution panel (currently CI is only available for the DC-only attribution endpoint).
-12. Add a calibration drift timeline chart to the diagnostics panel (currently shows only the latest window's drift metric).
+1. Run `optimize-ensemble` on real data to populate cached weights and verify end-to-end workflow.
+2. Add prediction value-betting analysis — expected value vs market odds, Kelly criterion position sizing, edge detection.
+3. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
+4. Add browser integration coverage for workspace export/import conflict previews and mobile dossier layout.
+5. Add browser integration coverage for tactical decision-pack creation, export preview, and `not_loaded` behavior.
+6. Surface a World Cup match briefing from schedule cards, including no-static-briefing states.
+7. Add browser-level regression coverage for schedule-to-briefing navigation and local tactical-plan creation.
+8. Add a display of briefing export provenance in the tactical-board export preview.
+9. Add prediction confidence calibration plot — reliability diagram showing predicted vs observed frequencies.
+10. Add model comparison dashboard — side-by-side metrics across Poisson/DC/Form/Ensemble on a unified holdout.
+11. Add per-team prediction accuracy tracking — historical hit rate per team for model diagnostics.
+12. Add live match state integration hooks — in-play event feed placeholders for future xG momentum.
