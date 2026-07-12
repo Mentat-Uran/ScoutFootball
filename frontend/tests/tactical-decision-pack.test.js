@@ -23,6 +23,9 @@ test("creates a decision pack with recorded prediction output and provenance", (
             model_run_id: "prediction-run-22",
             input_hash: "abc123",
             lineage_status: "recorded",
+            briefing_schema: "scoutfootball.world-cup-match-briefing",
+            briefing_version: "1.0.0",
+            briefing_source: "Local rating artifacts",
         },
         limitations: ["Model context only."],
     });
@@ -32,6 +35,8 @@ test("creates a decision pack with recorded prediction output and provenance", (
     assert.equal(pack.prediction.probabilities.home_win, 0.51);
     assert.equal(pack.prediction.expected_goals.away, 1.11);
     assert.equal(pack.provenance.model_run_id, "prediction-run-22");
+    assert.equal(pack.provenance.briefing_schema, "scoutfootball.world-cup-match-briefing");
+    assert.equal(pack.provenance.briefing_version, "1.0.0");
     assert.match(board.formatDecisionPackNotes(pack), /Home win: 51%/);
     assert.match(board.formatDecisionPackNotes(pack), /model run prediction-run-22/);
 });

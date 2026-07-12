@@ -138,6 +138,7 @@
 - Round 17 is squash-merged to `codex/integration`: World Cup comparison now has a source-bounded match briefing API/static contract and browser-local tactical-plan handoff. The next branch should extend briefing access from schedule cards or improve prediction calibration without claiming live match intelligence.
 - Round 18 is squash-merged to `codex/integration`: schedule rows now pre-load the same source-bounded briefing and open its tactical handoff. The next branch should add a durable browser regression path or improve calibrated prediction artifacts without claiming live match intelligence.
 - Round 19 is squash-merged to `codex/integration`: the World Cup briefing now exports versioned local JSON and spreadsheet-safe CSV reports. The next branch should improve briefing provenance in tactical exports or add browser regression coverage without introducing sync or server persistence.
+- Round 20 is squash-merged to `codex/integration`: tactical projects created from World Cup briefings now carry bounded briefing contract provenance into JSON export previews. The next branch should prioritize durable browser regression coverage or calibrated prediction artifacts without adding sync.
 
 ## Known Blockers
 
