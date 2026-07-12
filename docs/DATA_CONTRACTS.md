@@ -679,6 +679,10 @@ The comparison view can download the briefing as a browser-local JSON export
 (`scoutfootball.world-cup-match-briefing-export` v1.0.0) or CSV report. Both
 retain source attribution and limitations; CSV cells use the shared formula
 injection guard and neither action writes server state.
+When a briefing creates a tactical-board project, its decision-pack provenance
+also stores the bounded briefing schema, version, and source attribution. The
+tactical JSON export preview surfaces those fields so the board can be checked
+against a compatible local briefing export.
 
 ### GET /world-cup/knockout
 World Cup knockout bracket simulation.

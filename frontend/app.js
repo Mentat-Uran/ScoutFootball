@@ -6755,6 +6755,11 @@ function bindEvents() {
                             "Model: " + (tacticalProject.metadata.decision_pack.prediction?.model_type || "not recorded"),
                             "Model run: " + (tacticalProject.metadata.decision_pack.provenance?.model_run_id || "not recorded; local artifact snapshot"),
                             "Input hash: " + (tacticalProject.metadata.decision_pack.provenance?.input_hash || "not recorded"),
+                            ...(tacticalProject.metadata.decision_pack.provenance?.briefing_schema ? [
+                                "Briefing contract: " + tacticalProject.metadata.decision_pack.provenance.briefing_schema
+                                    + (tacticalProject.metadata.decision_pack.provenance.briefing_version ? " v" + tacticalProject.metadata.decision_pack.provenance.briefing_version : ""),
+                                "Briefing source: " + (tacticalProject.metadata.decision_pack.provenance.briefing_source || "not recorded"),
+                            ] : []),
                         ] : []),
                         "",
                         "No data leaves the browser. All projects are stored locally.",
@@ -10408,6 +10413,9 @@ function createWcBriefingTacticalPlan(briefing) {
         provenance: {
             lineage_status: "source_bounded_artifact",
             snapshot: "local World Cup match briefing artifact",
+            briefing_schema: briefing.schema || "",
+            briefing_version: briefing.version || "",
+            briefing_source: briefing.source_attribution || "",
         },
         limitations: briefing.limitations || [
             "World Cup briefing limits were not available; treat this as local model context only.",

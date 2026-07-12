@@ -11,7 +11,7 @@
 
 const TACTICAL_BOARD = {
     /* ── Schema version ────────────────────────────────────────────── */
-    SCHEMA_VERSION: "1.2.0",
+    SCHEMA_VERSION: "1.3.0",
     MAX_OBJECTS: 200,
     MAX_FRAMES: 60,
     MAX_TEXT_LENGTH: 120,
@@ -1174,6 +1174,9 @@ const TACTICAL_BOARD = {
                 feature_manifest_hash: this._safeString(provenance.feature_manifest_hash).slice(0, 160),
                 lineage_status: this._safeString(provenance.lineage_status, "not_recorded").slice(0, 40),
                 snapshot: this._safeString(provenance.snapshot, "local artifact snapshot").slice(0, 240),
+                briefing_schema: this._safeString(provenance.briefing_schema).slice(0, 160),
+                briefing_version: this._safeString(provenance.briefing_version).slice(0, 40),
+                briefing_source: this._safeString(provenance.briefing_source).slice(0, 240),
             },
             limitations,
         };
@@ -1386,6 +1389,15 @@ const TACTICAL_BOARD = {
         {
             version: "1.2.0",
             description: "Add constrained decision-pack metadata",
+            migrate(project) {
+                if (!project.metadata || typeof project.metadata !== "object") {
+                    project.metadata = {};
+                }
+            },
+        },
+        {
+            version: "1.3.0",
+            description: "Add bounded World Cup briefing provenance fields",
             migrate(project) {
                 if (!project.metadata || typeof project.metadata !== "object") {
                     project.metadata = {};
@@ -1867,7 +1879,7 @@ const TACTICAL_BOARD = {
     const checks = [];
 
     // Version should be set
-    checks.push(["version set", migrated.version === "1.2.0"]);
+    checks.push(["version set", migrated.version === "1.3.0"]);
 
     // Layers should be added
     checks.push(["layers added", Array.isArray(migrated.layers) && migrated.layers.length >= 1]);
