@@ -1623,6 +1623,266 @@ def get_ensemble_attribution_ci(
         return {"status": "error", "message": str(exc)}
 
 
+def get_value_bet_analysis(
+    home_team: str,
+    away_team: str,
+    *,
+    home_odds: float,
+    draw_odds: float,
+    away_odds: float,
+) -> dict:
+    """Compute value betting analysis for a match given market odds.
+
+    Fetches the Dixon-Coles prediction for the fixture, then computes
+    per-outcome expected value, edge, Kelly fraction, and recommendation.
+    """
+    try:
+        if home_odds < 1.0 or draw_odds < 1.0 or away_odds < 1.0:
+            return {"status": "error", "message": "All odds must be >= 1.0"}
+
+        prediction = get_match_prediction_dc(home_team, away_team)
+        if "error" in prediction:
+            return {"status": "error", "message": prediction["error"]}
+
+        model_probs = {
+            "home_win": float(prediction.get("home_win", 0.0)),
+            "draw": float(prediction.get("draw", 0.0)),
+            "away_win": float(prediction.get("away_win", 0.0)),
+        }
+        odds = {
+            "home_win": float(home_odds),
+            "draw": float(draw_odds),
+            "away_win": float(away_odds),
+        }
+
+        from scoutfootball.evaluation.backtests import compute_value_bets
+
+        analysis = compute_value_bets(model_probs, odds)
+        return _clean_json_value({
+            "status": "ok",
+            "home_team": home_team,
+            "away_team": away_team,
+            "model_type": prediction.get("model_type", "dixon_coles"),
+            "outcomes": [
+                {
+                    "outcome": o.outcome,
+                    "model_probability": o.model_probability,
+                    "decimal_odds": o.decimal_odds,
+                    "implied_probability": o.implied_probability,
+                    "expected_value": o.expected_value,
+                    "edge": o.edge,
+                    "kelly_fraction": o.kelly_fraction,
+                    "recommendation": o.recommendation,
+                }
+                for o in analysis.outcomes
+            ],
+            "best_bet": (
+                {
+                    "outcome": analysis.best_bet.outcome,
+                    "model_probability": analysis.best_bet.model_probability,
+                    "decimal_odds": analysis.best_bet.decimal_odds,
+                    "expected_value": analysis.best_bet.expected_value,
+                    "edge": analysis.best_bet.edge,
+                    "kelly_fraction": analysis.best_bet.kelly_fraction,
+                }
+                if analysis.best_bet
+                else None
+            ),
+            "overround": analysis.overround,
+            "total_implied": analysis.total_implied,
+            "disclaimer": (
+                "Analysis uses model probabilities, not live market data. "
+                "For research purposes only."
+            ),
+        })
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_reliability_diagram(*, n_bins: int = 10) -> dict:
+    """Return a reliability diagram for 1X2 prediction calibration.
+
+    Reads the backtest predictions artifact and bins predicted probabilities
+    against observed frequencies for chart-ready visualization.
+    """
+    import time
+
+    cache_key = f"reliability_{n_bins}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_reliability_diagram
+
+        settings = _settings()
+        # Prefer DC decay predictions, fall back to Poisson
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                diagram = compute_reliability_diagram(preds_df, n_bins=n_bins)
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_bins": diagram.n_bins,
+                    "n_predictions": diagram.n_predictions,
+                    "overall": diagram.overall,
+                    "per_outcome": {
+                        outcome: [
+                            {
+                                "bin_lower": b.bin_lower,
+                                "bin_upper": b.bin_upper,
+                                "bin_center": b.bin_center,
+                                "mean_predicted": b.mean_predicted,
+                                "observed_frequency": b.observed_frequency,
+                                "n_samples": b.n_samples,
+                            }
+                            for b in bins
+                        ]
+                        for outcome, bins in diagram.per_outcome.items()
+                    },
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_team_accuracy(team_id: str, *, min_predictions: int = 3) -> dict:
+    """Return per-team prediction accuracy from backtest predictions.
+
+    Computes historical hit rate, average confidence, and calibration gap
+    for the specified team (as home or away).
+    """
+    import time
+
+    cache_key = f"team_accuracy_{team_id}_{min_predictions}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_team_accuracy
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_team_accuracy(preds_df, min_predictions=min_predictions)
+                # Filter to the requested team
+                team_entry = next(
+                    (e for e in report.entries if e.team_id == team_id),
+                    None,
+                )
+                if team_entry is None:
+                    result = {
+                        "status": "not_found",
+                        "team_id": team_id,
+                        "message": (
+                            f"Team '{team_id}' not found in backtest predictions "
+                            f"or has fewer than {min_predictions} predictions"
+                        ),
+                    }
+                else:
+                    result = _clean_json_value({
+                        "status": "ok",
+                        "team_id": team_entry.team_id,
+                        "n_predictions": team_entry.n_predictions,
+                        "n_correct": team_entry.n_correct,
+                        "hit_rate": team_entry.hit_rate,
+                        "avg_confidence": team_entry.avg_confidence,
+                        "calibration_gap": team_entry.calibration_gap,
+                        "last_match_date": team_entry.last_match_date,
+                        "overall_hit_rate": report.overall_hit_rate,
+                        "total_predictions": report.total_predictions,
+                    })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
     """Return an aggregated prediction diagnostics summary for a fixture.
 

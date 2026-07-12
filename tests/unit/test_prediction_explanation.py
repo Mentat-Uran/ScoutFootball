@@ -9,9 +9,14 @@ Covers:
 - Prediction diagnostics aggregation endpoint
 - Ensemble attribution bootstrap CI
 - Calibration drift timeline endpoint
+- Value betting analysis (compute_value_bets)
+- Reliability diagram (compute_reliability_diagram)
+- Per-team prediction accuracy (compute_team_accuracy)
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -20,6 +25,9 @@ import pytest
 from scoutfootball.evaluation.backtests import (
     CalibrationComparison,
     compute_calibration_comparison,
+    compute_reliability_diagram,
+    compute_team_accuracy,
+    compute_value_bets,
 )
 from scoutfootball.models import (
     AttributionConfidenceInterval,
@@ -951,3 +959,439 @@ class TestCalibrationDriftTimeline:
         assert result.get("status") == "ok"
         assert result["n_points"] == 0
         assert result["points"] == []
+
+
+# ---------------------------------------------------------------------------
+# Value betting analysis (compute_value_bets)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeValueBets:
+    """Tests for the value betting computation function."""
+
+    def test_returns_analysis_with_three_outcomes(self) -> None:
+        probs = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        odds = {"home_win": 2.0, "draw": 3.5, "away_win": 5.0}
+        result = compute_value_bets(probs, odds)
+        assert len(result.outcomes) == 3
+        outcome_keys = {o.outcome for o in result.outcomes}
+        assert outcome_keys == {"home_win", "draw", "away_win"}
+
+    def test_implied_probability_correct(self) -> None:
+        probs = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        odds = {"home_win": 2.0, "draw": 4.0, "away_win": 5.0}
+        result = compute_value_bets(probs, odds)
+        home = next(o for o in result.outcomes if o.outcome == "home_win")
+        assert home.implied_probability == pytest.approx(0.5, abs=1e-6)
+
+    def test_expected_value_correct(self) -> None:
+        probs = {"home_win": 0.6, "draw": 0.25, "away_win": 0.15}
+        odds = {"home_win": 2.0, "draw": 4.0, "away_win": 8.0}
+        result = compute_value_bets(probs, odds)
+        home = next(o for o in result.outcomes if o.outcome == "home_win")
+        # EV = 0.6 * 2.0 - 1 = 0.2
+        assert home.expected_value == pytest.approx(0.2, abs=1e-6)
+
+    def test_edge_correct(self) -> None:
+        probs = {"home_win": 0.6, "draw": 0.25, "away_win": 0.15}
+        odds = {"home_win": 2.0, "draw": 4.0, "away_win": 8.0}
+        result = compute_value_bets(probs, odds)
+        home = next(o for o in result.outcomes if o.outcome == "home_win")
+        # edge = 0.6 - 0.5 = 0.1
+        assert home.edge == pytest.approx(0.1, abs=1e-6)
+
+    def test_kelly_fraction_correct(self) -> None:
+        probs = {"home_win": 0.6, "draw": 0.25, "away_win": 0.15}
+        odds = {"home_win": 2.0, "draw": 4.0, "away_win": 8.0}
+        result = compute_value_bets(probs, odds)
+        home = next(o for o in result.outcomes if o.outcome == "home_win")
+        # Kelly = (0.6 * 2 - 1) / (2 - 1) = 0.2
+        assert home.kelly_fraction == pytest.approx(0.2, abs=1e-6)
+
+    def test_value_bet_recommendation_when_ev_positive(self) -> None:
+        probs = {"home_win": 0.6, "draw": 0.25, "away_win": 0.15}
+        odds = {"home_win": 2.0, "draw": 4.0, "away_win": 8.0}
+        result = compute_value_bets(probs, odds)
+        home = next(o for o in result.outcomes if o.outcome == "home_win")
+        assert home.recommendation == "value_bet"
+
+    def test_no_value_when_ev_negative(self) -> None:
+        probs = {"home_win": 0.3, "draw": 0.4, "away_win": 0.3}
+        odds = {"home_win": 2.0, "draw": 2.0, "away_win": 2.0}
+        result = compute_value_bets(probs, odds)
+        for o in result.outcomes:
+            assert o.recommendation == "no_value"
+
+    def test_best_bet_is_highest_ev_value(self) -> None:
+        probs = {"home_win": 0.6, "draw": 0.25, "away_win": 0.15}
+        odds = {"home_win": 2.0, "draw": 4.0, "away_win": 8.0}
+        result = compute_value_bets(probs, odds)
+        assert result.best_bet is not None
+        # Home has EV 0.2, away has EV 0.15*8-1=0.2, draw has EV 0.25*4-1=0.0
+        # Home and away tied, best_bet should be one of the value bets
+        assert result.best_bet.recommendation == "value_bet"
+
+    def test_best_bet_none_when_no_value(self) -> None:
+        probs = {"home_win": 0.3, "draw": 0.4, "away_win": 0.3}
+        odds = {"home_win": 2.0, "draw": 2.0, "away_win": 2.0}
+        result = compute_value_bets(probs, odds)
+        assert result.best_bet is None
+
+    def test_overround_positive_for_fair_book(self) -> None:
+        probs = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        # Odds with overround: implied = 0.55 + 0.30 + 0.25 = 1.10
+        odds = {"home_win": 1.818, "draw": 3.333, "away_win": 4.0}
+        result = compute_value_bets(probs, odds)
+        assert result.overround > 0
+
+    def test_missing_prob_keys_raises(self) -> None:
+        with pytest.raises(ValueError, match="missing keys"):
+            compute_value_bets(
+                {"home_win": 0.5, "draw": 0.5},
+                {"home_win": 2.0, "draw": 3.0, "away_win": 4.0},
+            )
+
+    def test_probs_not_summing_to_one_raises(self) -> None:
+        with pytest.raises(ValueError, match="sum to 1.0"):
+            compute_value_bets(
+                {"home_win": 0.5, "draw": 0.3, "away_win": 0.3},
+                {"home_win": 2.0, "draw": 3.0, "away_win": 4.0},
+            )
+
+    def test_odds_below_one_raises(self) -> None:
+        with pytest.raises(ValueError, match=">= 1.0"):
+            compute_value_bets(
+                {"home_win": 0.5, "draw": 0.3, "away_win": 0.2},
+                {"home_win": 0.5, "draw": 3.0, "away_win": 4.0},
+            )
+
+    def test_kelly_clamped_to_zero_when_negative(self) -> None:
+        probs = {"home_win": 0.3, "draw": 0.4, "away_win": 0.3}
+        odds = {"home_win": 2.0, "draw": 2.5, "away_win": 3.0}
+        result = compute_value_bets(probs, odds)
+        for o in result.outcomes:
+            assert o.kelly_fraction >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# Reliability diagram (compute_reliability_diagram)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeReliabilityDiagram:
+    """Tests for the reliability diagram computation."""
+
+    def test_returns_diagram_with_bins(self) -> None:
+        df = _make_predictions_df(n=200)
+        diagram = compute_reliability_diagram(df, n_bins=10)
+        assert diagram.n_predictions == 200
+        assert len(diagram.bins) > 0
+        assert "home_win" in diagram.per_outcome
+        assert "draw" in diagram.per_outcome
+        assert "away_win" in diagram.per_outcome
+
+    def test_bin_fields_present(self) -> None:
+        df = _make_predictions_df(n=200)
+        diagram = compute_reliability_diagram(df, n_bins=10)
+        for b in diagram.bins:
+            assert 0.0 <= b.bin_lower <= 1.0
+            assert 0.0 <= b.bin_upper <= 1.0
+            assert 0.0 <= b.mean_predicted <= 1.0
+            assert 0.0 <= b.observed_frequency <= 1.0
+            assert b.n_samples > 0
+            assert b.outcome in ("home_win", "draw", "away_win")
+
+    def test_overall_metrics_present(self) -> None:
+        df = _make_predictions_df(n=200)
+        diagram = compute_reliability_diagram(df, n_bins=10)
+        assert "ece" in diagram.overall
+        assert "rms_calibration_error" in diagram.overall
+        assert diagram.overall["ece"] >= 0.0
+        assert diagram.overall["rms_calibration_error"] >= 0.0
+
+    def test_min_samples_filters_small_bins(self) -> None:
+        df = _make_predictions_df(n=50)
+        diagram_few = compute_reliability_diagram(df, n_bins=10, min_samples_per_bin=1)
+        diagram_many = compute_reliability_diagram(df, n_bins=10, min_samples_per_bin=100)
+        assert len(diagram_few.bins) >= len(diagram_many.bins)
+
+    def test_invalid_n_bins_raises(self) -> None:
+        df = _make_predictions_df(n=200)
+        with pytest.raises(ValueError, match="n_bins must be >= 2"):
+            compute_reliability_diagram(df, n_bins=1)
+
+    def test_missing_columns_raises(self) -> None:
+        df = pd.DataFrame({"foo": [1, 2, 3]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_reliability_diagram(df)
+
+    def test_perfect_calibration_has_low_ece(self) -> None:
+        """When predicted == observed, ECE should be near 0."""
+        n = 1000
+        rng = np.random.default_rng(42)
+        # Create perfectly calibrated predictions
+        probs = rng.uniform(0.1, 0.9, n)
+        outcomes = (rng.uniform(0, 1, n) < probs).astype(int)
+        df = pd.DataFrame({
+            "home_win_probability": probs,
+            "draw_probability": 0.1,
+            "away_win_probability": 1.0 - probs - 0.1,
+            "actual_outcome": np.where(outcomes == 1, "home_win", "away_win"),
+        })
+        diagram = compute_reliability_diagram(df, n_bins=10, min_samples_per_bin=5)
+        assert diagram.overall["ece"] < 0.1  # Should be reasonably calibrated
+
+
+# ---------------------------------------------------------------------------
+# Per-team prediction accuracy (compute_team_accuracy)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeTeamAccuracy:
+    """Tests for per-team prediction accuracy tracking."""
+
+    def test_returns_report_with_entries(self) -> None:
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = [f"team_{i % 6}" for i in range(n)]
+        df["away_team_id"] = [f"team_{(i + 3) % 6}" for i in range(n)]
+        report = compute_team_accuracy(df, min_predictions=1)
+        assert len(report.entries) > 0
+        assert report.n_teams > 0
+
+    def test_entries_sorted_by_n_predictions_desc(self) -> None:
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = [f"team_{i % 6}" for i in range(n)]
+        df["away_team_id"] = [f"team_{(i + 3) % 6}" for i in range(n)]
+        report = compute_team_accuracy(df, min_predictions=1)
+        n_preds = [e.n_predictions for e in report.entries]
+        assert n_preds == sorted(n_preds, reverse=True)
+
+    def test_hit_rate_in_range(self) -> None:
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = [f"team_{i % 6}" for i in range(n)]
+        df["away_team_id"] = [f"team_{(i + 3) % 6}" for i in range(n)]
+        report = compute_team_accuracy(df, min_predictions=1)
+        for e in report.entries:
+            assert 0.0 <= e.hit_rate <= 1.0
+
+    def test_calibration_gap_is_confidence_minus_hit_rate(self) -> None:
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = [f"team_{i % 6}" for i in range(n)]
+        df["away_team_id"] = [f"team_{(i + 3) % 6}" for i in range(n)]
+        report = compute_team_accuracy(df, min_predictions=1)
+        for e in report.entries:
+            expected = round(e.avg_confidence - e.hit_rate, 4)
+            assert e.calibration_gap == pytest.approx(expected, abs=1e-4)
+
+    def test_min_predictions_filters_teams(self) -> None:
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = [f"team_{i % 6}" for i in range(n)]
+        df["away_team_id"] = [f"team_{(i + 3) % 6}" for i in range(n)]
+        report_low = compute_team_accuracy(df, min_predictions=1)
+        report_high = compute_team_accuracy(df, min_predictions=100)
+        assert len(report_low.entries) >= len(report_high.entries)
+
+    def test_overall_hit_rate_present(self) -> None:
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = [f"team_{i % 6}" for i in range(n)]
+        df["away_team_id"] = [f"team_{(i + 3) % 6}" for i in range(n)]
+        report = compute_team_accuracy(df, min_predictions=1)
+        assert 0.0 <= report.overall_hit_rate <= 1.0
+
+    def test_missing_columns_raises(self) -> None:
+        df = pd.DataFrame({"foo": [1, 2, 3]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_team_accuracy(df)
+
+    def test_last_match_date_tracked(self) -> None:
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = [f"team_{i % 6}" for i in range(n)]
+        df["away_team_id"] = [f"team_{(i + 3) % 6}" for i in range(n)]
+        df["match_date"] = [f"2024-{(i % 12) + 1:02d}-15" for i in range(n)]
+        report = compute_team_accuracy(df, min_predictions=1)
+        for e in report.entries:
+            assert e.last_match_date is not None
+            assert e.last_match_date.startswith("2024-")
+
+
+# ---------------------------------------------------------------------------
+# Value bet API endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestValueBetAPI:
+    """Tests for the get_value_bet_analysis API wrapper."""
+
+    def test_returns_ok(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        # Stub get_match_prediction_dc to return known probabilities
+        def fake_pred(home, away):
+            return {
+                "home_win": 0.5,
+                "draw": 0.3,
+                "away_win": 0.2,
+                "model_type": "dixon_coles",
+            }
+
+        monkeypatch.setattr(api_module, "get_match_prediction_dc", fake_pred)
+
+        result = api_module.get_value_bet_analysis(
+            "team_a", "team_b",
+            home_odds=2.0, draw_odds=4.0, away_odds=8.0,
+        )
+        assert result["status"] == "ok"
+        assert len(result["outcomes"]) == 3
+        assert result["best_bet"] is not None
+        assert "overround" in result
+        assert "disclaimer" in result
+
+    def test_odds_below_one_returns_error(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        result = api_module.get_value_bet_analysis(
+            "team_a", "team_b",
+            home_odds=0.5, draw_odds=4.0, away_odds=8.0,
+        )
+        assert result["status"] == "error"
+
+    def test_no_value_when_odds_unfavorable(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        def fake_pred(home, away):
+            return {"home_win": 0.3, "draw": 0.4, "away_win": 0.3, "model_type": "dc"}
+
+        monkeypatch.setattr(api_module, "get_match_prediction_dc", fake_pred)
+
+        result = api_module.get_value_bet_analysis(
+            "team_a", "team_b",
+            home_odds=2.0, draw_odds=2.0, away_odds=2.0,
+        )
+        assert result["status"] == "ok"
+        assert result["best_bet"] is None
+
+
+# ---------------------------------------------------------------------------
+# Reliability diagram API endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestReliabilityDiagramAPI:
+    """Tests for the get_reliability_diagram API wrapper."""
+
+    def test_returns_not_available_without_data(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        class FakeSettings:
+            class _Inner:
+                report_root = Path("/nonexistent")
+
+            def __call__(self):
+                return self._Inner()
+
+        # Point to nonexistent path
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent_path_12345")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_reliability_diagram(n_bins=10)
+        assert result["status"] == "not_available"
+
+    def test_returns_ok_with_data(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=200)
+        # Create a temporary parquet file
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "calibration_backtest"
+            tmp_path.mkdir()
+            df.to_parquet(tmp_path / "poisson_backtest_predictions.parquet", index=False)
+
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_reliability_diagram(n_bins=10)
+            assert result["status"] == "ok"
+            assert "per_outcome" in result
+            assert "overall" in result
+            assert result["n_predictions"] == 200
+
+
+# ---------------------------------------------------------------------------
+# Team accuracy API endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestTeamAccuracyAPI:
+    """Tests for the get_team_accuracy API wrapper."""
+
+    def test_returns_not_available_without_data(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent_path_12345")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_team_accuracy("team_0")
+        assert result["status"] == "not_available"
+
+    def test_returns_ok_with_matching_team(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = ["arsenal" if i < 100 else "chelsea" for i in range(n)]
+        df["away_team_id"] = ["chelsea" if i < 100 else "arsenal" for i in range(n)]
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "calibration_backtest"
+            tmp_path.mkdir()
+            df.to_parquet(tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False)
+
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_team_accuracy("arsenal", min_predictions=1)
+            assert result["status"] == "ok"
+            assert result["team_id"] == "arsenal"
+            assert result["n_predictions"] > 0
+
+    def test_returns_not_found_for_unknown_team(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=200)
+        n = len(df)
+        df["home_team_id"] = ["arsenal"] * n
+        df["away_team_id"] = ["chelsea"] * n
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "calibration_backtest"
+            tmp_path.mkdir()
+            df.to_parquet(tmp_path / "poisson_backtest_predictions.parquet", index=False)
+
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_team_accuracy("nonexistent_team", min_predictions=1)
+            assert result["status"] == "not_found"

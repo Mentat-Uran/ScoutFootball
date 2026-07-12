@@ -50,10 +50,13 @@ from scoutfootball.api import (
     get_prediction_diagnostics,
     get_prediction_summary,
     get_ratings_meta,
+    get_reliability_diagram,
     get_review_queue,
     get_shortlist,
+    get_team_accuracy,
     get_team_comparison,
     get_team_strength,
+    get_value_bet_analysis,
     get_value_summary,
     get_watchlist,
     get_wc_group_stage_simulation,
@@ -262,6 +265,17 @@ def create_app() -> FastAPI:
     def predictions_calibration_comparison():
         return get_calibration_comparison()
 
+    @app.get("/predictions/calibration/reliability")
+    def predictions_calibration_reliability(n_bins: int = Query(10, ge=2, le=50)):
+        return get_reliability_diagram(n_bins=n_bins)
+
+    @app.get("/predictions/team-accuracy/{team_id}")
+    def predictions_team_accuracy(
+        team_id: str,
+        min_predictions: int = Query(3, ge=1, le=100),
+    ):
+        return get_team_accuracy(team_id, min_predictions=min_predictions)
+
     @app.get("/predictions/{home_team}/{away_team}/attribution")
     def predictions_attribution(home_team: str, away_team: str):
         return get_prediction_attribution(home_team, away_team)
@@ -291,6 +305,19 @@ def create_app() -> FastAPI:
     @app.get("/predictions/{home_team}/{away_team}/diagnostics")
     def predictions_diagnostics(home_team: str, away_team: str):
         return get_prediction_diagnostics(home_team, away_team)
+
+    @app.get("/predictions/{home_team}/{away_team}/value")
+    def predictions_value(
+        home_team: str,
+        away_team: str,
+        home_odds: float = Query(..., ge=1.0, le=1000.0),
+        draw_odds: float = Query(..., ge=1.0, le=1000.0),
+        away_odds: float = Query(..., ge=1.0, le=1000.0),
+    ):
+        return get_value_bet_analysis(
+            home_team, away_team,
+            home_odds=home_odds, draw_odds=draw_odds, away_odds=away_odds,
+        )
 
     @app.get("/predictions/{home_team}/{away_team}")
     def predictions(
