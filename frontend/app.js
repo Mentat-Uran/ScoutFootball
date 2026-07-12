@@ -358,6 +358,36 @@ const i18n = {
         ensemble_attribution_drift_timeline: "漂移时间线",
         ensemble_attribution_drift_timeline_loading: "加载漂移时间线…",
         ensemble_attribution_drift_timeline_not_available: "暂无漂移时间线数据",
+        value_bet_title: "价值投注分析",
+        value_bet_desc: "模型概率 vs 市场赔率 EV/Kelly 计算",
+        value_bet_fetch: "分析",
+        value_bet_home_odds: "主胜赔率",
+        value_bet_draw_odds: "平局赔率",
+        value_bet_away_odds: "客胜赔率",
+        value_bet_loading: "计算中…",
+        value_bet_error: "分析失败",
+        value_bet_outcome: "结果",
+        value_bet_model_prob: "模型概率",
+        value_bet_odds: "赔率",
+        value_bet_implied: "隐含概率",
+        value_bet_ev: "期望值(EV)",
+        value_bet_edge: "Edge",
+        value_bet_kelly: "Kelly 份额",
+        value_bet_recommendation: "推荐",
+        value_bet_best_bet: "最佳投注",
+        value_bet_no_value: "无价值投注",
+        value_bet_overround: "抽水率",
+        value_bet_disclaimer: "分析使用模型概率,非实时市场数据。仅供研究用途。",
+        backtest_reliability: "可靠性图",
+        backtest_reliability_desc: "预测概率 vs 观测频率校准曲线",
+        backtest_reliability_fetch: "加载",
+        backtest_reliability_loading: "加载可靠性图…",
+        backtest_reliability_not_available: "暂无可靠性图数据",
+        backtest_reliability_ece: "ECE (期望校准误差)",
+        backtest_reliability_rms: "RMS 校准误差",
+        backtest_reliability_predicted: "预测概率",
+        backtest_reliability_observed: "观测频率",
+        backtest_reliability_samples: "样本数",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -737,6 +767,36 @@ const i18n = {
         ensemble_attribution_drift_timeline: "Drift Timeline",
         ensemble_attribution_drift_timeline_loading: "Loading drift timeline…",
         ensemble_attribution_drift_timeline_not_available: "No drift timeline data available",
+        value_bet_title: "Value Bet Analysis",
+        value_bet_desc: "Model probability vs market odds EV/Kelly calculation",
+        value_bet_fetch: "Analyze",
+        value_bet_home_odds: "Home Win Odds",
+        value_bet_draw_odds: "Draw Odds",
+        value_bet_away_odds: "Away Win Odds",
+        value_bet_loading: "Calculating…",
+        value_bet_error: "Analysis failed",
+        value_bet_outcome: "Outcome",
+        value_bet_model_prob: "Model Prob",
+        value_bet_odds: "Odds",
+        value_bet_implied: "Implied Prob",
+        value_bet_ev: "Expected Value",
+        value_bet_edge: "Edge",
+        value_bet_kelly: "Kelly Fraction",
+        value_bet_recommendation: "Recommendation",
+        value_bet_best_bet: "Best Bet",
+        value_bet_no_value: "No value bet found",
+        value_bet_overround: "Overround",
+        value_bet_disclaimer: "Analysis uses model probabilities, not live market data. For research purposes only.",
+        backtest_reliability: "Reliability Diagram",
+        backtest_reliability_desc: "Predicted probability vs observed frequency calibration curve",
+        backtest_reliability_fetch: "Load",
+        backtest_reliability_loading: "Loading reliability diagram…",
+        backtest_reliability_not_available: "No reliability diagram data available",
+        backtest_reliability_ece: "ECE (Expected Calibration Error)",
+        backtest_reliability_rms: "RMS Calibration Error",
+        backtest_reliability_predicted: "Predicted Probability",
+        backtest_reliability_observed: "Observed Frequency",
+        backtest_reliability_samples: "Samples",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -3462,6 +3522,237 @@ async function fetchAndRenderDriftTimeline() {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderValueBet(home, away) {
+    const resultDiv = document.getElementById("match-value-bet-result");
+    const btn = document.getElementById("btn-value-bet");
+    if (!resultDiv) return;
+    const z = appState.lang === "zh";
+
+    const homeOdds = parseFloat(document.getElementById("value-bet-home-odds")?.value || "2.0");
+    const drawOdds = parseFloat(document.getElementById("value-bet-draw-odds")?.value || "3.5");
+    const awayOdds = parseFloat(document.getElementById("value-bet-away-odds")?.value || "3.0");
+
+    if (!homeOdds || !drawOdds || !awayOdds || homeOdds < 1 || drawOdds < 1 || awayOdds < 1) {
+        resultDiv.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("value_bet_error"))}</p>`;
+        return;
+    }
+
+    resultDiv.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("value_bet_loading"))}</p>`;
+    if (btn) btn.disabled = true;
+
+    let data;
+    try {
+        data = await fetchJson(
+            `/predictions/${encodeURIComponent(home)}/${encodeURIComponent(away)}/value?home_odds=${homeOdds}&draw_odds=${drawOdds}&away_odds=${awayOdds}`,
+            { fetchOpts: { signal: AbortSignal.timeout(30000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch value bet:", err);
+        resultDiv.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("value_bet_error"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    if (!data || data.status === "error") {
+        resultDiv.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("value_bet_error"))}: ${escapeHtml(data?.message || "unknown")}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const outcomes = Array.isArray(data.outcomes) ? data.outcomes : [];
+    const outcomeLabels = {
+        home_win: z ? "主胜" : "Home Win",
+        draw: z ? "平局" : "Draw",
+        away_win: z ? "客胜" : "Away Win",
+    };
+
+    const rows = outcomes.map((o) => {
+        const isValue = o.recommendation === "value_bet";
+        const evPct = (o.expected_value * 100).toFixed(1);
+        const edgePct = (o.edge * 100).toFixed(1);
+        const kellyPct = (o.kelly_fraction * 100).toFixed(1);
+        const recColor = isValue ? "var(--status-high, #10b981)" : "var(--text-muted)";
+        const recText = isValue ? (z ? "有价值" : "Value") : (z ? "无价值" : "No Value");
+        return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem">${escapeHtml(outcomeLabels[o.outcome] || o.outcome)}</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${(o.model_probability * 100).toFixed(1)}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${o.decimal_odds.toFixed(2)}</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${(o.implied_probability * 100).toFixed(1)}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.expected_value >= 0 ? "var(--status-high, #10b981)" : "var(--status-low, #ef4444)"}">${evPct >= 0 ? "+" : ""}${evPct}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.edge >= 0 ? "var(--status-high, #10b981)" : "var(--status-low, #ef4444)"}">${edgePct >= 0 ? "+" : ""}${edgePct}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${kellyPct}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;color:${recColor};font-weight:600">${recText}</td>
+        </tr>`;
+    }).join("");
+
+    const bestBetHtml = data.best_bet
+        ? `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:6px;border-left:3px solid var(--status-high, #10b981)">
+            <span style="font-size:0.75rem;font-weight:600">${escapeHtml(t("value_bet_best_bet"))}: ${escapeHtml(outcomeLabels[data.best_bet.outcome] || data.best_bet.outcome)}</span>
+            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:0.5rem">EV: ${(data.best_bet.expected_value * 100).toFixed(1)}% · Kelly: ${(data.best_bet.kelly_fraction * 100).toFixed(1)}%</span>
+          </div>`
+        : `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:6px">
+            <span style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("value_bet_no_value"))}</span>
+          </div>`;
+
+    const overroundPct = ((data.overround || 0) * 100).toFixed(1);
+    resultDiv.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;margin-top:0.3rem">
+            <thead>
+                <tr style="border-bottom:2px solid var(--border)">
+                    <th style="padding:0.3rem 0.4rem;font-size:0.7rem;text-align:left;color:var(--text-muted)">${escapeHtml(t("value_bet_outcome"))}</th>
+                    <th style="padding:0.3rem 0.4rem;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(t("value_bet_model_prob"))}</th>
+                    <th style="padding:0.3rem 0.4rem;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(t("value_bet_odds"))}</th>
+                    <th style="padding:0.3rem 0.4rem;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(t("value_bet_implied"))}</th>
+                    <th style="padding:0.3rem 0.4rem;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(t("value_bet_ev"))}</th>
+                    <th style="padding:0.3rem 0.4rem;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(t("value_bet_edge"))}</th>
+                    <th style="padding:0.3rem 0.4rem;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(t("value_bet_kelly"))}</th>
+                    <th style="padding:0.3rem 0.4rem;font-size:0.7rem;text-align:center;color:var(--text-muted)">${escapeHtml(t("value_bet_recommendation"))}</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+        ${bestBetHtml}
+        <div style="margin-top:0.3rem;font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("value_bet_overround"))}: ${overroundPct}%</div>
+        <div style="margin-top:0.2rem;font-size:0.65rem;color:var(--text-muted);font-style:italic">${escapeHtml(t("value_bet_disclaimer"))}</div>
+    `;
+
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderReliabilityDiagram() {
+    const body = document.getElementById("backtest-reliability-body");
+    const btn = document.getElementById("btn-reliability-diagram");
+    if (!body) return;
+    const z = appState.lang === "zh";
+
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("backtest_reliability_loading"))}</p>`;
+    if (btn) btn.disabled = true;
+
+    let data;
+    try {
+        data = await fetchJson(
+            `/predictions/calibration/reliability?n_bins=10`,
+            { fetchOpts: { signal: AbortSignal.timeout(30000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch reliability diagram:", err);
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("backtest_reliability_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    if (!data || data.status === "error" || data.status === "not_available" || data.status === "no_data") {
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("backtest_reliability_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const perOutcome = data.per_outcome || {};
+    const overall = data.overall || {};
+    const ece = (overall.ece || 0).toFixed(4);
+    const rms = (overall.rms_calibration_error || 0).toFixed(4);
+    const nPred = data.n_predictions || 0;
+
+    const chartId = "reliability-chart";
+    body.innerHTML = `
+        <div style="font-size:0.75rem;margin-bottom:0.4rem;color:var(--text-muted)">
+            ${escapeHtml(t("backtest_reliability_ece"))}: <strong>${ece}</strong> ·
+            ${escapeHtml(t("backtest_reliability_rms"))}: <strong>${rms}</strong> ·
+            ${z ? "预测数" : "Predictions"}: <strong>${nPred}</strong>
+        </div>
+        <div id="${chartId}" style="width:100%;height:300px"></div>`;
+
+    const chart = getChart(chartId);
+    if (!chart) {
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const textColor = isDark ? "#e0e0e0" : "#333";
+    const gridColor = isDark ? "#333" : "#ddd";
+
+    // Perfect calibration line (0-1 diagonal)
+    const diagonal = [[0, 0], [1, 1]];
+
+    // Build per-outcome series
+    const outcomeColors = { home_win: "#64b5f6", draw: "#f59e0b", away_win: "#10b981" };
+    const outcomeLabels = {
+        home_win: z ? "主胜" : "Home Win",
+        draw: z ? "平局" : "Draw",
+        away_win: z ? "客胜" : "Away Win",
+    };
+
+    const series = [
+        {
+            name: z ? "完美校准" : "Perfect",
+            type: "line",
+            data: diagonal,
+            symbol: "none",
+            lineStyle: { width: 1, type: "dashed", color: "#999" },
+            itemStyle: { color: "#999" },
+        },
+    ];
+
+    for (const [outcome, bins] of Object.entries(perOutcome)) {
+        if (!Array.isArray(bins) || bins.length === 0) continue;
+        const pts = bins.map((b) => [b.mean_predicted, b.observed_frequency]);
+        series.push({
+            name: outcomeLabels[outcome] || outcome,
+            type: "scatter",
+            data: pts,
+            symbolSize: (bins.length > 0 ? 8 : 5),
+            itemStyle: { color: outcomeColors[outcome] || "#888" },
+        });
+        // Also add a connecting line
+        const sorted = pts.slice().sort((a, b) => a[0] - b[0]);
+        series.push({
+            name: outcomeLabels[outcome] || outcome,
+            type: "line",
+            data: sorted,
+            symbol: "none",
+            lineStyle: { width: 1, color: outcomeColors[outcome] || "#888", opacity: 0.5 },
+            itemStyle: { color: outcomeColors[outcome] || "#888" },
+        });
+    }
+
+    chart.setOption({
+        tooltip: {
+            trigger: "item",
+            formatter: (p) => {
+                const x = (p.data[0] * 100).toFixed(1);
+                const y = (p.data[1] * 100).toFixed(1);
+                return `${p.seriesName}<br/>${escapeHtml(t("backtest_reliability_predicted"))}: ${x}%<br/>${escapeHtml(t("backtest_reliability_observed"))}: ${y}%`;
+            },
+        },
+        legend: { textStyle: { color: textColor, fontSize: 10 } },
+        grid: { left: "10%", right: "5%", bottom: "15%", top: "15%" },
+        xAxis: {
+            type: "value",
+            min: 0,
+            max: 1,
+            name: escapeHtml(t("backtest_reliability_predicted")),
+            nameTextStyle: { color: textColor, fontSize: 10 },
+            axisLabel: { color: textColor, fontSize: 9, formatter: (v) => `${(v * 100).toFixed(0)}%` },
+            axisLine: { lineStyle: { color: gridColor } },
+            splitLine: { lineStyle: { color: gridColor } },
+        },
+        yAxis: {
+            type: "value",
+            min: 0,
+            max: 1,
+            name: escapeHtml(t("backtest_reliability_observed")),
+            nameTextStyle: { color: textColor, fontSize: 10 },
+            axisLabel: { color: textColor, fontSize: 9, formatter: (v) => `${(v * 100).toFixed(0)}%` },
+            axisLine: { lineStyle: { color: gridColor } },
+            splitLine: { lineStyle: { color: gridColor } },
+        },
+        series,
+    });
+
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -4468,6 +4759,16 @@ async function renderMatches() {
     if (ensAttrPanel && ensAttrBody) {
         ensAttrPanel.style.display = "none";
         ensAttrBody.innerHTML = "";
+    }
+
+    // Show value bet panel for the new match (odds inputs visible, result cleared)
+    const valueBetPanel = document.getElementById("match-value-bet-panel");
+    const valueBetResult = document.getElementById("match-value-bet-result");
+    if (valueBetPanel) {
+        valueBetPanel.style.display = "block";
+    }
+    if (valueBetResult) {
+        valueBetResult.innerHTML = "";
     }
 }
 
@@ -6980,6 +7281,12 @@ async function renderBacktest() {
         } catch (e) {
             console.warn("Failed to render calibration comparison:", e);
         }
+
+        // Reliability diagram panel (shown, but data loaded on button click)
+        const reliabilityPanel = document.getElementById("backtest-reliability-panel");
+        if (reliabilityPanel) {
+            reliabilityPanel.style.display = "block";
+        }
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -7676,6 +7983,26 @@ function bindEvents() {
         ensembleAttrCIBtn.addEventListener("click", () => {
             fetchAndRenderEnsembleAttributionCI(appState.home, appState.away).catch(
                 (e) => console.warn("Ensemble attribution CI failed:", e)
+            );
+        });
+    }
+
+    // Value bet analysis button: EV/Kelly/edge calculation vs market odds
+    const valueBetBtn = document.getElementById("btn-value-bet");
+    if (valueBetBtn) {
+        valueBetBtn.addEventListener("click", () => {
+            fetchAndRenderValueBet(appState.home, appState.away).catch(
+                (e) => console.warn("Value bet analysis failed:", e)
+            );
+        });
+    }
+
+    // Reliability diagram button: calibration scatter plot
+    const reliabilityBtn = document.getElementById("btn-reliability-diagram");
+    if (reliabilityBtn) {
+        reliabilityBtn.addEventListener("click", () => {
+            fetchAndRenderReliabilityDiagram().catch(
+                (e) => console.warn("Reliability diagram failed:", e)
             );
         });
     }

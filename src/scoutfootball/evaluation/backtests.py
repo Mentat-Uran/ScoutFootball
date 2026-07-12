@@ -1374,3 +1374,415 @@ def tune_dixon_coles_decay(
         n_folds=n_folds,
         n_matches=n_matches,
     )
+
+
+# ---------------------------------------------------------------------------
+# Value betting analysis
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ValueBetOutcome:
+    """Value betting analysis for a single outcome (home/draw/away)."""
+
+    outcome: str
+    model_probability: float
+    decimal_odds: float
+    implied_probability: float
+    expected_value: float
+    edge: float
+    kelly_fraction: float
+    recommendation: str
+
+
+@dataclass(frozen=True)
+class ValueBetAnalysis:
+    """Value betting analysis for a match with three-way 1X2 market.
+
+    ``outcomes`` is a list of :class:`ValueBetOutcome` for home/draw/away.
+    ``best_bet`` is the outcome with the highest positive expected value,
+    or ``None`` when no value bet exists. ``overround`` is the bookmaker
+    margin (sum of implied probabilities minus 1).
+    """
+
+    outcomes: list[ValueBetOutcome]
+    best_bet: ValueBetOutcome | None
+    overround: float
+    total_implied: float
+
+
+def compute_value_bets(
+    model_probabilities: dict[str, float],
+    decimal_odds: dict[str, float],
+    *,
+    min_ev: float = 0.0,
+) -> ValueBetAnalysis:
+    """Compute value betting analysis from model probabilities and market odds.
+
+    Parameters
+    ----------
+    model_probabilities : ``{"home_win": p, "draw": p, "away_win": p}``.
+    decimal_odds : ``{"home_win": d, "draw": d, "away_win": d}`` (European
+        decimal odds, >= 1.0).
+    min_ev : Minimum expected value to flag as a value bet (default 0.0,
+        meaning any positive EV).
+
+    Returns
+    -------
+    :class:`ValueBetAnalysis` with per-outcome analysis and best bet.
+
+    Raises
+    ------
+    ValueError
+        If probabilities don't sum to ~1.0, odds are < 1.0, or keys are
+        missing.
+    """
+    required = {"home_win", "draw", "away_win"}
+    missing = sorted(required.difference(model_probabilities))
+    if missing:
+        raise ValueError(f"model_probabilities missing keys: {missing}")
+    missing_odds = sorted(required.difference(decimal_odds))
+    if missing_odds:
+        raise ValueError(f"decimal_odds missing keys: {missing_odds}")
+
+    probs = {k: float(model_probabilities[k]) for k in required}
+    odds = {k: float(decimal_odds[k]) for k in required}
+
+    total_prob = sum(probs.values())
+    if not np.isclose(total_prob, 1.0, atol=1e-4):
+        raise ValueError(
+            f"model_probabilities must sum to 1.0, got {total_prob:.6f}"
+        )
+
+    for k in required:
+        if odds[k] < 1.0:
+            raise ValueError(f"decimal_odds[{k!r}] must be >= 1.0, got {odds[k]}")
+        if probs[k] < 0.0 or probs[k] > 1.0:
+            raise ValueError(f"model_probabilities[{k!r}] must be in [0, 1], got {probs[k]}")
+
+    outcomes: list[ValueBetOutcome] = []
+    for outcome_key in required:
+        p = probs[outcome_key]
+        d = odds[outcome_key]
+        implied = 1.0 / d
+        ev = p * d - 1.0
+        edge = p - implied
+        # Kelly fraction: (p * d - 1) / (d - 1), clamped to [0, 1]
+        kelly = (p * d - 1.0) / (d - 1.0) if d > 1.0 else 0.0
+        kelly = max(0.0, min(1.0, kelly))
+        recommendation = "value_bet" if ev > min_ev and kelly > 0 else "no_value"
+        outcomes.append(ValueBetOutcome(
+            outcome=outcome_key,
+            model_probability=p,
+            decimal_odds=d,
+            implied_probability=implied,
+            expected_value=ev,
+            edge=edge,
+            kelly_fraction=kelly,
+            recommendation=recommendation,
+        ))
+
+    # Sort outcomes by EV descending for best_bet selection
+    sorted_by_ev = sorted(outcomes, key=lambda o: o.expected_value, reverse=True)
+    best_bet = next(
+        (o for o in sorted_by_ev if o.recommendation == "value_bet"),
+        None,
+    )
+    total_implied = sum(1.0 / odds[k] for k in required)
+    overround = total_implied - 1.0
+
+    return ValueBetAnalysis(
+        outcomes=outcomes,
+        best_bet=best_bet,
+        overround=overround,
+        total_implied=total_implied,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reliability diagram
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ReliabilityBin:
+    """One bin in a reliability diagram."""
+
+    bin_lower: float
+    bin_upper: float
+    bin_center: float
+    mean_predicted: float
+    observed_frequency: float
+    n_samples: int
+    outcome: str
+
+
+@dataclass(frozen=True)
+class ReliabilityDiagram:
+    """Reliability diagram data for 1X2 calibration visualization.
+
+    ``bins`` is a flat list of :class:`ReliabilityBin` across all outcomes
+    and probability bins. ``per_outcome`` maps outcome name to a list of
+    bins for that outcome only. ``overall`` contains aggregate metrics.
+    """
+
+    bins: list[ReliabilityBin]
+    per_outcome: dict[str, list[ReliabilityBin]]
+    n_bins: int
+    n_predictions: int
+    overall: dict[str, float]
+
+
+def compute_reliability_diagram(
+    predictions: pd.DataFrame,
+    *,
+    n_bins: int = 10,
+    min_samples_per_bin: int = 5,
+) -> ReliabilityDiagram:
+    """Compute a reliability diagram for 1X2 prediction calibration.
+
+    Bins predictions by predicted probability and compares to observed
+    frequency for each outcome (home_win, draw, away_win).
+
+    Parameters
+    ----------
+    predictions : DataFrame with columns ``home_win_probability``,
+        ``draw_probability``, ``away_win_probability``, ``actual_outcome``.
+    n_bins : Number of probability bins from 0 to 1 (default 10).
+    min_samples_per_bin : Bins with fewer samples are excluded (default 5).
+
+    Returns
+    -------
+    :class:`ReliabilityDiagram` with per-bin and aggregate data.
+    """
+    required = {
+        "home_win_probability", "draw_probability",
+        "away_win_probability", "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        raise ValueError(f"predictions missing required columns: {missing}")
+
+    if n_bins < 2:
+        raise ValueError("n_bins must be >= 2")
+
+    df = predictions.copy()
+    outcomes = ["home_win", "draw", "away_win"]
+    prob_cols = {
+        "home_win": "home_win_probability",
+        "draw": "draw_probability",
+        "away_win": "away_win_probability",
+    }
+
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    all_bins: list[ReliabilityBin] = []
+    per_outcome: dict[str, list[ReliabilityBin]] = {o: [] for o in outcomes}
+
+    total_samples = 0
+    total_abs_error = 0.0
+    total_squared_error = 0.0
+
+    for outcome in outcomes:
+        prob_col = prob_cols[outcome]
+        observed = (df["actual_outcome"] == outcome).astype(float).to_numpy()
+        probs = df[prob_col].to_numpy(dtype=float)
+
+        for i in range(n_bins):
+            lo = edges[i]
+            hi = edges[i + 1]
+            if i == n_bins - 1:
+                mask = (probs >= lo) & (probs <= hi)
+            else:
+                mask = (probs >= lo) & (probs < hi)
+
+            count = int(mask.sum())
+            if count < min_samples_per_bin:
+                continue
+
+            mean_pred = float(probs[mask].mean())
+            obs_freq = float(observed[mask].mean())
+            center = (lo + hi) / 2.0
+
+            bin_entry = ReliabilityBin(
+                bin_lower=float(lo),
+                bin_upper=float(hi),
+                bin_center=float(center),
+                mean_predicted=mean_pred,
+                observed_frequency=obs_freq,
+                n_samples=count,
+                outcome=outcome,
+            )
+            all_bins.append(bin_entry)
+            per_outcome[outcome].append(bin_entry)
+            total_samples += count
+            total_abs_error += abs(mean_pred - obs_freq) * count
+            total_squared_error += (mean_pred - obs_freq) ** 2 * count
+
+    # Aggregate metrics
+    if total_samples > 0:
+        calibration_error = total_abs_error / total_samples
+        rms_calibration_error = float(np.sqrt(total_squared_error / total_samples))
+    else:
+        calibration_error = 0.0
+        rms_calibration_error = 0.0
+
+    # ECE (Expected Calibration Error) — same as calibration_error
+    overall = {
+        "ece": float(calibration_error),
+        "rms_calibration_error": rms_calibration_error,
+        "n_bins_used": len(all_bins),
+        "n_predictions": len(df),
+    }
+
+    return ReliabilityDiagram(
+        bins=all_bins,
+        per_outcome=per_outcome,
+        n_bins=n_bins,
+        n_predictions=len(df),
+        overall=overall,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-team prediction accuracy
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TeamAccuracyEntry:
+    """Prediction accuracy statistics for a single team."""
+
+    team_id: str
+    n_predictions: int
+    n_correct: int
+    hit_rate: float
+    avg_confidence: float
+    calibration_gap: float
+    last_match_date: str | None
+
+
+@dataclass(frozen=True)
+class TeamAccuracyReport:
+    """Per-team prediction accuracy report.
+
+    ``entries`` is sorted by ``n_predictions`` descending. ``overall``
+    contains aggregate hit rate across all teams.
+    """
+
+    entries: list[TeamAccuracyEntry]
+    overall_hit_rate: float
+    total_predictions: int
+    n_teams: int
+
+
+def compute_team_accuracy(
+    predictions: pd.DataFrame,
+    *,
+    min_predictions: int = 3,
+) -> TeamAccuracyReport:
+    """Compute per-team prediction accuracy from backtest predictions.
+
+    For each team (appearing as either home or away), computes:
+    - ``n_predictions``: number of predictions involving the team
+    - ``n_correct``: predictions where the model's top pick matched actual
+    - ``hit_rate``: n_correct / n_predictions
+    - ``avg_confidence``: mean of the model's top-pick probability
+    - ``calibration_gap``: avg_confidence - hit_rate (positive = overconfident)
+    - ``last_match_date``: most recent match date for the team
+
+    Parameters
+    ----------
+    predictions : DataFrame with ``home_team_id``, ``away_team_id``,
+        ``home_win_probability``, ``draw_probability``,
+        ``away_win_probability``, ``actual_outcome``, and optionally
+        ``match_date``.
+    min_predictions : Teams with fewer predictions are excluded (default 3).
+
+    Returns
+    -------
+    :class:`TeamAccuracyReport` sorted by n_predictions descending.
+    """
+    required = {
+        "home_team_id", "away_team_id",
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        raise ValueError(f"predictions missing required columns: {missing}")
+
+    df = predictions.copy()
+    has_date = "match_date" in df.columns
+
+    prob_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    outcome_map = {
+        "home_win_probability": "home_win",
+        "draw_probability": "draw",
+        "away_win_probability": "away_win",
+    }
+
+    def _predicted_outcome(row: pd.Series) -> str:
+        probs = {col: row[col] for col in prob_cols}
+        best = max(probs, key=probs.get)
+        return outcome_map[best]
+
+    df["_predicted_outcome"] = df.apply(_predicted_outcome, axis=1)
+    df["_correct"] = (df["_predicted_outcome"] == df["actual_outcome"]).astype(int)
+    df["_top_prob"] = df[prob_cols].max(axis=1)
+
+    # Collect per-team stats
+    team_stats: dict[str, dict] = {}
+
+    for _, row in df.iterrows():
+        for team_col in ("home_team_id", "away_team_id"):
+            team_id = str(row[team_col])
+            if team_id not in team_stats:
+                team_stats[team_id] = {
+                    "n_predictions": 0,
+                    "n_correct": 0,
+                    "confidence_sum": 0.0,
+                    "last_date": None,
+                }
+            stats = team_stats[team_id]
+            stats["n_predictions"] += 1
+            stats["n_correct"] += int(row["_correct"])
+            stats["confidence_sum"] += float(row["_top_prob"])
+            if has_date:
+                d = row.get("match_date")
+                if d is not None and str(d) != "NaT":
+                    d_str = str(d)[:10]
+                    if stats["last_date"] is None or d_str > stats["last_date"]:
+                        stats["last_date"] = d_str
+
+    entries: list[TeamAccuracyEntry] = []
+    total_correct = 0
+    total_predictions = 0
+
+    for team_id, stats in team_stats.items():
+        n = stats["n_predictions"]
+        if n < min_predictions:
+            continue
+        correct = stats["n_correct"]
+        hit_rate = correct / n if n > 0 else 0.0
+        avg_conf = stats["confidence_sum"] / n if n > 0 else 0.0
+        entries.append(TeamAccuracyEntry(
+            team_id=team_id,
+            n_predictions=n,
+            n_correct=correct,
+            hit_rate=round(hit_rate, 4),
+            avg_confidence=round(avg_conf, 4),
+            calibration_gap=round(avg_conf - hit_rate, 4),
+            last_match_date=stats["last_date"],
+        ))
+        total_correct += correct
+        total_predictions += n
+
+    entries.sort(key=lambda e: e.n_predictions, reverse=True)
+    overall_hit_rate = total_correct / total_predictions if total_predictions > 0 else 0.0
+
+    return TeamAccuracyReport(
+        entries=entries,
+        overall_hit_rate=round(overall_hit_rate, 4),
+        total_predictions=total_predictions,
+        n_teams=len(entries),
+    )
