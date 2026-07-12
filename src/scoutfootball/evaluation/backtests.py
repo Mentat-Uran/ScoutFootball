@@ -1043,6 +1043,149 @@ def _compute_window_metrics(
 
 
 # ---------------------------------------------------------------------------
+# Calibration comparison (raw vs recalibrated)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CalibrationComparison:
+    """Per-score-line comparison of raw vs recalibrated predictions.
+
+    ``overall`` holds aggregate Brier/RPS for raw and recalibrated
+    probabilities. ``by_score_line`` breaks the comparison down by
+    common low-score outcomes (0-0, 1-0, 0-1, 1-1, 2-1, 1-2, 2-0, 0-2)
+    so users can see where isotonic recalibration helps most.
+    ``improvement`` expresses the relative change as a percentage
+    (negative = improvement, since lower Brier/RPS is better).
+    """
+
+    overall: dict[str, float]
+    by_score_line: list[dict[str, Any]]
+    n_matches: int
+    improvement: dict[str, float]
+
+
+def compute_calibration_comparison(
+    predictions: pd.DataFrame,
+    calibrator: object,
+) -> CalibrationComparison:
+    """Compare raw vs isotonic-recalibrated predictions per score line.
+
+    Parameters
+    ----------
+    predictions : DataFrame with ``home_win_probability``,
+        ``draw_probability``, ``away_win_probability``, ``actual_outcome``
+        and optionally ``home_goals``/``away_goals``.
+    calibrator : IsotonicCalibrator with fitted isotonic regressors.
+
+    Returns
+    -------
+    CalibrationComparison with overall and per-score-line metrics.
+    """
+    from scoutfootball.models.match_prediction import (
+        _compute_rps,
+        apply_recalibration,
+    )
+
+    required = {
+        "home_win_probability", "draw_probability",
+        "away_win_probability", "actual_outcome",
+    }
+    missing = required - set(predictions.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    probs = predictions.loc[
+        :, ["home_win_probability", "draw_probability", "away_win_probability"]
+    ].to_numpy()
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    actual_idx = np.array([outcome_map[o] for o in predictions["actual_outcome"]])
+    actual_onehot = np.zeros_like(probs)
+    actual_onehot[np.arange(len(actual_idx)), actual_idx] = 1.0
+
+    # Recalibrated probabilities
+    recalibrated = np.array([
+        list(apply_recalibration(
+            calibrator,
+            float(probs[i, 0]),
+            float(probs[i, 1]),
+            float(probs[i, 2]),
+        ))
+        for i in range(len(predictions))
+    ])
+
+    brier_raw = float(np.mean(np.sum((probs - actual_onehot) ** 2, axis=1)))
+    brier_recal = float(np.mean(np.sum((recalibrated - actual_onehot) ** 2, axis=1)))
+    rps_raw = _compute_rps(probs, actual_onehot)
+    rps_recal = _compute_rps(recalibrated, actual_onehot)
+
+    overall = {
+        "brier_raw": brier_raw,
+        "brier_recalibrated": brier_recal,
+        "rps_raw": rps_raw,
+        "rps_recalibrated": rps_recal,
+    }
+
+    improvement: dict[str, float] = {}
+    for metric, raw_val, recal_val in [
+        ("brier", brier_raw, brier_recal),
+        ("rps", rps_raw, rps_recal),
+    ]:
+        if raw_val > 0:
+            improvement[f"{metric}_improvement_pct"] = float(
+                (recal_val - raw_val) / raw_val * 100
+            )
+        else:
+            improvement[f"{metric}_improvement_pct"] = 0.0
+
+    # Per-score-line breakdown
+    by_score_line: list[dict[str, Any]] = []
+    has_goals = "home_goals" in predictions.columns and "away_goals" in predictions.columns
+    if has_goals:
+        score_lines = [(0, 0), (1, 0), (0, 1), (1, 1), (2, 1), (1, 2), (2, 0), (0, 2)]
+        for hg, ag in score_lines:
+            mask = (predictions["home_goals"] == hg) & (predictions["away_goals"] == ag)
+            n = int(mask.sum())
+            if n < 5:
+                continue
+            raw_subset = probs[mask]
+            recal_subset = recalibrated[mask]
+            actual_subset = actual_onehot[mask]
+            sl_brier_raw = float(np.mean(np.sum((raw_subset - actual_subset) ** 2, axis=1)))
+            sl_brier_recal = float(np.mean(np.sum((recal_subset - actual_subset) ** 2, axis=1)))
+            sl_rps_raw = _compute_rps(raw_subset, actual_subset)
+            sl_rps_recal = _compute_rps(recal_subset, actual_subset)
+            entry: dict[str, Any] = {
+                "score_line": f"{hg}-{ag}",
+                "n_matches": n,
+                "brier_raw": sl_brier_raw,
+                "brier_recalibrated": sl_brier_recal,
+                "rps_raw": sl_rps_raw,
+                "rps_recalibrated": sl_rps_recal,
+            }
+            if sl_brier_raw > 0:
+                entry["brier_improvement_pct"] = float(
+                    (sl_brier_recal - sl_brier_raw) / sl_brier_raw * 100
+                )
+            else:
+                entry["brier_improvement_pct"] = 0.0
+            if sl_rps_raw > 0:
+                entry["rps_improvement_pct"] = float(
+                    (sl_rps_recal - sl_rps_raw) / sl_rps_raw * 100
+                )
+            else:
+                entry["rps_improvement_pct"] = 0.0
+            by_score_line.append(entry)
+
+    return CalibrationComparison(
+        overall=overall,
+        by_score_line=by_score_line,
+        n_matches=len(predictions),
+        improvement=improvement,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Decay parameter tuning
 # ---------------------------------------------------------------------------
 

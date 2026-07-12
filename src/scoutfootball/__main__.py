@@ -1146,6 +1146,110 @@ def _cmd_tune_predictions(args: argparse.Namespace) -> None:
     print(f"\nResults saved to {out_dir}")
 
 
+def _cmd_optimize_ensemble(args: argparse.Namespace) -> None:
+    """Optimize ensemble weights via backtest grid-search and cache them."""
+    from scoutfootball.models import (
+        TimeSplitConfig,
+        optimize_ensemble_weights,
+        save_ensemble_weights,
+    )
+
+    project_root = Path(__file__).resolve().parents[2]
+    out_dir = Path(args.output_dir).resolve() if args.output_dir else (
+        project_root / "data" / "reports" / "calibration_backtest"
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    team_match = _load_team_match_from_raw()
+    print(f"  Loaded {len(team_match)} rows, {team_match['match_id'].nunique()} matches")
+
+    split_cfg = TimeSplitConfig(n_splits=args.n_splits, gap=0)
+
+    # Resolve decay from tuning results if not explicitly provided
+    decay = args.decay
+    if decay is None:
+        tuning_path = out_dir / "decay_tuning_results.json"
+        if tuning_path.exists():
+            try:
+                with open(tuning_path, encoding="utf-8") as f:
+                    tuning_data = json.load(f)
+                best = tuning_data.get("best_decay")
+                if isinstance(best, (int, float)) and best >= 0:
+                    decay = float(best)
+                    print(f"  Using tuned decay={decay} from {tuning_path.name}")
+            except (json.JSONDecodeError, OSError):
+                pass
+        if decay is None:
+            print("  No tuned decay found; fitting without time decay")
+
+    print(f"\n=== Ensemble Weight Optimization (n_splits={args.n_splits}) ===")
+    weights = optimize_ensemble_weights(
+        team_match,
+        decay=decay,
+        split_cfg=split_cfg,
+    )
+
+    # Compute the RPS achieved by these weights on the full backtest
+    import numpy as np
+
+    from scoutfootball.evaluation.backtests import (
+        run_dixon_coles_backtest,
+        run_poisson_backtest,
+    )
+    from scoutfootball.models.match_prediction import _compute_rps
+
+    p_bt = run_poisson_backtest(team_match, split_cfg)
+    dc_bt = run_dixon_coles_backtest(team_match, split_cfg, decay=decay)
+    merged = p_bt.predictions.merge(
+        dc_bt.predictions[
+            ["match_id", "home_win_probability", "draw_probability", "away_win_probability"]
+        ],
+        on="match_id",
+        suffixes=("_poisson", "_dc"),
+    )
+    if "actual_outcome" in merged.columns and not merged.empty:
+        actual = merged["actual_outcome"].map(
+            {"home_win": 0, "draw": 1, "away_win": 2}
+        ).to_numpy()
+        p_probs = merged[
+            [
+                "home_win_probability_poisson",
+                "draw_probability_poisson",
+                "away_win_probability_poisson",
+            ]
+        ].to_numpy()
+        dc_probs = merged[
+            ["home_win_probability_dc", "draw_probability_dc", "away_win_probability_dc"]
+        ].to_numpy()
+        actual_onehot = np.zeros_like(p_probs)
+        actual_onehot[np.arange(len(actual)), actual] = 1.0
+        blended = (
+            weights["poisson"] * p_probs
+            + weights["dixon_coles"] * dc_probs
+            + weights["dixon_coles_form"] * dc_probs
+        )
+        achieved_rps = _compute_rps(blended, actual_onehot)
+        n_matches = len(merged)
+    else:
+        achieved_rps = None
+        n_matches = 0
+
+    weights_path = out_dir / "ensemble_optimal_weights.json"
+    save_ensemble_weights(
+        weights,
+        weights_path,
+        rps=achieved_rps,
+        n_matches=n_matches,
+    )
+
+    print("\n  Optimal weights (minimizing RPS):")
+    for name, w in weights.items():
+        print(f"    {name:>20s}: {w:.2f}")
+    if achieved_rps is not None:
+        print(f"\n  Achieved RPS: {achieved_rps:.4f} ({n_matches} matches)")
+    print(f"  Saved to {weights_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="scoutfootball",
@@ -1264,6 +1368,23 @@ def main() -> None:
         help="Output directory for tuning results",
     )
 
+    opt_ens_p = sub.add_parser(
+        "optimize-ensemble",
+        help="Grid-search optimal ensemble weights and cache them",
+    )
+    opt_ens_p.add_argument(
+        "--n-splits", type=int, default=3,
+        help="Number of time-series folds (default: 3)",
+    )
+    opt_ens_p.add_argument(
+        "--decay", type=float, default=None,
+        help="Dixon-Coles time-decay parameter (default: read from tuning results)",
+    )
+    opt_ens_p.add_argument(
+        "--output-dir", type=str, default=None,
+        help="Output directory for ensemble weights artifact",
+    )
+
     serve_p = sub.add_parser("serve", help="Start FastAPI server")
     serve_p.add_argument("--host", default="0.0.0.0")
     serve_p.add_argument("--port", type=int, default=8000)
@@ -1362,6 +1483,7 @@ def main() -> None:
         "import-truth-labels": _cmd_import_truth_labels,
         "backtest": _cmd_backtest,
         "tune-predictions": _cmd_tune_predictions,
+        "optimize-ensemble": _cmd_optimize_ensemble,
         "serve": _cmd_serve,
         "tournament": _cmd_tournament,
     }

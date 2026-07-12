@@ -26,9 +26,11 @@ from scoutfootball.api import (
     get_action_value_summary,
     get_artifacts_summary,
     get_backtest_comparison,
+    get_calibration_comparison,
     get_calibration_drift,
     get_decay_tuning,
     get_ensemble_prediction,
+    get_ensemble_weights,
     get_form_weighted_prediction,
     get_head_to_head,
     get_match_momentum,
@@ -246,14 +248,27 @@ def create_app() -> FastAPI:
     def teams_compare(a: str, b: str):
         return get_team_comparison(a, b)
 
+    @app.get("/predictions/ensemble/weights")
+    def predictions_ensemble_weights():
+        return get_ensemble_weights()
+
+    @app.get("/predictions/calibration/comparison")
+    def predictions_calibration_comparison():
+        return get_calibration_comparison()
+
     @app.get("/predictions/{home_team}/{away_team}")
-    def predictions(home_team: str, away_team: str, model: str = "poisson"):
+    def predictions(
+        home_team: str,
+        away_team: str,
+        model: str = "poisson",
+        recalibrate: bool = Query(False, description="Apply isotonic recalibration to ensemble"),
+    ):
         if model == "dixon_coles":
             return get_match_prediction_dc(home_team, away_team)
         if model == "form":
             return get_form_weighted_prediction(home_team, away_team)
         if model == "ensemble":
-            return get_ensemble_prediction(home_team, away_team)
+            return get_ensemble_prediction(home_team, away_team, recalibrate=recalibrate)
         return get_match_prediction(home_team, away_team)
 
     @app.get("/predictions/{home_team}/{away_team}/h2h")
