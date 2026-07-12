@@ -2288,3 +2288,627 @@ def compute_confidence_distribution(
         n_predictions=n_total,
         n_buckets=len(buckets),
     )
+
+
+# ---------------------------------------------------------------------------
+# H2H historical bias correction
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class H2HBiasCorrection:
+    """Result of adjusting baseline 1x2 probabilities with historical H2H rates.
+
+    Attributes
+    ----------
+    home_team, away_team:
+        Team identifiers echoed back for traceability.
+    baseline_probabilities:
+        Original 1x2 probabilities (home_win/draw/away_win).
+    corrected_probabilities:
+        Bias-corrected 1x2 probabilities (sum to 1.0).
+    h2h_rates:
+        Historical H2H outcome rates from the queried home team's perspective.
+    adjustments:
+        Per-outcome delta applied (corrected - baseline), after clipping to
+        ``max_correction``. Signed.
+    n_meetings:
+        Number of historical H2H matches used.
+    correction_applied:
+        True when a non-zero adjustment was applied; False when the H2H sample
+        was too small or the correction was clipped to zero.
+    disclaimer:
+        Plain-text caveat about the correction's limitations.
+    """
+
+    home_team: str
+    away_team: str
+    baseline_probabilities: dict[str, float]
+    corrected_probabilities: dict[str, float]
+    h2h_rates: dict[str, float]
+    adjustments: dict[str, float]
+    n_meetings: int
+    correction_applied: bool
+    disclaimer: str
+
+
+def compute_h2h_bias_correction(
+    home_team: str,
+    away_team: str,
+    baseline_probabilities: dict[str, float],
+    h2h_summary: dict[str, Any],
+    *,
+    max_correction: float = 0.10,
+    min_meetings: int = 3,
+    blend_weight: float = 0.25,
+) -> H2HBiasCorrection:
+    """Adjust baseline 1x2 probabilities using historical H2H outcome rates.
+
+    Computes historical outcome rates from ``h2h_summary`` (home_wins / draws
+    / away_wins / total_meetings), then nudges the baseline probabilities
+    toward the historical rates by ``blend_weight`` (default 25% blend), with
+    per-outcome adjustments clipped to ``±max_correction`` (default 0.10).
+    The corrected probabilities are re-normalized to sum to 1.0.
+
+    Parameters
+    ----------
+    home_team, away_team:
+        Team identifiers (echoed back, not used for computation).
+    baseline_probabilities:
+        Dict with ``home_win``, ``draw``, ``away_win`` keys summing to ~1.0.
+    h2h_summary:
+        Dict from :func:`scoutfootball.head_to_head.compute_h2h_summary` with
+        ``total_meetings``, ``home_wins``, ``draws``, ``away_wins`` keys.
+    max_correction:
+        Maximum absolute adjustment per outcome (default 0.10).
+    min_meetings:
+        Minimum H2H sample size required to apply any correction (default 3).
+    blend_weight:
+        Fraction of the historical rate to blend into the baseline
+        (0.0 = no correction, 1.0 = fully replace baseline). Default 0.25.
+
+    Returns
+    -------
+    H2HBiasCorrection
+
+    Raises
+    ------
+    ValueError
+        If baseline probabilities are missing keys, don't sum to ~1.0, or
+        ``blend_weight`` is outside [0, 1].
+    """
+    if not 0.0 <= blend_weight <= 1.0:
+        raise ValueError(f"blend_weight must be in [0, 1], got {blend_weight}")
+
+    required_keys = {"home_win", "draw", "away_win"}
+    missing = sorted(required_keys.difference(baseline_probabilities.keys()))
+    if missing:
+        raise ValueError(f"baseline_probabilities missing keys: {missing}")
+
+    base_home = float(baseline_probabilities["home_win"])
+    base_draw = float(baseline_probabilities["draw"])
+    base_away = float(baseline_probabilities["away_win"])
+    base_sum = base_home + base_draw + base_away
+    if not 0.95 <= base_sum <= 1.05:
+        raise ValueError(
+            f"baseline_probabilities must sum to ~1.0, got {base_sum:.4f}"
+        )
+
+    total_meetings = int(h2h_summary.get("total_meetings", 0))
+    home_wins = int(h2h_summary.get("home_wins", 0))
+    draws = int(h2h_summary.get("draws", 0))
+    away_wins = int(h2h_summary.get("away_wins", 0))
+
+    disclaimer = (
+        "H2H bias correction is a heuristic nudge based on a small historical "
+        "sample and should not replace domain judgment. Corrections are "
+        "bounded and blended to avoid overfitting to rare matchup patterns."
+    )
+
+    if total_meetings < min_meetings or total_meetings == 0:
+        # No correction possible — echo baseline back unchanged.
+        rates = {"home_win": 0.0, "draw": 0.0, "away_win": 0.0}
+        adjustments = {"home_win": 0.0, "draw": 0.0, "away_win": 0.0}
+        corrected = {"home_win": base_home, "draw": base_draw, "away_win": base_away}
+        return H2HBiasCorrection(
+            home_team=home_team,
+            away_team=away_team,
+            baseline_probabilities=corrected,
+            corrected_probabilities=corrected,
+            h2h_rates=rates,
+            adjustments=adjustments,
+            n_meetings=total_meetings,
+            correction_applied=False,
+            disclaimer=disclaimer,
+        )
+
+    hist_home = home_wins / total_meetings
+    hist_draw = draws / total_meetings
+    hist_away = away_wins / total_meetings
+    rates = {
+        "home_win": round(hist_home, 4),
+        "draw": round(hist_draw, 4),
+        "away_win": round(hist_away, 4),
+    }
+
+    # Raw blend: baseline * (1 - w) + historical * w
+    raw_home = base_home * (1.0 - blend_weight) + hist_home * blend_weight
+    raw_draw = base_draw * (1.0 - blend_weight) + hist_draw * blend_weight
+    raw_away = base_away * (1.0 - blend_weight) + hist_away * blend_weight
+
+    # Clip per-outcome adjustment to ±max_correction relative to baseline.
+    adj_home = max(-max_correction, min(max_correction, raw_home - base_home))
+    adj_draw = max(-max_correction, min(max_correction, raw_draw - base_draw))
+    adj_away = max(-max_correction, min(max_correction, raw_away - base_away))
+
+    corrected_home = base_home + adj_home
+    corrected_draw = base_draw + adj_draw
+    corrected_away = base_away + adj_away
+
+    # Re-normalize to sum to 1.0 (guard against zero sum).
+    total = corrected_home + corrected_draw + corrected_away
+    if total <= 0.0:
+        corrected_home = base_home
+        corrected_draw = base_draw
+        corrected_away = base_away
+        adj_home = 0.0
+        adj_draw = 0.0
+        adj_away = 0.0
+    else:
+        corrected_home /= total
+        corrected_draw /= total
+        corrected_away /= total
+
+    adjustments = {
+        "home_win": round(corrected_home - base_home, 4),
+        "draw": round(corrected_draw - base_draw, 4),
+        "away_win": round(corrected_away - base_away, 4),
+    }
+    corrected = {
+        "home_win": round(corrected_home, 4),
+        "draw": round(corrected_draw, 4),
+        "away_win": round(corrected_away, 4),
+    }
+    correction_applied = any(abs(v) > 1e-6 for v in adjustments.values())
+
+    return H2HBiasCorrection(
+        home_team=home_team,
+        away_team=away_team,
+        baseline_probabilities={
+            "home_win": round(base_home, 4),
+            "draw": round(base_draw, 4),
+            "away_win": round(base_away, 4),
+        },
+        corrected_probabilities=corrected,
+        h2h_rates=rates,
+        adjustments=adjustments,
+        n_meetings=total_meetings,
+        correction_applied=correction_applied,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prediction error analysis (worst-match identification)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ErrorMatchEntry:
+    """A single match with its prediction error contribution."""
+
+    match_id: str | int | None
+    home_goals: int | None
+    away_goals: int | None
+    actual_outcome: str
+    predicted_home_win: float
+    predicted_draw: float
+    predicted_away_win: float
+    predicted_outcome: str
+    confidence: float
+    brier: float
+    log_loss: float | None
+    correct: bool
+
+
+@dataclass(frozen=True)
+class ErrorAnalysisBucket:
+    """Per-confidence-band error summary."""
+
+    bucket_label: str
+    bucket_lower: float
+    bucket_upper: float
+    n_predictions: int
+    avg_confidence: float
+    accuracy: float
+    avg_brier: float
+    avg_log_loss: float | None
+    worst_matches: list[ErrorMatchEntry]
+
+
+@dataclass(frozen=True)
+class ErrorAnalysisReport:
+    """Full error analysis: per-band buckets plus overall worst matches."""
+
+    buckets: list[ErrorAnalysisBucket]
+    overall_accuracy: float
+    overall_avg_brier: float
+    overall_avg_log_loss: float | None
+    n_predictions: int
+    n_buckets: int
+    worst_matches_overall: list[ErrorMatchEntry]
+
+
+def _brier_per_match(
+    home_prob: float, draw_prob: float, away_prob: float, actual: str
+) -> float:
+    """Per-match Brier score for 1x2 outcomes (lower is better)."""
+    actual_vec = {
+        "home_win": [1.0, 0.0, 0.0],
+        "draw": [0.0, 1.0, 0.0],
+        "away_win": [0.0, 0.0, 1.0],
+    }.get(actual, [0.0, 0.0, 0.0])
+    probs = [home_prob, draw_prob, away_prob]
+    return float(
+        sum((p - a) ** 2 for p, a in zip(probs, actual_vec, strict=True)) / 2.0
+    )
+
+
+def _log_loss_per_match(
+    exact_score_prob: float | None, actual_home: int, actual_away: int
+) -> float | None:
+    """Per-match log loss contribution (requires exact_score_probability)."""
+    if exact_score_prob is None or exact_score_prob <= 0.0:
+        return None
+    return -float(np.log(exact_score_prob))
+
+
+def _row_to_error_entry(
+    row: pd.Series, has_home_goals: bool, has_away_goals: bool
+) -> ErrorMatchEntry:
+    """Convert a DataFrame row to an ErrorMatchEntry."""
+    ll = row.get("_log_loss")
+    home_goals = (
+        int(row["home_goals"])
+        if has_home_goals and pd.notna(row.get("home_goals"))
+        else None
+    )
+    away_goals = (
+        int(row["away_goals"])
+        if has_away_goals and pd.notna(row.get("away_goals"))
+        else None
+    )
+    log_loss_val = (
+        round(float(ll), 4)
+        if ll is not None and pd.notna(ll)
+        else None
+    )
+    return ErrorMatchEntry(
+        match_id=row.get("match_id"),
+        home_goals=home_goals,
+        away_goals=away_goals,
+        actual_outcome=str(row["actual_outcome"]),
+        predicted_home_win=round(float(row["home_win_probability"]), 4),
+        predicted_draw=round(float(row["draw_probability"]), 4),
+        predicted_away_win=round(float(row["away_win_probability"]), 4),
+        predicted_outcome=str(row["_predicted_outcome"]),
+        confidence=round(float(row["_top_prob"]), 4),
+        brier=round(float(row["_brier"]), 4),
+        log_loss=log_loss_val,
+        correct=bool(row["_correct"]),
+    )
+
+
+def _safe_log_loss_avg(series: pd.Series, has_exact: bool) -> float | None:
+    """Compute mean log loss, returning None when not applicable."""
+    if not has_exact:
+        return None
+    dropped = series.dropna()
+    if dropped.empty:
+        return None
+    val = float(dropped.mean())
+    if np.isnan(val):
+        return None
+    return round(val, 4)
+
+
+def compute_error_analysis(
+    predictions: pd.DataFrame,
+    *,
+    n_bins: int = 5,
+    min_samples_per_bucket: int = 5,
+    top_n: int = 5,
+) -> ErrorAnalysisReport:
+    """Analyze prediction errors grouped by confidence band.
+
+    Buckets predictions by max predicted probability (confidence) into
+    ``n_bins`` equal-width buckets, and per bucket computes accuracy,
+    average Brier, average log-loss (when ``exact_score_probability`` is
+    present), and the ``top_n`` worst matches (highest Brier).
+
+    Parameters
+    ----------
+    predictions:
+        DataFrame with ``home_win_probability``, ``draw_probability``,
+        ``away_win_probability``, ``actual_outcome`` columns. Optional:
+        ``match_id``, ``home_goals``, ``away_goals``,
+        ``exact_score_probability``.
+    n_bins:
+        Number of equal-width confidence buckets between 1/3 and 1.0
+        (default 5, range [2, 20]). Predictions with confidence below 1/3
+        are grouped into the first bucket.
+    min_samples_per_bucket:
+        Buckets with fewer samples are excluded (default 5).
+    top_n:
+        Number of worst matches to surface per bucket (default 5, range
+        [1, 50]).
+
+    Returns
+    -------
+    ErrorAnalysisReport
+
+    Raises
+    ------
+    ValueError
+        If ``n_bins`` is not in [2, 20], ``top_n`` is not in [1, 50], or
+        required columns are missing.
+    """
+    if not 2 <= n_bins <= 20:
+        raise ValueError(f"n_bins must be in [2, 20], got {n_bins}")
+    if not 1 <= top_n <= 50:
+        raise ValueError(f"top_n must be in [1, 50], got {top_n}")
+
+    required = {
+        "home_win_probability", "draw_probability",
+        "away_win_probability", "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        raise ValueError(f"predictions missing required columns: {missing}")
+
+    prob_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    outcome_map = {
+        "home_win_probability": "home_win",
+        "draw_probability": "draw",
+        "away_win_probability": "away_win",
+    }
+
+    df = predictions.copy()
+    df["_top_prob"] = df[prob_cols].max(axis=1).astype(float)
+    df["_predicted_outcome"] = df[prob_cols].idxmax(axis=1).map(outcome_map)
+    df["_correct"] = (df["_predicted_outcome"] == df["actual_outcome"]).astype(int)
+    df["_brier"] = df.apply(
+        lambda r: _brier_per_match(
+            float(r["home_win_probability"]),
+            float(r["draw_probability"]),
+            float(r["away_win_probability"]),
+            r["actual_outcome"],
+        ),
+        axis=1,
+    )
+
+    has_exact = "exact_score_probability" in df.columns
+    has_home_goals = "home_goals" in df.columns
+    has_away_goals = "away_goals" in df.columns
+    if has_exact:
+        df["_log_loss"] = df.apply(
+            lambda r: _log_loss_per_match(
+                float(r["exact_score_probability"])
+                if pd.notna(r["exact_score_probability"])
+                else None,
+                int(r["home_goals"]) if has_home_goals and pd.notna(r.get("home_goals")) else 0,
+                int(r["away_goals"]) if has_away_goals and pd.notna(r.get("away_goals")) else 0,
+            ),
+            axis=1,
+        )
+    else:
+        df["_log_loss"] = None
+
+    # Confidence buckets: 1/n_outcomes (1/3) to 1.0
+    lo_floor = 1.0 / 3.0
+    edges = np.linspace(lo_floor, 1.0, n_bins + 1)
+    buckets: list[ErrorAnalysisBucket] = []
+    for i in range(n_bins):
+        lo = edges[i]
+        hi = edges[i + 1]
+        if i == n_bins - 1:
+            mask = (df["_top_prob"] >= lo) & (df["_top_prob"] <= hi)
+        elif i == 0:
+            # First bucket also catches sub-1/3 confidence predictions.
+            mask = df["_top_prob"] < hi
+        else:
+            mask = (df["_top_prob"] >= lo) & (df["_top_prob"] < hi)
+        count = int(mask.sum())
+        if count < min_samples_per_bucket:
+            continue
+        sub = df[mask].copy()
+        sub_sorted = sub.sort_values("_brier", ascending=False).head(top_n)
+        worst: list[ErrorMatchEntry] = [
+            _row_to_error_entry(row, has_home_goals, has_away_goals)
+            for _, row in sub_sorted.iterrows()
+        ]
+        avg_log = _safe_log_loss_avg(sub["_log_loss"], has_exact)
+        buckets.append(ErrorAnalysisBucket(
+            bucket_label=f"{lo:.2f}-{hi:.2f}",
+            bucket_lower=round(float(lo), 4),
+            bucket_upper=round(float(hi), 4),
+            n_predictions=count,
+            avg_confidence=round(float(sub["_top_prob"].mean()), 4),
+            accuracy=round(float(sub["_correct"].mean()), 4),
+            avg_brier=round(float(sub["_brier"].mean()), 4),
+            avg_log_loss=avg_log,
+            worst_matches=worst,
+        ))
+
+    n_total = len(df)
+    overall_acc = float(df["_correct"].mean()) if n_total > 0 else 0.0
+    overall_brier = float(df["_brier"].mean()) if n_total > 0 else 0.0
+    overall_log = _safe_log_loss_avg(df["_log_loss"], has_exact)
+    overall_log_raw = (
+        float(overall_log) if overall_log is not None else None
+    )
+
+    # Overall worst matches
+    df_sorted = df.sort_values("_brier", ascending=False).head(top_n)
+    worst_overall: list[ErrorMatchEntry] = [
+        _row_to_error_entry(row, has_home_goals, has_away_goals)
+        for _, row in df_sorted.iterrows()
+    ]
+
+    return ErrorAnalysisReport(
+        buckets=buckets,
+        overall_accuracy=round(overall_acc, 4),
+        overall_avg_brier=round(overall_brier, 4),
+        overall_avg_log_loss=overall_log_raw,
+        n_predictions=n_total,
+        n_buckets=len(buckets),
+        worst_matches_overall=worst_overall,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Outcome distribution analysis (predicted vs actual 1x2 distribution)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OutcomeDistributionEntry:
+    """Per-outcome predicted vs actual distribution row."""
+
+    outcome: str
+    predicted_count: int
+    predicted_share: float
+    actual_count: int
+    actual_share: float
+    distribution_gap: float
+
+
+@dataclass(frozen=True)
+class OutcomeDistributionReport:
+    """Compares the model's predicted 1x2 distribution to the actual one.
+
+    Reveals whether the model systematically over-predicts one outcome
+    (e.g. too many home wins) or under-predicts another (e.g. too few
+    draws).
+    """
+
+    entries: list[OutcomeDistributionEntry]
+    n_predictions: int
+    predicted_most_likely: dict[str, int]
+    actual_counts: dict[str, int]
+    dominant_bias: str
+    disclaimer: str
+
+
+def compute_outcome_distribution(
+    predictions: pd.DataFrame,
+) -> OutcomeDistributionReport:
+    """Compare predicted 1x2 outcome distribution to actual outcomes.
+
+    For each match, the model's "predicted outcome" is the argmax of
+    ``home_win_probability`` / ``draw_probability`` / ``away_probability``.
+    The function tallies how often each outcome is predicted vs how often
+    it actually occurred, and reports the per-outcome distribution gap.
+
+    Parameters
+    ----------
+    predictions:
+        DataFrame with ``home_win_probability``, ``draw_probability``,
+        ``away_win_probability``, and ``actual_outcome`` columns.
+
+    Returns
+    -------
+    OutcomeDistributionReport
+
+    Raises
+    ------
+    ValueError
+        If required columns are missing.
+    """
+    required = {
+        "home_win_probability", "draw_probability",
+        "away_win_probability", "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        raise ValueError(f"predictions missing required columns: {missing}")
+
+    prob_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    outcome_map = {
+        "home_win_probability": "home_win",
+        "draw_probability": "draw",
+        "away_win_probability": "away_win",
+    }
+
+    df = predictions.copy()
+    df["_predicted_outcome"] = df[prob_cols].idxmax(axis=1).map(outcome_map)
+
+    n_total = len(df)
+    disclaimer = (
+        "Distribution gaps reflect the model's argmax predictions, not the "
+        "mean predicted probability. A non-zero gap indicates systematic "
+        "over- or under-prediction of an outcome class."
+    )
+
+    if n_total == 0:
+        empty_entries = [
+            OutcomeDistributionEntry(
+                outcome=o,
+                predicted_count=0,
+                predicted_share=0.0,
+                actual_count=0,
+                actual_share=0.0,
+                distribution_gap=0.0,
+            )
+            for o in ["home_win", "draw", "away_win"]
+        ]
+        return OutcomeDistributionReport(
+            entries=empty_entries,
+            n_predictions=0,
+            predicted_most_likely={"home_win": 0, "draw": 0, "away_win": 0},
+            actual_counts={"home_win": 0, "draw": 0, "away_win": 0},
+            dominant_bias="none",
+            disclaimer=disclaimer,
+        )
+
+    predicted_counts = {"home_win": 0, "draw": 0, "away_win": 0}
+    actual_counts = {"home_win": 0, "draw": 0, "away_win": 0}
+    for po in df["_predicted_outcome"]:
+        if po in predicted_counts:
+            predicted_counts[po] += 1
+    for ao in df["actual_outcome"]:
+        if ao in actual_counts:
+            actual_counts[ao] += 1
+
+    entries: list[OutcomeDistributionEntry] = []
+    for outcome in ["home_win", "draw", "away_win"]:
+        p_count = predicted_counts[outcome]
+        a_count = actual_counts[outcome]
+        p_share = p_count / n_total
+        a_share = a_count / n_total
+        entries.append(OutcomeDistributionEntry(
+            outcome=outcome,
+            predicted_count=p_count,
+            predicted_share=round(p_share, 4),
+            actual_count=a_count,
+            actual_share=round(a_share, 4),
+            distribution_gap=round(p_share - a_share, 4),
+        ))
+
+    # Dominant bias = outcome with largest absolute distribution gap.
+    max_gap_outcome = max(entries, key=lambda e: abs(e.distribution_gap))
+    if abs(max_gap_outcome.distribution_gap) < 1e-4:
+        dominant_bias = "none"
+    elif max_gap_outcome.distribution_gap > 0:
+        dominant_bias = f"over_predicts_{max_gap_outcome.outcome}"
+    else:
+        dominant_bias = f"under_predicts_{max_gap_outcome.outcome}"
+
+    return OutcomeDistributionReport(
+        entries=entries,
+        n_predictions=n_total,
+        predicted_most_likely=predicted_counts,
+        actual_counts=actual_counts,
+        dominant_bias=dominant_bias,
+        disclaimer=disclaimer,
+    )

@@ -565,6 +565,17 @@
                         <div id="match-value-bet-result"></div>
                     </div>
                 </article>
+
+                <article class="liquid-panel chart-panel" id="match-h2h-bias-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="h2h_bias_title">H2H 历史偏差修正</h3>
+                            <span class="kicker" data-i18n="h2h_bias_desc">基于历史交锋结果调整基线预测概率</span>
+                        </div>
+                        <button class="text-button" id="btn-h2h-bias" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="h2h_bias_fetch">修正</button>
+                    </div>
+                    <div id="match-h2h-bias-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <section class="view" id="view-teams" aria-label="teams">
@@ -1663,6 +1674,26 @@
                         <button class="text-button" id="btn-confidence-distribution" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="confidence_dist_fetch">加载</button>
                     </div>
                     <div id="backtest-confidence-distribution-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+                <article class="liquid-panel chart-panel" id="backtest-error-analysis-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="error_analysis_title">预测误差分析</h3>
+                            <span class="kicker" data-i18n="error_analysis_desc">按置信度分桶找出最差预测，定位模型系统性错误</span>
+                        </div>
+                        <button class="text-button" id="btn-error-analysis" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="error_analysis_fetch">加载</button>
+                    </div>
+                    <div id="backtest-error-analysis-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+                <article class="liquid-panel chart-panel" id="backtest-outcome-distribution-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="outcome_dist_title">结果分布偏差</h3>
+                            <span class="kicker" data-i18n="outcome_dist_desc">对比模型预测结果分布与实际结果分布</span>
+                        </div>
+                        <button class="text-button" id="btn-outcome-distribution" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="outcome_dist_fetch">加载</button>
+                    </div>
+                    <div id="backtest-outcome-distribution-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
             </section>
 
