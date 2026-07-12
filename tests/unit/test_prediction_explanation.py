@@ -25,9 +25,12 @@ import pytest
 from scoutfootball.evaluation.backtests import (
     CalibrationComparison,
     compute_calibration_comparison,
+    compute_calibration_drift_heatmap,
+    compute_ci_coverage,
     compute_confidence_distribution,
     compute_confidence_interval_plot,
     compute_error_analysis,
+    compute_feature_importance,
     compute_fold_comparison,
     compute_h2h_bias_correction,
     compute_league_error_analysis,
@@ -3118,4 +3121,473 @@ class TestLeagueErrorAnalysisAPI:
         )
         api_module._BACKTEST_CACHE.clear()
         result = api_module.get_league_error_analysis()
+        assert result["status"] == "not_available"
+
+
+# ---------------------------------------------------------------------------
+# Feature importance ranking
+# ---------------------------------------------------------------------------
+
+
+def _make_feature_predictions_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame with synthetic numeric feature columns."""
+    rng = np.random.default_rng(42)
+    df = _make_predictions_df(n=n)
+    # Add two numeric features; feature_a should be more important (correlated
+    # with error), feature_b is noise.
+    df["feature_a"] = rng.uniform(0.0, 10.0, n)
+    df["feature_b"] = rng.normal(50.0, 5.0, n)
+    df["match_id"] = [f"m{i}" for i in range(n)]
+    return df
+
+
+class TestComputeFeatureImportance:
+    def test_returns_features(self) -> None:
+        df = _make_feature_predictions_df(n=200)
+        result = compute_feature_importance(df)
+        assert result.n_features > 0
+        assert len(result.features) > 0
+
+    def test_feature_fields(self) -> None:
+        df = _make_feature_predictions_df(n=200)
+        result = compute_feature_importance(df)
+        for fe in result.features:
+            assert len(fe.feature) > 0
+            assert fe.importance >= 0.0
+            assert fe.n_matches > 0
+            assert len(fe.bins) > 0
+
+    def test_bin_fields(self) -> None:
+        df = _make_feature_predictions_df(n=200)
+        result = compute_feature_importance(df)
+        for fe in result.features:
+            for b in fe.bins:
+                assert len(b.bin_label) > 0
+                assert b.bin_lower <= b.bin_upper
+                assert b.n_matches > 0
+                assert 0.0 <= b.accuracy <= 1.0
+                assert b.brier >= 0.0
+                assert 0.0 <= b.avg_confidence <= 1.0
+
+    def test_features_sorted_by_importance_desc(self) -> None:
+        df = _make_feature_predictions_df(n=200)
+        result = compute_feature_importance(df)
+        importances = [fe.importance for fe in result.features]
+        assert importances == sorted(importances, reverse=True)
+
+    def test_n_total_matches(self) -> None:
+        df = _make_feature_predictions_df(n=200)
+        result = compute_feature_importance(df)
+        assert result.n_total_matches == sum(fe.n_matches for fe in result.features)
+
+    def test_overall_brier_nonneg(self) -> None:
+        df = _make_feature_predictions_df(n=200)
+        result = compute_feature_importance(df)
+        assert result.overall_brier >= 0.0
+
+    def test_min_samples_filter(self) -> None:
+        df = _make_feature_predictions_df(n=30)
+        # With min_samples_per_bin=20 and only 30 rows, no feature should pass
+        result = compute_feature_importance(df, min_samples_per_bin=20, n_bins=2)
+        assert result.n_features == 0
+
+    def test_explicit_features_list(self) -> None:
+        df = _make_feature_predictions_df(n=200)
+        result = compute_feature_importance(df, features=("feature_a",))
+        assert result.n_features == 1
+        assert result.features[0].feature == "feature_a"
+
+    def test_invalid_n_bins_low_raises(self) -> None:
+        df = _make_feature_predictions_df(n=50)
+        with pytest.raises(ValueError, match="n_bins"):
+            compute_feature_importance(df, n_bins=1)
+
+    def test_invalid_n_bins_high_raises(self) -> None:
+        df = _make_feature_predictions_df(n=50)
+        with pytest.raises(ValueError, match="n_bins"):
+            compute_feature_importance(df, n_bins=21)
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"feature_a": [1.0, 2.0]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_feature_importance(df)
+
+    def test_explicit_missing_feature_raises(self) -> None:
+        df = _make_feature_predictions_df(n=50)
+        with pytest.raises(ValueError, match="feature column not found"):
+            compute_feature_importance(df, features=("nonexistent_col",))
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_feature_predictions_df(n=100)
+        result = compute_feature_importance(df)
+        assert len(result.disclaimer) > 0
+
+
+# ---------------------------------------------------------------------------
+# Confidence band coverage analysis
+# ---------------------------------------------------------------------------
+
+
+def _make_ci_coverage_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame with CI columns for coverage testing."""
+    rng = np.random.default_rng(42)
+    df = _make_predictions_df(n=n)
+    # Create CI bounds around home_win_probability
+    ci_width = rng.uniform(0.05, 0.25, n)
+    df["home_win_ci_lower"] = (df["home_win_probability"] - ci_width / 2).clip(0.0, 1.0)
+    df["home_win_ci_upper"] = (df["home_win_probability"] + ci_width / 2).clip(0.0, 1.0)
+    df["match_id"] = [f"m{i}" for i in range(n)]
+    return df
+
+
+class TestComputeCICoverage:
+    def test_returns_coverage(self) -> None:
+        df = _make_ci_coverage_df(n=200)
+        result = compute_ci_coverage(df)
+        assert 0.0 <= result.overall_coverage <= 1.0
+        assert result.avg_ci_width >= 0.0
+        assert result.n_matches > 0
+
+    def test_bucket_fields(self) -> None:
+        df = _make_ci_coverage_df(n=200)
+        result = compute_ci_coverage(df)
+        for b in result.buckets:
+            assert len(b.bucket_label) > 0
+            assert b.confidence_lower <= b.confidence_upper
+            assert b.n_matches > 0
+            assert 0.0 <= b.empirical_coverage <= 1.0
+            assert b.avg_ci_width >= 0.0
+
+    def test_n_matches_matches_df(self) -> None:
+        df = _make_ci_coverage_df(n=200)
+        result = compute_ci_coverage(df)
+        assert result.n_matches == len(df)
+
+    def test_coverage_assessment_values(self) -> None:
+        df = _make_ci_coverage_df(n=200)
+        result = compute_ci_coverage(df)
+        assert result.coverage_assessment in (
+            "well_calibrated", "undercoverage", "overcoverage",
+            "insufficient_data",
+        )
+
+    def test_nominal_level_propagated(self) -> None:
+        df = _make_ci_coverage_df(n=200)
+        result = compute_ci_coverage(df, nominal_level=0.80)
+        assert result.nominal_level == 0.80
+        for b in result.buckets:
+            assert b.nominal_coverage == 0.80
+
+    def test_min_samples_filter(self) -> None:
+        df = _make_ci_coverage_df(n=30)
+        result = compute_ci_coverage(df, min_samples_per_bucket=50, n_bins=3)
+        assert len(result.buckets) == 0
+
+    def test_missing_ci_columns_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_ci_coverage(df)
+
+    def test_missing_actual_outcome_raises(self) -> None:
+        df = _make_ci_coverage_df(n=50)
+        df = df.drop(columns=["actual_outcome"])
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_ci_coverage(df)
+
+    def test_invalid_n_bins_low_raises(self) -> None:
+        df = _make_ci_coverage_df(n=50)
+        with pytest.raises(ValueError, match="n_bins"):
+            compute_ci_coverage(df, n_bins=1)
+
+    def test_invalid_n_bins_high_raises(self) -> None:
+        df = _make_ci_coverage_df(n=50)
+        with pytest.raises(ValueError, match="n_bins"):
+            compute_ci_coverage(df, n_bins=21)
+
+    def test_custom_ci_columns(self) -> None:
+        df = _make_ci_coverage_df(n=200)
+        df["custom_lo"] = df["home_win_ci_lower"]
+        df["custom_hi"] = df["home_win_ci_upper"]
+        result = compute_ci_coverage(
+            df, ci_lower_col="custom_lo", ci_upper_col="custom_hi",
+        )
+        assert result.n_matches > 0
+
+    def test_empty_df_returns_insufficient(self) -> None:
+        df = _make_ci_coverage_df(n=10)
+        df = df.iloc[:0]
+        result = compute_ci_coverage(df)
+        assert result.coverage_assessment == "insufficient_data"
+        assert result.n_matches == 0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_ci_coverage_df(n=100)
+        result = compute_ci_coverage(df)
+        assert len(result.disclaimer) > 0
+
+
+# ---------------------------------------------------------------------------
+# Calibration drift heatmap
+# ---------------------------------------------------------------------------
+
+
+def _make_drift_heatmap_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame with match_date for drift heatmap testing."""
+    df = _make_predictions_df(n=n)
+    # Spread matches across a year so multiple 90D windows form
+    start = pd.Timestamp("2023-01-01")
+    df["match_date"] = [start + pd.Timedelta(days=int(i * 365 / n)) for i in range(n)]
+    df["match_id"] = [f"m{i}" for i in range(n)]
+    return df
+
+
+class TestComputeCalibrationDriftHeatmap:
+    def test_returns_cells(self) -> None:
+        df = _make_drift_heatmap_df(n=200)
+        result = compute_calibration_drift_heatmap(df)
+        assert result.n_windows > 0
+        assert result.n_confidence_buckets > 0
+        assert len(result.cells) > 0
+
+    def test_cell_fields(self) -> None:
+        df = _make_drift_heatmap_df(n=200)
+        result = compute_calibration_drift_heatmap(df)
+        for c in result.cells:
+            assert len(c.window_label) > 0
+            assert len(c.window_start) > 0
+            assert len(c.window_end) > 0
+            assert len(c.confidence_bucket) > 0
+            assert c.confidence_lower <= c.confidence_upper
+            assert c.n_matches > 0
+            assert 0.0 <= c.accuracy <= 1.0
+            assert c.brier >= 0.0
+            assert c.rps >= 0.0
+
+    def test_n_windows_matches_labels(self) -> None:
+        df = _make_drift_heatmap_df(n=200)
+        result = compute_calibration_drift_heatmap(df)
+        assert result.n_windows == len(result.window_labels)
+
+    def test_n_confidence_buckets_matches_labels(self) -> None:
+        df = _make_drift_heatmap_df(n=200)
+        result = compute_calibration_drift_heatmap(df)
+        assert result.n_confidence_buckets == len(result.confidence_bucket_labels)
+
+    def test_drift_detected_bool(self) -> None:
+        df = _make_drift_heatmap_df(n=200)
+        result = compute_calibration_drift_heatmap(df)
+        assert isinstance(result.drift_detected, bool)
+
+    def test_min_samples_filter(self) -> None:
+        df = _make_drift_heatmap_df(n=50)
+        result = compute_calibration_drift_heatmap(
+            df, min_samples_per_cell=200, n_confidence_bins=3,
+        )
+        assert len(result.cells) == 0
+
+    def test_missing_match_date_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_calibration_drift_heatmap(df)
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"match_date": ["2023-01-01"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_calibration_drift_heatmap(df)
+
+    def test_invalid_n_confidence_bins_low_raises(self) -> None:
+        df = _make_drift_heatmap_df(n=50)
+        with pytest.raises(ValueError, match="n_confidence_bins"):
+            compute_calibration_drift_heatmap(df, n_confidence_bins=1)
+
+    def test_invalid_n_confidence_bins_high_raises(self) -> None:
+        df = _make_drift_heatmap_df(n=50)
+        with pytest.raises(ValueError, match="n_confidence_bins"):
+            compute_calibration_drift_heatmap(df, n_confidence_bins=16)
+
+    def test_log_loss_none_without_exact_score(self) -> None:
+        df = _make_drift_heatmap_df(n=200)
+        result = compute_calibration_drift_heatmap(df)
+        for c in result.cells:
+            assert c.log_loss is None
+
+    def test_log_loss_computed_with_exact_score(self) -> None:
+        df = _make_drift_heatmap_df(n=200)
+        df["exact_score_probability"] = np.full(200, 0.05)
+        result = compute_calibration_drift_heatmap(df)
+        for c in result.cells:
+            assert c.log_loss is not None
+            assert c.log_loss > 0.0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_drift_heatmap_df(n=100)
+        result = compute_calibration_drift_heatmap(df)
+        assert len(result.disclaimer) > 0
+
+    def test_n_total_matches_nonneg(self) -> None:
+        df = _make_drift_heatmap_df(n=200)
+        result = compute_calibration_drift_heatmap(df)
+        assert result.n_total_matches >= 0
+
+
+# ---------------------------------------------------------------------------
+# API: feature importance, CI coverage, drift heatmap
+# ---------------------------------------------------------------------------
+
+
+class TestFeatureImportanceAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_feature_importance()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_feature_predictions_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_feature_importance()
+        assert result["status"] == "ok"
+        assert result["n_features"] > 0
+        assert "features" in result
+        assert "overall_brier" in result
+
+    def test_with_data_no_features(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=80)  # No numeric feature columns
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_feature_importance()
+        # No numeric features found → n_features == 0 but status is still ok
+        assert result["status"] == "ok"
+        assert result["n_features"] == 0
+
+
+class TestCICoverageAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_ci_coverage()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_ci_coverage_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_ci_coverage()
+        assert result["status"] == "ok"
+        assert result["n_matches"] > 0
+        assert "overall_coverage" in result
+        assert "coverage_assessment" in result
+
+    def test_with_data_no_ci_columns(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=80)  # No CI columns
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_ci_coverage()
+        assert result["status"] == "not_available"
+
+
+class TestCalibrationDriftHeatmapAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_calibration_drift_heatmap()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_drift_heatmap_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_calibration_drift_heatmap()
+        assert result["status"] == "ok"
+        assert result["n_windows"] > 0
+        assert "cells" in result
+        assert "drift_detected" in result
+
+    def test_with_data_no_match_date(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=80)  # No match_date column
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_calibration_drift_heatmap()
         assert result["status"] == "not_available"

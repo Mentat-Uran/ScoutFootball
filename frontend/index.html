@@ -1758,6 +1758,39 @@
                     </div>
                     <div id="backtest-league-error-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-feature-importance-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="feature_importance_title">特征重要性排名</h3>
+                            <span class="kicker" data-i18n="feature_importance_desc">按 Brier 分离度排名的输入特征,识别对预测误差影响最大的因子</span>
+                        </div>
+                        <button class="text-button" id="btn-feature-importance" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="feature_importance_fetch">加载</button>
+                    </div>
+                    <div id="backtest-feature-importance-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-ci-coverage-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="ci_coverage_title">置信区间覆盖率</h3>
+                            <span class="kicker" data-i18n="ci_coverage_desc">验证 bootstrap CI 是否达到标称覆盖率,判断区间是否过窄或过宽</span>
+                        </div>
+                        <button class="text-button" id="btn-ci-coverage" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="ci_coverage_fetch">加载</button>
+                    </div>
+                    <div id="backtest-ci-coverage-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-drift-heatmap-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="drift_heatmap_title">校准漂移热力图</h3>
+                            <span class="kicker" data-i18n="drift_heatmap_desc">时间窗口 × 置信度分桶的 Brier/RPS 网格,定位漂移发生的置信区间</span>
+                        </div>
+                        <button class="text-button" id="btn-drift-heatmap" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="drift_heatmap_fetch">加载</button>
+                    </div>
+                    <div id="backtest-drift-heatmap-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->
