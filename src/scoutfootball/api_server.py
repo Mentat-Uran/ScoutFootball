@@ -41,6 +41,7 @@ from scoutfootball.api import (
     get_player_comparison,
     get_player_profile,
     get_player_ratings,
+    get_prediction_attribution,
     get_prediction_calibration,
     get_prediction_summary,
     get_ratings_meta,
@@ -255,6 +256,10 @@ def create_app() -> FastAPI:
     @app.get("/predictions/calibration/comparison")
     def predictions_calibration_comparison():
         return get_calibration_comparison()
+
+    @app.get("/predictions/{home_team}/{away_team}/attribution")
+    def predictions_attribution(home_team: str, away_team: str):
+        return get_prediction_attribution(home_team, away_team)
 
     @app.get("/predictions/{home_team}/{away_team}")
     def predictions(

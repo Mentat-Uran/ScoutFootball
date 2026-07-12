@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -1506,4 +1507,186 @@ def update_probability_at_scoreline(
         remaining_home_lambda,
         remaining_away_lambda,
         max_goals=max_goals,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prediction feature attribution (permutation-based)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PredictionAttribution:
+    """Permutation-based feature attribution for a single match prediction.
+
+    Each entry in ``factors`` quantifies how much a specific driver
+    (home attack, home defense, away attack, away defense, home advantage,
+    league mean goals, rho low-score correction) contributes to the
+    home-win probability relative to a neutral baseline. Positive values
+    mean the factor pushes the prediction toward a home win; negative
+    values push toward an away win.
+
+    The attribution is computed by swapping/neutralizing each factor
+    one at a time and measuring the change in ``home_win`` probability.
+    """
+
+    home_team: str
+    away_team: str
+    baseline_home_win: float
+    baseline_draw: float
+    baseline_away_win: float
+    factors: list[dict[str, Any]]
+
+
+def compute_prediction_attribution(
+    model: DixonColesModel,
+    home_team_id: str,
+    away_team_id: str,
+    *,
+    max_goals: int = 10,
+) -> PredictionAttribution:
+    """Compute permutation-based feature attribution for a DC match prediction.
+
+    Quantifies how each Dixon-Coles parameter contributes to the home-win
+    probability by systematically neutralizing one factor at a time and
+    measuring the resulting change. Factors examined:
+
+    - ``home_attack``: home team's attacking strength (set to 0 = league avg)
+    - ``home_defense``: home team's defensive strength (set to 0)
+    - ``away_attack``: away team's attacking strength (set to 0)
+    - ``away_defense``: away team's defensive strength (set to 0)
+    - ``home_advantage``: home advantage parameter (set to 0)
+    - ``league_mean_goals``: baseline scoring rate (set to 1.0)
+    - ``rho_correction``: low-score tau correction (set to 0 = independent Poisson)
+
+    Parameters
+    ----------
+    model : fitted DixonColesModel.
+    home_team_id, away_team_id : team identifiers present in the model.
+    max_goals : max goals for score matrix (default 10).
+
+    Returns
+    -------
+    PredictionAttribution with baseline probabilities and per-factor deltas.
+    """
+    home_team_id = str(home_team_id)
+    away_team_id = str(away_team_id)
+
+    # Baseline prediction
+    baseline_pred = predict_match_dc(
+        model, home_team_id, away_team_id, max_goals=max_goals
+    )
+    baseline_hw = float(baseline_pred.summary.home_win)
+    baseline_dr = float(baseline_pred.summary.draw)
+    baseline_aw = float(baseline_pred.summary.away_win)
+
+    factors: list[dict[str, Any]] = []
+
+    def _neutralized_prediction(
+        *,
+        home_attack_override: float | None = None,
+        home_defense_override: float | None = None,
+        away_attack_override: float | None = None,
+        away_defense_override: float | None = None,
+        home_advantage_override: float | None = None,
+        league_mean_override: float | None = None,
+        rho_override: float | None = None,
+    ) -> float:
+        """Predict with one factor neutralized, return home_win probability."""
+        modified_attack = dict(model.team_attack)
+        modified_defense = dict(model.team_defense)
+        if home_attack_override is not None:
+            modified_attack[home_team_id] = home_attack_override
+        if home_defense_override is not None:
+            modified_defense[home_team_id] = home_defense_override
+        if away_attack_override is not None:
+            modified_attack[away_team_id] = away_attack_override
+        if away_defense_override is not None:
+            modified_defense[away_team_id] = away_defense_override
+
+        modified_model = DixonColesModel(
+            team_attack=modified_attack,
+            team_defense=modified_defense,
+            home_advantage=(
+                home_advantage_override
+                if home_advantage_override is not None
+                else model.home_advantage
+            ),
+            rho=rho_override if rho_override is not None else model.rho,
+            league_mean_goals=(
+                league_mean_override
+                if league_mean_override is not None
+                else model.league_mean_goals
+            ),
+            num_matches=model.num_matches,
+            half_life_days=model.half_life_days,
+            decay=model.decay,
+        )
+        pred = predict_match_dc(
+            modified_model, home_team_id, away_team_id, max_goals=max_goals
+        )
+        return float(pred.summary.home_win)
+
+    # Each factor: neutralize it and measure the delta in home_win probability
+    # delta = baseline - neutralized => positive means factor increases home_win
+    factor_specs: list[tuple[str, str, dict[str, Any]]] = [
+        (
+            "home_attack",
+            "Home team attacking strength",
+            {"home_attack_override": 0.0},
+        ),
+        (
+            "home_defense",
+            "Home team defensive strength",
+            {"home_defense_override": 0.0},
+        ),
+        (
+            "away_attack",
+            "Away team attacking strength",
+            {"away_attack_override": 0.0},
+        ),
+        (
+            "away_defense",
+            "Away team defensive strength",
+            {"away_defense_override": 0.0},
+        ),
+        (
+            "home_advantage",
+            "Home advantage parameter",
+            {"home_advantage_override": 0.0},
+        ),
+        (
+            "league_mean_goals",
+            "League mean scoring rate",
+            {"league_mean_override": 1.0},
+        ),
+        (
+            "rho_correction",
+            "Dixon-Coles low-score rho correction",
+            {"rho_override": 0.0},
+        ),
+    ]
+
+    for factor_key, factor_label, overrides in factor_specs:
+        neutralized_hw = _neutralized_prediction(**overrides)
+        delta = baseline_hw - neutralized_hw
+        factors.append({
+            "factor": factor_key,
+            "label": factor_label,
+            "baseline_home_win": baseline_hw,
+            "neutralized_home_win": neutralized_hw,
+            "delta": delta,
+            "abs_delta": abs(delta),
+        })
+
+    # Sort by absolute delta descending (most impactful first)
+    factors.sort(key=lambda f: f["abs_delta"], reverse=True)
+
+    return PredictionAttribution(
+        home_team=home_team_id,
+        away_team=away_team_id,
+        baseline_home_win=baseline_hw,
+        baseline_draw=baseline_dr,
+        baseline_away_win=baseline_aw,
+        factors=factors,
     )

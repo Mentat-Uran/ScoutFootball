@@ -2,6 +2,14 @@
 
 ## Recently Merged
 
+- **Prediction Explanation Suite (2026-07-12, Round 24):**
+  1. Added per-league calibration breakdown to `compute_calibration_comparison()` in `backtests.py` — `CalibrationComparison` dataclass gains `by_league: list[dict[str, Any]]` field; when the predictions DataFrame has a `league` column, the function groups by competition, computes per-league Brier/RPS (raw vs recalibrated) with improvement percentages, filters leagues below `min_per_league` (default 20), and sorts by `n_matches` descending. The `by_league` default is an empty tuple for backward compatibility.
+  2. Added permutation-based prediction feature attribution: `PredictionAttribution` dataclass and `compute_prediction_attribution()` in `match_prediction.py` — neutralizes one Dixon-Coles factor at a time (home_attack, home_defense, away_attack, away_defense, home_advantage, league_mean_goals, rho_correction) by setting it to 0 or 1.0, measures the marginal delta in home_win probability, and returns factors sorted by `abs_delta` descending. Each factor entry includes `factor`, `label`, `baseline_home_win`, `neutralized_home_win`, `delta`, and `abs_delta`.
+  3. Fixed ensemble CI cache key collision: `_get_prediction_confidence()` in `api.py` now accepts a `model_type: str = "dixon_coles"` parameter and keys the cache as `f"{home_team}__{away_team}__{model_type}"`, preventing ensemble and DC CIs from overwriting each other. Cache hits now include `cached: True` and `cache_age_seconds` fields; fresh results include `cached: False` and `model_type`.
+  4. API: added `get_prediction_attribution()` function and `GET /predictions/{home_team}/{away_team}/attribution` endpoint (registered before the parameterized `/{home_team}/{away_team}` route). `get_calibration_comparison()` now returns `by_league` array.
+  5. Frontend: added "Prediction Factor Attribution" panel to matches view with baseline probability display, factor table (factor name, neutralized win prob, delta with color coding, rank), and method/model metadata. Added per-league breakdown table to the calibration comparison panel in backtest view. Added 20 bilingual i18n keys (zh/en). Attribution panel shows on match render; button fetches and renders on demand.
+  6. Added 18 unit tests in `test_prediction_explanation.py` covering per-league breakdown (no league column, with league, required fields, sort order, min_per_league filter, overall unchanged), prediction attribution (return type, team names, probability sum, 7 factors, sort order, factor fields, delta formula, home advantage direction, unknown teams), and CI cache key isolation (model_type in key, cached flag, independence between model types). All 18 new tests pass, ruff + node --check clean.
+
 - **Ensemble Weight Optimization and Isotonic Recalibration (2026-07-12, Round 23):**
   1. Added `save_ensemble_weights()` / `load_ensemble_weights()` in `match_prediction.py` — persists optimal ensemble weights to JSON (`ensemble-weights-v1` format) with RPS, match count, and timestamp metadata. `get_ensemble_prediction()` now loads cached optimal weights (falling back to equal weights) and reports `weights_source` ("optimized"/"equal").
   2. Added `IsotonicCalibrator` dataclass, `fit_isotonic_calibrator()`, and `apply_recalibration()` — fits three independent `IsotonicRegression` models (one per 1x2 outcome) on backtest predictions, computes before/after Brier and RPS, and applies recalibration to single predictions with normalization. The calibrator is cached with 10-minute TTL via `_get_isotonic_calibrator()` API helper.
@@ -150,6 +158,7 @@
 - Round 21 is squash-merged to `codex/integration`: World Cup briefing input snapshots now preserve recorded rating-lineage hashes and strength-model parameters without inventing missing values. The next branch should expose the snapshot more prominently in browser UI or add regression coverage without adding sync.
 - Round 22 is squash-merged to `codex/integration`: World Cup briefing lineage UI traces model inputs and export provenance.
 - Round 23 is squash-merged to `codex/integration` (`ccb7c01`): ensemble weight optimization, isotonic recalibration, and per-score-line calibration comparison are now fully wired through models → evaluation → API → CLI → frontend. The next branch should run `optimize-ensemble` on real data to populate cached weights, or expand prediction analytics (e.g. per-league calibration, SHAP-style feature attribution).
+- Round 24 is squash-merged to `codex/integration`: per-league calibration breakdown, permutation-based prediction feature attribution, and ensemble CI cache key isolation are now fully wired through models → evaluation → API → frontend. The next branch should run `optimize-ensemble` on real data to populate cached weights, or add browser integration coverage for the new attribution/calibration panels.
 
 ## Known Blockers
 
@@ -165,6 +174,6 @@
 5. Add browser-level regression coverage for schedule-to-briefing navigation and local tactical-plan creation.
 6. Add a display of briefing export provenance in the tactical-board export preview.
 7. Run `optimize-ensemble` on real data to populate cached weights and verify end-to-end workflow.
-8. Per-league calibration breakdown: extend `compute_calibration_comparison` to group by competition.
-9. Prediction feature attribution: add SHAP-style or permutation-based explanations for match predictions.
-10. Bootstrap confidence interval caching for ensemble predictions to reduce API latency.
+8. Add browser integration coverage for the new prediction attribution and per-league calibration panels.
+9. Extend prediction attribution to ensemble models (currently DC-only) and add confidence intervals on factor deltas.
+10. Add a model diagnostics dashboard surfacing calibration drift, per-league breakdown, and attribution summaries in one view.

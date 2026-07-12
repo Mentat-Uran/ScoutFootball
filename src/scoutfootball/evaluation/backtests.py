@@ -1057,17 +1057,23 @@ class CalibrationComparison:
     so users can see where isotonic recalibration helps most.
     ``improvement`` expresses the relative change as a percentage
     (negative = improvement, since lower Brier/RPS is better).
+    ``by_league`` breaks the comparison down by competition (when the
+    ``league`` column is present), requiring at least ``min_per_league``
+    matches per league for a stable estimate.
     """
 
     overall: dict[str, float]
     by_score_line: list[dict[str, Any]]
     n_matches: int
     improvement: dict[str, float]
+    by_league: list[dict[str, Any]] = ()  # default empty tuple for backward compat
 
 
 def compute_calibration_comparison(
     predictions: pd.DataFrame,
     calibrator: object,
+    *,
+    min_per_league: int = 20,
 ) -> CalibrationComparison:
     """Compare raw vs isotonic-recalibrated predictions per score line.
 
@@ -1075,12 +1081,15 @@ def compute_calibration_comparison(
     ----------
     predictions : DataFrame with ``home_win_probability``,
         ``draw_probability``, ``away_win_probability``, ``actual_outcome``
-        and optionally ``home_goals``/``away_goals``.
+        and optionally ``home_goals``/``away_goals``. When a ``league``
+        column is present, per-league breakdown is also computed.
     calibrator : IsotonicCalibrator with fitted isotonic regressors.
+    min_per_league : minimum matches required for a league to appear in
+        the ``by_league`` breakdown (default 20).
 
     Returns
     -------
-    CalibrationComparison with overall and per-score-line metrics.
+    CalibrationComparison with overall, per-score-line and per-league metrics.
     """
     from scoutfootball.models.match_prediction import (
         _compute_rps,
@@ -1177,11 +1186,69 @@ def compute_calibration_comparison(
                 entry["rps_improvement_pct"] = 0.0
             by_score_line.append(entry)
 
+    # Per-league breakdown (only when league column is present)
+    by_league: list[dict[str, Any]] = []
+    if "league" in predictions.columns:
+        for league_name, group in predictions.groupby("league"):
+            n_lg = len(group)
+            if n_lg < min_per_league:
+                continue
+            lg_probs = group.loc[
+                :, ["home_win_probability", "draw_probability", "away_win_probability"]
+            ].to_numpy()
+            lg_outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+            lg_actual_idx = np.array(
+                [lg_outcome_map[o] for o in group["actual_outcome"]]
+            )
+            lg_actual_onehot = np.zeros_like(lg_probs)
+            lg_actual_onehot[np.arange(len(lg_actual_idx)), lg_actual_idx] = 1.0
+            lg_recalibrated = np.array([
+                list(apply_recalibration(
+                    calibrator,
+                    float(lg_probs[i, 0]),
+                    float(lg_probs[i, 1]),
+                    float(lg_probs[i, 2]),
+                ))
+                for i in range(len(group))
+            ])
+            lg_brier_raw = float(
+                np.mean(np.sum((lg_probs - lg_actual_onehot) ** 2, axis=1))
+            )
+            lg_brier_recal = float(
+                np.mean(np.sum((lg_recalibrated - lg_actual_onehot) ** 2, axis=1))
+            )
+            lg_rps_raw = _compute_rps(lg_probs, lg_actual_onehot)
+            lg_rps_recal = _compute_rps(lg_recalibrated, lg_actual_onehot)
+            lg_entry: dict[str, Any] = {
+                "league": str(league_name),
+                "n_matches": n_lg,
+                "brier_raw": lg_brier_raw,
+                "brier_recalibrated": lg_brier_recal,
+                "rps_raw": lg_rps_raw,
+                "rps_recalibrated": lg_rps_recal,
+            }
+            if lg_brier_raw > 0:
+                lg_entry["brier_improvement_pct"] = float(
+                    (lg_brier_recal - lg_brier_raw) / lg_brier_raw * 100
+                )
+            else:
+                lg_entry["brier_improvement_pct"] = 0.0
+            if lg_rps_raw > 0:
+                lg_entry["rps_improvement_pct"] = float(
+                    (lg_rps_recal - lg_rps_raw) / lg_rps_raw * 100
+                )
+            else:
+                lg_entry["rps_improvement_pct"] = 0.0
+            by_league.append(lg_entry)
+        # Sort by n_matches descending for a stable, useful order
+        by_league.sort(key=lambda e: e["n_matches"], reverse=True)
+
     return CalibrationComparison(
         overall=overall,
         by_score_line=by_score_line,
         n_matches=len(predictions),
         improvement=improvement,
+        by_league=by_league,
     )
 
 
