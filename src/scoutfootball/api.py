@@ -1883,6 +1883,280 @@ def get_team_accuracy(team_id: str, *, min_predictions: int = 3) -> dict:
         return {"status": "error", "message": str(exc)}
 
 
+def get_model_comparison() -> dict:
+    """Return a unified comparison of all available backtest models.
+
+    Loads all backtest prediction parquet files (Poisson, Dixon-Coles,
+    Dixon-Coles-decay) and computes aligned metrics (log_loss, brier, rps,
+    accuracy, avg_confidence, calibration_gap) on the intersection of
+    matches. Determines the winning model per metric. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = "model_comparison"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_model_comparison
+
+        settings = _settings()
+        bt_dir = settings.report_root / "calibration_backtest"
+
+        model_files = [
+            ("poisson", "poisson_backtest_predictions.parquet"),
+            ("dixon_coles", "dixon_coles_backtest_predictions.parquet"),
+            ("dixon_coles_decay", "dixon_coles_decay_backtest_predictions.parquet"),
+        ]
+
+        model_predictions: dict[str, Any] = {}
+        for model_key, filename in model_files:
+            path = bt_dir / filename
+            if not path.exists():
+                continue
+            df = _read_parquet(path)
+            if df.empty:
+                continue
+            if "actual_outcome" not in df.columns:
+                if "home_goals" in df.columns and "away_goals" in df.columns:
+                    import numpy as np
+
+                    df["actual_outcome"] = np.where(
+                        df["home_goals"] > df["away_goals"],
+                        "home_win",
+                        np.where(
+                            df["home_goals"] == df["away_goals"],
+                            "draw",
+                            "away_win",
+                        ),
+                    )
+            model_predictions[model_key] = df
+
+        if not model_predictions:
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball backtest' to generate prediction artifacts"
+                ),
+            }
+        else:
+            comparison = compute_model_comparison(model_predictions)
+            result = _clean_json_value({
+                "status": "ok",
+                "n_aligned": comparison.n_aligned,
+                "n_models": comparison.n_models,
+                "models": [
+                    {
+                        "model": e.model,
+                        "label": e.label,
+                        "n_predictions": e.n_predictions,
+                        "log_loss": e.log_loss,
+                        "brier": e.brier,
+                        "rps": e.rps,
+                        "accuracy": e.accuracy,
+                        "avg_confidence": e.avg_confidence,
+                        "calibration_gap": e.calibration_gap,
+                    }
+                    for e in comparison.models
+                ],
+                "metric_winners": comparison.metric_winners,
+            })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_scoreline_calibration(*, max_scoreline: int = 5, min_samples: int = 3) -> dict:
+    """Return score-line calibration from backtest predictions.
+
+    Groups predictions by actual score-line and compares predicted vs
+    actual 1x2 outcome rates per score-line bucket. Prefers Dixon-Coles
+    decay predictions, falls back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = f"scoreline_cal_{max_scoreline}_{min_samples}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_scoreline_calibration
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_scoreline_calibration(
+                    preds_df,
+                    max_scoreline=max_scoreline,
+                    min_samples=min_samples,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_matches": report.n_matches,
+                    "n_scorelines": report.n_scorelines,
+                    "entries": [
+                        {
+                            "scoreline": e.scoreline,
+                            "outcome": e.outcome,
+                            "n_matches": e.n_matches,
+                            "avg_home_win_prob": e.avg_home_win_prob,
+                            "avg_draw_prob": e.avg_draw_prob,
+                            "avg_away_win_prob": e.avg_away_win_prob,
+                            "actual_home_win_rate": e.actual_home_win_rate,
+                            "actual_draw_rate": e.actual_draw_rate,
+                            "actual_away_win_rate": e.actual_away_win_rate,
+                        }
+                        for e in report.entries
+                    ],
+                    "outcome_summary": report.outcome_summary,
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_confidence_distribution(*, n_bins: int = 10, min_samples_per_bucket: int = 5) -> dict:
+    """Return prediction confidence distribution from backtest predictions.
+
+    Buckets predictions by max probability (confidence) and computes
+    accuracy per bucket. Prefers Dixon-Coles decay predictions, falls back
+    to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = f"confidence_dist_{n_bins}_{min_samples_per_bucket}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_confidence_distribution
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_confidence_distribution(
+                    preds_df,
+                    n_bins=n_bins,
+                    min_samples_per_bucket=min_samples_per_bucket,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_predictions": report.n_predictions,
+                    "n_buckets": report.n_buckets,
+                    "overall_accuracy": report.overall_accuracy,
+                    "overall_confidence": report.overall_confidence,
+                    "buckets": [
+                        {
+                            "bucket_label": b.bucket_label,
+                            "bucket_lower": b.bucket_lower,
+                            "bucket_upper": b.bucket_upper,
+                            "n_predictions": b.n_predictions,
+                            "accuracy": b.accuracy,
+                            "avg_confidence": b.avg_confidence,
+                            "calibration_gap": b.calibration_gap,
+                        }
+                        for b in report.buckets
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
     """Return an aggregated prediction diagnostics summary for a fixture.
 

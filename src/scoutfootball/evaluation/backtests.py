@@ -1786,3 +1786,505 @@ def compute_team_accuracy(
         total_predictions=total_predictions,
         n_teams=len(entries),
     )
+
+
+# ---------------------------------------------------------------------------
+# Model comparison dashboard
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ModelComparisonEntry:
+    """Per-model metrics for the unified comparison dashboard."""
+
+    model: str
+    label: str
+    n_predictions: int
+    log_loss: float | None
+    brier: float | None
+    rps: float | None
+    accuracy: float | None
+    avg_confidence: float | None
+    calibration_gap: float | None
+
+
+@dataclass(frozen=True)
+class ModelComparison:
+    """Unified comparison of multiple models on aligned predictions.
+
+    ``models`` is a list of :class:`ModelComparisonEntry`, one per model.
+    ``metric_winners`` maps metric name to the winning model key.
+    ``n_aligned`` is the number of matches shared across all models.
+    """
+
+    models: list[ModelComparisonEntry]
+    metric_winners: dict[str, str]
+    n_aligned: int
+    n_models: int
+
+
+def _compute_prediction_metrics(df: pd.DataFrame) -> dict[str, float | None]:
+    """Compute log_loss/brier/rps/accuracy/confidence/calibration_gap.
+
+    Returns a dict with ``None`` values for metrics that cannot be computed
+    because the required columns are missing.
+    """
+    result: dict[str, float | None] = {
+        "log_loss": None,
+        "brier": None,
+        "rps": None,
+        "accuracy": None,
+        "avg_confidence": None,
+        "calibration_gap": None,
+    }
+    prob_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    if "actual_outcome" not in df.columns:
+        return result
+    has_probs = all(c in df.columns for c in prob_cols)
+    if not has_probs:
+        return result
+
+    n = len(df)
+    if n == 0:
+        return result
+
+    # Brier and RPS
+    probs = df.loc[:, prob_cols].to_numpy(dtype=float)
+    actual_vec = np.vstack(
+        df["actual_outcome"].map(
+            {
+                "home_win": [1.0, 0.0, 0.0],
+                "draw": [0.0, 1.0, 0.0],
+                "away_win": [0.0, 0.0, 1.0],
+            },
+        ),
+    )
+    result["brier"] = float(np.mean(np.sum((probs - actual_vec) ** 2, axis=1)))
+
+    # RPS: cumulative over [away, draw, home] ordering
+    rps_probs = df.loc[
+        :,
+        ["away_win_probability", "draw_probability", "home_win_probability"],
+    ].to_numpy(dtype=float)
+    rps_actual = np.vstack(
+        df["actual_outcome"].map(
+            {
+                "away_win": [1.0, 0.0, 0.0],
+                "draw": [0.0, 1.0, 0.0],
+                "home_win": [0.0, 0.0, 1.0],
+            },
+        ),
+    )
+    cum_probs = np.cumsum(rps_probs, axis=1)
+    cum_actual = np.cumsum(rps_actual, axis=1)
+    result["rps"] = float(np.mean(np.sum((cum_probs - cum_actual) ** 2, axis=1) / 2.0))
+
+    # Accuracy (hit rate of most-likely outcome)
+    outcome_map = {
+        "home_win_probability": "home_win",
+        "draw_probability": "draw",
+        "away_win_probability": "away_win",
+    }
+    predicted = df[prob_cols].idxmax(axis=1).map(outcome_map)
+    correct = (predicted == df["actual_outcome"]).astype(int)
+    result["accuracy"] = float(correct.mean())
+
+    # Confidence and calibration gap
+    top_probs = df[prob_cols].max(axis=1).to_numpy(dtype=float)
+    avg_conf = float(top_probs.mean())
+    result["avg_confidence"] = avg_conf
+    result["calibration_gap"] = round(avg_conf - result["accuracy"], 4)
+
+    # Log loss (exact score) — only if exact_score_probability column exists
+    if "exact_score_probability" in df.columns:
+        probabilities = df["exact_score_probability"].clip(lower=1e-12)
+        result["log_loss"] = float(-(np.log(probabilities)).mean())
+
+    return result
+
+
+def compute_model_comparison(
+    model_predictions: dict[str, pd.DataFrame],
+    *,
+    align_on: str = "match_id",
+) -> ModelComparison:
+    """Compare multiple models on a unified set of aligned predictions.
+
+    Parameters
+    ----------
+    model_predictions:
+        Mapping of model key (e.g. ``"poisson"``, ``"dixon_coles"``) to the
+        backtest predictions DataFrame. Each DataFrame must contain at least
+        ``home_win_probability``, ``draw_probability``,
+        ``away_win_probability``, ``actual_outcome``, and the ``align_on``
+        column.
+    align_on:
+        Column used to align predictions across models (default
+        ``"match_id"``). Only matches present in **all** models are scored.
+
+    Returns
+    -------
+    ModelComparison
+        Per-model metrics computed on the aligned intersection, plus the
+        winning model per metric (lowest value wins for all metrics except
+        ``accuracy``, where highest wins).
+
+    Raises
+    ------
+    ValueError
+        If ``model_predictions`` is empty or a DataFrame is missing the
+        ``align_on`` column.
+    """
+    if not model_predictions:
+        raise ValueError("model_predictions must not be empty")
+
+    # Determine the aligned match set (intersection across all models)
+    aligned_ids: set | None = None
+    for model_key, df in model_predictions.items():
+        if align_on not in df.columns:
+            raise ValueError(
+                f"model_predictions[{model_key!r}] missing align column {align_on!r}"
+            )
+        ids = set(df[align_on].dropna().tolist())
+        if aligned_ids is None:
+            aligned_ids = ids
+        else:
+            aligned_ids &= ids
+
+    if not aligned_ids:
+        return ModelComparison(
+            models=[],
+            metric_winners={},
+            n_aligned=0,
+            n_models=len(model_predictions),
+        )
+
+    metric_keys = ["log_loss", "brier", "rps", "accuracy", "avg_confidence", "calibration_gap"]
+    entries: list[ModelComparisonEntry] = []
+
+    for model_key, df in model_predictions.items():
+        aligned_df = df[df[align_on].isin(aligned_ids)].copy()
+        metrics = _compute_prediction_metrics(aligned_df)
+        entries.append(ModelComparisonEntry(
+            model=model_key,
+            label=model_key.replace("_", " ").title(),
+            n_predictions=len(aligned_df),
+            log_loss=metrics["log_loss"],
+            brier=metrics["brier"],
+            rps=metrics["rps"],
+            accuracy=metrics["accuracy"],
+            avg_confidence=metrics["avg_confidence"],
+            calibration_gap=metrics["calibration_gap"],
+        ))
+
+    # Determine winners: lower is better for log_loss/brier/rps/calibration_gap;
+    # higher is better for accuracy/avg_confidence.
+    higher_is_better = {"accuracy", "avg_confidence"}
+    metric_winners: dict[str, str] = {}
+    for mk in metric_keys:
+        candidates: list[tuple[str, float]] = []
+        for e in entries:
+            v = getattr(e, mk)
+            if v is not None:
+                candidates.append((e.model, float(v)))
+        if not candidates:
+            continue
+        if mk in higher_is_better:
+            winner = max(candidates, key=lambda x: x[1])[0]
+        else:
+            winner = min(candidates, key=lambda x: x[1])[0]
+        metric_winners[mk] = winner
+
+    return ModelComparison(
+        models=entries,
+        metric_winners=metric_winners,
+        n_aligned=len(aligned_ids),
+        n_models=len(entries),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Score-line calibration matrix
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ScorelineCalibrationEntry:
+    """Calibration data for a single actual score-line bucket."""
+
+    scoreline: str
+    outcome: str
+    n_matches: int
+    avg_home_win_prob: float
+    avg_draw_prob: float
+    avg_away_win_prob: float
+    actual_home_win_rate: float
+    actual_draw_rate: float
+    actual_away_win_rate: float
+
+
+@dataclass(frozen=True)
+class ScorelineCalibration:
+    """Score-line calibration matrix data.
+
+    ``entries`` is a list of :class:`ScorelineCalibrationEntry`, one per
+    actual score-line bucket, sorted by frequency descending.
+    ``outcome_summary`` aggregates by 1x2 outcome.
+    """
+
+    entries: list[ScorelineCalibrationEntry]
+    outcome_summary: list[dict[str, Any]]
+    n_matches: int
+    n_scorelines: int
+
+
+def compute_scoreline_calibration(
+    predictions: pd.DataFrame,
+    *,
+    max_scoreline: int = 5,
+    min_samples: int = 3,
+) -> ScorelineCalibration:
+    """Compute score-line calibration: predicted vs actual by score-line bucket.
+
+    Groups predictions by actual score-line (e.g. ``"1-0"``, ``"0-0"``).
+    Score-lines where either team's goals exceed ``max_scoreline`` are
+    bucketed as ``"{max}+"`` (e.g. ``"5+"``). For each bucket, computes the
+    average predicted 1x2 probabilities and the actual 1x2 outcome rates,
+    revealing whether the model is well-calibrated for specific score-line
+    types.
+
+    Parameters
+    ----------
+    predictions:
+        DataFrame with ``home_goals``, ``away_goals``,
+        ``home_win_probability``, ``draw_probability``,
+        ``away_win_probability``, and ``actual_outcome`` columns.
+    max_scoreline:
+        Goals above this value are bucketed as ``"{max}+"`` (default 5).
+    min_samples:
+        Minimum matches required for a score-line bucket to be included
+        (default 3).
+
+    Returns
+    -------
+    ScorelineCalibration
+
+    Raises
+    ------
+    ValueError
+        If required columns are missing.
+    """
+    required = {
+        "home_goals", "away_goals",
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        raise ValueError(f"predictions missing required columns: {missing}")
+
+    df = predictions.copy()
+    df["home_goals"] = pd.to_numeric(df["home_goals"], errors="coerce")
+    df["away_goals"] = pd.to_numeric(df["away_goals"], errors="coerce")
+    df = df.dropna(subset=["home_goals", "away_goals"])
+    df["home_goals"] = df["home_goals"].astype(int)
+    df["away_goals"] = df["away_goals"].astype(int)
+
+    def _scoreline_label(h: int, a: int) -> str:
+        hl = f"{h}" if h <= max_scoreline else f"{max_scoreline}+"
+        al = f"{a}" if a <= max_scoreline else f"{max_scoreline}+"
+        return f"{hl}-{al}"
+
+    df["_scoreline"] = df.apply(
+        lambda r: _scoreline_label(int(r["home_goals"]), int(r["away_goals"])),
+        axis=1,
+    )
+
+    entries: list[ScorelineCalibrationEntry] = []
+    outcome_acc: dict[str, dict[str, Any]] = {}
+
+    for scoreline, group in df.groupby("_scoreline"):
+        n = len(group)
+        if n < min_samples:
+            continue
+        avg_hw = float(group["home_win_probability"].mean())
+        avg_d = float(group["draw_probability"].mean())
+        avg_aw = float(group["away_win_probability"].mean())
+        actual_hw = float((group["actual_outcome"] == "home_win").mean())
+        actual_d = float((group["actual_outcome"] == "draw").mean())
+        actual_aw = float((group["actual_outcome"] == "away_win").mean())
+        # Determine the dominant outcome for this score-line
+        if actual_hw >= actual_d and actual_hw >= actual_aw:
+            outcome = "home_win"
+        elif actual_d >= actual_aw:
+            outcome = "draw"
+        else:
+            outcome = "away_win"
+        entries.append(ScorelineCalibrationEntry(
+            scoreline=scoreline,
+            outcome=outcome,
+            n_matches=n,
+            avg_home_win_prob=round(avg_hw, 4),
+            avg_draw_prob=round(avg_d, 4),
+            avg_away_win_prob=round(avg_aw, 4),
+            actual_home_win_rate=round(actual_hw, 4),
+            actual_draw_rate=round(actual_d, 4),
+            actual_away_win_rate=round(actual_aw, 4),
+        ))
+
+    entries.sort(key=lambda e: e.n_matches, reverse=True)
+
+    # Outcome summary
+    prob_col_map = {
+        "home_win": "home_win_probability",
+        "draw": "draw_probability",
+        "away_win": "away_win_probability",
+    }
+    for outcome in ("home_win", "draw", "away_win"):
+        mask = df["actual_outcome"] == outcome
+        n_outcome = int(mask.sum())
+        if n_outcome == 0:
+            continue
+        sub = df[mask]
+        prob_col = prob_col_map[outcome]
+        outcome_acc[outcome] = {
+            "outcome": outcome,
+            "n_matches": n_outcome,
+            "avg_predicted_prob": round(float(sub[prob_col].mean()), 4),
+            "scoreline_distribution": (
+                sub["_scoreline"].value_counts().head(5).to_dict()
+            ),
+        }
+
+    return ScorelineCalibration(
+        entries=entries,
+        outcome_summary=list(outcome_acc.values()),
+        n_matches=len(df),
+        n_scorelines=len(entries),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prediction confidence distribution
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ConfidenceBucket:
+    """One confidence bucket in the prediction confidence distribution."""
+
+    bucket_label: str
+    bucket_lower: float
+    bucket_upper: float
+    n_predictions: int
+    accuracy: float
+    avg_confidence: float
+    calibration_gap: float
+
+
+@dataclass(frozen=True)
+class ConfidenceDistribution:
+    """Distribution of prediction confidence and accuracy per bucket.
+
+    ``buckets`` is a list of :class:`ConfidenceBucket` sorted by confidence
+    ascending. ``overall_accuracy`` and ``overall_confidence`` are the
+    full-sample aggregates.
+    """
+
+    buckets: list[ConfidenceBucket]
+    overall_accuracy: float
+    overall_confidence: float
+    n_predictions: int
+    n_buckets: int
+
+
+def compute_confidence_distribution(
+    predictions: pd.DataFrame,
+    *,
+    n_bins: int = 10,
+    min_samples_per_bucket: int = 5,
+) -> ConfidenceDistribution:
+    """Bucket predictions by max probability and compute accuracy per bucket.
+
+    This reveals whether the model's confidence (max predicted probability)
+    is well-calibrated: in a well-calibrated model, a 70% confidence bucket
+    should have ~70% accuracy.
+
+    Parameters
+    ----------
+    predictions:
+        DataFrame with ``home_win_probability``, ``draw_probability``,
+        ``away_win_probability``, and ``actual_outcome`` columns.
+    n_bins:
+        Number of equal-width confidence buckets between 0 and 1 (default 10).
+    min_samples_per_bucket:
+        Buckets with fewer samples are excluded (default 5).
+
+    Returns
+    -------
+    ConfidenceDistribution
+
+    Raises
+    ------
+    ValueError
+        If ``n_bins`` is not in [2, 50] or required columns are missing.
+    """
+    if not 2 <= n_bins <= 50:
+        raise ValueError(f"n_bins must be in [2, 50], got {n_bins}")
+
+    required = {
+        "home_win_probability", "draw_probability",
+        "away_win_probability", "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        raise ValueError(f"predictions missing required columns: {missing}")
+
+    prob_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    outcome_map = {
+        "home_win_probability": "home_win",
+        "draw_probability": "draw",
+        "away_win_probability": "away_win",
+    }
+
+    df = predictions.copy()
+    df["_top_prob"] = df[prob_cols].max(axis=1).astype(float)
+    df["_predicted_outcome"] = df[prob_cols].idxmax(axis=1).map(outcome_map)
+    df["_correct"] = (df["_predicted_outcome"] == df["actual_outcome"]).astype(int)
+
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    buckets: list[ConfidenceBucket] = []
+    for i in range(n_bins):
+        lo = edges[i]
+        hi = edges[i + 1]
+        if i == n_bins - 1:
+            mask = (df["_top_prob"] >= lo) & (df["_top_prob"] <= hi)
+        else:
+            mask = (df["_top_prob"] >= lo) & (df["_top_prob"] < hi)
+        count = int(mask.sum())
+        if count < min_samples_per_bucket:
+            continue
+        sub = df[mask]
+        acc = float(sub["_correct"].mean())
+        conf = float(sub["_top_prob"].mean())
+        buckets.append(ConfidenceBucket(
+            bucket_label=f"{lo:.1f}-{hi:.1f}",
+            bucket_lower=round(float(lo), 4),
+            bucket_upper=round(float(hi), 4),
+            n_predictions=count,
+            accuracy=round(acc, 4),
+            avg_confidence=round(conf, 4),
+            calibration_gap=round(conf - acc, 4),
+        ))
+
+    n_total = len(df)
+    overall_acc = float(df["_correct"].mean()) if n_total > 0 else 0.0
+    overall_conf = float(df["_top_prob"].mean()) if n_total > 0 else 0.0
+
+    return ConfidenceDistribution(
+        buckets=buckets,
+        overall_accuracy=round(overall_acc, 4),
+        overall_confidence=round(overall_conf, 4),
+        n_predictions=n_total,
+        n_buckets=len(buckets),
+    )

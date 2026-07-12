@@ -25,7 +25,10 @@ import pytest
 from scoutfootball.evaluation.backtests import (
     CalibrationComparison,
     compute_calibration_comparison,
+    compute_confidence_distribution,
+    compute_model_comparison,
     compute_reliability_diagram,
+    compute_scoreline_calibration,
     compute_team_accuracy,
     compute_value_bets,
 )
@@ -1395,3 +1398,476 @@ class TestTeamAccuracyAPI:
             api_module._BACKTEST_CACHE.clear()
             result = api_module.get_team_accuracy("nonexistent_team", min_predictions=1)
             assert result["status"] == "not_found"
+
+
+# ---------------------------------------------------------------------------
+# Model comparison dashboard (compute_model_comparison)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeModelComparison:
+    """Tests for the unified model comparison function."""
+
+    def _make_model_df(
+        self, n: int = 100, *, model_bias: float = 0.0, seed: int = 42,
+    ) -> pd.DataFrame:
+        rng = np.random.default_rng(seed)
+        home_prob = np.clip(rng.uniform(0.2, 0.7, n) + model_bias, 0.05, 0.95)
+        draw_prob = rng.uniform(0.15, 0.3, n)
+        away_prob = 1.0 - home_prob - draw_prob
+        away_prob = np.clip(away_prob, 0.05, 0.9)
+        total = home_prob + draw_prob + away_prob
+        home_prob /= total
+        draw_prob /= total
+        away_prob /= total
+        outcomes = rng.choice(["home_win", "draw", "away_win"], n, p=[0.45, 0.28, 0.27])
+        return pd.DataFrame({
+            "match_id": [f"m{i}" for i in range(n)],
+            "home_win_probability": home_prob,
+            "draw_probability": draw_prob,
+            "away_win_probability": away_prob,
+            "actual_outcome": outcomes,
+        })
+
+    def test_returns_comparison_with_models(self) -> None:
+        models = {
+            "poisson": self._make_model_df(seed=1),
+            "dixon_coles": self._make_model_df(seed=2),
+        }
+        result = compute_model_comparison(models)
+        assert len(result.models) == 2
+        assert result.n_models == 2
+        assert result.n_aligned > 0
+
+    def test_aligned_on_intersection(self) -> None:
+        df1 = self._make_model_df(n=100, seed=1)
+        df2 = self._make_model_df(n=100, seed=2)
+        df2["match_id"] = [f"m{i+50}" for i in range(100)]
+        result = compute_model_comparison({"a": df1, "b": df2})
+        assert result.n_aligned == 50
+
+    def test_empty_dict_raises(self) -> None:
+        with pytest.raises(ValueError, match="must not be empty"):
+            compute_model_comparison({})
+
+    def test_missing_align_column_raises(self) -> None:
+        df = self._make_model_df(seed=1)
+        df_no_id = df.drop(columns=["match_id"])
+        with pytest.raises(ValueError, match="missing align column"):
+            compute_model_comparison({"a": df, "b": df_no_id})
+
+    def test_no_intersection_returns_empty_models(self) -> None:
+        df1 = self._make_model_df(n=50, seed=1)
+        df2 = self._make_model_df(n=50, seed=2)
+        df1["match_id"] = [f"a{i}" for i in range(50)]
+        df2["match_id"] = [f"b{i}" for i in range(50)]
+        result = compute_model_comparison({"a": df1, "b": df2})
+        assert result.models == []
+        assert result.n_aligned == 0
+
+    def test_metric_winners_present(self) -> None:
+        models = {
+            "poisson": self._make_model_df(seed=1),
+            "dixon_coles": self._make_model_df(seed=2),
+        }
+        result = compute_model_comparison(models)
+        assert "brier" in result.metric_winners
+        assert "rps" in result.metric_winners
+        assert "accuracy" in result.metric_winners
+
+    def test_model_entry_fields(self) -> None:
+        models = {"poisson": self._make_model_df(seed=1)}
+        result = compute_model_comparison(models)
+        e = result.models[0]
+        assert e.model == "poisson"
+        assert e.label == "Poisson"
+        assert e.n_predictions > 0
+        assert e.brier is not None
+        assert e.rps is not None
+        assert e.accuracy is not None
+
+    def test_lower_brier_wins(self) -> None:
+        """The model with lower Brier should win the brier metric."""
+        df_good = self._make_model_df(seed=1)
+        # Make df_good well-calibrated by aligning probs with outcomes
+        df_good["home_win_probability"] = np.where(
+            df_good["actual_outcome"] == "home_win", 0.7,
+            np.where(df_good["actual_outcome"] == "draw", 0.2, 0.1),
+        )
+        df_good["draw_probability"] = np.where(
+            df_good["actual_outcome"] == "draw", 0.6, 0.2,
+        )
+        df_good["away_win_probability"] = (
+            1.0 - df_good["home_win_probability"] - df_good["draw_probability"]
+        )
+        df_bad = self._make_model_df(seed=2)
+        result = compute_model_comparison({"good": df_good, "bad": df_bad})
+        good_brier = next(e.brier for e in result.models if e.model == "good")
+        bad_brier = next(e.brier for e in result.models if e.model == "bad")
+        assert good_brier < bad_brier
+        assert result.metric_winners["brier"] == "good"
+
+    def test_higher_accuracy_wins(self) -> None:
+        """The model with higher accuracy should win the accuracy metric."""
+        df_good = self._make_model_df(seed=1)
+        df_bad = self._make_model_df(seed=2)
+        # Force df_good to have higher accuracy by aligning predictions with outcomes
+        df_good["home_win_probability"] = np.where(
+            df_good["actual_outcome"] == "home_win", 0.8,
+            np.where(df_good["actual_outcome"] == "draw", 0.1, 0.1),
+        )
+        df_good["draw_probability"] = np.where(
+            df_good["actual_outcome"] == "draw", 0.8, 0.1,
+        )
+        df_good["away_win_probability"] = (
+            1.0 - df_good["home_win_probability"] - df_good["draw_probability"]
+        )
+        result = compute_model_comparison({"good": df_good, "bad": df_bad})
+        good_acc = next(e.accuracy for e in result.models if e.model == "good")
+        bad_acc = next(e.accuracy for e in result.models if e.model == "bad")
+        assert good_acc > bad_acc
+        assert result.metric_winners["accuracy"] == "good"
+
+    def test_log_loss_none_without_exact_score(self) -> None:
+        df = self._make_model_df(seed=1)
+        result = compute_model_comparison({"poisson": df})
+        assert result.models[0].log_loss is None
+
+    def test_log_loss_computed_with_exact_score(self) -> None:
+        df = self._make_model_df(seed=1)
+        df["exact_score_probability"] = 0.05
+        result = compute_model_comparison({"poisson": df})
+        assert result.models[0].log_loss is not None
+        assert result.models[0].log_loss > 0
+
+
+# ---------------------------------------------------------------------------
+# Score-line calibration (compute_scoreline_calibration)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeScorelineCalibration:
+    """Tests for score-line calibration matrix."""
+
+    def _make_scoreline_df(self, n: int = 200) -> pd.DataFrame:
+        rng = np.random.default_rng(42)
+        home_goals = rng.poisson(1.5, n)
+        away_goals = rng.poisson(1.1, n)
+        outcomes = np.where(
+            home_goals > away_goals, "home_win",
+            np.where(home_goals == away_goals, "draw", "away_win"),
+        )
+        return pd.DataFrame({
+            "home_goals": home_goals,
+            "away_goals": away_goals,
+            "home_win_probability": rng.uniform(0.2, 0.6, n),
+            "draw_probability": rng.uniform(0.2, 0.3, n),
+            "away_win_probability": rng.uniform(0.2, 0.5, n),
+            "actual_outcome": outcomes,
+        })
+
+    def test_returns_entries(self) -> None:
+        df = self._make_scoreline_df(n=300)
+        result = compute_scoreline_calibration(df)
+        assert len(result.entries) > 0
+        assert result.n_matches == 300
+
+    def test_entries_sorted_by_n_matches_desc(self) -> None:
+        df = self._make_scoreline_df(n=500)
+        result = compute_scoreline_calibration(df)
+        n_matches = [e.n_matches for e in result.entries]
+        assert n_matches == sorted(n_matches, reverse=True)
+
+    def test_entry_fields(self) -> None:
+        df = self._make_scoreline_df(n=300)
+        result = compute_scoreline_calibration(df)
+        e = result.entries[0]
+        assert hasattr(e, "scoreline")
+        assert hasattr(e, "outcome")
+        assert hasattr(e, "n_matches")
+        assert hasattr(e, "avg_home_win_prob")
+        assert hasattr(e, "avg_draw_prob")
+        assert hasattr(e, "avg_away_win_prob")
+        assert hasattr(e, "actual_home_win_rate")
+        assert hasattr(e, "actual_draw_rate")
+        assert hasattr(e, "actual_away_win_rate")
+
+    def test_min_samples_filters(self) -> None:
+        df = self._make_scoreline_df(n=100)
+        result_few = compute_scoreline_calibration(df, min_samples=1)
+        result_many = compute_scoreline_calibration(df, min_samples=50)
+        assert len(result_few.entries) >= len(result_many.entries)
+
+    def test_missing_columns_raises(self) -> None:
+        df = pd.DataFrame({"foo": [1, 2, 3]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_scoreline_calibration(df)
+
+    def test_high_score_bucketed(self) -> None:
+        df = self._make_scoreline_df(n=500)
+        # Inject some high-score matches
+        df.loc[:5, "home_goals"] = 7
+        df.loc[:5, "away_goals"] = 0
+        result = compute_scoreline_calibration(df, max_scoreline=5, min_samples=1)
+        scorelines = [e.scoreline for e in result.entries]
+        assert any("5+" in s for s in scorelines)
+
+    def test_outcome_summary(self) -> None:
+        df = self._make_scoreline_df(n=300)
+        result = compute_scoreline_calibration(df)
+        assert len(result.outcome_summary) > 0
+        for s in result.outcome_summary:
+            assert "outcome" in s
+            assert "n_matches" in s
+            assert "avg_predicted_prob" in s
+
+    def test_dominant_outcome_correct(self) -> None:
+        """Score-line 1-0 should have home_win as dominant outcome."""
+        n = 200
+        df = pd.DataFrame({
+            "home_goals": [1] * n,
+            "away_goals": [0] * n,
+            "home_win_probability": [0.5] * n,
+            "draw_probability": [0.3] * n,
+            "away_win_probability": [0.2] * n,
+            "actual_outcome": ["home_win"] * n,
+        })
+        result = compute_scoreline_calibration(df, min_samples=3)
+        assert len(result.entries) == 1
+        assert result.entries[0].outcome == "home_win"
+        assert result.entries[0].actual_home_win_rate == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Confidence distribution (compute_confidence_distribution)
+# ---------------------------------------------------------------------------
+
+
+class TestComputeConfidenceDistribution:
+    """Tests for prediction confidence distribution calibration."""
+
+    def test_returns_buckets(self) -> None:
+        df = _make_predictions_df(n=500)
+        result = compute_confidence_distribution(df, n_bins=10, min_samples_per_bucket=1)
+        assert len(result.buckets) > 0
+        assert result.n_predictions == 500
+
+    def test_bucket_fields(self) -> None:
+        df = _make_predictions_df(n=500)
+        result = compute_confidence_distribution(df, n_bins=10, min_samples_per_bucket=1)
+        b = result.buckets[0]
+        assert hasattr(b, "bucket_label")
+        assert hasattr(b, "bucket_lower")
+        assert hasattr(b, "bucket_upper")
+        assert hasattr(b, "n_predictions")
+        assert hasattr(b, "accuracy")
+        assert hasattr(b, "avg_confidence")
+        assert hasattr(b, "calibration_gap")
+
+    def test_overall_metrics(self) -> None:
+        df = _make_predictions_df(n=500)
+        result = compute_confidence_distribution(df, n_bins=10, min_samples_per_bucket=1)
+        assert 0 <= result.overall_accuracy <= 1
+        assert 0 <= result.overall_confidence <= 1
+
+    def test_min_samples_filters(self) -> None:
+        df = _make_predictions_df(n=100)
+        few = compute_confidence_distribution(df, n_bins=10, min_samples_per_bucket=1)
+        many = compute_confidence_distribution(df, n_bins=10, min_samples_per_bucket=50)
+        assert len(few.buckets) >= len(many.buckets)
+
+    def test_invalid_n_bins_raises(self) -> None:
+        df = _make_predictions_df(n=100)
+        with pytest.raises(ValueError, match="n_bins must be in"):
+            compute_confidence_distribution(df, n_bins=1)
+
+    def test_invalid_n_bins_too_high_raises(self) -> None:
+        df = _make_predictions_df(n=100)
+        with pytest.raises(ValueError, match="n_bins must be in"):
+            compute_confidence_distribution(df, n_bins=51)
+
+    def test_missing_columns_raises(self) -> None:
+        df = pd.DataFrame({"foo": [1, 2, 3]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_confidence_distribution(df)
+
+    def test_perfect_calibration_low_gap(self) -> None:
+        """When confidence == accuracy, calibration gap should be near 0."""
+        n = 1000
+        rng = np.random.default_rng(42)
+        probs = rng.uniform(0.34, 0.9, n)
+        # Make outcomes match the predicted confidence level
+        outcomes = (rng.uniform(0, 1, n) < probs).astype(int)
+        df = pd.DataFrame({
+            "home_win_probability": probs,
+            "draw_probability": 0.1,
+            "away_win_probability": 1.0 - probs - 0.1,
+            "actual_outcome": np.where(outcomes == 1, "home_win", "away_win"),
+        })
+        result = compute_confidence_distribution(df, n_bins=10, min_samples_per_bucket=5)
+        # Overall gap should be small for well-calibrated predictions
+        assert abs(result.overall_confidence - result.overall_accuracy) < 0.15
+
+    def test_buckets_sorted_ascending_by_confidence(self) -> None:
+        df = _make_predictions_df(n=500)
+        result = compute_confidence_distribution(df, n_bins=10, min_samples_per_bucket=1)
+        lowers = [b.bucket_lower for b in result.buckets]
+        assert lowers == sorted(lowers)
+
+
+# ---------------------------------------------------------------------------
+# Model comparison API endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestModelComparisonAPI:
+    """Tests for the get_model_comparison API wrapper."""
+
+    def test_returns_not_available_without_data(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent_path_12345")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_model_comparison()
+        assert result["status"] == "not_available"
+
+    def test_returns_ok_with_data(self, monkeypatch) -> None:
+        import tempfile
+
+        from scoutfootball import api as api_module
+
+        rng = np.random.default_rng(42)
+        n = 100
+        df = pd.DataFrame({
+            "match_id": [f"m{i}" for i in range(n)],
+            "home_win_probability": rng.uniform(0.2, 0.6, n),
+            "draw_probability": rng.uniform(0.2, 0.3, n),
+            "away_win_probability": rng.uniform(0.2, 0.5, n),
+            "actual_outcome": rng.choice(["home_win", "draw", "away_win"], n),
+        })
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "calibration_backtest"
+            tmp_path.mkdir()
+            df.to_parquet(tmp_path / "poisson_backtest_predictions.parquet", index=False)
+
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_model_comparison()
+            assert result["status"] == "ok"
+            assert len(result["models"]) == 1
+            assert "brier" in result["metric_winners"]
+
+
+# ---------------------------------------------------------------------------
+# Score-line calibration API endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestScorelineCalibrationAPI:
+    """Tests for the get_scoreline_calibration API wrapper."""
+
+    def test_returns_not_available_without_data(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent_path_12345")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_scoreline_calibration()
+        assert result["status"] == "not_available"
+
+    def test_returns_ok_with_data(self, monkeypatch) -> None:
+        import tempfile
+
+        from scoutfootball import api as api_module
+
+        rng = np.random.default_rng(42)
+        n = 100
+        home_goals = rng.poisson(1.5, n)
+        away_goals = rng.poisson(1.1, n)
+        outcomes = np.where(
+            home_goals > away_goals, "home_win",
+            np.where(home_goals == away_goals, "draw", "away_win"),
+        )
+        df = pd.DataFrame({
+            "home_goals": home_goals,
+            "away_goals": away_goals,
+            "home_win_probability": rng.uniform(0.2, 0.6, n),
+            "draw_probability": rng.uniform(0.2, 0.3, n),
+            "away_win_probability": rng.uniform(0.2, 0.5, n),
+            "actual_outcome": outcomes,
+        })
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "calibration_backtest"
+            tmp_path.mkdir()
+            df.to_parquet(tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False)
+
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_scoreline_calibration()
+            assert result["status"] == "ok"
+            assert result["n_matches"] == 100
+            assert len(result["entries"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# Confidence distribution API endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestConfidenceDistributionAPI:
+    """Tests for the get_confidence_distribution API wrapper."""
+
+    def test_returns_not_available_without_data(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent_path_12345")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_confidence_distribution()
+        assert result["status"] == "not_available"
+
+    def test_returns_ok_with_data(self, monkeypatch) -> None:
+        import tempfile
+
+        from scoutfootball import api as api_module
+
+        rng = np.random.default_rng(42)
+        n = 200
+        df = pd.DataFrame({
+            "home_win_probability": rng.uniform(0.2, 0.6, n),
+            "draw_probability": rng.uniform(0.2, 0.3, n),
+            "away_win_probability": rng.uniform(0.2, 0.5, n),
+            "actual_outcome": rng.choice(["home_win", "draw", "away_win"], n),
+        })
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "calibration_backtest"
+            tmp_path.mkdir()
+            df.to_parquet(tmp_path / "poisson_backtest_predictions.parquet", index=False)
+
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_confidence_distribution(n_bins=10, min_samples_per_bucket=1)
+            assert result["status"] == "ok"
+            assert result["n_predictions"] == 200
+            assert len(result["buckets"]) > 0
+            assert "overall_accuracy" in result
+            assert "overall_confidence" in result
