@@ -426,6 +426,62 @@ const i18n = {
         confidence_dist_cal_gap: "校准差距",
         confidence_dist_overall_acc: "总体准确率",
         confidence_dist_overall_conf: "总体置信度",
+        error_analysis_title: "预测误差分析",
+        error_analysis_desc: "按置信度分桶找出最差预测，定位模型系统性错误",
+        error_analysis_fetch: "加载",
+        error_analysis_loading: "加载误差分析...",
+        error_analysis_error: "加载误差分析失败",
+        error_analysis_not_available: "暂无回测数据",
+        error_analysis_bucket: "置信度区间",
+        error_analysis_n_pred: "预测数",
+        error_analysis_avg_conf: "平均置信度",
+        error_analysis_accuracy: "准确率",
+        error_analysis_avg_brier: "平均 Brier",
+        error_analysis_avg_log_loss: "平均 LogLoss",
+        error_analysis_worst_matches: "最差预测",
+        error_analysis_overall_worst: "全局最差预测",
+        error_analysis_match_id: "比赛ID",
+        error_analysis_score: "比分",
+        error_analysis_actual: "实际结果",
+        error_analysis_predicted: "预测结果",
+        error_analysis_confidence: "置信度",
+        error_analysis_brier: "Brier",
+        error_analysis_log_loss: "LogLoss",
+        error_analysis_correct: "正确",
+        error_analysis_overall_acc: "总体准确率",
+        error_analysis_overall_brier: "总体 Brier",
+        error_analysis_overall_log_loss: "总体 LogLoss",
+        outcome_dist_title: "结果分布偏差",
+        outcome_dist_desc: "对比模型预测结果分布与实际结果分布",
+        outcome_dist_fetch: "加载",
+        outcome_dist_loading: "加载结果分布...",
+        outcome_dist_error: "加载结果分布失败",
+        outcome_dist_not_available: "暂无回测数据",
+        outcome_dist_outcome: "结果",
+        outcome_dist_pred_count: "预测数",
+        outcome_dist_pred_share: "预测占比",
+        outcome_dist_actual_count: "实际数",
+        outcome_dist_actual_share: "实际占比",
+        outcome_dist_gap: "分布差距",
+        outcome_dist_dominant_bias: "主导偏差",
+        outcome_dist_disclaimer: "说明",
+        h2h_bias_title: "H2H 历史偏差修正",
+        h2h_bias_desc: "基于历史交锋结果调整基线预测概率",
+        h2h_bias_fetch: "修正",
+        h2h_bias_loading: "计算 H2H 偏差修正...",
+        h2h_bias_error: "加载 H2H 偏差修正失败",
+        h2h_bias_not_available: "暂无基线预测或 H2H 数据",
+        h2h_bias_baseline: "基线概率",
+        h2h_bias_corrected: "修正后概率",
+        h2h_bias_adjustments: "调整量",
+        h2h_bias_h2h_rates: "H2H 历史结果率",
+        h2h_bias_n_meetings: "交锋场次",
+        h2h_bias_applied: "已应用修正",
+        h2h_bias_not_applied: "未应用修正（样本不足）",
+        h2h_bias_disclaimer: "免责声明",
+        h2h_bias_home_win: "主胜",
+        h2h_bias_draw: "平",
+        h2h_bias_away_win: "客胜",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -873,6 +929,62 @@ const i18n = {
         confidence_dist_cal_gap: "Calibration Gap",
         confidence_dist_overall_acc: "Overall Accuracy",
         confidence_dist_overall_conf: "Overall Confidence",
+        error_analysis_title: "Prediction Error Analysis",
+        error_analysis_desc: "Bucket by confidence to find worst predictions and systematic errors",
+        error_analysis_fetch: "Load",
+        error_analysis_loading: "Loading error analysis...",
+        error_analysis_error: "Failed to load error analysis",
+        error_analysis_not_available: "No backtest data available",
+        error_analysis_bucket: "Confidence Bucket",
+        error_analysis_n_pred: "Predictions",
+        error_analysis_avg_conf: "Avg Confidence",
+        error_analysis_accuracy: "Accuracy",
+        error_analysis_avg_brier: "Avg Brier",
+        error_analysis_avg_log_loss: "Avg LogLoss",
+        error_analysis_worst_matches: "Worst Matches",
+        error_analysis_overall_worst: "Overall Worst Matches",
+        error_analysis_match_id: "Match ID",
+        error_analysis_score: "Score",
+        error_analysis_actual: "Actual",
+        error_analysis_predicted: "Predicted",
+        error_analysis_confidence: "Confidence",
+        error_analysis_brier: "Brier",
+        error_analysis_log_loss: "LogLoss",
+        error_analysis_correct: "Correct",
+        error_analysis_overall_acc: "Overall Accuracy",
+        error_analysis_overall_brier: "Overall Brier",
+        error_analysis_overall_log_loss: "Overall LogLoss",
+        outcome_dist_title: "Outcome Distribution Bias",
+        outcome_dist_desc: "Compare predicted vs actual 1x2 outcome distribution",
+        outcome_dist_fetch: "Load",
+        outcome_dist_loading: "Loading outcome distribution...",
+        outcome_dist_error: "Failed to load outcome distribution",
+        outcome_dist_not_available: "No backtest data available",
+        outcome_dist_outcome: "Outcome",
+        outcome_dist_pred_count: "Predicted Count",
+        outcome_dist_pred_share: "Predicted Share",
+        outcome_dist_actual_count: "Actual Count",
+        outcome_dist_actual_share: "Actual Share",
+        outcome_dist_gap: "Distribution Gap",
+        outcome_dist_dominant_bias: "Dominant Bias",
+        outcome_dist_disclaimer: "Disclaimer",
+        h2h_bias_title: "H2H Historical Bias Correction",
+        h2h_bias_desc: "Adjust baseline predictions using historical head-to-head results",
+        h2h_bias_fetch: "Correct",
+        h2h_bias_loading: "Computing H2H bias correction...",
+        h2h_bias_error: "Failed to load H2H bias correction",
+        h2h_bias_not_available: "No baseline prediction or H2H data available",
+        h2h_bias_baseline: "Baseline Probabilities",
+        h2h_bias_corrected: "Corrected Probabilities",
+        h2h_bias_adjustments: "Adjustments",
+        h2h_bias_h2h_rates: "H2H Historical Rates",
+        h2h_bias_n_meetings: "Meetings",
+        h2h_bias_applied: "Correction Applied",
+        h2h_bias_not_applied: "No Correction (insufficient sample)",
+        h2h_bias_disclaimer: "Disclaimer",
+        h2h_bias_home_win: "Home Win",
+        h2h_bias_draw: "Draw",
+        h2h_bias_away_win: "Away Win",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -4052,6 +4164,251 @@ async function fetchAndRenderConfidenceDistribution() {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderErrorAnalysis() {
+    const body = document.getElementById("backtest-error-analysis-body");
+    const btn = document.getElementById("btn-error-analysis");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("error_analysis_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/error-analysis?n_bins=5&min_samples_per_bucket=5&top_n=5");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("error_analysis_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("error_analysis_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(4) : String(v));
+        const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">N</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${fmtPct(data.overall_accuracy)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_avg_brier)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_brier"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_avg_log_loss)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_log_loss"))}</div>
+            </div>
+        </div>`;
+        const buckets = Array.isArray(data.buckets) ? data.buckets : [];
+        for (const b of buckets) {
+            html += `<h4 style="margin:0.8rem 0 0.4rem;font-size:0.85rem">${escapeHtml(b.bucket_label)} · ${b.n_predictions} predictions · acc ${fmtPct(b.accuracy)} · brier ${fmt(b.avg_brier)}</h4>`;
+            const worst = Array.isArray(b.worst_matches) ? b.worst_matches : [];
+            if (worst.length === 0) continue;
+            html += `<table class="data-table" style="width:100%;font-size:0.75rem;border-collapse:collapse;margin-bottom:0.5rem">
+                <thead><tr style="text-align:left;border-bottom:1px solid var(--border-color)">
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_match_id"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_score"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_actual"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_predicted"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_confidence"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_brier"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_log_loss"))}</th>
+                </tr></thead><tbody>`;
+            for (const m of worst) {
+                const correctColor = m.correct ? "var(--status-high)" : "var(--status-low)";
+                const scoreStr = (m.home_goals !== null && m.away_goals !== null) ? `${m.home_goals}-${m.away_goals}` : "–";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem;font-family:monospace">${escapeHtml(String(m.match_id ?? "–"))}</td>
+                    <td style="padding:0.25rem;font-family:monospace">${escapeHtml(scoreStr)}</td>
+                    <td style="padding:0.25rem">${escapeHtml(m.actual_outcome)}</td>
+                    <td style="padding:0.25rem;color:${correctColor}">${escapeHtml(m.predicted_outcome)}</td>
+                    <td style="padding:0.25rem">${fmtPct(m.confidence)}</td>
+                    <td style="padding:0.25rem;font-weight:600">${fmt(m.brier)}</td>
+                    <td style="padding:0.25rem">${fmt(m.log_loss)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        }
+        // Overall worst matches
+        const overallWorst = Array.isArray(data.worst_matches_overall) ? data.worst_matches_overall : [];
+        if (overallWorst.length > 0) {
+            html += `<h4 style="margin:1rem 0 0.4rem;font-size:0.85rem">${escapeHtml(t("error_analysis_overall_worst"))}</h4>`;
+            html += `<table class="data-table" style="width:100%;font-size:0.75rem;border-collapse:collapse">
+                <thead><tr style="text-align:left;border-bottom:1px solid var(--border-color)">
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_match_id"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_score"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_actual"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_predicted"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_confidence"))}</th>
+                    <th style="padding:0.25rem">${escapeHtml(t("error_analysis_brier"))}</th>
+                </tr></thead><tbody>`;
+            for (const m of overallWorst) {
+                const correctColor = m.correct ? "var(--status-high)" : "var(--status-low)";
+                const scoreStr = (m.home_goals !== null && m.away_goals !== null) ? `${m.home_goals}-${m.away_goals}` : "–";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem;font-family:monospace">${escapeHtml(String(m.match_id ?? "–"))}</td>
+                    <td style="padding:0.25rem;font-family:monospace">${escapeHtml(scoreStr)}</td>
+                    <td style="padding:0.25rem">${escapeHtml(m.actual_outcome)}</td>
+                    <td style="padding:0.25rem;color:${correctColor}">${escapeHtml(m.predicted_outcome)}</td>
+                    <td style="padding:0.25rem">${fmtPct(m.confidence)}</td>
+                    <td style="padding:0.25rem;font-weight:600">${fmt(m.brier)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("error_analysis_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderOutcomeDistribution() {
+    const body = document.getElementById("backtest-outcome-distribution-body");
+    const btn = document.getElementById("btn-outcome-distribution");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("outcome_dist_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/outcome-distribution");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("outcome_dist_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("outcome_dist_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        const biasColor = (data.dominant_bias && data.dominant_bias !== "none") ? "var(--status-medium)" : "var(--status-high)";
+        let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">N</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${biasColor}">${escapeHtml(data.dominant_bias || "none")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("outcome_dist_dominant_bias"))}</div>
+            </div>
+        </div>`;
+        html += `<table class="data-table" style="width:100%;font-size:0.78rem;border-collapse:collapse">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border-color)">
+                <th style="padding:0.3rem">${escapeHtml(t("outcome_dist_outcome"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("outcome_dist_pred_count"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("outcome_dist_pred_share"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("outcome_dist_actual_count"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("outcome_dist_actual_share"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("outcome_dist_gap"))}</th>
+            </tr></thead><tbody>`;
+        for (const e of entries) {
+            const gapColor = Math.abs(e.distribution_gap) < 0.03 ? "var(--status-high)" : (Math.abs(e.distribution_gap) < 0.10 ? "var(--status-medium)" : "var(--status-low)");
+            html += `<tr style="border-bottom:1px solid var(--border-color)">
+                <td style="padding:0.3rem;font-weight:600">${escapeHtml(e.outcome)}</td>
+                <td style="padding:0.3rem">${e.predicted_count}</td>
+                <td style="padding:0.3rem">${fmtPct(e.predicted_share)}</td>
+                <td style="padding:0.3rem">${e.actual_count}</td>
+                <td style="padding:0.3rem">${fmtPct(e.actual_share)}</td>
+                <td style="padding:0.3rem;color:${gapColor};font-weight:600">${fmtPct(e.distribution_gap)}</td>
+            </tr>`;
+        }
+        html += `</tbody></table>`;
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.6rem;font-size:0.72rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("outcome_dist_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderH2HBiasCorrection() {
+    const body = document.getElementById("match-h2h-bias-body");
+    const btn = document.getElementById("btn-h2h-bias");
+    if (!body) return;
+    const home = appState.selectedHome || "";
+    const away = appState.selectedAway || "";
+    if (!home || !away) {
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("h2h_bias_not_available"))}</p>`;
+        return;
+    }
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("h2h_bias_loading"))}</p>`;
+    try {
+        const data = await apiFetch(`/predictions/${encodeURIComponent(home)}/${encodeURIComponent(away)}/h2h-bias-correction`);
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("h2h_bias_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("h2h_bias_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
+        const applied = data.correction_applied === true;
+        const appliedColor = applied ? "var(--status-medium)" : "var(--text-muted)";
+        const appliedText = applied ? t("h2h_bias_applied") : t("h2h_bias_not_applied");
+        const base = data.baseline_probabilities || {};
+        const corr = data.corrected_probabilities || {};
+        const adj = data.adjustments || {};
+        const rates = data.h2h_rates || {};
+        let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_meetings ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("h2h_bias_n_meetings"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${appliedColor}">${escapeHtml(appliedText)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("h2h_bias_applied"))}</div>
+            </div>
+        </div>`;
+        html += `<table class="data-table" style="width:100%;font-size:0.78rem;border-collapse:collapse">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border-color)">
+                <th style="padding:0.3rem">${escapeHtml(t("h2h_bias_home_win"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("h2h_bias_draw"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("h2h_bias_away_win"))}</th>
+            </tr></thead><tbody>`;
+        html += `<tr style="border-bottom:1px solid var(--border-color)">
+            <td style="padding:0.3rem">${fmtPct(base.home_win)}</td>
+            <td style="padding:0.3rem">${fmtPct(base.draw)}</td>
+            <td style="padding:0.3rem">${fmtPct(base.away_win)}</td>
+        </tr>`;
+        html += `<tr style="border-bottom:1px solid var(--border-color);font-weight:600">
+            <td style="padding:0.3rem">${fmtPct(corr.home_win)}</td>
+            <td style="padding:0.3rem">${fmtPct(corr.draw)}</td>
+            <td style="padding:0.3rem">${fmtPct(corr.away_win)}</td>
+        </tr>`;
+        const adjColor = (v) => Math.abs(v) < 0.005 ? "var(--text-muted)" : (v > 0 ? "var(--status-medium)" : "var(--status-low)");
+        html += `<tr style="border-bottom:1px solid var(--border-color);font-size:0.72rem">
+            <td style="padding:0.3rem;color:${adjColor(adj.home_win || 0)}">${fmtPct(adj.home_win)}</td>
+            <td style="padding:0.3rem;color:${adjColor(adj.draw || 0)}">${fmtPct(adj.draw)}</td>
+            <td style="padding:0.3rem;color:${adjColor(adj.away_win || 0)}">${fmtPct(adj.away_win)}</td>
+        </tr>`;
+        html += `<tr style="font-size:0.72rem;color:var(--text-muted)">
+            <td style="padding:0.3rem">${fmtPct(rates.home_win)}</td>
+            <td style="padding:0.3rem">${fmtPct(rates.draw)}</td>
+            <td style="padding:0.3rem">${fmtPct(rates.away_win)}</td>
+        </tr>`;
+        html += `</tbody></table>`;
+        html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)"><strong>${escapeHtml(t("h2h_bias_baseline"))}:</strong> ${escapeHtml(t("h2h_bias_h2h_rates"))} → ${escapeHtml(t("h2h_bias_corrected"))}</p>`;
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("h2h_bias_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -5068,6 +5425,16 @@ async function renderMatches() {
     }
     if (valueBetResult) {
         valueBetResult.innerHTML = "";
+    }
+
+    // Show H2H bias correction panel (on-demand via button) and reset its body
+    const h2hBiasPanel = document.getElementById("match-h2h-bias-panel");
+    const h2hBiasBody = document.getElementById("match-h2h-bias-body");
+    if (h2hBiasPanel) {
+        h2hBiasPanel.style.display = "block";
+    }
+    if (h2hBiasBody) {
+        h2hBiasBody.innerHTML = "";
     }
 }
 
@@ -7593,6 +7960,10 @@ async function renderBacktest() {
         if (scorelinePanel) scorelinePanel.style.display = "block";
         const confDistPanel = document.getElementById("backtest-confidence-distribution-panel");
         if (confDistPanel) confDistPanel.style.display = "block";
+        const errorAnalysisPanel = document.getElementById("backtest-error-analysis-panel");
+        if (errorAnalysisPanel) errorAnalysisPanel.style.display = "block";
+        const outcomeDistPanel = document.getElementById("backtest-outcome-distribution-panel");
+        if (outcomeDistPanel) outcomeDistPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -8339,6 +8710,36 @@ function bindEvents() {
         confDistBtn.addEventListener("click", () => {
             fetchAndRenderConfidenceDistribution().catch(
                 (e) => console.warn("Confidence distribution failed:", e)
+            );
+        });
+    }
+
+    // Error analysis button: worst matches per confidence bucket
+    const errorAnalysisBtn = document.getElementById("btn-error-analysis");
+    if (errorAnalysisBtn) {
+        errorAnalysisBtn.addEventListener("click", () => {
+            fetchAndRenderErrorAnalysis().catch(
+                (e) => console.warn("Error analysis failed:", e)
+            );
+        });
+    }
+
+    // Outcome distribution button: predicted vs actual 1x2 distribution
+    const outcomeDistBtn = document.getElementById("btn-outcome-distribution");
+    if (outcomeDistBtn) {
+        outcomeDistBtn.addEventListener("click", () => {
+            fetchAndRenderOutcomeDistribution().catch(
+                (e) => console.warn("Outcome distribution failed:", e)
+            );
+        });
+    }
+
+    // H2H bias correction button: adjust baseline with historical H2H rates
+    const h2hBiasBtn = document.getElementById("btn-h2h-bias");
+    if (h2hBiasBtn) {
+        h2hBiasBtn.addEventListener("click", () => {
+            fetchAndRenderH2HBiasCorrection().catch(
+                (e) => console.warn("H2H bias correction failed:", e)
             );
         });
     }

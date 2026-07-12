@@ -35,7 +35,9 @@ from scoutfootball.api import (
     get_ensemble_attribution_ci,
     get_ensemble_prediction,
     get_ensemble_weights,
+    get_error_analysis,
     get_form_weighted_prediction,
+    get_h2h_bias_correction,
     get_head_to_head,
     get_match_momentum,
     get_match_prediction,
@@ -43,6 +45,7 @@ from scoutfootball.api import (
     get_model_comparison,
     get_model_run_detail,
     get_model_runs,
+    get_outcome_distribution,
     get_player_comparison,
     get_player_profile,
     get_player_ratings,
@@ -301,6 +304,22 @@ def create_app() -> FastAPI:
             n_bins=n_bins, min_samples_per_bucket=min_samples_per_bucket,
         )
 
+    @app.get("/predictions/calibration/error-analysis")
+    def predictions_calibration_error_analysis(
+        n_bins: int = Query(5, ge=2, le=20),
+        min_samples_per_bucket: int = Query(5, ge=1, le=100),
+        top_n: int = Query(5, ge=1, le=50),
+    ):
+        return get_error_analysis(
+            n_bins=n_bins,
+            min_samples_per_bucket=min_samples_per_bucket,
+            top_n=top_n,
+        )
+
+    @app.get("/predictions/calibration/outcome-distribution")
+    def predictions_calibration_outcome_distribution():
+        return get_outcome_distribution()
+
     @app.get("/predictions/{home_team}/{away_team}/attribution")
     def predictions_attribution(home_team: str, away_team: str):
         return get_prediction_attribution(home_team, away_team)
@@ -342,6 +361,21 @@ def create_app() -> FastAPI:
         return get_value_bet_analysis(
             home_team, away_team,
             home_odds=home_odds, draw_odds=draw_odds, away_odds=away_odds,
+        )
+
+    @app.get("/predictions/{home_team}/{away_team}/h2h-bias-correction")
+    def predictions_h2h_bias_correction(
+        home_team: str,
+        away_team: str,
+        max_correction: float = Query(0.10, ge=0.0, le=0.30),
+        min_meetings: int = Query(3, ge=1, le=50),
+        blend_weight: float = Query(0.25, ge=0.0, le=1.0),
+    ):
+        return get_h2h_bias_correction(
+            home_team, away_team,
+            max_correction=max_correction,
+            min_meetings=min_meetings,
+            blend_weight=blend_weight,
         )
 
     @app.get("/predictions/{home_team}/{away_team}")

@@ -26,7 +26,10 @@ from scoutfootball.evaluation.backtests import (
     CalibrationComparison,
     compute_calibration_comparison,
     compute_confidence_distribution,
+    compute_error_analysis,
+    compute_h2h_bias_correction,
     compute_model_comparison,
+    compute_outcome_distribution,
     compute_reliability_diagram,
     compute_scoreline_calibration,
     compute_team_accuracy,
@@ -1871,3 +1874,392 @@ class TestConfidenceDistributionAPI:
             assert len(result["buckets"]) > 0
             assert "overall_accuracy" in result
             assert "overall_confidence" in result
+
+
+# ---------------------------------------------------------------------------
+# H2H historical bias correction
+# ---------------------------------------------------------------------------
+
+
+class TestComputeH2HBiasCorrection:
+    def test_no_correction_when_insufficient_meetings(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        h2h = {"total_meetings": 2, "home_wins": 1, "draws": 1, "away_wins": 0}
+        result = compute_h2h_bias_correction("A", "B", baseline, h2h, min_meetings=3)
+        assert result.correction_applied is False
+        assert result.corrected_probabilities == pytest.approx(baseline)
+        assert result.n_meetings == 2
+
+    def test_correction_applied_with_sufficient_meetings(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        # H2H strongly favors away team
+        h2h = {"total_meetings": 10, "home_wins": 1, "draws": 2, "away_wins": 7}
+        result = compute_h2h_bias_correction(
+            "A", "B", baseline, h2h, min_meetings=3, blend_weight=0.5,
+        )
+        assert result.correction_applied is True
+        # Away win probability should increase
+        assert result.corrected_probabilities["away_win"] > baseline["away_win"]
+        # Home win probability should decrease
+        assert result.corrected_probabilities["home_win"] < baseline["home_win"]
+
+    def test_corrected_probabilities_sum_to_one(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        h2h = {"total_meetings": 10, "home_wins": 5, "draws": 3, "away_wins": 2}
+        result = compute_h2h_bias_correction("A", "B", baseline, h2h)
+        total = sum(result.corrected_probabilities.values())
+        assert total == pytest.approx(1.0, abs=1e-4)
+
+    def test_h2h_rates_computed_correctly(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        h2h = {"total_meetings": 10, "home_wins": 4, "draws": 3, "away_wins": 3}
+        result = compute_h2h_bias_correction("A", "B", baseline, h2h)
+        assert result.h2h_rates["home_win"] == pytest.approx(0.4, abs=1e-4)
+        assert result.h2h_rates["draw"] == pytest.approx(0.3, abs=1e-4)
+        assert result.h2h_rates["away_win"] == pytest.approx(0.3, abs=1e-4)
+
+    def test_max_correction_bounds(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        # Extreme H2H — all away wins
+        h2h = {"total_meetings": 10, "home_wins": 0, "draws": 0, "away_wins": 10}
+        result = compute_h2h_bias_correction(
+            "A", "B", baseline, h2h, max_correction=0.05, blend_weight=1.0,
+        )
+        # Each adjustment should be within ±0.05 (before normalization)
+        for adj in result.adjustments.values():
+            assert abs(adj) <= 0.07  # allow small normalization drift
+
+    def test_missing_baseline_keys_raises(self) -> None:
+        h2h = {"total_meetings": 10, "home_wins": 5, "draws": 3, "away_wins": 2}
+        with pytest.raises(ValueError, match="missing keys"):
+            compute_h2h_bias_correction("A", "B", {"home_win": 0.5}, h2h)
+
+    def test_baseline_not_summing_to_one_raises(self) -> None:
+        h2h = {"total_meetings": 10, "home_wins": 5, "draws": 3, "away_wins": 2}
+        with pytest.raises(ValueError, match="sum to ~1.0"):
+            compute_h2h_bias_correction(
+                "A", "B", {"home_win": 0.5, "draw": 0.3, "away_win": 0.5}, h2h,
+            )
+
+    def test_invalid_blend_weight_raises(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        h2h = {"total_meetings": 10, "home_wins": 5, "draws": 3, "away_wins": 2}
+        with pytest.raises(ValueError, match="blend_weight"):
+            compute_h2h_bias_correction("A", "B", baseline, h2h, blend_weight=1.5)
+
+    def test_zero_meetings_no_correction(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        h2h = {"total_meetings": 0, "home_wins": 0, "draws": 0, "away_wins": 0}
+        result = compute_h2h_bias_correction("A", "B", baseline, h2h)
+        assert result.correction_applied is False
+        assert result.n_meetings == 0
+
+    def test_adjustments_equal_corrected_minus_baseline(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        h2h = {"total_meetings": 10, "home_wins": 6, "draws": 2, "away_wins": 2}
+        result = compute_h2h_bias_correction("A", "B", baseline, h2h, blend_weight=0.3)
+        for key in ["home_win", "draw", "away_win"]:
+            expected = result.corrected_probabilities[key] - result.baseline_probabilities[key]
+            assert result.adjustments[key] == pytest.approx(expected, abs=1e-4)
+
+    def test_disclaimer_present(self) -> None:
+        baseline = {"home_win": 0.5, "draw": 0.3, "away_win": 0.2}
+        h2h = {"total_meetings": 10, "home_wins": 5, "draws": 3, "away_wins": 2}
+        result = compute_h2h_bias_correction("A", "B", baseline, h2h)
+        assert len(result.disclaimer) > 0
+
+
+# ---------------------------------------------------------------------------
+# Prediction error analysis
+# ---------------------------------------------------------------------------
+
+
+class TestComputeErrorAnalysis:
+    def test_returns_buckets(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_error_analysis(df, n_bins=5, min_samples_per_bucket=5)
+        assert isinstance(result.buckets, list)
+        assert len(result.buckets) > 0
+
+    def test_bucket_fields(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_error_analysis(df, n_bins=5, min_samples_per_bucket=5)
+        for b in result.buckets:
+            assert b.bucket_label is not None
+            assert b.bucket_lower >= 0.0
+            assert b.bucket_upper <= 1.0
+            assert b.n_predictions > 0
+            assert 0.0 <= b.accuracy <= 1.0
+            assert b.avg_brier >= 0.0
+
+    def test_overall_metrics(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_error_analysis(df, n_bins=5, min_samples_per_bucket=5)
+        assert result.n_predictions == 200
+        assert 0.0 <= result.overall_accuracy <= 1.0
+        assert result.overall_avg_brier >= 0.0
+        assert result.n_buckets > 0
+
+    def test_min_samples_filter(self) -> None:
+        df = _make_predictions_df(n=50)
+        result = compute_error_analysis(df, n_bins=20, min_samples_per_bucket=100)
+        assert len(result.buckets) == 0
+
+    def test_invalid_n_bins_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="n_bins"):
+            compute_error_analysis(df, n_bins=1)
+
+    def test_invalid_top_n_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="top_n"):
+            compute_error_analysis(df, top_n=0)
+
+    def test_missing_columns_raises(self) -> None:
+        df = pd.DataFrame({"foo": [1, 2, 3]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_error_analysis(df)
+
+    def test_worst_matches_present(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_error_analysis(df, n_bins=5, min_samples_per_bucket=5, top_n=3)
+        for b in result.buckets:
+            assert len(b.worst_matches) <= 3
+        assert len(result.worst_matches_overall) <= 3
+
+    def test_worst_match_fields(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_error_analysis(df, n_bins=5, min_samples_per_bucket=5, top_n=2)
+        for b in result.buckets:
+            for m in b.worst_matches:
+                assert m.actual_outcome in ("home_win", "draw", "away_win")
+                assert 0.0 <= m.confidence <= 1.0
+                assert m.brier >= 0.0
+                assert isinstance(m.correct, bool)
+
+    def test_log_loss_none_without_exact_score(self) -> None:
+        df = _make_predictions_df(n=100)
+        # No exact_score_probability column
+        result = compute_error_analysis(df, n_bins=5, min_samples_per_bucket=5)
+        assert result.overall_avg_log_loss is None
+        for b in result.buckets:
+            assert b.avg_log_loss is None
+
+    def test_log_loss_computed_with_exact_score(self) -> None:
+        df = _make_predictions_df(n=100)
+        rng = np.random.default_rng(42)
+        df["exact_score_probability"] = rng.uniform(0.01, 0.1, len(df))
+        result = compute_error_analysis(df, n_bins=5, min_samples_per_bucket=5)
+        assert result.overall_avg_log_loss is not None
+        assert result.overall_avg_log_loss > 0.0
+
+    def test_worst_matches_sorted_by_brier_desc(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_error_analysis(df, n_bins=5, min_samples_per_bucket=5, top_n=5)
+        for b in result.buckets:
+            briars = [m.brier for m in b.worst_matches]
+            assert briars == sorted(briars, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# Outcome distribution analysis
+# ---------------------------------------------------------------------------
+
+
+class TestComputeOutcomeDistribution:
+    def test_returns_entries(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_outcome_distribution(df)
+        assert len(result.entries) == 3
+
+    def test_entry_fields(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_outcome_distribution(df)
+        for e in result.entries:
+            assert e.outcome in ("home_win", "draw", "away_win")
+            assert e.predicted_count >= 0
+            assert e.actual_count >= 0
+            assert 0.0 <= e.predicted_share <= 1.0
+            assert 0.0 <= e.actual_share <= 1.0
+
+    def test_predicted_plus_actual_counts_match_total(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_outcome_distribution(df)
+        total_pred = sum(e.predicted_count for e in result.entries)
+        total_actual = sum(e.actual_count for e in result.entries)
+        assert total_pred == 200
+        assert total_actual == 200
+
+    def test_shares_sum_to_one(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_outcome_distribution(df)
+        pred_share_sum = sum(e.predicted_share for e in result.entries)
+        actual_share_sum = sum(e.actual_share for e in result.entries)
+        assert pred_share_sum == pytest.approx(1.0, abs=1e-4)
+        assert actual_share_sum == pytest.approx(1.0, abs=1e-4)
+
+    def test_distribution_gap_equals_pred_minus_actual(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_outcome_distribution(df)
+        for e in result.entries:
+            expected = e.predicted_share - e.actual_share
+            assert e.distribution_gap == pytest.approx(expected, abs=1e-4)
+
+    def test_dominant_bias_identified(self) -> None:
+        # Construct a model that always predicts home_win
+        df = pd.DataFrame({
+            "home_win_probability": [0.5] * 100,
+            "draw_probability": [0.3] * 100,
+            "away_win_probability": [0.2] * 100,
+            "actual_outcome": ["home_win"] * 30 + ["draw"] * 30 + ["away_win"] * 40,
+        })
+        result = compute_outcome_distribution(df)
+        # Model predicts home_win 100% of the time, but actual home_win is only 30%
+        assert (
+            "over_predicts_home_win" in result.dominant_bias
+            or "under_predicts" in result.dominant_bias
+        )
+
+    def test_no_bias_when_perfect(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.6, 0.2, 0.2] * 30,
+            "draw_probability": [0.2, 0.6, 0.2] * 30,
+            "away_win_probability": [0.2, 0.2, 0.6] * 30,
+            "actual_outcome": ["home_win", "draw", "away_win"] * 30,
+        })
+        result = compute_outcome_distribution(df)
+        # Each outcome predicted 30 times, actual 30 times — gap is 0
+        assert result.dominant_bias == "none"
+
+    def test_missing_columns_raises(self) -> None:
+        df = pd.DataFrame({"foo": [1, 2, 3]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_outcome_distribution(df)
+
+    def test_empty_dataframe_returns_zero(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [],
+            "draw_probability": [],
+            "away_win_probability": [],
+            "actual_outcome": [],
+        })
+        result = compute_outcome_distribution(df)
+        assert result.n_predictions == 0
+        assert result.dominant_bias == "none"
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_predictions_df(n=50)
+        result = compute_outcome_distribution(df)
+        assert len(result.disclaimer) > 0
+
+
+# ---------------------------------------------------------------------------
+# API: H2H bias correction, error analysis, outcome distribution
+# ---------------------------------------------------------------------------
+
+
+class TestH2HBiasCorrectionAPI:
+    def test_no_data_returns_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        def _fake_dc_prediction(home, away):
+            return {"status": "not_available"}
+
+        monkeypatch.setattr(api_module, "get_match_prediction_dc", _fake_dc_prediction)
+        result = api_module.get_h2h_bias_correction("UnknownA", "UnknownB")
+        assert result["status"] == "not_available"
+
+
+class TestErrorAnalysisAPI:
+    def test_no_data_returns_not_available(self, monkeypatch) -> None:
+        import tempfile
+
+        from scoutfootball import api as api_module
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_error_analysis()
+            assert result["status"] == "not_available"
+
+    def test_with_data_returns_ok(self, monkeypatch) -> None:
+        import tempfile
+
+        from scoutfootball import api as api_module
+
+        rng = np.random.default_rng(42)
+        n = 200
+        df = pd.DataFrame({
+            "home_win_probability": rng.uniform(0.2, 0.6, n),
+            "draw_probability": rng.uniform(0.2, 0.3, n),
+            "away_win_probability": rng.uniform(0.2, 0.5, n),
+            "actual_outcome": rng.choice(["home_win", "draw", "away_win"], n),
+            "home_goals": rng.poisson(1.5, n),
+            "away_goals": rng.poisson(1.1, n),
+        })
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "calibration_backtest"
+            tmp_path.mkdir()
+            df.to_parquet(tmp_path / "poisson_backtest_predictions.parquet", index=False)
+
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_error_analysis(n_bins=5, min_samples_per_bucket=5, top_n=3)
+            assert result["status"] == "ok"
+            assert result["n_predictions"] == 200
+            assert len(result["buckets"]) > 0
+            assert "overall_accuracy" in result
+            assert "worst_matches_overall" in result
+
+
+class TestOutcomeDistributionAPI:
+    def test_no_data_returns_not_available(self, monkeypatch) -> None:
+        import tempfile
+
+        from scoutfootball import api as api_module
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_outcome_distribution()
+            assert result["status"] == "not_available"
+
+    def test_with_data_returns_ok(self, monkeypatch) -> None:
+        import tempfile
+
+        from scoutfootball import api as api_module
+
+        rng = np.random.default_rng(42)
+        n = 200
+        df = pd.DataFrame({
+            "home_win_probability": rng.uniform(0.2, 0.6, n),
+            "draw_probability": rng.uniform(0.2, 0.3, n),
+            "away_win_probability": rng.uniform(0.2, 0.5, n),
+            "actual_outcome": rng.choice(["home_win", "draw", "away_win"], n),
+        })
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "calibration_backtest"
+            tmp_path.mkdir()
+            df.to_parquet(tmp_path / "poisson_backtest_predictions.parquet", index=False)
+
+            monkeypatch.setattr(
+                api_module, "_settings",
+                lambda: type("S", (), {"report_root": Path(tmpdir)})(),
+            )
+            api_module._BACKTEST_CACHE.clear()
+            result = api_module.get_outcome_distribution()
+            assert result["status"] == "ok"
+            assert result["n_predictions"] == 200
+            assert len(result["entries"]) == 3
+            assert "dominant_bias" in result
