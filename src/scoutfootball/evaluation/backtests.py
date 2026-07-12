@@ -3357,3 +3357,451 @@ def compute_prediction_staleness(
         staleness_level=level,
         disclaimer=disclaimer,
     )
+
+
+# ---------------------------------------------------------------------------
+# Confidence interval plot data (CI width vs match confidence)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CIPlotPoint:
+    """One point in the confidence interval plot."""
+
+    match_id: str | int | None
+    home_team: str | None
+    away_team: str | None
+    confidence: float
+    ci_lower: float
+    ci_upper: float
+    ci_width: float
+    actual_outcome: str | None
+    correct: bool | None
+
+
+@dataclass(frozen=True)
+class CIPlotReport:
+    """CI width vs match confidence scatter plot data."""
+
+    points: list[CIPlotPoint]
+    n_predictions: int
+    avg_confidence: float
+    avg_ci_width: float
+    correlation: float | None
+    disclaimer: str
+
+
+def compute_confidence_interval_plot(
+    predictions: pd.DataFrame,
+    *,
+    ci_lower_col: str = "home_win_ci_lower",
+    ci_upper_col: str = "home_win_ci_upper",
+    max_points: int = 500,
+) -> CIPlotReport:
+    """Compute CI width vs match confidence scatter plot data.
+
+    Each prediction becomes a point with confidence (max predicted
+    probability), CI lower/upper bounds, CI width, and correctness flag.
+    Useful for visualizing whether high-confidence predictions have
+    narrower CIs.
+
+    Args:
+        predictions: DataFrame with backtest prediction columns plus
+            CI bound columns.
+        ci_lower_col: Column name for CI lower bound (default
+            ``home_win_ci_lower``).
+        ci_upper_col: Column name for CI upper bound (default
+            ``home_win_ci_upper``).
+        max_points: Maximum number of points to return (subsamples if
+            exceeded, keeping first N).
+
+    Returns:
+        CIPlotReport with scatter points and summary statistics.
+
+    Raises:
+        ValueError: If required columns are missing.
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        ci_lower_col, ci_upper_col,
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    disclaimer = (
+        "CI plot shows the relationship between prediction confidence and "
+        "uncertainty interval width; wider CIs at high confidence may "
+        "indicate miscalibration."
+    )
+
+    df = predictions.copy()
+    n_total = len(df)
+    if n_total == 0:
+        return CIPlotReport(
+            points=[],
+            n_predictions=0,
+            avg_confidence=0.0,
+            avg_ci_width=0.0,
+            correlation=None,
+            disclaimer=disclaimer,
+        )
+
+    probs = df.loc[
+        :,
+        ["home_win_probability", "draw_probability", "away_win_probability"],
+    ].to_numpy()
+    df["_confidence"] = np.max(probs, axis=1)
+    df["_ci_width"] = df[ci_upper_col] - df[ci_lower_col]
+
+    has_actual = "actual_outcome" in df.columns
+    if has_actual:
+        outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+        predicted_idx = np.argmax(probs, axis=1)
+        actual_idx = df["actual_outcome"].map(outcome_map).to_numpy()
+        df["_correct"] = predicted_idx == actual_idx
+    else:
+        df["_correct"] = None
+
+    has_match_id = "match_id" in df.columns
+    has_home = "home_team_id" in df.columns or "home_team" in df.columns
+    has_away = "away_team_id" in df.columns or "away_team" in df.columns
+    home_col = "home_team" if "home_team" in df.columns else "home_team_id"
+    away_col = "away_team" if "away_team" in df.columns else "away_team_id"
+
+    if len(df) > max_points:
+        df = df.iloc[:max_points]
+
+    points: list[CIPlotPoint] = []
+    for _, row in df.iterrows():
+        mid = row.get("match_id") if has_match_id else None
+        ht = row.get(home_col) if has_home else None
+        at = row.get(away_col) if has_away else None
+        correct_val = bool(row["_correct"]) if has_actual else None
+        actual_val = str(row["actual_outcome"]) if has_actual else None
+        points.append(CIPlotPoint(
+            match_id=mid,
+            home_team=str(ht) if ht is not None else None,
+            away_team=str(at) if at is not None else None,
+            confidence=round(float(row["_confidence"]), 4),
+            ci_lower=round(float(row[ci_lower_col]), 4),
+            ci_upper=round(float(row[ci_upper_col]), 4),
+            ci_width=round(float(row["_ci_width"]), 4),
+            actual_outcome=actual_val,
+            correct=correct_val,
+        ))
+
+    avg_conf = round(float(df["_confidence"].mean()), 4)
+    avg_width = round(float(df["_ci_width"].mean()), 4)
+    if len(df) >= 2 and df["_confidence"].std() > 0 and df["_ci_width"].std() > 0:
+        corr = round(
+            float(df["_confidence"].corr(df["_ci_width"])), 4,
+        )
+    else:
+        corr = None
+
+    return CIPlotReport(
+        points=points,
+        n_predictions=len(points),
+        avg_confidence=avg_conf,
+        avg_ci_width=avg_width,
+        correlation=corr,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Backtest fold comparison (per-fold metrics + stability)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FoldMetrics:
+    """Metrics for one cross-validation fold."""
+
+    fold: int
+    n_matches: int
+    accuracy: float
+    brier: float
+    rps: float
+    log_loss: float | None
+    avg_confidence: float
+
+
+@dataclass(frozen=True)
+class FoldComparisonReport:
+    """Per-fold metrics comparison with stability indicator."""
+
+    folds: list[FoldMetrics]
+    n_folds: int
+    n_total_matches: int
+    overall_accuracy: float
+    overall_brier: float
+    overall_rps: float
+    overall_log_loss: float | None
+    accuracy_std: float
+    brier_std: float
+    rps_std: float
+    stability: str
+    disclaimer: str
+
+
+def compute_fold_comparison(
+    predictions: pd.DataFrame,
+    *,
+    min_samples_per_fold: int = 5,
+) -> FoldComparisonReport:
+    """Compute per-fold metrics comparison with stability indicator.
+
+    Groups backtest predictions by the ``fold`` column and computes
+    accuracy, Brier, RPS, LogLoss, and avg_confidence per fold. Reports
+    standard deviation of accuracy/Brier/RPS across folds and a stability
+    label (stable/moderate/unstable) based on accuracy std.
+
+    Args:
+        predictions: DataFrame with backtest prediction columns plus a
+            ``fold`` column.
+        min_samples_per_fold: Minimum samples per fold; folds below this
+            threshold are excluded.
+
+    Returns:
+        FoldComparisonReport with per-fold metrics and stability.
+
+    Raises:
+        ValueError: If required columns are missing.
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome", "fold",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    disclaimer = (
+        "Fold stability is based on the standard deviation of per-fold "
+        "accuracy; high variance suggests the model is sensitive to "
+        "temporal splits."
+    )
+
+    df = predictions.copy()
+    has_exact = "exact_score_probability" in df.columns
+
+    fold_ids = sorted(df["fold"].unique())
+    folds: list[FoldMetrics] = []
+    for fid in fold_ids:
+        chunk = df.loc[df["fold"] == fid]
+        if len(chunk) < min_samples_per_fold:
+            continue
+        ll = None
+        if has_exact and "exact_score_probability" in chunk.columns:
+            ll = round(float(_exact_score_log_loss(chunk)), 4)
+        folds.append(FoldMetrics(
+            fold=int(fid),
+            n_matches=len(chunk),
+            accuracy=round(_accuracy_for_df(chunk), 4),
+            brier=round(_brier_1x2(chunk), 4),
+            rps=round(_ranked_probability_score(chunk), 4),
+            log_loss=ll,
+            avg_confidence=round(_avg_confidence_for_df(chunk), 4),
+        ))
+
+    if not folds:
+        return FoldComparisonReport(
+            folds=[],
+            n_folds=0,
+            n_total_matches=0,
+            overall_accuracy=0.0,
+            overall_brier=0.0,
+            overall_rps=0.0,
+            overall_log_loss=None,
+            accuracy_std=0.0,
+            brier_std=0.0,
+            rps_std=0.0,
+            stability="insufficient_data",
+            disclaimer=disclaimer,
+        )
+
+    accs = [f.accuracy for f in folds]
+    briers = [f.brier for f in folds]
+    rpss = [f.rps for f in folds]
+    acc_std = round(float(np.std(accs, ddof=0)), 4)
+    brier_std = round(float(np.std(briers, ddof=0)), 4)
+    rps_std = round(float(np.std(rpss, ddof=0)), 4)
+
+    if acc_std < 0.03:
+        stability = "stable"
+    elif acc_std < 0.08:
+        stability = "moderate"
+    else:
+        stability = "unstable"
+
+    n_total = sum(f.n_matches for f in folds)
+    overall_acc = round(_accuracy_for_df(df), 4)
+    overall_brier = round(_brier_1x2(df), 4)
+    overall_rps = round(_ranked_probability_score(df), 4)
+    overall_ll = None
+    if has_exact:
+        overall_ll = round(float(_exact_score_log_loss(df)), 4)
+
+    return FoldComparisonReport(
+        folds=folds,
+        n_folds=len(folds),
+        n_total_matches=n_total,
+        overall_accuracy=overall_acc,
+        overall_brier=overall_brier,
+        overall_rps=overall_rps,
+        overall_log_loss=overall_ll,
+        accuracy_std=acc_std,
+        brier_std=brier_std,
+        rps_std=rps_std,
+        stability=stability,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-league error analysis (league-grouped worst predictions)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LeagueErrorSummary:
+    """Per-league error summary."""
+
+    league: str
+    n_matches: int
+    accuracy: float
+    brier: float
+    rps: float
+    log_loss: float | None
+    avg_confidence: float
+    worst_matches: list[ErrorMatchEntry]
+
+
+@dataclass(frozen=True)
+class LeagueErrorReport:
+    """Per-league error analysis report."""
+
+    leagues: list[LeagueErrorSummary]
+    n_leagues: int
+    n_total_matches: int
+    overall_accuracy: float
+    overall_brier: float
+    disclaimer: str
+
+
+def compute_league_error_analysis(
+    predictions: pd.DataFrame,
+    *,
+    min_matches_per_league: int = 10,
+    top_n: int = 3,
+) -> LeagueErrorReport:
+    """Compute per-league error analysis with worst predictions.
+
+    Groups backtest predictions by the ``league`` column and computes
+    accuracy, Brier, RPS, LogLoss, and avg_confidence per league. Also
+    extracts the top-N worst predictions (highest Brier) per league.
+
+    Args:
+        predictions: DataFrame with backtest prediction columns plus a
+            ``league`` column.
+        min_matches_per_league: Minimum matches per league; leagues below
+            this threshold are excluded.
+        top_n: Number of worst predictions to extract per league.
+
+    Returns:
+        LeagueErrorReport with per-league summaries.
+
+    Raises:
+        ValueError: If required columns are missing.
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome", "league",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    disclaimer = (
+        "Per-league error analysis reveals whether the model performs "
+        "better or worse on specific competitions; small leagues may "
+        "have high variance."
+    )
+
+    df = predictions.copy()
+    has_exact = "exact_score_probability" in df.columns
+    has_home_goals = "home_goals" in df.columns
+    has_away_goals = "away_goals" in df.columns
+
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+    df["_top_prob"] = df[probs_cols].max(axis=1)
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    df["_predicted_outcome"] = df[probs_cols].idxmax(axis=1).str.replace(
+        "_probability", "", regex=False,
+    )
+    actual_idx = df["actual_outcome"].map(outcome_map)
+    predicted_idx = np.argmax(df[probs_cols].to_numpy(), axis=1)
+    df["_correct"] = predicted_idx == actual_idx.to_numpy()
+
+    def _brier_row(row: pd.Series) -> float:
+        return _brier_per_match(
+            row["home_win_probability"],
+            row["draw_probability"],
+            row["away_win_probability"],
+            str(row["actual_outcome"]),
+        )
+
+    df["_brier"] = df.apply(_brier_row, axis=1)
+    if has_exact:
+        df["_log_loss"] = df["exact_score_probability"].apply(
+            lambda p: _log_loss_per_match(
+                float(p) if pd.notna(p) else None, 0, 0,
+            )
+        )
+    else:
+        df["_log_loss"] = None
+
+    leagues: list[LeagueErrorSummary] = []
+    league_names = sorted(df["league"].dropna().unique())
+    for lg in league_names:
+        chunk = df.loc[df["league"] == lg]
+        if len(chunk) < min_matches_per_league:
+            continue
+        ll = _safe_log_loss_avg(chunk["_log_loss"], has_exact) if has_exact else None
+        worst = chunk.nlargest(top_n, "_brier")
+        worst_entries = [
+            _row_to_error_entry(row, has_home_goals, has_away_goals)
+            for _, row in worst.iterrows()
+        ]
+        leagues.append(LeagueErrorSummary(
+            league=str(lg),
+            n_matches=len(chunk),
+            accuracy=round(_accuracy_for_df(chunk), 4),
+            brier=round(_brier_1x2(chunk), 4),
+            rps=round(_ranked_probability_score(chunk), 4),
+            log_loss=ll,
+            avg_confidence=round(_avg_confidence_for_df(chunk), 4),
+            worst_matches=worst_entries,
+        ))
+
+    leagues.sort(key=lambda x: x.n_matches, reverse=True)
+
+    n_total = sum(lg.n_matches for lg in leagues)
+    overall_acc = round(_accuracy_for_df(df), 4) if n_total > 0 else 0.0
+    overall_brier = round(_brier_1x2(df), 4) if n_total > 0 else 0.0
+
+    return LeagueErrorReport(
+        leagues=leagues,
+        n_leagues=len(leagues),
+        n_total_matches=n_total,
+        overall_accuracy=overall_acc,
+        overall_brier=overall_brier,
+        disclaimer=disclaimer,
+    )

@@ -1725,6 +1725,39 @@
                     </div>
                     <div id="backtest-prediction-staleness-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-ci-plot-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="ci_plot_title">置信区间图</h3>
+                            <span class="kicker" data-i18n="ci_plot_desc">CI 宽度 vs 置信度散点,判断高置信预测是否伴随更窄区间</span>
+                        </div>
+                        <button class="text-button" id="btn-ci-plot" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="ci_plot_fetch">加载</button>
+                    </div>
+                    <div id="backtest-ci-plot-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-fold-comparison-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="fold_comparison_title">折叠对比</h3>
+                            <span class="kicker" data-i18n="fold_comparison_desc">交叉验证折间指标稳定性分析(stable/moderate/unstable)</span>
+                        </div>
+                        <button class="text-button" id="btn-fold-comparison" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="fold_comparison_fetch">加载</button>
+                    </div>
+                    <div id="backtest-fold-comparison-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-league-error-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="league_error_title">联赛误差分析</h3>
+                            <span class="kicker" data-i18n="league_error_desc">按联赛分组的误差与最差预测,识别模型在不同赛事的表现差异</span>
+                        </div>
+                        <button class="text-button" id="btn-league-error" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="league_error_fetch">加载</button>
+                    </div>
+                    <div id="backtest-league-error-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->

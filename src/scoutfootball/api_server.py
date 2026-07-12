@@ -30,15 +30,18 @@ from scoutfootball.api import (
     get_calibration_drift,
     get_calibration_drift_timeline,
     get_confidence_distribution,
+    get_confidence_interval_plot,
     get_decay_tuning,
     get_ensemble_attribution,
     get_ensemble_attribution_ci,
     get_ensemble_prediction,
     get_ensemble_weights,
     get_error_analysis,
+    get_fold_comparison,
     get_form_weighted_prediction,
     get_h2h_bias_correction,
     get_head_to_head,
+    get_league_error_analysis,
     get_match_momentum,
     get_match_prediction,
     get_match_prediction_dc,
@@ -346,6 +349,34 @@ def create_app() -> FastAPI:
     @app.get("/predictions/staleness")
     def predictions_staleness():
         return get_prediction_staleness()
+
+    @app.get("/predictions/calibration/ci-plot")
+    def predictions_calibration_ci_plot(
+        max_points: int = Query(500, ge=10, le=5000),
+        ci_lower_col: str = Query("home_win_ci_lower", max_length=64),
+        ci_upper_col: str = Query("home_win_ci_upper", max_length=64),
+    ):
+        return get_confidence_interval_plot(
+            max_points=max_points,
+            ci_lower_col=ci_lower_col,
+            ci_upper_col=ci_upper_col,
+        )
+
+    @app.get("/predictions/calibration/fold-comparison")
+    def predictions_calibration_fold_comparison(
+        min_samples_per_fold: int = Query(5, ge=1, le=100),
+    ):
+        return get_fold_comparison(min_samples_per_fold=min_samples_per_fold)
+
+    @app.get("/predictions/calibration/league-errors")
+    def predictions_calibration_league_errors(
+        min_matches_per_league: int = Query(10, ge=1, le=200),
+        top_n: int = Query(3, ge=1, le=20),
+    ):
+        return get_league_error_analysis(
+            min_matches_per_league=min_matches_per_league,
+            top_n=top_n,
+        )
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")
     def predictions_attribution(home_team: str, away_team: str):
