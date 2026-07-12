@@ -2,6 +2,11 @@
 
 ## Recently Merged
 
+- **Model-Run Dataset and Feature Lineage (2026-07-12, Round 15):**
+  1. `save_model_run()` now writes a versioned `scoutfootball.model-run-lineage` record with the optimizer input snapshot hash and the feature-manifest hash, version and generation time.
+  2. The model-run registry, run-detail API, static report payload and report UI surface this lineage. Runs created before this capability are explicitly marked `not_recorded`; missing manifests are marked `partial`.
+  3. Added model-run registry and API tests for recorded, partial and legacy lineage states; no historic run is retroactively presented as reproducible.
+
 - **Structured Shortlist Dossiers + World Cup Renderer Repair (2026-07-12, Round 14):**
   1. Upgraded the browser-local scouting workspace to v1.2 with `review.shortlist_dossiers`, keyed by stable player identity and containing validated priority, recommendation, target role, and rationale/risk fields. Existing short-list notes remain readable and are mirrored when dossier rationale is edited.
   2. Added dossier controls to every shortlist card, including mobile layout; the browser-local state is included in export/import, preview summary, conflict analysis, opt-in local API persistence, and the player scouting-report CSV decision section.
@@ -128,7 +133,7 @@
 
 ## Current Development
 
-- Round 14 is committed on `codex/scouting-shortlist-dossiers`; Round 15 (model-run lineage) is ready to commit on `codex/model-run-lineage`. Both are descendants of the clean Round 13 integration commit, but cannot be squash-merged while the checked-out `codex/integration` worktree retains unrelated, uncommitted data artifacts.
+- Rounds 14 and 15 are squash-merged into `codex/integration` as `af4d08b`. `main` fast-forward and the post-merge backup are next; only the two pre-existing, unstaged data artifacts remain in the integration worktree.
 
 ## Known Blockers
 
