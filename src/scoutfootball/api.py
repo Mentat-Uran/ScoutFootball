@@ -909,12 +909,13 @@ def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
         return {"error": str(exc)}
 
 
-def get_ensemble_prediction(home_team: str, away_team: str) -> dict:
+def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool = False) -> dict:
     """Predict a match using an ensemble of Poisson, DC, and form-weighted DC.
 
-    Blends the three model predictions using equal weights (or cached
-    optimal weights if available). Returns the blended prediction plus
-    per-model breakdown for transparency.
+    Blends the three model predictions using cached optimal weights when
+    available (falling back to equal weights). When ``recalibrate`` is True,
+    applies isotonic recalibration to the blended 1x2 probabilities if a
+    fitted calibrator is available from the backtest artifacts.
     """
     try:
         from scoutfootball.models import (
@@ -922,6 +923,7 @@ def get_ensemble_prediction(home_team: str, away_team: str) -> dict:
             fit_dixon_coles,
             fit_dixon_coles_with_form,
             fit_independent_poisson,
+            load_ensemble_weights,
             predict_match,
             predict_match_dc,
         )
@@ -944,12 +946,26 @@ def get_ensemble_prediction(home_team: str, away_team: str) -> dict:
         dc_pred = predict_match_dc(dc_model, str(home_team), str(away_team))
         form_pred = predict_match_dc(form_model, str(home_team), str(away_team))
 
-        # Blend with equal weights (could be optimized via optimize_ensemble_weights)
+        # Use cached optimal weights if available, otherwise equal weights
+        weights_path = (
+            _settings().report_root
+            / "calibration_backtest"
+            / "ensemble_optimal_weights.json"
+        )
+        cached_weights = load_ensemble_weights(weights_path)
+        weights_source = "equal"
+        if cached_weights:
+            weights = cached_weights
+            weights_source = "optimized"
+        else:
+            weights = None
+            weights_source = "equal"
+
         ens = ensemble_prediction({
             "poisson": poisson_pred,
             "dixon_coles": dc_pred,
             "dixon_coles_form": form_pred,
-        })
+        }, weights=weights)
 
         result = {
             "home_team": home_team,
@@ -965,8 +981,34 @@ def get_ensemble_prediction(home_team: str, away_team: str) -> dict:
             "btts_yes": ens.btts_yes,
             "score_matrix": _clean_json_value(ens.score_matrix.to_numpy().tolist()),
             "weights": ens.weights,
+            "weights_source": weights_source,
             "model_predictions": ens.model_predictions,
         }
+
+        # Apply isotonic recalibration if requested and calibrator available
+        if recalibrate:
+            calibrator = _get_isotonic_calibrator()
+            if calibrator is not None:
+                from scoutfootball.models import apply_recalibration
+
+                hw, dr, aw = apply_recalibration(
+                    calibrator,
+                    float(ens.home_win),
+                    float(ens.draw),
+                    float(ens.away_win),
+                )
+                result["raw_home_win"] = ens.home_win
+                result["raw_draw"] = ens.draw
+                result["raw_away_win"] = ens.away_win
+                result["home_win"] = hw
+                result["draw"] = dr
+                result["away_win"] = aw
+                result["recalibrated"] = True
+                result["calibration_n_samples"] = calibrator.n_samples
+            else:
+                result["recalibrated"] = False
+                result["recalibration_note"] = "No calibration artifacts available"
+
         # Add confidence intervals (cached, best-effort)
         ci = _get_prediction_confidence(home_team, away_team)
         if ci:
@@ -1106,6 +1148,209 @@ def get_calibration_drift() -> dict:
 
         _BACKTEST_CACHE[cache_key] = result
         _BACKTEST_CACHE["drift_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+# --- Isotonic calibrator cache ---
+_CALIBRATOR_CACHE: dict[str, Any] = {"calibrator": None, "timestamp": 0.0}
+_CALIBRATOR_TTL_SECONDS = 600  # 10 minutes
+
+
+def _get_isotonic_calibrator(*, force_refresh: bool = False) -> object | None:
+    """Return a cached IsotonicCalibrator fitted from backtest predictions.
+
+    Reads the DC decay backtest predictions parquet (which has the best
+    calibration) and fits isotonic regression. Returns None if artifacts
+    are missing.
+    """
+    import time as _time
+
+    now = _time.time()
+    cached = _CALIBRATOR_CACHE.get("calibrator")
+    if (
+        not force_refresh
+        and cached is not None
+        and now - _CALIBRATOR_CACHE.get("timestamp", 0) < _CALIBRATOR_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        settings = _settings()
+        # Prefer DC-with-decay predictions (best calibrated model)
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            # Fall back to Poisson predictions
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            return None
+
+        preds_df = _read_parquet(pred_path)
+        if preds_df.empty:
+            return None
+
+        # Ensure actual_outcome column exists
+        if "actual_outcome" not in preds_df.columns:
+            if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                import numpy as np
+
+                preds_df["actual_outcome"] = np.where(
+                    preds_df["home_goals"] > preds_df["away_goals"],
+                    "home_win",
+                    np.where(
+                        preds_df["home_goals"] == preds_df["away_goals"],
+                        "draw",
+                        "away_win",
+                    ),
+                )
+            else:
+                return None
+
+        calibrator = fit_isotonic_calibrator(preds_df)
+        _CALIBRATOR_CACHE["calibrator"] = calibrator
+        _CALIBRATOR_CACHE["timestamp"] = now
+        return calibrator
+    except Exception:
+        return None
+
+
+def get_ensemble_weights() -> dict:
+    """Return the cached ensemble optimal weights and their provenance.
+
+    If no optimization has been run yet, returns ``not_available`` with
+    instructions on how to generate the weights.
+    """
+    import json
+
+    try:
+        weights_path = (
+            _settings().report_root
+            / "calibration_backtest"
+            / "ensemble_optimal_weights.json"
+        )
+        if not weights_path.exists():
+            return {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball optimize-ensemble' to compute "
+                    "and cache optimal ensemble weights"
+                ),
+                "default_weights": {
+                    "poisson": 0.33,
+                    "dixon_coles": 0.34,
+                    "dixon_coles_form": 0.33,
+                },
+            }
+
+        with open(weights_path, encoding="utf-8") as f:
+            data = json.load(f)
+        return _clean_json_value({
+            "status": "ok",
+            "weights": data.get("weights"),
+            "rps": data.get("rps"),
+            "n_matches": data.get("n_matches"),
+            "saved_at": data.get("saved_at"),
+            "format": data.get("format"),
+            "path": str(weights_path),
+        })
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_calibration_comparison() -> dict:
+    """Return a per-score-line comparison of raw vs recalibrated predictions.
+
+    Fits an isotonic calibrator from the backtest predictions and compares
+    raw vs recalibrated Brier/RPS overall and per score line.
+    """
+    import time
+
+    cache_key = "calibration_comparison"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get("calibration_comparison_timestamp", 0)
+        < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_calibration_comparison
+
+        calibrator = _get_isotonic_calibrator()
+        if calibrator is None:
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts first"
+                ),
+            }
+        else:
+            settings = _settings()
+            # Use the same predictions the calibrator was fitted on
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "dixon_coles_decay_backtest_predictions.parquet"
+            )
+            if not pred_path.exists():
+                pred_path = (
+                    settings.report_root
+                    / "calibration_backtest"
+                    / "poisson_backtest_predictions.parquet"
+                )
+            if not pred_path.exists():
+                result = {
+                    "status": "not_available",
+                    "instructions": "No backtest predictions found",
+                }
+            else:
+                preds_df = _read_parquet(pred_path)
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+
+                comparison = compute_calibration_comparison(preds_df, calibrator)
+                result = _clean_json_value({
+                    "status": "ok",
+                    "overall": comparison.overall,
+                    "improvement": comparison.improvement,
+                    "by_score_line": comparison.by_score_line,
+                    "n_matches": comparison.n_matches,
+                    "calibrator_metrics": {
+                        "brier_before": calibrator.brier_before,
+                        "brier_after": calibrator.brier_after,
+                        "rps_before": calibrator.rps_before,
+                        "rps_after": calibrator.rps_after,
+                        "n_samples": calibrator.n_samples,
+                    },
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE["calibration_comparison_timestamp"] = now
         return result
     except Exception as exc:
         return {"status": "error", "message": str(exc)}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -1136,6 +1137,167 @@ def optimize_ensemble_weights(
                 }
 
     return best_weights
+
+
+def save_ensemble_weights(
+    weights: dict[str, float],
+    path: Path,
+    *,
+    rps: float | None = None,
+    n_matches: int | None = None,
+) -> None:
+    """Save ensemble weights to a JSON artifact for later reuse.
+
+    Parameters
+    ----------
+    weights : normalized weights dict keyed by model name.
+    path : destination JSON file path.
+    rps : optional RPS achieved by these weights on the holdout.
+    n_matches : optional number of matches used for optimization.
+    """
+    import json
+    from datetime import UTC, datetime
+
+    payload = {
+        "weights": {k: float(v) for k, v in weights.items()},
+        "rps": float(rps) if rps is not None else None,
+        "n_matches": int(n_matches) if n_matches is not None else None,
+        "saved_at": datetime.now(UTC).isoformat(),
+        "format": "ensemble-weights-v1",
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+
+
+def load_ensemble_weights(path: Path) -> dict[str, float] | None:
+    """Load cached ensemble weights from a JSON artifact.
+
+    Returns ``None`` if the file does not exist or is invalid.
+    """
+    import json
+
+    if not path.exists():
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        weights = data.get("weights")
+        if not isinstance(weights, dict) or not weights:
+            return None
+        return {k: float(v) for k, v in weights.items()}
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Isotonic recalibration
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class IsotonicCalibrator:
+    """Fitted isotonic regression calibrators for 1x2 match probabilities.
+
+    Stores three independent IsotonicRegression objects (one per outcome)
+    along with before/after metrics so the recalibration effect is
+    transparent and auditable.
+    """
+
+    home_win_iso: object  # sklearn.isotonic.IsotonicRegression
+    draw_iso: object
+    away_win_iso: object
+    n_samples: int
+    brier_before: float
+    brier_after: float
+    rps_before: float
+    rps_after: float
+
+
+def fit_isotonic_calibrator(predictions: pd.DataFrame) -> IsotonicCalibrator:
+    """Fit isotonic regression calibrators on backtest predictions.
+
+    Parameters
+    ----------
+    predictions : DataFrame with columns ``home_win_probability``,
+        ``draw_probability``, ``away_win_probability`` and
+        ``actual_outcome`` (values: ``home_win``/``draw``/``away_win``).
+
+    Returns
+    -------
+    IsotonicCalibrator holding the fitted regressors and before/after metrics.
+    """
+    from sklearn.isotonic import IsotonicRegression
+
+    required = {
+        "home_win_probability", "draw_probability",
+        "away_win_probability", "actual_outcome",
+    }
+    missing = required - set(predictions.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    probs = predictions.loc[
+        :, ["home_win_probability", "draw_probability", "away_win_probability"]
+    ].to_numpy()
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    actual_idx = np.array([outcome_map[o] for o in predictions["actual_outcome"]])
+    actual_onehot = np.zeros_like(probs)
+    actual_onehot[np.arange(len(actual_idx)), actual_idx] = 1.0
+
+    brier_before = float(np.mean(np.sum((probs - actual_onehot) ** 2, axis=1)))
+    rps_before = _compute_rps(probs, actual_onehot)
+
+    calibrators: list[IsotonicRegression] = []
+    for col_idx in range(3):
+        iso = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
+        iso.fit(probs[:, col_idx], actual_onehot[:, col_idx])
+        calibrators.append(iso)
+
+    calibrated = np.column_stack([
+        calibrators[0].transform(probs[:, 0]),
+        calibrators[1].transform(probs[:, 1]),
+        calibrators[2].transform(probs[:, 2]),
+    ])
+    row_sums = calibrated.sum(axis=1, keepdims=True)
+    row_sums = np.where(row_sums == 0, 1.0, row_sums)
+    calibrated = calibrated / row_sums
+
+    brier_after = float(np.mean(np.sum((calibrated - actual_onehot) ** 2, axis=1)))
+    rps_after = _compute_rps(calibrated, actual_onehot)
+
+    return IsotonicCalibrator(
+        home_win_iso=calibrators[0],
+        draw_iso=calibrators[1],
+        away_win_iso=calibrators[2],
+        n_samples=len(predictions),
+        brier_before=brier_before,
+        brier_after=brier_after,
+        rps_before=rps_before,
+        rps_after=rps_after,
+    )
+
+
+def apply_recalibration(
+    calibrator: IsotonicCalibrator,
+    home_win: float,
+    draw: float,
+    away_win: float,
+) -> tuple[float, float, float]:
+    """Apply isotonic recalibration to a single prediction's 1x2 probabilities.
+
+    Returns a normalized ``(home_win, draw, away_win)`` tuple.
+    """
+    raw = np.array([home_win, draw, away_win], dtype=float)
+    calibrated = np.array([
+        float(calibrator.home_win_iso.transform([raw[0]])[0]),
+        float(calibrator.draw_iso.transform([raw[1]])[0]),
+        float(calibrator.away_win_iso.transform([raw[2]])[0]),
+    ])
+    total = calibrated.sum()
+    if total > 0:
+        calibrated = calibrated / total
+    return float(calibrated[0]), float(calibrated[1]), float(calibrated[2])
 
 
 # ---------------------------------------------------------------------------

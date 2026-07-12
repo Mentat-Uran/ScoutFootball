@@ -12,10 +12,15 @@ from .availability_diagnostic import (
     save_availability_diagnostic,
 )
 from .backtests import (
+    CalibrationComparison,
+    CalibrationDriftReport,
     DixonColesBacktestResult,
     PoissonBacktestResult,
+    compute_calibration_comparison,
+    compute_calibration_drift,
     run_dixon_coles_backtest,
     run_poisson_backtest,
+    tune_dixon_coles_decay,
 )
 from .calibration import CalibrationResult, brier_score, calibrate_probabilities_isotonic
 from .confidence import (
@@ -113,10 +118,15 @@ __all__ = [
     "generate_availability_diagnostic",
     "generate_explanation",
     "identify_availability_driven_players",
+    "CalibrationComparison",
+    "CalibrationDriftReport",
+    "compute_calibration_comparison",
+    "compute_calibration_drift",
     "run_dixon_coles_backtest",
     "run_poisson_backtest",
     "run_pre_training_validation",
     "save_availability_diagnostic",
+    "tune_dixon_coles_decay",
     "validate_date_range",
     "validate_no_null_keys",
     "validate_parquet_exists",

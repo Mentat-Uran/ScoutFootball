@@ -299,6 +299,26 @@ const i18n = {
         backtest_tuning_desc: "Dixon-Coles 时间衰减网格搜索",
         backtest_drift: "校准漂移监控",
         backtest_drift_desc: "按时间窗口追踪 RPS/Brier/LogLoss 漂移",
+        backtest_ensemble_weights: "集成权重优化",
+        backtest_ensemble_weights_desc: "基于回测 RPS 网格搜索的最优权重",
+        backtest_calibration_comparison: "校准对比分析",
+        backtest_calibration_comparison_desc: "原始 vs Isotonic 重校准 按比分线对比",
+        ensemble_weights_not_available: "尚未优化权重",
+        ensemble_weights_instructions: "运行 `scoutfootball optimize-ensemble` 计算并缓存最优集成权重",
+        ensemble_weights_default: "默认等权重",
+        ensemble_weights_optimized: "已优化",
+        ensemble_achieved_rps: "达成 RPS",
+        ensemble_n_matches: "比赛数",
+        ensemble_saved_at: "保存时间",
+        calibration_comparison_not_available: "暂无校准对比数据",
+        calibration_comparison_instructions: "运行 `scoutfootball tune-predictions --run-backtest` 生成回测产物",
+        calibration_comparison_overall: "总体指标",
+        calibration_comparison_by_score: "按比分线分解",
+        calibration_comparison_score_line: "比分",
+        calibration_comparison_raw: "原始",
+        calibration_comparison_recalibrated: "重校准",
+        calibration_comparison_improvement: "改善%",
+        calibration_comparison_n_matches: "场次",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -619,6 +639,26 @@ const i18n = {
         backtest_tuning_desc: "Dixon-Coles time-decay grid search",
         backtest_drift: "Calibration Drift Monitoring",
         backtest_drift_desc: "Track RPS/Brier/LogLoss drift across time windows",
+        backtest_ensemble_weights: "Ensemble Weight Optimization",
+        backtest_ensemble_weights_desc: "Optimal weights from backtest RPS grid search",
+        backtest_calibration_comparison: "Calibration Comparison",
+        backtest_calibration_comparison_desc: "Raw vs Isotonic recalibration per score line",
+        ensemble_weights_not_available: "Weights not yet optimized",
+        ensemble_weights_instructions: "Run `scoutfootball optimize-ensemble` to compute and cache optimal weights",
+        ensemble_weights_default: "Default equal weights",
+        ensemble_weights_optimized: "Optimized",
+        ensemble_achieved_rps: "Achieved RPS",
+        ensemble_n_matches: "Matches",
+        ensemble_saved_at: "Saved at",
+        calibration_comparison_not_available: "No calibration comparison data available",
+        calibration_comparison_instructions: "Run `scoutfootball tune-predictions --run-backtest` to generate backtest artifacts",
+        calibration_comparison_overall: "Overall Metrics",
+        calibration_comparison_by_score: "Per Score Line",
+        calibration_comparison_score_line: "Score",
+        calibration_comparison_raw: "Raw",
+        calibration_comparison_recalibrated: "Recalibrated",
+        calibration_comparison_improvement: "Improvement%",
+        calibration_comparison_n_matches: "Matches",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -6013,6 +6053,8 @@ async function renderCalibration() {
 let backtestComparisonData = null;
 let decayTuningData = null;
 let calibrationDriftData = null;
+let ensembleWeightsData = null;
+let calibrationComparisonData = null;
 
 async function fetchBacktestComparison() {
     try {
@@ -6043,6 +6085,28 @@ async function fetchCalibrationDrift() {
         });
     } catch (err) {
         console.warn("Failed to fetch calibration drift:", err);
+        return null;
+    }
+}
+
+async function fetchEnsembleWeights() {
+    try {
+        return await fetchJson("/predictions/ensemble/weights", {
+            fetchOpts: { signal: AbortSignal.timeout(30000) },
+        });
+    } catch (err) {
+        console.warn("Failed to fetch ensemble weights:", err);
+        return null;
+    }
+}
+
+async function fetchCalibrationComparison() {
+    try {
+        return await fetchJson("/predictions/calibration/comparison", {
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
+    } catch (err) {
+        console.warn("Failed to fetch calibration comparison:", err);
         return null;
     }
 }
@@ -6179,6 +6243,24 @@ async function renderBacktest() {
             _renderCalibrationDrift(drift);
         } catch (e) {
             console.warn("Failed to render calibration drift:", e);
+        }
+
+        // Ensemble weights panel
+        try {
+            const weights = ensembleWeightsData || await fetchEnsembleWeights();
+            ensembleWeightsData = weights;
+            _renderEnsembleWeights(weights);
+        } catch (e) {
+            console.warn("Failed to render ensemble weights:", e);
+        }
+
+        // Calibration comparison panel
+        try {
+            const comp = calibrationComparisonData || await fetchCalibrationComparison();
+            calibrationComparisonData = comp;
+            _renderCalibrationComparison(comp);
+        } catch (e) {
+            console.warn("Failed to render calibration comparison:", e);
         }
     } catch (err) {
         if (statusPill) {
@@ -6365,6 +6447,160 @@ function _renderCalibrationDrift(data) {
             </thead>
             <tbody>${windowRows}</tbody>
         </table>${latestBlock}`;
+}
+
+function _renderEnsembleWeights(data) {
+    const panel = document.getElementById("backtest-ensemble-weights-panel");
+    if (!panel) return;
+    const body = document.getElementById("backtest-ensemble-weights-body");
+    if (!body) return;
+    const statusPill = document.getElementById("ensemble-weights-status-pill");
+    const z = appState.lang === "zh";
+
+    if (!data) {
+        panel.style.display = "none";
+        return;
+    }
+
+    panel.style.display = "block";
+
+    if (data.status === "not_available") {
+        if (statusPill) {
+            statusPill.textContent = z ? "等权重" : "EQUAL";
+            statusPill.className = "status-pill status-medium";
+        }
+        const defaultW = data.default_weights || {};
+        const defaultRows = Object.entries(defaultW).map(([k, v]) =>
+            `<div><span>${escapeHtml(k)}</span><strong>${(Number(v) * 100).toFixed(1)}%</strong></div>`
+        ).join("");
+        body.innerHTML = `
+            <p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 0.5rem">${escapeHtml(t("ensemble_weights_not_available"))}</p>
+            <p style="font-size:0.75rem;margin:0 0 0.8rem;font-family:monospace;color:var(--text-muted)">${escapeHtml(data.instructions || t("ensemble_weights_instructions"))}</p>
+            <div class="detail-grid">${defaultRows}</div>`;
+        return;
+    }
+
+    if (data.status === "error") {
+        if (statusPill) {
+            statusPill.textContent = z ? "错误" : "error";
+            statusPill.className = "status-pill status-low";
+        }
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">Error: ${escapeHtml(data.message || "unknown")}</p>`;
+        return;
+    }
+
+    if (statusPill) {
+        statusPill.textContent = z ? "已优化" : "OPTIMIZED";
+        statusPill.className = "status-pill status-high";
+    }
+
+    const weights = data.weights || {};
+    const weightBars = Object.entries(weights).map(([k, v]) => {
+        const pct = (Number(v) * 100).toFixed(1);
+        return `<div style="margin-bottom:0.4rem">
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.2rem">
+                <span>${escapeHtml(k)}</span><strong>${pct}%</strong>
+            </div>
+            <div style="height:6px;background:var(--bg-elevated, rgba(255,255,255,0.08));border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:var(--accent, #64b5f6);border-radius:3px"></div>
+            </div>
+        </div>`;
+    }).join("");
+
+    const meta = `
+        <div class="detail-grid" style="margin-top:0.8rem">
+            ${data.rps != null ? `<div><span>${escapeHtml(t("ensemble_achieved_rps"))}</span><strong>${fmtMetric(data.rps)}</strong></div>` : ""}
+            ${data.n_matches != null ? `<div><span>${escapeHtml(t("ensemble_n_matches"))}</span><strong>${escapeHtml(String(data.n_matches))}</strong></div>` : ""}
+            ${data.saved_at ? `<div><span>${escapeHtml(t("ensemble_saved_at"))}</span><strong style="font-size:0.75rem">${escapeHtml(String(data.saved_at).slice(0, 19).replace("T", " "))}</strong></div>` : ""}
+        </div>`;
+
+    body.innerHTML = `${weightBars}${meta}`;
+}
+
+function _renderCalibrationComparison(data) {
+    const panel = document.getElementById("backtest-calibration-comparison-panel");
+    if (!panel) return;
+    const body = document.getElementById("backtest-calibration-comparison-body");
+    if (!body) return;
+    const z = appState.lang === "zh";
+
+    if (!data) {
+        panel.style.display = "none";
+        return;
+    }
+
+    panel.style.display = "block";
+
+    if (data.status === "not_available" || data.status === "error") {
+        const msg = data.status === "error"
+            ? `Error: ${escapeHtml(data.message || "unknown")}`
+            : escapeHtml(t("calibration_comparison_not_available"));
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${msg}</p>
+            <p style="font-size:0.75rem;margin-top:0.5rem;font-family:monospace;color:var(--text-muted)">${escapeHtml(data.instructions || t("calibration_comparison_instructions"))}</p>`;
+        return;
+    }
+
+    const overall = data.overall || {};
+    const improvement = data.improvement || {};
+    const byScoreLine = data.by_score_line || [];
+    const calMetrics = data.calibrator_metrics || {};
+
+    // Overall metrics card
+    const brierImp = improvement.brier_improvement_pct;
+    const rpsImp = improvement.rps_improvement_pct;
+    const impColor = (v) => v != null && v < 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+
+    const overallHtml = `
+        <h4 style="margin:0 0 0.5rem;font-size:0.85rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("calibration_comparison_overall"))}</h4>
+        <div class="detail-grid">
+            <div><span>Brier ${escapeHtml(t("calibration_comparison_raw"))}</span><strong>${fmtMetric(overall.brier_raw)}</strong></div>
+            <div><span>Brier ${escapeHtml(t("calibration_comparison_recalibrated"))}</span><strong>${fmtMetric(overall.brier_recalibrated)}</strong></div>
+            <div><span>Brier ${escapeHtml(t("calibration_comparison_improvement"))}</span><strong style="color:${impColor(brierImp)}">${brierImp != null ? `${brierImp >= 0 ? "+" : ""}${brierImp.toFixed(2)}%` : "—"}</strong></div>
+            <div><span>RPS ${escapeHtml(t("calibration_comparison_raw"))}</span><strong>${fmtMetric(overall.rps_raw)}</strong></div>
+            <div><span>RPS ${escapeHtml(t("calibration_comparison_recalibrated"))}</span><strong>${fmtMetric(overall.rps_recalibrated)}</strong></div>
+            <div><span>RPS ${escapeHtml(t("calibration_comparison_improvement"))}</span><strong style="color:${impColor(rpsImp)}">${rpsImp != null ? `${rpsImp >= 0 ? "+" : ""}${rpsImp.toFixed(2)}%` : "—"}</strong></div>
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.4rem">
+            ${escapeHtml(t("calibration_comparison_n_matches"))}: ${escapeHtml(String(data.n_matches ?? calMetrics.n_samples ?? "—"))}
+        </div>`;
+
+    // Per-score-line table
+    let scoreLineHtml = "";
+    if (byScoreLine.length > 0) {
+        const rows = byScoreLine.map((s) => {
+            const bImp = s.brier_improvement_pct;
+            const rImp = s.rps_improvement_pct;
+            return `<tr>
+                <td><strong>${escapeHtml(s.score_line)}</strong></td>
+                <td>${escapeHtml(String(s.n_matches))}</td>
+                <td>${fmtMetric(s.brier_raw)}</td>
+                <td>${fmtMetric(s.brier_recalibrated)}</td>
+                <td style="color:${impColor(bImp)}">${bImp != null ? `${bImp >= 0 ? "+" : ""}${bImp.toFixed(2)}%` : "—"}</td>
+                <td>${fmtMetric(s.rps_raw)}</td>
+                <td>${fmtMetric(s.rps_recalibrated)}</td>
+                <td style="color:${impColor(rImp)}">${rImp != null ? `${rImp >= 0 ? "+" : ""}${rImp.toFixed(2)}%` : "—"}</td>
+            </tr>`;
+        }).join("");
+        scoreLineHtml = `
+            <h4 style="margin:1rem 0 0.5rem;font-size:0.85rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("calibration_comparison_by_score"))}</h4>
+            <table class="data-table" style="width:100%;font-size:0.78rem">
+                <thead>
+                    <tr>
+                        <th>${escapeHtml(t("calibration_comparison_score_line"))}</th>
+                        <th>N</th>
+                        <th>Brier ${escapeHtml(t("calibration_comparison_raw"))}</th>
+                        <th>Brier ${escapeHtml(t("calibration_comparison_recalibrated"))}</th>
+                        <th>Δ%</th>
+                        <th>RPS ${escapeHtml(t("calibration_comparison_raw"))}</th>
+                        <th>RPS ${escapeHtml(t("calibration_comparison_recalibrated"))}</th>
+                        <th>Δ%</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    }
+
+    body.innerHTML = `${overallHtml}${scoreLineHtml}`;
 }
 
 function _renderBacktestFoldChart(data, models, folds) {

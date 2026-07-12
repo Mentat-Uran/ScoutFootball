@@ -302,3 +302,234 @@ class TestComputeCalibrationDrift:
         report = compute_calibration_drift(df)
         total = sum(w["n_matches"] for w in report.windows)
         assert total == len(df)
+
+
+# ---------------------------------------------------------------------------
+# Ensemble weights persistence (save / load)
+# ---------------------------------------------------------------------------
+
+
+class TestEnsembleWeightsPersistence:
+    def test_save_and_load_roundtrip(self, tmp_path) -> None:
+        from scoutfootball.models.match_prediction import (
+            load_ensemble_weights,
+            save_ensemble_weights,
+        )
+
+        weights = {"poisson": 0.2, "dixon_coles": 0.5, "dixon_coles_form": 0.3}
+        path = tmp_path / "weights.json"
+        save_ensemble_weights(weights, path, rps=0.185, n_matches=120)
+        loaded = load_ensemble_weights(path)
+        assert loaded is not None
+        assert loaded == weights
+
+    def test_load_nonexistent_returns_none(self, tmp_path) -> None:
+        from scoutfootball.models.match_prediction import load_ensemble_weights
+
+        assert load_ensemble_weights(tmp_path / "missing.json") is None
+
+    def test_load_invalid_json_returns_none(self, tmp_path) -> None:
+        from scoutfootball.models.match_prediction import load_ensemble_weights
+
+        path = tmp_path / "bad.json"
+        path.write_text("not json", encoding="utf-8")
+        assert load_ensemble_weights(path) is None
+
+    def test_load_empty_weights_returns_none(self, tmp_path) -> None:
+        from scoutfootball.models.match_prediction import load_ensemble_weights
+
+        path = tmp_path / "empty.json"
+        path.write_text('{"weights": {}}', encoding="utf-8")
+        assert load_ensemble_weights(path) is None
+
+    def test_save_creates_parent_dir(self, tmp_path) -> None:
+        from scoutfootball.models.match_prediction import (
+            load_ensemble_weights,
+            save_ensemble_weights,
+        )
+
+        path = tmp_path / "nested" / "dir" / "weights.json"
+        save_ensemble_weights({"poisson": 1.0}, path)
+        assert path.exists()
+        assert load_ensemble_weights(path) == {"poisson": 1.0}
+
+    def test_save_includes_metadata(self, tmp_path) -> None:
+        import json
+
+        from scoutfootball.models.match_prediction import save_ensemble_weights
+
+        path = tmp_path / "weights.json"
+        save_ensemble_weights(
+            {"poisson": 0.5, "dixon_coles": 0.5},
+            path,
+            rps=0.2,
+            n_matches=50,
+        )
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["rps"] == 0.2
+        assert data["n_matches"] == 50
+        assert data["format"] == "ensemble-weights-v1"
+        assert "saved_at" in data
+
+
+# ---------------------------------------------------------------------------
+# Isotonic recalibration
+# ---------------------------------------------------------------------------
+
+
+def _make_calibration_df(n: int = 100, seed: int = 42) -> pd.DataFrame:
+    """Create a synthetic predictions DataFrame for calibrator testing."""
+    rng = np.random.default_rng(seed)
+    # Generate probabilities that are somewhat miscalibrated
+    home_win_prob = rng.beta(2, 3, size=n).clip(0.01, 0.97)
+    draw_prob = rng.beta(2, 4, size=n).clip(0.01, 0.97)
+    # Ensure they sum to ≤ 1
+    total = home_win_prob + draw_prob
+    away_win_prob = (1.0 - total).clip(0.01, 0.97)
+    # Re-normalize
+    s = home_win_prob + draw_prob + away_win_prob
+    home_win_prob /= s
+    draw_prob /= s
+    away_win_prob /= s
+
+    # Generate actual outcomes based on probabilities
+    actual = []
+    for i in range(n):
+        r = rng.random()
+        if r < home_win_prob[i]:
+            actual.append("home_win")
+        elif r < home_win_prob[i] + draw_prob[i]:
+            actual.append("draw")
+        else:
+            actual.append("away_win")
+
+    return pd.DataFrame({
+        "home_win_probability": home_win_prob,
+        "draw_probability": draw_prob,
+        "away_win_probability": away_win_prob,
+        "actual_outcome": actual,
+        "home_goals": [2 if a == "home_win" else (1 if a == "draw" else 0) for a in actual],
+        "away_goals": [0 if a == "home_win" else (1 if a == "draw" else 2) for a in actual],
+    })
+
+
+class TestIsotonicCalibrator:
+    def test_fit_returns_calibrator(self) -> None:
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        df = _make_calibration_df()
+        cal = fit_isotonic_calibrator(df)
+        assert cal is not None
+        assert cal.n_samples == len(df)
+
+    def test_missing_columns_raises(self) -> None:
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        df = pd.DataFrame({"home_win_probability": [0.5]})
+        with pytest.raises(ValueError, match="Missing required columns"):
+            fit_isotonic_calibrator(df)
+
+    def test_brier_and_rps_are_non_negative(self) -> None:
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        df = _make_calibration_df()
+        cal = fit_isotonic_calibrator(df)
+        assert cal.brier_before >= 0.0
+        assert cal.brier_after >= 0.0
+        assert cal.rps_before >= 0.0
+        assert cal.rps_after >= 0.0
+
+    def test_apply_returns_normalized(self) -> None:
+        from scoutfootball.models import apply_recalibration, fit_isotonic_calibrator
+
+        df = _make_calibration_df()
+        cal = fit_isotonic_calibrator(df)
+        hw, dr, aw = apply_recalibration(cal, 0.5, 0.3, 0.2)
+        assert hw >= 0.0 and hw <= 1.0
+        assert dr >= 0.0 and dr <= 1.0
+        assert aw >= 0.0 and aw <= 1.0
+        assert hw + dr + aw == pytest.approx(1.0, abs=1e-6)
+
+    def test_apply_extreme_values(self) -> None:
+        from scoutfootball.models import apply_recalibration, fit_isotonic_calibrator
+
+        df = _make_calibration_df()
+        cal = fit_isotonic_calibrator(df)
+        # Extreme values should not crash
+        hw, dr, aw = apply_recalibration(cal, 0.99, 0.005, 0.005)
+        assert hw + dr + aw == pytest.approx(1.0, abs=1e-6)
+
+    def test_brier_improves_or_stays_same(self) -> None:
+        """On reasonable data, isotonic should not make Brier much worse."""
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        # Use larger sample for more stable results
+        df = _make_calibration_df(n=300, seed=123)
+        cal = fit_isotonic_calibrator(df)
+        # Isotonic regression is fit on the same data it's evaluated on,
+        # so it should generally improve or at least not significantly worsen
+        assert cal.brier_after <= cal.brier_before + 1e-6
+
+
+# ---------------------------------------------------------------------------
+# Calibration comparison
+# ---------------------------------------------------------------------------
+
+
+class TestCalibrationComparison:
+    def test_returns_comparison(self) -> None:
+        from scoutfootball.evaluation.backtests import compute_calibration_comparison
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        df = _make_calibration_df(n=100)
+        cal = fit_isotonic_calibrator(df)
+        comp = compute_calibration_comparison(df, cal)
+        assert comp is not None
+        assert comp.n_matches == len(df)
+
+    def test_overall_has_brier_and_rps(self) -> None:
+        from scoutfootball.evaluation.backtests import compute_calibration_comparison
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        df = _make_calibration_df(n=100)
+        cal = fit_isotonic_calibrator(df)
+        comp = compute_calibration_comparison(df, cal)
+        assert "brier_raw" in comp.overall
+        assert "brier_recalibrated" in comp.overall
+        assert "rps_raw" in comp.overall
+        assert "rps_recalibrated" in comp.overall
+
+    def test_improvement_pct_computed(self) -> None:
+        from scoutfootball.evaluation.backtests import compute_calibration_comparison
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        df = _make_calibration_df(n=100)
+        cal = fit_isotonic_calibrator(df)
+        comp = compute_calibration_comparison(df, cal)
+        assert "brier_improvement_pct" in comp.improvement
+        assert "rps_improvement_pct" in comp.improvement
+
+    def test_by_score_line_entries_valid(self) -> None:
+        from scoutfootball.evaluation.backtests import compute_calibration_comparison
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        df = _make_calibration_df(n=200)
+        cal = fit_isotonic_calibrator(df)
+        comp = compute_calibration_comparison(df, cal)
+        for entry in comp.by_score_line:
+            assert "score_line" in entry
+            assert "n_matches" in entry
+            assert entry["n_matches"] >= 5
+            assert "brier_raw" in entry
+            assert "brier_recalibrated" in entry
+
+    def test_missing_columns_raises(self) -> None:
+        from scoutfootball.evaluation.backtests import compute_calibration_comparison
+        from scoutfootball.models import fit_isotonic_calibrator
+
+        df = _make_calibration_df(n=50)
+        cal = fit_isotonic_calibrator(df)
+        bad_df = df.drop(columns=["actual_outcome"])
+        with pytest.raises(ValueError, match="Missing required columns"):
+            compute_calibration_comparison(bad_df, cal)
