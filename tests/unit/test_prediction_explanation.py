@@ -26,8 +26,11 @@ from scoutfootball.evaluation.backtests import (
     CalibrationComparison,
     compute_calibration_comparison,
     compute_confidence_distribution,
+    compute_confidence_interval_plot,
     compute_error_analysis,
+    compute_fold_comparison,
     compute_h2h_bias_correction,
+    compute_league_error_analysis,
     compute_model_comparison,
     compute_outcome_distribution,
     compute_prediction_staleness,
@@ -2613,3 +2616,506 @@ class TestPredictionStalenessAPI:
         assert result["has_backtest"] is True
         assert result["staleness_level"] in ("fresh", "aging", "stale")
         assert result["model_type"] == "dixon_coles_decay"
+
+
+# ---------------------------------------------------------------------------
+# Confidence interval plot (CI width vs confidence scatter)
+# ---------------------------------------------------------------------------
+
+
+def _make_ci_predictions_df(n: int = 200) -> pd.DataFrame:
+    """Create synthetic predictions DataFrame with CI columns for CI plot."""
+    rng = np.random.default_rng(42)
+    home_win_prob = rng.uniform(0.2, 0.7, n)
+    draw_prob = rng.uniform(0.2, 0.3, n)
+    away_win_prob = 1.0 - home_win_prob - draw_prob
+    away_win_prob = np.clip(away_win_prob, 0.05, 0.9)
+    total = home_win_prob + draw_prob + away_win_prob
+    home_win_prob /= total
+    draw_prob /= total
+    away_win_prob /= total
+    # CI bounds around home_win_probability
+    ci_width = rng.uniform(0.05, 0.30, n)
+    ci_lower = np.clip(home_win_prob - ci_width / 2, 0.0, 1.0)
+    ci_upper = np.clip(home_win_prob + ci_width / 2, 0.0, 1.0)
+    outcomes = rng.choice(["home_win", "draw", "away_win"], n, p=[0.45, 0.28, 0.27])
+    df = pd.DataFrame({
+        "home_win_probability": home_win_prob,
+        "draw_probability": draw_prob,
+        "away_win_probability": away_win_prob,
+        "home_win_ci_lower": ci_lower,
+        "home_win_ci_upper": ci_upper,
+        "actual_outcome": outcomes,
+        "match_id": [f"m{i}" for i in range(n)],
+        "home_team": [f"team_{i % 5}" for i in range(n)],
+        "away_team": [f"team_{(i + 1) % 5}" for i in range(n)],
+    })
+    return df
+
+
+class TestComputeConfidenceIntervalPlot:
+    def test_returns_points(self) -> None:
+        df = _make_ci_predictions_df(n=200)
+        result = compute_confidence_interval_plot(df)
+        assert len(result.points) > 0
+        assert result.n_predictions > 0
+
+    def test_point_fields(self) -> None:
+        df = _make_ci_predictions_df(n=50)
+        result = compute_confidence_interval_plot(df)
+        for p in result.points:
+            assert p.confidence >= 0.0
+            assert p.ci_lower <= p.ci_upper
+            assert p.ci_width >= 0.0
+            assert p.actual_outcome in ("home_win", "draw", "away_win")
+            assert isinstance(p.correct, bool)
+
+    def test_n_predictions_matches_points(self) -> None:
+        df = _make_ci_predictions_df(n=80)
+        result = compute_confidence_interval_plot(df)
+        assert result.n_predictions == len(result.points)
+
+    def test_avg_confidence_in_range(self) -> None:
+        df = _make_ci_predictions_df(n=100)
+        result = compute_confidence_interval_plot(df)
+        assert 0.0 <= result.avg_confidence <= 1.0
+
+    def test_avg_ci_width_nonneg(self) -> None:
+        df = _make_ci_predictions_df(n=100)
+        result = compute_confidence_interval_plot(df)
+        assert result.avg_ci_width >= 0.0
+
+    def test_correlation_present(self) -> None:
+        df = _make_ci_predictions_df(n=100)
+        result = compute_confidence_interval_plot(df)
+        assert result.correlation is not None
+        assert -1.0 <= result.correlation <= 1.0
+
+    def test_max_points_subsamples(self) -> None:
+        df = _make_ci_predictions_df(n=200)
+        result = compute_confidence_interval_plot(df, max_points=50)
+        assert result.n_predictions == 50
+        assert len(result.points) == 50
+
+    def test_missing_ci_columns_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_confidence_interval_plot(df)
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"home_win_ci_lower": [0.1], "home_win_ci_upper": [0.3]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_confidence_interval_plot(df)
+
+    def test_empty_df_returns_empty(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [],
+            "draw_probability": [],
+            "away_win_probability": [],
+            "home_win_ci_lower": [],
+            "home_win_ci_upper": [],
+        })
+        result = compute_confidence_interval_plot(df)
+        assert result.n_predictions == 0
+        assert result.points == []
+        assert result.correlation is None
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_ci_predictions_df(n=50)
+        result = compute_confidence_interval_plot(df)
+        assert len(result.disclaimer) > 0
+
+    def test_custom_ci_columns(self) -> None:
+        df = _make_ci_predictions_df(n=50)
+        df = df.rename(columns={
+            "home_win_ci_lower": "hw_lo",
+            "home_win_ci_upper": "hw_hi",
+        })
+        result = compute_confidence_interval_plot(
+            df, ci_lower_col="hw_lo", ci_upper_col="hw_hi",
+        )
+        assert result.n_predictions > 0
+
+
+# ---------------------------------------------------------------------------
+# Fold comparison (per-fold metrics + stability)
+# ---------------------------------------------------------------------------
+
+
+def _make_fold_predictions_df(n: int = 200, n_folds: int = 5) -> pd.DataFrame:
+    """Create synthetic predictions DataFrame with a fold column."""
+    rng = np.random.default_rng(42)
+    home_win_prob = rng.uniform(0.2, 0.7, n)
+    draw_prob = rng.uniform(0.2, 0.3, n)
+    away_win_prob = 1.0 - home_win_prob - draw_prob
+    away_win_prob = np.clip(away_win_prob, 0.05, 0.9)
+    total = home_win_prob + draw_prob + away_win_prob
+    home_win_prob /= total
+    draw_prob /= total
+    away_win_prob /= total
+    outcomes = rng.choice(["home_win", "draw", "away_win"], n, p=[0.45, 0.28, 0.27])
+    df = pd.DataFrame({
+        "home_win_probability": home_win_prob,
+        "draw_probability": draw_prob,
+        "away_win_probability": away_win_prob,
+        "actual_outcome": outcomes,
+        "fold": np.tile(np.arange(n_folds), n // n_folds + 1)[:n],
+    })
+    return df
+
+
+class TestComputeFoldComparison:
+    def test_returns_folds(self) -> None:
+        df = _make_fold_predictions_df(n=200, n_folds=5)
+        result = compute_fold_comparison(df)
+        assert len(result.folds) > 0
+        assert result.n_folds > 0
+
+    def test_fold_fields(self) -> None:
+        df = _make_fold_predictions_df(n=100, n_folds=5)
+        result = compute_fold_comparison(df)
+        for f in result.folds:
+            assert f.fold >= 0
+            assert f.n_matches > 0
+            assert 0.0 <= f.accuracy <= 1.0
+            assert f.brier >= 0.0
+            assert f.rps >= 0.0
+            assert 0.0 <= f.avg_confidence <= 1.0
+
+    def test_n_total_matches(self) -> None:
+        df = _make_fold_predictions_df(n=100, n_folds=5)
+        result = compute_fold_comparison(df)
+        assert result.n_total_matches == sum(f.n_matches for f in result.folds)
+
+    def test_stability_value(self) -> None:
+        df = _make_fold_predictions_df(n=200, n_folds=5)
+        result = compute_fold_comparison(df)
+        assert result.stability in ("stable", "moderate", "unstable")
+
+    def test_std_nonneg(self) -> None:
+        df = _make_fold_predictions_df(n=200, n_folds=5)
+        result = compute_fold_comparison(df)
+        assert result.accuracy_std >= 0.0
+        assert result.brier_std >= 0.0
+        assert result.rps_std >= 0.0
+
+    def test_min_samples_filter(self) -> None:
+        df = _make_fold_predictions_df(n=100, n_folds=5)
+        # Each fold has 20 samples; raising min_samples filters all out
+        result = compute_fold_comparison(df, min_samples_per_fold=50)
+        assert result.n_folds == 0
+        assert result.stability == "insufficient_data"
+
+    def test_missing_fold_column_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_fold_comparison(df)
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"fold": [0, 1, 2]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_fold_comparison(df)
+
+    def test_log_loss_none_without_exact_score(self) -> None:
+        df = _make_fold_predictions_df(n=100, n_folds=5)
+        result = compute_fold_comparison(df)
+        for f in result.folds:
+            assert f.log_loss is None
+        assert result.overall_log_loss is None
+
+    def test_log_loss_computed_with_exact_score(self) -> None:
+        df = _make_fold_predictions_df(n=100, n_folds=5)
+        df["exact_score_probability"] = np.full(100, 0.05)
+        result = compute_fold_comparison(df)
+        for f in result.folds:
+            assert f.log_loss is not None
+            assert f.log_loss > 0.0
+        assert result.overall_log_loss is not None
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_fold_predictions_df(n=100, n_folds=5)
+        result = compute_fold_comparison(df)
+        assert len(result.disclaimer) > 0
+
+    def test_overall_metrics_in_range(self) -> None:
+        df = _make_fold_predictions_df(n=200, n_folds=5)
+        result = compute_fold_comparison(df)
+        assert 0.0 <= result.overall_accuracy <= 1.0
+        assert result.overall_brier >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# Per-league error analysis
+# ---------------------------------------------------------------------------
+
+
+def _make_league_predictions_df(n: int = 200) -> pd.DataFrame:
+    """Create synthetic predictions DataFrame with a league column."""
+    df = _make_predictions_df(n=n)
+    # Two leagues with enough samples each
+    df["league"] = np.where(np.arange(n) < n // 2, "Premier", "La Liga")
+    df["match_id"] = [f"m{i}" for i in range(n)]
+    return df
+
+
+class TestComputeLeagueErrorAnalysis:
+    def test_returns_leagues(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        result = compute_league_error_analysis(df)
+        assert len(result.leagues) > 0
+        assert result.n_leagues > 0
+
+    def test_league_fields(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        result = compute_league_error_analysis(df)
+        for lg in result.leagues:
+            assert len(lg.league) > 0
+            assert lg.n_matches > 0
+            assert 0.0 <= lg.accuracy <= 1.0
+            assert lg.brier >= 0.0
+            assert lg.rps >= 0.0
+            assert 0.0 <= lg.avg_confidence <= 1.0
+
+    def test_n_total_matches(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        result = compute_league_error_analysis(df)
+        assert result.n_total_matches == sum(lg.n_matches for lg in result.leagues)
+
+    def test_min_matches_filter(self) -> None:
+        df = _make_league_predictions_df(n=100)
+        # Each league has 50; raising min to 100 filters all out
+        result = compute_league_error_analysis(df, min_matches_per_league=100)
+        assert result.n_leagues == 0
+        assert result.n_total_matches == 0
+
+    def test_top_n_limits_worst_matches(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        result = compute_league_error_analysis(df, top_n=2)
+        for lg in result.leagues:
+            assert len(lg.worst_matches) <= 2
+
+    def test_worst_matches_sorted_by_brier_desc(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        result = compute_league_error_analysis(df, top_n=5)
+        for lg in result.leagues:
+            briars = [m.brier for m in lg.worst_matches]
+            assert briars == sorted(briars, reverse=True)
+
+    def test_worst_match_fields(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        result = compute_league_error_analysis(df, top_n=3)
+        for lg in result.leagues:
+            for m in lg.worst_matches:
+                assert m.actual_outcome in ("home_win", "draw", "away_win")
+                assert m.predicted_outcome in ("home_win", "draw", "away_win")
+                assert 0.0 <= m.predicted_home_win <= 1.0
+                assert 0.0 <= m.predicted_draw <= 1.0
+                assert 0.0 <= m.predicted_away_win <= 1.0
+                assert 0.0 <= m.confidence <= 1.0
+                assert m.brier >= 0.0
+                assert isinstance(m.correct, bool)
+
+    def test_missing_league_column_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_league_error_analysis(df)
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"league": ["A", "B"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_league_error_analysis(df)
+
+    def test_log_loss_none_without_exact_score(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        result = compute_league_error_analysis(df)
+        for lg in result.leagues:
+            assert lg.log_loss is None
+
+    def test_log_loss_computed_with_exact_score(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        df["exact_score_probability"] = np.full(200, 0.05)
+        result = compute_league_error_analysis(df)
+        for lg in result.leagues:
+            assert lg.log_loss is not None
+            assert lg.log_loss > 0.0
+
+    def test_leagues_sorted_by_n_matches_desc(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        # Make one league bigger
+        df.loc[df.index[:120], "league"] = "Big"
+        df.loc[df.index[120:], "league"] = "Small"
+        result = compute_league_error_analysis(df, min_matches_per_league=10)
+        n_matches_list = [lg.n_matches for lg in result.leagues]
+        assert n_matches_list == sorted(n_matches_list, reverse=True)
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_league_predictions_df(n=100)
+        result = compute_league_error_analysis(df)
+        assert len(result.disclaimer) > 0
+
+    def test_overall_metrics_in_range(self) -> None:
+        df = _make_league_predictions_df(n=200)
+        result = compute_league_error_analysis(df)
+        assert 0.0 <= result.overall_accuracy <= 1.0
+        assert result.overall_brier >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# API: CI plot, fold comparison, league error analysis
+# ---------------------------------------------------------------------------
+
+
+class TestConfidenceIntervalPlotAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_confidence_interval_plot()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_ci_predictions_df(n=80)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_confidence_interval_plot()
+        assert result["status"] == "ok"
+        assert result["n_predictions"] > 0
+        assert "points" in result
+        assert "correlation" in result
+
+    def test_with_data_no_ci_columns(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=80)  # No CI columns
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_confidence_interval_plot()
+        assert result["status"] == "not_available"
+
+
+class TestFoldComparisonAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_fold_comparison()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_fold_predictions_df(n=100, n_folds=5)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_fold_comparison()
+        assert result["status"] == "ok"
+        assert result["n_folds"] > 0
+        assert "folds" in result
+        assert "stability" in result
+
+    def test_with_data_no_fold_column(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=80)  # No fold column
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_fold_comparison()
+        assert result["status"] == "not_available"
+
+
+class TestLeagueErrorAnalysisAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_league_error_analysis()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_league_predictions_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_league_error_analysis()
+        assert result["status"] == "ok"
+        assert result["n_leagues"] > 0
+        assert "leagues" in result
+        assert "overall_accuracy" in result
+
+    def test_with_data_no_league_column(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=80)  # No league column
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_league_error_analysis()
+        assert result["status"] == "not_available"

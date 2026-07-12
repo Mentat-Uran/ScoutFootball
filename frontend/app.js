@@ -518,6 +518,58 @@ const i18n = {
         staleness_backtest_end: "回测结束",
         staleness_n_matches: "回测比赛数",
         staleness_model_type: "模型类型",
+        ci_plot_title: "置信区间图",
+        ci_plot_desc: "CI 宽度 vs 置信度散点,判断高置信预测是否伴随更窄区间",
+        ci_plot_fetch: "加载",
+        ci_plot_loading: "计算置信区间散点...",
+        ci_plot_error: "加载置信区间图失败",
+        ci_plot_not_available: "暂无 CI 列数据(需启用 bootstrap CI 生成)",
+        ci_plot_n_points: "散点数",
+        ci_plot_avg_conf: "平均置信度",
+        ci_plot_avg_width: "平均 CI 宽度",
+        ci_plot_corr: "相关系数",
+        ci_plot_match: "比赛",
+        ci_plot_conf: "置信度",
+        ci_plot_lower: "CI 下界",
+        ci_plot_upper: "CI 上界",
+        ci_plot_width: "CI 宽度",
+        ci_plot_correct: "正确",
+        ci_plot_no_points: "无散点数据",
+        ci_plot_truncated: "已截取前 50 行(共 {n} 行)",
+        fold_comparison_title: "折叠对比",
+        fold_comparison_desc: "交叉验证折间指标稳定性分析(stable/moderate/unstable)",
+        fold_comparison_fetch: "加载",
+        fold_comparison_loading: "计算折间指标...",
+        fold_comparison_error: "加载折叠对比失败",
+        fold_comparison_not_available: "暂无 fold 列数据(需启用交叉验证折分配)",
+        fold_comparison_stability: "稳定性",
+        fold_comparison_n_folds: "折数",
+        fold_comparison_n_matches: "总样本数",
+        fold_comparison_acc_std: "准确率标准差",
+        fold_comparison_fold: "折",
+        fold_comparison_n: "样本数",
+        fold_comparison_accuracy: "准确率",
+        fold_comparison_brier: "Brier",
+        fold_comparison_rps: "RPS",
+        fold_comparison_log_loss: "LogLoss",
+        fold_comparison_avg_conf: "平均置信度",
+        fold_comparison_no_folds: "无折数据",
+        league_error_title: "联赛误差分析",
+        league_error_desc: "按联赛分组的误差与最差预测,识别模型在不同赛事的表现差异",
+        league_error_fetch: "加载",
+        league_error_loading: "计算联赛误差...",
+        league_error_error: "加载联赛误差分析失败",
+        league_error_not_available: "暂无 league 列数据(需启用联赛元数据)",
+        league_error_n_leagues: "联赛数",
+        league_error_n_matches: "总样本数",
+        league_error_accuracy: "总体准确率",
+        league_error_brier: "总体 Brier",
+        league_error_avg_conf: "平均置信度",
+        league_error_match_id: "比赛 ID",
+        league_error_pred: "预测结果",
+        league_error_actual: "实际结果",
+        league_error_conf: "置信度",
+        league_error_no_leagues: "无联赛数据",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -1057,6 +1109,58 @@ const i18n = {
         staleness_backtest_end: "Backtest End",
         staleness_n_matches: "Backtest Matches",
         staleness_model_type: "Model Type",
+        ci_plot_title: "Confidence Interval Plot",
+        ci_plot_desc: "CI width vs confidence scatter; checks if high-confidence predictions have narrower CIs",
+        ci_plot_fetch: "Load",
+        ci_plot_loading: "Computing CI scatter...",
+        ci_plot_error: "Failed to load CI plot",
+        ci_plot_not_available: "No CI column data (bootstrap CI generation required)",
+        ci_plot_n_points: "Points",
+        ci_plot_avg_conf: "Avg Confidence",
+        ci_plot_avg_width: "Avg CI Width",
+        ci_plot_corr: "Correlation",
+        ci_plot_match: "Match",
+        ci_plot_conf: "Confidence",
+        ci_plot_lower: "CI Lower",
+        ci_plot_upper: "CI Upper",
+        ci_plot_width: "CI Width",
+        ci_plot_correct: "Correct",
+        ci_plot_no_points: "No scatter points",
+        ci_plot_truncated: "Showing first 50 of {n} rows",
+        fold_comparison_title: "Fold Comparison",
+        fold_comparison_desc: "Cross-validation fold metrics stability (stable/moderate/unstable)",
+        fold_comparison_fetch: "Load",
+        fold_comparison_loading: "Computing fold metrics...",
+        fold_comparison_error: "Failed to load fold comparison",
+        fold_comparison_not_available: "No fold column data (cross-validation fold assignment required)",
+        fold_comparison_stability: "Stability",
+        fold_comparison_n_folds: "Folds",
+        fold_comparison_n_matches: "Total Matches",
+        fold_comparison_acc_std: "Accuracy Std",
+        fold_comparison_fold: "Fold",
+        fold_comparison_n: "N",
+        fold_comparison_accuracy: "Accuracy",
+        fold_comparison_brier: "Brier",
+        fold_comparison_rps: "RPS",
+        fold_comparison_log_loss: "LogLoss",
+        fold_comparison_avg_conf: "Avg Confidence",
+        fold_comparison_no_folds: "No fold data",
+        league_error_title: "League Error Analysis",
+        league_error_desc: "Per-league error and worst predictions; identifies model performance variance across competitions",
+        league_error_fetch: "Load",
+        league_error_loading: "Computing league errors...",
+        league_error_error: "Failed to load league error analysis",
+        league_error_not_available: "No league column data (league metadata required)",
+        league_error_n_leagues: "Leagues",
+        league_error_n_matches: "Total Matches",
+        league_error_accuracy: "Overall Accuracy",
+        league_error_brier: "Overall Brier",
+        league_error_avg_conf: "Avg Confidence",
+        league_error_match_id: "Match ID",
+        league_error_pred: "Predicted",
+        league_error_actual: "Actual",
+        league_error_conf: "Confidence",
+        league_error_no_leagues: "No league data",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -4677,6 +4781,259 @@ async function fetchAndRenderPredictionStaleness() {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderConfidenceIntervalPlot() {
+    const body = document.getElementById("backtest-ci-plot-body");
+    const btn = document.getElementById("btn-ci-plot");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_plot_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/ci-plot?max_points=300");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_plot_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("ci_plot_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const corrText = (data.correlation === null || data.correlation === undefined)
+            ? "–"
+            : Number(data.correlation).toFixed(3);
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_n_points"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_confidence || 0).toFixed(3)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_avg_conf"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_ci_width || 0).toFixed(3)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_avg_width"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${corrText}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_corr"))}</div>
+            </div>
+        </div>`;
+        const points = Array.isArray(data.points) ? data.points : [];
+        if (points.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.72rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.3rem">${escapeHtml(t("ci_plot_match"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("ci_plot_conf"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("ci_plot_lower"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("ci_plot_upper"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("ci_plot_width"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("ci_plot_correct"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            for (const p of points.slice(0, 50)) {
+                const correctBadge = p.correct === null || p.correct === undefined
+                    ? "–"
+                    : (p.correct
+                        ? `<span style="color:var(--status-medium)">✓</span>`
+                        : `<span style="color:var(--status-low)">✗</span>`);
+                const homeLabel = p.home_team || "–";
+                const awayLabel = p.away_team || "–";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem">${escapeHtml(String(homeLabel))} vs ${escapeHtml(String(awayLabel))}</td>
+                    <td style="padding:0.3rem;text-align:right">${Number(p.confidence || 0).toFixed(3)}</td>
+                    <td style="padding:0.3rem;text-align:right">${Number(p.ci_lower || 0).toFixed(3)}</td>
+                    <td style="padding:0.3rem;text-align:right">${Number(p.ci_upper || 0).toFixed(3)}</td>
+                    <td style="padding:0.3rem;text-align:right">${Number(p.ci_width || 0).toFixed(3)}</td>
+                    <td style="padding:0.3rem;text-align:right">${correctBadge}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+            if (points.length > 50) {
+                html += `<p style="margin-top:0.3rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_truncated")).replace("{n}", String(points.length))}</p>`;
+            }
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_plot_no_points"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("ci_plot_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderFoldComparison() {
+    const body = document.getElementById("backtest-fold-comparison-body");
+    const btn = document.getElementById("btn-fold-comparison");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("fold_comparison_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/fold-comparison");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("fold_comparison_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("fold_comparison_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const stabilityColor = data.stability === "stable"
+            ? "var(--status-medium)"
+            : (data.stability === "unstable" ? "var(--status-low)" : "var(--status-high)");
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600;color:${stabilityColor}">${escapeHtml(data.stability || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_stability"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_folds ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_n_folds"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.accuracy_std || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_acc_std"))}</div>
+            </div>
+        </div>`;
+        const folds = Array.isArray(data.folds) ? data.folds : [];
+        if (folds.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.75rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.3rem">${escapeHtml(t("fold_comparison_fold"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("fold_comparison_n"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("fold_comparison_accuracy"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("fold_comparison_brier"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("fold_comparison_rps"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("fold_comparison_log_loss"))}</th>
+                        <th style="padding:0.3rem;text-align:right">${escapeHtml(t("fold_comparison_avg_conf"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            for (const f of folds) {
+                const ll = (f.log_loss === null || f.log_loss === undefined) ? "–" : Number(f.log_loss).toFixed(4);
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem">${f.fold ?? "–"}</td>
+                    <td style="padding:0.3rem;text-align:right">${f.n_matches ?? 0}</td>
+                    <td style="padding:0.3rem;text-align:right">${Number(f.accuracy || 0).toFixed(4)}</td>
+                    <td style="padding:0.3rem;text-align:right">${Number(f.brier || 0).toFixed(4)}</td>
+                    <td style="padding:0.3rem;text-align:right">${Number(f.rps || 0).toFixed(4)}</td>
+                    <td style="padding:0.3rem;text-align:right">${ll}</td>
+                    <td style="padding:0.3rem;text-align:right">${Number(f.avg_confidence || 0).toFixed(4)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("fold_comparison_no_folds"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("fold_comparison_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderLeagueErrorAnalysis() {
+    const body = document.getElementById("backtest-league-error-body");
+    const btn = document.getElementById("btn-league-error");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("league_error_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/league-errors");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("league_error_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("league_error_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_leagues ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_n_leagues"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_accuracy || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_accuracy"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_brier || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_brier"))}</div>
+            </div>
+        </div>`;
+        const leagues = Array.isArray(data.leagues) ? data.leagues : [];
+        if (leagues.length > 0) {
+            for (const lg of leagues) {
+                const ll = (lg.log_loss === null || lg.log_loss === undefined) ? "–" : Number(lg.log_loss).toFixed(4);
+                html += `<details style="margin-bottom:0.6rem;border:1px solid var(--border-color);border-radius:6px;padding:0.4rem 0.6rem">
+                    <summary style="cursor:pointer;font-size:0.85rem;font-weight:600">
+                        ${escapeHtml(lg.league || "–")} — acc ${Number(lg.accuracy || 0).toFixed(4)} / brier ${Number(lg.brier || 0).toFixed(4)} / n ${lg.n_matches ?? 0}
+                    </summary>
+                    <div style="margin-top:0.4rem;font-size:0.72rem;color:var(--text-muted)">
+                        RPS: ${Number(lg.rps || 0).toFixed(4)} | LogLoss: ${ll} | ${escapeHtml(t("league_error_avg_conf"))}: ${Number(lg.avg_confidence || 0).toFixed(4)}
+                    </div>`;
+                const worst = Array.isArray(lg.worst_matches) ? lg.worst_matches : [];
+                if (worst.length > 0) {
+                    html += `<table class="data-table" style="width:100%;font-size:0.7rem;border-collapse:collapse;margin-top:0.3rem">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                                <th style="padding:0.25rem">${escapeHtml(t("league_error_match_id"))}</th>
+                                <th style="padding:0.25rem;text-align:right">${escapeHtml(t("league_error_pred"))}</th>
+                                <th style="padding:0.25rem;text-align:right">${escapeHtml(t("league_error_actual"))}</th>
+                                <th style="padding:0.25rem;text-align:right">${escapeHtml(t("league_error_conf"))}</th>
+                                <th style="padding:0.25rem;text-align:right">${escapeHtml(t("league_error_brier"))}</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                    for (const m of worst) {
+                        html += `<tr style="border-bottom:1px solid var(--border-color)">
+                            <td style="padding:0.25rem">${escapeHtml(String(m.match_id ?? "–"))}</td>
+                            <td style="padding:0.25rem;text-align:right">${escapeHtml(m.predicted_outcome || "–")}</td>
+                            <td style="padding:0.25rem;text-align:right">${escapeHtml(m.actual_outcome || "–")}</td>
+                            <td style="padding:0.25rem;text-align:right">${Number(m.confidence || 0).toFixed(3)}</td>
+                            <td style="padding:0.25rem;text-align:right">${Number(m.brier || 0).toFixed(4)}</td>
+                        </tr>`;
+                    }
+                    html += `</tbody></table>`;
+                }
+                html += `</details>`;
+            }
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("league_error_no_leagues"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("league_error_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -8238,6 +8595,12 @@ async function renderBacktest() {
         if (heatmapPanel) heatmapPanel.style.display = "block";
         const stalenessPanel = document.getElementById("backtest-prediction-staleness-panel");
         if (stalenessPanel) stalenessPanel.style.display = "block";
+        const ciPlotPanel = document.getElementById("backtest-ci-plot-panel");
+        if (ciPlotPanel) ciPlotPanel.style.display = "block";
+        const foldCmpPanel = document.getElementById("backtest-fold-comparison-panel");
+        if (foldCmpPanel) foldCmpPanel.style.display = "block";
+        const leagueErrPanel = document.getElementById("backtest-league-error-panel");
+        if (leagueErrPanel) leagueErrPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -9044,6 +9407,36 @@ function bindEvents() {
         stalenessBtn.addEventListener("click", () => {
             fetchAndRenderPredictionStaleness().catch(
                 (e) => console.warn("Prediction staleness failed:", e)
+            );
+        });
+    }
+
+    // CI plot button: confidence vs CI width scatter
+    const ciPlotBtn = document.getElementById("btn-ci-plot");
+    if (ciPlotBtn) {
+        ciPlotBtn.addEventListener("click", () => {
+            fetchAndRenderConfidenceIntervalPlot().catch(
+                (e) => console.warn("CI plot failed:", e)
+            );
+        });
+    }
+
+    // Fold comparison button: per-fold metrics + stability
+    const foldCmpBtn = document.getElementById("btn-fold-comparison");
+    if (foldCmpBtn) {
+        foldCmpBtn.addEventListener("click", () => {
+            fetchAndRenderFoldComparison().catch(
+                (e) => console.warn("Fold comparison failed:", e)
+            );
+        });
+    }
+
+    // League error analysis button: per-league error + worst predictions
+    const leagueErrBtn = document.getElementById("btn-league-error");
+    if (leagueErrBtn) {
+        leagueErrBtn.addEventListener("click", () => {
+            fetchAndRenderLeagueErrorAnalysis().catch(
+                (e) => console.warn("League error analysis failed:", e)
             );
         });
     }
