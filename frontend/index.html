@@ -1791,6 +1791,39 @@
                     </div>
                     <div id="backtest-drift-heatmap-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-error-clustering-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="error_clustering_title">预测误差聚类</h3>
+                            <span class="kicker" data-i18n="error_clustering_desc">对最差预测按特征签名 k-means 聚类,发现误差模式</span>
+                        </div>
+                        <button class="text-button" id="btn-error-clustering" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="error_clustering_fetch">加载</button>
+                    </div>
+                    <div id="backtest-error-clustering-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-data-drift-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="data_drift_title">数据漂移检测</h3>
+                            <span class="kicker" data-i18n="data_drift_desc">训练/holdout 窗口特征分布 KS 检验,标记 p&lt;0.05 的漂移特征</span>
+                        </div>
+                        <button class="text-button" id="btn-data-drift" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="data_drift_fetch">加载</button>
+                    </div>
+                    <div id="backtest-data-drift-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-ci-width-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="ci_width_title">置信区间宽度分析</h3>
+                            <span class="kicker" data-i18n="ci_width_desc">按置信度分桶跟踪平均 CI 宽度,标记过宽/过窄的置信区间</span>
+                        </div>
+                        <button class="text-button" id="btn-ci-width" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="ci_width_fetch">加载</button>
+                    </div>
+                    <div id="backtest-ci-width-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->
