@@ -1634,6 +1634,36 @@
                     </div>
                     <div id="backtest-reliability-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
+                <article class="liquid-panel chart-panel" id="backtest-model-comparison-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="model_comparison_title">模型对比仪表板</h3>
+                            <span class="kicker" data-i18n="model_comparison_desc">Poisson / DC / DC-Decay 在对齐预测集上的统一指标对比</span>
+                        </div>
+                        <button class="text-button" id="btn-model-comparison" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="model_comparison_fetch">加载</button>
+                    </div>
+                    <div id="backtest-model-comparison-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+                <article class="liquid-panel chart-panel" id="backtest-scoreline-calibration-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="scoreline_cal_title">比分线校准矩阵</h3>
+                            <span class="kicker" data-i18n="scoreline_cal_desc">按实际比分分桶对比预测概率 vs 实际结果率</span>
+                        </div>
+                        <button class="text-button" id="btn-scoreline-calibration" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="scoreline_cal_fetch">加载</button>
+                    </div>
+                    <div id="backtest-scoreline-calibration-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+                <article class="liquid-panel chart-panel" id="backtest-confidence-distribution-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="confidence_dist_title">置信度分布校准</h3>
+                            <span class="kicker" data-i18n="confidence_dist_desc">按预测置信度分桶对比准确率，检验过度自信/欠自信</span>
+                        </div>
+                        <button class="text-button" id="btn-confidence-distribution" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="confidence_dist_fetch">加载</button>
+                    </div>
+                    <div id="backtest-confidence-distribution-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->

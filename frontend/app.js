@@ -388,6 +388,44 @@ const i18n = {
         backtest_reliability_predicted: "预测概率",
         backtest_reliability_observed: "观测频率",
         backtest_reliability_samples: "样本数",
+        model_comparison_title: "模型对比仪表板",
+        model_comparison_desc: "Poisson / DC / DC-Decay 在对齐预测集上的统一指标对比",
+        model_comparison_fetch: "加载",
+        model_comparison_loading: "加载模型对比数据...",
+        model_comparison_error: "加载模型对比失败",
+        model_comparison_not_available: "暂无回测数据，请先运行 scoutfootball backtest",
+        model_comparison_n_aligned: "对齐比赛数",
+        model_comparison_n_models: "模型数",
+        model_comparison_metric: "指标",
+        model_comparison_winner: "获胜模型",
+        model_comparison_accuracy: "准确率",
+        model_comparison_avg_confidence: "平均置信度",
+        model_comparison_cal_gap: "校准差距",
+        scoreline_cal_title: "比分线校准矩阵",
+        scoreline_cal_desc: "按实际比分分桶对比预测概率 vs 实际结果率",
+        scoreline_cal_fetch: "加载",
+        scoreline_cal_loading: "加载比分线校准...",
+        scoreline_cal_error: "加载比分线校准失败",
+        scoreline_cal_not_available: "暂无回测数据",
+        scoreline_cal_scoreline: "比分",
+        scoreline_cal_n_matches: "比赛数",
+        scoreline_cal_outcome: "主导结果",
+        scoreline_cal_avg_probs: "平均预测概率",
+        scoreline_cal_actual_rates: "实际结果率",
+        scoreline_cal_outcome_summary: "按结果汇总",
+        confidence_dist_title: "置信度分布校准",
+        confidence_dist_desc: "按预测置信度分桶对比准确率，检验过度自信/欠自信",
+        confidence_dist_fetch: "加载",
+        confidence_dist_loading: "加载置信度分布...",
+        confidence_dist_error: "加载置信度分布失败",
+        confidence_dist_not_available: "暂无回测数据",
+        confidence_dist_bucket: "置信度区间",
+        confidence_dist_n_pred: "预测数",
+        confidence_dist_accuracy: "准确率",
+        confidence_dist_avg_conf: "平均置信度",
+        confidence_dist_cal_gap: "校准差距",
+        confidence_dist_overall_acc: "总体准确率",
+        confidence_dist_overall_conf: "总体置信度",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -797,6 +835,44 @@ const i18n = {
         backtest_reliability_predicted: "Predicted Probability",
         backtest_reliability_observed: "Observed Frequency",
         backtest_reliability_samples: "Samples",
+        model_comparison_title: "Model Comparison Dashboard",
+        model_comparison_desc: "Poisson / DC / DC-Decay unified metrics on aligned prediction set",
+        model_comparison_fetch: "Load",
+        model_comparison_loading: "Loading model comparison...",
+        model_comparison_error: "Failed to load model comparison",
+        model_comparison_not_available: "No backtest data. Run scoutfootball backtest first.",
+        model_comparison_n_aligned: "Aligned Matches",
+        model_comparison_n_models: "Models",
+        model_comparison_metric: "Metric",
+        model_comparison_winner: "Winner",
+        model_comparison_accuracy: "Accuracy",
+        model_comparison_avg_confidence: "Avg Confidence",
+        model_comparison_cal_gap: "Calibration Gap",
+        scoreline_cal_title: "Score-line Calibration Matrix",
+        scoreline_cal_desc: "Predicted vs actual outcome rates by score-line bucket",
+        scoreline_cal_fetch: "Load",
+        scoreline_cal_loading: "Loading score-line calibration...",
+        scoreline_cal_error: "Failed to load score-line calibration",
+        scoreline_cal_not_available: "No backtest data available",
+        scoreline_cal_scoreline: "Score-line",
+        scoreline_cal_n_matches: "Matches",
+        scoreline_cal_outcome: "Dominant Outcome",
+        scoreline_cal_avg_probs: "Avg Predicted Probs",
+        scoreline_cal_actual_rates: "Actual Outcome Rates",
+        scoreline_cal_outcome_summary: "Outcome Summary",
+        confidence_dist_title: "Confidence Distribution Calibration",
+        confidence_dist_desc: "Accuracy per confidence bucket — detects over/under-confidence",
+        confidence_dist_fetch: "Load",
+        confidence_dist_loading: "Loading confidence distribution...",
+        confidence_dist_error: "Failed to load confidence distribution",
+        confidence_dist_not_available: "No backtest data available",
+        confidence_dist_bucket: "Confidence Bucket",
+        confidence_dist_n_pred: "Predictions",
+        confidence_dist_accuracy: "Accuracy",
+        confidence_dist_avg_conf: "Avg Confidence",
+        confidence_dist_cal_gap: "Calibration Gap",
+        confidence_dist_overall_acc: "Overall Accuracy",
+        confidence_dist_overall_conf: "Overall Confidence",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -3750,6 +3826,229 @@ async function fetchAndRenderReliabilityDiagram() {
         series,
     });
 
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderModelComparison() {
+    const body = document.getElementById("backtest-model-comparison-body");
+    const btn = document.getElementById("btn-model-comparison");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("model_comparison_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/models/comparison");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("model_comparison_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("model_comparison_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const models = Array.isArray(data.models) ? data.models : [];
+        const winners = data.metric_winners || {};
+        const metricRows = [
+            { key: "log_loss", label: "Log Loss", higher: false },
+            { key: "brier", label: "Brier", higher: false },
+            { key: "rps", label: "RPS", higher: false },
+            { key: "accuracy", label: escapeHtml(t("model_comparison_accuracy")), higher: true },
+            { key: "avg_confidence", label: escapeHtml(t("model_comparison_avg_confidence")), higher: true },
+            { key: "calibration_gap", label: escapeHtml(t("model_comparison_cal_gap")), higher: false },
+        ];
+        const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(4) : String(v));
+        let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.2rem;font-weight:600">${data.n_aligned ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("model_comparison_n_aligned"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.2rem;font-weight:600">${data.n_models ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("model_comparison_n_models"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.2rem;font-weight:600">${models.length}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">Models Listed</div>
+            </div>
+        </div>`;
+        // Per-model metrics table
+        html += `<table class="data-table" style="width:100%;font-size:0.78rem;border-collapse:collapse">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border-color)">
+                <th style="padding:0.3rem">Model</th>
+                <th style="padding:0.3rem">N</th>
+                <th style="padding:0.3rem">Log Loss</th>
+                <th style="padding:0.3rem">Brier</th>
+                <th style="padding:0.3rem">RPS</th>
+                <th style="padding:0.3rem">Acc</th>
+                <th style="padding:0.3rem">Conf</th>
+                <th style="padding:0.3rem">Cal Gap</th>
+            </tr></thead><tbody>`;
+        for (const m of models) {
+            html += `<tr style="border-bottom:1px solid var(--border-color)">
+                <td style="padding:0.3rem;font-weight:600">${escapeHtml(m.label || m.model)}</td>
+                <td style="padding:0.3rem">${m.n_predictions ?? 0}</td>
+                <td style="padding:0.3rem">${fmt(m.log_loss)}</td>
+                <td style="padding:0.3rem">${fmt(m.brier)}</td>
+                <td style="padding:0.3rem">${fmt(m.rps)}</td>
+                <td style="padding:0.3rem">${fmt(m.accuracy)}</td>
+                <td style="padding:0.3rem">${fmt(m.avg_confidence)}</td>
+                <td style="padding:0.3rem">${fmt(m.calibration_gap)}</td>
+            </tr>`;
+        }
+        html += `</tbody></table>`;
+        // Metric winners
+        const winnerEntries = Object.entries(winners);
+        if (winnerEntries.length > 0) {
+            html += `<h4 style="margin:0.8rem 0 0.4rem;font-size:0.85rem">${escapeHtml(t("model_comparison_winner"))}</h4><ul style="list-style:none;padding:0;font-size:0.78rem">`;
+            for (const [metric, winner] of winnerEntries) {
+                const row = metricRows.find(r => r.key === metric);
+                const label = row ? row.label : metric;
+                const winnerModel = models.find(m => m.model === winner);
+                const winnerLabel = winnerModel ? (winnerModel.label || winnerModel.model) : winner;
+                html += `<li style="padding:0.2rem 0;border-bottom:1px solid var(--border-color)">
+                    <span style="font-weight:600">${label}</span>: 
+                    <span style="color:var(--accent-primary)">${escapeHtml(winnerLabel)}</span>
+                </li>`;
+            }
+            html += `</ul>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("model_comparison_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderScorelineCalibration() {
+    const body = document.getElementById("backtest-scoreline-calibration-body");
+    const btn = document.getElementById("btn-scoreline-calibration");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("scoreline_cal_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/scoreline?max_scoreline=5&min_samples=3");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("scoreline_cal_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("scoreline_cal_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
+        let html = `<div style="margin-bottom:0.5rem;font-size:0.8rem;color:var(--text-muted)">
+            ${data.n_matches ?? 0} matches · ${data.n_scorelines ?? 0} score-lines
+        </div>`;
+        html += `<div style="overflow-x:auto"><table class="data-table" style="width:100%;font-size:0.75rem;border-collapse:collapse">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border-color)">
+                <th style="padding:0.3rem">${escapeHtml(t("scoreline_cal_scoreline"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("scoreline_cal_outcome"))}</th>
+                <th style="padding:0.3rem">N</th>
+                <th style="padding:0.3rem">Pred HW</th>
+                <th style="padding:0.3rem">Pred D</th>
+                <th style="padding:0.3rem">Pred AW</th>
+                <th style="padding:0.3rem">Act HW</th>
+                <th style="padding:0.3rem">Act D</th>
+                <th style="padding:0.3rem">Act AW</th>
+            </tr></thead><tbody>`;
+        for (const e of entries) {
+            const outcomeColor = e.outcome === "home_win" ? "var(--accent-primary)" : (e.outcome === "draw" ? "var(--text-muted)" : "var(--accent-secondary)");
+            html += `<tr style="border-bottom:1px solid var(--border-color)">
+                <td style="padding:0.3rem;font-weight:600;font-family:monospace">${escapeHtml(e.scoreline)}</td>
+                <td style="padding:0.3rem;color:${outcomeColor}">${escapeHtml(e.outcome)}</td>
+                <td style="padding:0.3rem">${e.n_matches}</td>
+                <td style="padding:0.3rem">${fmt(e.avg_home_win_prob)}</td>
+                <td style="padding:0.3rem">${fmt(e.avg_draw_prob)}</td>
+                <td style="padding:0.3rem">${fmt(e.avg_away_win_prob)}</td>
+                <td style="padding:0.3rem;font-weight:600">${fmt(e.actual_home_win_rate)}</td>
+                <td style="padding:0.3rem;font-weight:600">${fmt(e.actual_draw_rate)}</td>
+                <td style="padding:0.3rem;font-weight:600">${fmt(e.actual_away_win_rate)}</td>
+            </tr>`;
+        }
+        html += `</tbody></table></div>`;
+        // Outcome summary
+        const summary = Array.isArray(data.outcome_summary) ? data.outcome_summary : [];
+        if (summary.length > 0) {
+            html += `<h4 style="margin:0.8rem 0 0.4rem;font-size:0.85rem">${escapeHtml(t("scoreline_cal_outcome_summary"))}</h4><ul style="list-style:none;padding:0;font-size:0.78rem">`;
+            for (const s of summary) {
+                const dist = s.scoreline_distribution || {};
+                const distStr = Object.entries(dist).slice(0, 3).map(([k, v]) => `${escapeHtml(k)}: ${v}`).join(", ");
+                html += `<li style="padding:0.2rem 0;border-bottom:1px solid var(--border-color)">
+                    <span style="font-weight:600">${escapeHtml(s.outcome)}</span> — 
+                    ${s.n_matches} matches, avg pred ${fmt(s.avg_predicted_prob)}
+                    ${distStr ? ` · top: ${distStr}` : ""}
+                </li>`;
+            }
+            html += `</ul>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("scoreline_cal_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderConfidenceDistribution() {
+    const body = document.getElementById("backtest-confidence-distribution-body");
+    const btn = document.getElementById("btn-confidence-distribution");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("confidence_dist_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/confidence-distribution?n_bins=10&min_samples_per_bucket=5");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("confidence_dist_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("confidence_dist_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const buckets = Array.isArray(data.buckets) ? data.buckets : [];
+        const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
+        let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">Predictions</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_accuracy)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("confidence_dist_overall_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_confidence)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("confidence_dist_overall_conf"))}</div>
+            </div>
+        </div>`;
+        html += `<table class="data-table" style="width:100%;font-size:0.78rem;border-collapse:collapse">
+            <thead><tr style="text-align:left;border-bottom:1px solid var(--border-color)">
+                <th style="padding:0.3rem">${escapeHtml(t("confidence_dist_bucket"))}</th>
+                <th style="padding:0.3rem">N</th>
+                <th style="padding:0.3rem">${escapeHtml(t("confidence_dist_accuracy"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("confidence_dist_avg_conf"))}</th>
+                <th style="padding:0.3rem">${escapeHtml(t("confidence_dist_cal_gap"))}</th>
+            </tr></thead><tbody>`;
+        for (const b of buckets) {
+            const gapColor = Math.abs(b.calibration_gap) < 0.05 ? "var(--status-high)" : (Math.abs(b.calibration_gap) < 0.15 ? "var(--status-medium)" : "var(--status-low)");
+            html += `<tr style="border-bottom:1px solid var(--border-color)">
+                <td style="padding:0.3rem;font-family:monospace">${escapeHtml(b.bucket_label)}</td>
+                <td style="padding:0.3rem">${b.n_predictions}</td>
+                <td style="padding:0.3rem;font-weight:600">${fmt(b.accuracy)}</td>
+                <td style="padding:0.3rem">${fmt(b.avg_confidence)}</td>
+                <td style="padding:0.3rem;color:${gapColor}">${fmt(b.calibration_gap)}</td>
+            </tr>`;
+        }
+        html += `</tbody></table>`;
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("confidence_dist_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
     if (btn) btn.disabled = false;
 }
 
@@ -7287,6 +7586,13 @@ async function renderBacktest() {
         if (reliabilityPanel) {
             reliabilityPanel.style.display = "block";
         }
+        // Model comparison / scoreline calibration / confidence distribution panels
+        const modelCmpPanel = document.getElementById("backtest-model-comparison-panel");
+        if (modelCmpPanel) modelCmpPanel.style.display = "block";
+        const scorelinePanel = document.getElementById("backtest-scoreline-calibration-panel");
+        if (scorelinePanel) scorelinePanel.style.display = "block";
+        const confDistPanel = document.getElementById("backtest-confidence-distribution-panel");
+        if (confDistPanel) confDistPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -8003,6 +8309,36 @@ function bindEvents() {
         reliabilityBtn.addEventListener("click", () => {
             fetchAndRenderReliabilityDiagram().catch(
                 (e) => console.warn("Reliability diagram failed:", e)
+            );
+        });
+    }
+
+    // Model comparison button: unified metrics dashboard
+    const modelCmpBtn = document.getElementById("btn-model-comparison");
+    if (modelCmpBtn) {
+        modelCmpBtn.addEventListener("click", () => {
+            fetchAndRenderModelComparison().catch(
+                (e) => console.warn("Model comparison failed:", e)
+            );
+        });
+    }
+
+    // Score-line calibration button: predicted vs actual by score-line
+    const scorelineBtn = document.getElementById("btn-scoreline-calibration");
+    if (scorelineBtn) {
+        scorelineBtn.addEventListener("click", () => {
+            fetchAndRenderScorelineCalibration().catch(
+                (e) => console.warn("Score-line calibration failed:", e)
+            );
+        });
+    }
+
+    // Confidence distribution button: accuracy per confidence bucket
+    const confDistBtn = document.getElementById("btn-confidence-distribution");
+    if (confDistBtn) {
+        confDistBtn.addEventListener("click", () => {
+            fetchAndRenderConfidenceDistribution().catch(
+                (e) => console.warn("Confidence distribution failed:", e)
             );
         });
     }

@@ -29,6 +29,7 @@ from scoutfootball.api import (
     get_calibration_comparison,
     get_calibration_drift,
     get_calibration_drift_timeline,
+    get_confidence_distribution,
     get_decay_tuning,
     get_ensemble_attribution,
     get_ensemble_attribution_ci,
@@ -39,6 +40,7 @@ from scoutfootball.api import (
     get_match_momentum,
     get_match_prediction,
     get_match_prediction_dc,
+    get_model_comparison,
     get_model_run_detail,
     get_model_runs,
     get_player_comparison,
@@ -52,6 +54,7 @@ from scoutfootball.api import (
     get_ratings_meta,
     get_reliability_diagram,
     get_review_queue,
+    get_scoreline_calibration,
     get_shortlist,
     get_team_accuracy,
     get_team_comparison,
@@ -275,6 +278,28 @@ def create_app() -> FastAPI:
         min_predictions: int = Query(3, ge=1, le=100),
     ):
         return get_team_accuracy(team_id, min_predictions=min_predictions)
+
+    @app.get("/predictions/models/comparison")
+    def predictions_models_comparison():
+        return get_model_comparison()
+
+    @app.get("/predictions/calibration/scoreline")
+    def predictions_calibration_scoreline(
+        max_scoreline: int = Query(5, ge=1, le=10),
+        min_samples: int = Query(3, ge=1, le=100),
+    ):
+        return get_scoreline_calibration(
+            max_scoreline=max_scoreline, min_samples=min_samples,
+        )
+
+    @app.get("/predictions/calibration/confidence-distribution")
+    def predictions_calibration_confidence_distribution(
+        n_bins: int = Query(10, ge=2, le=50),
+        min_samples_per_bucket: int = Query(5, ge=1, le=100),
+    ):
+        return get_confidence_distribution(
+            n_bins=n_bins, min_samples_per_bucket=min_samples_per_bucket,
+        )
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")
     def predictions_attribution(home_team: str, away_team: str):
