@@ -393,25 +393,27 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [ ] 分享方式：本地 JSON 文件、浏览器下载、剪贴板图片、只读演示链接（后置）、报告页嵌入；云同步和公开分享默认不做。
 - [x] 支持 JSON 工程基础导入/导出，并在导入时清洗 schema。
 - [x] 版本不兼容时走迁移或只读打开，避免旧工程静默丢字段。
-- [x] JSON 工程补 migration registry（1.0.0->1.1.0）、validateProject/roundTripTest、损坏文件处理已实现。
+- [x] JSON 工程补 migration registry（1.0.0->1.2.0）、validateProject/roundTripTest、损坏文件处理已实现；1.2.0 增加受限的赛前决策包 metadata。
 - [ ] 后续 FastAPI read-only endpoint 可设计为 `/tactical-boards`、`/tactical-boards/{id}`、`/tactical-boards/{id}/exports`，但第一阶段不急于实现写入 API。
 - [x] 战术板嵌入报告页：Board Snapshots 列表、coaching notes 预览、点击加载已实现。
 
 ### 第四切片：数据分析联动
 
 - [x] 从球员画像页发送球员到战术板，自动带入姓名、号码、位置和评分数据已实现。
-- [x] 从比赛预测页创建赛前方案：主客队阵型、预测比分矩阵、模型版本和 coverage 作为战术板元数据已实现。
+- [x] 从比赛预测页创建赛前方案：主客队阵型、实际已加载的预测概率/比分矩阵、模型版本和 coverage 写入版本化决策包；请求不可用时明确记录 `not_loaded`，不写入占位概率。
 - [x] 从 P2 动作价值产物读取样例 xT 热区作为背景参考，并保留 StatsBomb attribution；不写成全量动作价值战术建议。
 - [x] 从 watchlist/shortlist 读取备注，生成战术角色说明（位置/层级/工作量）已实现。
 - [x] 从国家队/世界杯页创建队伍模板：4-3-3 阵型 + 球员姓名/号码已实现。
 - [x] 支持战术板上显示球员评分 badge（颜色编码：绿/黄/红），可通过按钮切换显示/隐藏。
 - [x] xT 热区背景层：action values 页 'Show on Tactical Board' 按钮，蓝红色标，StatsBomb 归属已实现。
 - [x] 公开导出物如果包含 StatsBomb Open Data 或其他衍生数据，必须带 data source attribution。（前端已自动更新 source_attribution，导出已包含 attribution 文字）
+- [x] 含预测输出的 JSON 工程导出预览显示模型、model run id 或 local artifact snapshot、输入 hash（如可用）及本地存储边界。
 
 ### 第五切片：质量、安全和兼容性
 
 - [ ] 战术板所有导入字段继续走 `TACTICAL_BOARD.sanitizeProject()`，新增对象类型必须同步 sanitizer、schema 文档和 fixture。
 - [x] 战术板浏览器回归测试：10 个新测试覆盖恶意标题/球员名/超大 JSON/损坏 JSON/重复 ID/超出坐标/过多对象/旧 schema 已实现。
+- [x] 赛前决策包 Node 合约测试覆盖真实预测、未加载时不写入回退概率、受限 metadata 的导入导出和字段上限。
 - [x] 支持桌面鼠标、触控板、iPad/Safari 基础触控；移动端只读查看和编辑能力可以后置。
 - [x] 无障碍基础：25+ aria-label、Tab/Enter/Escape 键盘导航、焦点环、团队图例、导出预览已实现。
 - [x] 性能边界：200 对象/60 帧警告、FPS 计数器、Simplify 按钮已实现。
