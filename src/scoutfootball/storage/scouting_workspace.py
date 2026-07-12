@@ -26,7 +26,10 @@ MAX_MAP_ENTRIES = 1_000
 MAX_PLAYERS = 500
 MAX_KEY_LENGTH = 180
 MAX_NOTE_LENGTH = 2_000
+MAX_ROLE_LENGTH = 120
 _VALID_STATUSES = {"pending", "reviewing", "approved", "rejected"}
+_VALID_DOSSIER_PRIORITIES = {"urgent", "standard", "monitor"}
+_VALID_DOSSIER_RECOMMENDATIONS = {"target", "monitor", "decline"}
 _FORBIDDEN_KEYS = {"__proto__", "prototype", "constructor"}
 _WORKSPACE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _STORE_LOCK = threading.RLock()
@@ -137,6 +140,27 @@ def _validate_players(value: object, code: str) -> None:
             raise WorkspaceStoreError(code)
 
 
+def _validate_dossiers(value: object) -> None:
+    if not isinstance(value, dict) or len(value) > MAX_MAP_ENTRIES:
+        raise WorkspaceStoreError("workspace_dossiers_invalid")
+    for key, dossier in value.items():
+        if not isinstance(key, str) or not key or len(key) > MAX_KEY_LENGTH:
+            raise WorkspaceStoreError("workspace_dossiers_invalid")
+        if not isinstance(dossier, dict):
+            raise WorkspaceStoreError("workspace_dossiers_invalid")
+        if set(dossier) != {"priority", "recommendation", "target_role", "rationale"}:
+            raise WorkspaceStoreError("workspace_dossiers_invalid")
+        if dossier["priority"] not in _VALID_DOSSIER_PRIORITIES:
+            raise WorkspaceStoreError("workspace_dossiers_invalid")
+        if dossier["recommendation"] not in _VALID_DOSSIER_RECOMMENDATIONS:
+            raise WorkspaceStoreError("workspace_dossiers_invalid")
+        target_role = dossier["target_role"]
+        if not isinstance(target_role, str) or len(target_role) > MAX_ROLE_LENGTH:
+            raise WorkspaceStoreError("workspace_dossiers_invalid")
+        if not isinstance(dossier["rationale"], str) or len(dossier["rationale"]) > MAX_NOTE_LENGTH:
+            raise WorkspaceStoreError("workspace_dossiers_invalid")
+
+
 def validate_workspace_payload(
     payload: object,
     *,
@@ -186,6 +210,7 @@ def validate_workspace_payload(
     )
     _validate_string_map(review.get("shortlist_notes"), code="workspace_notes_invalid")
     _validate_string_map(review.get("watchlist_notes"), code="workspace_notes_invalid")
+    _validate_dossiers(review.get("shortlist_dossiers", {}))
     _validate_players(selections.get("watchlist"), "workspace_watchlist_invalid")
     _validate_players(selections.get("shortlist"), "workspace_shortlist_invalid")
 
@@ -213,6 +238,7 @@ def _decision_count(workspace: dict[str, Any]) -> int:
             review["statuses"],
             review["shortlist_notes"],
             review["watchlist_notes"],
+            review.get("shortlist_dossiers", {}),
             selections["watchlist"],
             selections["shortlist"],
         )

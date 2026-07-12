@@ -45,6 +45,14 @@ def _workspace(
             "statuses": {"player-7": status},
             "shortlist_notes": {"Ada": "Check role fit"},
             "watchlist_notes": {},
+            "shortlist_dossiers": {
+                "player-7": {
+                    "priority": "standard",
+                    "recommendation": "monitor",
+                    "target_role": "Creative midfielder",
+                    "rationale": "Check role fit",
+                },
+            },
         },
         "selections": {
             "watchlist": [],
@@ -87,6 +95,11 @@ def test_validate_workspace_payload_rejects_mismatch_and_unsafe_content() -> Non
     with pytest.raises(WorkspaceStoreError, match="workspace_key_invalid"):
         validate_workspace_payload(unsafe)
 
+    invalid_dossier = _workspace()
+    invalid_dossier["review"]["shortlist_dossiers"]["player-7"]["priority"] = "rush"
+    with pytest.raises(WorkspaceStoreError, match="workspace_dossiers_invalid"):
+        validate_workspace_payload(invalid_dossier)
+
 
 def test_store_uses_server_revision_conflicts_atomic_update_and_backup(tmp_path: Path) -> None:
     store = ScoutingWorkspaceStore(tmp_path / "workspaces")
@@ -117,7 +130,7 @@ def test_store_uses_server_revision_conflicts_atomic_update_and_backup(tmp_path:
     records = store.list_records()
     assert records[0]["workspace_id"] == "workspace-alpha"
     assert records[0]["server_revision"] == 2
-    assert records[0]["decision_count"] == 3
+    assert records[0]["decision_count"] == 4
     assert store.latest()["server_revision"] == 2
 
 

@@ -27,7 +27,7 @@ test("creates a versioned workspace with audit metadata", () => {
     const result = workspace();
 
     assert.equal(result.schema, "scoutfootball.scouting-workspace");
-    assert.equal(result.version, "1.1.0");
+    assert.equal(result.version, "1.2.0");
     assert.equal(result.audit.workspace_id, "local-workspace");
     assert.equal(result.audit.revision, 2);
     assert.equal(result.audit.device_scope, "browser-local");
@@ -45,7 +45,7 @@ test("migrates 1.0 exports and sanitizes unsafe keys and values", () => {
 
     const result = workspaceApi.parseWorkspace(JSON.stringify(legacy));
 
-    assert.equal(result.version, "1.1.0");
+    assert.equal(result.version, "1.2.0");
     assert.equal(result.review.statuses.player_1, "approved");
     assert.equal(result.review.statuses.player_2, undefined);
     assert.equal(Object.hasOwn(result.review.statuses, "__proto__"), false);
@@ -136,4 +136,39 @@ test("serialization round-trips into local state", () => {
     assert.equal(local.review_statuses.player_1, "reviewing");
     assert.equal(local.watchlist[0].key, "player_1");
     assert.deepEqual(local.snapshot_player_keys, ["player_1"]);
+});
+
+test("sanitizes structured shortlist dossiers and includes them in conflicts", () => {
+    const local = workspace({
+        shortlist_dossiers: {
+            player_1: {
+                priority: "urgent",
+                recommendation: "target",
+                target_role: "Right-sided centre-back",
+                rationale: "Fits the press, but aerial sample is limited.",
+            },
+        },
+    });
+    const incoming = workspace({
+        updated_at: "2026-07-03T00:00:00.000Z",
+        shortlist_dossiers: {
+            player_1: {
+                priority: "invalid",
+                recommendation: "decline",
+                target_role: "x".repeat(140),
+                rationale: "x".repeat(2_100),
+            },
+        },
+    });
+
+    const normalized = workspaceApi.normalizeWorkspace(incoming);
+    const analysis = workspaceApi.analyzeConflict(local, incoming);
+    const merged = workspaceApi.mergeWorkspaces(local, incoming);
+
+    assert.equal(normalized.review.shortlist_dossiers.player_1.priority, "standard");
+    assert.equal(normalized.review.shortlist_dossiers.player_1.target_role.length, 120);
+    assert.equal(normalized.review.shortlist_dossiers.player_1.rationale.length, 2_000);
+    assert.equal(analysis.dossier_conflicts, 1);
+    assert.equal(merged.review.shortlist_dossiers.player_1.recommendation, "decline");
+    assert.equal(workspaceApi.summarizeWorkspace(merged).dossier_count, 1);
 });

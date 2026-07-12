@@ -519,6 +519,7 @@ def main():
         metrics=metrics,
         args=args,
         feat_hash=feat_hash,
+        data_dir=data_dir,
     )
 
     print(f"\n{'='*80}")
