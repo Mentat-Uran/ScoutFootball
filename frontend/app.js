@@ -570,6 +570,59 @@ const i18n = {
         league_error_actual: "实际结果",
         league_error_conf: "置信度",
         league_error_no_leagues: "无联赛数据",
+        feature_importance_title: "特征重要性排名",
+        feature_importance_desc: "按 Brier 分离度排名的输入特征,识别对预测误差影响最大的因子",
+        feature_importance_fetch: "加载",
+        feature_importance_loading: "计算特征重要性...",
+        feature_importance_error: "加载特征重要性失败",
+        feature_importance_not_available: "暂无可分析的特征列(需在回测中保存输入特征)",
+        feature_importance_n_features: "特征数",
+        feature_importance_n_matches: "总样本数",
+        feature_importance_overall_brier: "总体 Brier",
+        feature_importance_top: "最高重要性",
+        feature_importance_feature: "特征",
+        feature_importance_importance: "重要性",
+        feature_importance_mean: "均值",
+        feature_importance_std: "标准差",
+        feature_importance_n: "样本数",
+        feature_importance_truncated: "仅显示前 20 个特征(共 {n} 个)",
+        feature_importance_no_features: "无特征数据",
+        ci_coverage_title: "置信区间覆盖率",
+        ci_coverage_desc: "验证 bootstrap CI 是否达到标称覆盖率,判断区间是否过窄或过宽",
+        ci_coverage_fetch: "加载",
+        ci_coverage_loading: "计算覆盖率...",
+        ci_coverage_error: "加载覆盖率分析失败",
+        ci_coverage_not_available: "暂无 CI 列数据(需启用 bootstrap CI 生成)",
+        ci_coverage_assessment: "覆盖评估",
+        ci_coverage_overall: "总体覆盖率",
+        ci_coverage_avg_width: "平均 CI 宽度",
+        ci_coverage_nominal: "标称水平",
+        ci_coverage_n_matches: "样本数",
+        ci_coverage_bucket: "分桶",
+        ci_coverage_conf_range: "置信度范围",
+        ci_coverage_n: "样本数",
+        ci_coverage_empirical: "经验覆盖率",
+        ci_coverage_no_buckets: "无分桶数据",
+        drift_heatmap_title: "校准漂移热力图",
+        drift_heatmap_desc: "时间窗口 × 置信度分桶的 Brier/RPS 网格,定位漂移发生的置信区间",
+        drift_heatmap_fetch: "加载",
+        drift_heatmap_loading: "计算漂移热力图...",
+        drift_heatmap_error: "加载漂移热力图失败",
+        drift_heatmap_not_available: "暂无 match_date 列数据(需启用比赛日期元数据)",
+        drift_heatmap_drift: "漂移检测",
+        drift_heatmap_drift_yes: "检测到漂移",
+        drift_heatmap_drift_no: "无漂移",
+        drift_heatmap_n_windows: "时间窗口数",
+        drift_heatmap_n_buckets: "置信分桶数",
+        drift_heatmap_n_matches: "总样本数",
+        drift_heatmap_window: "时间窗口",
+        drift_heatmap_conf_bucket: "置信分桶",
+        drift_heatmap_n: "样本数",
+        drift_heatmap_accuracy: "准确率",
+        drift_heatmap_brier: "Brier",
+        drift_heatmap_rps: "RPS",
+        drift_heatmap_log_loss: "LogLoss",
+        drift_heatmap_no_cells: "无热力图单元格数据",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -1161,6 +1214,59 @@ const i18n = {
         league_error_actual: "Actual",
         league_error_conf: "Confidence",
         league_error_no_leagues: "No league data",
+        feature_importance_title: "Feature Importance Ranking",
+        feature_importance_desc: "Input features ranked by Brier separation; identifies factors most associated with prediction error",
+        feature_importance_fetch: "Load",
+        feature_importance_loading: "Computing feature importance...",
+        feature_importance_error: "Failed to load feature importance",
+        feature_importance_not_available: "No analyzable feature columns (input features must be saved during backtest)",
+        feature_importance_n_features: "Features",
+        feature_importance_n_matches: "Total Matches",
+        feature_importance_overall_brier: "Overall Brier",
+        feature_importance_top: "Top Importance",
+        feature_importance_feature: "Feature",
+        feature_importance_importance: "Importance",
+        feature_importance_mean: "Mean",
+        feature_importance_std: "Std",
+        feature_importance_n: "Matches",
+        feature_importance_truncated: "Showing top 20 features (of {n})",
+        feature_importance_no_features: "No feature data",
+        ci_coverage_title: "Confidence Band Coverage",
+        ci_coverage_desc: "Validates whether bootstrap CIs achieve nominal coverage; detects under/overcoverage",
+        ci_coverage_fetch: "Load",
+        ci_coverage_loading: "Computing coverage...",
+        ci_coverage_error: "Failed to load coverage analysis",
+        ci_coverage_not_available: "No CI column data (bootstrap CI generation required)",
+        ci_coverage_assessment: "Assessment",
+        ci_coverage_overall: "Overall Coverage",
+        ci_coverage_avg_width: "Avg CI Width",
+        ci_coverage_nominal: "Nominal Level",
+        ci_coverage_n_matches: "Matches",
+        ci_coverage_bucket: "Bucket",
+        ci_coverage_conf_range: "Confidence Range",
+        ci_coverage_n: "Matches",
+        ci_coverage_empirical: "Empirical Coverage",
+        ci_coverage_no_buckets: "No bucket data",
+        drift_heatmap_title: "Calibration Drift Heatmap",
+        drift_heatmap_desc: "Time window × confidence bucket grid of Brier/RPS; pinpoints which confidence range drifts",
+        drift_heatmap_fetch: "Load",
+        drift_heatmap_loading: "Computing drift heatmap...",
+        drift_heatmap_error: "Failed to load drift heatmap",
+        drift_heatmap_not_available: "No match_date column data (match date metadata required)",
+        drift_heatmap_drift: "Drift Detection",
+        drift_heatmap_drift_yes: "Drift Detected",
+        drift_heatmap_drift_no: "No Drift",
+        drift_heatmap_n_windows: "Time Windows",
+        drift_heatmap_n_buckets: "Confidence Buckets",
+        drift_heatmap_n_matches: "Total Matches",
+        drift_heatmap_window: "Time Window",
+        drift_heatmap_conf_bucket: "Conf Bucket",
+        drift_heatmap_n: "Matches",
+        drift_heatmap_accuracy: "Accuracy",
+        drift_heatmap_brier: "Brier",
+        drift_heatmap_rps: "RPS",
+        drift_heatmap_log_loss: "LogLoss",
+        drift_heatmap_no_cells: "No heatmap cell data",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -5034,6 +5140,245 @@ async function fetchAndRenderLeagueErrorAnalysis() {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderFeatureImportance() {
+    const body = document.getElementById("backtest-feature-importance-body");
+    const btn = document.getElementById("btn-feature-importance");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("feature_importance_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/feature-importance");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("feature_importance_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("feature_importance_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_features ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_n_features"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_brier || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_overall_brier"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.features && data.features.length > 0 ? Number(data.features[0].importance || 0).toFixed(6) : "–"}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_top"))}</div>
+            </div>
+        </div>`;
+        const features = Array.isArray(data.features) ? data.features : [];
+        if (features.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.72rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">#</th>
+                        <th style="padding:0.25rem">${escapeHtml(t("feature_importance_feature"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("feature_importance_importance"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("feature_importance_mean"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("feature_importance_std"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("feature_importance_n"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            features.slice(0, 20).forEach((fe, idx) => {
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem">${idx + 1}</td>
+                    <td style="padding:0.25rem">${escapeHtml(fe.feature || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(fe.importance || 0).toFixed(6)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(fe.mean_value || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(fe.std_value || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fe.n_matches ?? 0}</td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+            if (features.length > 20) {
+                html += `<p style="margin-top:0.3rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_truncated").replace("{n}", String(features.length)))}</p>`;
+            }
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("feature_importance_no_features"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("feature_importance_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderCICoverage() {
+    const body = document.getElementById("backtest-ci-coverage-body");
+    const btn = document.getElementById("btn-ci-coverage");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_coverage_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/ci-coverage");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_coverage_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("ci_coverage_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const assessmentColors = {
+            well_calibrated: "var(--status-high, #4ade80)",
+            undercoverage: "var(--status-low, #f87171)",
+            overcoverage: "var(--status-medium, #fbbf24)",
+            insufficient_data: "var(--text-muted)",
+        };
+        const assessmentColor = assessmentColors[data.coverage_assessment] || "var(--text-muted)";
+        const nominalText = (data.nominal_level === null || data.nominal_level === undefined) ? "–" : Number(data.nominal_level).toFixed(2);
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.coverage_assessment || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_assessment"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_coverage || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_overall"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_ci_width || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_avg_width"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${nominalText}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_nominal"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.4rem">${escapeHtml(t("ci_coverage_n_matches"))}: ${data.n_matches ?? 0}</div>`;
+        const buckets = Array.isArray(data.buckets) ? data.buckets : [];
+        if (buckets.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.72rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("ci_coverage_bucket"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_coverage_conf_range"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_coverage_n"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_coverage_empirical"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_coverage_avg_width"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            for (const b of buckets) {
+                const confRange = `[${Number(b.confidence_lower || 0).toFixed(3)}, ${Number(b.confidence_upper || 0).toFixed(3)}]`;
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem">${escapeHtml(b.bucket_label || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right">${confRange}</td>
+                    <td style="padding:0.25rem;text-align:right">${b.n_matches ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(b.empirical_coverage || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(b.avg_ci_width || 0).toFixed(4)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_coverage_no_buckets"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("ci_coverage_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderDriftHeatmap() {
+    const body = document.getElementById("backtest-drift-heatmap-body");
+    const btn = document.getElementById("btn-drift-heatmap");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("drift_heatmap_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/drift-heatmap");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("drift_heatmap_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("drift_heatmap_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const driftColor = data.drift_detected ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        const driftText = data.drift_detected ? t("drift_heatmap_drift_yes") : t("drift_heatmap_drift_no");
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:${driftColor}">${escapeHtml(driftText)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_drift"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_windows"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_confidence_buckets ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_buckets"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_matches"))}</div>
+            </div>
+        </div>`;
+        const cells = Array.isArray(data.cells) ? data.cells : [];
+        if (cells.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.7rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("drift_heatmap_window"))}</th>
+                        <th style="padding:0.25rem">${escapeHtml(t("drift_heatmap_conf_bucket"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("drift_heatmap_n"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("drift_heatmap_accuracy"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("drift_heatmap_brier"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("drift_heatmap_rps"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("drift_heatmap_log_loss"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            for (const c of cells) {
+                const ll = (c.log_loss === null || c.log_loss === undefined) ? "–" : Number(c.log_loss).toFixed(4);
+                const brierColor = `hsl(${Math.max(0, 120 - Number(c.brier || 0) * 500)}, 70%, 45%)`;
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem;font-size:0.66rem">${escapeHtml(c.window_start || "–")} → ${escapeHtml(c.window_end || "–")}</td>
+                    <td style="padding:0.25rem">${escapeHtml(c.confidence_bucket || "–")} <span style="font-size:0.62rem;color:var(--text-muted)">[${Number(c.confidence_lower || 0).toFixed(3)},${Number(c.confidence_upper || 0).toFixed(3)}]</span></td>
+                    <td style="padding:0.25rem;text-align:right">${c.n_matches ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(c.accuracy || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${brierColor};font-weight:600">${Number(c.brier || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(c.rps || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${ll}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("drift_heatmap_no_cells"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("drift_heatmap_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -8601,6 +8946,12 @@ async function renderBacktest() {
         if (foldCmpPanel) foldCmpPanel.style.display = "block";
         const leagueErrPanel = document.getElementById("backtest-league-error-panel");
         if (leagueErrPanel) leagueErrPanel.style.display = "block";
+        const featureImpPanel = document.getElementById("backtest-feature-importance-panel");
+        if (featureImpPanel) featureImpPanel.style.display = "block";
+        const ciCovPanel = document.getElementById("backtest-ci-coverage-panel");
+        if (ciCovPanel) ciCovPanel.style.display = "block";
+        const driftHmPanel = document.getElementById("backtest-drift-heatmap-panel");
+        if (driftHmPanel) driftHmPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -9437,6 +9788,36 @@ function bindEvents() {
         leagueErrBtn.addEventListener("click", () => {
             fetchAndRenderLeagueErrorAnalysis().catch(
                 (e) => console.warn("League error analysis failed:", e)
+            );
+        });
+    }
+
+    // Feature importance button: bin-wise Brier separation ranking
+    const featureImpBtn = document.getElementById("btn-feature-importance");
+    if (featureImpBtn) {
+        featureImpBtn.addEventListener("click", () => {
+            fetchAndRenderFeatureImportance().catch(
+                (e) => console.warn("Feature importance failed:", e)
+            );
+        });
+    }
+
+    // CI coverage button: bootstrap CI coverage validation
+    const ciCovBtn = document.getElementById("btn-ci-coverage");
+    if (ciCovBtn) {
+        ciCovBtn.addEventListener("click", () => {
+            fetchAndRenderCICoverage().catch(
+                (e) => console.warn("CI coverage failed:", e)
+            );
+        });
+    }
+
+    // Drift heatmap button: window × confidence bucket grid
+    const driftHmBtn = document.getElementById("btn-drift-heatmap");
+    if (driftHmBtn) {
+        driftHmBtn.addEventListener("click", () => {
+            fetchAndRenderDriftHeatmap().catch(
+                (e) => console.warn("Drift heatmap failed:", e)
             );
         });
     }

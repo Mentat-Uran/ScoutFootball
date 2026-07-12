@@ -3046,6 +3046,342 @@ def get_league_error_analysis(
         return {"status": "error", "message": str(exc)}
 
 
+def get_feature_importance(
+    *, n_bins: int = 5, min_samples_per_bin: int = 10,
+) -> dict:
+    """Return feature importance ranking from backtest predictions.
+
+    Ranks input feature columns by how strongly they separate prediction
+    error (bin-wise Brier standard deviation). Prefers Dixon-Coles decay
+    predictions, falls back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = f"feature_importance_{n_bins}_{min_samples_per_bin}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_feature_importance,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_feature_importance(
+                    preds_df,
+                    n_bins=n_bins,
+                    min_samples_per_bin=min_samples_per_bin,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_features": report.n_features,
+                    "n_total_matches": report.n_total_matches,
+                    "overall_brier": report.overall_brier,
+                    "disclaimer": report.disclaimer,
+                    "features": [
+                        {
+                            "feature": fe.feature,
+                            "importance": fe.importance,
+                            "mean_value": fe.mean_value,
+                            "std_value": fe.std_value,
+                            "n_matches": fe.n_matches,
+                            "bins": [
+                                {
+                                    "bin_label": b.bin_label,
+                                    "bin_lower": b.bin_lower,
+                                    "bin_upper": b.bin_upper,
+                                    "n_matches": b.n_matches,
+                                    "accuracy": b.accuracy,
+                                    "brier": b.brier,
+                                    "avg_confidence": b.avg_confidence,
+                                }
+                                for b in fe.bins
+                            ],
+                        }
+                        for fe in report.features
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_ci_coverage(
+    *,
+    ci_lower_col: str = "home_win_ci_lower",
+    ci_upper_col: str = "home_win_ci_upper",
+    nominal_level: float | None = None,
+    n_bins: int = 5,
+    min_samples_per_bucket: int = 10,
+) -> dict:
+    """Return confidence band coverage analysis from backtest predictions.
+
+    Validates whether bootstrap confidence intervals achieve their nominal
+    coverage. Prefers Dixon-Coles decay predictions, falls back to Poisson.
+    Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = (
+        f"ci_coverage_{ci_lower_col}_{ci_upper_col}_{nominal_level}_"
+        f"{n_bins}_{min_samples_per_bucket}"
+    )
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_ci_coverage
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            elif ci_lower_col not in preds_df.columns or ci_upper_col not in preds_df.columns:
+                result = {
+                    "status": "not_available",
+                    "instructions": (
+                        f"Backtest predictions do not include CI columns "
+                        f"'{ci_lower_col}'/'{ci_upper_col}'. Re-run backtest "
+                        f"with bootstrap CI generation enabled."
+                    ),
+                }
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_ci_coverage(
+                    preds_df,
+                    ci_lower_col=ci_lower_col,
+                    ci_upper_col=ci_upper_col,
+                    nominal_level=nominal_level,
+                    n_bins=n_bins,
+                    min_samples_per_bucket=min_samples_per_bucket,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "overall_coverage": report.overall_coverage,
+                    "avg_ci_width": report.avg_ci_width,
+                    "n_matches": report.n_matches,
+                    "nominal_level": report.nominal_level,
+                    "coverage_assessment": report.coverage_assessment,
+                    "disclaimer": report.disclaimer,
+                    "buckets": [
+                        {
+                            "bucket_label": b.bucket_label,
+                            "confidence_lower": b.confidence_lower,
+                            "confidence_upper": b.confidence_upper,
+                            "n_matches": b.n_matches,
+                            "empirical_coverage": b.empirical_coverage,
+                            "avg_ci_width": b.avg_ci_width,
+                            "nominal_coverage": b.nominal_coverage,
+                        }
+                        for b in report.buckets
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_calibration_drift_heatmap(
+    *,
+    window_size: str = "90D",
+    n_confidence_bins: int = 4,
+    min_samples_per_cell: int = 5,
+) -> dict:
+    """Return calibration drift heatmap from backtest predictions.
+
+    Computes a 2D grid of accuracy/Brier/RPS/LogLoss over time windows ×
+    confidence buckets. Prefers Dixon-Coles decay predictions, falls back
+    to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = (
+        f"drift_heatmap_{window_size}_{n_confidence_bins}_{min_samples_per_cell}"
+    )
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_calibration_drift_heatmap,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            elif "match_date" not in preds_df.columns:
+                result = {
+                    "status": "not_available",
+                    "instructions": (
+                        "Backtest predictions do not include a 'match_date' "
+                        "column. Re-run backtest with match date metadata."
+                    ),
+                }
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_calibration_drift_heatmap(
+                    preds_df,
+                    window_size=window_size,
+                    n_confidence_bins=n_confidence_bins,
+                    min_samples_per_cell=min_samples_per_cell,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_windows": report.n_windows,
+                    "n_confidence_buckets": report.n_confidence_buckets,
+                    "n_total_matches": report.n_total_matches,
+                    "window_labels": report.window_labels,
+                    "confidence_bucket_labels": report.confidence_bucket_labels,
+                    "drift_detected": report.drift_detected,
+                    "disclaimer": report.disclaimer,
+                    "cells": [
+                        {
+                            "window_label": c.window_label,
+                            "window_start": c.window_start,
+                            "window_end": c.window_end,
+                            "confidence_bucket": c.confidence_bucket,
+                            "confidence_lower": c.confidence_lower,
+                            "confidence_upper": c.confidence_upper,
+                            "n_matches": c.n_matches,
+                            "accuracy": c.accuracy,
+                            "brier": c.brier,
+                            "rps": c.rps,
+                            "log_loss": c.log_loss,
+                        }
+                        for c in report.cells
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
     """Return an aggregated prediction diagnostics summary for a fixture.
 

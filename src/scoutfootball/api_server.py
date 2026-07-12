@@ -28,7 +28,9 @@ from scoutfootball.api import (
     get_backtest_comparison,
     get_calibration_comparison,
     get_calibration_drift,
+    get_calibration_drift_heatmap,
     get_calibration_drift_timeline,
+    get_ci_coverage,
     get_confidence_distribution,
     get_confidence_interval_plot,
     get_decay_tuning,
@@ -37,6 +39,7 @@ from scoutfootball.api import (
     get_ensemble_prediction,
     get_ensemble_weights,
     get_error_analysis,
+    get_feature_importance,
     get_fold_comparison,
     get_form_weighted_prediction,
     get_h2h_bias_correction,
@@ -376,6 +379,44 @@ def create_app() -> FastAPI:
         return get_league_error_analysis(
             min_matches_per_league=min_matches_per_league,
             top_n=top_n,
+        )
+
+    @app.get("/predictions/calibration/feature-importance")
+    def predictions_calibration_feature_importance(
+        n_bins: int = Query(5, ge=2, le=20),
+        min_samples_per_bin: int = Query(10, ge=1, le=100),
+    ):
+        return get_feature_importance(
+            n_bins=n_bins,
+            min_samples_per_bin=min_samples_per_bin,
+        )
+
+    @app.get("/predictions/calibration/ci-coverage")
+    def predictions_calibration_ci_coverage(
+        ci_lower_col: str = Query("home_win_ci_lower", max_length=64),
+        ci_upper_col: str = Query("home_win_ci_upper", max_length=64),
+        nominal_level: float | None = Query(None, ge=0.0, le=1.0),
+        n_bins: int = Query(5, ge=2, le=20),
+        min_samples_per_bucket: int = Query(10, ge=1, le=100),
+    ):
+        return get_ci_coverage(
+            ci_lower_col=ci_lower_col,
+            ci_upper_col=ci_upper_col,
+            nominal_level=nominal_level,
+            n_bins=n_bins,
+            min_samples_per_bucket=min_samples_per_bucket,
+        )
+
+    @app.get("/predictions/calibration/drift-heatmap")
+    def predictions_calibration_drift_heatmap(
+        window_size: str = Query("90D", max_length=16),
+        n_confidence_bins: int = Query(4, ge=2, le=15),
+        min_samples_per_cell: int = Query(5, ge=1, le=100),
+    ):
+        return get_calibration_drift_heatmap(
+            window_size=window_size,
+            n_confidence_bins=n_confidence_bins,
+            min_samples_per_cell=min_samples_per_cell,
         )
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")

@@ -3805,3 +3805,668 @@ def compute_league_error_analysis(
         overall_brier=overall_brier,
         disclaimer=disclaimer,
     )
+
+
+# ---------------------------------------------------------------------------
+# Feature importance ranking (bin-based Brier separation)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FeatureImportanceBin:
+    """Per-bin statistics for a feature column."""
+
+    bin_label: str
+    bin_lower: float
+    bin_upper: float
+    n_matches: int
+    accuracy: float
+    brier: float
+    avg_confidence: float
+
+
+@dataclass(frozen=True)
+class FeatureImportanceEntry:
+    """Importance summary for a single feature column."""
+
+    feature: str
+    importance: float
+    mean_value: float
+    std_value: float
+    n_matches: int
+    bins: list[FeatureImportanceBin]
+
+
+@dataclass(frozen=True)
+class FeatureImportanceReport:
+    """Aggregated feature importance ranking report."""
+
+    features: list[FeatureImportanceEntry]
+    n_features: int
+    n_total_matches: int
+    overall_brier: float
+    disclaimer: str
+
+
+# Columns that must never be treated as model input features.
+_FEATURE_EXCLUDE_COLUMNS = {
+    "home_win_probability",
+    "draw_probability",
+    "away_win_probability",
+    "actual_outcome",
+    "home_goals",
+    "away_goals",
+    "match_id",
+    "match_date",
+    "league",
+    "fold",
+    "exact_score_probability",
+    "home_win_ci_lower",
+    "home_win_ci_upper",
+    "draw_win_ci_lower",
+    "draw_win_ci_upper",
+    "away_win_ci_lower",
+    "away_win_ci_upper",
+    "predicted_outcome",
+    "correct",
+}
+
+
+def compute_feature_importance(
+    predictions: pd.DataFrame,
+    *,
+    features: tuple[str, ...] | None = None,
+    n_bins: int = 5,
+    min_samples_per_bin: int = 10,
+) -> FeatureImportanceReport:
+    """Rank input features by how strongly they separate prediction error.
+
+    For each numeric feature column, predictions are bucketed into
+    ``n_bins`` quantile bins and the per-bin Brier score is computed.
+    The importance score is the standard deviation of bin-level Brier
+    values (weighted by bin size); higher values indicate the feature
+    more strongly separates good vs bad predictions.
+
+    Args:
+        predictions: DataFrame with backtest prediction columns plus
+            numeric feature columns. When ``features`` is None, numeric
+            columns excluding probabilities/outcomes/goals/date/league
+            are auto-detected.
+        features: Optional explicit list of feature column names.
+        n_bins: Number of quantile bins per feature (2-20).
+        min_samples_per_bin: Minimum samples per bin; bins below this
+            threshold are excluded from importance calculation.
+
+    Returns:
+        FeatureImportanceReport with features sorted by importance desc.
+
+    Raises:
+        ValueError: If required probability columns are missing or
+            ``n_bins`` is outside [2, 20].
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    if n_bins < 2 or n_bins > 20:
+        raise ValueError(f"n_bins must be in [2, 20], got {n_bins}")
+
+    disclaimer = (
+        "Feature importance is computed via bin-wise Brier separation "
+        "and reflects association, not causal effect. Features with "
+        "small sample sizes per bin may show inflated importance."
+    )
+
+    df = predictions.copy()
+
+    def _brier_row(row: pd.Series) -> float:
+        return _brier_per_match(
+            row["home_win_probability"],
+            row["draw_probability"],
+            row["away_win_probability"],
+            str(row["actual_outcome"]),
+        )
+
+    df["_brier"] = df.apply(_brier_row, axis=1)
+    overall_brier = round(float(df["_brier"].mean()), 4)
+
+    # Auto-detect feature columns when not provided.
+    if features is None:
+        feature_cols: list[str] = []
+        for col in df.columns:
+            if col in _FEATURE_EXCLUDE_COLUMNS or col.startswith("_"):
+                continue
+            if col == "home_team" or col == "away_team":
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                if df[col].dropna().nunique() > 1:
+                    feature_cols.append(col)
+    else:
+        feature_cols = list(features)
+        for fc in feature_cols:
+            if fc not in df.columns:
+                raise ValueError(f"feature column not found: {fc}")
+
+    entries: list[FeatureImportanceEntry] = []
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+    for col in feature_cols:
+        keep_cols = [col, "_brier", "actual_outcome"] + probs_cols
+        col_data = df[keep_cols].dropna(subset=[col, "_brier"])
+        if len(col_data) < min_samples_per_bin:
+            continue
+        if col_data[col].nunique() < 2:
+            continue
+        try:
+            col_data = col_data.assign(_bin=pd.qcut(
+                col_data[col],
+                q=n_bins,
+                duplicates="drop",
+                labels=False,
+            ))
+        except ValueError:
+            # Sufficient unique values but qcut failed; fall back to equal-width.
+            col_data = col_data.assign(_bin=pd.cut(
+                col_data[col],
+                bins=min(n_bins, col_data[col].nunique()),
+                labels=False,
+                include_lowest=True,
+            ))
+        col_data = col_data.dropna(subset=["_bin"])
+        if col_data.empty:
+            continue
+
+        bins: list[FeatureImportanceBin] = []
+        bin_briers: list[float] = []
+        bin_weights: list[int] = []
+        for bid in sorted(col_data["_bin"].unique()):
+            chunk = col_data.loc[col_data["_bin"] == bid]
+            if len(chunk) < min_samples_per_bin:
+                continue
+            bin_brier = float(chunk["_brier"].mean())
+            bin_briers.append(bin_brier)
+            bin_weights.append(len(chunk))
+            bin_lower = float(chunk[col].min())
+            bin_upper = float(chunk[col].max())
+            bins.append(FeatureImportanceBin(
+                bin_label=f"bin_{int(bid)}",
+                bin_lower=round(bin_lower, 4),
+                bin_upper=round(bin_upper, 4),
+                n_matches=len(chunk),
+                accuracy=round(_accuracy_for_df(chunk), 4),
+                brier=round(bin_brier, 4),
+                avg_confidence=round(_avg_confidence_for_df(chunk), 4),
+            ))
+
+        if len(bin_briers) < 2:
+            continue
+
+        # Weighted std of bin Brier scores.
+        weights = np.array(bin_weights, dtype=float)
+        values = np.array(bin_briers, dtype=float)
+        weighted_mean = float(np.average(values, weights=weights))
+        if len(values) > 1:
+            variance = float(
+                np.average((values - weighted_mean) ** 2, weights=weights)
+            )
+            importance = float(np.sqrt(variance))
+        else:
+            importance = 0.0
+
+        entries.append(FeatureImportanceEntry(
+            feature=col,
+            importance=round(importance, 6),
+            mean_value=round(float(col_data[col].mean()), 4),
+            std_value=round(float(col_data[col].std()), 4),
+            n_matches=len(col_data),
+            bins=bins,
+        ))
+
+    entries.sort(key=lambda x: x.importance, reverse=True)
+
+    n_total = sum(e.n_matches for e in entries) if entries else 0
+    return FeatureImportanceReport(
+        features=entries,
+        n_features=len(entries),
+        n_total_matches=n_total,
+        overall_brier=overall_brier,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Confidence band coverage analysis
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CoverageBucket:
+    """Per-confidence-bucket coverage statistics."""
+
+    bucket_label: str
+    confidence_lower: float
+    confidence_upper: float
+    n_matches: int
+    empirical_coverage: float
+    avg_ci_width: float
+    nominal_coverage: float | None
+
+
+@dataclass(frozen=True)
+class CICoverageReport:
+    """Confidence band coverage analysis report."""
+
+    overall_coverage: float
+    avg_ci_width: float
+    n_matches: int
+    nominal_level: float | None
+    coverage_assessment: str
+    buckets: list[CoverageBucket]
+    disclaimer: str
+
+
+def compute_ci_coverage(
+    predictions: pd.DataFrame,
+    *,
+    ci_lower_col: str = "home_win_ci_lower",
+    ci_upper_col: str = "home_win_ci_upper",
+    nominal_level: float | None = None,
+    n_bins: int = 5,
+    min_samples_per_bucket: int = 10,
+) -> CICoverageReport:
+    """Validate whether bootstrap confidence bands achieve nominal coverage.
+
+    For each prediction, checks whether the actual home-win indicator
+    (1 if ``actual_outcome`` == "home_win", else 0) falls within the
+    interval ``[ci_lower, ci_upper]``. Computes the empirical coverage
+    and compares it to the nominal level when provided.
+
+    Args:
+        predictions: DataFrame with CI columns plus ``actual_outcome``.
+        ci_lower_col: Column name for CI lower bound (default
+            ``home_win_ci_lower``).
+        ci_upper_col: Column name for CI upper bound (default
+            ``home_win_ci_upper``).
+        nominal_level: Optional nominal coverage level (e.g., 0.80 for
+            80% CIs). When provided, coverage assessment is computed.
+        n_bins: Number of confidence buckets (2-20).
+        min_samples_per_bucket: Minimum samples per bucket.
+
+    Returns:
+        CICoverageReport with overall and per-bucket coverage stats.
+
+    Raises:
+        ValueError: If CI columns or ``actual_outcome`` are missing, or
+            ``n_bins`` is outside [2, 20].
+    """
+    required = {ci_lower_col, ci_upper_col, "actual_outcome"}
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    if n_bins < 2 or n_bins > 20:
+        raise ValueError(f"n_bins must be in [2, 20], got {n_bins}")
+
+    disclaimer = (
+        "Coverage analysis validates whether bootstrap confidence "
+        "intervals achieve their nominal coverage. Undercoverage (<80%) "
+        "indicates CIs are too narrow; overcoverage (>95%) indicates "
+        "CIs are too wide. Small buckets may have high variance."
+    )
+
+    df = predictions.copy()
+    df["_ci_lower"] = pd.to_numeric(df[ci_lower_col], errors="coerce")
+    df["_ci_upper"] = pd.to_numeric(df[ci_upper_col], errors="coerce")
+    df = df.dropna(subset=["_ci_lower", "_ci_upper", "actual_outcome"])
+
+    if df.empty:
+        return CICoverageReport(
+            overall_coverage=0.0,
+            avg_ci_width=0.0,
+            n_matches=0,
+            nominal_level=nominal_level,
+            coverage_assessment="insufficient_data",
+            buckets=[],
+            disclaimer=disclaimer,
+        )
+
+    df["_actual_home_win"] = (
+        df["actual_outcome"].astype(str) == "home_win"
+    ).astype(float)
+    df["_ci_width"] = (df["_ci_upper"] - df["_ci_lower"]).clip(lower=0.0)
+    df["_covered"] = (
+        (df["_actual_home_win"] >= df["_ci_lower"])
+        & (df["_actual_home_win"] <= df["_ci_upper"])
+    )
+
+    overall_coverage = float(df["_covered"].mean())
+    avg_ci_width = float(df["_ci_width"].mean())
+
+    # Coverage assessment against nominal level.
+    if nominal_level is not None:
+        diff = overall_coverage - float(nominal_level)
+        if diff < -0.05:
+            assessment = "undercoverage"
+        elif diff > 0.05:
+            assessment = "overcoverage"
+        else:
+            assessment = "well_calibrated"
+    else:
+        # Without a nominal level, use absolute thresholds.
+        if overall_coverage < 0.80:
+            assessment = "undercoverage"
+        elif overall_coverage > 0.95:
+            assessment = "overcoverage"
+        else:
+            assessment = "well_calibrated"
+
+    # Per-confidence-bucket coverage.
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+    if all(c in df.columns for c in probs_cols):
+        df["_confidence"] = df[probs_cols].max(axis=1)
+    elif "home_win_probability" in df.columns:
+        df["_confidence"] = df["home_win_probability"]
+    else:
+        df["_confidence"] = df["_ci_lower"]
+
+    try:
+        df["_bucket"] = pd.qcut(
+            df["_confidence"],
+            q=n_bins,
+            duplicates="drop",
+            labels=False,
+        )
+    except ValueError:
+        df["_bucket"] = pd.cut(
+            df["_confidence"],
+            bins=min(n_bins, df["_confidence"].nunique()),
+            labels=False,
+            include_lowest=True,
+        )
+
+    buckets: list[CoverageBucket] = []
+    for bid in sorted(df["_bucket"].dropna().unique()):
+        chunk = df.loc[df["_bucket"] == bid]
+        if len(chunk) < min_samples_per_bucket:
+            continue
+        conf_lower = float(chunk["_confidence"].min())
+        conf_upper = float(chunk["_confidence"].max())
+        buckets.append(CoverageBucket(
+            bucket_label=f"conf_bin_{int(bid)}",
+            confidence_lower=round(conf_lower, 4),
+            confidence_upper=round(conf_upper, 4),
+            n_matches=len(chunk),
+            empirical_coverage=round(float(chunk["_covered"].mean()), 4),
+            avg_ci_width=round(float(chunk["_ci_width"].mean()), 4),
+            nominal_coverage=round(float(nominal_level), 4) if nominal_level else None,
+        ))
+
+    return CICoverageReport(
+        overall_coverage=round(overall_coverage, 4),
+        avg_ci_width=round(avg_ci_width, 4),
+        n_matches=len(df),
+        nominal_level=round(float(nominal_level), 4) if nominal_level else None,
+        coverage_assessment=assessment,
+        buckets=buckets,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Calibration drift heatmap (window × confidence bucket grid)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DriftHeatmapCell:
+    """A single cell in the calibration drift heatmap grid."""
+
+    window_label: str
+    window_start: str
+    window_end: str
+    confidence_bucket: str
+    confidence_lower: float
+    confidence_upper: float
+    n_matches: int
+    accuracy: float
+    brier: float
+    rps: float
+    log_loss: float | None
+
+
+@dataclass(frozen=True)
+class DriftHeatmapReport:
+    """Calibration drift heatmap report.
+
+    Combines time-window segmentation with confidence-bucket segmentation
+    to produce a 2D grid of per-cell metrics. Useful for spotting
+    degradation that only affects high-confidence or low-confidence
+    predictions over time.
+    """
+
+    cells: list[DriftHeatmapCell]
+    n_windows: int
+    n_confidence_buckets: int
+    n_total_matches: int
+    window_labels: list[str]
+    confidence_bucket_labels: list[str]
+    drift_detected: bool
+    disclaimer: str
+
+
+def compute_calibration_drift_heatmap(
+    predictions: pd.DataFrame,
+    *,
+    window_col: str = "match_date",
+    window_size: str = "90D",
+    n_confidence_bins: int = 4,
+    min_samples_per_cell: int = 5,
+) -> DriftHeatmapReport:
+    """Compute a 2D heatmap of calibration metrics over time × confidence.
+
+    Segments predictions into time windows (via ``window_size``) and
+    confidence buckets (via ``n_confidence_bins`` quantiles on the max
+    predicted probability), then computes accuracy/Brier/RPS/LogLoss
+    per cell.
+
+    Args:
+        predictions: DataFrame with prediction columns, ``actual_outcome``,
+            and ``window_col``.
+        window_col: Column to use for time windowing (default match_date).
+        window_size: Pandas frequency string for window size.
+        n_confidence_bins: Number of confidence buckets (2-15).
+        min_samples_per_cell: Minimum samples per cell; cells below this
+            threshold are excluded.
+
+    Returns:
+        DriftHeatmapReport with the 2D grid and drift detection flag.
+
+    Raises:
+        ValueError: If required columns are missing or ``n_confidence_bins``
+            is outside [2, 15].
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome", window_col,
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    if n_confidence_bins < 2 or n_confidence_bins > 15:
+        raise ValueError(
+            f"n_confidence_bins must be in [2, 15], got {n_confidence_bins}"
+        )
+
+    disclaimer = (
+        "The drift heatmap reveals temporal calibration patterns across "
+        "confidence levels. Cells with high Brier indicate regions where "
+        "the model is over-confident or mis-calibrated. Empty cells "
+        "indicate insufficient samples."
+    )
+
+    df = predictions.copy()
+    df[window_col] = pd.to_datetime(df[window_col], errors="coerce")
+    df = df.dropna(subset=[window_col]).sort_values(window_col).reset_index(drop=True)
+
+    has_exact = "exact_score_probability" in df.columns
+
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+    df["_confidence"] = df[probs_cols].max(axis=1)
+
+    if df.empty:
+        return DriftHeatmapReport(
+            cells=[],
+            n_windows=0,
+            n_confidence_buckets=0,
+            n_total_matches=0,
+            window_labels=[],
+            confidence_bucket_labels=[],
+            drift_detected=False,
+            disclaimer=disclaimer,
+        )
+
+    # Build confidence buckets on the full DataFrame BEFORE windowing so
+    # that bucket boundaries are consistent across windows.
+    try:
+        df = df.assign(_conf_bin=pd.qcut(
+            df["_confidence"],
+            q=n_confidence_bins,
+            duplicates="drop",
+            labels=False,
+        ))
+    except ValueError:
+        df = df.assign(_conf_bin=pd.cut(
+            df["_confidence"],
+            bins=min(n_confidence_bins, df["_confidence"].nunique()),
+            labels=False,
+            include_lowest=True,
+        ))
+
+    # Determine global confidence bucket boundaries for labeling.
+    bucket_bounds: dict[int, tuple[float, float]] = {}
+    for bid in sorted(df["_conf_bin"].dropna().unique()):
+        chunk = df.loc[df["_conf_bin"] == bid]
+        bucket_bounds[int(bid)] = (
+            float(chunk["_confidence"].min()),
+            float(chunk["_confidence"].max()),
+        )
+
+    confidence_labels = [
+        f"conf_{bid}_[{lo:.3f},{hi:.3f}]"
+        for bid, (lo, hi) in sorted(bucket_bounds.items())
+    ]
+
+    # Build time windows (after _conf_bin is assigned so windows inherit it).
+    min_date = df[window_col].min()
+    max_date = df[window_col].max()
+    windows: list[tuple[str, str, pd.DataFrame]] = []
+    current_start = min_date
+    while current_start <= max_date:
+        current_end = current_start + pd.Timedelta(window_size)
+        window_df = df[
+            (df[window_col] >= current_start) & (df[window_col] < current_end)
+        ].copy()
+        if not window_df.empty:
+            windows.append((
+                current_start.strftime("%Y-%m-%d"),
+                current_end.strftime("%Y-%m-%d"),
+                window_df,
+            ))
+        current_start = current_end
+
+    if not windows:
+        return DriftHeatmapReport(
+            cells=[],
+            n_windows=0,
+            n_confidence_buckets=0,
+            n_total_matches=0,
+            window_labels=[],
+            confidence_bucket_labels=[],
+            drift_detected=False,
+            disclaimer=disclaimer,
+        )
+
+    cells: list[DriftHeatmapCell] = []
+    # Track per-window overall Brier for drift detection.
+    window_briers: list[float] = []
+    for start_str, end_str, window_df in windows:
+        window_label = f"{start_str}_{end_str}"
+        window_brier = float(
+            window_df.apply(
+                lambda r: _brier_per_match(
+                    r["home_win_probability"],
+                    r["draw_probability"],
+                    r["away_win_probability"],
+                    str(r["actual_outcome"]),
+                ),
+                axis=1,
+            ).mean()
+        ) if not window_df.empty else 0.0
+        window_briers.append(window_brier)
+
+        for bid in sorted(bucket_bounds.keys()):
+            chunk = window_df.loc[window_df["_conf_bin"] == bid]
+            if len(chunk) < min_samples_per_cell:
+                continue
+            conf_lo, conf_hi = bucket_bounds[bid]
+            ll = None
+            if has_exact:
+                ll = _safe_log_loss_avg(
+                    chunk["exact_score_probability"].apply(
+                        lambda p: _log_loss_per_match(
+                            float(p) if pd.notna(p) else None, 0, 0,
+                        )
+                    ),
+                    has_exact,
+                )
+            cells.append(DriftHeatmapCell(
+                window_label=window_label,
+                window_start=start_str,
+                window_end=end_str,
+                confidence_bucket=f"conf_{bid}",
+                confidence_lower=round(conf_lo, 4),
+                confidence_upper=round(conf_hi, 4),
+                n_matches=len(chunk),
+                accuracy=round(_accuracy_for_df(chunk), 4),
+                brier=round(_brier_1x2(chunk), 4),
+                rps=round(_ranked_probability_score(chunk), 4),
+                log_loss=ll,
+            ))
+
+    # Drift detection: compare latest window Brier to historical mean.
+    drift_detected = False
+    if len(window_briers) >= 2:
+        historical_avg = float(np.mean(window_briers[:-1]))
+        latest = window_briers[-1]
+        if historical_avg > 0:
+            relative_change = (latest - historical_avg) / historical_avg
+            drift_detected = relative_change > 0.05
+
+    window_labels_list = [
+        f"{s}_{e}" for s, e, _ in windows
+    ]
+    n_total = sum(c.n_matches for c in cells)
+
+    return DriftHeatmapReport(
+        cells=cells,
+        n_windows=len(windows),
+        n_confidence_buckets=len(bucket_bounds),
+        n_total_matches=n_total,
+        window_labels=window_labels_list,
+        confidence_bucket_labels=confidence_labels,
+        drift_detected=drift_detected,
+        disclaimer=disclaimer,
+    )
