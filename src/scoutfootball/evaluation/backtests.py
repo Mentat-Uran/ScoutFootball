@@ -4470,3 +4470,638 @@ def compute_calibration_drift_heatmap(
         drift_detected=drift_detected,
         disclaimer=disclaimer,
     )
+
+
+# ---------------------------------------------------------------------------
+# Prediction error clustering (k-means on worst-decile feature signatures)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ErrorClusterCentroid:
+    """Per-feature centroid value for an error cluster."""
+
+    feature: str
+    centroid_value: float
+    abs_centroid: float
+
+
+@dataclass(frozen=True)
+class ErrorCluster:
+    """Statistics for a single cluster of prediction errors."""
+
+    cluster_id: int
+    n_matches: int
+    avg_brier: float
+    avg_confidence: float
+    accuracy: float
+    dominant_actual_outcome: str
+    dominant_predicted_outcome: str
+    top_centroid_features: list[ErrorClusterCentroid]
+
+
+@dataclass(frozen=True)
+class ErrorClusteringReport:
+    """Report grouping worst predictions into clusters by feature signature."""
+
+    clusters: list[ErrorCluster]
+    n_clusters: int
+    n_total_matches: int
+    n_features_used: int
+    error_percentile: float
+    n_worst_matches: int
+    overall_avg_brier: float
+    disclaimer: str
+
+
+def compute_error_clustering(
+    predictions: pd.DataFrame,
+    *,
+    n_clusters: int = 3,
+    error_percentile: float = 0.1,
+    features: tuple[str, ...] | None = None,
+    min_samples_per_cluster: int = 5,
+    random_state: int = 42,
+) -> ErrorClusteringReport:
+    """Cluster the worst predictions by feature signature using k-means.
+
+    Selects the bottom ``error_percentile`` (worst) predictions by Brier
+    score, standardizes the feature columns, and runs k-means clustering
+    to surface common error patterns.
+
+    Args:
+        predictions: DataFrame with prediction columns, ``actual_outcome``,
+            and numeric feature columns.
+        n_clusters: Number of k-means clusters (2-8).
+        error_percentile: Fraction of worst predictions to select (0.01-0.5).
+        features: Optional explicit list of feature column names.
+        min_samples_per_cluster: Minimum samples per cluster; clusters below
+            this threshold are excluded.
+        random_state: Random seed for reproducibility.
+
+    Returns:
+        ErrorClusteringReport with per-cluster stats and centroids.
+
+    Raises:
+        ValueError: If required columns are missing, ``n_clusters`` is
+            outside [2, 8], or ``error_percentile`` is outside (0, 0.5].
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    if n_clusters < 2 or n_clusters > 8:
+        raise ValueError(f"n_clusters must be in [2, 8], got {n_clusters}")
+
+    if error_percentile <= 0.0 or error_percentile > 0.5:
+        raise ValueError(
+            f"error_percentile must be in (0, 0.5], got {error_percentile}"
+        )
+
+    disclaimer = (
+        "Error clustering groups worst predictions by feature signature "
+        "via k-means. Clusters reveal common error patterns but do not "
+        "imply causation. Small clusters may be unreliable."
+    )
+
+    df = predictions.copy()
+
+    def _brier_row(row: pd.Series) -> float:
+        return _brier_per_match(
+            row["home_win_probability"],
+            row["draw_probability"],
+            row["away_win_probability"],
+            str(row["actual_outcome"]),
+        )
+
+    df["_brier"] = df.apply(_brier_row, axis=1)
+    overall_avg_brier = round(float(df["_brier"].mean()), 4)
+
+    # Auto-detect feature columns when not provided.
+    if features is None:
+        feature_cols: list[str] = []
+        for col in df.columns:
+            if col in _FEATURE_EXCLUDE_COLUMNS or col.startswith("_"):
+                continue
+            if col in ("home_team", "away_team"):
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                if df[col].dropna().nunique() > 1:
+                    feature_cols.append(col)
+    else:
+        feature_cols = list(features)
+        for fc in feature_cols:
+            if fc not in df.columns:
+                raise ValueError(f"feature column not found: {fc}")
+
+    if not feature_cols:
+        return ErrorClusteringReport(
+            clusters=[],
+            n_clusters=0,
+            n_total_matches=len(df),
+            n_features_used=0,
+            error_percentile=error_percentile,
+            n_worst_matches=0,
+            overall_avg_brier=overall_avg_brier,
+            disclaimer=disclaimer,
+        )
+
+    # Select worst predictions by Brier.
+    n_worst = max(n_clusters * min_samples_per_cluster, int(len(df) * error_percentile))
+    worst_df = df.nlargest(n_worst, "_brier").copy()
+
+    if len(worst_df) < n_clusters * min_samples_per_cluster:
+        return ErrorClusteringReport(
+            clusters=[],
+            n_clusters=0,
+            n_total_matches=len(df),
+            n_features_used=len(feature_cols),
+            error_percentile=error_percentile,
+            n_worst_matches=len(worst_df),
+            overall_avg_brier=overall_avg_brier,
+            disclaimer=disclaimer,
+        )
+
+    # Prepare feature matrix (drop rows with NaN in feature columns).
+    feature_data = worst_df[feature_cols].dropna()
+    if len(feature_data) < n_clusters * min_samples_per_cluster:
+        return ErrorClusteringReport(
+            clusters=[],
+            n_clusters=0,
+            n_total_matches=len(df),
+            n_features_used=len(feature_cols),
+            error_percentile=error_percentile,
+            n_worst_matches=len(feature_data),
+            overall_avg_brier=overall_avg_brier,
+            disclaimer=disclaimer,
+        )
+
+    # Standardize features.
+    means = feature_data.mean(axis=0)
+    stds = feature_data.std(axis=0).replace(0.0, 1.0)
+    standardized = (feature_data - means) / stds
+
+    # Run k-means clustering.
+    from sklearn.cluster import KMeans
+
+    km = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
+    labels = km.fit_predict(standardized.values)
+
+    worst_df = worst_df.loc[feature_data.index].copy()
+    worst_df["_cluster"] = labels
+
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+
+    def _predicted_outcome(row: pd.Series) -> str:
+        probs = {
+            "home_win": row["home_win_probability"],
+            "draw": row["draw_probability"],
+            "away_win": row["away_win_probability"],
+        }
+        return max(probs, key=probs.get)
+
+    clusters: list[ErrorCluster] = []
+    for cid in sorted(worst_df["_cluster"].unique()):
+        chunk = worst_df.loc[worst_df["_cluster"] == cid]
+        if len(chunk) < min_samples_per_cluster:
+            continue
+
+        # Centroid: mean standardized value per feature in this cluster.
+        chunk_std = standardized.loc[chunk.index]
+        centroid_values = chunk_std.mean(axis=0)
+        top_features = sorted(
+            [
+                ErrorClusterCentroid(
+                    feature=feat,
+                    centroid_value=round(float(centroid_values[feat]), 4),
+                    abs_centroid=round(abs(float(centroid_values[feat])), 4),
+                )
+                for feat in feature_cols
+            ],
+            key=lambda x: x.abs_centroid,
+            reverse=True,
+        )[:10]
+
+        actual_counts = chunk["actual_outcome"].value_counts()
+        dominant_actual = str(actual_counts.index[0]) if not actual_counts.empty else "unknown"
+        predicted_outcomes = chunk.apply(_predicted_outcome, axis=1)
+        pred_counts = predicted_outcomes.value_counts()
+        dominant_predicted = str(pred_counts.index[0]) if not pred_counts.empty else "unknown"
+
+        chunk_with_probs = chunk[probs_cols + ["actual_outcome"]].copy()
+        clusters.append(ErrorCluster(
+            cluster_id=int(cid),
+            n_matches=len(chunk),
+            avg_brier=round(float(chunk["_brier"].mean()), 4),
+            avg_confidence=round(_avg_confidence_for_df(chunk_with_probs), 4),
+            accuracy=round(_accuracy_for_df(chunk_with_probs), 4),
+            dominant_actual_outcome=dominant_actual,
+            dominant_predicted_outcome=dominant_predicted,
+            top_centroid_features=top_features,
+        ))
+
+    clusters.sort(key=lambda x: x.avg_brier, reverse=True)
+
+    n_total = sum(c.n_matches for c in clusters)
+
+    return ErrorClusteringReport(
+        clusters=clusters,
+        n_clusters=len(clusters),
+        n_total_matches=len(df),
+        n_features_used=len(feature_cols),
+        error_percentile=error_percentile,
+        n_worst_matches=n_total,
+        overall_avg_brier=overall_avg_brier,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Backtest data drift detection (KS test between train/holdout windows)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FeatureDriftEntry:
+    """Per-feature drift statistics between train and holdout windows."""
+
+    feature: str
+    ks_statistic: float
+    p_value: float
+    drifted: bool
+    train_mean: float
+    holdout_mean: float
+    mean_delta: float
+    train_std: float
+    holdout_std: float
+
+
+@dataclass(frozen=True)
+class DataDriftReport:
+    """Report on feature distribution drift between train and holdout."""
+
+    features: list[FeatureDriftEntry]
+    n_features: int
+    n_drifted: int
+    drift_ratio: float
+    n_train: int
+    n_holdout: int
+    split_date: str
+    p_value_threshold: float
+    disclaimer: str
+
+
+def compute_data_drift(
+    predictions: pd.DataFrame,
+    *,
+    window_col: str = "match_date",
+    split_ratio: float = 0.7,
+    split_date: str | None = None,
+    p_value_threshold: float = 0.05,
+    features: tuple[str, ...] | None = None,
+    min_samples: int = 20,
+) -> DataDriftReport:
+    """Detect feature distribution drift between train and holdout windows.
+
+    Splits predictions chronologically into training and holdout windows,
+    then runs a two-sample Kolmogorov-Smirnov test per numeric feature
+    to detect distribution shifts.
+
+    Args:
+        predictions: DataFrame with prediction columns, ``window_col``,
+            and numeric feature columns.
+        window_col: Column to use for chronological split (default match_date).
+        split_ratio: Fraction of data to use as training window (0.1-0.9).
+            Ignored when ``split_date`` is provided.
+        split_date: Explicit split date (ISO format string). When provided,
+            overrides ``split_ratio``.
+        p_value_threshold: P-value below which a feature is flagged as drifted.
+        features: Optional explicit list of feature column names.
+        min_samples: Minimum samples in both train and holdout for the test
+            to be meaningful.
+
+    Returns:
+        DataDriftReport with per-feature drift stats.
+
+    Raises:
+        ValueError: If required columns are missing, ``split_ratio`` is
+            outside [0.1, 0.9], or ``window_col`` is absent.
+    """
+    if window_col not in predictions.columns:
+        raise ValueError(f"predictions is missing required column: {window_col}")
+
+    if split_ratio < 0.1 or split_ratio > 0.9:
+        raise ValueError(f"split_ratio must be in [0.1, 0.9], got {split_ratio}")
+
+    if p_value_threshold <= 0.0 or p_value_threshold >= 1.0:
+        raise ValueError(
+            f"p_value_threshold must be in (0, 1), got {p_value_threshold}"
+        )
+
+    disclaimer = (
+        "Data drift detection uses the two-sample Kolmogorov-Smirnov test "
+        "per feature. A drifted feature (p < threshold) indicates its "
+        "distribution changed between train and holdout windows, which "
+        "may degrade model performance. Multiple testing is not corrected; "
+        "some features may be flagged by chance."
+    )
+
+    from scipy.stats import ks_2samp
+
+    df = predictions.copy()
+    df[window_col] = pd.to_datetime(df[window_col], errors="coerce")
+    df = df.dropna(subset=[window_col]).sort_values(window_col).reset_index(drop=True)
+
+    if len(df) < min_samples * 2:
+        return DataDriftReport(
+            features=[],
+            n_features=0,
+            n_drifted=0,
+            drift_ratio=0.0,
+            n_train=0,
+            n_holdout=0,
+            split_date="",
+            p_value_threshold=p_value_threshold,
+            disclaimer=disclaimer,
+        )
+
+    # Split into train and holdout.
+    if split_date is not None:
+        split_ts = pd.Timestamp(split_date)
+        train_df = df.loc[df[window_col] < split_ts]
+        holdout_df = df.loc[df[window_col] >= split_ts]
+        split_date_str = split_ts.strftime("%Y-%m-%d")
+    else:
+        split_idx = int(len(df) * split_ratio)
+        train_df = df.iloc[:split_idx]
+        holdout_df = df.iloc[split_idx:]
+        split_ts = train_df[window_col].max()
+        split_date_str = split_ts.strftime("%Y-%m-%d") if pd.notna(split_ts) else ""
+
+    if len(train_df) < min_samples or len(holdout_df) < min_samples:
+        return DataDriftReport(
+            features=[],
+            n_features=0,
+            n_drifted=0,
+            drift_ratio=0.0,
+            n_train=len(train_df),
+            n_holdout=len(holdout_df),
+            split_date=split_date_str,
+            p_value_threshold=p_value_threshold,
+            disclaimer=disclaimer,
+        )
+
+    # Auto-detect feature columns.
+    if features is None:
+        feature_cols: list[str] = []
+        for col in df.columns:
+            if col in _FEATURE_EXCLUDE_COLUMNS or col.startswith("_"):
+                continue
+            if col in ("home_team", "away_team"):
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                if df[col].dropna().nunique() > 1:
+                    feature_cols.append(col)
+    else:
+        feature_cols = list(features)
+        for fc in feature_cols:
+            if fc not in df.columns:
+                raise ValueError(f"feature column not found: {fc}")
+
+    entries: list[FeatureDriftEntry] = []
+    for col in feature_cols:
+        train_values = train_df[col].dropna()
+        holdout_values = holdout_df[col].dropna()
+        if len(train_values) < min_samples or len(holdout_values) < min_samples:
+            continue
+        if train_values.nunique() < 2 and holdout_values.nunique() < 2:
+            continue
+        ks_result = ks_2samp(train_values.values, holdout_values.values)
+        ks_stat = float(ks_result.statistic)
+        p_val = float(ks_result.pvalue)
+        drifted = p_val < p_value_threshold
+        entries.append(FeatureDriftEntry(
+            feature=col,
+            ks_statistic=round(ks_stat, 6),
+            p_value=round(p_val, 6),
+            drifted=drifted,
+            train_mean=round(float(train_values.mean()), 4),
+            holdout_mean=round(float(holdout_values.mean()), 4),
+            mean_delta=round(
+                float(holdout_values.mean() - train_values.mean()), 4,
+            ),
+            train_std=round(float(train_values.std()), 4),
+            holdout_std=round(float(holdout_values.std()), 4),
+        ))
+
+    entries.sort(key=lambda x: x.ks_statistic, reverse=True)
+
+    n_drifted = sum(1 for e in entries if e.drifted)
+    drift_ratio = round(n_drifted / len(entries), 4) if entries else 0.0
+
+    return DataDriftReport(
+        features=entries,
+        n_features=len(entries),
+        n_drifted=n_drifted,
+        drift_ratio=drift_ratio,
+        n_train=len(train_df),
+        n_holdout=len(holdout_df),
+        split_date=split_date_str,
+        p_value_threshold=p_value_threshold,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# CI width analysis (per-confidence-bucket CI width tracking)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CIWidthBucket:
+    """Per-confidence-bucket CI width statistics."""
+
+    bucket_label: str
+    confidence_lower: float
+    confidence_upper: float
+    n_matches: int
+    avg_ci_width: float
+    avg_ci_lower: float
+    avg_ci_upper: float
+    width_std: float
+    relative_width: float
+
+
+@dataclass(frozen=True)
+class CIWidthReport:
+    """Report on CI width distribution across confidence levels."""
+
+    buckets: list[CIWidthBucket]
+    n_matches: int
+    overall_avg_ci_width: float
+    overall_avg_confidence: float
+    width_confidence_correlation: float | None
+    widest_bucket: str
+    narrowest_bucket: str
+    assessment: str
+    disclaimer: str
+
+
+def compute_ci_width_analysis(
+    predictions: pd.DataFrame,
+    *,
+    ci_lower_col: str = "home_win_ci_lower",
+    ci_upper_col: str = "home_win_ci_upper",
+    n_bins: int = 5,
+    min_samples_per_bucket: int = 10,
+) -> CIWidthReport:
+    """Analyze CI width distribution across confidence levels.
+
+    Buckets predictions by max predicted probability and per bucket
+    computes average CI width, CI bounds, width std, and relative width
+    (avg_ci_width / avg_confidence). Surfaces over/under-confident CI
+    widths via the width-confidence correlation.
+
+    Args:
+        predictions: DataFrame with CI columns plus probability columns.
+        ci_lower_col: Column name for CI lower bound.
+        ci_upper_col: Column name for CI upper bound.
+        n_bins: Number of confidence buckets (2-20).
+        min_samples_per_bucket: Minimum samples per bucket.
+
+    Returns:
+        CIWidthReport with per-bucket CI width stats.
+
+    Raises:
+        ValueError: If CI or probability columns are missing, or
+            ``n_bins`` is outside [2, 20].
+    """
+    required = {
+        ci_lower_col, ci_upper_col,
+        "home_win_probability", "draw_probability", "away_win_probability",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    if n_bins < 2 or n_bins > 20:
+        raise ValueError(f"n_bins must be in [2, 20], got {n_bins}")
+
+    disclaimer = (
+        "CI width analysis tracks how confidence interval width varies "
+        "with prediction confidence. A negative correlation is expected "
+        "(higher confidence → narrower CI). Anomalous widening or "
+        "consistently narrow CIs may indicate miscalibration."
+    )
+
+    df = predictions.copy()
+    df["_ci_lower"] = pd.to_numeric(df[ci_lower_col], errors="coerce")
+    df["_ci_upper"] = pd.to_numeric(df[ci_upper_col], errors="coerce")
+    df = df.dropna(subset=["_ci_lower", "_ci_upper"])
+
+    if df.empty:
+        return CIWidthReport(
+            buckets=[],
+            n_matches=0,
+            overall_avg_ci_width=0.0,
+            overall_avg_confidence=0.0,
+            width_confidence_correlation=None,
+            widest_bucket="",
+            narrowest_bucket="",
+            assessment="insufficient_data",
+            disclaimer=disclaimer,
+        )
+
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+    df["_confidence"] = df[probs_cols].max(axis=1)
+    df["_ci_width"] = (df["_ci_upper"] - df["_ci_lower"]).clip(lower=0.0)
+
+    overall_avg_ci_width = round(float(df["_ci_width"].mean()), 4)
+    overall_avg_confidence = round(float(df["_confidence"].mean()), 4)
+
+    # Pearson correlation between confidence and CI width.
+    if len(df) >= 2 and df["_confidence"].std() > 0 and df["_ci_width"].std() > 0:
+        correlation = round(
+            float(df["_confidence"].corr(df["_ci_width"])), 4,
+        )
+    else:
+        correlation = None
+
+    # Bucket by confidence.
+    try:
+        df["_bucket"] = pd.qcut(
+            df["_confidence"],
+            q=n_bins,
+            duplicates="drop",
+            labels=False,
+        )
+    except ValueError:
+        df["_bucket"] = pd.cut(
+            df["_confidence"],
+            bins=min(n_bins, df["_confidence"].nunique()),
+            labels=False,
+            include_lowest=True,
+        )
+
+    buckets: list[CIWidthBucket] = []
+    for bid in sorted(df["_bucket"].dropna().unique()):
+        chunk = df.loc[df["_bucket"] == bid]
+        if len(chunk) < min_samples_per_bucket:
+            continue
+        conf_lower = float(chunk["_confidence"].min())
+        conf_upper = float(chunk["_confidence"].max())
+        avg_width = float(chunk["_ci_width"].mean())
+        avg_conf = float(chunk["_confidence"].mean())
+        buckets.append(CIWidthBucket(
+            bucket_label=f"conf_bin_{int(bid)}",
+            confidence_lower=round(conf_lower, 4),
+            confidence_upper=round(conf_upper, 4),
+            n_matches=len(chunk),
+            avg_ci_width=round(avg_width, 4),
+            avg_ci_lower=round(float(chunk["_ci_lower"].mean()), 4),
+            avg_ci_upper=round(float(chunk["_ci_upper"].mean()), 4),
+            width_std=round(float(chunk["_ci_width"].std()), 4),
+            relative_width=round(avg_width / avg_conf, 4) if avg_conf > 0 else 0.0,
+        ))
+
+    # Identify widest and narrowest buckets.
+    if buckets:
+        widest = max(buckets, key=lambda b: b.avg_ci_width)
+        narrowest = min(buckets, key=lambda b: b.avg_ci_width)
+        widest_label = widest.bucket_label
+        narrowest_label = narrowest.bucket_label
+    else:
+        widest_label = ""
+        narrowest_label = ""
+
+    # Assessment based on correlation.
+    if correlation is None:
+        assessment = "insufficient_data"
+    elif correlation > 0.3:
+        assessment = "anomalous_widening"
+    elif correlation < -0.3:
+        assessment = "expected_narrowing"
+    else:
+        assessment = "weak_correlation"
+
+    return CIWidthReport(
+        buckets=buckets,
+        n_matches=len(df),
+        overall_avg_ci_width=overall_avg_ci_width,
+        overall_avg_confidence=overall_avg_confidence,
+        width_confidence_correlation=correlation,
+        widest_bucket=widest_label,
+        narrowest_bucket=narrowest_label,
+        assessment=assessment,
+        disclaimer=disclaimer,
+    )

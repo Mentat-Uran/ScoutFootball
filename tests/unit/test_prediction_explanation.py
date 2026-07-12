@@ -27,9 +27,12 @@ from scoutfootball.evaluation.backtests import (
     compute_calibration_comparison,
     compute_calibration_drift_heatmap,
     compute_ci_coverage,
+    compute_ci_width_analysis,
     compute_confidence_distribution,
     compute_confidence_interval_plot,
+    compute_data_drift,
     compute_error_analysis,
+    compute_error_clustering,
     compute_feature_importance,
     compute_fold_comparison,
     compute_h2h_bias_correction,
@@ -3591,3 +3594,677 @@ class TestCalibrationDriftHeatmapAPI:
         api_module._BACKTEST_CACHE.clear()
         result = api_module.get_calibration_drift_heatmap()
         assert result["status"] == "not_available"
+
+
+# ---------------------------------------------------------------------------
+# Prediction error clustering (k-means on worst-decile feature signatures)
+# ---------------------------------------------------------------------------
+
+
+def _make_error_clustering_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame with numeric features for clustering."""
+    rng = np.random.default_rng(42)
+    df = _make_predictions_df(n=n)
+    # Add numeric features that vary across rows
+    df["attack_strength"] = rng.uniform(0.5, 2.0, n)
+    df["defense_strength"] = rng.uniform(0.5, 2.0, n)
+    df["form_index"] = rng.uniform(-1.0, 1.0, n)
+    df["rest_days"] = rng.integers(2, 10, n)
+    return df
+
+
+class TestComputeErrorClustering:
+    def test_returns_clusters(self) -> None:
+        df = _make_error_clustering_df(n=200)
+        result = compute_error_clustering(df, n_clusters=3)
+        assert result.n_clusters >= 1
+        assert len(result.clusters) >= 1
+        assert result.n_total_matches == 200
+        assert result.n_features_used > 0
+        assert result.overall_avg_brier >= 0.0
+
+    def test_cluster_fields(self) -> None:
+        df = _make_error_clustering_df(n=200)
+        result = compute_error_clustering(df, n_clusters=3)
+        for c in result.clusters:
+            assert c.cluster_id >= 0
+            assert c.n_matches > 0
+            assert c.avg_brier >= 0.0
+            assert 0.0 <= c.avg_confidence <= 1.0
+            assert 0.0 <= c.accuracy <= 1.0
+            assert isinstance(c.dominant_actual_outcome, str)
+            assert isinstance(c.dominant_predicted_outcome, str)
+            assert isinstance(c.top_centroid_features, list)
+            for f in c.top_centroid_features:
+                assert isinstance(f.feature, str)
+                assert isinstance(f.centroid_value, float)
+                assert isinstance(f.abs_centroid, float)
+                assert f.abs_centroid >= 0.0
+
+    def test_clusters_sorted_by_brier_desc(self) -> None:
+        df = _make_error_clustering_df(n=200)
+        result = compute_error_clustering(df, n_clusters=3)
+        briers = [c.avg_brier for c in result.clusters]
+        assert briers == sorted(briers, reverse=True)
+
+    def test_n_clusters_param(self) -> None:
+        df = _make_error_clustering_df(n=300)
+        result = compute_error_clustering(df, n_clusters=4)
+        assert result.n_clusters <= 4
+
+    def test_error_percentile_param(self) -> None:
+        df = _make_error_clustering_df(n=300)
+        result = compute_error_clustering(df, n_clusters=2, error_percentile=0.2)
+        assert result.error_percentile == 0.2
+
+    def test_custom_features(self) -> None:
+        df = _make_error_clustering_df(n=200)
+        result = compute_error_clustering(
+            df, n_clusters=2, features=("attack_strength", "form_index"),
+        )
+        assert result.n_features_used == 2
+
+    def test_invalid_n_clusters_low(self) -> None:
+        df = _make_error_clustering_df(n=50)
+        with pytest.raises(ValueError, match="n_clusters"):
+            compute_error_clustering(df, n_clusters=1)
+
+    def test_invalid_n_clusters_high(self) -> None:
+        df = _make_error_clustering_df(n=50)
+        with pytest.raises(ValueError, match="n_clusters"):
+            compute_error_clustering(df, n_clusters=9)
+
+    def test_invalid_error_percentile_zero(self) -> None:
+        df = _make_error_clustering_df(n=50)
+        with pytest.raises(ValueError, match="error_percentile"):
+            compute_error_clustering(df, error_percentile=0.0)
+
+    def test_invalid_error_percentile_high(self) -> None:
+        df = _make_error_clustering_df(n=50)
+        with pytest.raises(ValueError, match="error_percentile"):
+            compute_error_clustering(df, error_percentile=0.6)
+
+    def test_missing_required_columns_raises(self) -> None:
+        df = pd.DataFrame({"foo": [1, 2, 3]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_error_clustering(df)
+
+    def test_custom_feature_not_found_raises(self) -> None:
+        df = _make_error_clustering_df(n=50)
+        with pytest.raises(ValueError, match="feature column not found"):
+            compute_error_clustering(df, features=("nonexistent_col",))
+
+    def test_no_features_returns_empty_clusters(self) -> None:
+        df = _make_predictions_df(n=100)  # No extra numeric features
+        result = compute_error_clustering(df, n_clusters=3)
+        assert result.n_clusters == 0
+        assert result.clusters == []
+        assert result.n_features_used == 0
+
+    def test_too_few_samples_returns_empty(self) -> None:
+        df = _make_error_clustering_df(n=20)
+        result = compute_error_clustering(
+            df, n_clusters=3, min_samples_per_cluster=50,
+        )
+        assert result.n_clusters == 0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_error_clustering_df(n=100)
+        result = compute_error_clustering(df, n_clusters=2)
+        assert len(result.disclaimer) > 0
+
+    def test_random_state_reproducible(self) -> None:
+        df = _make_error_clustering_df(n=200)
+        r1 = compute_error_clustering(df, n_clusters=3, random_state=42)
+        r2 = compute_error_clustering(df, n_clusters=3, random_state=42)
+        assert r1.n_clusters == r2.n_clusters
+        for c1, c2 in zip(r1.clusters, r2.clusters, strict=False):
+            assert c1.avg_brier == c2.avg_brier
+            assert c1.n_matches == c2.n_matches
+
+
+# ---------------------------------------------------------------------------
+# Data drift detection (KS test between train/holdout windows)
+# ---------------------------------------------------------------------------
+
+
+def _make_data_drift_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame with match_date for drift testing."""
+    df = _make_error_clustering_df(n=n)
+    start = pd.Timestamp("2023-01-01")
+    df["match_date"] = [
+        start + pd.Timedelta(days=int(i * 365 / n)) for i in range(n)
+    ]
+    return df
+
+
+class TestComputeDataDrift:
+    def test_returns_drift(self) -> None:
+        df = _make_data_drift_df(n=200)
+        result = compute_data_drift(df)
+        assert result.n_features > 0
+        assert result.n_train > 0
+        assert result.n_holdout > 0
+        assert 0.0 <= result.drift_ratio <= 1.0
+        assert len(result.split_date) > 0
+
+    def test_feature_fields(self) -> None:
+        df = _make_data_drift_df(n=200)
+        result = compute_data_drift(df)
+        for e in result.features:
+            assert isinstance(e.feature, str)
+            assert 0.0 <= e.ks_statistic <= 1.0
+            assert 0.0 <= e.p_value <= 1.0
+            assert isinstance(e.drifted, bool)
+            assert isinstance(e.train_mean, float)
+            assert isinstance(e.holdout_mean, float)
+            assert isinstance(e.mean_delta, float)
+            assert isinstance(e.train_std, float)
+            assert isinstance(e.holdout_std, float)
+
+    def test_features_sorted_by_ks_desc(self) -> None:
+        df = _make_data_drift_df(n=200)
+        result = compute_data_drift(df)
+        ks_vals = [e.ks_statistic for e in result.features]
+        assert ks_vals == sorted(ks_vals, reverse=True)
+
+    def test_split_ratio_param(self) -> None:
+        df = _make_data_drift_df(n=200)
+        result = compute_data_drift(df, split_ratio=0.5)
+        # With 50/50 split, both windows should have similar size
+        assert result.n_train + result.n_holdout == 200
+
+    def test_split_date_param(self) -> None:
+        df = _make_data_drift_df(n=200)
+        result = compute_data_drift(df, split_date="2023-06-01")
+        assert len(result.split_date) > 0
+
+    def test_p_value_threshold_param(self) -> None:
+        df = _make_data_drift_df(n=200)
+        result = compute_data_drift(df, p_value_threshold=0.01)
+        assert result.p_value_threshold == 0.01
+
+    def test_custom_features(self) -> None:
+        df = _make_data_drift_df(n=200)
+        result = compute_data_drift(
+            df, features=("attack_strength", "form_index"),
+        )
+        assert result.n_features <= 2
+
+    def test_missing_window_col_raises(self) -> None:
+        df = _make_error_clustering_df(n=50)  # No match_date
+        with pytest.raises(ValueError, match="missing required column"):
+            compute_data_drift(df)
+
+    def test_invalid_split_ratio_low(self) -> None:
+        df = _make_data_drift_df(n=50)
+        with pytest.raises(ValueError, match="split_ratio"):
+            compute_data_drift(df, split_ratio=0.05)
+
+    def test_invalid_split_ratio_high(self) -> None:
+        df = _make_data_drift_df(n=50)
+        with pytest.raises(ValueError, match="split_ratio"):
+            compute_data_drift(df, split_ratio=0.95)
+
+    def test_invalid_p_value_threshold_zero(self) -> None:
+        df = _make_data_drift_df(n=50)
+        with pytest.raises(ValueError, match="p_value_threshold"):
+            compute_data_drift(df, p_value_threshold=0.0)
+
+    def test_invalid_p_value_threshold_one(self) -> None:
+        df = _make_data_drift_df(n=50)
+        with pytest.raises(ValueError, match="p_value_threshold"):
+            compute_data_drift(df, p_value_threshold=1.0)
+
+    def test_custom_feature_not_found_raises(self) -> None:
+        df = _make_data_drift_df(n=200)
+        with pytest.raises(ValueError, match="feature column not found"):
+            compute_data_drift(df, features=("nonexistent_col",))
+
+    def test_too_few_samples_returns_empty(self) -> None:
+        df = _make_data_drift_df(n=20)
+        result = compute_data_drift(df, min_samples=50)
+        assert result.n_features == 0
+        assert result.n_drifted == 0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_data_drift_df(n=100)
+        result = compute_data_drift(df)
+        assert len(result.disclaimer) > 0
+
+    def test_drifted_flag_consistent_with_p_value(self) -> None:
+        df = _make_data_drift_df(n=200)
+        result = compute_data_drift(df, p_value_threshold=0.05)
+        for e in result.features:
+            if e.p_value < 0.05:
+                assert e.drifted is True
+            else:
+                assert e.drifted is False
+
+
+# ---------------------------------------------------------------------------
+# CI width analysis (per-confidence-bucket CI width tracking)
+# ---------------------------------------------------------------------------
+
+
+def _make_ci_width_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame with CI columns for width analysis."""
+    rng = np.random.default_rng(42)
+    df = _make_predictions_df(n=n)
+    # Create CI bounds with varying widths
+    ci_width = rng.uniform(0.05, 0.30, n)
+    df["home_win_ci_lower"] = (df["home_win_probability"] - ci_width / 2).clip(0.0, 1.0)
+    df["home_win_ci_upper"] = (df["home_win_probability"] + ci_width / 2).clip(0.0, 1.0)
+    return df
+
+
+class TestComputeCIWidthAnalysis:
+    def test_returns_report(self) -> None:
+        df = _make_ci_width_df(n=200)
+        result = compute_ci_width_analysis(df)
+        assert result.n_matches > 0
+        assert result.overall_avg_ci_width >= 0.0
+        assert 0.0 <= result.overall_avg_confidence <= 1.0
+        assert len(result.buckets) > 0
+
+    def test_bucket_fields(self) -> None:
+        df = _make_ci_width_df(n=200)
+        result = compute_ci_width_analysis(df)
+        for b in result.buckets:
+            assert len(b.bucket_label) > 0
+            assert b.confidence_lower <= b.confidence_upper
+            assert b.n_matches > 0
+            assert b.avg_ci_width >= 0.0
+            assert 0.0 <= b.avg_ci_lower <= 1.0
+            assert 0.0 <= b.avg_ci_upper <= 1.0
+            assert b.width_std >= 0.0
+            assert b.relative_width >= 0.0
+
+    def test_assessment_values(self) -> None:
+        df = _make_ci_width_df(n=200)
+        result = compute_ci_width_analysis(df)
+        assert result.assessment in (
+            "anomalous_widening", "expected_narrowing",
+            "weak_correlation", "insufficient_data",
+        )
+
+    def test_correlation_can_be_none(self) -> None:
+        # Constant confidence (all probs identical) → std=0 → correlation None
+        df = _make_predictions_df(n=50)
+        df["home_win_probability"] = 0.5
+        df["draw_probability"] = 0.25
+        df["away_win_probability"] = 0.25
+        df["home_win_ci_lower"] = 0.4
+        df["home_win_ci_upper"] = 0.5
+        result = compute_ci_width_analysis(df)
+        assert result.width_confidence_correlation is None
+        assert result.assessment == "insufficient_data"
+
+    def test_n_bins_param(self) -> None:
+        df = _make_ci_width_df(n=300)
+        result = compute_ci_width_analysis(df, n_bins=10, min_samples_per_bucket=5)
+        assert len(result.buckets) <= 10
+
+    def test_min_samples_filter(self) -> None:
+        df = _make_ci_width_df(n=30)
+        result = compute_ci_width_analysis(
+            df, n_bins=5, min_samples_per_bucket=50,
+        )
+        assert len(result.buckets) == 0
+
+    def test_missing_ci_columns_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_ci_width_analysis(df)
+
+    def test_missing_probability_columns_raises(self) -> None:
+        df = pd.DataFrame({
+            "home_win_ci_lower": [0.2, 0.3, 0.4],
+            "home_win_ci_upper": [0.4, 0.5, 0.6],
+        })
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_ci_width_analysis(df)
+
+    def test_invalid_n_bins_low(self) -> None:
+        df = _make_ci_width_df(n=50)
+        with pytest.raises(ValueError, match="n_bins"):
+            compute_ci_width_analysis(df, n_bins=1)
+
+    def test_invalid_n_bins_high(self) -> None:
+        df = _make_ci_width_df(n=50)
+        with pytest.raises(ValueError, match="n_bins"):
+            compute_ci_width_analysis(df, n_bins=21)
+
+    def test_custom_ci_columns(self) -> None:
+        df = _make_ci_width_df(n=200)
+        df["custom_lo"] = df["home_win_ci_lower"]
+        df["custom_hi"] = df["home_win_ci_upper"]
+        result = compute_ci_width_analysis(
+            df, ci_lower_col="custom_lo", ci_upper_col="custom_hi",
+        )
+        assert result.n_matches > 0
+
+    def test_empty_df_returns_insufficient(self) -> None:
+        df = _make_ci_width_df(n=10)
+        df = df.iloc[:0]
+        result = compute_ci_width_analysis(df)
+        assert result.assessment == "insufficient_data"
+        assert result.n_matches == 0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_ci_width_df(n=100)
+        result = compute_ci_width_analysis(df)
+        assert len(result.disclaimer) > 0
+
+    def test_widest_and_narrowest_buckets(self) -> None:
+        df = _make_ci_width_df(n=200)
+        result = compute_ci_width_analysis(df)
+        if result.buckets:
+            widths = [b.avg_ci_width for b in result.buckets]
+            widest = max(result.buckets, key=lambda b: b.avg_ci_width)
+            narrowest = min(result.buckets, key=lambda b: b.avg_ci_width)
+            assert result.widest_bucket == widest.bucket_label
+            assert result.narrowest_bucket == narrowest.bucket_label
+            assert widest.avg_ci_width == max(widths)
+            assert narrowest.avg_ci_width == min(widths)
+
+
+# ---------------------------------------------------------------------------
+# Error clustering API
+# ---------------------------------------------------------------------------
+
+
+class TestErrorClusteringAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_error_clustering()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_error_clustering_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_error_clustering()
+        assert result["status"] == "ok"
+        assert "n_clusters" in result
+        assert "clusters" in result
+        assert "disclaimer" in result
+
+    def test_with_empty_data_no_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_error_clustering_df(n=200).iloc[:0]
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_error_clustering()
+        assert result["status"] == "no_data"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_error_clustering_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_error_clustering()
+        r2 = api_module.get_error_clustering()
+        assert r1 == r2
+
+    def test_fallback_to_poisson(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_error_clustering_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        # Only write Poisson file (no DC decay)
+        df.to_parquet(
+            tmp_path / "poisson_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_error_clustering()
+        assert result["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Data drift API
+# ---------------------------------------------------------------------------
+
+
+class TestDataDriftAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_data_drift()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_data_drift_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_data_drift()
+        assert result["status"] == "ok"
+        assert "n_features" in result
+        assert "n_drifted" in result
+        assert "features" in result
+        assert "disclaimer" in result
+
+    def test_no_match_date_not_available(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=80)  # No match_date
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_data_drift()
+        assert result["status"] == "not_available"
+
+    def test_with_split_date_param(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_data_drift_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_data_drift(split_date="2023-06-01")
+        assert result["status"] == "ok"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_data_drift_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_data_drift()
+        r2 = api_module.get_data_drift()
+        assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# CI width analysis API
+# ---------------------------------------------------------------------------
+
+
+class TestCIWidthAnalysisAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_ci_width_analysis()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_ci_width_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_ci_width_analysis()
+        assert result["status"] == "ok"
+        assert "assessment" in result
+        assert "buckets" in result
+        assert "overall_avg_ci_width" in result
+        assert "disclaimer" in result
+
+    def test_no_ci_columns_not_available(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=80)  # No CI columns
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_ci_width_analysis()
+        assert result["status"] == "not_available"
+
+    def test_with_custom_ci_columns(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_ci_width_df(n=200)
+        df["custom_lo"] = df["home_win_ci_lower"]
+        df["custom_hi"] = df["home_win_ci_upper"]
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_ci_width_analysis(
+            ci_lower_col="custom_lo", ci_upper_col="custom_hi",
+        )
+        assert result["status"] == "ok"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_ci_width_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_ci_width_analysis()
+        r2 = api_module.get_ci_width_analysis()
+        assert r1 == r2

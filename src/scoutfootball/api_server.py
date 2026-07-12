@@ -31,14 +31,17 @@ from scoutfootball.api import (
     get_calibration_drift_heatmap,
     get_calibration_drift_timeline,
     get_ci_coverage,
+    get_ci_width_analysis,
     get_confidence_distribution,
     get_confidence_interval_plot,
+    get_data_drift,
     get_decay_tuning,
     get_ensemble_attribution,
     get_ensemble_attribution_ci,
     get_ensemble_prediction,
     get_ensemble_weights,
     get_error_analysis,
+    get_error_clustering,
     get_feature_importance,
     get_fold_comparison,
     get_form_weighted_prediction,
@@ -417,6 +420,46 @@ def create_app() -> FastAPI:
             window_size=window_size,
             n_confidence_bins=n_confidence_bins,
             min_samples_per_cell=min_samples_per_cell,
+        )
+
+    @app.get("/predictions/calibration/error-clustering")
+    def predictions_calibration_error_clustering(
+        n_clusters: int = Query(3, ge=2, le=8),
+        error_percentile: float = Query(0.1, ge=0.01, le=0.5),
+        min_samples_per_cluster: int = Query(5, ge=1, le=100),
+    ):
+        return get_error_clustering(
+            n_clusters=n_clusters,
+            error_percentile=error_percentile,
+            min_samples_per_cluster=min_samples_per_cluster,
+        )
+
+    @app.get("/predictions/calibration/data-drift")
+    def predictions_calibration_data_drift(
+        split_ratio: float = Query(0.7, ge=0.1, le=0.9),
+        split_date: str | None = Query(None, max_length=32),
+        p_value_threshold: float = Query(0.05, ge=0.001, le=0.999),
+        min_samples: int = Query(20, ge=5, le=500),
+    ):
+        return get_data_drift(
+            split_ratio=split_ratio,
+            split_date=split_date,
+            p_value_threshold=p_value_threshold,
+            min_samples=min_samples,
+        )
+
+    @app.get("/predictions/calibration/ci-width")
+    def predictions_calibration_ci_width(
+        ci_lower_col: str = Query("home_win_ci_lower", max_length=64),
+        ci_upper_col: str = Query("home_win_ci_upper", max_length=64),
+        n_bins: int = Query(5, ge=2, le=20),
+        min_samples_per_bucket: int = Query(10, ge=1, le=100),
+    ):
+        return get_ci_width_analysis(
+            ci_lower_col=ci_lower_col,
+            ci_upper_col=ci_upper_col,
+            n_bins=n_bins,
+            min_samples_per_bucket=min_samples_per_bucket,
         )
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")

@@ -3382,6 +3382,326 @@ def get_calibration_drift_heatmap(
         return {"status": "error", "message": str(exc)}
 
 
+def get_error_clustering(
+    *, n_clusters: int = 3, error_percentile: float = 0.1,
+    min_samples_per_cluster: int = 5,
+) -> dict:
+    """Return prediction error clustering from backtest predictions.
+
+    Clusters the worst predictions by feature signature using k-means.
+    Prefers Dixon-Coles decay predictions, falls back to Poisson.
+    Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = (
+        f"error_clustering_{n_clusters}_{error_percentile}_"
+        f"{min_samples_per_cluster}"
+    )
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_error_clustering,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_error_clustering(
+                    preds_df,
+                    n_clusters=n_clusters,
+                    error_percentile=error_percentile,
+                    min_samples_per_cluster=min_samples_per_cluster,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_clusters": report.n_clusters,
+                    "n_total_matches": report.n_total_matches,
+                    "n_features_used": report.n_features_used,
+                    "error_percentile": report.error_percentile,
+                    "n_worst_matches": report.n_worst_matches,
+                    "overall_avg_brier": report.overall_avg_brier,
+                    "disclaimer": report.disclaimer,
+                    "clusters": [
+                        {
+                            "cluster_id": c.cluster_id,
+                            "n_matches": c.n_matches,
+                            "avg_brier": c.avg_brier,
+                            "avg_confidence": c.avg_confidence,
+                            "accuracy": c.accuracy,
+                            "dominant_actual_outcome": c.dominant_actual_outcome,
+                            "dominant_predicted_outcome": c.dominant_predicted_outcome,
+                            "top_centroid_features": [
+                                {
+                                    "feature": f.feature,
+                                    "centroid_value": f.centroid_value,
+                                    "abs_centroid": f.abs_centroid,
+                                }
+                                for f in c.top_centroid_features
+                            ],
+                        }
+                        for c in report.clusters
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_data_drift(
+    *,
+    split_ratio: float = 0.7,
+    split_date: str | None = None,
+    p_value_threshold: float = 0.05,
+    min_samples: int = 20,
+) -> dict:
+    """Return data drift detection from backtest predictions.
+
+    Detects feature distribution drift between train and holdout windows
+    via two-sample Kolmogorov-Smirnov test. Prefers Dixon-Coles decay
+    predictions, falls back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = (
+        f"data_drift_{split_ratio}_{split_date}_"
+        f"{p_value_threshold}_{min_samples}"
+    )
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_data_drift
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            elif "match_date" not in preds_df.columns:
+                result = {
+                    "status": "not_available",
+                    "instructions": (
+                        "Backtest predictions do not include a 'match_date' "
+                        "column. Re-run backtest with match date metadata."
+                    ),
+                }
+            else:
+                report = compute_data_drift(
+                    preds_df,
+                    split_ratio=split_ratio,
+                    split_date=split_date,
+                    p_value_threshold=p_value_threshold,
+                    min_samples=min_samples,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_features": report.n_features,
+                    "n_drifted": report.n_drifted,
+                    "drift_ratio": report.drift_ratio,
+                    "n_train": report.n_train,
+                    "n_holdout": report.n_holdout,
+                    "split_date": report.split_date,
+                    "p_value_threshold": report.p_value_threshold,
+                    "disclaimer": report.disclaimer,
+                    "features": [
+                        {
+                            "feature": e.feature,
+                            "ks_statistic": e.ks_statistic,
+                            "p_value": e.p_value,
+                            "drifted": e.drifted,
+                            "train_mean": e.train_mean,
+                            "holdout_mean": e.holdout_mean,
+                            "mean_delta": e.mean_delta,
+                            "train_std": e.train_std,
+                            "holdout_std": e.holdout_std,
+                        }
+                        for e in report.features
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_ci_width_analysis(
+    *,
+    ci_lower_col: str = "home_win_ci_lower",
+    ci_upper_col: str = "home_win_ci_upper",
+    n_bins: int = 5,
+    min_samples_per_bucket: int = 10,
+) -> dict:
+    """Return CI width analysis from backtest predictions.
+
+    Analyzes CI width distribution across confidence levels. Prefers
+    Dixon-Coles decay predictions, falls back to Poisson. Cached for
+    5 minutes.
+    """
+    import time
+
+    cache_key = (
+        f"ci_width_{ci_lower_col}_{ci_upper_col}_"
+        f"{n_bins}_{min_samples_per_bucket}"
+    )
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_ci_width_analysis,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            elif ci_lower_col not in preds_df.columns or ci_upper_col not in preds_df.columns:
+                result = {
+                    "status": "not_available",
+                    "instructions": (
+                        f"Backtest predictions do not include CI columns "
+                        f"'{ci_lower_col}'/'{ci_upper_col}'. Re-run backtest "
+                        f"with bootstrap CI generation enabled."
+                    ),
+                }
+            else:
+                report = compute_ci_width_analysis(
+                    preds_df,
+                    ci_lower_col=ci_lower_col,
+                    ci_upper_col=ci_upper_col,
+                    n_bins=n_bins,
+                    min_samples_per_bucket=min_samples_per_bucket,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_matches": report.n_matches,
+                    "overall_avg_ci_width": report.overall_avg_ci_width,
+                    "overall_avg_confidence": report.overall_avg_confidence,
+                    "width_confidence_correlation": report.width_confidence_correlation,
+                    "widest_bucket": report.widest_bucket,
+                    "narrowest_bucket": report.narrowest_bucket,
+                    "assessment": report.assessment,
+                    "disclaimer": report.disclaimer,
+                    "buckets": [
+                        {
+                            "bucket_label": b.bucket_label,
+                            "confidence_lower": b.confidence_lower,
+                            "confidence_upper": b.confidence_upper,
+                            "n_matches": b.n_matches,
+                            "avg_ci_width": b.avg_ci_width,
+                            "avg_ci_lower": b.avg_ci_lower,
+                            "avg_ci_upper": b.avg_ci_upper,
+                            "width_std": b.width_std,
+                            "relative_width": b.relative_width,
+                        }
+                        for b in report.buckets
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
     """Return an aggregated prediction diagnostics summary for a fixture.
 

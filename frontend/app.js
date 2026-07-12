@@ -643,6 +643,64 @@ const i18n = {
         xT_not_available: "xT 数据不可用",
         confidence_reason_label: "置信原因",
         rating_snapshot: "评分快照",
+        error_clustering_title: "预测误差聚类",
+        error_clustering_desc: "对最差预测按特征签名 k-means 聚类,发现误差模式",
+        error_clustering_fetch: "加载",
+        error_clustering_loading: "计算误差聚类中…",
+        error_clustering_not_available: "暂无回测数据",
+        error_clustering_error: "加载误差聚类失败",
+        error_clustering_n_clusters: "簇数",
+        error_clustering_n_worst: "最差样本",
+        error_clustering_n_features: "特征数",
+        error_clustering_avg_brier: "平均 Brier",
+        error_clustering_cluster: "簇",
+        error_clustering_matches: "场",
+        error_clustering_brier: "Brier",
+        error_clustering_accuracy: "准确率",
+        error_clustering_conf: "平均置信度",
+        error_clustering_actual: "实际主导",
+        error_clustering_predicted: "预测主导",
+        error_clustering_feature: "特征",
+        error_clustering_centroid: "质心 z",
+        error_clustering_no_clusters: "无聚类结果",
+        data_drift_title: "数据漂移检测",
+        data_drift_desc: "训练/holdout 窗口特征分布 KS 检验,标记 p<0.05 的漂移特征",
+        data_drift_fetch: "加载",
+        data_drift_loading: "计算数据漂移中…",
+        data_drift_not_available: "暂无回测数据(需 match_date 列)",
+        data_drift_error: "加载数据漂移失败",
+        data_drift_ratio: "漂移比例",
+        data_drift_drifted: "漂移特征",
+        data_drift_n_train: "训练样本",
+        data_drift_n_holdout: "Holdout 样本",
+        data_drift_split_date: "分割点",
+        data_drift_feature: "特征",
+        data_drift_ks: "KS 统计量",
+        data_drift_p_value: "p 值",
+        data_drift_status: "状态",
+        data_drift_train_mean: "训练均值",
+        data_drift_holdout_mean: "Holdout 均值",
+        data_drift_drifted_yes: "漂移",
+        data_drift_drifted_no: "稳定",
+        data_drift_no_features: "无特征漂移数据",
+        ci_width_title: "置信区间宽度分析",
+        ci_width_desc: "按置信度分桶跟踪平均 CI 宽度,标记过宽/过窄的置信区间",
+        ci_width_fetch: "加载",
+        ci_width_loading: "计算 CI 宽度分析中…",
+        ci_width_not_available: "暂无 CI 列数据(需启用 bootstrap CI 生成)",
+        ci_width_error: "加载 CI 宽度分析失败",
+        ci_width_assessment: "评估",
+        ci_width_avg: "平均 CI 宽度",
+        ci_width_avg_conf: "平均置信度",
+        ci_width_corr: "宽度-置信度相关",
+        ci_width_bucket: "置信度桶",
+        ci_width_n: "场次",
+        ci_width_avg_width: "平均宽度",
+        ci_width_avg_lower: "平均下界",
+        ci_width_avg_upper: "平均上界",
+        ci_width_std: "宽度标准差",
+        ci_width_relative: "相对宽度",
+        ci_width_no_buckets: "无桶数据",
     },
     en: {
         nav_overview: "Overview",
@@ -1287,6 +1345,64 @@ const i18n = {
         xT_not_available: "xT data not available",
         confidence_reason_label: "Confidence reason",
         rating_snapshot: "Rating snapshot",
+        error_clustering_title: "Prediction Error Clustering",
+        error_clustering_desc: "k-means clustering on worst predictions by feature signatures to surface error patterns",
+        error_clustering_fetch: "Load",
+        error_clustering_loading: "Computing error clustering...",
+        error_clustering_not_available: "No backtest data available",
+        error_clustering_error: "Failed to load error clustering",
+        error_clustering_n_clusters: "Clusters",
+        error_clustering_n_worst: "Worst samples",
+        error_clustering_n_features: "Features",
+        error_clustering_avg_brier: "Avg Brier",
+        error_clustering_cluster: "Cluster",
+        error_clustering_matches: "matches",
+        error_clustering_brier: "Brier",
+        error_clustering_accuracy: "Accuracy",
+        error_clustering_conf: "Avg confidence",
+        error_clustering_actual: "Dominant actual",
+        error_clustering_predicted: "Dominant predicted",
+        error_clustering_feature: "Feature",
+        error_clustering_centroid: "Centroid z",
+        error_clustering_no_clusters: "No clusters",
+        data_drift_title: "Data Drift Detection",
+        data_drift_desc: "KS test on feature distributions between train/holdout windows, flag drift when p<0.05",
+        data_drift_fetch: "Load",
+        data_drift_loading: "Computing data drift...",
+        data_drift_not_available: "No backtest data available (requires match_date column)",
+        data_drift_error: "Failed to load data drift",
+        data_drift_ratio: "Drift ratio",
+        data_drift_drifted: "Drifted features",
+        data_drift_n_train: "Train samples",
+        data_drift_n_holdout: "Holdout samples",
+        data_drift_split_date: "Split point",
+        data_drift_feature: "Feature",
+        data_drift_ks: "KS statistic",
+        data_drift_p_value: "p-value",
+        data_drift_status: "Status",
+        data_drift_train_mean: "Train mean",
+        data_drift_holdout_mean: "Holdout mean",
+        data_drift_drifted_yes: "Drifted",
+        data_drift_drifted_no: "Stable",
+        data_drift_no_features: "No feature drift data",
+        ci_width_title: "Confidence Interval Width Analysis",
+        ci_width_desc: "Bucketed avg CI width by confidence, flag too wide/narrow intervals",
+        ci_width_fetch: "Load",
+        ci_width_loading: "Computing CI width analysis...",
+        ci_width_not_available: "No CI columns available (requires bootstrap CI generation)",
+        ci_width_error: "Failed to load CI width analysis",
+        ci_width_assessment: "Assessment",
+        ci_width_avg: "Avg CI width",
+        ci_width_avg_conf: "Avg confidence",
+        ci_width_corr: "Width-conf correlation",
+        ci_width_bucket: "Confidence bucket",
+        ci_width_n: "Matches",
+        ci_width_avg_width: "Avg width",
+        ci_width_avg_lower: "Avg lower",
+        ci_width_avg_upper: "Avg upper",
+        ci_width_std: "Width std",
+        ci_width_relative: "Relative width",
+        ci_width_no_buckets: "No bucket data",
     },
 };
 
@@ -5379,6 +5495,258 @@ async function fetchAndRenderDriftHeatmap() {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderErrorClustering() {
+    const body = document.getElementById("backtest-error-clustering-body");
+    const btn = document.getElementById("btn-error-clustering");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("error_clustering_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/error-clustering");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("error_clustering_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("error_clustering_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_clusters ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_clusters"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_worst_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_worst"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_features_used ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_features"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_brier || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_avg_brier"))}</div>
+            </div>
+        </div>`;
+        const clusters = Array.isArray(data.clusters) ? data.clusters : [];
+        if (clusters.length > 0) {
+            for (const c of clusters) {
+                const brierColor = `hsl(${Math.max(0, 120 - Number(c.avg_brier || 0) * 500)}, 70%, 45%)`;
+                html += `<details style="margin-bottom:0.5rem;border:1px solid var(--border-color);border-radius:6px;padding:0.4rem">
+                    <summary style="cursor:pointer;font-size:0.8rem;font-weight:600">
+                        ${escapeHtml(t("error_clustering_cluster"))} #${c.cluster_id} · ${c.n_matches} ${escapeHtml(t("error_clustering_matches"))} · ${escapeHtml(t("error_clustering_brier"))}: <span style="color:${brierColor}">${Number(c.avg_brier || 0).toFixed(4)}</span>
+                    </summary>
+                    <div style="margin-top:0.4rem;font-size:0.72rem">
+                        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.3rem;margin-bottom:0.4rem">
+                            <div><span style="color:var(--text-muted)">${escapeHtml(t("error_clustering_accuracy"))}:</span> ${Number(c.accuracy || 0).toFixed(4)}</div>
+                            <div><span style="color:var(--text-muted)">${escapeHtml(t("error_clustering_conf"))}:</span> ${Number(c.avg_confidence || 0).toFixed(4)}</div>
+                            <div><span style="color:var(--text-muted)">${escapeHtml(t("error_clustering_actual"))}:</span> ${escapeHtml(c.dominant_actual_outcome || "–")}</div>
+                            <div><span style="color:var(--text-muted)">${escapeHtml(t("error_clustering_predicted"))}:</span> ${escapeHtml(c.dominant_predicted_outcome || "–")}</div>
+                        </div>
+                        <table class="data-table" style="width:100%;font-size:0.68rem;border-collapse:collapse">
+                            <thead><tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                                <th style="padding:0.2rem">${escapeHtml(t("error_clustering_feature"))}</th>
+                                <th style="padding:0.2rem;text-align:right">${escapeHtml(t("error_clustering_centroid"))}</th>
+                                <th style="padding:0.2rem;text-align:right">|z|</th>
+                            </tr></thead>
+                            <tbody>`;
+                const feats = Array.isArray(c.top_centroid_features) ? c.top_centroid_features : [];
+                for (const f of feats) {
+                    const valColor = f.centroid_value >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                    html += `<tr style="border-bottom:1px solid var(--border-color)">
+                        <td style="padding:0.2rem">${escapeHtml(f.feature || "–")}</td>
+                        <td style="padding:0.2rem;text-align:right;color:${valColor}">${Number(f.centroid_value || 0).toFixed(4)}</td>
+                        <td style="padding:0.2rem;text-align:right">${Number(f.abs_centroid || 0).toFixed(4)}</td>
+                    </tr>`;
+                }
+                html += `</tbody></table></div></details>`;
+            }
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("error_clustering_no_clusters"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("error_clustering_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderDataDrift() {
+    const body = document.getElementById("backtest-data-drift-body");
+    const btn = document.getElementById("btn-data-drift");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("data_drift_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/data-drift");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("data_drift_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("data_drift_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const driftRatio = Number(data.drift_ratio || 0);
+        const driftColor = driftRatio > 0.3 ? "var(--status-low, #f87171)" : (driftRatio > 0.1 ? "var(--status-medium, #fbbf24)" : "var(--status-high, #4ade80)");
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:${driftColor}">${(driftRatio * 100).toFixed(1)}%</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_ratio"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_drifted ?? 0}/${data.n_features ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_drifted"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_train ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_n_train"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_holdout ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_n_holdout"))}</div>
+            </div>
+        </div>`;
+        if (data.split_date) {
+            html += `<p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.4rem">${escapeHtml(t("data_drift_split_date"))}: ${escapeHtml(data.split_date)} · p&lt;${escapeHtml(String(data.p_value_threshold ?? 0.05))}</p>`;
+        }
+        const features = Array.isArray(data.features) ? data.features : [];
+        if (features.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.7rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("data_drift_feature"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("data_drift_ks"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("data_drift_p_value"))}</th>
+                        <th style="padding:0.25rem;text-align:center">${escapeHtml(t("data_drift_status"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("data_drift_train_mean"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("data_drift_holdout_mean"))}</th>
+                        <th style="padding:0.25rem;text-align:right">Δ</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            for (const f of features) {
+                const statusColor = f.drifted ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+                const statusText = f.drifted ? t("data_drift_drifted_yes") : t("data_drift_drifted_no");
+                const deltaColor = (f.mean_delta || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem">${escapeHtml(f.feature || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(f.ks_statistic || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(f.p_value || 0).toFixed(6)}</td>
+                    <td style="padding:0.25rem;text-align:center;color:${statusColor};font-weight:600">${escapeHtml(statusText)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(f.train_mean || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(f.holdout_mean || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${deltaColor}">${Number(f.mean_delta || 0).toFixed(4)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("data_drift_no_features"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("data_drift_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderCIWidth() {
+    const body = document.getElementById("backtest-ci-width-body");
+    const btn = document.getElementById("btn-ci-width");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_width_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/ci-width");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_width_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("ci_width_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const assessmentColors = {
+            "expected_narrowing": "var(--status-high, #4ade80)",
+            "weak_correlation": "var(--status-medium, #fbbf24)",
+            "anomalous_widening": "var(--status-low, #f87171)",
+            "insufficient_data": "var(--text-muted)",
+        };
+        const assessmentColor = assessmentColors[data.assessment] || "var(--text-muted)";
+        const corr = data.width_confidence_correlation;
+        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #4ade80)" : (corr > 0.3 ? "var(--status-low, #f87171)" : "var(--status-medium, #fbbf24)")) : "var(--text-muted)";
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.assessment || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_assessment"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_ci_width || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_avg"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_confidence || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_avg_conf"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:${corrColor}">${corr !== null && corr !== undefined ? Number(corr).toFixed(4) : "–"}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_corr"))}</div>
+            </div>
+        </div>`;
+        const buckets = Array.isArray(data.buckets) ? data.buckets : [];
+        if (buckets.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.7rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("ci_width_bucket"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_width_n"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_width_avg_width"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_width_avg_lower"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_width_avg_upper"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_width_std"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("ci_width_relative"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            for (const b of buckets) {
+                const widthColor = `hsl(${Math.max(0, 120 - Number(b.relative_width || 0) * 200)}, 70%, 45%)`;
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem">${escapeHtml(b.bucket_label || "–")} <span style="font-size:0.62rem;color:var(--text-muted)">[${Number(b.confidence_lower || 0).toFixed(3)},${Number(b.confidence_upper || 0).toFixed(3)}]</span></td>
+                    <td style="padding:0.25rem;text-align:right">${b.n_matches ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right;font-weight:600">${Number(b.avg_ci_width || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(b.avg_ci_lower || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(b.avg_ci_upper || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(b.width_std || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${widthColor}">${Number(b.relative_width || 0).toFixed(4)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("ci_width_no_buckets"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("ci_width_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -8952,6 +9320,12 @@ async function renderBacktest() {
         if (ciCovPanel) ciCovPanel.style.display = "block";
         const driftHmPanel = document.getElementById("backtest-drift-heatmap-panel");
         if (driftHmPanel) driftHmPanel.style.display = "block";
+        const errClusterPanel = document.getElementById("backtest-error-clustering-panel");
+        if (errClusterPanel) errClusterPanel.style.display = "block";
+        const dataDriftPanel = document.getElementById("backtest-data-drift-panel");
+        if (dataDriftPanel) dataDriftPanel.style.display = "block";
+        const ciWidthPanel = document.getElementById("backtest-ci-width-panel");
+        if (ciWidthPanel) ciWidthPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -9818,6 +10192,36 @@ function bindEvents() {
         driftHmBtn.addEventListener("click", () => {
             fetchAndRenderDriftHeatmap().catch(
                 (e) => console.warn("Drift heatmap failed:", e)
+            );
+        });
+    }
+
+    // Error clustering button: k-means on worst predictions
+    const errClusterBtn = document.getElementById("btn-error-clustering");
+    if (errClusterBtn) {
+        errClusterBtn.addEventListener("click", () => {
+            fetchAndRenderErrorClustering().catch(
+                (e) => console.warn("Error clustering failed:", e)
+            );
+        });
+    }
+
+    // Data drift button: KS test between train/holdout
+    const dataDriftBtn = document.getElementById("btn-data-drift");
+    if (dataDriftBtn) {
+        dataDriftBtn.addEventListener("click", () => {
+            fetchAndRenderDataDrift().catch(
+                (e) => console.warn("Data drift failed:", e)
+            );
+        });
+    }
+
+    // CI width button: per-confidence-bucket CI width
+    const ciWidthBtn = document.getElementById("btn-ci-width");
+    if (ciWidthBtn) {
+        ciWidthBtn.addEventListener("click", () => {
+            fetchAndRenderCIWidth().catch(
+                (e) => console.warn("CI width failed:", e)
             );
         });
     }
