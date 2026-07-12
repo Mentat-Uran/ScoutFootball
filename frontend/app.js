@@ -701,6 +701,76 @@ const i18n = {
         ci_width_std: "宽度标准差",
         ci_width_relative: "相对宽度",
         ci_width_no_buckets: "无桶数据",
+        stress_test_title: "回测场景压力测试",
+        stress_test_desc: "模拟分布偏移并测量模型退化,量化鲁棒性",
+        stress_test_fetch: "加载",
+        stress_test_loading: "计算压力测试中…",
+        stress_test_not_available: "暂无回测数据",
+        stress_test_error: "加载压力测试失败",
+        stress_test_shift_type: "偏移类型",
+        stress_test_shift_ratio: "偏移比例",
+        stress_test_n_shifted: "扰动场次",
+        stress_test_degradation: "退化评分",
+        stress_test_assessment: "评估",
+        stress_test_baseline: "基线指标",
+        stress_test_stressed: "压力指标",
+        stress_test_acc_delta: "准确率变化",
+        stress_test_brier_delta: "Brier 变化",
+        stress_test_rps_delta: "RPS 变化",
+        stress_test_conf_delta: "置信度变化",
+        stress_test_n_matches: "场次",
+        stress_test_accuracy: "准确率",
+        stress_test_brier: "Brier",
+        stress_test_rps: "RPS",
+        stress_test_log_loss: "LogLoss",
+        stress_test_conf: "平均置信度",
+        team_drift_title: "按球队校准漂移",
+        team_drift_desc: "追踪单支球队预测质量随时间的演化",
+        team_drift_fetch: "加载",
+        team_drift_loading: "计算球队漂移中…",
+        stress_test_team_input: "球队名称",
+        stress_test_team_input_ph: "输入球队名",
+        team_drift_not_available: "暂无回测数据或球队不存在",
+        team_drift_error: "加载球队漂移失败",
+        team_drift_team: "球队",
+        team_drift_n_matches: "总场次",
+        team_drift_n_windows: "窗口数",
+        team_drift_drift_detected: "漂移检测",
+        team_drift_drift_yes: "检测到漂移",
+        team_drift_drift_no: "稳定",
+        team_drift_latest_brier: "最新 Brier",
+        team_drift_hist_brier: "历史平均 Brier",
+        team_drift_rel_change: "相对变化",
+        team_drift_trend: "趋势",
+        team_drift_window: "时间窗口",
+        team_drift_n: "场次",
+        team_drift_acc: "准确率",
+        team_drift_brier: "Brier",
+        team_drift_conf: "平均置信度",
+        team_drift_no_points: "无窗口数据(样本不足)",
+        uncertainty_title: "预测不确定性量化",
+        uncertainty_desc: "每场比赛的熵、置信度边际、概率离散度",
+        uncertainty_fetch: "加载",
+        uncertainty_loading: "计算不确定性中…",
+        uncertainty_not_available: "暂无回测数据",
+        uncertainty_error: "加载不确定性分析失败",
+        uncertainty_avg_entropy: "平均熵",
+        uncertainty_avg_margin: "平均边际",
+        uncertainty_avg_dispersion: "平均离散度",
+        uncertainty_high_count: "高不确定性场次",
+        uncertainty_high_acc: "高不确定性准确率",
+        uncertainty_low_acc: "低不确定性准确率",
+        uncertainty_entropy_corr: "熵-准确率相关",
+        uncertainty_match: "比赛",
+        uncertainty_conf: "置信度",
+        uncertainty_entropy: "熵",
+        uncertainty_margin: "边际",
+        uncertainty_dispersion: "离散度",
+        uncertainty_predicted: "预测",
+        uncertainty_actual: "实际",
+        uncertainty_correct: "正确",
+        uncertainty_label: "标签",
+        uncertainty_no_points: "无不确定点数据",
     },
     en: {
         nav_overview: "Overview",
@@ -1403,6 +1473,76 @@ const i18n = {
         ci_width_std: "Width std",
         ci_width_relative: "Relative width",
         ci_width_no_buckets: "No bucket data",
+        stress_test_title: "Backtest Scenario Stress Test",
+        stress_test_desc: "Simulate distribution shifts and measure model degradation",
+        stress_test_fetch: "Load",
+        stress_test_loading: "Computing stress test...",
+        stress_test_not_available: "No backtest data available",
+        stress_test_error: "Failed to load stress test",
+        stress_test_shift_type: "Shift type",
+        stress_test_shift_ratio: "Shift ratio",
+        stress_test_n_shifted: "Shifted matches",
+        stress_test_degradation: "Degradation score",
+        stress_test_assessment: "Assessment",
+        stress_test_baseline: "Baseline metrics",
+        stress_test_stressed: "Stressed metrics",
+        stress_test_acc_delta: "Accuracy delta",
+        stress_test_brier_delta: "Brier delta",
+        stress_test_rps_delta: "RPS delta",
+        stress_test_conf_delta: "Confidence delta",
+        stress_test_n_matches: "Matches",
+        stress_test_accuracy: "Accuracy",
+        stress_test_brier: "Brier",
+        stress_test_rps: "RPS",
+        stress_test_log_loss: "LogLoss",
+        stress_test_conf: "Avg confidence",
+        team_drift_title: "Per-Team Calibration Drift",
+        team_drift_desc: "Track how a single team's prediction quality evolves over time",
+        team_drift_fetch: "Load",
+        team_drift_loading: "Computing team drift...",
+        stress_test_team_input: "Team name",
+        stress_test_team_input_ph: "Enter team name",
+        team_drift_not_available: "No backtest data or team not found",
+        team_drift_error: "Failed to load team drift",
+        team_drift_team: "Team",
+        team_drift_n_matches: "Total matches",
+        team_drift_n_windows: "Windows",
+        team_drift_drift_detected: "Drift detected",
+        team_drift_drift_yes: "Drift detected",
+        team_drift_drift_no: "Stable",
+        team_drift_latest_brier: "Latest Brier",
+        team_drift_hist_brier: "Historical avg Brier",
+        team_drift_rel_change: "Relative change",
+        team_drift_trend: "Trend",
+        team_drift_window: "Time window",
+        team_drift_n: "Matches",
+        team_drift_acc: "Accuracy",
+        team_drift_brier: "Brier",
+        team_drift_conf: "Avg confidence",
+        team_drift_no_points: "No window data (insufficient samples)",
+        uncertainty_title: "Prediction Uncertainty Quantification",
+        uncertainty_desc: "Per-match entropy, confidence margin, and probability dispersion",
+        uncertainty_fetch: "Load",
+        uncertainty_loading: "Computing uncertainty...",
+        uncertainty_not_available: "No backtest data available",
+        uncertainty_error: "Failed to load uncertainty analysis",
+        uncertainty_avg_entropy: "Avg entropy",
+        uncertainty_avg_margin: "Avg margin",
+        uncertainty_avg_dispersion: "Avg dispersion",
+        uncertainty_high_count: "High-uncertainty matches",
+        uncertainty_high_acc: "High-uncertainty accuracy",
+        uncertainty_low_acc: "Low-uncertainty accuracy",
+        uncertainty_entropy_corr: "Entropy-accuracy corr",
+        uncertainty_match: "Match",
+        uncertainty_conf: "Confidence",
+        uncertainty_entropy: "Entropy",
+        uncertainty_margin: "Margin",
+        uncertainty_dispersion: "Dispersion",
+        uncertainty_predicted: "Predicted",
+        uncertainty_actual: "Actual",
+        uncertainty_correct: "Correct",
+        uncertainty_label: "Label",
+        uncertainty_no_points: "No uncertainty points",
     },
 };
 
@@ -5747,6 +5887,324 @@ async function fetchAndRenderCIWidth() {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderStressTest() {
+    const body = document.getElementById("backtest-stress-test-body");
+    const btn = document.getElementById("btn-stress-test");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("stress_test_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/stress-test");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("stress_test_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("stress_test_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const assessmentColors = {
+            "severe": "var(--status-low, #f87171)",
+            "moderate": "var(--status-medium, #fbbf24)",
+            "mild": "var(--status-high, #4ade80)",
+            "negligible": "var(--status-high, #4ade80)",
+        };
+        const assessmentColor = assessmentColors[data.assessment] || "var(--text-muted)";
+        const degColor = data.degradation_score >= 0.5 ? "var(--status-low, #f87171)" : (data.degradation_score >= 0.2 ? "var(--status-medium, #fbbf24)" : "var(--status-high, #4ade80)");
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.assessment || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_assessment"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:${degColor}">${Number(data.degradation_score || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_degradation"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${escapeHtml(data.shift_type || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_shift_type"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_shifted ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_n_shifted"))}</div>
+            </div>
+        </div>`;
+        const baseline = data.baseline || {};
+        const stressed = data.stressed || {};
+        const fmt = (v) => v !== null && v !== undefined ? Number(v).toFixed(4) : "–";
+        const deltaColor = (d) => d > 0 ? "var(--status-low, #f87171)" : (d < 0 ? "var(--status-high, #4ade80)" : "var(--text-muted)");
+        html += `<table class="data-table" style="width:100%;font-size:0.72rem;border-collapse:collapse;margin-bottom:0.4rem">
+            <thead>
+                <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                    <th style="padding:0.25rem">${escapeHtml(t("stress_test_n_matches"))}</th>
+                    <th style="padding:0.25rem;text-align:right">${escapeHtml(t("stress_test_accuracy"))}</th>
+                    <th style="padding:0.25rem;text-align:right">${escapeHtml(t("stress_test_brier"))}</th>
+                    <th style="padding:0.25rem;text-align:right">${escapeHtml(t("stress_test_rps"))}</th>
+                    <th style="padding:0.25rem;text-align:right">${escapeHtml(t("stress_test_log_loss"))}</th>
+                    <th style="padding:0.25rem;text-align:right">${escapeHtml(t("stress_test_conf"))}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem;font-weight:600">${escapeHtml(t("stress_test_baseline"))}</td>
+                    <td style="padding:0.25rem;text-align:right">${baseline.n_matches ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(baseline.accuracy)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(baseline.brier)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(baseline.rps)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(baseline.log_loss)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(baseline.avg_confidence)}</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem;font-weight:600">${escapeHtml(t("stress_test_stressed"))}</td>
+                    <td style="padding:0.25rem;text-align:right">${stressed.n_matches ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(stressed.accuracy)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(stressed.brier)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(stressed.rps)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(stressed.log_loss)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(stressed.avg_confidence)}</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border-color);font-weight:600">
+                    <td style="padding:0.25rem">Δ</td>
+                    <td style="padding:0.25rem;text-align:right;color:${deltaColor(data.accuracy_delta)}">${fmt(data.accuracy_delta)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${deltaColor(data.brier_delta)}">${fmt(data.brier_delta)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${deltaColor(data.rps_delta)}">${fmt(data.rps_delta)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(data.log_loss_delta)}</td>
+                    <td style="padding:0.25rem;text-align:right">${fmt(data.confidence_delta)}</td>
+                </tr>
+            </tbody>
+        </table>`;
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("stress_test_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderTeamDrift() {
+    const body = document.getElementById("backtest-team-drift-body");
+    const btn = document.getElementById("btn-team-drift");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    let teamName = "";
+    const input = document.getElementById("team-drift-input");
+    if (input) teamName = (input.value || "").trim();
+    if (!teamName) {
+        body.innerHTML = `<div style="margin-bottom:0.4rem">
+            <label style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(t("stress_test_team_input"))}</label>
+            <input id="team-drift-input" type="text" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-base);color:var(--text-primary)" />
+        </div>
+        <p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_drift_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_drift_loading"))}</p>`;
+    try {
+        const params = new URLSearchParams({ team_name: teamName });
+        const data = await apiFetch(`/predictions/calibration/team-drift?${params.toString()}`);
+        const inputHtml = `<div style="margin-bottom:0.4rem">
+            <label style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(t("stress_test_team_input"))}</label>
+            <input id="team-drift-input" type="text" value="${escapeHtml(teamName)}" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-base);color:var(--text-primary)" />
+        </div>`;
+        if (!data || data.status === "not_available") {
+            body.innerHTML = inputHtml + `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_drift_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = inputHtml + `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("team_drift_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const driftColor = data.drift_detected ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        const trendColors = {
+            "improving": "var(--status-high, #4ade80)",
+            "degrading": "var(--status-low, #f87171)",
+            "stable": "var(--status-medium, #fbbf24)",
+            "insufficient_data": "var(--text-muted)",
+        };
+        const trendColor = trendColors[data.trend] || "var(--text-muted)";
+        let html = inputHtml + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${driftColor}">${data.drift_detected ? escapeHtml(t("team_drift_drift_yes")) : escapeHtml(t("team_drift_drift_no"))}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_drift_detected"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_n_windows"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_trend"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.latest_brier || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_latest_brier"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.historical_avg_brier || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_hist_brier"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${driftColor}">${Number(data.relative_change || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_rel_change"))}</div>
+            </div>
+        </div>`;
+        const points = Array.isArray(data.points) ? data.points : [];
+        if (points.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.7rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("team_drift_window"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("team_drift_n"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("team_drift_acc"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("team_drift_brier"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("team_drift_conf"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            for (const p of points) {
+                const brierColor = `hsl(${Math.max(0, 120 - Number(p.brier || 0) * 200)}, 70%, 45%)`;
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem;font-size:0.65rem">${escapeHtml(p.window_label || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right">${p.n_matches ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.accuracy || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;font-weight:600;color:${brierColor}">${Number(p.brier || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.avg_confidence || 0).toFixed(4)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_drift_no_points"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("team_drift_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderUncertainty() {
+    const body = document.getElementById("backtest-uncertainty-body");
+    const btn = document.getElementById("btn-uncertainty");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("uncertainty_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/uncertainty");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("uncertainty_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("uncertainty_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const corr = data.entropy_accuracy_correlation;
+        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #4ade80)" : (corr > 0.3 ? "var(--status-low, #f87171)" : "var(--status-medium, #fbbf24)")) : "var(--text-muted)";
+        const highAccColor = data.high_uncertainty_accuracy < 0.5 ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_entropy || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_entropy"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_margin || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_margin"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_dispersion || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_dispersion"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.high_uncertainty_count ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_high_count"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${highAccColor}">${Number(data.high_uncertainty_accuracy || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_high_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.low_uncertainty_accuracy || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_low_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${corrColor}">${corr !== null && corr !== undefined ? Number(corr).toFixed(4) : "–"}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_entropy_corr"))}</div>
+            </div>
+        </div>`;
+        const points = Array.isArray(data.points) ? data.points : [];
+        if (points.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.68rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("uncertainty_match"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("uncertainty_conf"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("uncertainty_entropy"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("uncertainty_margin"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("uncertainty_dispersion"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("uncertainty_predicted"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("uncertainty_label"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("uncertainty_correct"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            const shown = points.slice(0, 50);
+            for (const p of shown) {
+                const labelColors = {
+                    "high": "var(--status-low, #f87171)",
+                    "medium": "var(--status-medium, #fbbf24)",
+                    "low": "var(--status-high, #4ade80)",
+                };
+                const labelColor = labelColors[p.uncertainty_label] || "var(--text-muted)";
+                const matchLabel = p.home_team && p.away_team ? `${escapeHtml(p.home_team)} vs ${escapeHtml(p.away_team)}` : (p.match_id ? escapeHtml(p.match_id) : "–");
+                const correctMark = p.correct === true ? "✓" : (p.correct === false ? "✗" : "–");
+                const correctColor = p.correct === true ? "var(--status-high, #4ade80)" : (p.correct === false ? "var(--status-low, #f87171)" : "var(--text-muted)");
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem">${matchLabel}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.confidence || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.entropy || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.margin || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.dispersion || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${escapeHtml(p.predicted_outcome || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${labelColor}">${escapeHtml(p.uncertainty_label || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${correctColor}">${correctMark}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+            if (points.length > 50) {
+                html += `<p style="margin-top:0.3rem;font-size:0.68rem;color:var(--text-muted)">Showing 50 of ${points.length} points</p>`;
+            }
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("uncertainty_no_points"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("uncertainty_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -9326,6 +9784,12 @@ async function renderBacktest() {
         if (dataDriftPanel) dataDriftPanel.style.display = "block";
         const ciWidthPanel = document.getElementById("backtest-ci-width-panel");
         if (ciWidthPanel) ciWidthPanel.style.display = "block";
+        const stressTestPanel = document.getElementById("backtest-stress-test-panel");
+        if (stressTestPanel) stressTestPanel.style.display = "block";
+        const teamDriftPanel = document.getElementById("backtest-team-drift-panel");
+        if (teamDriftPanel) teamDriftPanel.style.display = "block";
+        const uncertaintyPanel = document.getElementById("backtest-uncertainty-panel");
+        if (uncertaintyPanel) uncertaintyPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -10222,6 +10686,36 @@ function bindEvents() {
         ciWidthBtn.addEventListener("click", () => {
             fetchAndRenderCIWidth().catch(
                 (e) => console.warn("CI width failed:", e)
+            );
+        });
+    }
+
+    // Stress test button: distribution shift simulation
+    const stressTestBtn = document.getElementById("btn-stress-test");
+    if (stressTestBtn) {
+        stressTestBtn.addEventListener("click", () => {
+            fetchAndRenderStressTest().catch(
+                (e) => console.warn("Stress test failed:", e)
+            );
+        });
+    }
+
+    // Team drift button: per-team calibration drift
+    const teamDriftBtn = document.getElementById("btn-team-drift");
+    if (teamDriftBtn) {
+        teamDriftBtn.addEventListener("click", () => {
+            fetchAndRenderTeamDrift().catch(
+                (e) => console.warn("Team drift failed:", e)
+            );
+        });
+    }
+
+    // Uncertainty button: per-match uncertainty quantification
+    const uncertaintyBtn = document.getElementById("btn-uncertainty");
+    if (uncertaintyBtn) {
+        uncertaintyBtn.addEventListener("click", () => {
+            fetchAndRenderUncertainty().catch(
+                (e) => console.warn("Uncertainty failed:", e)
             );
         });
     }

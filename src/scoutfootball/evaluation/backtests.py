@@ -5105,3 +5105,692 @@ def compute_ci_width_analysis(
         assessment=assessment,
         disclaimer=disclaimer,
     )
+
+
+# ---------------------------------------------------------------------------
+# Round 34: Scenario Stress Test, Per-Team Calibration Drift, Uncertainty
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StressTestMetricSet:
+    """Metric snapshot for either baseline or stressed predictions."""
+
+    n_matches: int
+    accuracy: float
+    brier: float
+    rps: float
+    log_loss: float | None
+    avg_confidence: float
+
+
+@dataclass(frozen=True)
+class StressTestReport:
+    """Report comparing baseline vs stressed distribution metrics."""
+
+    shift_type: str
+    shift_ratio: float
+    baseline: StressTestMetricSet
+    stressed: StressTestMetricSet
+    accuracy_delta: float
+    brier_delta: float
+    rps_delta: float
+    log_loss_delta: float | None
+    confidence_delta: float
+    degradation_score: float
+    assessment: str
+    n_shifted: int
+    disclaimer: str
+
+
+def _metrics_set(df: pd.DataFrame) -> StressTestMetricSet:
+    """Build a StressTestMetricSet from a predictions DataFrame."""
+    if df.empty:
+        return StressTestMetricSet(
+            n_matches=0,
+            accuracy=0.0,
+            brier=0.0,
+            rps=0.0,
+            log_loss=None,
+            avg_confidence=0.0,
+        )
+    accuracy = _accuracy_for_df(df)
+    brier = _brier_1x2(df)
+    rps = _ranked_probability_score(df)
+    if "exact_score_probability" in df.columns:
+        sub = df.dropna(subset=["exact_score_probability"])
+        log_loss = _exact_score_log_loss(sub) if not sub.empty else None
+    else:
+        log_loss = None
+    avg_conf = _avg_confidence_for_df(df)
+    return StressTestMetricSet(
+        n_matches=int(len(df)),
+        accuracy=round(accuracy, 4),
+        brier=round(brier, 4),
+        rps=round(rps, 4),
+        log_loss=round(log_loss, 4) if log_loss is not None else None,
+        avg_confidence=round(avg_conf, 4),
+    )
+
+
+_VALID_SHIFT_TYPES = {
+    "outcome_swap", "probability_shift",
+    "confidence_inflation", "confidence_deflation",
+}
+
+
+def compute_scenario_stress_test(
+    predictions: pd.DataFrame,
+    *,
+    shift_type: str = "outcome_swap",
+    shift_ratio: float = 0.2,
+    random_state: int = 42,
+) -> StressTestReport:
+    """Simulate distribution shift and measure model degradation.
+
+    Args:
+        predictions: Backtest predictions DataFrame. Must include
+            ``home_win_probability``, ``draw_probability``,
+            ``away_win_probability`` and ``actual_outcome`` columns.
+        shift_type: Type of distribution shift to simulate. One of:
+
+            * ``outcome_swap`` — swap ``shift_ratio`` fraction of
+              ``home_win`` actual outcomes to ``away_win``.
+            * ``probability_shift`` — shift probability mass from
+              home to away for ``shift_ratio`` fraction of rows.
+            * ``confidence_inflation`` — inflate the max probability
+              toward 1.0 for ``shift_ratio`` fraction of rows.
+            * ``confidence_deflation`` — compress probabilities
+              toward uniform for ``shift_ratio`` fraction of rows.
+        shift_ratio: Fraction of rows to perturb (0.0–1.0).
+        random_state: Seed for reproducible row selection.
+
+    Returns:
+        StressTestReport with baseline and stressed metric sets plus
+        deltas and a composite degradation score.
+
+    Raises:
+        ValueError: If required columns are missing, ``shift_type`` is
+            invalid, or ``shift_ratio`` is outside [0.0, 1.0].
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    if shift_type not in _VALID_SHIFT_TYPES:
+        valid = ", ".join(sorted(_VALID_SHIFT_TYPES))
+        raise ValueError(f"shift_type must be one of {valid}, got '{shift_type}'")
+
+    if shift_ratio < 0.0 or shift_ratio > 1.0:
+        raise ValueError(f"shift_ratio must be in [0.0, 1.0], got {shift_ratio}")
+
+    disclaimer = (
+        "Scenario stress testing simulates distribution shifts on the "
+        "backtest predictions to quantify model robustness. The "
+        "degradation score summarizes accuracy loss, Brier increase, "
+        "and RPS increase. Positive scores indicate degradation."
+    )
+
+    df = predictions.copy()
+    baseline = _metrics_set(df)
+
+    if df.empty or shift_ratio == 0.0:
+        return StressTestReport(
+            shift_type=shift_type,
+            shift_ratio=shift_ratio,
+            baseline=baseline,
+            stressed=baseline,
+            accuracy_delta=0.0,
+            brier_delta=0.0,
+            rps_delta=0.0,
+            log_loss_delta=None,
+            confidence_delta=0.0,
+            degradation_score=0.0,
+            assessment="negligible",
+            n_shifted=0,
+            disclaimer=disclaimer,
+        )
+
+    rng = np.random.default_rng(random_state)
+    n_rows = len(df)
+    n_shift = int(round(n_rows * shift_ratio))
+    if n_shift < 1:
+        n_shift = 1 if n_rows >= 1 else 0
+    if n_shift > n_rows:
+        n_shift = n_rows
+
+    shift_idx = rng.choice(n_rows, size=n_shift, replace=False)
+
+    stressed = df.copy()
+    probs_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+
+    if shift_type == "outcome_swap":
+        # Swap home_win -> away_win for the selected rows.
+        mask = stressed.index.isin(stressed.iloc[shift_idx].index)
+        swap_mask = mask & (stressed["actual_outcome"] == "home_win")
+        stressed.loc[swap_mask, "actual_outcome"] = "away_win"
+    elif shift_type == "probability_shift":
+        # Shift probability mass from home to away.
+        shift_amount = 0.2  # move 20% of home prob to away
+        for i in shift_idx:
+            row_label = stressed.index[i]
+            home_p = float(stressed.at[row_label, "home_win_probability"])
+            move = home_p * shift_amount
+            stressed.at[row_label, "home_win_probability"] = max(0.0, home_p - move)
+            stressed.at[row_label, "away_win_probability"] = (
+                float(stressed.at[row_label, "away_win_probability"]) + move
+            )
+    elif shift_type == "confidence_inflation":
+        # Inflate max probability toward 1.0.
+        for i in shift_idx:
+            row_label = stressed.index[i]
+            probs = [
+                float(stressed.at[row_label, "home_win_probability"]),
+                float(stressed.at[row_label, "draw_probability"]),
+                float(stressed.at[row_label, "away_win_probability"]),
+            ]
+            max_idx = int(np.argmax(probs))
+            inflation = 0.2  # inflate by 20% of gap to 1.0
+            new_max = probs[max_idx] + (1.0 - probs[max_idx]) * inflation
+            residual = max(0.0, 1.0 - new_max)
+            others = [j for j in range(3) if j != max_idx]
+            other_sum = sum(probs[j] for j in others)
+            if other_sum > 0:
+                for j in others:
+                    probs[j] = residual * (probs[j] / other_sum)
+            else:
+                for j in others:
+                    probs[j] = residual / 2.0
+            probs[max_idx] = new_max
+            for j, col in enumerate(probs_cols):
+                stressed.at[row_label, col] = probs[j]
+    else:  # confidence_deflation
+        # Compress probabilities toward uniform (1/3 each).
+        compress = 0.2  # move 20% toward uniform
+        uniform = 1.0 / 3.0
+        for i in shift_idx:
+            row_label = stressed.index[i]
+            for col in probs_cols:
+                cur = float(stressed.at[row_label, col])
+                stressed.at[row_label, col] = cur + (uniform - cur) * compress
+
+    stressed_metrics = _metrics_set(stressed)
+
+    accuracy_delta = round(stressed_metrics.accuracy - baseline.accuracy, 4)
+    brier_delta = round(stressed_metrics.brier - baseline.brier, 4)
+    rps_delta = round(stressed_metrics.rps - baseline.rps, 4)
+    confidence_delta = round(
+        stressed_metrics.avg_confidence - baseline.avg_confidence, 4
+    )
+    if (
+        baseline.log_loss is not None
+        and stressed_metrics.log_loss is not None
+    ):
+        log_loss_delta = round(stressed_metrics.log_loss - baseline.log_loss, 4)
+    else:
+        log_loss_delta = None
+
+    # Composite degradation score: weighted sum of normalized deltas.
+    # Positive = degradation. Accuracy delta is negated (loss is bad).
+    degradation_score = round(
+        max(0.0, -accuracy_delta) * 2.0
+        + max(0.0, brier_delta) * 5.0
+        + max(0.0, rps_delta) * 3.0,
+        4,
+    )
+
+    if degradation_score >= 0.5:
+        assessment = "severe"
+    elif degradation_score >= 0.2:
+        assessment = "moderate"
+    elif degradation_score >= 0.05:
+        assessment = "mild"
+    else:
+        assessment = "negligible"
+
+    return StressTestReport(
+        shift_type=shift_type,
+        shift_ratio=shift_ratio,
+        baseline=baseline,
+        stressed=stressed_metrics,
+        accuracy_delta=accuracy_delta,
+        brier_delta=brier_delta,
+        rps_delta=rps_delta,
+        log_loss_delta=log_loss_delta,
+        confidence_delta=confidence_delta,
+        degradation_score=degradation_score,
+        assessment=assessment,
+        n_shifted=n_shift,
+        disclaimer=disclaimer,
+    )
+
+
+@dataclass(frozen=True)
+class TeamDriftPoint:
+    """Per-team metrics within a single time window."""
+
+    window_label: str
+    n_matches: int
+    accuracy: float
+    brier: float
+    avg_confidence: float
+
+
+@dataclass(frozen=True)
+class TeamCalibrationDriftReport:
+    """Calibration drift analysis restricted to a single team."""
+
+    team_col: str
+    team_name: str
+    points: list[TeamDriftPoint]
+    n_total_matches: int
+    n_windows: int
+    drift_detected: bool
+    latest_brier: float
+    historical_avg_brier: float
+    relative_change: float
+    trend: str
+    disclaimer: str
+
+
+def compute_team_calibration_drift(
+    predictions: pd.DataFrame,
+    *,
+    team_col: str = "home_team",
+    team_name: str,
+    window_size: str = "180D",
+    min_samples_per_window: int = 5,
+    n_windows: int | None = None,
+) -> TeamCalibrationDriftReport:
+    """Compute calibration drift restricted to a single team.
+
+    Filters predictions to rows where ``team_col == team_name``, then
+    builds rolling time windows of ``window_size`` over ``match_date``
+    and computes per-window accuracy, Brier, and avg confidence.
+
+    Drift detection compares the latest window's mean Brier to the
+    historical mean Brier (all earlier windows). ``drift_detected`` is
+    flagged when the relative change exceeds 5%.
+
+    Args:
+        predictions: Backtest predictions DataFrame.
+        team_col: Column to filter on (e.g. ``home_team`` or
+            ``away_team``).
+        team_name: Team name to filter for.
+        window_size: Pandas offset alias for window size.
+        min_samples_per_window: Minimum matches per window.
+        n_windows: Optional cap on the number of windows returned.
+
+    Returns:
+        TeamCalibrationDriftReport with per-window points and drift
+        summary.
+
+    Raises:
+        ValueError: If required columns are missing or ``team_name``
+            is empty.
+    """
+    required = {
+        team_col,
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome", "match_date",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    if not team_name:
+        raise ValueError("team_name must be a non-empty string")
+
+    disclaimer = (
+        "Per-team calibration drift tracks how a single team's "
+        "prediction quality evolves over time. A degrading trend may "
+        "indicate roster turnover, tactical shifts, or model staleness "
+        "specific to that team. Small samples per window can produce "
+        "noisy trends."
+    )
+
+    df = predictions.copy()
+    df = df.loc[df[team_col].astype(str) == str(team_name)].copy()
+    if df.empty:
+        return TeamCalibrationDriftReport(
+            team_col=team_col,
+            team_name=team_name,
+            points=[],
+            n_total_matches=0,
+            n_windows=0,
+            drift_detected=False,
+            latest_brier=0.0,
+            historical_avg_brier=0.0,
+            relative_change=0.0,
+            trend="insufficient_data",
+            disclaimer=disclaimer,
+        )
+
+    df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
+    df = df.dropna(subset=["match_date"]).sort_values("match_date").reset_index(drop=True)
+    if df.empty:
+        return TeamCalibrationDriftReport(
+            team_col=team_col,
+            team_name=team_name,
+            points=[],
+            n_total_matches=0,
+            n_windows=0,
+            drift_detected=False,
+            latest_brier=0.0,
+            historical_avg_brier=0.0,
+            relative_change=0.0,
+            trend="insufficient_data",
+            disclaimer=disclaimer,
+        )
+
+    min_date = df["match_date"].min()
+    max_date = df["match_date"].max()
+
+    points: list[TeamDriftPoint] = []
+    current_start = min_date
+    while current_start <= max_date:
+        current_end = current_start + pd.Timedelta(window_size)
+        window_df = df[
+            (df["match_date"] >= current_start)
+            & (df["match_date"] < current_end)
+        ]
+        if len(window_df) >= min_samples_per_window:
+            label = f"{current_start.strftime('%Y-%m-%d')}_{current_end.strftime('%Y-%m-%d')}"
+            points.append(TeamDriftPoint(
+                window_label=label,
+                n_matches=int(len(window_df)),
+                accuracy=round(_accuracy_for_df(window_df), 4),
+                brier=round(_brier_1x2(window_df), 4),
+                avg_confidence=round(_avg_confidence_for_df(window_df), 4),
+            ))
+        current_start = current_end
+
+    if n_windows is not None and len(points) > n_windows:
+        points = points[:n_windows]
+
+    if not points:
+        return TeamCalibrationDriftReport(
+            team_col=team_col,
+            team_name=team_name,
+            points=[],
+            n_total_matches=int(len(df)),
+            n_windows=0,
+            drift_detected=False,
+            latest_brier=0.0,
+            historical_avg_brier=0.0,
+            relative_change=0.0,
+            trend="insufficient_data",
+            disclaimer=disclaimer,
+        )
+
+    latest_brier = points[-1].brier
+    if len(points) >= 2:
+        historical_briers = [p.brier for p in points[:-1]]
+        historical_avg = float(np.mean(historical_briers))
+    else:
+        historical_avg = latest_brier
+
+    if historical_avg > 0:
+        relative_change = round((latest_brier - historical_avg) / historical_avg, 4)
+    else:
+        relative_change = 0.0
+
+    drift_detected = abs(relative_change) > 0.05 and len(points) >= 2
+
+    if len(points) < 2:
+        trend = "insufficient_data"
+    elif relative_change < -0.005:
+        trend = "improving"
+    elif relative_change > 0.005:
+        trend = "degrading"
+    else:
+        trend = "stable"
+
+    return TeamCalibrationDriftReport(
+        team_col=team_col,
+        team_name=team_name,
+        points=points,
+        n_total_matches=int(len(df)),
+        n_windows=len(points),
+        drift_detected=drift_detected,
+        latest_brier=latest_brier,
+        historical_avg_brier=round(historical_avg, 4),
+        relative_change=relative_change,
+        trend=trend,
+        disclaimer=disclaimer,
+    )
+
+
+@dataclass(frozen=True)
+class UncertaintyPoint:
+    """Per-match uncertainty metrics."""
+
+    match_id: str | None
+    home_team: str | None
+    away_team: str | None
+    confidence: float
+    entropy: float
+    margin: float
+    dispersion: float
+    predicted_outcome: str
+    actual_outcome: str | None
+    correct: bool | None
+    uncertainty_label: str
+
+
+@dataclass(frozen=True)
+class UncertaintyReport:
+    """Aggregated prediction uncertainty analysis."""
+
+    points: list[UncertaintyPoint]
+    n_matches: int
+    avg_entropy: float
+    avg_margin: float
+    avg_dispersion: float
+    high_uncertainty_count: int
+    high_uncertainty_accuracy: float
+    low_uncertainty_accuracy: float
+    entropy_accuracy_correlation: float | None
+    disclaimer: str
+
+
+def _shannon_entropy(probs: list[float]) -> float:
+    """Normalized Shannon entropy in [0, 1] for a 3-outcome distribution."""
+    raw = 0.0
+    for p in probs:
+        if p > 0:
+            raw -= p * float(np.log(p))
+    # Normalize by log(3) so the result is in [0, 1].
+    return float(raw / float(np.log(3)))
+
+
+def _uncertainty_label(entropy: float) -> str:
+    """Categorize entropy into high/medium/low."""
+    if entropy >= 0.85:
+        return "high"
+    if entropy >= 0.5:
+        return "medium"
+    return "low"
+
+
+def compute_prediction_uncertainty(
+    predictions: pd.DataFrame,
+    *,
+    max_points: int = 500,
+) -> UncertaintyReport:
+    """Quantify per-match prediction uncertainty.
+
+    For each match computes:
+        * Shannon entropy of the 1x2 probability vector (normalized
+          to [0, 1] via division by ``log(3)``).
+        * Confidence margin (max probability − second-highest).
+        * Probability dispersion (standard deviation of the 1x2
+          probabilities).
+        * Uncertainty label (``high`` / ``medium`` / ``low``).
+
+    Also reports the average metrics, accuracy for high vs low
+    uncertainty buckets, and the Pearson correlation between entropy
+    and binary correctness (1 = correct, 0 = incorrect).
+
+    Args:
+        predictions: Backtest predictions DataFrame.
+        max_points: Maximum number of points to return (keeps first N).
+
+    Returns:
+        UncertaintyReport with per-match points and aggregates.
+
+    Raises:
+        ValueError: If required probability columns are missing.
+    """
+    required = {"home_win_probability", "draw_probability", "away_win_probability"}
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    disclaimer = (
+        "Prediction uncertainty quantification supplements confidence "
+        "with Shannon entropy, margin, and dispersion. High-uncertainty "
+        "matches should be treated cautiously. Entropy near 1.0 "
+        "indicates near-uniform probabilities; entropy near 0.0 "
+        "indicates a dominant outcome."
+    )
+
+    df = predictions.copy()
+    if df.empty:
+        return UncertaintyReport(
+            points=[],
+            n_matches=0,
+            avg_entropy=0.0,
+            avg_margin=0.0,
+            avg_dispersion=0.0,
+            high_uncertainty_count=0,
+            high_uncertainty_accuracy=0.0,
+            low_uncertainty_accuracy=0.0,
+            entropy_accuracy_correlation=None,
+            disclaimer=disclaimer,
+        )
+
+    probs_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    probs = df[probs_cols].to_numpy(dtype=float)
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    label_map = {0: "home_win", 1: "draw", 2: "away_win"}
+
+    has_actual = "actual_outcome" in df.columns
+    has_match_id = "match_id" in df.columns
+    has_home = "home_team" in df.columns
+    has_away = "away_team" in df.columns
+
+    points: list[UncertaintyPoint] = []
+    entropies: list[float] = []
+    margins: list[float] = []
+    dispersions: list[float] = []
+    correct_flags: list[int] = []
+
+    n_rows = len(df)
+    cap = min(max_points, n_rows) if max_points > 0 else n_rows
+
+    for i in range(n_rows):
+        row_probs = [float(probs[i, 0]), float(probs[i, 1]), float(probs[i, 2])]
+        confidence = max(row_probs)
+        entropy = _shannon_entropy(row_probs)
+        sorted_desc = sorted(row_probs, reverse=True)
+        margin = sorted_desc[0] - sorted_desc[1] if len(sorted_desc) >= 2 else 0.0
+        dispersion = float(np.std(row_probs))
+        predicted_idx = int(np.argmax(row_probs))
+        predicted_outcome = label_map[predicted_idx]
+
+        actual = None
+        correct = None
+        if has_actual:
+            actual_val = df.iloc[i]["actual_outcome"]
+            if isinstance(actual_val, str) and actual_val in outcome_map:
+                actual = actual_val
+                correct = predicted_idx == outcome_map[actual_val]
+                correct_flags.append(1 if correct else 0)
+
+        entropies.append(entropy)
+        margins.append(margin)
+        dispersions.append(dispersion)
+
+        if i < cap:
+            match_id = None
+            if has_match_id:
+                mid_val = df.iloc[i]["match_id"]
+                match_id = str(mid_val) if mid_val is not None and str(mid_val) != "nan" else None
+            home_team = None
+            if has_home:
+                ht_val = df.iloc[i]["home_team"]
+                home_team = str(ht_val) if ht_val is not None and str(ht_val) != "nan" else None
+            away_team = None
+            if has_away:
+                at_val = df.iloc[i]["away_team"]
+                away_team = str(at_val) if at_val is not None and str(at_val) != "nan" else None
+
+            points.append(UncertaintyPoint(
+                match_id=match_id,
+                home_team=home_team,
+                away_team=away_team,
+                confidence=round(confidence, 4),
+                entropy=round(entropy, 4),
+                margin=round(margin, 4),
+                dispersion=round(dispersion, 4),
+                predicted_outcome=predicted_outcome,
+                actual_outcome=actual,
+                correct=correct,
+                uncertainty_label=_uncertainty_label(entropy),
+            ))
+
+    avg_entropy = float(np.mean(entropies)) if entropies else 0.0
+    avg_margin = float(np.mean(margins)) if margins else 0.0
+    avg_dispersion = float(np.mean(dispersions)) if dispersions else 0.0
+
+    high_uncertainty_count = sum(1 for e in entropies if e >= 0.85)
+    low_entropy_mask = [e < 0.5 for e in entropies]
+    high_entropy_mask = [e >= 0.85 for e in entropies]
+
+    high_acc = 0.0
+    low_acc = 0.0
+    if correct_flags:
+        high_correct = sum(
+            c for c, h in zip(correct_flags, high_entropy_mask, strict=False) if h
+        )
+        high_total = sum(1 for h in high_entropy_mask if h)
+        if high_total > 0:
+            high_acc = high_correct / high_total
+        low_correct = sum(
+            c for c, lo in zip(correct_flags, low_entropy_mask, strict=False) if lo
+        )
+        low_total = sum(1 for lo in low_entropy_mask if lo)
+        if low_total > 0:
+            low_acc = low_correct / low_total
+
+    correlation: float | None = None
+    if len(correct_flags) >= 2 and len(set(entropies)) > 1:
+        try:
+            from scipy.stats import pearsonr
+
+            r, _ = pearsonr(entropies, correct_flags)
+            if not np.isnan(r):
+                correlation = round(float(r), 4)
+        except Exception:
+            correlation = None
+
+    return UncertaintyReport(
+        points=points,
+        n_matches=int(len(df)),
+        avg_entropy=round(avg_entropy, 4),
+        avg_margin=round(avg_margin, 4),
+        avg_dispersion=round(avg_dispersion, 4),
+        high_uncertainty_count=high_uncertainty_count,
+        high_uncertainty_accuracy=round(high_acc, 4),
+        low_uncertainty_accuracy=round(low_acc, 4),
+        entropy_accuracy_correlation=correlation,
+        disclaimer=disclaimer,
+    )

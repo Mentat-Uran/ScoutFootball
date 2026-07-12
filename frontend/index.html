@@ -1824,6 +1824,39 @@
                     </div>
                     <div id="backtest-ci-width-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-stress-test-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="stress_test_title">回测场景压力测试</h3>
+                            <span class="kicker" data-i18n="stress_test_desc">模拟分布偏移并测量模型退化,量化鲁棒性</span>
+                        </div>
+                        <button class="text-button" id="btn-stress-test" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="stress_test_fetch">加载</button>
+                    </div>
+                    <div id="backtest-stress-test-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-team-drift-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="team_drift_title">按球队校准漂移</h3>
+                            <span class="kicker" data-i18n="team_drift_desc">追踪单支球队预测质量随时间的演化</span>
+                        </div>
+                        <button class="text-button" id="btn-team-drift" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="team_drift_fetch">加载</button>
+                    </div>
+                    <div id="backtest-team-drift-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-uncertainty-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="uncertainty_title">预测不确定性量化</h3>
+                            <span class="kicker" data-i18n="uncertainty_desc">每场比赛的熵、置信度边际、概率离散度</span>
+                        </div>
+                        <button class="text-button" id="btn-uncertainty" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="uncertainty_fetch">加载</button>
+                    </div>
+                    <div id="backtest-uncertainty-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->

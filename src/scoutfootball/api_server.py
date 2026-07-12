@@ -64,13 +64,16 @@ from scoutfootball.api import (
     get_prediction_diagnostics,
     get_prediction_staleness,
     get_prediction_summary,
+    get_prediction_uncertainty,
     get_probability_heatmap,
     get_ratings_meta,
     get_reliability_diagram,
     get_review_queue,
+    get_scenario_stress_test,
     get_scoreline_calibration,
     get_shortlist,
     get_team_accuracy,
+    get_team_calibration_drift,
     get_team_comparison,
     get_team_strength,
     get_temporal_validation,
@@ -461,6 +464,40 @@ def create_app() -> FastAPI:
             n_bins=n_bins,
             min_samples_per_bucket=min_samples_per_bucket,
         )
+
+    @app.get("/predictions/calibration/stress-test")
+    def predictions_calibration_stress_test(
+        shift_type: str = Query("outcome_swap", max_length=32),
+        shift_ratio: float = Query(0.2, ge=0.0, le=1.0),
+        random_state: int = Query(42, ge=0, le=2**31 - 1),
+    ):
+        return get_scenario_stress_test(
+            shift_type=shift_type,
+            shift_ratio=shift_ratio,
+            random_state=random_state,
+        )
+
+    @app.get("/predictions/calibration/team-drift")
+    def predictions_calibration_team_drift(
+        team_col: str = Query("home_team", max_length=64),
+        team_name: str = Query(..., max_length=128),
+        window_size: str = Query("180D", max_length=16),
+        min_samples_per_window: int = Query(5, ge=1, le=100),
+        n_windows: int | None = Query(None, ge=1, le=100),
+    ):
+        return get_team_calibration_drift(
+            team_col=team_col,
+            team_name=team_name,
+            window_size=window_size,
+            min_samples_per_window=min_samples_per_window,
+            n_windows=n_windows,
+        )
+
+    @app.get("/predictions/calibration/uncertainty")
+    def predictions_calibration_uncertainty(
+        max_points: int = Query(500, ge=10, le=5000),
+    ):
+        return get_prediction_uncertainty(max_points=max_points)
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")
     def predictions_attribution(home_team: str, away_team: str):
