@@ -675,6 +675,10 @@ tactical recommendation.
 `squad.top_rated_players`, and bounded strength components. Static exports may
 provide `/data/worldcup/match_briefings.json`; if no matching static briefing
 exists, the frontend shows it as unavailable rather than synthesizing one.
+`input_snapshot` records the current rating run ID/input hash and feature
+manifest hash only when model-run lineage has captured them; otherwise its
+status is `not_recorded`. It also names the fixed World Cup strength-model
+version and parameters used for the response.
 The comparison view can download the briefing as a browser-local JSON export
 (`scoutfootball.world-cup-match-briefing-export` v1.0.0) or CSV report. Both
 retain source attribution and limitations; CSV cells use the shared formula

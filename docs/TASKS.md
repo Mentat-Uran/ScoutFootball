@@ -102,6 +102,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] **世界杯赛程简报入口**（2026-07-12，Round 18）：小组赛赛程新增每场“赛前简报”按钮和可点击行；它会先获取双方阵容、预测及简报，再进入对比页和本地战术方案交接。离线缓存不存在匹配简报时显示不可用，不合成概率或阵容内容。
 - [x] **世界杯简报本地报告导出**（2026-07-12，Round 19）：比赛简报支持版本化 JSON 和公式注入防护的 CSV 下载，包含预测、阵容评分覆盖、Top rated players、来源、限制及浏览器本地存储范围；导出不写入服务端、不创建共享链接。
 - [x] **战术板简报血缘预览**（2026-07-12，Round 20）：战术板 schema 升级至 1.3.0，受限 decision-pack provenance 保存世界杯简报 schema/version/source；JSON 导出预览显示该引用，方便将战术工程与本地简报导出核对，仍不增加同步或服务端写入。
+- [x] **世界杯简报输入快照**（2026-07-12，Round 21）：简报新增 `input_snapshot`，只在模型运行已记录时传递评分 run ID/input hash/feature manifest hash，否则明确 `not_recorded`；同时记录固定强度比 Poisson 的版本、最大比分矩阵和主场修正。世界杯战术方案会转写该快照到 decision-pack provenance。
 - [x] **球探工作区服务端持久化**（2026-07-11，v1.0.3）：新增 `ScoutingWorkspaceStore` 服务端持久化层，支持 `PUT/GET /scouting-workspaces/{id}`、`/scouting-workspaces/latest`、`/scouting-workspaces/capabilities` 端点。使用 If-Match 乐观并发控制（revision 版本号）、原子写入、不可变备份和 loopback 访问控制。
 - [x] **H2H 近期状态趋势增强**（2026-07-11，v1.0.3）：新增 `compute_form_trend()` 函数，计算 momentum（近期 vs 较早期 PPG 差值）、form_rating（0-100 综合评分）、trend_label（improving/declining/stable）、进球/失球趋势、clean_sheets、failed_to_score 和累积积分 sparkline 数据。前端新增 form trend 卡片含评分条、趋势徽章和 SVG sparkline。空数据和异常路径均有零状态降级。
 - [x] **球员球探报告导出**（2026-07-11，v1.0.3）：将单行球员 CSV 导出替换为多段球探报告，支持 CSV 和 JSON 两种格式，覆盖 profile、radar、position_percentiles、xT_summary、3-season trend、low_confidence_reasons、scouting_notes、season_history 八个 section。修复 `position_percentiles` 字段名 bug（API 返回复数 dict，前端读单数 undefined）和 radar label bug（Volume/Overall → Reliability/Impact）。

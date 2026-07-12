@@ -16,6 +16,10 @@ def test_world_cup_match_briefing_returns_prediction_and_coverage() -> None:
     assert briefing["teams"]["home"]["squad"]["total_players"] > 0
     assert 0 <= briefing["teams"]["away"]["squad"]["rating_coverage"] <= 1
     assert len(briefing["teams"]["home"]["squad"]["top_rated_players"]) <= 5
+    snapshot = briefing["input_snapshot"]
+    assert snapshot["status"] in {"recorded", "not_recorded"}
+    assert snapshot["strength_model"]["version"] == "wc-1.0"
+    assert snapshot["strength_model"]["score_matrix_max_goals"] == 5
     assert len(briefing["limitations"]) >= 3
     assert "placeholder" in " ".join(briefing["limitations"]).lower()
 
