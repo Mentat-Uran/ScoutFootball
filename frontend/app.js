@@ -331,6 +331,21 @@ const i18n = {
         prediction_attribution_fetch: "分析因子",
         prediction_attribution_not_available: "暂无归因数据",
         prediction_attribution_instructions: "需要足够的 team_match 数据以拟合 Dixon-Coles 模型",
+        prediction_attribution_ci_fetch: "置信区间",
+        prediction_attribution_ci_loading: "Bootstrap 置信区间计算中…",
+        prediction_attribution_ci_not_available: "暂无置信区间数据",
+        prediction_attribution_delta_ci: "Δ 90% CI",
+        prediction_attribution_delta_mean: "Δ 均值",
+        prediction_diagnostics_title: "预测诊断",
+        prediction_diagnostics_desc: "校准、漂移与因子归因综合视图",
+        prediction_diagnostics_fetch: "诊断",
+        prediction_diagnostics_loading: "加载诊断数据中…",
+        prediction_diagnostics_calibration: "校准",
+        prediction_diagnostics_drift: "漂移",
+        prediction_diagnostics_attribution: "因子归因",
+        prediction_diagnostics_ci_cache: "CI 缓存",
+        prediction_diagnostics_stable: "稳定",
+        prediction_diagnostics_drift_detected: "检测到漂移",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -683,6 +698,21 @@ const i18n = {
         prediction_attribution_fetch: "Analyze Factors",
         prediction_attribution_not_available: "No attribution data available",
         prediction_attribution_instructions: "Requires sufficient team_match data to fit Dixon-Coles model",
+        prediction_attribution_ci_fetch: "Confidence Interval",
+        prediction_attribution_ci_loading: "Bootstrap CI computing…",
+        prediction_attribution_ci_not_available: "No CI data available",
+        prediction_attribution_delta_ci: "Δ 90% CI",
+        prediction_attribution_delta_mean: "Δ Mean",
+        prediction_diagnostics_title: "Prediction Diagnostics",
+        prediction_diagnostics_desc: "Combined view of calibration, drift, and attribution",
+        prediction_diagnostics_fetch: "Diagnostics",
+        prediction_diagnostics_loading: "Loading diagnostics…",
+        prediction_diagnostics_calibration: "Calibration",
+        prediction_diagnostics_drift: "Drift",
+        prediction_diagnostics_attribution: "Attribution",
+        prediction_diagnostics_ci_cache: "CI Cache",
+        prediction_diagnostics_stable: "Stable",
+        prediction_diagnostics_drift_detected: "Drift detected",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -2881,6 +2911,183 @@ async function fetchAndRenderPredictionAttribution(home, away) {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderPredictionAttributionCI(home, away) {
+    const body = document.getElementById("match-attribution-body");
+    const btn = document.getElementById("btn-prediction-attribution-ci");
+    if (!body) return;
+    const z = appState.lang === "zh";
+
+    const placeholder = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_attribution_ci_loading"))}</p>`;
+    const prev = body.innerHTML;
+    body.innerHTML = placeholder;
+    if (btn) btn.disabled = true;
+
+    let data;
+    try {
+        data = await fetchJson(
+            `/predictions/${encodeURIComponent(home)}/${encodeURIComponent(away)}/attribution/ci`,
+            { fetchOpts: { signal: AbortSignal.timeout(120000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch attribution CI:", err);
+        body.innerHTML = prev + `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_attribution_ci_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    if (!data || data.status === "error" || data.status === "not_available") {
+        const msg = data && data.status === "error"
+            ? `Error: ${escapeHtml(data.message || "unknown")}`
+            : escapeHtml(t("prediction_attribution_ci_not_available"));
+        body.innerHTML = prev + `<p style="color:var(--text-muted);font-size:0.82rem">${msg}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const cis = Array.isArray(data.factor_cis) ? data.factor_cis : [];
+    const fmtPct = (v) => v != null && !Number.isNaN(Number(v))
+        ? `${(Number(v) * 100).toFixed(2)}pp`
+        : "—";
+    const fmtCI = (lo, hi) => {
+        const loStr = lo == null || Number.isNaN(Number(lo)) ? "—" : `${(Number(lo) * 100).toFixed(2)}pp`;
+        const hiStr = hi == null || Number.isNaN(Number(hi)) ? "—" : `${(Number(hi) * 100).toFixed(2)}pp`;
+        return `[${loStr}, ${hiStr}]`;
+    };
+
+    let ciHtml = "";
+    if (cis.length > 0) {
+        const rows = cis.map((c) => {
+            const lo = Number(c.delta_low);
+            const hi = Number(c.delta_high);
+            const mean = Number(c.delta_mean);
+            const crossesZero = (!Number.isNaN(lo) && !Number.isNaN(hi) && lo <= 0 && hi >= 0);
+            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #64b5f6)";
+            return `<tr>
+                <td><strong>${escapeHtml(c.factor || "—")}</strong></td>
+                <td style="color:${ciColor}">${fmtCI(lo, hi)}</td>
+                <td>${fmtPct(mean)}</td>
+            </tr>`;
+        }).join("");
+        ciHtml = `
+            <h4 style="margin:0.6rem 0 0.3rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("prediction_attribution_delta_ci"))}</h4>
+            <table class="data-table" style="width:100%;font-size:0.76rem">
+                <thead>
+                    <tr>
+                        <th>${escapeHtml(t("prediction_attribution_factor"))}</th>
+                        <th>${escapeHtml(t("prediction_attribution_delta_ci"))}</th>
+                        <th>${escapeHtml(t("prediction_attribution_delta_mean"))}</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    } else {
+        ciHtml = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_attribution_ci_not_available"))}</p>`;
+    }
+
+    const nBoot = Number(data.n_bootstrap ?? 0);
+    const failed = Number(data.failed_iterations ?? 0);
+    const note = `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:0.4rem">bootstrap: n=${escapeHtml(String(nBoot))} · failed=${escapeHtml(String(failed))} · confidence=${escapeHtml(String(data.confidence_level ?? 0.9))}</div>`;
+
+    body.innerHTML = prev + ciHtml + note;
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderDiagnostics(home, away) {
+    const panel = document.getElementById("match-diagnostics-panel");
+    const body = document.getElementById("match-diagnostics-body");
+    const btn = document.getElementById("btn-prediction-diagnostics");
+    if (!panel || !body) return;
+    const z = appState.lang === "zh";
+
+    panel.style.display = "block";
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_diagnostics_loading"))}</p>`;
+    if (btn) btn.disabled = true;
+
+    let data;
+    try {
+        data = await fetchJson(
+            `/predictions/${encodeURIComponent(home)}/${encodeURIComponent(away)}/diagnostics`,
+            { fetchOpts: { signal: AbortSignal.timeout(90000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch diagnostics:", err);
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(z ? "诊断数据不可用" : "Diagnostics unavailable")}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    if (!data || data.status === "error" || data.status === "not_available") {
+        const msg = data && data.status === "error"
+            ? `Error: ${escapeHtml(data.message || "unknown")}`
+            : escapeHtml(z ? "诊断数据不可用" : "Diagnostics unavailable");
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${msg}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const fmtPct = (v) => v != null && !Number.isNaN(Number(v)) ? `${(Number(v) * 100).toFixed(2)}%` : "—";
+
+    // Calibration section
+    const cal = data.calibration || {};
+    const calHtml = `
+        <div style="margin-bottom:0.6rem">
+            <h4 style="margin:0 0 0.3rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("prediction_diagnostics_calibration"))}</h4>
+            <div class="detail-grid" style="font-size:0.76rem">
+                <div><span>${z ? "原始 RPS" : "Raw RPS"}</span><strong>${escapeHtml(String(cal.rps_raw ?? "—"))}</strong></div>
+                <div><span>${z ? "重校准 RPS" : "Recal RPS"}</span><strong>${escapeHtml(String(cal.rps_recalibrated ?? "—"))}</strong></div>
+                <div><span>${z ? "场次" : "Matches"}</span><strong>${escapeHtml(String(cal.n_matches ?? "—"))}</strong></div>
+            </div>
+        </div>`;
+
+    // Drift section
+    const drift = data.drift || {};
+    const driftStatus = drift.drift_detected === true
+        ? `<span class="status-pill status-low">${escapeHtml(t("prediction_diagnostics_drift_detected"))}</span>`
+        : `<span class="status-pill status-high">${escapeHtml(t("prediction_diagnostics_stable"))}</span>`;
+    const driftHtml = `
+        <div style="margin-bottom:0.6rem">
+            <h4 style="margin:0 0 0.3rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("prediction_diagnostics_drift"))}</h4>
+            <div style="font-size:0.76rem">${driftStatus}
+                <span style="margin-left:0.5rem;color:var(--text-muted)">${z ? "窗口" : "window"}: ${escapeHtml(String(drift.latest_window ?? "—"))} · ${z ? "指标" : "metric"}: ${escapeHtml(String(drift.drift_metric ?? "—"))}</span>
+            </div>
+        </div>`;
+
+    // Attribution section
+    const attr = data.attribution || {};
+    const factors = Array.isArray(attr.top_factors) ? attr.top_factors : [];
+    let attrHtml = `
+        <div style="margin-bottom:0.6rem">
+            <h4 style="margin:0 0 0.3rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("prediction_diagnostics_attribution"))}</h4>`;
+    if (factors.length > 0) {
+        const rows = factors.map((f) => {
+            const delta = Number(f.delta);
+            const dStr = !Number.isNaN(delta) ? `${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(2)}pp` : "—";
+            const color = delta > 0 ? "var(--accent, #64b5f6)" : (delta < 0 ? "var(--warn, #f59e0b)" : "var(--text-muted)");
+            return `<tr><td><strong>${escapeHtml(f.factor || "—")}</strong></td><td style="color:${color}">${dStr}</td></tr>`;
+        }).join("");
+        attrHtml += `<table class="data-table" style="width:100%;font-size:0.76rem"><tbody>${rows}</tbody></table>`;
+    } else {
+        attrHtml += `<p style="color:var(--text-muted);font-size:0.76rem">${escapeHtml(z ? "暂无归因数据" : "No attribution data")}</p>`;
+    }
+    attrHtml += `</div>`;
+
+    // CI cache section
+    const ciCache = data.ci_cache || {};
+    const ciStatus = ciCache.available === true
+        ? `<span class="status-pill status-high">${z ? "已缓存" : "cached"}</span>`
+        : `<span class="status-pill status-medium">${z ? "未缓存" : "not cached"}</span>`;
+    const ciCacheHtml = `
+        <div>
+            <h4 style="margin:0 0 0.3rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("prediction_diagnostics_ci_cache"))}</h4>
+            <div style="font-size:0.76rem">${ciStatus}
+                <span style="margin-left:0.5rem;color:var(--text-muted)">${z ? "年龄(秒)" : "age(s)"}: ${escapeHtml(String(ciCache.age_seconds ?? "—"))}</span>
+            </div>
+        </div>`;
+
+    body.innerHTML = `${calHtml}${driftHtml}${attrHtml}${ciCacheHtml}`;
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -3871,6 +4078,14 @@ async function renderMatches() {
     if (attributionPanel && attributionBody) {
         attributionPanel.style.display = "block";
         attributionBody.innerHTML = `<p style="color:var(--text-muted);font-size:0.78rem">${escapeHtml(t("prediction_attribution_instructions"))}</p>`;
+    }
+
+    // Reset diagnostics panel for the new match (hidden until user clicks the button)
+    const diagnosticsPanel = document.getElementById("match-diagnostics-panel");
+    const diagnosticsBody = document.getElementById("match-diagnostics-body");
+    if (diagnosticsPanel && diagnosticsBody) {
+        diagnosticsPanel.style.display = "none";
+        diagnosticsBody.innerHTML = "";
     }
 }
 
@@ -7029,6 +7244,26 @@ function bindEvents() {
         attributionBtn.addEventListener("click", () => {
             fetchAndRenderPredictionAttribution(appState.home, appState.away).catch(
                 (e) => console.warn("Prediction attribution failed:", e)
+            );
+        });
+    }
+
+    // Prediction attribution CI button: bootstrap confidence intervals on factor deltas
+    const attributionCIBtn = document.getElementById("btn-prediction-attribution-ci");
+    if (attributionCIBtn) {
+        attributionCIBtn.addEventListener("click", () => {
+            fetchAndRenderPredictionAttributionCI(appState.home, appState.away).catch(
+                (e) => console.warn("Prediction attribution CI failed:", e)
+            );
+        });
+    }
+
+    // Prediction diagnostics button: combined calibration/drift/attribution view
+    const diagnosticsBtn = document.getElementById("btn-prediction-diagnostics");
+    if (diagnosticsBtn) {
+        diagnosticsBtn.addEventListener("click", () => {
+            fetchAndRenderDiagnostics(appState.home, appState.away).catch(
+                (e) => console.warn("Prediction diagnostics failed:", e)
             );
         });
     }

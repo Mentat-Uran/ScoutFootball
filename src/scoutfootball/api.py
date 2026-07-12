@@ -1409,6 +1409,197 @@ def get_prediction_attribution(home_team: str, away_team: str) -> dict:
         return {"status": "error", "message": str(exc)}
 
 
+def get_prediction_attribution_ci(
+    home_team: str, away_team: str, *, n_bootstrap: int = 30,
+) -> dict:
+    """Return bootstrap confidence intervals for prediction attribution deltas.
+
+    Fits Dixon-Coles on the current team-match data, then bootstraps the
+    attribution to produce 90% CIs on each factor's delta.
+    """
+    try:
+        from scoutfootball.models import (
+            bootstrap_attribution_confidence,
+        )
+
+        team_match = load_team_match()
+        if team_match is None or len(team_match) < 50:
+            return {
+                "status": "not_available",
+                "instructions": "Insufficient team_match data for bootstrap CI",
+            }
+
+        decay = _resolve_tuned_decay()
+        ci = bootstrap_attribution_confidence(
+            team_match,
+            str(home_team),
+            str(away_team),
+            n_bootstrap=n_bootstrap,
+            confidence_level=0.90,
+            decay=decay,
+            seed=42,
+        )
+        return _clean_json_value({
+            "status": "ok",
+            "home_team": ci.home_team,
+            "away_team": ci.away_team,
+            "n_bootstrap": ci.n_bootstrap,
+            "failed_iterations": ci.failed_iterations,
+            "confidence_level": 0.90,
+            "factor_cis": ci.factor_cis,
+        })
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
+    """Return per-model and blended prediction attribution for the ensemble.
+
+    Fits Dixon-Coles and form-weighted Dixon-Coles, computes attribution
+    for each, and blends with equal weights (or cached optimal weights
+    if available).
+    """
+    try:
+        from scoutfootball.models import (
+            compute_ensemble_attribution,
+            fit_dixon_coles,
+            fit_dixon_coles_with_form,
+            load_ensemble_weights,
+        )
+
+        team_match = load_team_match()
+        if team_match is None or len(team_match) < 50:
+            return {
+                "status": "not_available",
+                "instructions": "Insufficient team_match data for ensemble attribution",
+            }
+
+        decay = _resolve_tuned_decay()
+        dc_model = fit_dixon_coles(team_match, decay=decay)
+        form_model = fit_dixon_coles_with_form(team_match, decay=decay)
+
+        models = {"dixon_coles": dc_model, "dixon_coles_form": form_model}
+
+        # Try to load cached optimal weights
+        weights = None
+        try:
+            cached = load_ensemble_weights()
+            if cached and "weights" in cached:
+                w = cached["weights"]
+                weights = {
+                    "dixon_coles": w.get("dixon_coles", 0.5),
+                    "dixon_coles_form": w.get("dixon_coles_form", 0.5),
+                }
+        except Exception:
+            pass
+
+        ensemble_attr = compute_ensemble_attribution(
+            models, str(home_team), str(away_team), weights=weights,
+        )
+
+        return _clean_json_value({
+            "status": "ok",
+            "home_team": ensemble_attr.home_team,
+            "away_team": ensemble_attr.away_team,
+            "weights": ensemble_attr.weights,
+            "weights_source": "optimized" if weights else "equal",
+            "blended": {
+                "baseline_home_win": ensemble_attr.blended.baseline_home_win,
+                "baseline_draw": ensemble_attr.blended.baseline_draw,
+                "baseline_away_win": ensemble_attr.blended.baseline_away_win,
+                "factors": ensemble_attr.blended.factors,
+            },
+            "per_model": {
+                name: {
+                    "baseline_home_win": attr.baseline_home_win,
+                    "baseline_draw": attr.baseline_draw,
+                    "baseline_away_win": attr.baseline_away_win,
+                    "factors": attr.factors,
+                }
+                for name, attr in ensemble_attr.per_model.items()
+            },
+        })
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
+    """Return an aggregated prediction diagnostics summary for a fixture.
+
+    Combines calibration comparison highlights, drift status, and the top
+    attribution factors into one response for quick model-trust assessment.
+    """
+    try:
+        # Calibration comparison summary
+        cal = get_calibration_comparison()
+        cal_summary: dict[str, Any] = {"status": cal.get("status", "unknown")}
+        if cal.get("status") == "ok":
+            overall = cal.get("overall", {})
+            improvement = cal.get("improvement", {})
+            cal_summary = {
+                "status": "ok",
+                "n_matches": cal.get("n_matches", 0),
+                "brier_raw": overall.get("brier_raw"),
+                "brier_recalibrated": overall.get("brier_recalibrated"),
+                "brier_improvement_pct": improvement.get("brier_improvement_pct"),
+                "rps_raw": overall.get("rps_raw"),
+                "rps_recalibrated": overall.get("rps_recalibrated"),
+                "rps_improvement_pct": improvement.get("rps_improvement_pct"),
+                "n_leagues": len(cal.get("by_league", [])),
+            }
+
+        # Drift status
+        drift = get_calibration_drift()
+        drift_summary: dict[str, Any] = {"status": drift.get("status", "unknown")}
+        if drift.get("status") == "ok":
+            drift_summary = {
+                "status": "ok",
+                "drift_detected": drift.get("drift_detected", False),
+                "drift_metric": drift.get("drift_metric"),
+                "threshold": drift.get("threshold"),
+                "n_windows": drift.get("n_windows", 0),
+                "latest_window": drift.get("latest_window"),
+            }
+
+        # Attribution top factors
+        attr = get_prediction_attribution(home_team, away_team)
+        attr_summary: dict[str, Any] = {"status": attr.get("status", "unknown")}
+        if attr.get("status") == "ok":
+            factors = attr.get("factors", [])
+            attr_summary = {
+                "status": "ok",
+                "baseline_home_win": attr.get("baseline_home_win"),
+                "top_factors": factors[:3] if factors else [],
+                "n_factors": len(factors),
+                "model_type": attr.get("model_type", "dixon_coles"),
+            }
+
+        # CI cache status
+        ci_status: dict[str, Any] = {"available": False}
+        try:
+            ci_cache_key = f"{home_team}__{away_team}__dixon_coles"
+            cached = _PREDICTION_CI_CACHE.get(ci_cache_key)
+            if cached:
+                ci_status = {
+                    "available": True,
+                    "age_seconds": int(__import__("time").time() - cached.get("timestamp", 0)),
+                }
+        except Exception:
+            pass
+
+        return _clean_json_value({
+            "status": "ok",
+            "home_team": home_team,
+            "away_team": away_team,
+            "calibration": cal_summary,
+            "drift": drift_summary,
+            "attribution": attr_summary,
+            "ci_cache": ci_status,
+        })
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_head_to_head(
     home_team: str, away_team: str, limit: int = 10, form_limit: int = 10
 ) -> dict:

@@ -1690,3 +1690,228 @@ def compute_prediction_attribution(
         baseline_away_win=baseline_aw,
         factors=factors,
     )
+
+
+@dataclass(frozen=True)
+class AttributionConfidenceInterval:
+    """Bootstrap confidence intervals for prediction attribution factor deltas.
+
+    Each factor's delta is surrounded by a lower and upper bound computed
+    from the percentile of bootstrap resampled deltas. ``n_bootstrap`` is
+    the number of successful iterations; ``failed_iterations`` tracks skips.
+    """
+
+    home_team: str
+    away_team: str
+    n_bootstrap: int
+    failed_iterations: int
+    factor_cis: list[dict[str, Any]]
+
+
+def bootstrap_attribution_confidence(
+    team_match_df: pd.DataFrame,
+    home_team_id: str,
+    away_team_id: str,
+    *,
+    n_bootstrap: int = 50,
+    confidence_level: float = 0.90,
+    decay: float | None = None,
+    max_goals: int = 10,
+    seed: int | None = None,
+) -> AttributionConfidenceInterval:
+    """Bootstrap confidence intervals for attribution factor deltas.
+
+    Resamples fixture-level data with replacement, refits Dixon-Coles per
+    sample, computes attribution, and collects delta distributions for each
+    factor. Returns percentile-based CIs (default 90% → 5th/95th).
+    """
+    if n_bootstrap < 2:
+        raise ValueError("n_bootstrap must be >= 2")
+
+    fixtures = _build_bootstrap_fixtures(team_match_df)
+    if fixtures.empty:
+        raise ValueError("No fixtures available for bootstrap")
+
+    rng = np.random.default_rng(seed)
+    alpha = 1.0 - confidence_level
+    lower_pct = alpha / 2.0 * 100.0
+    upper_pct = (1.0 - alpha / 2.0) * 100.0
+
+    factor_keys: list[str] = []
+    delta_samples: dict[str, list[float]] = {}
+    failed = 0
+
+    for _ in range(n_bootstrap):
+        try:
+            resampled = fixtures.sample(
+                n=len(fixtures), replace=True, random_state=rng.integers(0, 2**31 - 1)
+            )
+            tm_rows = []
+            for _, r in resampled.iterrows():
+                mid = str(r["match_id"])
+                ht = str(r["home_team"])
+                at = str(r["away_team"])
+                hg = int(r["home_goals"])
+                ag = int(r["away_goals"])
+                md = r.get("match_date", None)
+                tm_rows.append({
+                    "match_id": mid, "team_id": ht, "is_home": True,
+                    "goals_for": hg, "goals_against": ag,
+                    **({"match_date": md} if pd.notna(md) else {}),
+                })
+                tm_rows.append({
+                    "match_id": mid, "team_id": at, "is_home": False,
+                    "goals_for": ag, "goals_against": hg,
+                    **({"match_date": md} if pd.notna(md) else {}),
+                })
+            boot_df = pd.DataFrame(tm_rows)
+            boot_model = fit_dixon_coles(boot_df, decay=decay)
+            attr = compute_prediction_attribution(
+                boot_model, str(home_team_id), str(away_team_id), max_goals=max_goals,
+            )
+            if not factor_keys:
+                factor_keys = [f["factor"] for f in attr.factors]
+                delta_samples = {k: [] for k in factor_keys}
+            for f in attr.factors:
+                delta_samples[f["factor"]].append(float(f["delta"]))
+        except Exception:
+            failed += 1
+            continue
+
+    n_successful = n_bootstrap - failed
+    factor_cis: list[dict[str, Any]] = []
+    for key in factor_keys:
+        samples = delta_samples.get(key, [])
+        if len(samples) < 2:
+            continue
+        arr = np.array(samples)
+        factor_cis.append({
+            "factor": key,
+            "n_samples": len(samples),
+            "delta_mean": float(np.mean(arr)),
+            "delta_std": float(np.std(arr, ddof=1)) if len(samples) > 1 else 0.0,
+            "delta_low": float(np.percentile(arr, lower_pct)),
+            "delta_high": float(np.percentile(arr, upper_pct)),
+        })
+
+    return AttributionConfidenceInterval(
+        home_team=str(home_team_id),
+        away_team=str(away_team_id),
+        n_bootstrap=n_successful,
+        failed_iterations=failed,
+        factor_cis=factor_cis,
+    )
+
+
+@dataclass(frozen=True)
+class EnsembleAttribution:
+    """Per-model and blended prediction attribution for an ensemble of models.
+
+    ``per_model`` holds attribution for each sub-model keyed by model name.
+    ``blended`` merges the factor deltas using the ensemble weights, producing
+    a single ranked factor list that reflects the blended contribution.
+    """
+
+    home_team: str
+    away_team: str
+    per_model: dict[str, PredictionAttribution]
+    blended: PredictionAttribution
+    weights: dict[str, float]
+
+
+def compute_ensemble_attribution(
+    models: dict[str, DixonColesModel],
+    home_team_id: str,
+    away_team_id: str,
+    weights: dict[str, float] | None = None,
+    *,
+    max_goals: int = 10,
+) -> EnsembleAttribution:
+    """Compute per-model and blended prediction attribution.
+
+    Parameters
+    ----------
+    models : mapping of model name → fitted DixonColesModel.
+    home_team_id, away_team_id : team identifiers.
+    weights : optional per-model weights (default: equal). Need not sum to 1;
+        they are normalized internally.
+    max_goals : max goals for score matrix.
+
+    Returns
+    -------
+    EnsembleAttribution with per-model attributions and a blended summary.
+    """
+    if not models:
+        raise ValueError("models must not be empty")
+
+    home_team_id = str(home_team_id)
+    away_team_id = str(away_team_id)
+
+    if weights is None:
+        weights = {name: 1.0 / len(models) for name in models}
+    else:
+        total_w = sum(weights.values())
+        if total_w <= 0:
+            weights = {name: 1.0 / len(models) for name in models}
+        else:
+            weights = {name: w / total_w for name, w in weights.items()}
+
+    per_model: dict[str, PredictionAttribution] = {}
+    for name, model in models.items():
+        per_model[name] = compute_prediction_attribution(
+            model, home_team_id, away_team_id, max_goals=max_goals,
+        )
+
+    # Collect all factor keys from the first model (they all have the same set)
+    first_attr = next(iter(per_model.values()))
+    factor_keys = [f["factor"] for f in first_attr.factors]
+
+    # Blend deltas by weight
+    blended_factors: list[dict[str, Any]] = []
+    # Use weighted average of baseline probabilities
+    baseline_hw = sum(
+        per_model[name].baseline_home_win * weights[name] for name in per_model
+    )
+    baseline_dr = sum(
+        per_model[name].baseline_draw * weights[name] for name in per_model
+    )
+    baseline_aw = sum(
+        per_model[name].baseline_away_win * weights[name] for name in per_model
+    )
+
+    for key in factor_keys:
+        blended_delta = 0.0
+        blended_neutral = 0.0
+        for name, attr in per_model.items():
+            factor_entry = next(f for f in attr.factors if f["factor"] == key)
+            blended_delta += factor_entry["delta"] * weights[name]
+            blended_neutral += factor_entry["neutralized_home_win"] * weights[name]
+        blended_factors.append({
+            "factor": key,
+            "label": next(
+                f["label"] for f in first_attr.factors if f["factor"] == key
+            ),
+            "baseline_home_win": baseline_hw,
+            "neutralized_home_win": blended_neutral,
+            "delta": blended_delta,
+            "abs_delta": abs(blended_delta),
+        })
+
+    blended_factors.sort(key=lambda f: f["abs_delta"], reverse=True)
+
+    blended = PredictionAttribution(
+        home_team=home_team_id,
+        away_team=away_team_id,
+        baseline_home_win=baseline_hw,
+        baseline_draw=baseline_dr,
+        baseline_away_win=baseline_aw,
+        factors=blended_factors,
+    )
+
+    return EnsembleAttribution(
+        home_team=home_team_id,
+        away_team=away_team_id,
+        per_model=per_model,
+        blended=blended,
+        weights=weights,
+    )

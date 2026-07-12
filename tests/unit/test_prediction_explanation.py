@@ -4,6 +4,9 @@ Covers:
 - Per-league calibration breakdown (compute_calibration_comparison)
 - Permutation-based prediction attribution (compute_prediction_attribution)
 - Ensemble CI cache key isolation by model_type
+- Bootstrap attribution confidence intervals
+- Ensemble attribution (per-model + blended)
+- Prediction diagnostics aggregation endpoint
 """
 
 from __future__ import annotations
@@ -17,9 +20,14 @@ from scoutfootball.evaluation.backtests import (
     compute_calibration_comparison,
 )
 from scoutfootball.models import (
+    AttributionConfidenceInterval,
+    EnsembleAttribution,
     PredictionAttribution,
+    bootstrap_attribution_confidence,
+    compute_ensemble_attribution,
     compute_prediction_attribution,
     fit_dixon_coles,
+    fit_dixon_coles_with_form,
     fit_isotonic_calibrator,
 )
 
@@ -336,3 +344,346 @@ class TestCICacheKeyIsolation:
         assert result_ens2 is not None
         assert result_dc2.get("cached") is True
         assert result_ens2.get("cached") is True
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap attribution confidence intervals
+# ---------------------------------------------------------------------------
+
+
+class TestBootstrapAttributionConfidence:
+    """Tests for bootstrap_attribution_confidence producing CIs on factor deltas."""
+
+    def test_returns_attribution_ci(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=42,
+        )
+        assert isinstance(ci, AttributionConfidenceInterval)
+        assert ci.home_team == "team_0"
+        assert ci.away_team == "team_1"
+
+    def test_n_bootstrap_counts_successful_iterations(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=8, seed=1,
+        )
+        # n_bootstrap reflects successful iterations; failed_iterations tracks skips
+        assert ci.n_bootstrap + ci.failed_iterations == 8
+        assert ci.n_bootstrap >= 1
+
+    def test_factor_cis_have_expected_fields(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=2,
+        )
+        assert len(ci.factor_cis) > 0
+        for entry in ci.factor_cis:
+            assert "factor" in entry
+            assert "n_samples" in entry
+            assert "delta_mean" in entry
+            assert "delta_std" in entry
+            assert "delta_low" in entry
+            assert "delta_high" in entry
+
+    def test_ci_bounds_ordered(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=6, seed=3,
+        )
+        for entry in ci.factor_cis:
+            assert entry["delta_low"] <= entry["delta_mean"] + 1e-9
+            assert entry["delta_mean"] - 1e-9 <= entry["delta_high"]
+            assert entry["delta_low"] <= entry["delta_high"]
+
+    def test_seven_factors_present(self) -> None:
+        df = _make_team_match_df()
+        ci = bootstrap_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=4,
+        )
+        factor_keys = {e["factor"] for e in ci.factor_cis}
+        expected = {
+            "home_attack", "home_defense",
+            "away_attack", "away_defense",
+            "home_advantage", "league_mean_goals", "rho_correction",
+        }
+        assert factor_keys == expected
+
+    def test_invalid_n_bootstrap_raises(self) -> None:
+        df = _make_team_match_df()
+        with pytest.raises(ValueError):
+            bootstrap_attribution_confidence(
+                df, "team_0", "team_1", n_bootstrap=1,
+            )
+
+    def test_reproducible_with_seed(self) -> None:
+        df = _make_team_match_df()
+        ci1 = bootstrap_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=99,
+        )
+        ci2 = bootstrap_attribution_confidence(
+            df, "team_0", "team_1", n_bootstrap=5, seed=99,
+        )
+        assert ci1.n_bootstrap == ci2.n_bootstrap
+        assert ci1.failed_iterations == ci2.failed_iterations
+        # Compare mean deltas factor-by-factor
+        m1 = {e["factor"]: e["delta_mean"] for e in ci1.factor_cis}
+        m2 = {e["factor"]: e["delta_mean"] for e in ci2.factor_cis}
+        for k in m1:
+            assert m1[k] == pytest.approx(m2[k], abs=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Ensemble attribution (per-model + blended)
+# ---------------------------------------------------------------------------
+
+
+class TestEnsembleAttribution:
+    """Tests for compute_ensemble_attribution blending per-model factor deltas."""
+
+    def test_returns_ensemble_attribution(self) -> None:
+        df = _make_team_match_df()
+        dc_model = fit_dixon_coles(df)
+        form_model = fit_dixon_coles_with_form(df)
+        ens = compute_ensemble_attribution(
+            {"dixon_coles": dc_model, "dixon_coles_form": form_model},
+            "team_0", "team_1",
+        )
+        assert isinstance(ens, EnsembleAttribution)
+        assert ens.home_team == "team_0"
+        assert ens.away_team == "team_1"
+
+    def test_per_model_has_each_model(self) -> None:
+        df = _make_team_match_df()
+        dc_model = fit_dixon_coles(df)
+        form_model = fit_dixon_coles_with_form(df)
+        ens = compute_ensemble_attribution(
+            {"dixon_coles": dc_model, "dixon_coles_form": form_model},
+            "team_0", "team_1",
+        )
+        assert set(ens.per_model.keys()) == {"dixon_coles", "dixon_coles_form"}
+        for attr in ens.per_model.values():
+            assert isinstance(attr, PredictionAttribution)
+
+    def test_blended_has_seven_factors(self) -> None:
+        df = _make_team_match_df()
+        dc_model = fit_dixon_coles(df)
+        form_model = fit_dixon_coles_with_form(df)
+        ens = compute_ensemble_attribution(
+            {"dixon_coles": dc_model, "dixon_coles_form": form_model},
+            "team_0", "team_1",
+        )
+        assert len(ens.blended.factors) == 7
+        factor_keys = {f["factor"] for f in ens.blended.factors}
+        assert "home_advantage" in factor_keys
+
+    def test_equal_weights_default(self) -> None:
+        df = _make_team_match_df()
+        dc_model = fit_dixon_coles(df)
+        form_model = fit_dixon_coles_with_form(df)
+        ens = compute_ensemble_attribution(
+            {"dixon_coles": dc_model, "dixon_coles_form": form_model},
+            "team_0", "team_1",
+        )
+        # Default weights should be equal (0.5 each)
+        for w in ens.weights.values():
+            assert w == pytest.approx(0.5, abs=1e-6)
+
+    def test_custom_weights_normalized(self) -> None:
+        df = _make_team_match_df()
+        dc_model = fit_dixon_coles(df)
+        form_model = fit_dixon_coles_with_form(df)
+        ens = compute_ensemble_attribution(
+            {"dixon_coles": dc_model, "dixon_coles_form": form_model},
+            "team_0", "team_1",
+            weights={"dixon_coles": 3.0, "dixon_coles_form": 1.0},
+        )
+        assert ens.weights["dixon_coles"] == pytest.approx(0.75, abs=1e-6)
+        assert ens.weights["dixon_coles_form"] == pytest.approx(0.25, abs=1e-6)
+
+    def test_blended_delta_is_weighted_average(self) -> None:
+        df = _make_team_match_df()
+        dc_model = fit_dixon_coles(df)
+        form_model = fit_dixon_coles_with_form(df)
+        weights = {"dixon_coles": 0.6, "dixon_coles_form": 0.4}
+        ens = compute_ensemble_attribution(
+            {"dixon_coles": dc_model, "dixon_coles_form": form_model},
+            "team_0", "team_1",
+            weights=weights,
+        )
+        # Pick a factor and verify blended delta = weighted sum of per-model deltas
+        factor_key = ens.blended.factors[0]["factor"]
+        dc_delta = next(
+            f["delta"] for f in ens.per_model["dixon_coles"].factors
+            if f["factor"] == factor_key
+        )
+        form_delta = next(
+            f["delta"] for f in ens.per_model["dixon_coles_form"].factors
+            if f["factor"] == factor_key
+        )
+        expected = dc_delta * 0.6 + form_delta * 0.4
+        blended_delta = next(
+            f["delta"] for f in ens.blended.factors if f["factor"] == factor_key
+        )
+        assert blended_delta == pytest.approx(expected, abs=1e-6)
+
+    def test_empty_models_raises(self) -> None:
+        with pytest.raises(ValueError):
+            compute_ensemble_attribution({}, "team_0", "team_1")
+
+    def test_blended_factors_sorted_by_abs_delta(self) -> None:
+        df = _make_team_match_df()
+        dc_model = fit_dixon_coles(df)
+        form_model = fit_dixon_coles_with_form(df)
+        ens = compute_ensemble_attribution(
+            {"dixon_coles": dc_model, "dixon_coles_form": form_model},
+            "team_0", "team_1",
+        )
+        abs_deltas = [f["abs_delta"] for f in ens.blended.factors]
+        assert abs_deltas == sorted(abs_deltas, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# Prediction diagnostics aggregation endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestPredictionDiagnosticsEndpoint:
+    """Tests for get_prediction_diagnostics aggregating calibration, drift,
+    attribution, and CI cache status into one response."""
+
+    def test_returns_diagnostics_with_expected_sections(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+        api_module._PREDICTION_CI_CACHE.clear()
+
+        result = api_module.get_prediction_diagnostics("team_0", "team_1")
+
+        assert result.get("status") == "ok"
+        assert result["home_team"] == "team_0"
+        assert result["away_team"] == "team_1"
+        assert "calibration" in result
+        assert "drift" in result
+        assert "attribution" in result
+        assert "ci_cache" in result
+
+    def test_diagnostics_attribution_has_top_factors(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+        api_module._PREDICTION_CI_CACHE.clear()
+
+        result = api_module.get_prediction_diagnostics("team_0", "team_1")
+        attr = result["attribution"]
+        assert attr.get("status") == "ok"
+        top = attr.get("top_factors", [])
+        assert isinstance(top, list)
+        assert len(top) <= 3
+        assert attr.get("n_factors") == 7
+
+    def test_diagnostics_ci_cache_reflects_warming(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+        api_module._PREDICTION_CI_CACHE.clear()
+
+        # Before warming: ci_cache.available should be False
+        result1 = api_module.get_prediction_diagnostics("team_0", "team_1")
+        assert result1["ci_cache"].get("available") is False
+
+        # Warm the cache for dixon_coles
+        api_module._get_prediction_confidence(
+            "team_0", "team_1", model_type="dixon_coles",
+        )
+
+        # After warming: ci_cache.available should be True
+        result2 = api_module.get_prediction_diagnostics("team_0", "team_1")
+        assert result2["ci_cache"].get("available") is True
+        assert "age_seconds" in result2["ci_cache"]
+
+    def test_diagnostics_does_not_raise_on_unknown_teams(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+        api_module._PREDICTION_CI_CACHE.clear()
+
+        result = api_module.get_prediction_diagnostics(
+            "unknown_home", "unknown_away",
+        )
+        # Should still return a structured response, not crash
+        assert result.get("status") == "ok"
+        assert "calibration" in result
+        assert "drift" in result
+
+
+# ---------------------------------------------------------------------------
+# Attribution CI and ensemble attribution API endpoints
+# ---------------------------------------------------------------------------
+
+
+class TestAttributionCIAndEnsembleAPI:
+    """Smoke tests for the API wrappers get_prediction_attribution_ci and
+    get_ensemble_attribution."""
+
+    def test_attribution_ci_returns_ok(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+
+        result = api_module.get_prediction_attribution_ci(
+            "team_0", "team_1", n_bootstrap=5,
+        )
+        assert result.get("status") == "ok"
+        assert result["home_team"] == "team_0"
+        assert result["away_team"] == "team_1"
+        assert "factor_cis" in result
+        assert isinstance(result["factor_cis"], list)
+        assert len(result["factor_cis"]) > 0
+
+    def test_attribution_ci_insufficient_data(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        # Empty dataframe should trigger not_available
+        monkeypatch.setattr(api_module, "load_team_match", lambda: pd.DataFrame())
+        result = api_module.get_prediction_attribution_ci(
+            "team_0", "team_1", n_bootstrap=5,
+        )
+        assert result.get("status") == "not_available"
+
+    def test_ensemble_attribution_returns_ok(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+
+        result = api_module.get_ensemble_attribution("team_0", "team_1")
+        assert result.get("status") == "ok"
+        assert "blended" in result
+        assert "per_model" in result
+        assert "weights" in result
+        assert set(result["per_model"].keys()) == {"dixon_coles", "dixon_coles_form"}
+
+    def test_ensemble_attribution_blended_has_factors(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_match_df()
+        monkeypatch.setattr(api_module, "load_team_match", lambda: df)
+        monkeypatch.setattr(api_module, "_resolve_tuned_decay", lambda: 0.005)
+
+        result = api_module.get_ensemble_attribution("team_0", "team_1")
+        blended = result["blended"]
+        assert "factors" in blended
+        assert len(blended["factors"]) == 7
+        assert "baseline_home_win" in blended
