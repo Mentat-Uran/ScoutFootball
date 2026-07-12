@@ -2441,6 +2441,271 @@ def get_outcome_distribution() -> dict:
         return {"status": "error", "message": str(exc)}
 
 
+def get_temporal_validation(
+    *, n_windows: int = 6, min_samples_per_window: int = 10,
+) -> dict:
+    """Return per-window metric trends from backtest predictions.
+
+    Groups predictions into time windows and computes accuracy, Brier, RPS,
+    LogLoss, and avg_confidence per window. Prefers Dixon-Coles decay
+    predictions, falls back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = f"temporal_validation_{n_windows}_{min_samples_per_window}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_temporal_validation
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_temporal_validation(
+                    preds_df,
+                    n_windows=n_windows,
+                    min_samples_per_window=min_samples_per_window,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_total_matches": report.n_total_matches,
+                    "n_windows": report.n_windows,
+                    "overall_accuracy": report.overall_accuracy,
+                    "overall_brier": report.overall_brier,
+                    "overall_rps": report.overall_rps,
+                    "overall_log_loss": report.overall_log_loss,
+                    "trend": report.trend,
+                    "disclaimer": report.disclaimer,
+                    "windows": [
+                        {
+                            "window_label": w.window_label,
+                            "window_start": w.window_start,
+                            "window_end": w.window_end,
+                            "n_matches": w.n_matches,
+                            "accuracy": w.accuracy,
+                            "brier": w.brier,
+                            "rps": w.rps,
+                            "log_loss": w.log_loss,
+                            "avg_confidence": w.avg_confidence,
+                        }
+                        for w in report.windows
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_probability_heatmap(
+    *, n_bins: int = 5, min_samples_per_cell: int = 3,
+) -> dict:
+    """Return 2D probability heatmap from backtest predictions.
+
+    Buckets predictions into an n_bins × n_bins grid of home_win vs
+    away_win probability. Prefers Dixon-Coles decay predictions, falls
+    back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = f"probability_heatmap_{n_bins}_{min_samples_per_cell}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_probability_heatmap
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_probability_heatmap(
+                    preds_df,
+                    n_bins=n_bins,
+                    min_samples_per_cell=min_samples_per_cell,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_predictions": report.n_predictions,
+                    "n_bins": report.n_bins,
+                    "total_density": report.total_density,
+                    "disclaimer": report.disclaimer,
+                    "cells": [
+                        {
+                            "home_bin": c.home_bin,
+                            "away_bin": c.away_bin,
+                            "home_lo": c.home_lo,
+                            "home_hi": c.home_hi,
+                            "away_lo": c.away_lo,
+                            "away_hi": c.away_hi,
+                            "count": c.count,
+                            "density": c.density,
+                            "accuracy": c.accuracy,
+                            "avg_confidence": c.avg_confidence,
+                        }
+                        for c in report.cells
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_prediction_staleness() -> dict:
+    """Return model staleness indicator from backtest data coverage.
+
+    Reports the backtest data date range, days since last match, and
+    staleness level (fresh/aging/stale). Prefers Dixon-Coles decay
+    predictions, falls back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = "prediction_staleness"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import compute_prediction_staleness
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        model_type = "dixon_coles_decay"
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+            model_type = "poisson"
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                report = compute_prediction_staleness(
+                    preds_df, model_type=model_type,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "has_backtest": report.has_backtest,
+                    "backtest_start": report.backtest_start,
+                    "backtest_end": report.backtest_end,
+                    "n_backtest_matches": report.n_backtest_matches,
+                    "model_type": report.model_type,
+                    "days_since_backtest_end": report.days_since_backtest_end,
+                    "staleness_level": report.staleness_level,
+                    "disclaimer": report.disclaimer,
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
     """Return an aggregated prediction diagnostics summary for a fixture.
 

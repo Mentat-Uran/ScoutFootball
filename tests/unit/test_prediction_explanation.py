@@ -30,9 +30,12 @@ from scoutfootball.evaluation.backtests import (
     compute_h2h_bias_correction,
     compute_model_comparison,
     compute_outcome_distribution,
+    compute_prediction_staleness,
+    compute_probability_heatmap,
     compute_reliability_diagram,
     compute_scoreline_calibration,
     compute_team_accuracy,
+    compute_temporal_validation,
     compute_value_bets,
 )
 from scoutfootball.models import (
@@ -2263,3 +2266,350 @@ class TestOutcomeDistributionAPI:
             assert result["n_predictions"] == 200
             assert len(result["entries"]) == 3
             assert "dominant_bias" in result
+
+
+# ---------------------------------------------------------------------------
+# Temporal validation backtest
+# ---------------------------------------------------------------------------
+
+
+class TestComputeTemporalValidation:
+    def test_returns_windows(self) -> None:
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        result = compute_temporal_validation(df, n_windows=4)
+        assert len(result.windows) == 4
+        assert result.n_windows == 4
+
+    def test_window_fields(self) -> None:
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        result = compute_temporal_validation(df, n_windows=4)
+        for w in result.windows:
+            assert isinstance(w.window_label, str)
+            assert isinstance(w.n_matches, int)
+            assert isinstance(w.accuracy, float)
+            assert isinstance(w.brier, float)
+            assert isinstance(w.rps, float)
+            assert isinstance(w.avg_confidence, float)
+
+    def test_overall_metrics(self) -> None:
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        result = compute_temporal_validation(df, n_windows=4)
+        assert result.n_total_matches == 200
+        assert 0.0 <= result.overall_accuracy <= 1.0
+        assert result.overall_brier >= 0.0
+        assert result.overall_rps >= 0.0
+
+    def test_trend_value(self) -> None:
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        result = compute_temporal_validation(df, n_windows=4)
+        assert result.trend in ("improving", "degrading", "stable", "insufficient_data")
+
+    def test_invalid_n_windows_low_raises(self) -> None:
+        df = _make_predictions_df(n=100)
+        with pytest.raises(ValueError, match="n_windows must be between"):
+            compute_temporal_validation(df, n_windows=1)
+
+    def test_invalid_n_windows_high_raises(self) -> None:
+        df = _make_predictions_df(n=100)
+        with pytest.raises(ValueError, match="n_windows must be between"):
+            compute_temporal_validation(df, n_windows=21)
+
+    def test_missing_columns_raises(self) -> None:
+        df = pd.DataFrame({"match_date": pd.date_range("2022-01-01", periods=50)})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_temporal_validation(df)
+
+    def test_insufficient_data_returns_empty_windows(self) -> None:
+        df = _make_predictions_df(n=10)
+        df["match_date"] = pd.date_range("2022-01-01", periods=10, freq="D")
+        result = compute_temporal_validation(
+            df, n_windows=6, min_samples_per_window=10,
+        )
+        assert result.trend == "insufficient_data"
+        assert result.n_windows == 0
+
+    def test_log_loss_none_without_exact_score(self) -> None:
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        df = df.drop(columns=["exact_score_probability"], errors="ignore")
+        result = compute_temporal_validation(df, n_windows=4)
+        assert result.overall_log_loss is None
+        for w in result.windows:
+            assert w.log_loss is None
+
+    def test_log_loss_computed_with_exact_score(self) -> None:
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        df["exact_score_probability"] = np.random.uniform(0.01, 0.1, 200)
+        result = compute_temporal_validation(df, n_windows=4)
+        assert result.overall_log_loss is not None
+        assert result.overall_log_loss > 0.0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        result = compute_temporal_validation(df, n_windows=4)
+        assert isinstance(result.disclaimer, str)
+        assert len(result.disclaimer) > 0
+
+    def test_windows_sorted_chronologically(self) -> None:
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        result = compute_temporal_validation(df, n_windows=4)
+        starts = [w.window_start for w in result.windows if w.window_start]
+        assert starts == sorted(starts)
+
+
+# ---------------------------------------------------------------------------
+# Probability heatmap
+# ---------------------------------------------------------------------------
+
+
+class TestComputeProbabilityHeatmap:
+    def test_returns_cells(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_probability_heatmap(df, n_bins=5)
+        assert isinstance(result.cells, list)
+        assert len(result.cells) > 0
+
+    def test_cell_fields(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_probability_heatmap(df, n_bins=5)
+        for c in result.cells:
+            assert isinstance(c.home_bin, str)
+            assert isinstance(c.away_bin, str)
+            assert isinstance(c.count, int)
+            assert isinstance(c.density, float)
+            assert isinstance(c.accuracy, float)
+            assert isinstance(c.avg_confidence, float)
+
+    def test_n_predictions_matches(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_probability_heatmap(df, n_bins=5)
+        assert result.n_predictions == 200
+
+    def test_density_sum_leq_one(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_probability_heatmap(df, n_bins=5, min_samples_per_cell=1)
+        assert result.total_density <= 1.0 + 1e-6
+
+    def test_min_samples_filter(self) -> None:
+        df = _make_predictions_df(n=50)
+        result_low = compute_probability_heatmap(df, n_bins=5, min_samples_per_cell=1)
+        result_high = compute_probability_heatmap(df, n_bins=5, min_samples_per_cell=10)
+        assert len(result_low.cells) >= len(result_high.cells)
+
+    def test_invalid_n_bins_low_raises(self) -> None:
+        df = _make_predictions_df(n=100)
+        with pytest.raises(ValueError, match="n_bins must be between"):
+            compute_probability_heatmap(df, n_bins=1)
+
+    def test_invalid_n_bins_high_raises(self) -> None:
+        df = _make_predictions_df(n=100)
+        with pytest.raises(ValueError, match="n_bins must be between"):
+            compute_probability_heatmap(df, n_bins=16)
+
+    def test_missing_columns_raises(self) -> None:
+        df = pd.DataFrame({"match_date": pd.date_range("2022-01-01", periods=50)})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_probability_heatmap(df)
+
+    def test_empty_df_returns_empty_cells(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [],
+            "draw_probability": [],
+            "away_win_probability": [],
+            "actual_outcome": [],
+        })
+        result = compute_probability_heatmap(df, n_bins=5)
+        assert result.cells == []
+        assert result.n_predictions == 0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_predictions_df(n=200)
+        result = compute_probability_heatmap(df, n_bins=5)
+        assert isinstance(result.disclaimer, str)
+        assert len(result.disclaimer) > 0
+
+
+# ---------------------------------------------------------------------------
+# Prediction staleness
+# ---------------------------------------------------------------------------
+
+
+class TestComputePredictionStaleness:
+    def test_returns_staleness(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["match_date"] = pd.date_range("2022-01-01", periods=50, freq="D")
+        result = compute_prediction_staleness(df)
+        assert result.has_backtest is True
+        assert result.staleness_level in ("fresh", "aging", "stale")
+
+    def test_backtest_dates(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["match_date"] = pd.date_range("2022-01-01", periods=50, freq="D")
+        result = compute_prediction_staleness(df, reference_date="2022-03-01")
+        assert result.backtest_start == "2022-01-01"
+        assert result.backtest_end == "2022-02-19"
+
+    def test_days_since(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["match_date"] = pd.date_range("2022-01-01", periods=50, freq="D")
+        result = compute_prediction_staleness(df, reference_date="2022-03-01")
+        assert result.days_since_backtest_end is not None
+        assert result.days_since_backtest_end >= 0
+
+    def test_fresh_level(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["match_date"] = pd.date_range("2022-01-01", periods=50, freq="D")
+        result = compute_prediction_staleness(df, reference_date="2022-02-25")
+        assert result.staleness_level == "fresh"
+
+    def test_aging_level(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["match_date"] = pd.date_range("2022-01-01", periods=50, freq="D")
+        result = compute_prediction_staleness(df, reference_date="2022-05-01")
+        assert result.staleness_level == "aging"
+
+    def test_stale_level(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["match_date"] = pd.date_range("2022-01-01", periods=50, freq="D")
+        result = compute_prediction_staleness(df, reference_date="2023-01-01")
+        assert result.staleness_level == "stale"
+
+    def test_model_type(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["match_date"] = pd.date_range("2022-01-01", periods=50, freq="D")
+        result = compute_prediction_staleness(df, model_type="poisson")
+        assert result.model_type == "poisson"
+
+    def test_missing_match_date_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="missing required column"):
+            compute_prediction_staleness(df)
+
+    def test_empty_df_returns_empty_level(self) -> None:
+        df = pd.DataFrame({"match_date": []})
+        result = compute_prediction_staleness(df)
+        assert result.has_backtest is False
+        assert result.staleness_level == "empty"
+        assert result.n_backtest_matches == 0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["match_date"] = pd.date_range("2022-01-01", periods=50, freq="D")
+        result = compute_prediction_staleness(df)
+        assert isinstance(result.disclaimer, str)
+        assert len(result.disclaimer) > 0
+
+
+# ---------------------------------------------------------------------------
+# API tests for temporal validation, heatmap, staleness
+# ---------------------------------------------------------------------------
+
+
+class TestTemporalValidationAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_temporal_validation()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=200)
+        df["match_date"] = pd.date_range("2022-01-01", periods=200, freq="D")
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_temporal_validation(n_windows=4)
+        assert result["status"] == "ok"
+        assert result["n_windows"] == 4
+        assert len(result["windows"]) == 4
+
+
+class TestProbabilityHeatmapAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_probability_heatmap()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_probability_heatmap(n_bins=5)
+        assert result["status"] == "ok"
+        assert result["n_predictions"] == 200
+        assert result["n_bins"] == 5
+        assert len(result["cells"]) > 0
+
+
+class TestPredictionStalenessAPI:
+    def test_no_data_not_available(self, monkeypatch) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path("/nonexistent")})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_staleness()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=100)
+        df["match_date"] = pd.date_range("2022-01-01", periods=100, freq="D")
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet", index=False,
+        )
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_staleness()
+        assert result["status"] == "ok"
+        assert result["has_backtest"] is True
+        assert result["staleness_level"] in ("fresh", "aging", "stale")
+        assert result["model_type"] == "dixon_coles_decay"
