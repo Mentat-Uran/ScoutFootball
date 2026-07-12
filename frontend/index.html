@@ -517,9 +517,26 @@
                             <p class="eyebrow" data-i18n="prediction_diagnostics_title">预测诊断</p>
                             <h3 data-i18n="prediction_diagnostics_desc">校准、漂移与因子归因综合视图</h3>
                         </div>
-                        <button class="text-button" id="btn-prediction-diagnostics" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="prediction_diagnostics_fetch">诊断</button>
+                        <div style="display:flex;gap:0.3rem">
+                            <button class="text-button" id="btn-drift-timeline" type="button" style="font-size:0.72rem;padding:0.3rem 0.5rem" data-i18n="ensemble_attribution_drift_timeline">漂移时间线</button>
+                            <button class="text-button" id="btn-prediction-diagnostics" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="prediction_diagnostics_fetch">诊断</button>
+                        </div>
                     </div>
                     <div id="match-diagnostics-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel compact" id="match-ensemble-attribution-panel" style="margin-top:var(--space);display:none">
+                    <div class="panel-head">
+                        <div>
+                            <p class="eyebrow" data-i18n="ensemble_attribution_title">集成归因</p>
+                            <h3 data-i18n="ensemble_attribution_desc">多模型因子贡献与加权融合</h3>
+                        </div>
+                        <div style="display:flex;gap:0.3rem">
+                            <button class="text-button" id="btn-ensemble-attribution-ci" type="button" style="font-size:0.72rem;padding:0.3rem 0.5rem" data-i18n="prediction_attribution_ci_fetch">置信区间</button>
+                            <button class="text-button" id="btn-ensemble-attribution" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="ensemble_attribution_fetch">集成分析</button>
+                        </div>
+                    </div>
+                    <div id="match-ensemble-attribution-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
             </section>
 

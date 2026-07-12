@@ -346,6 +346,18 @@ const i18n = {
         prediction_diagnostics_ci_cache: "CI 缓存",
         prediction_diagnostics_stable: "稳定",
         prediction_diagnostics_drift_detected: "检测到漂移",
+        ensemble_attribution_title: "集成归因",
+        ensemble_attribution_desc: "多模型因子贡献与加权融合",
+        ensemble_attribution_fetch: "集成分析",
+        ensemble_attribution_loading: "计算集成归因中…",
+        ensemble_attribution_not_available: "暂无集成归因数据",
+        ensemble_attribution_weights: "权重",
+        ensemble_attribution_weights_source: "权重来源",
+        ensemble_attribution_blended: "融合",
+        ensemble_attribution_per_model: "逐模型",
+        ensemble_attribution_drift_timeline: "漂移时间线",
+        ensemble_attribution_drift_timeline_loading: "加载漂移时间线…",
+        ensemble_attribution_drift_timeline_not_available: "暂无漂移时间线数据",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -713,6 +725,18 @@ const i18n = {
         prediction_diagnostics_ci_cache: "CI Cache",
         prediction_diagnostics_stable: "Stable",
         prediction_diagnostics_drift_detected: "Drift detected",
+        ensemble_attribution_title: "Ensemble Attribution",
+        ensemble_attribution_desc: "Multi-model factor contributions and weighted blend",
+        ensemble_attribution_fetch: "Ensemble Analysis",
+        ensemble_attribution_loading: "Computing ensemble attribution…",
+        ensemble_attribution_not_available: "No ensemble attribution data available",
+        ensemble_attribution_weights: "Weights",
+        ensemble_attribution_weights_source: "Weights source",
+        ensemble_attribution_blended: "Blended",
+        ensemble_attribution_per_model: "Per model",
+        ensemble_attribution_drift_timeline: "Drift Timeline",
+        ensemble_attribution_drift_timeline_loading: "Loading drift timeline…",
+        ensemble_attribution_drift_timeline_not_available: "No drift timeline data available",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -3088,6 +3112,356 @@ async function fetchAndRenderDiagnostics(home, away) {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderEnsembleAttribution(home, away) {
+    const panel = document.getElementById("match-ensemble-attribution-panel");
+    const body = document.getElementById("match-ensemble-attribution-body");
+    const btn = document.getElementById("btn-ensemble-attribution");
+    if (!panel || !body) return;
+    const z = appState.lang === "zh";
+
+    panel.style.display = "block";
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("ensemble_attribution_loading"))}</p>`;
+    if (btn) btn.disabled = true;
+
+    let data;
+    try {
+        data = await fetchJson(
+            `/predictions/${encodeURIComponent(home)}/${encodeURIComponent(away)}/ensemble-attribution`,
+            { fetchOpts: { signal: AbortSignal.timeout(90000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch ensemble attribution:", err);
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("ensemble_attribution_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    if (!data || data.status === "error" || data.status === "not_available") {
+        const msg = data && data.status === "error"
+            ? `Error: ${escapeHtml(data.message || "unknown")}`
+            : escapeHtml(t("ensemble_attribution_not_available"));
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${msg}</p>`
+            + `<p style="font-size:0.72rem;margin-top:0.4rem;font-family:monospace;color:var(--text-muted)">${escapeHtml((data && data.instructions) || "")}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const fmtPct = (v) => v != null && !Number.isNaN(Number(v)) ? `${(Number(v) * 100).toFixed(2)}%` : "—";
+    const fmtDeltaPct = (d) => d != null && !Number.isNaN(Number(d))
+        ? `${Number(d) >= 0 ? "+" : ""}${(Number(d) * 100).toFixed(2)}pp`
+        : "—";
+    const deltaColor = (d) => {
+        if (d == null || Number.isNaN(d)) return "var(--text-muted)";
+        return d > 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+    };
+
+    // Weights header
+    const weights = data.weights || {};
+    const weightsSource = data.weights_source || "equal";
+    const weightsLabel = weightsSource === "optimized"
+        ? (z ? "优化" : "optimized")
+        : (z ? "等权" : "equal");
+    const weightsStr = Object.entries(weights)
+        .map(([k, v]) => `${escapeHtml(k)}: ${(Number(v) * 100).toFixed(1)}%`)
+        .join(" · ");
+    const weightsHtml = `
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.5rem">
+            <strong>${escapeHtml(t("ensemble_attribution_weights_source"))}:</strong> ${escapeHtml(weightsLabel)}
+            <span style="margin-left:0.5rem">| ${escapeHtml(t("ensemble_attribution_weights"))}: ${weightsStr}</span>
+        </div>`;
+
+    // Helper to render a factor table from an attribution object
+    const renderFactorTable = (attr, headerLabel) => {
+        const factors = Array.isArray(attr.factors) ? attr.factors : [];
+        if (factors.length === 0) {
+            return `<p style="color:var(--text-muted);font-size:0.76rem">${escapeHtml(z ? "暂无因子" : "No factors")}</p>`;
+        }
+        const rows = factors.map((f) => {
+            const delta = Number(f.delta);
+            const neutralized = Number(f.neutralized_home_win);
+            return `<tr>
+                <td><strong>${escapeHtml(f.factor || "—")}</strong></td>
+                <td>${fmtPct(neutralized)}</td>
+                <td style="color:${deltaColor(delta)}">${fmtDeltaPct(delta)}</td>
+            </tr>`;
+        }).join("");
+        return `
+            <h4 style="margin:0.4rem 0 0.2rem;font-size:0.74rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(headerLabel)}</h4>
+            <table class="data-table" style="width:100%;font-size:0.74rem">
+                <thead><tr>
+                    <th>${escapeHtml(t("prediction_attribution_factor"))}</th>
+                    <th>${escapeHtml(t("prediction_attribution_neutralized"))}</th>
+                    <th>${escapeHtml(t("prediction_attribution_delta"))}</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    };
+
+    // Blended section
+    const blended = data.blended || {};
+    const blendedBaseline = `
+        <div class="detail-grid" style="margin-bottom:0.3rem;font-size:0.74rem">
+            <div><span>${escapeHtml(t("prediction_attribution_baseline"))}</span><strong style="color:var(--accent)">${fmtPct(blended.baseline_home_win)}</strong></div>
+            <div><span>${z ? "平" : "Draw"}</span><strong>${fmtPct(blended.baseline_draw)}</strong></div>
+            <div><span>${z ? "客胜" : "Away"}</span><strong>${fmtPct(blended.baseline_away_win)}</strong></div>
+        </div>`;
+    const blendedHtml = `
+        <div style="margin-bottom:0.6rem">
+            <h4 style="margin:0 0 0.2rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("ensemble_attribution_blended"))}</h4>
+            ${blendedBaseline}
+            ${renderFactorTable(blended, t("ensemble_attribution_blended"))}
+        </div>`;
+
+    // Per-model section
+    const perModel = data.per_model || {};
+    const perModelNames = Object.keys(perModel);
+    let perModelHtml = "";
+    if (perModelNames.length > 0) {
+        const tables = perModelNames.map((name) => {
+            const w = weights[name];
+            const wStr = w != null ? ` (${(Number(w) * 100).toFixed(0)}%)` : "";
+            return renderFactorTable(perModel[name], `${escapeHtml(name)}${wStr}`);
+        }).join("");
+        perModelHtml = `
+            <div>
+                <h4 style="margin:0.4rem 0 0.2rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("ensemble_attribution_per_model"))}</h4>
+                ${tables}
+            </div>`;
+    }
+
+    body.innerHTML = `${weightsHtml}${blendedHtml}${perModelHtml}`;
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderEnsembleAttributionCI(home, away) {
+    const body = document.getElementById("match-ensemble-attribution-body");
+    const btn = document.getElementById("btn-ensemble-attribution-ci");
+    if (!body) return;
+    const z = appState.lang === "zh";
+
+    const placeholder = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_attribution_ci_loading"))}</p>`;
+    const prev = body.innerHTML;
+    body.innerHTML = placeholder;
+    if (btn) btn.disabled = true;
+
+    let data;
+    try {
+        data = await fetchJson(
+            `/predictions/${encodeURIComponent(home)}/${encodeURIComponent(away)}/ensemble-attribution/ci`,
+            { fetchOpts: { signal: AbortSignal.timeout(120000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch ensemble attribution CI:", err);
+        body.innerHTML = prev + `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_attribution_ci_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    if (!data || data.status === "error" || data.status === "not_available") {
+        const msg = data && data.status === "error"
+            ? `Error: ${escapeHtml(data.message || "unknown")}`
+            : escapeHtml(t("prediction_attribution_ci_not_available"));
+        body.innerHTML = prev + `<p style="color:var(--text-muted);font-size:0.82rem">${msg}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const cis = Array.isArray(data.factor_cis) ? data.factor_cis : [];
+    const fmtPct = (v) => v != null && !Number.isNaN(Number(v))
+        ? `${(Number(v) * 100).toFixed(2)}pp`
+        : "—";
+    const fmtCI = (lo, hi) => {
+        const loStr = lo == null || Number.isNaN(Number(lo)) ? "—" : `${(Number(lo) * 100).toFixed(2)}pp`;
+        const hiStr = hi == null || Number.isNaN(Number(hi)) ? "—" : `${(Number(hi) * 100).toFixed(2)}pp`;
+        return `[${loStr}, ${hiStr}]`;
+    };
+
+    let ciHtml = "";
+    if (cis.length > 0) {
+        const rows = cis.map((c) => {
+            const lo = Number(c.delta_low);
+            const hi = Number(c.delta_high);
+            const mean = Number(c.delta_mean);
+            const crossesZero = (!Number.isNaN(lo) && !Number.isNaN(hi) && lo <= 0 && hi >= 0);
+            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #64b5f6)";
+            return `<tr>
+                <td><strong>${escapeHtml(c.factor || "—")}</strong></td>
+                <td style="color:${ciColor}">${fmtCI(lo, hi)}</td>
+                <td>${fmtPct(mean)}</td>
+            </tr>`;
+        }).join("");
+        ciHtml = `
+            <h4 style="margin:0.6rem 0 0.3rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("prediction_attribution_delta_ci"))} (${z ? "融合" : "blended"})</h4>
+            <table class="data-table" style="width:100%;font-size:0.76rem">
+                <thead>
+                    <tr>
+                        <th>${escapeHtml(t("prediction_attribution_factor"))}</th>
+                        <th>${escapeHtml(t("prediction_attribution_delta_ci"))}</th>
+                        <th>${escapeHtml(t("prediction_attribution_delta_mean"))}</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    } else {
+        ciHtml = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_attribution_ci_not_available"))}</p>`;
+    }
+
+    const nBoot = Number(data.n_bootstrap ?? 0);
+    const failed = Number(data.failed_iterations ?? 0);
+    const ws = data.weights_source || "equal";
+    const wsLabel = ws === "optimized" ? (z ? "优化" : "optimized") : (z ? "等权" : "equal");
+    const note = `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:0.4rem">bootstrap: n=${escapeHtml(String(nBoot))} · failed=${escapeHtml(String(failed))} · confidence=${escapeHtml(String(data.confidence_level ?? 0.9))} · weights=${escapeHtml(wsLabel)}</div>`;
+
+    body.innerHTML = prev + ciHtml + note;
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderDriftTimeline() {
+    const body = document.getElementById("match-diagnostics-body");
+    const btn = document.getElementById("btn-drift-timeline");
+    if (!body) return;
+    const z = appState.lang === "zh";
+
+    const prev = body.innerHTML;
+    body.innerHTML += `<div id="drift-timeline-loading" style="margin-top:0.5rem"><p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("ensemble_attribution_drift_timeline_loading"))}</p></div>`;
+    if (btn) btn.disabled = true;
+
+    let data;
+    try {
+        data = await fetchJson(
+            `/predictions/drift/timeline`,
+            { fetchOpts: { signal: AbortSignal.timeout(60000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch drift timeline:", err);
+        const loading = document.getElementById("drift-timeline-loading");
+        if (loading) loading.remove();
+        body.innerHTML = prev + `<p style="color:var(--text-muted);font-size:0.82rem;margin-top:0.5rem">${escapeHtml(t("ensemble_attribution_drift_timeline_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const loading = document.getElementById("drift-timeline-loading");
+    if (loading) loading.remove();
+
+    if (!data || data.status === "error" || data.status === "not_available" || data.status === "no_data") {
+        const msg = data && data.status === "error"
+            ? `Error: ${escapeHtml(data.message || "unknown")}`
+            : escapeHtml(t("ensemble_attribution_drift_timeline_not_available"));
+        body.innerHTML = prev + `<p style="color:var(--text-muted);font-size:0.82rem;margin-top:0.5rem">${msg}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const points = Array.isArray(data.points) ? data.points : [];
+    if (points.length < 2) {
+        body.innerHTML = prev + `<p style="color:var(--text-muted);font-size:0.82rem;margin-top:0.5rem">${escapeHtml(t("ensemble_attribution_drift_timeline_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    // Build chart container
+    const chartId = "drift-timeline-chart";
+    const driftDetected = data.drift_detected === true;
+    const statusPill = driftDetected
+        ? `<span class="status-pill status-low">${escapeHtml(t("prediction_diagnostics_drift_detected"))}</span>`
+        : `<span class="status-pill status-high">${escapeHtml(t("prediction_diagnostics_stable"))}</span>`;
+    const metricName = data.metric || "rps_1x2";
+    const threshold = Number(data.threshold ?? 0.05);
+
+    body.innerHTML = prev + `
+        <div style="margin-top:0.6rem">
+            <h4 style="margin:0 0 0.3rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("ensemble_attribution_drift_timeline"))}</h4>
+            <div style="font-size:0.72rem;margin-bottom:0.4rem">${statusPill}
+                <span style="margin-left:0.5rem;color:var(--text-muted)">${z ? "指标" : "metric"}: ${escapeHtml(metricName)} · ${z ? "阈值" : "threshold"}: ${(threshold * 100).toFixed(0)}% · ${z ? "窗口" : "windows"}: ${escapeHtml(String(data.n_points ?? points.length))}</span>
+            </div>
+            <div id="${chartId}" style="width:100%;height:240px"></div>
+        </div>`;
+
+    // Render ECharts line chart
+    const chart = getChart(chartId);
+    if (!chart) {
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const dates = points.map((p) => p.date || p.end_date || "");
+    const rpsSeries = points.map((p) => Number(p.rps_1x2));
+    const brierSeries = points.map((p) => Number(p.brier_1x2));
+    const logLossSeries = points.map((p) => Number(p.log_loss_exact));
+
+    // Compute threshold reference line as avg * (1 + threshold)
+    const validRps = rpsSeries.filter((v) => !Number.isNaN(v));
+    const avgRps = validRps.length > 0
+        ? validRps.reduce((a, b) => a + b, 0) / validRps.length
+        : 0;
+    const thresholdLine = dates.map(() => avgRps * (1 + threshold));
+
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const textColor = isDark ? "#e0e0e0" : "#333";
+    const gridColor = isDark ? "#333" : "#ddd";
+
+    chart.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { data: ["RPS", "Brier", "LogLoss"], textStyle: { color: textColor, fontSize: 10 } },
+        grid: { left: "8%", right: "5%", bottom: "15%", top: "15%" },
+        xAxis: {
+            type: "category",
+            data: dates,
+            axisLabel: { color: textColor, fontSize: 9, rotate: 30 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        yAxis: {
+            type: "value",
+            axisLabel: { color: textColor, fontSize: 9 },
+            axisLine: { lineStyle: { color: gridColor } },
+            splitLine: { lineStyle: { color: gridColor } },
+        },
+        series: [
+            {
+                name: "RPS",
+                type: "line",
+                data: rpsSeries,
+                smooth: true,
+                symbol: "circle",
+                symbolSize: 5,
+                lineStyle: { width: 2 },
+                itemStyle: { color: "#64b5f6" },
+            },
+            {
+                name: "Brier",
+                type: "line",
+                data: brierSeries,
+                smooth: true,
+                symbol: "circle",
+                symbolSize: 4,
+                lineStyle: { width: 1.5, type: "dashed" },
+                itemStyle: { color: "#f59e0b" },
+            },
+            {
+                name: "LogLoss",
+                type: "line",
+                data: logLossSeries,
+                smooth: true,
+                symbol: "circle",
+                symbolSize: 4,
+                lineStyle: { width: 1.5, type: "dotted" },
+                itemStyle: { color: "#10b981" },
+            },
+            {
+                name: "Threshold",
+                type: "line",
+                data: thresholdLine,
+                symbol: "none",
+                lineStyle: { width: 1, type: "dashed", color: "#ef4444" },
+                itemStyle: { color: "#ef4444" },
+            },
+        ],
+    });
+
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -4086,6 +4460,14 @@ async function renderMatches() {
     if (diagnosticsPanel && diagnosticsBody) {
         diagnosticsPanel.style.display = "none";
         diagnosticsBody.innerHTML = "";
+    }
+
+    // Reset ensemble attribution panel for the new match (hidden until user clicks the button)
+    const ensAttrPanel = document.getElementById("match-ensemble-attribution-panel");
+    const ensAttrBody = document.getElementById("match-ensemble-attribution-body");
+    if (ensAttrPanel && ensAttrBody) {
+        ensAttrPanel.style.display = "none";
+        ensAttrBody.innerHTML = "";
     }
 }
 
@@ -7264,6 +7646,36 @@ function bindEvents() {
         diagnosticsBtn.addEventListener("click", () => {
             fetchAndRenderDiagnostics(appState.home, appState.away).catch(
                 (e) => console.warn("Prediction diagnostics failed:", e)
+            );
+        });
+    }
+
+    // Drift timeline button: ECharts line chart of per-window calibration metrics
+    const driftTimelineBtn = document.getElementById("btn-drift-timeline");
+    if (driftTimelineBtn) {
+        driftTimelineBtn.addEventListener("click", () => {
+            fetchAndRenderDriftTimeline().catch(
+                (e) => console.warn("Drift timeline failed:", e)
+            );
+        });
+    }
+
+    // Ensemble attribution button: per-model + blended factor contributions
+    const ensembleAttrBtn = document.getElementById("btn-ensemble-attribution");
+    if (ensembleAttrBtn) {
+        ensembleAttrBtn.addEventListener("click", () => {
+            fetchAndRenderEnsembleAttribution(appState.home, appState.away).catch(
+                (e) => console.warn("Ensemble attribution failed:", e)
+            );
+        });
+    }
+
+    // Ensemble attribution CI button: bootstrap CIs on blended factor deltas
+    const ensembleAttrCIBtn = document.getElementById("btn-ensemble-attribution-ci");
+    if (ensembleAttrCIBtn) {
+        ensembleAttrCIBtn.addEventListener("click", () => {
+            fetchAndRenderEnsembleAttributionCI(appState.home, appState.away).catch(
+                (e) => console.warn("Ensemble attribution CI failed:", e)
             );
         });
     }

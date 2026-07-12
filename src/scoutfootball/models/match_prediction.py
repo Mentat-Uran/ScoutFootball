@@ -1915,3 +1915,117 @@ def compute_ensemble_attribution(
         blended=blended,
         weights=weights,
     )
+
+
+def bootstrap_ensemble_attribution_confidence(
+    team_match_df: pd.DataFrame,
+    home_team_id: str,
+    away_team_id: str,
+    *,
+    n_bootstrap: int = 50,
+    confidence_level: float = 0.90,
+    decay: float | None = None,
+    weights: dict[str, float] | None = None,
+    max_goals: int = 10,
+    seed: int | None = None,
+) -> AttributionConfidenceInterval:
+    """Bootstrap confidence intervals for ensemble attribution blended deltas.
+
+    Resamples fixture-level data with replacement, refits both Dixon-Coles and
+    form-weighted Dixon-Coles per sample, computes per-model attribution and
+    the weighted blend, and collects blended delta distributions for each
+    factor. Returns percentile-based CIs (default 90% → 5th/95th) on the
+    blended deltas.
+    """
+    if n_bootstrap < 2:
+        raise ValueError("n_bootstrap must be >= 2")
+
+    fixtures = _build_bootstrap_fixtures(team_match_df)
+    if fixtures.empty:
+        raise ValueError("No fixtures available for bootstrap")
+
+    rng = np.random.default_rng(seed)
+    alpha = 1.0 - confidence_level
+    lower_pct = alpha / 2.0 * 100.0
+    upper_pct = (1.0 - alpha / 2.0) * 100.0
+
+    # Normalize weights once (default equal between the two models)
+    model_names = ["dixon_coles", "dixon_coles_form"]
+    if weights is None:
+        norm_weights = {name: 0.5 for name in model_names}
+    else:
+        total_w = sum(weights.get(name, 0.0) for name in model_names)
+        if total_w <= 0:
+            norm_weights = {name: 0.5 for name in model_names}
+        else:
+            norm_weights = {
+                name: weights.get(name, 0.0) / total_w for name in model_names
+            }
+
+    factor_keys: list[str] = []
+    delta_samples: dict[str, list[float]] = {}
+    failed = 0
+
+    for _ in range(n_bootstrap):
+        try:
+            resampled = fixtures.sample(
+                n=len(fixtures), replace=True, random_state=rng.integers(0, 2**31 - 1)
+            )
+            tm_rows = []
+            for _, r in resampled.iterrows():
+                mid = str(r["match_id"])
+                ht = str(r["home_team"])
+                at = str(r["away_team"])
+                hg = int(r["home_goals"])
+                ag = int(r["away_goals"])
+                md = r.get("match_date", None)
+                tm_rows.append({
+                    "match_id": mid, "team_id": ht, "is_home": True,
+                    "goals_for": hg, "goals_against": ag,
+                    **({"match_date": md} if pd.notna(md) else {}),
+                })
+                tm_rows.append({
+                    "match_id": mid, "team_id": at, "is_home": False,
+                    "goals_for": ag, "goals_against": hg,
+                    **({"match_date": md} if pd.notna(md) else {}),
+                })
+            boot_df = pd.DataFrame(tm_rows)
+            dc_model = fit_dixon_coles(boot_df, decay=decay)
+            form_model = fit_dixon_coles_with_form(boot_df, decay=decay)
+            models = {"dixon_coles": dc_model, "dixon_coles_form": form_model}
+            ens = compute_ensemble_attribution(
+                models, str(home_team_id), str(away_team_id),
+                weights=norm_weights, max_goals=max_goals,
+            )
+            if not factor_keys:
+                factor_keys = [f["factor"] for f in ens.blended.factors]
+                delta_samples = {k: [] for k in factor_keys}
+            for f in ens.blended.factors:
+                delta_samples[f["factor"]].append(float(f["delta"]))
+        except Exception:
+            failed += 1
+            continue
+
+    n_successful = n_bootstrap - failed
+    factor_cis: list[dict[str, Any]] = []
+    for key in factor_keys:
+        samples = delta_samples.get(key, [])
+        if len(samples) < 2:
+            continue
+        arr = np.array(samples)
+        factor_cis.append({
+            "factor": key,
+            "n_samples": len(samples),
+            "delta_mean": float(np.mean(arr)),
+            "delta_std": float(np.std(arr, ddof=1)) if len(samples) > 1 else 0.0,
+            "delta_low": float(np.percentile(arr, lower_pct)),
+            "delta_high": float(np.percentile(arr, upper_pct)),
+        })
+
+    return AttributionConfidenceInterval(
+        home_team=str(home_team_id),
+        away_team=str(away_team_id),
+        n_bootstrap=n_successful,
+        failed_iterations=failed,
+        factor_cis=factor_cis,
+    )

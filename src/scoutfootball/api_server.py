@@ -28,8 +28,10 @@ from scoutfootball.api import (
     get_backtest_comparison,
     get_calibration_comparison,
     get_calibration_drift,
+    get_calibration_drift_timeline,
     get_decay_tuning,
     get_ensemble_attribution,
+    get_ensemble_attribution_ci,
     get_ensemble_prediction,
     get_ensemble_weights,
     get_form_weighted_prediction,
@@ -277,6 +279,15 @@ def create_app() -> FastAPI:
     def predictions_ensemble_attribution(home_team: str, away_team: str):
         return get_ensemble_attribution(home_team, away_team)
 
+    @app.get("/predictions/{home_team}/{away_team}/ensemble-attribution/ci")
+    def predictions_ensemble_attribution_ci(
+        home_team: str, away_team: str,
+        n_bootstrap: int = Query(30, ge=5, le=100),
+    ):
+        return get_ensemble_attribution_ci(
+            home_team, away_team, n_bootstrap=n_bootstrap,
+        )
+
     @app.get("/predictions/{home_team}/{away_team}/diagnostics")
     def predictions_diagnostics(home_team: str, away_team: str):
         return get_prediction_diagnostics(home_team, away_team)
@@ -337,6 +348,10 @@ def create_app() -> FastAPI:
     @app.get("/predictions/drift")
     def predictions_drift():
         return get_calibration_drift()
+
+    @app.get("/predictions/drift/timeline")
+    def predictions_drift_timeline():
+        return get_calibration_drift_timeline()
 
     @app.get("/value-summary")
     def value_summary():
