@@ -160,6 +160,7 @@ const i18n = {
         wc_teams: "球队",
         wc_groups: "小组",
         wc_group_matches: "小组赛",
+        wc_briefing: "赛前简报",
         wc_fixtures: "赛程表",
         wc_date: "日期",
         wc_time: "时间",
@@ -477,6 +478,7 @@ const i18n = {
         wc_teams: "Teams",
         wc_groups: "Groups",
         wc_group_matches: "Group Matches",
+        wc_briefing: "Pre-match briefing",
         wc_fixtures: "Fixtures",
         wc_date: "Date",
         wc_time: "Time",
@@ -9386,6 +9388,23 @@ function wcTeamStrength(team) {
 
 // ── World Cup Renderers ──────────────────────────────────────────────────
 
+async function openWcFixtureBriefing(home, away) {
+    if (!home || !away) return;
+    appState.wcCompareA = home;
+    appState.wcCompareB = away;
+    const selA = document.getElementById("wc-compare-a");
+    const selB = document.getElementById("wc-compare-b");
+    if (selA) selA.value = home;
+    if (selB) selB.value = away;
+    await Promise.all([
+        fetchWcSquad(home),
+        fetchWcSquad(away),
+        fetchWcMatchPrediction(home, away),
+        fetchWcMatchBriefing(home, away),
+    ]);
+    await setView("wc_compare");
+}
+
 function renderWcSchedule() {
     const groupFilter = document.getElementById("wc-group-filter").value;
     const mdFilter = document.getElementById("wc-matchday-filter").value;
@@ -9533,25 +9552,21 @@ function renderWcSchedule() {
     tbody.innerHTML = filtered.map((m, index) => `<tr data-wc-home="${escapeAttr(m.home)}" data-wc-away="${escapeAttr(m.away)}" data-row-index="${index}" style="cursor:pointer">
         <td>${escapeHtml(m.date)}</td><td>${escapeHtml(m.time_et || m.time)} ET</td><td>${escapeHtml(m.group)}</td>
         <td>${escapeHtml(m.home)}</td><td>${escapeHtml(m.away)}</td><td>${escapeHtml(m.venue)}, ${escapeHtml(m.city)}</td>
+        <td><button class="text-button wc-schedule-briefing" type="button" data-wc-home="${escapeAttr(m.home)}" data-wc-away="${escapeAttr(m.away)}" style="font-size:0.72rem;padding:0.2rem 0.45rem">${escapeHtml(t("wc_briefing"))}</button></td>
     </tr>`).join("");
 
     tbody.querySelectorAll("tr[data-wc-home][data-wc-away]").forEach((row) => {
         row.addEventListener("click", async () => {
             const home = row.dataset.wcHome;
             const away = row.dataset.wcAway;
-            if (!home || !away) return;
-            appState.wcCompareA = home;
-            appState.wcCompareB = away;
-            const selA = document.getElementById("wc-compare-a");
-            const selB = document.getElementById("wc-compare-b");
-            if (selA) selA.value = home;
-            if (selB) selB.value = away;
-            await Promise.all([
-                fetchWcSquad(home),
-                fetchWcSquad(away),
-                fetchWcMatchPrediction(home, away),
-            ]);
-            await setView("wc_compare");
+            await openWcFixtureBriefing(home, away);
+        });
+    });
+    tbody.querySelectorAll(".wc-schedule-briefing").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            button.disabled = true;
+            await openWcFixtureBriefing(button.dataset.wcHome, button.dataset.wcAway);
         });
     });
 }

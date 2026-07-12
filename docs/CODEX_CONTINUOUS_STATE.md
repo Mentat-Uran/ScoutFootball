@@ -136,6 +136,7 @@
 - Rounds 14 and 15 are merged to `main` through `74a7b7b`; the integration worktree still has two pre-existing, unstaged data artifacts that must remain untouched.
 - Round 16 is squash-merged to `codex/integration`: browser-local pre-match decision packs now preserve actual loaded prediction output and provenance, while unavailable requests record explicit `not_loaded` without synthetic probabilities. The next branch should focus on browser coverage or a prediction-calibration workflow.
 - Round 17 is squash-merged to `codex/integration`: World Cup comparison now has a source-bounded match briefing API/static contract and browser-local tactical-plan handoff. The next branch should extend briefing access from schedule cards or improve prediction calibration without claiming live match intelligence.
+- Round 18 is squash-merged to `codex/integration`: schedule rows now pre-load the same source-bounded briefing and open its tactical handoff. The next branch should add a durable browser regression path or improve calibrated prediction artifacts without claiming live match intelligence.
 
 ## Known Blockers
 
@@ -148,5 +149,6 @@
 2. Browser integration coverage for workspace export/import conflict previews and mobile dossier layout.
 3. Add browser integration coverage for tactical decision-pack creation, export preview, and `not_loaded` behavior.
 4. Surface a World Cup match briefing from schedule cards, including no-static-briefing states.
+5. Add browser-level regression coverage for schedule-to-briefing navigation and local tactical-plan creation.
 4. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
 5. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
