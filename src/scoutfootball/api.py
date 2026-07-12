@@ -803,15 +803,18 @@ def _resolve_tuned_decay() -> float | None:
 
 
 def _get_prediction_confidence(
-    home_team: str, away_team: str, *, force_refresh: bool = False
+    home_team: str, away_team: str, *, force_refresh: bool = False,
+    model_type: str = "dixon_coles",
 ) -> dict[str, Any] | None:
     """Return cached bootstrap confidence intervals for a match prediction.
 
     Uses n_bootstrap=50 for API-friendly latency. Returns None on failure.
+    The cache is keyed by ``(home, away, model_type)`` so that ensemble
+    predictions do not silently reuse DC-only CIs (and vice versa).
     """
     import time as _time
 
-    cache_key = f"{home_team}__{away_team}"
+    cache_key = f"{home_team}__{away_team}__{model_type}"
     now = _time.time()
     cached = _PREDICTION_CI_CACHE.get(cache_key)
     if (
@@ -819,7 +822,12 @@ def _get_prediction_confidence(
         and cached is not None
         and now - cached.get("timestamp", 0) < _PREDICTION_CI_TTL_SECONDS
     ):
-        return cached.get("data")
+        cached_data = cached.get("data")
+        if isinstance(cached_data, dict):
+            # Mark as cache hit for transparency
+            cached_data["cached"] = True
+            cached_data["cache_age_seconds"] = int(now - cached.get("timestamp", 0))
+        return cached_data
 
     try:
         from scoutfootball.models import bootstrap_prediction_confidence
@@ -841,6 +849,8 @@ def _get_prediction_confidence(
             "n_bootstrap": ci.n_bootstrap,
             "confidence_level": 0.90,
             "failed_iterations": ci.failed_iterations,
+            "model_type": model_type,
+            "cached": False,
             "home_win": [ci.home_win_low, ci.home_win_high],
             "draw": [ci.draw_low, ci.draw_high],
             "away_win": [ci.away_win_low, ci.away_win_high],
@@ -901,7 +911,7 @@ def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
             "home_advantage": model.home_advantage,
         }
         # Add confidence intervals (cached, best-effort)
-        ci = _get_prediction_confidence(home_team, away_team)
+        ci = _get_prediction_confidence(home_team, away_team, model_type="dixon_coles_form")
         if ci:
             result["confidence_intervals"] = ci
         return _clean_json_value(result)
@@ -1010,7 +1020,7 @@ def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool
                 result["recalibration_note"] = "No calibration artifacts available"
 
         # Add confidence intervals (cached, best-effort)
-        ci = _get_prediction_confidence(home_team, away_team)
+        ci = _get_prediction_confidence(home_team, away_team, model_type="ensemble")
         if ci:
             result["confidence_intervals"] = ci
         return _clean_json_value(result)
@@ -1339,6 +1349,7 @@ def get_calibration_comparison() -> dict:
                     "overall": comparison.overall,
                     "improvement": comparison.improvement,
                     "by_score_line": comparison.by_score_line,
+                    "by_league": list(comparison.by_league) if comparison.by_league else [],
                     "n_matches": comparison.n_matches,
                     "calibrator_metrics": {
                         "brier_before": calibrator.brier_before,
@@ -1352,6 +1363,48 @@ def get_calibration_comparison() -> dict:
         _BACKTEST_CACHE[cache_key] = result
         _BACKTEST_CACHE["calibration_comparison_timestamp"] = now
         return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_prediction_attribution(home_team: str, away_team: str) -> dict:
+    """Return permutation-based feature attribution for a match prediction.
+
+    Fits a Dixon-Coles model on the current team-match data and quantifies
+    how each factor (home attack, home defense, away attack, away defense,
+    home advantage, league mean goals, rho correction) contributes to the
+    home-win probability by neutralizing one factor at a time.
+    """
+    try:
+        from scoutfootball.models import (
+            compute_prediction_attribution,
+            fit_dixon_coles,
+        )
+
+        team_match = load_team_match()
+        if team_match is None or len(team_match) < 50:
+            return {
+                "status": "not_available",
+                "instructions": "Insufficient team_match data for attribution",
+            }
+
+        decay = _resolve_tuned_decay()
+        model = fit_dixon_coles(team_match, decay=decay)
+        attribution = compute_prediction_attribution(
+            model, str(home_team), str(away_team)
+        )
+        return _clean_json_value({
+            "status": "ok",
+            "home_team": attribution.home_team,
+            "away_team": attribution.away_team,
+            "baseline_home_win": attribution.baseline_home_win,
+            "baseline_draw": attribution.baseline_draw,
+            "baseline_away_win": attribution.baseline_away_win,
+            "factors": attribution.factors,
+            "model_type": "dixon_coles",
+            "method": "permutation-neutralize",
+            "n_factors": len(attribution.factors),
+        })
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
 

@@ -314,11 +314,23 @@ const i18n = {
         calibration_comparison_instructions: "运行 `scoutfootball tune-predictions --run-backtest` 生成回测产物",
         calibration_comparison_overall: "总体指标",
         calibration_comparison_by_score: "按比分线分解",
+        calibration_comparison_by_league: "按联赛分解",
+        calibration_comparison_league: "联赛",
         calibration_comparison_score_line: "比分",
         calibration_comparison_raw: "原始",
         calibration_comparison_recalibrated: "重校准",
         calibration_comparison_improvement: "改善%",
         calibration_comparison_n_matches: "场次",
+        prediction_attribution_title: "预测因子归因",
+        prediction_attribution_desc: "基于排列中性化的 Dixon-Coles 因子贡献分解",
+        prediction_attribution_baseline: "基线胜率",
+        prediction_attribution_factor: "因子",
+        prediction_attribution_delta: "Δ 主胜概率",
+        prediction_attribution_neutralized: "中性化后胜率",
+        prediction_attribution_loading: "计算因子归因中…",
+        prediction_attribution_fetch: "分析因子",
+        prediction_attribution_not_available: "暂无归因数据",
+        prediction_attribution_instructions: "需要足够的 team_match 数据以拟合 Dixon-Coles 模型",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -654,11 +666,23 @@ const i18n = {
         calibration_comparison_instructions: "Run `scoutfootball tune-predictions --run-backtest` to generate backtest artifacts",
         calibration_comparison_overall: "Overall Metrics",
         calibration_comparison_by_score: "Per Score Line",
+        calibration_comparison_by_league: "Per League",
+        calibration_comparison_league: "League",
         calibration_comparison_score_line: "Score",
         calibration_comparison_raw: "Raw",
         calibration_comparison_recalibrated: "Recalibrated",
         calibration_comparison_improvement: "Improvement%",
         calibration_comparison_n_matches: "Matches",
+        prediction_attribution_title: "Prediction Factor Attribution",
+        prediction_attribution_desc: "Permutation-neutralized Dixon-Coles factor contribution breakdown",
+        prediction_attribution_baseline: "Baseline win prob",
+        prediction_attribution_factor: "Factor",
+        prediction_attribution_delta: "Δ Home win prob",
+        prediction_attribution_neutralized: "Neutralized win prob",
+        prediction_attribution_loading: "Computing factor attribution…",
+        prediction_attribution_fetch: "Analyze Factors",
+        prediction_attribution_not_available: "No attribution data available",
+        prediction_attribution_instructions: "Requires sufficient team_match data to fit Dixon-Coles model",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -2768,6 +2792,95 @@ async function renderMomentum(home, away) {
     });
 }
 
+async function fetchAndRenderPredictionAttribution(home, away) {
+    const panel = document.getElementById("match-attribution-panel");
+    const body = document.getElementById("match-attribution-body");
+    const btn = document.getElementById("btn-prediction-attribution");
+    if (!panel || !body) return;
+    const z = appState.lang === "zh";
+
+    panel.style.display = "block";
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_attribution_loading"))}</p>`;
+    if (btn) btn.disabled = true;
+
+    let data;
+    try {
+        data = await fetchJson(
+            `/predictions/${encodeURIComponent(home)}/${encodeURIComponent(away)}/attribution`,
+            { fetchOpts: { signal: AbortSignal.timeout(60000) } },
+        );
+    } catch (err) {
+        console.warn("Failed to fetch prediction attribution:", err);
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(t("prediction_attribution_not_available"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    if (!data || data.status === "error" || data.status === "not_available") {
+        const msg = data && data.status === "error"
+            ? `Error: ${escapeHtml(data.message || "unknown")}`
+            : escapeHtml(t("prediction_attribution_not_available"));
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.82rem">${msg}</p>`
+            + `<p style="font-size:0.72rem;margin-top:0.4rem;font-family:monospace;color:var(--text-muted)">${escapeHtml((data && data.instructions) || t("prediction_attribution_instructions"))}</p>`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    const baselineHome = Number(data.baseline_home_win ?? 0);
+    const baselineDraw = Number(data.baseline_draw ?? 0);
+    const baselineAway = Number(data.baseline_away_win ?? 0);
+    const factors = Array.isArray(data.factors) ? data.factors : [];
+
+    const deltaColor = (d) => {
+        if (d == null || Number.isNaN(d)) return "var(--text-muted)";
+        return d > 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+    };
+    const fmtPct = (v) => v != null && !Number.isNaN(Number(v)) ? `${(Number(v) * 100).toFixed(2)}%` : "—";
+    const fmtDeltaPct = (d) => d != null && !Number.isNaN(Number(d))
+        ? `${Number(d) >= 0 ? "+" : ""}${(Number(d) * 100).toFixed(2)}pp`
+        : "—";
+
+    const baselineHtml = `
+        <div class="detail-grid" style="margin-bottom:0.5rem">
+            <div><span>${escapeHtml(t("prediction_attribution_baseline"))}</span><strong style="color:var(--accent)">${fmtPct(baselineHome)}</strong></div>
+            <div><span>${z ? "平" : "Draw"}</span><strong>${fmtPct(baselineDraw)}</strong></div>
+            <div><span>${z ? "客胜" : "Away"}</span><strong>${fmtPct(baselineAway)}</strong></div>
+        </div>`;
+
+    let factorsHtml = "";
+    if (factors.length > 0) {
+        const rows = factors.map((f, idx) => {
+            const delta = Number(f.delta);
+            const neutralized = Number(f.neutralized_home_win);
+            const label = f.label || f.factor || "—";
+            return `<tr>
+                <td><strong>${escapeHtml(f.factor || "—")}</strong><div style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(label)}</div></td>
+                <td>${fmtPct(neutralized)}</td>
+                <td style="color:${deltaColor(delta)}">${fmtDeltaPct(delta)}</td>
+                <td>${idx + 1}</td>
+            </tr>`;
+        }).join("");
+        factorsHtml = `
+            <h4 style="margin:0.5rem 0 0.3rem;font-size:0.78rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("prediction_attribution_factor"))}</h4>
+            <table class="data-table" style="width:100%;font-size:0.76rem">
+                <thead>
+                    <tr>
+                        <th>${escapeHtml(t("prediction_attribution_factor"))}</th>
+                        <th>${escapeHtml(t("prediction_attribution_neutralized"))}</th>
+                        <th>${escapeHtml(t("prediction_attribution_delta"))}</th>
+                        <th>#</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    }
+
+    const methodNote = `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:0.4rem">method: ${escapeHtml(data.method || "permutation-neutralize")} · model: ${escapeHtml(data.model_type || "dixon_coles")} · n_factors: ${escapeHtml(String(data.n_factors ?? factors.length))}</div>`;
+
+    body.innerHTML = `${baselineHtml}${factorsHtml}${methodNote}`;
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -3751,6 +3864,14 @@ async function renderMatches() {
     // Head-to-head section (loads independently — failures don't affect prediction display)
     renderHeadToHead(appState.home, appState.away).catch((e) => console.warn("H2H render failed:", e));
     renderMomentum(appState.home, appState.away).catch((e) => console.warn("Momentum render failed:", e));
+
+    // Show attribution panel (on-demand via button) and reset its body for the new match
+    const attributionPanel = document.getElementById("match-attribution-panel");
+    const attributionBody = document.getElementById("match-attribution-body");
+    if (attributionPanel && attributionBody) {
+        attributionPanel.style.display = "block";
+        attributionBody.innerHTML = `<p style="color:var(--text-muted);font-size:0.78rem">${escapeHtml(t("prediction_attribution_instructions"))}</p>`;
+    }
 }
 
 function poisson(lambda, k) {
@@ -6600,7 +6721,44 @@ function _renderCalibrationComparison(data) {
             </table>`;
     }
 
-    body.innerHTML = `${overallHtml}${scoreLineHtml}`;
+    // Per-league breakdown table
+    const byLeague = Array.isArray(data.by_league) ? data.by_league : [];
+    let leagueHtml = "";
+    if (byLeague.length > 0) {
+        const lgRows = byLeague.map((l) => {
+            const bImp = l.brier_improvement_pct;
+            const rImp = l.rps_improvement_pct;
+            return `<tr>
+                <td><strong>${escapeHtml(String(l.league))}</strong></td>
+                <td>${escapeHtml(String(l.n_matches))}</td>
+                <td>${fmtMetric(l.brier_raw)}</td>
+                <td>${fmtMetric(l.brier_recalibrated)}</td>
+                <td style="color:${impColor(bImp)}">${bImp != null ? `${bImp >= 0 ? "+" : ""}${bImp.toFixed(2)}%` : "—"}</td>
+                <td>${fmtMetric(l.rps_raw)}</td>
+                <td>${fmtMetric(l.rps_recalibrated)}</td>
+                <td style="color:${impColor(rImp)}">${rImp != null ? `${rImp >= 0 ? "+" : ""}${rImp.toFixed(2)}%` : "—"}</td>
+            </tr>`;
+        }).join("");
+        leagueHtml = `
+            <h4 style="margin:1rem 0 0.5rem;font-size:0.85rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("calibration_comparison_by_league"))}</h4>
+            <table class="data-table" style="width:100%;font-size:0.78rem">
+                <thead>
+                    <tr>
+                        <th>${escapeHtml(t("calibration_comparison_league"))}</th>
+                        <th>N</th>
+                        <th>Brier ${escapeHtml(t("calibration_comparison_raw"))}</th>
+                        <th>Brier ${escapeHtml(t("calibration_comparison_recalibrated"))}</th>
+                        <th>Δ%</th>
+                        <th>RPS ${escapeHtml(t("calibration_comparison_raw"))}</th>
+                        <th>RPS ${escapeHtml(t("calibration_comparison_recalibrated"))}</th>
+                        <th>Δ%</th>
+                    </tr>
+                </thead>
+                <tbody>${lgRows}</tbody>
+            </table>`;
+    }
+
+    body.innerHTML = `${overallHtml}${scoreLineHtml}${leagueHtml}`;
 }
 
 function _renderBacktestFoldChart(data, models, folds) {
@@ -6862,6 +7020,16 @@ function bindEvents() {
     if (momentumBtn) {
         momentumBtn.addEventListener("click", () => {
             renderMomentum(appState.home, appState.away).catch((e) => console.warn("Momentum update failed:", e));
+        });
+    }
+
+    // Prediction attribution button: fetch permutation-based factor attribution
+    const attributionBtn = document.getElementById("btn-prediction-attribution");
+    if (attributionBtn) {
+        attributionBtn.addEventListener("click", () => {
+            fetchAndRenderPredictionAttribution(appState.home, appState.away).catch(
+                (e) => console.warn("Prediction attribution failed:", e)
+            );
         });
     }
 
