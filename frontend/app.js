@@ -482,6 +482,42 @@ const i18n = {
         h2h_bias_home_win: "主胜",
         h2h_bias_draw: "平",
         h2h_bias_away_win: "客胜",
+        temporal_val_title: "时序验证回测",
+        temporal_val_desc: "按时间窗口追踪模型指标趋势",
+        temporal_val_fetch: "加载",
+        temporal_val_loading: "计算时序验证...",
+        temporal_val_error: "加载时序验证失败",
+        temporal_val_not_available: "暂无回测数据",
+        temporal_val_n_windows: "时间窗口数",
+        temporal_val_n_matches: "总比赛数",
+        temporal_val_trend: "趋势",
+        temporal_val_window: "时间窗口",
+        prob_heatmap_title: "概率热力图",
+        prob_heatmap_desc: "主胜 vs 客胜概率空间内的密度与准确率",
+        prob_heatmap_fetch: "加载",
+        prob_heatmap_loading: "计算概率热力图...",
+        prob_heatmap_error: "加载概率热力图失败",
+        prob_heatmap_not_available: "暂无回测数据",
+        prob_heatmap_n_predictions: "预测总数",
+        prob_heatmap_grid: "网格",
+        prob_heatmap_coverage: "覆盖率",
+        prob_heatmap_home_bin: "主胜区间",
+        prob_heatmap_away_bin: "客胜区间",
+        prob_heatmap_density: "密度",
+        prob_heatmap_accuracy: "准确率",
+        prob_heatmap_confidence: "置信度",
+        staleness_title: "模型新鲜度",
+        staleness_desc: "回测数据覆盖窗口与模型新鲜度指示",
+        staleness_fetch: "加载",
+        staleness_loading: "计算模型新鲜度...",
+        staleness_error: "加载模型新鲜度失败",
+        staleness_not_available: "暂无回测数据",
+        staleness_level: "新鲜度等级",
+        staleness_days: "距今天数",
+        staleness_backtest_start: "回测起始",
+        staleness_backtest_end: "回测结束",
+        staleness_n_matches: "回测比赛数",
+        staleness_model_type: "模型类型",
         momentum_kicker: "比赛动量预测",
         momentum_title: "实时胜率时间线",
         momentum_home_goals: "主队进球",
@@ -985,6 +1021,42 @@ const i18n = {
         h2h_bias_home_win: "Home Win",
         h2h_bias_draw: "Draw",
         h2h_bias_away_win: "Away Win",
+        temporal_val_title: "Temporal Validation",
+        temporal_val_desc: "Track model metric trends across time windows",
+        temporal_val_fetch: "Load",
+        temporal_val_loading: "Computing temporal validation...",
+        temporal_val_error: "Failed to load temporal validation",
+        temporal_val_not_available: "No backtest data available",
+        temporal_val_n_windows: "N Windows",
+        temporal_val_n_matches: "Total Matches",
+        temporal_val_trend: "Trend",
+        temporal_val_window: "Window",
+        prob_heatmap_title: "Probability Heatmap",
+        prob_heatmap_desc: "Density and accuracy across home_win vs away_win probability space",
+        prob_heatmap_fetch: "Load",
+        prob_heatmap_loading: "Computing probability heatmap...",
+        prob_heatmap_error: "Failed to load probability heatmap",
+        prob_heatmap_not_available: "No backtest data available",
+        prob_heatmap_n_predictions: "N Predictions",
+        prob_heatmap_grid: "Grid",
+        prob_heatmap_coverage: "Coverage",
+        prob_heatmap_home_bin: "Home Bin",
+        prob_heatmap_away_bin: "Away Bin",
+        prob_heatmap_density: "Density",
+        prob_heatmap_accuracy: "Accuracy",
+        prob_heatmap_confidence: "Confidence",
+        staleness_title: "Model Staleness",
+        staleness_desc: "Backtest data coverage window and model freshness indicator",
+        staleness_fetch: "Load",
+        staleness_loading: "Computing model staleness...",
+        staleness_error: "Failed to load model staleness",
+        staleness_not_available: "No backtest data available",
+        staleness_level: "Staleness Level",
+        staleness_days: "Days Since",
+        staleness_backtest_start: "Backtest Start",
+        staleness_backtest_end: "Backtest End",
+        staleness_n_matches: "Backtest Matches",
+        staleness_model_type: "Model Type",
         momentum_kicker: "Match Momentum Prediction",
         momentum_title: "Live Win Probability Timeline",
         momentum_home_goals: "Home Goals",
@@ -4405,6 +4477,202 @@ async function fetchAndRenderH2HBiasCorrection() {
         body.innerHTML = html;
     } catch (e) {
         body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("h2h_bias_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderTemporalValidation() {
+    const body = document.getElementById("backtest-temporal-validation-body");
+    const btn = document.getElementById("btn-temporal-validation");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("temporal_val_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/temporal-validation");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("temporal_val_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("temporal_val_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const windows = data.windows || [];
+        const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
+        const fmtNum = (v, d) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(d) : String(v));
+        const trendColor = data.trend === "improving" ? "var(--status-medium)" : (data.trend === "degrading" ? "var(--status-low)" : "var(--text-muted)");
+        let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_n_windows"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_trend"))}</div>
+            </div>
+        </div>`;
+        if (windows.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.75rem;border-collapse:collapse">
+                <thead><tr style="text-align:right;border-bottom:1px solid var(--border-color)">
+                    <th style="padding:0.3rem;text-align:left">${escapeHtml(t("temporal_val_window"))}</th>
+                    <th style="padding:0.3rem">N</th>
+                    <th style="padding:0.3rem">Acc</th>
+                    <th style="padding:0.3rem">Brier</th>
+                    <th style="padding:0.3rem">RPS</th>
+                    <th style="padding:0.3rem">LL</th>
+                    <th style="padding:0.3rem">Conf</th>
+                </tr></thead><tbody>`;
+            for (const w of windows) {
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem;text-align:left">${escapeHtml(w.window_label || "")}</td>
+                    <td style="padding:0.3rem">${w.n_matches ?? 0}</td>
+                    <td style="padding:0.3rem">${fmtPct(w.accuracy)}</td>
+                    <td style="padding:0.3rem">${fmtNum(w.brier, 4)}</td>
+                    <td style="padding:0.3rem">${fmtNum(w.rps, 4)}</td>
+                    <td style="padding:0.3rem">${fmtNum(w.log_loss, 4)}</td>
+                    <td style="padding:0.3rem">${fmtPct(w.avg_confidence)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("temporal_val_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderProbabilityHeatmap() {
+    const body = document.getElementById("backtest-probability-heatmap-body");
+    const btn = document.getElementById("btn-probability-heatmap");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("prob_heatmap_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/probability-heatmap");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("prob_heatmap_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("prob_heatmap_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const cells = data.cells || [];
+        const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
+        let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_n_predictions"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_bins ?? 0}×${data.n_bins ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_grid"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${fmtPct(data.total_density)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_coverage"))}</div>
+            </div>
+        </div>`;
+        if (cells.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.75rem;border-collapse:collapse">
+                <thead><tr style="text-align:right;border-bottom:1px solid var(--border-color)">
+                    <th style="padding:0.3rem;text-align:left">${escapeHtml(t("prob_heatmap_home_bin"))}</th>
+                    <th style="padding:0.3rem;text-align:left">${escapeHtml(t("prob_heatmap_away_bin"))}</th>
+                    <th style="padding:0.3rem">N</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("prob_heatmap_density"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("prob_heatmap_accuracy"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("prob_heatmap_confidence"))}</th>
+                </tr></thead><tbody>`;
+            for (const c of cells) {
+                const accColor = c.accuracy >= 0.5 ? "var(--status-medium)" : "var(--status-low)";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem;text-align:left">${escapeHtml(c.home_bin || "")}</td>
+                    <td style="padding:0.3rem;text-align:left">${escapeHtml(c.away_bin || "")}</td>
+                    <td style="padding:0.3rem">${c.count ?? 0}</td>
+                    <td style="padding:0.3rem">${fmtPct(c.density)}</td>
+                    <td style="padding:0.3rem;color:${accColor}">${fmtPct(c.accuracy)}</td>
+                    <td style="padding:0.3rem">${fmtPct(c.avg_confidence)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("prob_heatmap_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderPredictionStaleness() {
+    const body = document.getElementById("backtest-prediction-staleness-body");
+    const btn = document.getElementById("btn-prediction-staleness");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("staleness_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/staleness");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("staleness_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("staleness_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const levelColor = data.staleness_level === "fresh" ? "var(--status-medium)" : (data.staleness_level === "stale" ? "var(--status-low)" : "var(--status-high)");
+        let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${levelColor}">${escapeHtml(data.staleness_level || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("staleness_level"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.days_since_backtest_end ?? "–"}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("staleness_days"))}</div>
+            </div>
+        </div>`;
+        html += `<table class="data-table" style="width:100%;font-size:0.75rem;border-collapse:collapse">
+            <tbody>
+                <tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem;color:var(--text-muted)">${escapeHtml(t("staleness_backtest_start"))}</td>
+                    <td style="padding:0.3rem;text-align:right">${escapeHtml(data.backtest_start || "–")}</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem;color:var(--text-muted)">${escapeHtml(t("staleness_backtest_end"))}</td>
+                    <td style="padding:0.3rem;text-align:right">${escapeHtml(data.backtest_end || "–")}</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem;color:var(--text-muted)">${escapeHtml(t("staleness_n_matches"))}</td>
+                    <td style="padding:0.3rem;text-align:right">${data.n_backtest_matches ?? 0}</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem;color:var(--text-muted)">${escapeHtml(t("staleness_model_type"))}</td>
+                    <td style="padding:0.3rem;text-align:right">${escapeHtml(data.model_type || "–")}</td>
+                </tr>
+            </tbody>
+        </table>`;
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("staleness_error"))}: ${escapeHtml(String(e))}</p>`;
     }
     if (btn) btn.disabled = false;
 }
@@ -7964,6 +8232,12 @@ async function renderBacktest() {
         if (errorAnalysisPanel) errorAnalysisPanel.style.display = "block";
         const outcomeDistPanel = document.getElementById("backtest-outcome-distribution-panel");
         if (outcomeDistPanel) outcomeDistPanel.style.display = "block";
+        const temporalValPanel = document.getElementById("backtest-temporal-validation-panel");
+        if (temporalValPanel) temporalValPanel.style.display = "block";
+        const heatmapPanel = document.getElementById("backtest-probability-heatmap-panel");
+        if (heatmapPanel) heatmapPanel.style.display = "block";
+        const stalenessPanel = document.getElementById("backtest-prediction-staleness-panel");
+        if (stalenessPanel) stalenessPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -8740,6 +9014,36 @@ function bindEvents() {
         h2hBiasBtn.addEventListener("click", () => {
             fetchAndRenderH2HBiasCorrection().catch(
                 (e) => console.warn("H2H bias correction failed:", e)
+            );
+        });
+    }
+
+    // Temporal validation button: per-window metric trends
+    const temporalValBtn = document.getElementById("btn-temporal-validation");
+    if (temporalValBtn) {
+        temporalValBtn.addEventListener("click", () => {
+            fetchAndRenderTemporalValidation().catch(
+                (e) => console.warn("Temporal validation failed:", e)
+            );
+        });
+    }
+
+    // Probability heatmap button: 2D density grid
+    const heatmapBtn = document.getElementById("btn-probability-heatmap");
+    if (heatmapBtn) {
+        heatmapBtn.addEventListener("click", () => {
+            fetchAndRenderProbabilityHeatmap().catch(
+                (e) => console.warn("Probability heatmap failed:", e)
+            );
+        });
+    }
+
+    // Prediction staleness button: model freshness indicator
+    const stalenessBtn = document.getElementById("btn-prediction-staleness");
+    if (stalenessBtn) {
+        stalenessBtn.addEventListener("click", () => {
+            fetchAndRenderPredictionStaleness().catch(
+                (e) => console.warn("Prediction staleness failed:", e)
             );
         });
     }

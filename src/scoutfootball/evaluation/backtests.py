@@ -2912,3 +2912,448 @@ def compute_outcome_distribution(
         dominant_bias=dominant_bias,
         disclaimer=disclaimer,
     )
+
+
+# ---------------------------------------------------------------------------
+# Temporal validation backtest (per-window metric trend)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TemporalWindow:
+    """Metrics for one time window in a temporal validation backtest."""
+
+    window_label: str
+    window_start: str
+    window_end: str
+    n_matches: int
+    accuracy: float
+    brier: float
+    rps: float
+    log_loss: float | None
+    avg_confidence: float
+
+
+@dataclass(frozen=True)
+class TemporalValidationReport:
+    """Rolling-origin temporal validation report with per-window trends."""
+
+    windows: list[TemporalWindow]
+    n_total_matches: int
+    n_windows: int
+    overall_accuracy: float
+    overall_brier: float
+    overall_rps: float
+    overall_log_loss: float | None
+    trend: str
+    disclaimer: str
+
+
+def _accuracy_for_df(df: pd.DataFrame) -> float:
+    """Compute accuracy (argmax hit rate) for a predictions DataFrame."""
+    if df.empty:
+        return 0.0
+    probs = df.loc[
+        :,
+        ["home_win_probability", "draw_probability", "away_win_probability"],
+    ].to_numpy()
+    predicted_idx = np.argmax(probs, axis=1)
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    actual_idx = df["actual_outcome"].map(outcome_map).to_numpy()
+    return float(np.mean(predicted_idx == actual_idx))
+
+
+def _avg_confidence_for_df(df: pd.DataFrame) -> float:
+    """Compute average confidence (mean of max predicted probability)."""
+    if df.empty:
+        return 0.0
+    probs = df.loc[
+        :,
+        ["home_win_probability", "draw_probability", "away_win_probability"],
+    ].to_numpy()
+    return float(np.mean(np.max(probs, axis=1)))
+
+
+def compute_temporal_validation(
+    predictions: pd.DataFrame,
+    *,
+    n_windows: int = 6,
+    min_samples_per_window: int = 10,
+) -> TemporalValidationReport:
+    """Compute per-window metric trends for temporal validation.
+
+    Groups backtest predictions into equal-count time windows (sorted by
+    ``match_date``) and computes accuracy, Brier, RPS, LogLoss, and
+    avg_confidence per window. Useful for detecting model drift over time.
+
+    Args:
+        predictions: DataFrame with backtest prediction columns.
+        n_windows: Number of time windows to create (2–20).
+        min_samples_per_window: Minimum samples per window; windows below
+            this threshold are merged into the previous window.
+
+    Returns:
+        TemporalValidationReport with per-window metrics and trend detection.
+
+    Raises:
+        ValueError: If ``n_windows`` is outside [2, 20] or required columns
+            are missing.
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+    if not (2 <= n_windows <= 20):
+        raise ValueError(f"n_windows must be between 2 and 20, got {n_windows}")
+
+    disclaimer = (
+        "Temporal validation shows per-window metric trends; small windows "
+        "may have high variance."
+    )
+
+    df = predictions.copy()
+    df["match_date"] = pd.to_datetime(df.get("match_date"), errors="coerce")
+    has_dates = df["match_date"].notna().any()
+    if not has_dates:
+        df["match_date"] = pd.date_range(
+            start="2020-01-01", periods=len(df), freq="D",
+        )
+    df = df.sort_values("match_date").reset_index(drop=True)
+
+    has_exact = "exact_score_probability" in df.columns
+
+    n_total = len(df)
+    if n_total < n_windows * min_samples_per_window:
+        n_windows = max(2, n_total // min_samples_per_window)
+    if n_total < 2 * min_samples_per_window:
+        return TemporalValidationReport(
+            windows=[],
+            n_total_matches=n_total,
+            n_windows=0,
+            overall_accuracy=0.0,
+            overall_brier=0.0,
+            overall_rps=0.0,
+            overall_log_loss=None,
+            trend="insufficient_data",
+            disclaimer=disclaimer,
+        )
+
+    window_size = n_total // n_windows
+    windows: list[TemporalWindow] = []
+
+    for i in range(n_windows):
+        start_idx = i * window_size
+        if i == n_windows - 1:
+            end_idx = n_total
+        else:
+            end_idx = (i + 1) * window_size
+        chunk = df.iloc[start_idx:end_idx]
+        if len(chunk) < min_samples_per_window:
+            continue
+
+        w_start = chunk["match_date"].min()
+        w_end = chunk["match_date"].max()
+        w_label = (
+            f"{w_start.strftime('%Y-%m')}"
+            if pd.notna(w_start)
+            else f"window_{i + 1}"
+        )
+        if pd.notna(w_start) and pd.notna(w_end) and w_start != w_end:
+            w_label = (
+                f"{w_start.strftime('%Y-%m')}–{w_end.strftime('%Y-%m')}"
+            )
+
+        acc = round(_accuracy_for_df(chunk), 4)
+        brier = round(_brier_1x2(chunk), 4)
+        rps = round(_ranked_probability_score(chunk), 4)
+        ll = None
+        if has_exact and "exact_score_probability" in chunk.columns:
+            ll_val = _exact_score_log_loss(chunk)
+            ll = round(float(ll_val), 4)
+        conf = round(_avg_confidence_for_df(chunk), 4)
+
+        windows.append(TemporalWindow(
+            window_label=w_label,
+            window_start=str(w_start.date()) if pd.notna(w_start) else "",
+            window_end=str(w_end.date()) if pd.notna(w_end) else "",
+            n_matches=len(chunk),
+            accuracy=acc,
+            brier=brier,
+            rps=rps,
+            log_loss=ll,
+            avg_confidence=conf,
+        ))
+
+    overall_acc = round(_accuracy_for_df(df), 4)
+    overall_brier = round(_brier_1x2(df), 4)
+    overall_rps = round(_ranked_probability_score(df), 4)
+    overall_ll = None
+    if has_exact:
+        overall_ll = round(float(_exact_score_log_loss(df)), 4)
+
+    # Trend detection: compare first-half vs second-half Brier.
+    mid = n_total // 2
+    first_half_brier = _brier_1x2(df.iloc[:mid]) if mid > 0 else 0.0
+    second_half_brier = _brier_1x2(df.iloc[mid:]) if mid < n_total else 0.0
+    delta = second_half_brier - first_half_brier
+    if abs(delta) < 0.005:
+        trend = "stable"
+    elif delta < 0:
+        trend = "improving"
+    else:
+        trend = "degrading"
+
+    return TemporalValidationReport(
+        windows=windows,
+        n_total_matches=n_total,
+        n_windows=len(windows),
+        overall_accuracy=overall_acc,
+        overall_brier=overall_brier,
+        overall_rps=overall_rps,
+        overall_log_loss=overall_ll,
+        trend=trend,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Probability heatmap (2D density + accuracy grid)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class HeatmapCell:
+    """One cell in the probability heatmap grid."""
+
+    home_bin: str
+    away_bin: str
+    home_lo: float
+    home_hi: float
+    away_lo: float
+    away_hi: float
+    count: int
+    density: float
+    accuracy: float
+    avg_confidence: float
+
+
+@dataclass(frozen=True)
+class ProbabilityHeatmap:
+    """2D grid of home_win vs away_win probability density and accuracy."""
+
+    cells: list[HeatmapCell]
+    n_predictions: int
+    n_bins: int
+    total_density: float
+    disclaimer: str
+
+
+def compute_probability_heatmap(
+    predictions: pd.DataFrame,
+    *,
+    n_bins: int = 5,
+    min_samples_per_cell: int = 3,
+) -> ProbabilityHeatmap:
+    """Compute a 2D heatmap of home_win vs away_win probability density.
+
+    Buckets predictions into an ``n_bins`` × ``n_bins`` grid based on
+    ``home_win_probability`` and ``away_win_probability``. Each cell reports
+    count, density (fraction of total), accuracy (argmax hit rate), and
+    avg_confidence. Cells below ``min_samples_per_cell`` are excluded.
+
+    Args:
+        predictions: DataFrame with backtest prediction columns.
+        n_bins: Number of bins per axis (2–15).
+        min_samples_per_cell: Minimum samples per cell; sparser cells are
+            excluded.
+
+    Returns:
+        ProbabilityHeatmap with per-cell stats.
+
+    Raises:
+        ValueError: If ``n_bins`` is outside [2, 15] or required columns
+            are missing.
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+    if not (2 <= n_bins <= 15):
+        raise ValueError(f"n_bins must be between 2 and 15, got {n_bins}")
+
+    disclaimer = (
+        "Heatmap shows prediction density and accuracy across the "
+        "home_win vs away_win probability space."
+    )
+
+    df = predictions.copy()
+    n_total = len(df)
+    if n_total == 0:
+        return ProbabilityHeatmap(
+            cells=[],
+            n_predictions=0,
+            n_bins=n_bins,
+            total_density=0.0,
+            disclaimer=disclaimer,
+        )
+
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    cells: list[HeatmapCell] = []
+
+    for i in range(n_bins):
+        h_lo = float(edges[i])
+        h_hi = float(edges[i + 1])
+        if i == n_bins - 1:
+            h_mask = (df["home_win_probability"] >= h_lo) & (
+                df["home_win_probability"] <= h_hi
+            )
+        else:
+            h_mask = (df["home_win_probability"] >= h_lo) & (
+                df["home_win_probability"] < h_hi
+            )
+        for j in range(n_bins):
+            a_lo = float(edges[j])
+            a_hi = float(edges[j + 1])
+            if j == n_bins - 1:
+                a_mask = (df["away_win_probability"] >= a_lo) & (
+                    df["away_win_probability"] <= a_hi
+                )
+            else:
+                a_mask = (df["away_win_probability"] >= a_lo) & (
+                    df["away_win_probability"] < a_hi
+                )
+            chunk = df.loc[h_mask & a_mask]
+            count = len(chunk)
+            if count < min_samples_per_cell:
+                continue
+            density = round(count / n_total, 4)
+            acc = round(_accuracy_for_df(chunk), 4)
+            conf = round(_avg_confidence_for_df(chunk), 4)
+            h_label = f"{h_lo:.1f}-{h_hi:.1f}"
+            a_label = f"{a_lo:.1f}-{a_hi:.1f}"
+            cells.append(HeatmapCell(
+                home_bin=h_label,
+                away_bin=a_label,
+                home_lo=round(h_lo, 2),
+                home_hi=round(h_hi, 2),
+                away_lo=round(a_lo, 2),
+                away_hi=round(a_hi, 2),
+                count=count,
+                density=density,
+                accuracy=acc,
+                avg_confidence=conf,
+            ))
+
+    total_density = round(sum(c.density for c in cells), 4)
+    return ProbabilityHeatmap(
+        cells=cells,
+        n_predictions=n_total,
+        n_bins=n_bins,
+        total_density=total_density,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prediction staleness indicator
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PredictionStaleness:
+    """Model training date and data freshness indicator."""
+
+    has_backtest: bool
+    backtest_start: str
+    backtest_end: str
+    n_backtest_matches: int
+    model_type: str
+    days_since_backtest_end: int | None
+    staleness_level: str
+    disclaimer: str
+
+
+def compute_prediction_staleness(
+    predictions: pd.DataFrame,
+    *,
+    reference_date: str | None = None,
+    model_type: str = "dixon_coles_decay",
+) -> PredictionStaleness:
+    """Compute model staleness from backtest prediction date range.
+
+    Args:
+        predictions: DataFrame with backtest prediction columns (must have
+            ``match_date``).
+        reference_date: Reference date for staleness calculation (ISO format).
+            Defaults to today.
+        model_type: Model identifier for the staleness report.
+
+    Returns:
+        PredictionStaleness with date range, days since last match, and
+        staleness level (fresh/aging/stale/empty).
+
+    Raises:
+        ValueError: If required columns are missing.
+    """
+    if "match_date" not in predictions.columns:
+        raise ValueError("predictions is missing required column: match_date")
+
+    disclaimer = (
+        "Staleness is based on the backtest data coverage window, not "
+        "real-time model retraining status."
+    )
+
+    df = predictions.copy()
+    df["match_date"] = pd.to_datetime(df["match_date"], errors="coerce")
+    df = df.dropna(subset=["match_date"])
+
+    if df.empty:
+        return PredictionStaleness(
+            has_backtest=False,
+            backtest_start="",
+            backtest_end="",
+            n_backtest_matches=0,
+            model_type=model_type,
+            days_since_backtest_end=None,
+            staleness_level="empty",
+            disclaimer=disclaimer,
+        )
+
+    b_start = df["match_date"].min()
+    b_end = df["match_date"].max()
+    n_matches = len(df)
+
+    if reference_date is not None:
+        ref = pd.to_datetime(reference_date)
+    else:
+        ref = pd.Timestamp.now()
+
+    days_since = int((ref - b_end).days)
+    if days_since < 0:
+        days_since = 0
+
+    if days_since <= 30:
+        level = "fresh"
+    elif days_since <= 90:
+        level = "aging"
+    else:
+        level = "stale"
+
+    return PredictionStaleness(
+        has_backtest=True,
+        backtest_start=str(b_start.date()),
+        backtest_end=str(b_end.date()),
+        n_backtest_matches=n_matches,
+        model_type=model_type,
+        days_since_backtest_end=days_since,
+        staleness_level=level,
+        disclaimer=disclaimer,
+    )

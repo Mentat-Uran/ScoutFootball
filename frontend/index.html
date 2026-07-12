@@ -1695,6 +1695,36 @@
                     </div>
                     <div id="backtest-outcome-distribution-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
+                <article class="liquid-panel chart-panel" id="backtest-temporal-validation-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="temporal_val_title">时序验证回测</h3>
+                            <span class="kicker" data-i18n="temporal_val_desc">按时间窗口追踪模型指标趋势</span>
+                        </div>
+                        <button class="text-button" id="btn-temporal-validation" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="temporal_val_fetch">加载</button>
+                    </div>
+                    <div id="backtest-temporal-validation-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+                <article class="liquid-panel chart-panel" id="backtest-probability-heatmap-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="prob_heatmap_title">概率热力图</h3>
+                            <span class="kicker" data-i18n="prob_heatmap_desc">主胜 vs 客胜概率空间内的密度与准确率</span>
+                        </div>
+                        <button class="text-button" id="btn-probability-heatmap" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="prob_heatmap_fetch">加载</button>
+                    </div>
+                    <div id="backtest-probability-heatmap-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+                <article class="liquid-panel chart-panel" id="backtest-prediction-staleness-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="staleness_title">模型新鲜度</h3>
+                            <span class="kicker" data-i18n="staleness_desc">回测数据覆盖窗口与模型新鲜度指示</span>
+                        </div>
+                        <button class="text-button" id="btn-prediction-staleness" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="staleness_fetch">加载</button>
+                    </div>
+                    <div id="backtest-prediction-staleness-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->

@@ -53,7 +53,9 @@ from scoutfootball.api import (
     get_prediction_attribution_ci,
     get_prediction_calibration,
     get_prediction_diagnostics,
+    get_prediction_staleness,
     get_prediction_summary,
+    get_probability_heatmap,
     get_ratings_meta,
     get_reliability_diagram,
     get_review_queue,
@@ -62,6 +64,7 @@ from scoutfootball.api import (
     get_team_accuracy,
     get_team_comparison,
     get_team_strength,
+    get_temporal_validation,
     get_value_bet_analysis,
     get_value_summary,
     get_watchlist,
@@ -319,6 +322,30 @@ def create_app() -> FastAPI:
     @app.get("/predictions/calibration/outcome-distribution")
     def predictions_calibration_outcome_distribution():
         return get_outcome_distribution()
+
+    @app.get("/predictions/calibration/temporal-validation")
+    def predictions_calibration_temporal_validation(
+        n_windows: int = Query(6, ge=2, le=20),
+        min_samples_per_window: int = Query(10, ge=1, le=100),
+    ):
+        return get_temporal_validation(
+            n_windows=n_windows,
+            min_samples_per_window=min_samples_per_window,
+        )
+
+    @app.get("/predictions/calibration/probability-heatmap")
+    def predictions_calibration_probability_heatmap(
+        n_bins: int = Query(5, ge=2, le=15),
+        min_samples_per_cell: int = Query(3, ge=1, le=100),
+    ):
+        return get_probability_heatmap(
+            n_bins=n_bins,
+            min_samples_per_cell=min_samples_per_cell,
+        )
+
+    @app.get("/predictions/staleness")
+    def predictions_staleness():
+        return get_prediction_staleness()
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")
     def predictions_attribution(home_team: str, away_team: str):
