@@ -2,6 +2,12 @@
 
 ## Recently Merged
 
+- **Structured Shortlist Dossiers + World Cup Renderer Repair (2026-07-12, Round 14):**
+  1. Upgraded the browser-local scouting workspace to v1.2 with `review.shortlist_dossiers`, keyed by stable player identity and containing validated priority, recommendation, target role, and rationale/risk fields. Existing short-list notes remain readable and are mirrored when dossier rationale is edited.
+  2. Added dossier controls to every shortlist card, including mobile layout; the browser-local state is included in export/import, preview summary, conflict analysis, opt-in local API persistence, and the player scouting-report CSV decision section.
+  3. Added browser and Python contract tests for sanitization, merge conflict handling, persistence validation, version migration, and wiring. The static frontend workflow was exercised end-to-end with a local dossier edit.
+  4. Replaced stale `currentLang` references in World Cup renderers with `appState.lang`, fixing the startup `ReferenceError` that interrupted offline World Cup initialization.
+
 - **Bracket Share/Import + Print/PDF Export (2026-07-12, Round 13):**
   1. Added `export_wc_tournament_state()` in `scoutfootball.api` — serializes the full `TournamentState` (matches + results + knockout) to compact JSON, then encodes as base64-URL-safe string. Returns `status`, `format` ("base64url-json-v1"), `schema_version`, `state_size` (bytes), `encoded` (the shareable string), and `exported_at`. Uses `state_to_dict()` for serialization.
   2. Added `import_wc_tournament_state(encoded)` in `scoutfootball.api` — decodes the base64-URL-safe JSON string (auto-handles missing padding), validates schema version (must be 1.x via `state_from_dict()`), reconstructs `TournamentState`, and persists to `DEFAULT_STATE_PATH`. Returns `status`, `imported`, `schema_version`, `matches` count, `results` count, `has_knockout` flag, and `saved_to` path. Error codes: `decode_failed` (invalid base64/JSON), `invalid_state` (incompatible schema).
@@ -122,16 +128,17 @@
 
 ## Current Development
 
-- Round 13 (Bracket Share/Import + Print/PDF Export) is ready to merge on `codex/tournament-share`. Once squash-merged into `codex/integration` and fast-forwarded to `main`, the next round will focus on browser integration coverage and player shortlist notes persistence (see Next Round Candidates).
+- Round 14 is committed on `codex/scouting-shortlist-dossiers`; Round 15 (model-run lineage) is ready to commit on `codex/model-run-lineage`. Both are descendants of the clean Round 13 integration commit, but cannot be squash-merged while the checked-out `codex/integration` worktree retains unrelated, uncommitted data artifacts.
 
 ## Known Blockers
 
 - GitHub account suspension persists (HTTP 403 on `gh`/`git push`/REST API). Local development and merges continue normally; remote PR/push blocked.
+- The local runner terminates `uv run pytest --tb=short -q`, `uv run pytest tests/unit -q`, and `tests/integration/test_pipeline_e2e.py` after roughly 124 seconds without a test failure report; targeted workspace tests, frontend tests, Ruff, CLI validation, and API integration tests pass.
 
 ## Next Round Candidates
 
 1. Add browser integration coverage for scouting, action-value, API/static empty states, and mobile breakpoints.
-2. Player shortlist notes persistence (per-player notes attached to scouting workspace shortlist entries).
-3. Model-run registry enhancement: tag runs with dataset snapshot hash and feature manifest version.
+2. Browser integration coverage for workspace export/import conflict previews and mobile dossier layout.
+3. Surface run lineage in tactical-board model-output exports without implying a live model execution.
 4. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
 5. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.

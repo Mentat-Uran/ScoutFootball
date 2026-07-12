@@ -44,6 +44,35 @@ class TestGetModelRunDetail:
         assert "StatsBomb" in da["statsbomb_attribution_required"]
 
     @patch("scoutfootball.api._settings")
+    def test_returns_recorded_lineage_and_marks_legacy_runs(
+        self, mock_settings: MagicMock, tmp_path: Path
+    ) -> None:
+        run_dir = tmp_path / "models" / "runs" / "test_run_lineage"
+        run_dir.mkdir(parents=True)
+        meta = {
+            "input_hash": "legacy-hash",
+            "lineage": {
+                "schema": "scoutfootball.model-run-lineage",
+                "version": "1.0.0",
+                "status": "recorded",
+                "dataset_snapshot": {"input_hash": "dataset-hash"},
+                "feature_manifest": {"hash": "manifest-hash", "schema_version": "2.4.0"},
+            },
+        }
+        (run_dir / "meta.json").write_text(json.dumps(meta))
+        mock_settings.return_value.data_root = tmp_path
+
+        result = get_model_run_detail("test_run_lineage")
+
+        assert result["lineage"]["status"] == "recorded"
+        assert result["lineage"]["dataset_snapshot"]["input_hash"] == "dataset-hash"
+
+        (run_dir / "meta.json").write_text(json.dumps({"input_hash": "legacy-hash"}))
+        legacy = get_model_run_detail("test_run_lineage")
+        assert legacy["lineage"]["status"] == "not_recorded"
+        assert legacy["lineage"]["dataset_snapshot"]["input_hash"] == "legacy-hash"
+
+    @patch("scoutfootball.api._settings")
     def test_returns_params_summary_from_npy(
         self, mock_settings: MagicMock, tmp_path: Path,
     ) -> None:

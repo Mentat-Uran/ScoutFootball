@@ -481,6 +481,40 @@ body.dark-mode .mesh-bg {
     line-height: 1.3;
 }
 
+.scout-dossier-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+    padding: 9px;
+    border: 1px solid color-mix(in srgb, var(--blue) 24%, var(--glass-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--blue) 5%, var(--glass-bg));
+}
+
+.scout-dossier-grid label {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.scout-dossier-grid .glass-control {
+    width: 100%;
+    min-height: 32px;
+    font: inherit;
+}
+
+.scout-dossier-wide {
+    grid-column: 1 / -1;
+}
+
+.scout-dossier-wide .scout-note-input {
+    margin-top: 0;
+}
+
 .feature-hero {
     position: relative;
     display: grid;
@@ -2216,6 +2250,10 @@ tbody button {
 /* ── Extra-small phones (<= 480px) ─────────────────────────────────────── */
 
 @media (max-width: 480px) {
+    .scout-dossier-grid {
+        grid-template-columns: 1fr;
+    }
+
     .feature-metric-strip {
         grid-template-columns: 1fr;
     }

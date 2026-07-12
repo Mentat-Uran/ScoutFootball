@@ -636,23 +636,29 @@ browser workspace's `audit.revision`:
   "version": "1.0",
   "server_revision": 2,
   "stored_at": "2026-07-11T01:00:00Z",
-  "workspace": { "schema": "scoutfootball.scouting-workspace", "version": "1.1.0" }
+  "workspace": { "schema": "scoutfootball.scouting-workspace", "version": "1.2.0" }
 }
 ```
 
 The payload limit is 1 MB. Workspace IDs are path-safe and must match
 `workspace.audit.workspace_id`; dynamic maps, notes, selections, timestamps,
-statuses, nesting, and forbidden prototype keys are validated. New records get
+statuses, dossiers, nesting, and forbidden prototype keys are validated. New records get
 server revision 1. Updating without `If-Match` returns 428; a stale revision
 returns 409 with `current_revision`. Each successful update copies the previous
 record to `data/reports/scouting/workspaces/backups/`, then atomically replaces
 the live JSON file. No delete endpoint is exposed.
 
 ### GET /model-runs
-Model run registry with holdout metrics.
+Model run registry with holdout metrics. New optimizer runs include a
+`lineage` object with `schema: scoutfootball.model-run-lineage`, a dataset
+snapshot `input_hash`, and a fingerprint/version of
+`rating_feature_matrix_manifest.json`. Legacy runs return
+`lineage.status: not_recorded` rather than implying that provenance was
+captured retroactively. A missing manifest yields `status: partial`.
 
 ### GET /reports/model-runs/{run_id}
-Full details for a single model run.
+Full details for a single model run, including the same lineage object for
+reproducibility review.
 
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
@@ -1367,7 +1373,7 @@ strategy as `player_compare_pairs.json`.
 
 **Schema**: `scoutfootball.scouting-workspace`
 
-**Current version**: `1.1.0`
+**Current version**: `1.2.0`
 
 **Implementation**: `frontend/scouting-workspace.js`
 
@@ -1376,7 +1382,7 @@ The workspace is an explicit backup and transfer format for browser-local scouti
 ```json
 {
   "schema": "scoutfootball.scouting-workspace",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "exported_at": "2026-07-10T12:00:00.000Z",
   "audit": {
     "workspace_id": "uuid-or-local-id",
@@ -1395,14 +1401,22 @@ The workspace is an explicit backup and transfer format for browser-local scouti
   "review": {
     "statuses": { "player-key": "pending|reviewing|approved|rejected" },
     "shortlist_notes": { "player-key": "note" },
-    "watchlist_notes": { "player-key": "note" }
+    "watchlist_notes": { "player-key": "note" },
+    "shortlist_dossiers": {
+      "stable-player-key": {
+        "priority": "urgent|standard|monitor",
+        "recommendation": "target|monitor|decline",
+        "target_role": "optional role, max 120 characters",
+        "rationale": "local decision context and risks, max 2,000 characters"
+      }
+    }
   },
   "selections": { "watchlist": [], "shortlist": [] },
   "watchlist_snapshot": { "player_keys": [], "saved_at": "ISO-8601|null" }
 }
 ```
 
-Imports are limited to 1 MB, 1,000 status/note entries and 500 selected players. Unknown statuses, forbidden object keys, oversized strings and unsupported major versions are rejected or sanitized. Safe merge unions selections and uses the workspace with the newer audit timestamp for conflicting status/note keys; explicit replacement is the only overwrite path.
+Imports are limited to 1 MB, 1,000 status/note/dossier entries and 500 selected players. Unknown statuses, forbidden object keys, oversized strings, invalid dossier enums and unsupported major versions are rejected or sanitized. Safe merge unions selections and uses the workspace with the newer audit timestamp for conflicting status/note/dossier keys; explicit replacement is the only overwrite path. A dossier is browser-local decision context, not a server-side recommendation or a claim that a transfer is in progress.
 
 ---
 

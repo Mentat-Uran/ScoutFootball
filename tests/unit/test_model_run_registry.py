@@ -20,7 +20,7 @@ _mock_torch.is_tensor = lambda x: False
 sys.modules["torch"] = _mock_torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from optimizer.data import compute_input_hash, save_model_run  # noqa: E402
+from optimizer.data import build_run_lineage, compute_input_hash, save_model_run  # noqa: E402
 
 # Restore real torch so other test files are not poisoned
 if _real_torch is not None:
@@ -82,6 +82,40 @@ class TestSaveModelRun:
         assert "python" in dep
         assert "numpy" in dep
         assert "pandas" in dep
+
+    def test_records_dataset_and_feature_manifest_lineage(self, tmp_path):
+        manifest_path = tmp_path / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
+        manifest_path.parent.mkdir(parents=True)
+        manifest_path.write_text(
+            json.dumps({
+                "schema_version": "2.4.0",
+                "generated_at": "2026-07-12T00:00:00Z",
+                "input_hash": "feature-input-123",
+            }),
+            encoding="utf-8",
+        )
+        params = np.random.randn(77).astype(np.float32)
+        run_dir = save_model_run(
+            params,
+            {"spearman": 0.65},
+            output_dir=tmp_path / "models" / "runs",
+            feat_hash="dataset-snapshot-456",
+            data_dir=tmp_path,
+        )
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+
+        lineage = meta["lineage"]
+        assert lineage["status"] == "recorded"
+        assert lineage["dataset_snapshot"]["input_hash"] == "dataset-snapshot-456"
+        assert lineage["feature_manifest"]["hash"]
+        assert lineage["feature_manifest"]["schema_version"] == "2.4.0"
+
+    def test_lineage_is_explicitly_partial_without_a_feature_manifest(self, tmp_path):
+        lineage = build_run_lineage(tmp_path, input_hash="snapshot")
+
+        assert lineage["status"] == "partial"
+        assert lineage["dataset_snapshot"]["input_hash"] == "snapshot"
+        assert lineage["feature_manifest"]["hash"] is None
 
     def test_train_test_seasons_from_args(self, tmp_path):
         params = np.random.randn(77).astype(np.float32)

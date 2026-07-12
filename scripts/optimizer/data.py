@@ -1068,6 +1068,50 @@ def compute_input_hash(data_dir: Path) -> str:
     return hasher.hexdigest()[:16]
 
 
+def build_run_lineage(data_dir: Path, *, input_hash: str | None = None) -> dict:
+    """Describe the local dataset and feature-manifest snapshot used by a run.
+
+    The rating optimizer's input hash identifies the selected source artifacts.
+    The adjacent feature-manifest hash identifies the schema and feature build
+    metadata separately, so a run can be reproduced or explicitly marked as
+    partially recorded when older artifacts lack that manifest.
+    """
+    root = Path(data_dir)
+    manifest_path = root / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
+    manifest: dict = {}
+    manifest_hash: str | None = None
+    if manifest_path.exists():
+        raw = manifest_path.read_bytes()
+        manifest_hash = hashlib.sha256(raw).hexdigest()[:16]
+        try:
+            loaded = json.loads(raw)
+            manifest = loaded if isinstance(loaded, dict) else {}
+        except (TypeError, ValueError, UnicodeDecodeError):
+            manifest = {}
+
+    snapshot_hash = input_hash or compute_input_hash(root)
+    return {
+        "schema": "scoutfootball.model-run-lineage",
+        "version": "1.0.0",
+        "status": "recorded" if manifest_hash else "partial",
+        "dataset_snapshot": {
+            "input_hash": snapshot_hash,
+            "input_artifacts": [
+                "gold/feature_store/rating_feature_matrix.parquet",
+                "raw/football_data/combined_results.parquet",
+                "gold/feature_store/player_ratings_optimized.parquet",
+            ],
+        },
+        "feature_manifest": {
+            "path": "gold/feature_store/rating_feature_matrix_manifest.json",
+            "hash": manifest_hash,
+            "schema_version": manifest.get("schema_version") or manifest.get("version"),
+            "generated_at": manifest.get("generated_at") or manifest.get("timestamp"),
+            "input_hash": manifest.get("input_hash"),
+        },
+    }
+
+
 def build_dc_tensors(feat, matches_df, device):
     """Build Dixon-Coles tensors from match data and feature tensors.
 
@@ -1127,6 +1171,7 @@ def save_model_run(
     args: argparse.Namespace | None = None,
     output_dir: Path | None = None,
     feat_hash: str | None = None,
+    data_dir: Path | None = None,
 ):
     """Save model run with full provenance to data/models/runs/<timestamp>/.
 
@@ -1134,7 +1179,7 @@ def save_model_run(
     - optimized_params.npy
     - meta.json with: params summary, seed, input hash, metrics, position metrics,
       error case summary, dependency versions, train/test season split,
-      composite objective weights
+      composite objective weights and dataset/feature-manifest lineage
     """
     import platform
     from datetime import UTC, datetime
@@ -1157,6 +1202,7 @@ def save_model_run(
             k: float(v) if isinstance(v, (int, float, np.floating)) else str(v)
             for k, v in metrics.items()
         },
+        "lineage": build_run_lineage(data_dir or Path("data"), input_hash=feat_hash),
     }
 
     # Dependency versions for reproducibility

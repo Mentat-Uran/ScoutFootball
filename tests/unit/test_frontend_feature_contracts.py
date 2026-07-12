@@ -96,16 +96,20 @@ def test_scouting_workspace_is_loaded_before_the_app_and_has_a_versioned_contrac
     workspace_js = _read(FRONTEND / "scouting-workspace.js")
 
     assert html.index('src="scouting-workspace.js"') < html.index('src="app.js"')
-    assert 'const VERSION = "1.1.0"' in workspace_js
+    assert 'const VERSION = "1.2.0"' in workspace_js
     assert "workspace_id" in workspace_js
     assert "revision" in workspace_js
     assert "analyzeConflict" in workspace_js
     assert "mergeWorkspaces" in workspace_js
+    assert "shortlist_dossiers" in workspace_js
     assert 'if (typeof SCOUTING_WORKSPACE !== "undefined") ensureScoutingWorkspaceMeta();' in app_js
     assert "Number.MAX_SAFE_INTEGER" in app_js
     assert "saveScoutingWorkspaceToServer" in app_js
     assert "loadLatestScoutingWorkspaceFromServer" in app_js
     assert 'headers["If-Match"]' in app_js
+    assert "SCOUT_DOSSIERS_KEY" in app_js
+    assert "updateShortlistDossier" in app_js
+    assert "currentLang" not in app_js
 
 
 def test_static_server_404_continues_to_mapped_json_fallback() -> None:

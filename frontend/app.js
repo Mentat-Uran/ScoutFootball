@@ -1948,6 +1948,11 @@ function _buildScoutingReport(player, profile, detail) {
     const trendDelta = trend.delta || {};
     const lowConfReasons = Array.isArray(profile && profile.low_confidence_reasons) ? profile.low_confidence_reasons : [];
     const seasonsHistory = Array.isArray(profile && profile.seasons) ? profile.seasons : [];
+    const shortlistDossier = getShortlistDossier({
+        player_id: player.player_id || profile && profile.player_id,
+        key: player.key,
+        name: player.name,
+    });
 
     return {
         player: player.name || "",
@@ -1996,7 +2001,8 @@ function _buildScoutingReport(player, profile, detail) {
             minutes: s.minutes ?? null,
         })),
         watchlist_note: watchlistNotes[player.name] || "",
-        shortlist_note: scoutShortlistNotes[player.name] || "",
+        shortlist_note: shortlistDossier.rationale,
+        shortlist_dossier: shortlistDossier,
         exported_at: new Date().toISOString(),
         app_version: APP_VERSION,
     };
@@ -2084,12 +2090,15 @@ function exportPlayerScoutingReportCSV(player, profile, detail) {
         lines.push([]);
     }
 
-    // Section 7: Scouting notes
-    if (report.watchlist_note || report.shortlist_note) {
-        lines.push(["# Scouting Notes"]);
-        lines.push(["type", "note"]);
+    // Section 7: Browser-local scouting decision context
+    if (report.watchlist_note || report.shortlist_note || report.shortlist_dossier.target_role) {
+        lines.push(["# Browser-local Scouting Decision"]);
+        lines.push(["field", "value"]);
         if (report.watchlist_note) lines.push(["watchlist", report.watchlist_note]);
-        if (report.shortlist_note) lines.push(["shortlist", report.shortlist_note]);
+        lines.push(["priority", report.shortlist_dossier.priority]);
+        lines.push(["recommendation", report.shortlist_dossier.recommendation]);
+        if (report.shortlist_dossier.target_role) lines.push(["target_role", report.shortlist_dossier.target_role]);
+        if (report.shortlist_note) lines.push(["rationale_and_risks", report.shortlist_note]);
         lines.push([]);
     }
 
@@ -2610,7 +2619,7 @@ async function renderMomentum(home, away) {
     const hg = parseInt(hgInput?.value || "0", 10) || 0;
     const ag = parseInt(agInput?.value || "0", 10) || 0;
     const minute = parseInt(minInput?.value || "0", 10) || 0;
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
 
     statusPill.textContent = z ? "加载中" : "loading";
     statusPill.className = "status-pill status-medium";
@@ -3986,12 +3995,15 @@ function renderScouting() {
         </div>`;
     }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
 
-    // Shortlist with notes
+    // Shortlist dossiers: local-only decision context with a stable player key.
     document.getElementById("shortlist-count").textContent = String(combinedShortlist.length);
     document.getElementById("shortlist").innerHTML = combinedShortlist.length > 0 ? combinedShortlist.map((player) => {
         const pName = player.player_name || player.name || "";
         const conf = (player.confidence_level || player.confidence || "HIGH").toUpperCase();
-        const note = scoutShortlistNotes[pName] || "";
+        const dossierKey = scoutingPlayerKey(player);
+        const dossier = getShortlistDossier(player);
+        const note = dossier.rationale;
+        const zh = appState.lang === "zh";
         return `
         <div class="watch-card">
             <div>
@@ -4000,8 +4012,28 @@ function renderScouting() {
             </div>
             <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
             <div class="watch-card-extra">
-                ${note ? `<div class="scout-note-display">\u25B8 ${escapeHtml(note)}</div>` : ""}
-                <textarea class="scout-note-textarea" data-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(note)}</textarea>
+                <div class="scout-dossier-grid" data-shortlist-dossier="${escapeAttr(dossierKey)}">
+                    <label><span>${escapeHtml(zh ? "优先级" : "Priority")}</span>
+                        <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="priority">
+                            <option value="urgent"${dossier.priority === "urgent" ? " selected" : ""}>${escapeHtml(zh ? "紧急" : "Urgent")}</option>
+                            <option value="standard"${dossier.priority === "standard" ? " selected" : ""}>${escapeHtml(zh ? "标准" : "Standard")}</option>
+                            <option value="monitor"${dossier.priority === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "持续观察" : "Monitor")}</option>
+                        </select>
+                    </label>
+                    <label><span>${escapeHtml(zh ? "建议" : "Recommendation")}</span>
+                        <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="recommendation">
+                            <option value="target"${dossier.recommendation === "target" ? " selected" : ""}>${escapeHtml(zh ? "重点引进" : "Target")}</option>
+                            <option value="monitor"${dossier.recommendation === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "继续观察" : "Monitor")}</option>
+                            <option value="decline"${dossier.recommendation === "decline" ? " selected" : ""}>${escapeHtml(zh ? "暂不推进" : "Decline")}</option>
+                        </select>
+                    </label>
+                    <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "目标角色" : "Target role")}</span>
+                        <input class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="target_role" maxlength="120" value="${escapeAttr(dossier.target_role)}" placeholder="${escapeAttr(zh ? "例如：高压体系的右侧中卫" : "e.g. right-sided centre-back in a high press")}">
+                    </label>
+                    <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "理由与风险" : "Rationale and risks")}</span>
+                        <textarea class="scout-note-textarea scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="rationale" maxlength="2000" rows="3" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(note)}</textarea>
+                    </label>
+                </div>
                 <button class="text-button scout-tactical-role-btn" data-tactical-role="${escapeAttr(pName)}" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem;margin-top:0.2rem">\u25C6 ${escapeHtml(t("generate_tactical_role"))}</button>
             </div>
         </div>`;
@@ -4013,6 +4045,43 @@ function renderScouting() {
 
 function queueStatusKey(player) {
     return String(player.player_id || player.player_name || player.name || "");
+}
+
+function scoutingPlayerKey(player) {
+    return String(player && (player.player_id || player.key || player.player_name || player.name) || "").trim();
+}
+
+function getShortlistDossier(player) {
+    const key = scoutingPlayerKey(player);
+    const name = String(player && (player.player_name || player.name) || "");
+    const stored = scoutShortlistDossiers[key];
+    return {
+        priority: stored && ["urgent", "standard", "monitor"].includes(stored.priority)
+            ? stored.priority
+            : "standard",
+        recommendation: stored && ["target", "monitor", "decline"].includes(stored.recommendation)
+            ? stored.recommendation
+            : "monitor",
+        target_role: String(stored && stored.target_role || "").slice(0, 120),
+        // Existing browser-local notes remain visible and become the dossier rationale on edit.
+        rationale: String(stored && stored.rationale || scoutShortlistNotes[name] || "").slice(0, 2000),
+    };
+}
+
+function updateShortlistDossier(playerKey, legacyName, field, value) {
+    if (!playerKey || !["priority", "recommendation", "target_role", "rationale"].includes(field)) return;
+    const current = getShortlistDossier({ key: playerKey, name: legacyName });
+    const limit = field === "target_role" ? 120 : field === "rationale" ? 2000 : 24;
+    current[field] = String(value || "").trim().slice(0, limit);
+    if (field === "priority" && !["urgent", "standard", "monitor"].includes(current[field])) {
+        current[field] = "standard";
+    }
+    if (field === "recommendation" && !["target", "monitor", "decline"].includes(current[field])) {
+        current[field] = "monitor";
+    }
+    scoutShortlistDossiers[playerKey] = current;
+    if (field === "rationale" && legacyName) scoutShortlistNotes[legacyName] = current.rationale;
+    saveScoutShortlistDossiers();
 }
 
 function getQueueStatus(player) {
@@ -5002,6 +5071,10 @@ function renderReports() {
             const coverage = optTest.team_coverage ?? metrics.team_coverage ?? run.team_coverage;
             const dataSource = run.data_source || "";
             const overfitGap = hs.overfit_rank_loss_gap;
+            const lineage = run.lineage || {};
+            const snapshotHash = lineage.dataset_snapshot?.input_hash || hash;
+            const manifestHash = lineage.feature_manifest?.hash || null;
+            const lineageStatus = lineage.status || "not_recorded";
 
             // Header status
             const statusText = spearman != null ? "READY" : "N/A";
@@ -5010,6 +5083,7 @@ function renderReports() {
             // Details row
             const detailParts = [
                 `<span style="color:var(--text-muted)">hash</span> ${escapeHtml(hash)}`,
+                `<span style="color:var(--text-muted)">snapshot</span> ${escapeHtml(snapshotHash || "n/a")}`,
                 `<span style="color:var(--text-muted)">seed</span> ${escapeHtml(String(seed))}`,
                 `<span style="color:var(--text-muted)">players</span> ${escapeHtml(String(nPlayers))}`,
                 `<span style="color:var(--text-muted)">team-seas</span> ${escapeHtml(String(nTeamSeasons))}`,
@@ -5108,12 +5182,29 @@ function renderReports() {
                 depHtml += `</div>`;
             }
 
+            let lineageHtml = '';
+            if (lineage && typeof lineage === 'object') {
+                const z5 = appState.lang === 'zh';
+                const stateLabel = lineageStatus === 'recorded'
+                    ? (z5 ? '已记录' : 'Recorded')
+                    : (z5 ? '未完整记录' : 'Not fully recorded');
+                const manifestVersion = lineage.feature_manifest?.schema_version || '—';
+                const manifestGenerated = lineage.feature_manifest?.generated_at || '—';
+                lineageHtml = `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z5 ? '数据血缘' : 'Data lineage'}</p>
+                    <div style="font-size:0.75rem;line-height:1.5">
+                        <div><span style="color:var(--text-muted)">${z5 ? '状态' : 'Status'}:</span> ${escapeHtml(stateLabel)}</div>
+                        <div><span style="color:var(--text-muted)">${z5 ? '数据快照' : 'Dataset snapshot'}:</span> ${escapeHtml(String(snapshotHash || '—'))}</div>
+                        <div><span style="color:var(--text-muted)">${z5 ? '特征清单' : 'Feature manifest'}:</span> ${escapeHtml(String(manifestHash || '—'))} · v${escapeHtml(String(manifestVersion))}</div>
+                        <div><span style="color:var(--text-muted)">${z5 ? '生成时间' : 'Generated'}:</span> ${escapeHtml(String(manifestGenerated))}</div>
+                    </div>`;
+            }
+
             // Reproduce command for copy button
             const copyBtn = cmd
                 ? `<button class="text-button" data-copy-cmd="${escapeAttr(cmd)}" style="font-size:0.72rem;padding:0.15rem 0.4rem;margin-left:0.3rem" title="${z ? '复制命令' : 'Copy command'}">\u25C6 ${z ? '复制' : 'Copy'}</button>`
                 : '';
 
-            const fullDetailSections = [depHtml, detailSections].filter(Boolean)
+            const fullDetailSections = [lineageHtml, depHtml, detailSections].filter(Boolean)
                 .join("<hr style=\"border:none;border-top:1px solid var(--border,#333);margin:0.35rem 0\">");
 
             const runIdx = run.run_id || `run_${Math.random().toString(36).slice(2, 8)}`;
@@ -5956,7 +6047,7 @@ function fmtMetric(v) {
 }
 
 async function renderBacktest() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const statusPill = document.getElementById("backtest-status");
     try {
         const data = backtestComparisonData || await fetchBacktestComparison();
@@ -6160,7 +6251,7 @@ function _renderCalibrationDrift(data) {
     const body = document.getElementById("backtest-drift-body");
     if (!body) return;
     const statusPill = document.getElementById("drift-status-pill");
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
 
     if (!data) {
         panel.style.display = "none";
@@ -6280,7 +6371,7 @@ function _renderBacktestFoldChart(data, models, folds) {
     if (panel) panel.style.display = "";
     const chart = getChart("backtest-fold-chart");
     if (!chart) return;
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
 
     const metricKeys = ["log_loss", "brier", "rps"];
     const metricLabels = z
@@ -7388,6 +7479,14 @@ function bindEvents() {
 
     // Scouting: note input change
     document.addEventListener("change", (e) => {
+        if (e.target.matches(".scout-dossier-input") && e.target.dataset.dossierPlayer) {
+            updateShortlistDossier(
+                e.target.dataset.dossierPlayer,
+                e.target.dataset.dossierLegacyName,
+                e.target.dataset.dossierField,
+                e.target.value,
+            );
+        }
         if (e.target.matches(".scout-note-textarea") && e.target.dataset.notePlayer) {
             const pName = e.target.dataset.notePlayer;
             if (pName != null) {
@@ -7404,8 +7503,16 @@ function bindEvents() {
             }
         }
     });
-    // Scouting: note input live update on keyup
-    document.addEventListener("keyup", (e) => {
+    // Scouting: note and dossier text update while typing.
+    document.addEventListener("input", (e) => {
+        if (e.target.matches(".scout-dossier-input") && e.target.dataset.dossierPlayer) {
+            updateShortlistDossier(
+                e.target.dataset.dossierPlayer,
+                e.target.dataset.dossierLegacyName,
+                e.target.dataset.dossierField,
+                e.target.value,
+            );
+        }
         if (e.target.matches(".scout-note-textarea") && e.target.dataset.notePlayer) {
             const pName = e.target.dataset.notePlayer;
             if (pName != null) {
@@ -7658,7 +7765,7 @@ async function fetchWcTeamOutlook(team) {
 }
 
 function renderWcOutlook(outlook) {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const panel = document.getElementById("wc-outlook-panel");
     if (!panel) return;
     if (!outlook || outlook.status !== "ok") {
@@ -7788,7 +7895,7 @@ function renderWcOutlook(outlook) {
 
 async function loadAndRenderWcOutlook(team) {
     const panel = document.getElementById("wc-outlook-panel");
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     if (panel && wcApiData.outlookLoading.has(team)) {
         panel.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem">${z ? "加载中..." : "Loading..."}</p>`;
     }
@@ -7849,7 +7956,7 @@ async function fetchWcTournamentScenarios(team) {
 }
 
 async function postTournamentResult(matchId, homeGoals, awayGoals) {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     try {
         const params = `match_id=${encodeURIComponent(matchId)}&home_goals=${homeGoals}&away_goals=${awayGoals}`;
         const resp = await fetch(
@@ -7870,7 +7977,7 @@ async function postTournamentResult(matchId, homeGoals, awayGoals) {
 }
 
 async function deleteTournamentResult(matchId) {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     try {
         const params = `match_id=${encodeURIComponent(matchId)}`;
         const resp = await fetch(
@@ -7891,7 +7998,7 @@ async function deleteTournamentResult(matchId) {
 }
 
 async function resetTournament() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     if (!confirm(z ? "重置所有比赛结果？" : "Reset all match results?")) return;
     try {
         const resp = await fetch(`${API_BASE}/world-cup/tournament/reset`, {
@@ -7913,7 +8020,7 @@ async function resetTournament() {
 }
 
 async function loadAndRenderWcTournament() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const statusEl = document.getElementById("wc-tournament-status");
     if (statusEl) {
         statusEl.textContent = z ? "加载中..." : "Loading...";
@@ -7929,7 +8036,7 @@ async function loadAndRenderWcTournament() {
 }
 
 function renderWcTournament() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const root = document.getElementById("wc-tournament-root");
     if (!root) return;
 
@@ -8396,7 +8503,7 @@ function renderWcTournament() {
 }
 
 function renderWcTournamentScenarios(team) {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const panel = document.getElementById("wc-tournament-scenarios-panel");
     if (!panel) return;
 
@@ -8484,7 +8591,7 @@ async function generateKnockoutBracket() {
             alert(data.message);
         }
     } catch (e) {
-        alert((currentLang === "zh" ? "生成失败: " : "Generate failed: ") + e.message);
+        alert((appState.lang === "zh" ? "生成失败: " : "Generate failed: ") + e.message);
     }
 }
 
@@ -8501,7 +8608,7 @@ async function applyKnockoutResult(matchId, homeGoals, awayGoals, penaltiesWinne
             alert(data.message);
         }
     } catch (e) {
-        alert((currentLang === "zh" ? "录入失败: " : "Apply failed: ") + e.message);
+        alert((appState.lang === "zh" ? "录入失败: " : "Apply failed: ") + e.message);
     }
 }
 
@@ -8557,7 +8664,7 @@ async function fetchWcGroupStageSimulation(mode, iterations) {
 }
 
 function renderWcKnockoutScenarios(team) {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const data = wcApiData.knockoutScenarios[team];
     if (!data || data.status !== "ok") {
         alert(data && data.message ? data.message : (z ? "无法获取情景数据" : "Failed to load scenario data"));
@@ -8671,7 +8778,7 @@ async function fetchWcTournamentImport(encoded) {
 }
 
 function renderWcShareDialog() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const data = wcApiData.tournamentExport;
     if (!data || data.status !== "ok") {
         alert(z ? "导出失败，请检查 API 是否在线" : "Export failed. Check if API is online.");
@@ -8747,7 +8854,7 @@ function renderWcShareDialog() {
 }
 
 function renderWcImportDialog() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const bracketPanel = document.getElementById("wc-ko-bracket-panel");
     if (!bracketPanel) return;
 
@@ -8846,7 +8953,7 @@ function renderWcImportDialog() {
 }
 
 function renderWcGroupStageSimulation() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const panel = document.getElementById("wc-grpsim-panel");
     if (!panel) return;
 
@@ -8905,7 +9012,7 @@ function renderWcGroupStageSimulation() {
 }
 
 function renderWcKnockoutBracket() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const panel = document.getElementById("wc-ko-bracket-panel");
     if (!panel) return;
 
@@ -9683,7 +9790,7 @@ function renderWcProbability() {
 }
 
 function renderWcKnockout() {
-    const z = currentLang === "zh";
+    const z = appState.lang === "zh";
     const bracketEl = document.getElementById("wc-knockout-bracket");
     const tableEl = document.getElementById("wc-knockout-table");
     const statusEl = document.querySelector(".wc-knockout-status");
@@ -10258,6 +10365,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof SCOUTING_WORKSPACE !== "undefined") ensureScoutingWorkspaceMeta();
     loadScoutQueueStatuses();
     loadScoutShortlistNotes();
+    loadScoutShortlistDossiers();
     loadWatchlistNotes();
 
     // Load real data from API in parallel
@@ -10408,6 +10516,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 const SCOUT_QUEUE_KEY = "scout-queue-statuses";
 const SCOUT_NOTES_KEY = "scout-shortlist-notes";
+const SCOUT_DOSSIERS_KEY = "sf-shortlist-dossiers";
 const SCOUT_LASTVISIT_KEY = "scout-watchlist-lastvisit";
 const SCOUT_SNAPSHOT_KEY = "scout-watchlist-snapshot";
 const SCOUT_WORKSPACE_META_KEY = "sf-scouting-workspace-meta";
@@ -10419,6 +10528,7 @@ const STATUS_ICONS = { pending: "\u25CB", reviewing: "\u25B2", approved: "\u2713
 
 let scoutQueueStatuses = {};
 let scoutShortlistNotes = {};
+let scoutShortlistDossiers = {};
 let watchlistNotes = {};
 let scoutSortMode = "priority";
 let watchlistDiffCount = 0;
@@ -10520,6 +10630,7 @@ function buildCurrentScoutingWorkspace() {
         review_statuses: scoutQueueStatuses,
         shortlist_notes: scoutShortlistNotes,
         watchlist_notes: watchlistNotes,
+        shortlist_dossiers: scoutShortlistDossiers,
         watchlist: getPlayerWatchlist(),
         shortlist: getPlayerShortlist(),
         snapshot_player_keys: snapshot.playerKeys,
@@ -10599,6 +10710,7 @@ function workspaceForServerSave() {
         review_statuses: state.review_statuses,
         shortlist_notes: state.shortlist_notes,
         watchlist_notes: state.watchlist_notes,
+        shortlist_dossiers: state.shortlist_dossiers,
         watchlist: state.watchlist,
         shortlist: state.shortlist,
         snapshot_player_keys: state.snapshot_player_keys,
@@ -10738,6 +10850,7 @@ function workspaceSummaryCard(title, summary) {
         <div class="workspace-preview-metrics">
             <span><b>${summary.status_count}</b>${escapeHtml(appState.lang === "zh" ? "状态" : "statuses")}</span>
             <span><b>${summary.note_count}</b>${escapeHtml(appState.lang === "zh" ? "备注" : "notes")}</span>
+            <span><b>${summary.dossier_count || 0}</b>${escapeHtml(appState.lang === "zh" ? "档案" : "dossiers")}</span>
             <span><b>${summary.watchlist_count + summary.shortlist_count}</b>${escapeHtml(appState.lang === "zh" ? "选择" : "selections")}</span>
         </div>
     </div>`;
@@ -10752,8 +10865,8 @@ function showScoutingWorkspacePreview(incoming, label, serverRecord = null) {
     if (!preview || !dialog) throw new Error("workspace_dialog_unavailable");
     const conflictText = analysis.total_conflicts > 0
         ? (appState.lang === "zh"
-            ? `检测到 ${analysis.status_conflicts} 个状态冲突和 ${analysis.note_conflicts} 个备注冲突。安全合并会保留两边条目，并以更新时间较新的工作区解决同键冲突。`
-            : `Found ${analysis.status_conflicts} status conflicts and ${analysis.note_conflicts} note conflicts. Safe merge keeps entries from both sides and uses the newer workspace for same-key conflicts.`)
+            ? `检测到 ${analysis.status_conflicts} 个状态冲突、${analysis.note_conflicts} 个备注冲突和 ${analysis.dossier_conflicts || 0} 个档案冲突。安全合并会保留两边条目，并以更新时间较新的工作区解决同键冲突。`
+            : `Found ${analysis.status_conflicts} status conflicts, ${analysis.note_conflicts} note conflicts, and ${analysis.dossier_conflicts || 0} dossier conflicts. Safe merge keeps entries from both sides and uses the newer workspace for same-key conflicts.`)
         : (appState.lang === "zh"
             ? "未检测到同键冲突。仍会先预览，不会自动覆盖当前浏览器状态。"
             : "No same-key conflicts detected. The import is still previewed and never overwrites browser state automatically.");
@@ -10798,6 +10911,7 @@ function replaceWorkspaceAudit(incoming) {
         review_statuses: state.review_statuses,
         shortlist_notes: state.shortlist_notes,
         watchlist_notes: state.watchlist_notes,
+        shortlist_dossiers: state.shortlist_dossiers,
         watchlist: state.watchlist,
         shortlist: state.shortlist,
         snapshot_player_keys: state.snapshot_player_keys,
@@ -10810,6 +10924,7 @@ function persistScoutingWorkspace(workspace) {
     const keys = [
         SCOUT_QUEUE_KEY,
         SCOUT_NOTES_KEY,
+        SCOUT_DOSSIERS_KEY,
         WATCHLIST_NOTES_KEY,
         PLAYER_WATCHLIST_KEY,
         PLAYER_SHORTLIST_KEY,
@@ -10821,6 +10936,7 @@ function persistScoutingWorkspace(workspace) {
     try {
         localStorage.setItem(SCOUT_QUEUE_KEY, JSON.stringify(state.review_statuses));
         localStorage.setItem(SCOUT_NOTES_KEY, JSON.stringify(state.shortlist_notes));
+        localStorage.setItem(SCOUT_DOSSIERS_KEY, JSON.stringify(state.shortlist_dossiers));
         localStorage.setItem(WATCHLIST_NOTES_KEY, JSON.stringify(state.watchlist_notes));
         localStorage.setItem(PLAYER_WATCHLIST_KEY, JSON.stringify(state.watchlist));
         localStorage.setItem(PLAYER_SHORTLIST_KEY, JSON.stringify(state.shortlist));
@@ -10838,6 +10954,7 @@ function persistScoutingWorkspace(workspace) {
     }
     loadScoutQueueStatuses();
     loadScoutShortlistNotes();
+    loadScoutShortlistDossiers();
     loadWatchlistNotes();
     lastScoutingTouchAt = 0;
 }
@@ -10970,6 +11087,19 @@ function saveScoutShortlistNotes() {
         touchScoutingWorkspace();
     } catch {}
 }
+
+function loadScoutShortlistDossiers() {
+    try { scoutShortlistDossiers = JSON.parse(localStorage.getItem(SCOUT_DOSSIERS_KEY)) || {}; } catch { scoutShortlistDossiers = {}; }
+}
+
+function saveScoutShortlistDossiers() {
+    try {
+        localStorage.setItem(SCOUT_DOSSIERS_KEY, JSON.stringify(scoutShortlistDossiers));
+        localStorage.setItem(SCOUT_NOTES_KEY, JSON.stringify(scoutShortlistNotes));
+        touchScoutingWorkspace();
+    } catch {}
+}
+
 function loadWatchlistNotes() {
     try { watchlistNotes = JSON.parse(localStorage.getItem(WATCHLIST_NOTES_KEY)) || {}; } catch { watchlistNotes = {}; }
 }

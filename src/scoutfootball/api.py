@@ -2316,6 +2316,21 @@ def _build_reproduce_command(run_id: str, args: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _model_run_lineage(meta: dict[str, Any]) -> dict[str, Any]:
+    """Return explicit lineage status for current and legacy model-run metadata."""
+    lineage = meta.get("lineage")
+    if isinstance(lineage, dict):
+        return lineage
+    return {
+        "schema": "scoutfootball.model-run-lineage",
+        "version": "1.0.0",
+        "status": "not_recorded",
+        "dataset_snapshot": {"input_hash": meta.get("input_hash")},
+        "feature_manifest": {"hash": None, "schema_version": None},
+        "note": "This legacy run predates feature-manifest lineage capture.",
+    }
+
+
 def get_model_runs() -> dict:
     """Return model run registry from local artifacts."""
     settings = _settings()
@@ -2332,6 +2347,7 @@ def get_model_runs() -> dict:
                 meta["run_id"] = run_dir.name
                 meta["updated_at"] = meta_path.stat().st_mtime
                 meta["data_source"] = ds_label
+                meta["lineage"] = _model_run_lineage(meta)
                 # Build reproduce command from stored args
                 run_args = meta.get("args", {})
                 meta["reproduce_command"] = _build_reproduce_command(
@@ -2349,6 +2365,7 @@ def get_model_runs() -> dict:
             meta["run_id"] = "latest"
             meta["updated_at"] = meta_path.stat().st_mtime
             meta["data_source"] = ds_label
+            meta["lineage"] = _model_run_lineage(meta)
             run_args = meta.get("args", {})
             meta["reproduce_command"] = _build_reproduce_command("latest", run_args)
             _enrich_holdout_summary(meta)
@@ -2385,6 +2402,7 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
             meta["run_id"] = run_id
             meta["updated_at"] = meta_path.stat().st_mtime
             meta["data_source"] = ds_label
+            meta["lineage"] = _model_run_lineage(meta)
 
             # Build reproduce command from stored args
             run_args = meta.get("args", {})
@@ -2441,6 +2459,7 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
         meta["run_id"] = "latest"
         meta["updated_at"] = meta_path.stat().st_mtime
         meta["data_source"] = ds_label
+        meta["lineage"] = _model_run_lineage(meta)
         run_args = meta.get("args", {})
         meta["reproduce_command"] = _build_reproduce_command("latest", run_args)
         _enrich_holdout_summary(meta)
