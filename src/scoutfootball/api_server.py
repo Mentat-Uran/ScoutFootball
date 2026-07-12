@@ -63,6 +63,7 @@ from scoutfootball.api import (
     get_wc_tournament_scenarios,
     get_wc_tournament_standings,
     get_wc_tournament_summary,
+    get_world_cup_match_briefing,
     get_world_cup_match_prediction,
     health_check,
     import_wc_tournament_state,
@@ -520,6 +521,10 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/predictions/{home_team}/{away_team}")
     def wc_match_prediction(home_team: str, away_team: str):
         return get_world_cup_match_prediction(home_team, away_team)
+
+    @app.get("/world-cup/match-briefings/{home_team}/{away_team}")
+    def wc_match_briefing(home_team: str, away_team: str):
+        return get_world_cup_match_briefing(home_team, away_team)
 
     @app.get("/worldcup/teams")
     def wc_teams():

@@ -663,6 +663,19 @@ reproducibility review.
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
 
+### GET /world-cup/match-briefings/{home_team}/{away_team}
+Returns a versioned, source-bounded World Cup pre-match briefing. It combines
+the simplified strength-ratio Poisson output with each side's local
+squad-rating coverage, strength components, and up to five rated players. It
+does not represent confirmed lineups, live team news, market odds, or a
+tactical recommendation.
+
+**Response**: `{ schema, version, status, fixture, prediction, teams, source_attribution, limitations }`.
+`teams.home` and `teams.away` include `squad.rating_coverage`,
+`squad.top_rated_players`, and bounded strength components. Static exports may
+provide `/data/worldcup/match_briefings.json`; if no matching static briefing
+exists, the frontend shows it as unavailable rather than synthesizing one.
+
 ### GET /world-cup/knockout
 World Cup knockout bracket simulation.
 

@@ -110,3 +110,14 @@ def test_teams_compare_endpoint(client: TestClient):
         assert "team_b" in data
         assert "position_group_comparison" in data
         assert "radar_labels" in data
+
+
+def test_world_cup_match_briefing_endpoint(client: TestClient):
+    """World Cup briefing exposes a model result with explicit limitations."""
+    response = client.get("/world-cup/match-briefings/Argentina/France")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["schema"] == "scoutfootball.world-cup-match-briefing"
+    assert data["prediction"]["model_type"] == "world_cup_strength_poisson"
+    assert "limitations" in data

@@ -557,6 +557,87 @@ def get_world_cup_match_prediction(home_team: str, away_team: str) -> dict[str, 
     return _clean_json_value(result)
 
 
+def _world_cup_briefing_team_snapshot(
+    team: str,
+    squad: list[Any],
+    strength_detail: dict[str, Any],
+) -> dict[str, Any]:
+    rated = [player for player in squad if player.has_rating and player.rating is not None]
+    top_players = sorted(rated, key=lambda player: float(player.rating), reverse=True)[:5]
+    return {
+        "team": team,
+        "group": get_team_group(team),
+        "is_host": team in HOSTS,
+        "squad": {
+            "total_players": len(squad),
+            "rated_players": len(rated),
+            "rating_coverage": strength_detail.get("coverage", 0.0),
+            "core_avg_rating": strength_detail.get("core_avg_rating"),
+            "depth_avg_rating": strength_detail.get("depth_avg_rating"),
+            "top_rated_players": [
+                {
+                    "name": player.name,
+                    "position": player.position,
+                    "club": player.club,
+                    "rating": round(float(player.rating), 2),
+                    "rating_confidence": player.rating_confidence,
+                }
+                for player in top_players
+            ],
+        },
+        "strength": {
+            "score": strength_detail.get("strength", 0.0),
+            "league_component": strength_detail.get("league_score", 0.0),
+            "coverage_component": strength_detail.get("coverage_score", 0.0),
+            "big5_component": strength_detail.get("big5_score", 0.0),
+        },
+    }
+
+
+def get_world_cup_match_briefing(home_team: str, away_team: str) -> dict[str, Any]:
+    """Return a source-bounded pre-match briefing for a World Cup pairing.
+
+    This combines the simplified tournament prediction with roster-rating
+    coverage, but deliberately does not turn placeholder squads or strength
+    proxies into live team news or tactical advice.
+    """
+    prediction = get_world_cup_match_prediction(home_team, away_team)
+    if prediction.get("error"):
+        return prediction
+    enriched_squads, _ = _get_wc_enriched_squads()
+    strength_details = _get_wc_strength_details()
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-match-briefing",
+        "version": "1.0.0",
+        "status": "ok",
+        "fixture": {"home_team": home_team, "away_team": away_team},
+        "prediction": prediction,
+        "teams": {
+            "home": _world_cup_briefing_team_snapshot(
+                home_team,
+                enriched_squads.get(home_team, []),
+                strength_details.get(home_team, {}),
+            ),
+            "away": _world_cup_briefing_team_snapshot(
+                away_team,
+                enriched_squads.get(away_team, []),
+                strength_details.get(away_team, {}),
+            ),
+        },
+        "source_attribution": (
+            "World Cup squad ratings are derived from ScoutFootball local "
+            "FBref/Understat artifacts; the tournament strength model also "
+            "uses public Opta priors."
+        ),
+        "limitations": [
+            "Squad lists are placeholders and are not confirmed matchday rosters.",
+            "Probabilities come from a simplified strength-ratio Poisson model, "
+            "not live team news or market odds.",
+            "Lower rating coverage and non-Big5 league proxies can reduce comparability.",
+        ],
+    })
+
+
 def _match_model_comparison(home_team: str, away_team: str) -> dict[str, Any] | None:
     """Return 1x2 probabilities from both Poisson and Dixon-Coles for a match.
 
