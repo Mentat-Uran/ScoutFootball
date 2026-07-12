@@ -6742,6 +6742,13 @@ function bindEvents() {
                         "Frames: " + (tacticalProject.frames || []).length,
                         "Created: " + (tacticalProject.created_at || "unknown"),
                         "Updated: " + (tacticalProject.updated_at || "unknown"),
+                        ...(tacticalProject.metadata?.decision_pack ? [
+                            "",
+                            "Decision pack: " + (tacticalProject.metadata.decision_pack.prediction?.status === "available" ? "prediction recorded" : "prediction not loaded"),
+                            "Model: " + (tacticalProject.metadata.decision_pack.prediction?.model_type || "not recorded"),
+                            "Model run: " + (tacticalProject.metadata.decision_pack.provenance?.model_run_id || "not recorded; local artifact snapshot"),
+                            "Input hash: " + (tacticalProject.metadata.decision_pack.provenance?.input_hash || "not recorded"),
+                        ] : []),
                         "",
                         "No data leaves the browser. All projects are stored locally.",
                     ].join("\n");
@@ -10051,6 +10058,7 @@ function renderTactical() {
 
     // Update coaching notes panel for current frame
     updateCoachingNotesPanel();
+    renderTacticalDecisionPack();
 }
 
 function updateCoachingNotesPanel() {
@@ -10059,6 +10067,79 @@ function updateCoachingNotesPanel() {
     if (typeof TacticalRenderer !== "undefined") {
         notesEl.value = TacticalRenderer.getCurrentFrameNotes();
     }
+}
+
+function buildPrematchDecisionPack(match) {
+    const response = currentPrediction && !currentPrediction.error ? currentPrediction : null;
+    const artifact = predictionMeta && typeof predictionMeta === "object" ? predictionMeta : {};
+    const isAvailable = Boolean(response);
+    const coverageCount = artifact.status === "ok" && Number.isFinite(Number(artifact.num_teams))
+        ? Number(artifact.num_teams)
+        : null;
+    const coverageSummary = coverageCount
+        ? `${coverageCount} teams`
+        : (artifact.status === "ok" ? "artifact loaded; team count not recorded" : "artifact pending");
+    const inputHash = response?.input_hash
+        || artifact.input_hash
+        || artifact.dixon_coles?.input_hash
+        || artifact.poisson?.input_hash
+        || "";
+    const modelRunId = response?.model_run_id || artifact.model_run_id || "";
+    return TACTICAL_BOARD.createDecisionPack({
+        match: { home: match.home, away: match.away },
+        prediction: {
+            status: isAvailable ? "available" : "not_loaded",
+            model_type: response?.model_type || artifact.model_type || "",
+            model_version: response?.model_version || artifact.model_version || "",
+            probabilities: isAvailable ? {
+                home_win: response.home_win,
+                draw: response.draw,
+                away_win: response.away_win,
+            } : {},
+            expected_goals: isAvailable ? {
+                home: response.home_lambda,
+                away: response.away_lambda,
+            } : {},
+            score_matrix: isAvailable ? response.score_matrix : null,
+            coverage: {
+                status: artifact.status || "unknown",
+                summary: coverageSummary,
+            },
+        },
+        provenance: {
+            model_run_id: modelRunId,
+            input_hash: inputHash,
+            lineage_status: modelRunId ? "recorded" : (artifact.status === "ok" ? "artifact_snapshot" : "not_recorded"),
+            snapshot: modelRunId ? "local model run record" : "local prediction artifact snapshot",
+        },
+        limitations: [
+            "Pre-match probabilities are model context, not a tactical recommendation.",
+            "This decision pack and JSON export are browser-local; they are not synchronized to a server.",
+            ...(isAvailable ? [] : ["Prediction output was unavailable when this plan was created; no fallback estimate is included."]),
+        ],
+    });
+}
+
+function renderTacticalDecisionPack() {
+    const el = document.getElementById("tactical-decision-pack");
+    const pack = tacticalProject?.metadata?.decision_pack;
+    if (!el) return;
+    if (!pack) {
+        el.hidden = true;
+        el.textContent = "";
+        return;
+    }
+    const prediction = pack.prediction || {};
+    const provenance = pack.provenance || {};
+    const status = prediction.status === "available" ? "Prediction recorded" : "Prediction not loaded";
+    const model = prediction.model_type || "model not recorded";
+    const version = prediction.model_version ? ` (${prediction.model_version})` : "";
+    const coverage = prediction.coverage?.summary || prediction.coverage?.status || "coverage unknown";
+    const provenanceLabel = provenance.model_run_id
+        ? `model run ${provenance.model_run_id}`
+        : (provenance.snapshot || "local artifact snapshot");
+    el.textContent = `${status} · ${model}${version}\nCoverage: ${coverage}\nProvenance: ${provenanceLabel}${provenance.input_hash ? ` · input ${provenance.input_hash}` : ""}\nLocal-only: this decision pack remains in this browser and exported JSON.`;
+    el.hidden = false;
 }
 
 function createPrematchPlan() {
@@ -10076,19 +10157,10 @@ function createPrematchPlan() {
     const awayObjs = TACTICAL_BOARD.generateFormation("4-3-3", "away");
     project.objects = [...homeObjs, ...awayObjs];
 
-    // Add prediction metadata as frame notes
-    const modelType = (typeof predictionMeta !== "undefined" && predictionMeta.model_type) || "Poisson";
-    const coverage = (typeof predictionMeta !== "undefined" && predictionMeta.num_teams)
-        ? predictionMeta.num_teams + " teams"
-        : "artifact pending";
-    const hwPct = Math.round((match.hw || 0) * 100);
-    const drawPct = Math.round((match.draw || 0) * 100);
-    const awPct = Math.round((match.aw || 0) * 100);
-
-    let notes = match.home + " vs " + match.away + " Pre-Match Plan\n";
-    notes += "Model: " + modelType + " | Coverage: " + coverage + "\n";
-    notes += "\n- Home win: " + hwPct + "% | Draw: " + drawPct + "% | Away win: " + awPct + "%";
-    notes += "\n- Expected goals: " + (match.xh || 0).toFixed(2) + " / " + (match.xa || 0).toFixed(2);
+    const decisionPack = buildPrematchDecisionPack(match);
+    project.metadata = { decision_pack: decisionPack };
+    project.source_attribution = "ScoutFootball tactical board + local prediction artifact snapshot";
+    let notes = TACTICAL_BOARD.formatDecisionPackNotes(decisionPack);
     notes += "\n- Edit formations to plan your tactical approach";
 
     if (project.frames && project.frames[0]) {

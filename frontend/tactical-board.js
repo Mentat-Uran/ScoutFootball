@@ -11,7 +11,7 @@
 
 const TACTICAL_BOARD = {
     /* ── Schema version ────────────────────────────────────────────── */
-    SCHEMA_VERSION: "1.1.0",
+    SCHEMA_VERSION: "1.2.0",
     MAX_OBJECTS: 200,
     MAX_FRAMES: 60,
     MAX_TEXT_LENGTH: 120,
@@ -749,6 +749,7 @@ const TACTICAL_BOARD = {
             created_at: now,
             updated_at: now,
             source_attribution: "ScoutFootball tactical board",
+            metadata: {},
         };
     },
 
@@ -1119,6 +1120,99 @@ const TACTICAL_BOARD = {
         return safe;
     },
 
+    _sanitizeDecisionPack(pack) {
+        if (!pack || typeof pack !== "object") return null;
+        const prediction = pack.prediction && typeof pack.prediction === "object" ? pack.prediction : {};
+        const provenance = pack.provenance && typeof pack.provenance === "object" ? pack.provenance : {};
+        const match = pack.match && typeof pack.match === "object" ? pack.match : {};
+        const status = ["available", "not_loaded"].includes(prediction.status)
+            ? prediction.status
+            : "not_loaded";
+        const probability = (value) => {
+            if (status !== "available") return null;
+            const number = Number(value);
+            return Number.isFinite(number) ? this._clampNumber(number, 0, 1, 0) : null;
+        };
+        const boundedMatrix = Array.isArray(prediction.score_matrix)
+            ? prediction.score_matrix.slice(0, 12).map((row) => Array.isArray(row)
+                ? row.slice(0, 12).map((value) => this._clampNumber(value, 0, 1, 0))
+                : [])
+            : null;
+        const limitations = Array.isArray(pack.limitations)
+            ? pack.limitations.slice(0, 6).map((item) => this._safeString(item).slice(0, 300)).filter(Boolean)
+            : [];
+        return {
+            schema: "scoutfootball.tactical-decision-pack",
+            version: "1.0.0",
+            created_at: this._safeString(pack.created_at, new Date().toISOString()),
+            match: {
+                home_team: this._safeString(match.home_team).slice(0, 120),
+                away_team: this._safeString(match.away_team).slice(0, 120),
+            },
+            prediction: {
+                status,
+                model_type: this._safeString(prediction.model_type).slice(0, 120),
+                model_version: this._safeString(prediction.model_version).slice(0, 120),
+                probabilities: {
+                    home_win: probability(prediction.probabilities?.home_win),
+                    draw: probability(prediction.probabilities?.draw),
+                    away_win: probability(prediction.probabilities?.away_win),
+                },
+                expected_goals: {
+                    home: status === "available" ? this._clampNumber(prediction.expected_goals?.home, 0, 20, 0) : null,
+                    away: status === "available" ? this._clampNumber(prediction.expected_goals?.away, 0, 20, 0) : null,
+                },
+                score_matrix: status === "available" ? boundedMatrix : null,
+                coverage: {
+                    status: this._safeString(prediction.coverage?.status, "unknown").slice(0, 40),
+                    summary: this._safeString(prediction.coverage?.summary).slice(0, 240),
+                },
+            },
+            provenance: {
+                model_run_id: this._safeString(provenance.model_run_id).slice(0, 160),
+                input_hash: this._safeString(provenance.input_hash).slice(0, 160),
+                feature_manifest_hash: this._safeString(provenance.feature_manifest_hash).slice(0, 160),
+                lineage_status: this._safeString(provenance.lineage_status, "not_recorded").slice(0, 40),
+                snapshot: this._safeString(provenance.snapshot, "local artifact snapshot").slice(0, 240),
+            },
+            limitations,
+        };
+    },
+
+    createDecisionPack({ match = {}, prediction = {}, provenance = {}, limitations = [] } = {}) {
+        return this._sanitizeDecisionPack({
+            created_at: new Date().toISOString(),
+            match: {
+                home_team: match.home_team ?? match.home,
+                away_team: match.away_team ?? match.away,
+            },
+            prediction,
+            provenance,
+            limitations,
+        });
+    },
+
+    formatDecisionPackNotes(pack) {
+        const safe = this._sanitizeDecisionPack(pack);
+        if (!safe) return "";
+        const prediction = safe.prediction;
+        const lines = [
+            `${safe.match.home_team || "Home"} vs ${safe.match.away_team || "Away"} Pre-Match Decision Pack`,
+            `Model: ${prediction.model_type || "not recorded"}${prediction.model_version ? ` (${prediction.model_version})` : ""}`,
+            `Coverage: ${prediction.coverage.summary || prediction.coverage.status || "unknown"}`,
+        ];
+        if (prediction.status === "available") {
+            const probability = prediction.probabilities;
+            lines.push(`Home win: ${Math.round((probability.home_win || 0) * 100)}% | Draw: ${Math.round((probability.draw || 0) * 100)}% | Away win: ${Math.round((probability.away_win || 0) * 100)}%`);
+            lines.push(`Expected goals: ${(prediction.expected_goals.home || 0).toFixed(2)} / ${(prediction.expected_goals.away || 0).toFixed(2)}`);
+        } else {
+            lines.push("Prediction output was not loaded. No fallback probability or score estimate was recorded.");
+        }
+        lines.push(`Provenance: ${safe.provenance.model_run_id ? `model run ${safe.provenance.model_run_id}` : safe.provenance.snapshot}${safe.provenance.input_hash ? ` | input ${safe.provenance.input_hash}` : ""}`);
+        if (safe.limitations.length) lines.push(`Limitations: ${safe.limitations.join(" ")}`);
+        return lines.join("\n");
+    },
+
     sanitizeProject(project) {
         if (!project || typeof project !== "object") return null;
         const now = new Date().toISOString();
@@ -1165,6 +1259,9 @@ const TACTICAL_BOARD = {
                 project.source_attribution,
                 "ScoutFootball tactical board",
             ),
+            metadata: {
+                decision_pack: this._sanitizeDecisionPack(project.metadata?.decision_pack),
+            },
         };
     },
 
@@ -1284,6 +1381,15 @@ const TACTICAL_BOARD = {
                     project.stepDuration = 1000;
                 }
                 return project;
+            },
+        },
+        {
+            version: "1.2.0",
+            description: "Add constrained decision-pack metadata",
+            migrate(project) {
+                if (!project.metadata || typeof project.metadata !== "object") {
+                    project.metadata = {};
+                }
             },
         },
     ],
@@ -1761,7 +1867,7 @@ const TACTICAL_BOARD = {
     const checks = [];
 
     // Version should be set
-    checks.push(["version set", migrated.version === "1.1.0"]);
+    checks.push(["version set", migrated.version === "1.2.0"]);
 
     // Layers should be added
     checks.push(["layers added", Array.isArray(migrated.layers) && migrated.layers.length >= 1]);
@@ -1817,3 +1923,6 @@ const TACTICAL_BOARD = {
         console.log("[migrateProject test] PASS — all " + checks.length + " checks passed");
     }
 })();
+
+// Expose the module for static-browser consumers and ESM-based contract tests.
+globalThis.TACTICAL_BOARD = TACTICAL_BOARD;
