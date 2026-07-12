@@ -2,6 +2,14 @@
 
 ## Recently Merged
 
+- **Ensemble Weight Optimization and Isotonic Recalibration (2026-07-12, Round 23):**
+  1. Added `save_ensemble_weights()` / `load_ensemble_weights()` in `match_prediction.py` — persists optimal ensemble weights to JSON (`ensemble-weights-v1` format) with RPS, match count, and timestamp metadata. `get_ensemble_prediction()` now loads cached optimal weights (falling back to equal weights) and reports `weights_source` ("optimized"/"equal").
+  2. Added `IsotonicCalibrator` dataclass, `fit_isotonic_calibrator()`, and `apply_recalibration()` — fits three independent `IsotonicRegression` models (one per 1x2 outcome) on backtest predictions, computes before/after Brier and RPS, and applies recalibration to single predictions with normalization. The calibrator is cached with 10-minute TTL via `_get_isotonic_calibrator()` API helper.
+  3. Added `compute_calibration_comparison()` in `backtests.py` — compares raw vs recalibrated Brier/RPS overall and per score line (0-0, 1-0, 0-1, 1-1, 2-1, 1-2, 2-0, 0-2), with each group requiring ≥5 matches. Returns `CalibrationComparison` with overall metrics, improvement percentages, and per-score-line breakdown.
+  4. API: `get_ensemble_prediction()` supports `recalibrate=True` query parameter; added `GET /predictions/ensemble/weights` and `GET /predictions/calibration/comparison` endpoints. CLI: `scoutfootball optimize-ensemble` command with `--n-splits`, `--decay`, `--output-dir` flags.
+  5. Frontend: Added "Ensemble Weight Optimization" panel (weight bars, RPS, match count, saved timestamp) and "Calibration Comparison" panel (overall Brier/RPS with improvement %, per-score-line table) to the Backtest view. Bilingual i18n (zh/en).
+  6. Added 18 unit tests in `test_ensemble_drift.py` covering save/load round-trip, nonexistent/invalid/empty weights, parent directory creation, metadata fields, calibrator fitting, missing columns, non-negative metrics, normalized output, extreme values, Brier improvement, comparison structure, overall metrics, improvement percentages, per-score-line entries, and missing columns error. All 46 ensemble/drift tests pass, ruff + node --check clean.
+
 - **Model-Run Dataset and Feature Lineage (2026-07-12, Round 15):**
   1. `save_model_run()` now writes a versioned `scoutfootball.model-run-lineage` record with the optimizer input snapshot hash and the feature-manifest hash, version and generation time.
   2. The model-run registry, run-detail API, static report payload and report UI surface this lineage. Runs created before this capability are explicitly marked `not_recorded`; missing manifests are marked `partial`.
@@ -140,6 +148,8 @@
 - Round 19 is squash-merged to `codex/integration`: the World Cup briefing now exports versioned local JSON and spreadsheet-safe CSV reports. The next branch should improve briefing provenance in tactical exports or add browser regression coverage without introducing sync or server persistence.
 - Round 20 is squash-merged to `codex/integration`: tactical projects created from World Cup briefings now carry bounded briefing contract provenance into JSON export previews. The next branch should prioritize durable browser regression coverage or calibrated prediction artifacts without adding sync.
 - Round 21 is squash-merged to `codex/integration`: World Cup briefing input snapshots now preserve recorded rating-lineage hashes and strength-model parameters without inventing missing values. The next branch should expose the snapshot more prominently in browser UI or add regression coverage without adding sync.
+- Round 22 is squash-merged to `codex/integration`: World Cup briefing lineage UI traces model inputs and export provenance.
+- Round 23 is squash-merged to `codex/integration` (`ccb7c01`): ensemble weight optimization, isotonic recalibration, and per-score-line calibration comparison are now fully wired through models → evaluation → API → CLI → frontend. The next branch should run `optimize-ensemble` on real data to populate cached weights, or expand prediction analytics (e.g. per-league calibration, SHAP-style feature attribution).
 
 ## Known Blockers
 
@@ -154,5 +164,7 @@
 4. Surface a World Cup match briefing from schedule cards, including no-static-briefing states.
 5. Add browser-level regression coverage for schedule-to-briefing navigation and local tactical-plan creation.
 6. Add a display of briefing export provenance in the tactical-board export preview.
-4. Ensemble weight optimization backtest: run `optimize_ensemble_weights()` on full dataset and cache optimal weights for the ensemble API endpoint.
-5. Prediction calibration isotonic recalibration: apply isotonic regression to recent predictions when drift is detected.
+7. Run `optimize-ensemble` on real data to populate cached weights and verify end-to-end workflow.
+8. Per-league calibration breakdown: extend `compute_calibration_comparison` to group by competition.
+9. Prediction feature attribution: add SHAP-style or permutation-based explanations for match predictions.
+10. Bootstrap confidence interval caching for ensemble predictions to reduce API latency.
