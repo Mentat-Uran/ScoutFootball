@@ -594,6 +594,31 @@ def _world_cup_briefing_team_snapshot(
     }
 
 
+def _world_cup_briefing_input_snapshot() -> dict[str, Any]:
+    """Expose recorded rating-run lineage without inventing missing hashes."""
+    latest_run = (get_model_runs().get("runs") or [{}])[0]
+    lineage = latest_run.get("lineage") if isinstance(latest_run, dict) else {}
+    if not isinstance(lineage, dict):
+        lineage = {}
+    dataset_value = lineage.get("dataset_snapshot")
+    manifest_value = lineage.get("feature_manifest")
+    dataset = dataset_value if isinstance(dataset_value, dict) else {}
+    manifest = manifest_value if isinstance(manifest_value, dict) else {}
+    input_hash = dataset.get("input_hash") or manifest.get("input_hash") or ""
+    return {
+        "status": "recorded" if input_hash else "not_recorded",
+        "rating_model_run_id": latest_run.get("run_id", "") if isinstance(latest_run, dict) else "",
+        "rating_input_hash": input_hash,
+        "feature_manifest_hash": manifest.get("sha256", ""),
+        "strength_model": {
+            "type": "world_cup_strength_ratio_poisson",
+            "version": "wc-1.0",
+            "score_matrix_max_goals": 5,
+            "host_bonus": 0.12,
+        },
+    }
+
+
 def get_world_cup_match_briefing(home_team: str, away_team: str) -> dict[str, Any]:
     """Return a source-bounded pre-match briefing for a World Cup pairing.
 
@@ -612,6 +637,7 @@ def get_world_cup_match_briefing(home_team: str, away_team: str) -> dict[str, An
         "status": "ok",
         "fixture": {"home_team": home_team, "away_team": away_team},
         "prediction": prediction,
+        "input_snapshot": _world_cup_briefing_input_snapshot(),
         "teams": {
             "home": _world_cup_briefing_team_snapshot(
                 home_team,

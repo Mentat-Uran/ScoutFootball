@@ -10385,6 +10385,7 @@ function createWcBriefingTacticalPlan(briefing) {
     const prediction = briefing.prediction || {};
     const home = briefing.teams?.home || {};
     const away = briefing.teams?.away || {};
+    const inputSnapshot = briefing.input_snapshot || {};
     const hasPrediction = Number.isFinite(Number(prediction.home_win))
         && Number.isFinite(Number(prediction.draw))
         && Number.isFinite(Number(prediction.away_win));
@@ -10411,6 +10412,9 @@ function createWcBriefingTacticalPlan(briefing) {
             },
         },
         provenance: {
+            model_run_id: inputSnapshot.rating_model_run_id || "",
+            input_hash: inputSnapshot.rating_input_hash || "",
+            feature_manifest_hash: inputSnapshot.feature_manifest_hash || "",
             lineage_status: "source_bounded_artifact",
             snapshot: "local World Cup match briefing artifact",
             briefing_schema: briefing.schema || "",
