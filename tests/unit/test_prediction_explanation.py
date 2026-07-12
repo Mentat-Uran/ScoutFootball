@@ -40,10 +40,13 @@ from scoutfootball.evaluation.backtests import (
     compute_model_comparison,
     compute_outcome_distribution,
     compute_prediction_staleness,
+    compute_prediction_uncertainty,
     compute_probability_heatmap,
     compute_reliability_diagram,
+    compute_scenario_stress_test,
     compute_scoreline_calibration,
     compute_team_accuracy,
+    compute_team_calibration_drift,
     compute_temporal_validation,
     compute_value_bets,
 )
@@ -4267,4 +4270,648 @@ class TestCIWidthAnalysisAPI:
         api_module._BACKTEST_CACHE.clear()
         r1 = api_module.get_ci_width_analysis()
         r2 = api_module.get_ci_width_analysis()
+        assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# Round 34: Scenario Stress Test, Per-Team Calibration Drift, Uncertainty
+# ---------------------------------------------------------------------------
+
+
+def _make_stress_test_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame suitable for stress testing."""
+    return _make_predictions_df(n=n)
+
+
+def _make_team_drift_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame with team + match_date columns."""
+    rng = np.random.default_rng(42)
+    df = _make_predictions_df(n=n)
+    teams = ["TeamA", "TeamB", "TeamC", "TeamD"]
+    df["home_team"] = rng.choice(teams, n)
+    df["away_team"] = rng.choice(teams, n)
+    start = pd.Timestamp("2023-01-01")
+    df["match_date"] = [start + pd.Timedelta(days=int(i * 365 / n)) for i in range(n)]
+    return df
+
+
+def _make_uncertainty_df(n: int = 200) -> pd.DataFrame:
+    """Create predictions DataFrame for uncertainty analysis."""
+    rng = np.random.default_rng(42)
+    df = _make_predictions_df(n=n)
+    df["match_id"] = [f"m{i}" for i in range(n)]
+    df["home_team"] = rng.choice(["TeamA", "TeamB", "TeamC"], n)
+    df["away_team"] = rng.choice(["TeamD", "TeamE", "TeamF"], n)
+    return df
+
+
+class TestComputeScenarioStressTest:
+    def test_returns_report(self) -> None:
+        df = _make_stress_test_df(n=200)
+        result = compute_scenario_stress_test(df)
+        assert result.baseline.n_matches == 200
+        assert result.stressed.n_matches == 200
+        assert result.n_shifted > 0
+        assert 0.0 <= result.baseline.accuracy <= 1.0
+        assert result.baseline.brier >= 0.0
+        assert result.baseline.rps >= 0.0
+        assert result.baseline.avg_confidence >= 0.0
+
+    def test_report_fields(self) -> None:
+        df = _make_stress_test_df(n=100)
+        result = compute_scenario_stress_test(df, shift_ratio=0.3)
+        assert result.shift_type == "outcome_swap"
+        assert result.shift_ratio == 0.3
+        assert isinstance(result.accuracy_delta, float)
+        assert isinstance(result.brier_delta, float)
+        assert isinstance(result.rps_delta, float)
+        assert isinstance(result.confidence_delta, float)
+        assert isinstance(result.degradation_score, float)
+        assert result.assessment in ("severe", "moderate", "mild", "negligible")
+        assert result.n_shifted > 0
+        assert len(result.disclaimer) > 0
+
+    def test_shift_ratio_zero_returns_negligible(self) -> None:
+        df = _make_stress_test_df(n=100)
+        result = compute_scenario_stress_test(df, shift_ratio=0.0)
+        assert result.n_shifted == 0
+        assert result.degradation_score == 0.0
+        assert result.assessment == "negligible"
+        assert result.accuracy_delta == 0.0
+
+    def test_shift_type_probability_shift(self) -> None:
+        df = _make_stress_test_df(n=100)
+        result = compute_scenario_stress_test(
+            df, shift_type="probability_shift", shift_ratio=0.5,
+        )
+        assert result.shift_type == "probability_shift"
+        assert result.n_shifted > 0
+
+    def test_shift_type_confidence_inflation(self) -> None:
+        df = _make_stress_test_df(n=100)
+        result = compute_scenario_stress_test(
+            df, shift_type="confidence_inflation", shift_ratio=0.5,
+        )
+        assert result.shift_type == "confidence_inflation"
+        assert result.stressed.avg_confidence >= result.baseline.avg_confidence
+
+    def test_shift_type_confidence_deflation(self) -> None:
+        df = _make_stress_test_df(n=100)
+        result = compute_scenario_stress_test(
+            df, shift_type="confidence_deflation", shift_ratio=0.5,
+        )
+        assert result.shift_type == "confidence_deflation"
+        assert result.stressed.avg_confidence <= result.baseline.avg_confidence
+
+    def test_empty_df_returns_negligible(self) -> None:
+        df = pd.DataFrame(columns=[
+            "home_win_probability", "draw_probability",
+            "away_win_probability", "actual_outcome",
+        ])
+        result = compute_scenario_stress_test(df)
+        assert result.baseline.n_matches == 0
+        assert result.degradation_score == 0.0
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"actual_outcome": ["home_win"] * 10})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_scenario_stress_test(df)
+
+    def test_invalid_shift_type_raises(self) -> None:
+        df = _make_stress_test_df(n=50)
+        with pytest.raises(ValueError, match="shift_type must be one of"):
+            compute_scenario_stress_test(df, shift_type="bogus")
+
+    def test_invalid_shift_ratio_raises(self) -> None:
+        df = _make_stress_test_df(n=50)
+        with pytest.raises(ValueError, match="shift_ratio must be in"):
+            compute_scenario_stress_test(df, shift_ratio=1.5)
+
+    def test_reproducible_with_same_seed(self) -> None:
+        df = _make_stress_test_df(n=100)
+        r1 = compute_scenario_stress_test(df, random_state=42)
+        r2 = compute_scenario_stress_test(df, random_state=42)
+        assert r1.stressed.accuracy == r2.stressed.accuracy
+        assert r1.stressed.brier == r2.stressed.brier
+
+    def test_different_seed_may_differ(self) -> None:
+        df = _make_stress_test_df(n=100)
+        r1 = compute_scenario_stress_test(df, random_state=42)
+        r2 = compute_scenario_stress_test(df, random_state=123)
+        # Different seeds should generally perturb different rows
+        # (not a strict requirement, but a sanity check)
+        assert isinstance(r1.stressed.accuracy, float)
+        assert isinstance(r2.stressed.accuracy, float)
+
+    def test_log_loss_present(self) -> None:
+        rng = np.random.default_rng(42)
+        df = _make_stress_test_df(n=100)
+        df["exact_score_probability"] = rng.uniform(0.01, 0.1, 100)
+        result = compute_scenario_stress_test(df)
+        assert result.baseline.log_loss is not None
+        assert result.baseline.log_loss > 0.0
+
+    def test_log_loss_none_without_exact_score(self) -> None:
+        df = _make_stress_test_df(n=100)
+        result = compute_scenario_stress_test(df)
+        assert result.baseline.log_loss is None
+        assert result.log_loss_delta is None
+
+    def test_degradation_score_nonneg(self) -> None:
+        df = _make_stress_test_df(n=200)
+        result = compute_scenario_stress_test(df, shift_ratio=0.5)
+        assert result.degradation_score >= 0.0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_stress_test_df(n=50)
+        result = compute_scenario_stress_test(df)
+        assert "stress" in result.disclaimer.lower()
+
+
+class TestComputeTeamCalibrationDrift:
+    def test_returns_report(self) -> None:
+        df = _make_team_drift_df(n=200)
+        result = compute_team_calibration_drift(df, team_name="TeamA")
+        assert result.team_name == "TeamA"
+        assert result.team_col == "home_team"
+        assert result.n_total_matches > 0
+
+    def test_report_fields(self) -> None:
+        df = _make_team_drift_df(n=300)
+        result = compute_team_calibration_drift(df, team_name="TeamA")
+        assert isinstance(result.points, list)
+        assert isinstance(result.drift_detected, bool)
+        assert isinstance(result.latest_brier, float)
+        assert isinstance(result.historical_avg_brier, float)
+        assert isinstance(result.relative_change, float)
+        assert result.trend in ("improving", "degrading", "stable", "insufficient_data")
+        assert len(result.disclaimer) > 0
+
+    def test_team_not_found_returns_empty(self) -> None:
+        df = _make_team_drift_df(n=100)
+        result = compute_team_calibration_drift(df, team_name="NonexistentTeam")
+        assert result.n_total_matches == 0
+        assert result.points == []
+        assert result.trend == "insufficient_data"
+
+    def test_empty_team_name_raises(self) -> None:
+        df = _make_team_drift_df(n=50)
+        with pytest.raises(ValueError, match="team_name must be a non-empty string"):
+            compute_team_calibration_drift(df, team_name="")
+
+    def test_missing_team_col_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_team_calibration_drift(df, team_name="TeamA")
+
+    def test_missing_match_date_raises(self) -> None:
+        df = _make_predictions_df(n=50)
+        df["home_team"] = "TeamA"
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_team_calibration_drift(df, team_name="TeamA")
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({
+            "home_team": ["TeamA"] * 10,
+            "match_date": pd.date_range("2023-01-01", periods=10),
+            "actual_outcome": ["home_win"] * 10,
+        })
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_team_calibration_drift(df, team_name="TeamA")
+
+    def test_custom_team_col(self) -> None:
+        df = _make_team_drift_df(n=200)
+        result = compute_team_calibration_drift(
+            df, team_col="away_team", team_name="TeamB",
+        )
+        assert result.team_col == "away_team"
+        assert result.team_name == "TeamB"
+
+    def test_n_windows_cap(self) -> None:
+        df = _make_team_drift_df(n=500)
+        result = compute_team_calibration_drift(
+            df, team_name="TeamA", n_windows=2,
+        )
+        assert result.n_windows <= 2
+
+    def test_point_fields(self) -> None:
+        df = _make_team_drift_df(n=300)
+        result = compute_team_calibration_drift(df, team_name="TeamA")
+        for p in result.points:
+            assert len(p.window_label) > 0
+            assert p.n_matches > 0
+            assert 0.0 <= p.accuracy <= 1.0
+            assert p.brier >= 0.0
+            assert 0.0 <= p.avg_confidence <= 1.0
+
+    def test_min_samples_filter(self) -> None:
+        df = _make_team_drift_df(n=100)
+        # Very high min_samples_per_window should filter out most windows
+        result = compute_team_calibration_drift(
+            df, team_name="TeamA", min_samples_per_window=1000,
+        )
+        assert result.n_windows == 0
+
+    def test_drift_detection_logic(self) -> None:
+        df = _make_team_drift_df(n=400)
+        result = compute_team_calibration_drift(df, team_name="TeamA")
+        # Drift detection requires >= 2 windows and >5% relative change
+        if result.n_windows >= 2:
+            expected = abs(result.relative_change) > 0.05
+            assert result.drift_detected == expected
+
+    def test_insufficient_windows_trend(self) -> None:
+        df = _make_team_drift_df(n=100)
+        result = compute_team_calibration_drift(
+            df, team_name="TeamA", min_samples_per_window=1000,
+        )
+        assert result.trend == "insufficient_data"
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_team_drift_df(n=100)
+        result = compute_team_calibration_drift(df, team_name="TeamA")
+        assert "team" in result.disclaimer.lower() or "drift" in result.disclaimer.lower()
+
+    def test_away_team_filter(self) -> None:
+        df = _make_team_drift_df(n=200)
+        result = compute_team_calibration_drift(
+            df, team_col="away_team", team_name="TeamC",
+        )
+        assert result.team_name == "TeamC"
+        assert result.n_total_matches > 0
+
+
+class TestComputePredictionUncertainty:
+    def test_returns_report(self) -> None:
+        df = _make_uncertainty_df(n=200)
+        result = compute_prediction_uncertainty(df)
+        assert result.n_matches == 200
+        assert 0.0 <= result.avg_entropy <= 1.0
+        assert result.avg_margin >= 0.0
+        assert result.avg_dispersion >= 0.0
+        assert result.high_uncertainty_count >= 0
+        assert len(result.points) > 0
+
+    def test_point_fields(self) -> None:
+        df = _make_uncertainty_df(n=100)
+        result = compute_prediction_uncertainty(df)
+        for p in result.points:
+            assert p.match_id is not None or p.home_team is not None
+            assert 0.0 <= p.confidence <= 1.0
+            assert 0.0 <= p.entropy <= 1.0
+            assert p.margin >= 0.0
+            assert p.dispersion >= 0.0
+            assert p.predicted_outcome in ("home_win", "draw", "away_win")
+            assert p.uncertainty_label in ("high", "medium", "low")
+
+    def test_correct_flag_with_actual(self) -> None:
+        df = _make_uncertainty_df(n=100)
+        result = compute_prediction_uncertainty(df)
+        # At least some points should have correct flag set
+        correct_flags = [p.correct for p in result.points if p.correct is not None]
+        assert len(correct_flags) > 0
+        assert all(isinstance(c, bool) for c in correct_flags)
+
+    def test_max_points_caps_points(self) -> None:
+        df = _make_uncertainty_df(n=300)
+        result = compute_prediction_uncertainty(df, max_points=50)
+        assert len(result.points) <= 50
+        # Aggregates should still be computed on all rows
+        assert result.n_matches == 300
+
+    def test_empty_df_returns_empty(self) -> None:
+        df = pd.DataFrame(columns=[
+            "home_win_probability", "draw_probability", "away_win_probability",
+        ])
+        result = compute_prediction_uncertainty(df)
+        assert result.n_matches == 0
+        assert result.points == []
+        assert result.avg_entropy == 0.0
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"match_id": ["m1"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_prediction_uncertainty(df)
+
+    def test_entropy_uniform_distribution(self) -> None:
+        # Uniform distribution → max entropy (close to 1.0)
+        df = pd.DataFrame({
+            "home_win_probability": [1.0 / 3.0] * 10,
+            "draw_probability": [1.0 / 3.0] * 10,
+            "away_win_probability": [1.0 / 3.0] * 10,
+        })
+        result = compute_prediction_uncertainty(df)
+        assert result.avg_entropy > 0.99  # Near max entropy
+
+    def test_entropy_dominant_outcome(self) -> None:
+        # Dominant outcome → low entropy
+        df = pd.DataFrame({
+            "home_win_probability": [0.95] * 10,
+            "draw_probability": [0.03] * 10,
+            "away_win_probability": [0.02] * 10,
+        })
+        result = compute_prediction_uncertainty(df)
+        assert result.avg_entropy < 0.25  # Low entropy
+
+    def test_uncertainty_label_high(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.34, 0.34, 0.33] * 5,
+            "draw_probability": [0.33, 0.33, 0.34] * 5,
+            "away_win_probability": [0.33, 0.33, 0.33] * 5,
+        })
+        result = compute_prediction_uncertainty(df)
+        for p in result.points:
+            assert p.uncertainty_label == "high"
+
+    def test_uncertainty_label_low(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.95] * 10,
+            "draw_probability": [0.03] * 10,
+            "away_win_probability": [0.02] * 10,
+        })
+        result = compute_prediction_uncertainty(df)
+        for p in result.points:
+            assert p.uncertainty_label == "low"
+
+    def test_high_uncertainty_count(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [1.0 / 3.0] * 20,
+            "draw_probability": [1.0 / 3.0] * 20,
+            "away_win_probability": [1.0 / 3.0] * 20,
+        })
+        result = compute_prediction_uncertainty(df)
+        assert result.high_uncertainty_count == 20
+
+    def test_correlation_can_be_none(self) -> None:
+        # When all entropies are identical, correlation is None
+        df = pd.DataFrame({
+            "home_win_probability": [0.5, 0.5] * 10,
+            "draw_probability": [0.25, 0.25] * 10,
+            "away_win_probability": [0.25, 0.25] * 10,
+            "actual_outcome": ["home_win", "draw"] * 10,
+        })
+        result = compute_prediction_uncertainty(df)
+        # All entropies identical → set(entropies) has 1 element → correlation None
+        assert result.entropy_accuracy_correlation is None
+
+    def test_correlation_computed_with_variance(self) -> None:
+        df = _make_uncertainty_df(n=200)
+        result = compute_prediction_uncertainty(df)
+        # With varied probabilities and outcomes, correlation should be a float
+        assert result.entropy_accuracy_correlation is not None or result.n_matches < 2
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_uncertainty_df(n=50)
+        result = compute_prediction_uncertainty(df)
+        assert "entropy" in result.disclaimer.lower() or "uncertainty" in result.disclaimer.lower()
+
+
+class TestScenarioStressTestAPI:
+    def test_no_data_not_available(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        tmp_path = Path(tmp_path)
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": tmp_path})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_scenario_stress_test()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_stress_test_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_scenario_stress_test()
+        assert result["status"] == "ok"
+        assert result["baseline"]["n_matches"] == 200
+        assert result["stressed"]["n_matches"] == 200
+
+    def test_poisson_fallback(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_stress_test_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "poisson_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_scenario_stress_test()
+        assert result["status"] == "ok"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_stress_test_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_scenario_stress_test()
+        r2 = api_module.get_scenario_stress_test()
+        assert r1 == r2
+
+    def test_synthesizes_actual_outcome(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=100)
+        df = df.drop(columns=["actual_outcome"])
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_scenario_stress_test()
+        assert result["status"] == "ok"
+
+
+class TestTeamCalibrationDriftAPI:
+    def test_no_data_not_available(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        tmp_path = Path(tmp_path)
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": tmp_path})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_team_calibration_drift(team_name="TeamA")
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_drift_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_team_calibration_drift(team_name="TeamA")
+        assert result["status"] == "ok"
+        assert result["team_name"] == "TeamA"
+
+    def test_no_team_column_not_available(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_team_calibration_drift(team_name="TeamA")
+        assert result["status"] == "not_available"
+
+    def test_no_match_date_not_available(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_predictions_df(n=100)
+        df["home_team"] = "TeamA"
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_team_calibration_drift(team_name="TeamA")
+        assert result["status"] == "not_available"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_drift_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_team_calibration_drift(team_name="TeamA")
+        r2 = api_module.get_team_calibration_drift(team_name="TeamA")
+        assert r1 == r2
+
+
+class TestPredictionUncertaintyAPI:
+    def test_no_data_not_available(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        tmp_path = Path(tmp_path)
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": tmp_path})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_uncertainty()
+        assert result["status"] == "not_available"
+
+    def test_with_data_ok(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_uncertainty_df(n=200)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_uncertainty()
+        assert result["status"] == "ok"
+        assert result["n_matches"] == 200
+        assert len(result["points"]) > 0
+
+    def test_synthesizes_actual_outcome(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_uncertainty_df(n=100)
+        df = df.drop(columns=["actual_outcome"])
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_uncertainty()
+        assert result["status"] == "ok"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_uncertainty_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_prediction_uncertainty()
+        r2 = api_module.get_prediction_uncertainty()
         assert r1 == r2
