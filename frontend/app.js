@@ -696,6 +696,7 @@ function _staticUrlFor(apiPath) {
         "/world-cup/predictions": "/data/worldcup/predictions.json",
         "/world-cup/knockout": "/data/worldcup/knockout.json",
         "/world-cup/match-predictions": "/data/worldcup/match_predictions.json",
+        "/world-cup/match-briefings": "/data/worldcup/match_briefings.json",
         "/world-cup/group-predictions": "/data/worldcup/group_predictions.json",
         "/world-cup/predictions-index": "/data/worldcup/predictions_index.json",
     };
@@ -7648,6 +7649,7 @@ let wcApiData = {
     predictions: null,  // from /world-cup/predictions
     knockout: null,     // from /world-cup/knockout
     matchPredictionCache: {}, // home|away -> single-match prediction
+    matchBriefingCache: {}, // home|away -> source-bounded pre-match briefing
     outlookCache: {},   // team -> from /world-cup/outlook/{team}
     teams: null,        // from /worldcup/teams
     apiOnline: false,
@@ -9253,6 +9255,43 @@ async function fetchWcMatchPrediction(teamA, teamB) {
     }
 }
 
+async function fetchWcMatchBriefing(teamA, teamB) {
+    const cacheKey = `${teamA}|${teamB}`;
+    if (wcApiData.matchBriefingCache[cacheKey]) return wcApiData.matchBriefingCache[cacheKey];
+
+    if (apiOnline !== false) {
+        try {
+            const briefing = await fetchJson(`/world-cup/match-briefings/${encodeURIComponent(teamA)}/${encodeURIComponent(teamB)}`);
+            if (briefing?.status === "ok") {
+                wcApiData.matchBriefingCache[cacheKey] = briefing;
+                wcApiData.apiOnline = true;
+                return briefing;
+            }
+        } catch (e) {
+            console.warn("[WC] fetchWcMatchBriefing failed:", e.message);
+        }
+    }
+
+    try {
+        if (!wcApiData._matchBriefingsAll) {
+            const data = await fetchJson("/world-cup/match-briefings");
+            wcApiData._matchBriefingsAll = data?.briefings || [];
+        }
+        const briefing = wcApiData._matchBriefingsAll.find((item) =>
+            item?.fixture?.home_team === teamA && item?.fixture?.away_team === teamB,
+        ) || wcApiData._matchBriefingsAll.find((item) =>
+            item?.fixture?.home_team === teamB && item?.fixture?.away_team === teamA,
+        );
+        if (briefing?.status === "ok") {
+            wcApiData.matchBriefingCache[cacheKey] = briefing;
+            return briefing;
+        }
+    } catch (e) {
+        console.warn("[WC] static match briefing lookup failed:", e.message);
+    }
+    return null;
+}
+
 function wcAllTeams() {
     if (wcApiData.teams && wcApiData.teams.teams) {
         return wcApiData.teams.teams.map((t) => t.team);
@@ -9668,6 +9707,7 @@ function renderWcMatchPredictionPanel(teamA, teamB) {
 
     const cacheKey = `${teamA}|${teamB}`;
     const prediction = wcApiData.matchPredictionCache[cacheKey];
+    const briefing = wcApiData.matchBriefingCache[cacheKey];
     if (!prediction || prediction.error) {
         panel.innerHTML = `<div style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(t("wc_no_data"))}</div>`;
         return;
@@ -9687,6 +9727,26 @@ function renderWcMatchPredictionPanel(teamA, teamB) {
     };
 
     const z = appState.lang === "zh";
+    const briefingBody = briefing?.status === "ok"
+        ? (() => {
+            const home = briefing.teams?.home || {};
+            const away = briefing.teams?.away || {};
+            const coverage = (team) => `${Math.round(Number(team.squad?.rating_coverage || 0) * 100)}%`;
+            const topPlayers = (team) => (team.squad?.top_rated_players || []).slice(0, 3)
+                .map((player) => `${player.name} (${Number(player.rating).toFixed(1)})`).join(" · ") || (z ? "无评分球员" : "No rated players");
+            return `
+                <div class="wc-summary-row" style="margin:0.35rem 0 0.65rem">
+                    <div><span>${z ? "主队评分覆盖" : "Home rating coverage"}</span><strong>${coverage(home)}</strong></div>
+                    <div><span>${z ? "客队评分覆盖" : "Away rating coverage"}</span><strong>${coverage(away)}</strong></div>
+                </div>
+                <p style="font-size:0.78rem;line-height:1.55;margin:0.3rem 0"><strong>${escapeHtml(home.team || teamA)}</strong>: ${escapeHtml(topPlayers(home))}</p>
+                <p style="font-size:0.78rem;line-height:1.55;margin:0.3rem 0"><strong>${escapeHtml(away.team || teamB)}</strong>: ${escapeHtml(topPlayers(away))}</p>
+                <p style="font-size:0.75rem;color:var(--text-muted);line-height:1.5;margin:0.55rem 0">${escapeHtml((briefing.limitations || []).join(" "))}</p>
+                <button class="text-button wc-create-briefing-plan" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${z ? "创建本地战术方案" : "Create local tactical plan"}</button>
+            `;
+        })()
+        : `<button class="text-button wc-load-briefing" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${z ? "加载赛前简报" : "Load pre-match briefing"}</button>
+           <p style="font-size:0.75rem;color:var(--text-muted);margin:0.5rem 0 0">${z ? "简报仅使用本地阵容评分和简化强度模型；离线快照不存在时会明确显示不可用。" : "Briefings use local roster ratings and a simplified strength model; unavailable offline snapshots stay unavailable."}</p>`;
     panel.innerHTML = `
         <div class="layout-2">
             <article class="liquid-panel table-panel">
@@ -9705,6 +9765,10 @@ function renderWcMatchPredictionPanel(teamA, teamB) {
                 <div id="wc-score-chart" class="chart-box" style="height:340px"></div>
             </article>
         </div>
+        <article class="liquid-panel compact-panel" style="margin-top:1rem">
+            <div class="panel-head"><h3>${z ? "赛前比赛简报" : "Pre-match briefing"}</h3><span class="status-pill status-medium">local artifact</span></div>
+            ${briefingBody}
+        </article>
     `;
 
     document.getElementById("wc-match-probabilities").innerHTML = [
@@ -9728,6 +9792,19 @@ function renderWcMatchPredictionPanel(teamA, teamB) {
 
     renderScoreMatrixInto("wc-score-chart", match);
     renderOutcomeBarInto("wc-outcome-bar-chart", match);
+
+    const loadBriefing = panel.querySelector(".wc-load-briefing");
+    if (loadBriefing) {
+        loadBriefing.addEventListener("click", async () => {
+            loadBriefing.disabled = true;
+            await fetchWcMatchBriefing(teamA, teamB);
+            renderWcMatchPredictionPanel(teamA, teamB);
+        });
+    }
+    const createPlan = panel.querySelector(".wc-create-briefing-plan");
+    if (createPlan && briefing?.status === "ok") {
+        createPlan.addEventListener("click", () => createWcBriefingTacticalPlan(briefing));
+    }
 }
 
 function renderWcProbability() {
@@ -10177,6 +10254,63 @@ function createPrematchPlan() {
     }
 
     // Save and switch to tactical view
+    TACTICAL_BOARD.saveProject(project);
+    tacticalProject = project;
+    setView("tactical");
+}
+
+function createWcBriefingTacticalPlan(briefing) {
+    if (typeof TACTICAL_BOARD === "undefined" || briefing?.status !== "ok") return;
+    const fixture = briefing.fixture || {};
+    const prediction = briefing.prediction || {};
+    const home = briefing.teams?.home || {};
+    const away = briefing.teams?.away || {};
+    const hasPrediction = Number.isFinite(Number(prediction.home_win))
+        && Number.isFinite(Number(prediction.draw))
+        && Number.isFinite(Number(prediction.away_win));
+    const coverage = (team) => `${team.team || "team"}: ${Math.round(Number(team.squad?.rating_coverage || 0) * 100)}% rating coverage`;
+    const decisionPack = TACTICAL_BOARD.createDecisionPack({
+        match: { home: fixture.home_team, away: fixture.away_team },
+        prediction: {
+            status: hasPrediction ? "available" : "not_loaded",
+            model_type: prediction.model_type || "",
+            model_version: prediction.model_version || "",
+            probabilities: hasPrediction ? {
+                home_win: prediction.home_win,
+                draw: prediction.draw,
+                away_win: prediction.away_win,
+            } : {},
+            expected_goals: hasPrediction ? {
+                home: prediction.home_lambda,
+                away: prediction.away_lambda,
+            } : {},
+            score_matrix: hasPrediction ? prediction.score_matrix : null,
+            coverage: {
+                status: "source_bounded",
+                summary: `${coverage(home)}; ${coverage(away)}`,
+            },
+        },
+        provenance: {
+            lineage_status: "source_bounded_artifact",
+            snapshot: "local World Cup match briefing artifact",
+        },
+        limitations: briefing.limitations || [
+            "World Cup briefing limits were not available; treat this as local model context only.",
+        ],
+    });
+    const project = TACTICAL_BOARD.createProject(`${fixture.home_team || "Home"} vs ${fixture.away_team || "Away"} World Cup pre-match`);
+    project.pitch_type = "11v11";
+    project.objects = [
+        ...TACTICAL_BOARD.generateFormation("4-3-3", "home"),
+        ...TACTICAL_BOARD.generateFormation("4-3-3", "away"),
+    ];
+    project.metadata = { decision_pack: decisionPack };
+    project.source_attribution = "ScoutFootball tactical board + local World Cup match briefing artifact";
+    if (project.frames?.[0]) {
+        const topNames = (team) => (team.squad?.top_rated_players || []).slice(0, 3)
+            .map((player) => `${player.name} (${Number(player.rating).toFixed(1)})`).join(", ") || "not recorded";
+        project.frames[0].notes = `${TACTICAL_BOARD.formatDecisionPackNotes(decisionPack)}\n\nSquad context (local artifact, not a confirmed lineup):\n${home.team || fixture.home_team}: ${topNames(home)}\n${away.team || fixture.away_team}: ${topNames(away)}`;
+    }
     TACTICAL_BOARD.saveProject(project);
     tacticalProject = project;
     setView("tactical");

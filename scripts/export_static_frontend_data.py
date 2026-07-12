@@ -262,6 +262,7 @@ def export_worldcup() -> int:
         get_wc_squad,
         get_wc_teams,
         get_wc_tournament_summary,
+        get_world_cup_match_briefing,
     )
     from scoutfootball.worldcup.data import GROUPS
 
@@ -270,6 +271,22 @@ def export_worldcup() -> int:
     _write_json(WORLDCUP_DIR / "schedule.json", get_wc_schedule())
     _write_json(WORLDCUP_DIR / "predictions.json", get_wc_predictions())
     _write_json(WORLDCUP_DIR / "knockout.json", get_wc_knockout())
+
+    schedule = get_wc_schedule()
+    briefings = []
+    for match in schedule.get("matches", []):
+        home_team = match.get("home")
+        away_team = match.get("away")
+        if home_team and away_team:
+            briefing = get_world_cup_match_briefing(home_team, away_team)
+            if briefing.get("status") == "ok":
+                briefings.append(briefing)
+    _write_json(WORLDCUP_DIR / "match_briefings.json", {
+        "schema": "scoutfootball.world-cup-match-briefings",
+        "version": "1.0.0",
+        "status": "ok",
+        "briefings": briefings,
+    })
 
     # Tournament state snapshot (summary + knockout bracket overview)
     _write_json(WORLDCUP_DIR / "tournament_summary.json", get_wc_tournament_summary())
@@ -283,7 +300,10 @@ def export_worldcup() -> int:
         _write_json(SQUADS_DIR / filename, squad)
         squad_count += 1
 
-    print("  worldcup/teams.json, groups.json, schedule.json, predictions.json, knockout.json")
+    print(
+        "  worldcup/teams.json, groups.json, schedule.json, predictions.json, "
+        "knockout.json, match_briefings.json"
+    )
     print("  worldcup/tournament_summary.json, knockout_bracket.json")
     print(f"  worldcup/squads/*.json ({squad_count} teams)")
     return squad_count
