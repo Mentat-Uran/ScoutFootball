@@ -204,3 +204,15 @@ def test_training_exports_calibration_detail_for_frontend() -> None:
     pipeline = _read(PROJECT_ROOT / "src" / "scoutfootball" / "pipeline.py")
 
     assert "resolved.model_root, save_detail=True" in pipeline
+
+
+def test_world_cup_briefing_exports_keep_local_scope_and_csv_safety() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "exportWcBriefingJSON" in app_js
+    assert "exportWcBriefingCSV" in app_js
+    assert 'schema: "scoutfootball.world-cup-match-briefing-export"' in app_js
+    assert 'storage_scope: "browser-local-download"' in app_js
+    assert 'row.map(csvCell).join(",")' in app_js
+    assert "wc-export-briefing-json" in app_js
+    assert "wc-export-briefing-csv" in app_js

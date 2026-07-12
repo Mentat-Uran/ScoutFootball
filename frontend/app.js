@@ -161,6 +161,8 @@ const i18n = {
         wc_groups: "小组",
         wc_group_matches: "小组赛",
         wc_briefing: "赛前简报",
+        wc_export_json: "导出简报 JSON",
+        wc_export_csv: "导出简报 CSV",
         wc_fixtures: "赛程表",
         wc_date: "日期",
         wc_time: "时间",
@@ -479,6 +481,8 @@ const i18n = {
         wc_groups: "Groups",
         wc_group_matches: "Group Matches",
         wc_briefing: "Pre-match briefing",
+        wc_export_json: "Export briefing JSON",
+        wc_export_csv: "Export briefing CSV",
         wc_fixtures: "Fixtures",
         wc_date: "Date",
         wc_time: "Time",
@@ -9294,6 +9298,90 @@ async function fetchWcMatchBriefing(teamA, teamB) {
     return null;
 }
 
+function _safeBriefingFilename(briefing) {
+    const fixture = briefing?.fixture || {};
+    const raw = `${fixture.home_team || "home"}_vs_${fixture.away_team || "away"}`;
+    return raw.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+}
+
+function _downloadLocalBriefing(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportWcBriefingJSON(briefing) {
+    if (briefing?.status !== "ok") return;
+    const payload = {
+        schema: "scoutfootball.world-cup-match-briefing-export",
+        version: "1.0.0",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        briefing,
+    };
+    _downloadLocalBriefing(
+        JSON.stringify(payload, null, 2),
+        `${_safeBriefingFilename(briefing)}_world_cup_briefing.json`,
+        "application/json;charset=utf-8",
+    );
+}
+
+function exportWcBriefingCSV(briefing) {
+    if (briefing?.status !== "ok") return;
+    const fixture = briefing.fixture || {};
+    const prediction = briefing.prediction || {};
+    const teams = briefing.teams || {};
+    const lines = [
+        ["# World Cup Match Briefing"],
+        ["field", "value"],
+        ["home_team", fixture.home_team || ""],
+        ["away_team", fixture.away_team || ""],
+        ["model_type", prediction.model_type || ""],
+        ["model_version", prediction.model_version || ""],
+        ["home_win", prediction.home_win ?? ""],
+        ["draw", prediction.draw ?? ""],
+        ["away_win", prediction.away_win ?? ""],
+        ["home_expected_goals", prediction.home_lambda ?? ""],
+        ["away_expected_goals", prediction.away_lambda ?? ""],
+        ["source_attribution", briefing.source_attribution || ""],
+        ["storage_scope", "browser-local-download"],
+        [],
+        ["# Team Coverage"],
+        ["team", "rating_coverage", "rated_players", "total_players", "core_avg_rating", "depth_avg_rating"],
+    ];
+    for (const team of [teams.home, teams.away]) {
+        if (!team) continue;
+        const squad = team.squad || {};
+        lines.push([
+            team.team || "",
+            squad.rating_coverage ?? "",
+            squad.rated_players ?? "",
+            squad.total_players ?? "",
+            squad.core_avg_rating ?? "",
+            squad.depth_avg_rating ?? "",
+        ]);
+    }
+    lines.push([], ["# Top Rated Players"], ["team", "player", "position", "club", "rating", "confidence"]);
+    for (const team of [teams.home, teams.away]) {
+        for (const player of team?.squad?.top_rated_players || []) {
+            lines.push([team.team || "", player.name || "", player.position || "", player.club || "", player.rating ?? "", player.rating_confidence || ""]);
+        }
+    }
+    lines.push([], ["# Limitations"], ["limitation"]);
+    for (const limitation of briefing.limitations || []) lines.push([limitation]);
+    lines.push([], ["# Exported", new Date().toISOString(), `ScoutFootball v${APP_VERSION}`]);
+    const csv = lines.map((row) => row.map(csvCell).join(",")).join("\n");
+    _downloadLocalBriefing(
+        `\uFEFF${csv}`,
+        `${_safeBriefingFilename(briefing)}_world_cup_briefing.csv`,
+        "text/csv;charset=utf-8",
+    );
+}
+
 function wcAllTeams() {
     if (wcApiData.teams && wcApiData.teams.teams) {
         return wcApiData.teams.teams.map((t) => t.team);
@@ -9757,7 +9845,11 @@ function renderWcMatchPredictionPanel(teamA, teamB) {
                 <p style="font-size:0.78rem;line-height:1.55;margin:0.3rem 0"><strong>${escapeHtml(home.team || teamA)}</strong>: ${escapeHtml(topPlayers(home))}</p>
                 <p style="font-size:0.78rem;line-height:1.55;margin:0.3rem 0"><strong>${escapeHtml(away.team || teamB)}</strong>: ${escapeHtml(topPlayers(away))}</p>
                 <p style="font-size:0.75rem;color:var(--text-muted);line-height:1.5;margin:0.55rem 0">${escapeHtml((briefing.limitations || []).join(" "))}</p>
-                <button class="text-button wc-create-briefing-plan" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${z ? "创建本地战术方案" : "Create local tactical plan"}</button>
+                <div class="filter-row" style="margin-top:0.65rem">
+                    <button class="text-button wc-create-briefing-plan" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${z ? "创建本地战术方案" : "Create local tactical plan"}</button>
+                    <button class="text-button wc-export-briefing-json" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${escapeHtml(t("wc_export_json"))}</button>
+                    <button class="text-button wc-export-briefing-csv" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${escapeHtml(t("wc_export_csv"))}</button>
+                </div>
             `;
         })()
         : `<button class="text-button wc-load-briefing" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${z ? "加载赛前简报" : "Load pre-match briefing"}</button>
@@ -9819,6 +9911,14 @@ function renderWcMatchPredictionPanel(teamA, teamB) {
     const createPlan = panel.querySelector(".wc-create-briefing-plan");
     if (createPlan && briefing?.status === "ok") {
         createPlan.addEventListener("click", () => createWcBriefingTacticalPlan(briefing));
+    }
+    const exportJson = panel.querySelector(".wc-export-briefing-json");
+    if (exportJson && briefing?.status === "ok") {
+        exportJson.addEventListener("click", () => exportWcBriefingJSON(briefing));
+    }
+    const exportCsv = panel.querySelector(".wc-export-briefing-csv");
+    if (exportCsv && briefing?.status === "ok") {
+        exportCsv.addEventListener("click", () => exportWcBriefingCSV(briefing));
     }
 }
 

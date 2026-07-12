@@ -675,6 +675,10 @@ tactical recommendation.
 `squad.top_rated_players`, and bounded strength components. Static exports may
 provide `/data/worldcup/match_briefings.json`; if no matching static briefing
 exists, the frontend shows it as unavailable rather than synthesizing one.
+The comparison view can download the briefing as a browser-local JSON export
+(`scoutfootball.world-cup-match-briefing-export` v1.0.0) or CSV report. Both
+retain source attribution and limitations; CSV cells use the shared formula
+injection guard and neither action writes server state.
 
 ### GET /world-cup/knockout
 World Cup knockout bracket simulation.
