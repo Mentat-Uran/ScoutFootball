@@ -38,6 +38,7 @@ from scoutfootball.worldcup.data import (
     GROUPS,
     HOSTS,
     compute_group_predictions,
+    compute_squad_balance,
     compute_team_strength_details,
     enrich_squads_with_ratings,
     generate_group_stage_matches,
@@ -574,6 +575,7 @@ def _world_cup_briefing_team_snapshot(
             "rating_coverage": strength_detail.get("coverage", 0.0),
             "core_avg_rating": strength_detail.get("core_avg_rating"),
             "depth_avg_rating": strength_detail.get("depth_avg_rating"),
+            "balance": compute_squad_balance(squad),
             "top_rated_players": [
                 {
                     "name": player.name,
@@ -6931,6 +6933,7 @@ def get_wc_squad(team: str) -> dict:
         "rated_players": len(rated),
         "big5_players": big5_count,
         "avg_rating": avg_rating,
+        "squad_balance": compute_squad_balance(squad),
         "source_attribution": (
             "Ratings derived from FBref/Understat data "
             "via ScoutFootball optimizer"
@@ -7029,6 +7032,7 @@ def get_wc_team_outlook(team: str) -> dict:
     outlook = _compute_team_outlook(
         team, strengths, group_preds, bracket, strength_details,
     )
+    outlook["squad_balance"] = compute_squad_balance(enriched_squads.get(team, []))
     return _clean_json_value(outlook)
 
 

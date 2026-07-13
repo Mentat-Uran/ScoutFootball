@@ -676,6 +676,12 @@ reproducibility review.
 
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
+`/world-cup/squads/{team}` and `/world-cup/outlook/{team}` include a versioned
+`squad_balance` object. It reports expected-callup snapshot counts and rating
+coverage by listed role (GK/CB/FB/DM/CM/AM/W/ST), unit summaries, and planning
+flags relative to internal role-depth targets. It is not a confirmed 26-player
+roster, lineup, injury report, or tactical recommendation; missing or thin
+roles only describe the local expected-callup list.
 
 ### GET /world-cup/match-briefings/{home_team}/{away_team}
 Returns a versioned, source-bounded World Cup pre-match briefing. It combines
@@ -686,7 +692,7 @@ tactical recommendation.
 
 **Response**: `{ schema, version, status, fixture, prediction, teams, source_attribution, limitations }`.
 `teams.home` and `teams.away` include `squad.rating_coverage`,
-`squad.top_rated_players`, and bounded strength components. Static exports may
+`squad.top_rated_players`, `squad.balance`, and bounded strength components. Static exports may
 provide `/data/worldcup/match_briefings.json`; if no matching static briefing
 exists, the frontend shows it as unavailable rather than synthesizing one.
 `input_snapshot` records the current rating run ID/input hash and feature
