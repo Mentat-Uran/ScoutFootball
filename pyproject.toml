@@ -23,6 +23,9 @@ dependencies = [
   "uvicorn>=0.34,<1.0",
 ]
 
+[project.optional-dependencies]
+optimizer = ["torch>=2.4,<3.0"]
+
 [project.scripts]
 scoutfootball = "scoutfootball.__main__:main"
 

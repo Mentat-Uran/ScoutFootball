@@ -22,7 +22,13 @@ cd ScoutFootball_for_World_Cup
 ### 2. 安装依赖
 
 ```bash
-pip install torch pandas numpy scipy pyarrow matplotlib plotly dash dash-bootstrap-components
+uv sync --extra optimizer
+```
+
+Before a training run, verify the selected interpreter and raw Parquet inputs without writing an artifact:
+
+```bash
+PYTHONPATH=src uv run python -m scoutfootball optimizer-preflight --data-dir data
 ```
 
 **RTX 5070 Ti (Blackwell, sm_120) 注意**：PyTorch 官方 cu121 稳定版不支持 sm_120
