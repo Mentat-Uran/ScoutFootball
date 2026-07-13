@@ -652,4 +652,5 @@ SOCCERDATA_DIR=./data/soccerdata uv run python -m scoutfootball ingest --sources
 
 ## Recent autonomous delivery
 
+- [x] **Conservative Transfermarkt identity resolution (2026-07-14):** The dated local snapshot import now converts only deterministic name/team/season or unique-name/season matches into canonical rating-matrix IDs. Ambiguous names, team conflicts, and no-candidate rows stay out of supervision and are retained in a local JSON review report, exposed by `GET /reports/transfermarkt-identities` and the reports panel.
 - [x] **Dated Transfermarkt label intake (2026-07-14):** Local CSV/Parquet snapshots now enter `player_truth_labels.parquet` through `import-transfermarkt-truth-labels`. The preview validates without writing, preserves source `snapshot_date` by default, reports source-scoped replacement, rating-matrix name/season coverage, and temporal eligibility; re-imports never delete other label sources. The reports UI now shows post-season snapshot counts alongside source-policy eligibility.

@@ -267,6 +267,15 @@ explicit provenance override, not a way to make a post-season value appear to
 have been known earlier. Re-imports replace only the same
 `player_id + season + label_source` key; labels from other sources remain.
 
+Before writing labels, the import resolves each snapshot row against the
+selected season of `rating_feature_matrix.parquet`. Only deterministic
+name/team/season or unique-name/season matches become labels with canonical
+`player_id`s. Team conflicts, ambiguous same-name candidates, and unmatched
+rows are excluded from supervision and written to
+`transfermarkt_identity_report.json` for review. `GET
+/reports/transfermarkt-identities` exposes that local report; it is an audit
+of the current matrix, not a cross-provider identity authority.
+
 ---
 
 ## 7. team_match.parquet

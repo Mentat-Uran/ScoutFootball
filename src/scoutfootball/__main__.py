@@ -175,7 +175,12 @@ def _transfermarkt_feature_coverage(
 
 def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
     """Import a dated, local Transfermarkt snapshot as independent proxy labels."""
-    from scoutfootball.adapters.transfermarkt_manual import snapshot_to_truth_labels
+    from scoutfootball.adapters.transfermarkt_manual import load_snapshot, snapshot_to_truth_labels
+    from scoutfootball.evaluation.transfermarkt_identity import (
+        apply_resolved_transfermarkt_identities,
+        resolve_transfermarkt_snapshot_identities,
+        transfermarkt_identity_report,
+    )
     from scoutfootball.evaluation.truth_labels import (
         create_empty_truth_labels,
         merge_truth_label_rows,
@@ -197,6 +202,20 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
     except Exception as exc:
         print(f"Error: unable to prepare Transfermarkt labels: {exc}")
         sys.exit(1)
+
+    try:
+        snapshot = load_snapshot(snapshot_path).dataframe
+        feature_matrix = pd.read_parquet(Path(args.feature_matrix).resolve())
+        identities = resolve_transfermarkt_snapshot_identities(
+            snapshot,
+            feature_matrix,
+            season=args.season,
+        )
+    except Exception as exc:
+        print(f"Error: unable to resolve Transfermarkt identities: {exc}")
+        sys.exit(1)
+    identity = transfermarkt_identity_report(identities)
+    new_labels = apply_resolved_transfermarkt_identities(new_labels, identities)
 
     output_path = Path(args.output).resolve()
     try:
@@ -227,10 +246,7 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
         "total_rows": int(len(combined)),
         "as_of_date_min": str(new_labels["as_of_date"].min()),
         "as_of_date_max": str(new_labels["as_of_date"].max()),
-        "feature_coverage": _transfermarkt_feature_coverage(
-            new_labels,
-            Path(args.feature_matrix).resolve(),
-        ),
+        "identity": identity,
         "temporal": report["temporal"],
         "dry_run": bool(args.dry_run),
     }
@@ -238,19 +254,40 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
         return
 
+    identity_path = (
+        Path(args.identity_report).resolve()
+        if args.identity_report
+        else output_path.with_name("transfermarkt_identity_report.json")
+    )
+    identity_payload = {
+        **identity,
+        "season": str(args.season),
+        "snapshot": str(snapshot_path),
+        "mappings": identities.mappings.to_dict(orient="records"),
+        "review_queue": identities.review_queue.to_dict(orient="records"),
+        "unresolved": identities.unresolved.to_dict(orient="records"),
+    }
+    identity_path.parent.mkdir(parents=True, exist_ok=True)
+    identity_path.write_text(
+        json.dumps(identity_payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    if new_labels.empty:
+        print("No deterministic Transfermarkt identities resolved; no truth labels were written.")
+        print(f"  Identity review report: {identity_path}")
+        print(
+            f"  Review rows: {identity['review_rows']}; "
+            f"unresolved rows: {identity['unresolved_rows']}",
+        )
+        return
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(output_path, index=False)
     print(f"Imported {len(new_labels)} dated Transfermarkt labels to {output_path}")
     print(f"  Replaced matching player-season-source rows: {replaced_rows}")
     print(f"  Source snapshot dates: {summary['as_of_date_min']} to {summary['as_of_date_max']}")
-    coverage = summary["feature_coverage"]
-    if coverage["status"] == "checked":
-        print(
-            "  Rating-matrix matches: "
-            f"{coverage['matched_player_seasons']} / {coverage['unique_player_seasons']}"
-        )
-    else:
-        print(f"  Rating-matrix coverage: {coverage['reason']}")
+    print(f"  Deterministic identity matches: {identity['mapped_rows']} / {identity['total_rows']}")
+    print(f"  Identity review report: {identity_path}")
     print(f"  Total labels in file: {len(combined)}")
 
 
@@ -1558,7 +1595,11 @@ def main() -> None:
     transfermarkt_truth_p.add_argument(
         "--feature-matrix", type=str,
         default="data/gold/feature_store/rating_feature_matrix.parquet",
-        help="Rating feature matrix used for local name-and-season coverage preview",
+        help="Rating feature matrix used for deterministic identity resolution",
+    )
+    transfermarkt_truth_p.add_argument(
+        "--identity-report", type=str, default=None,
+        help="JSON audit output for mapped, review, and unresolved identity rows",
     )
     transfermarkt_truth_p.add_argument(
         "--dry-run", action="store_true",
