@@ -7897,20 +7897,12 @@ def export_wc_tournament_state() -> dict:
     })
 
 
-def import_wc_tournament_state(encoded: str) -> dict:
-    """Import a shared tournament state and persist it.
-
-    Decodes the base64-URL-safe JSON string, validates the schema version,
-    reconstructs the state, and saves it to ``DEFAULT_STATE_PATH``.
-    """
+def _decode_wc_tournament_import(encoded: str) -> tuple[Any | None, dict | None]:
+    """Decode an imported tournament state without writing local state."""
     import base64
     import json
 
-    from scoutfootball.worldcup.tournament import (
-        DEFAULT_STATE_PATH,
-        save_state,
-        state_from_dict,
-    )
+    from scoutfootball.worldcup.tournament import state_from_dict
 
     try:
         # Add padding if missing
@@ -7918,7 +7910,7 @@ def import_wc_tournament_state(encoded: str) -> dict:
         json_bytes = base64.urlsafe_b64decode(padded)
         state_dict = json.loads(json_bytes.decode("utf-8"))
     except Exception as exc:
-        return _clean_json_value({
+        return None, _clean_json_value({
             "status": "error",
             "code": "decode_failed",
             "message": f"Failed to decode state: {exc}",
@@ -7927,11 +7919,89 @@ def import_wc_tournament_state(encoded: str) -> dict:
     try:
         state = state_from_dict(state_dict)
     except ValueError as exc:
-        return _clean_json_value({
+        return None, _clean_json_value({
             "status": "error",
             "code": "invalid_state",
             "message": str(exc),
         })
+
+    return state, None
+
+
+def _wc_import_state_counts(state: Any) -> dict[str, int]:
+    """Return bounded counts used by import preview and confirmation UI."""
+    knockout_matches = (state.knockout or {}).get("matches", [])
+    return {
+        "group_results": len(state.results),
+        "knockout_matches_completed": sum(
+            bool(match.get("winner")) for match in knockout_matches
+        ),
+        "knockout_prediction_snapshots": sum(
+            isinstance(match.get("prediction_snapshot"), dict)
+            for match in knockout_matches
+        ),
+    }
+
+
+def preview_wc_tournament_import(encoded: str) -> dict:
+    """Validate an import and report bounded local-state replacement risks."""
+    incoming, error = _decode_wc_tournament_import(encoded)
+    if error:
+        return error
+    current = _wc_tournament_state()
+    current_result_ids = set(current.results)
+    incoming_result_ids = set(incoming.results)
+    changed_results = sum(
+        current.results.get(match_id) != incoming.results.get(match_id)
+        for match_id in current_result_ids & incoming_result_ids
+    )
+    current_counts = _wc_import_state_counts(current)
+    incoming_counts = _wc_import_state_counts(incoming)
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-tournament-import-preview",
+        "version": "1.0.0",
+        "status": "ok",
+        "recording_scope": "local application tournament state",
+        "incoming": {
+            "schema_version": incoming.schema_version,
+            "matches": len(incoming.matches),
+            **incoming_counts,
+        },
+        "current": {
+            "schema_version": current.schema_version,
+            "matches": len(current.matches),
+            **current_counts,
+        },
+        "differences": {
+            "group_results_added": len(incoming_result_ids - current_result_ids),
+            "group_results_removed": len(current_result_ids - incoming_result_ids),
+            "group_results_changed": changed_results,
+            "knockout_snapshots_removed": max(
+                0,
+                current_counts["knockout_prediction_snapshots"]
+                - incoming_counts["knockout_prediction_snapshots"],
+            ),
+        },
+        "requires_confirmation": True,
+        "limitations": [
+            "Preview validates the encoded local tournament state but does not write it.",
+            "Confirming import replaces the entire local application tournament "
+            "state; it is not a merge or official result synchronization.",
+        ],
+    })
+
+
+def import_wc_tournament_state(encoded: str) -> dict:
+    """Import a shared tournament state and persist it after UI confirmation.
+
+    Programmatic callers remain supported; the application UI first calls the
+    preview endpoint and requires an explicit confirmation before this write.
+    """
+    from scoutfootball.worldcup.tournament import DEFAULT_STATE_PATH, save_state
+
+    state, error = _decode_wc_tournament_import(encoded)
+    if error:
+        return error
 
     save_state(state, DEFAULT_STATE_PATH)
     return _clean_json_value({

@@ -755,6 +755,13 @@ not backfill missing snapshots and is never an official-result feed,
 calibration statistic, or model-accuracy report. The World Cup page can render
 and locally download this ledger as JSON.
 
+`POST /world-cup/tournament/import/preview` validates an encoded tournament
+state without writing local data. Its versioned response summarizes incoming
+and current result/snapshot counts plus bounded replacement differences. The
+World Cup page enables confirmation only after a successful preview of the
+unchanged encoded value. Confirmation still replaces the complete local
+application state; it is not a merge, official result feed, or automatic sync.
+
 The general match-prediction tactical handoff writes a bounded
 `scoutfootball.tactical-decision-pack` v1.1.0 into the browser-local board
 project. Alongside the loaded model output and provenance, it may preserve the

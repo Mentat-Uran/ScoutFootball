@@ -110,6 +110,7 @@ from scoutfootball.api import (
     import_wc_tournament_state,
     list_players,
     list_teams,
+    preview_wc_tournament_import,
     reset_wc_tournament,
     search_players_and_teams,
 )
@@ -1003,6 +1004,17 @@ def create_app() -> FastAPI:
         if not encoded:
             raise HTTPException(status_code=400, detail={"code": "missing_encoded"})
         return import_wc_tournament_state(encoded)
+
+    @app.post("/world-cup/tournament/import/preview")
+    async def wc_tournament_import_preview(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        body = _json.loads(raw.decode("utf-8")) if raw else {}
+        encoded = body.get("encoded", "")
+        if not encoded:
+            raise HTTPException(status_code=400, detail={"code": "missing_encoded"})
+        return preview_wc_tournament_import(encoded)
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")

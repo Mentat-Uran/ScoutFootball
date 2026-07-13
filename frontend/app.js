@@ -13861,6 +13861,19 @@ async function fetchWcTournamentImport(encoded) {
     }
 }
 
+async function fetchWcTournamentImportPreview(encoded) {
+    try {
+        const resp = await fetch(`${API_BASE}/world-cup/tournament/import/preview`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ encoded }),
+        });
+        return await resp.json();
+    } catch (e) {
+        return { status: "error", code: "request_failed", message: String(e) };
+    }
+}
+
 function renderWcShareDialog() {
     const z = appState.lang === "zh";
     const data = wcApiData.tournamentExport;
@@ -13954,24 +13967,58 @@ function renderWcImportDialog() {
             <h4 style="font-size:0.9rem">${z ? "导入锦标赛状态" : "Import Tournament State"}</h4>
             <button class="text-button" onclick="document.getElementById('wc-ko-import-dialog').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
         </div>
-        <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "粘贴分享编码字符串到下方文本框，点击导入将覆盖当前锦标赛状态。" : "Paste the shared encoded string into the box below. Importing will overwrite the current tournament state."}</p>
+        <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "先预览编码的状态差异，再确认替换本地应用中的锦标赛状态。" : "Preview state differences first, then explicitly confirm replacement of the local application tournament state."}</p>
         <textarea id="wc-ko-import-code" placeholder="${z ? "粘贴编码..." : "Paste encoded string..."}" style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:4px;background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical"></textarea>
         <div id="wc-ko-import-msg" style="font-size:0.7rem;margin-top:0.4rem;min-height:1rem"></div>
         <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-            <button class="text-button" id="wc-ko-import-confirm" type="button" style="font-size:0.75rem">${z ? "导入" : "Import"}</button>
+            <button class="text-button" id="wc-ko-import-preview" type="button" style="font-size:0.75rem">${z ? "预览差异" : "Preview Differences"}</button>
+            <button class="text-button" id="wc-ko-import-confirm" type="button" disabled style="font-size:0.75rem">${z ? "确认导入" : "Confirm Import"}</button>
             <button class="text-button" id="wc-ko-import-file" type="button" style="font-size:0.75rem">${z ? "从文件加载" : "Load File"}</button>
         </div>
         <input type="file" id="wc-ko-import-file-input" accept=".json,.txt" style="display:none">
     </div>`;
 
     const confirmBtn = dlg.querySelector("#wc-ko-import-confirm");
+    const previewBtn = dlg.querySelector("#wc-ko-import-preview");
     const msgEl = dlg.querySelector("#wc-ko-import-msg");
+    if (previewBtn) {
+        previewBtn.addEventListener("click", async () => {
+            const ta = dlg.querySelector("#wc-ko-import-code");
+            const encoded = ta ? ta.value.trim() : "";
+            if (!encoded) {
+                msgEl.textContent = z ? "请输入编码字符串" : "Please enter the encoded string";
+                return;
+            }
+            previewBtn.disabled = true;
+            const preview = await fetchWcTournamentImportPreview(encoded);
+            previewBtn.disabled = false;
+            if (preview?.status !== "ok") {
+                msgEl.textContent = z ? "预览失败，未写入本地状态。" : "Preview failed; local state was not written.";
+                msgEl.style.color = "var(--status-low-color,#f44336)";
+                if (confirmBtn) confirmBtn.disabled = true;
+                return;
+            }
+            const d = preview.differences || {};
+            const incoming = preview.incoming || {};
+            dlg.dataset.previewFor = encoded;
+            msgEl.textContent = (z
+                ? `导入将替换为 ${incoming.group_results || 0} 个小组赛果；新增 ${d.group_results_added || 0}，移除 ${d.group_results_removed || 0}，变更 ${d.group_results_changed || 0}，可能移除 ${d.knockout_snapshots_removed || 0} 个赛前快照。`
+                : `Import will replace with ${incoming.group_results || 0} group results; add ${d.group_results_added || 0}, remove ${d.group_results_removed || 0}, change ${d.group_results_changed || 0}, and may remove ${d.knockout_snapshots_removed || 0} pre-recording snapshots.`);
+            msgEl.style.color = "var(--text-muted)";
+            if (confirmBtn) confirmBtn.disabled = false;
+        });
+    }
     if (confirmBtn) {
         confirmBtn.addEventListener("click", async () => {
             const ta = dlg.querySelector("#wc-ko-import-code");
             const encoded = ta ? ta.value.trim() : "";
             if (!encoded) {
                 msgEl.textContent = z ? "请输入编码字符串" : "Please enter the encoded string";
+                msgEl.style.color = "var(--status-low-color,#f44336)";
+                return;
+            }
+            if (dlg.dataset.previewFor !== encoded) {
+                msgEl.textContent = z ? "请先预览当前编码的差异。" : "Preview differences for the current encoded state first.";
                 msgEl.style.color = "var(--status-low-color,#f44336)";
                 return;
             }
