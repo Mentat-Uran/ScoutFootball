@@ -761,6 +761,10 @@ and current result/snapshot counts plus bounded replacement differences. The
 World Cup page enables confirmation only after a successful preview of the
 unchanged encoded value. Confirmation still replaces the complete local
 application state; it is not a merge, official result feed, or automatic sync.
+Malformed but decodable states return `status: error`, `code:
+integrity_failed`, and up to 20 `integrity_errors` describing score, fixture,
+or knockout inconsistencies. These diagnostics are read-only; they do not
+partially import, repair, or persist any state.
 
 The general match-prediction tactical handoff writes a bounded
 `scoutfootball.tactical-decision-pack` v1.1.0 into the browser-local board

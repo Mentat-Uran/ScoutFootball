@@ -753,8 +753,17 @@ def state_to_dict(state: TournamentState) -> dict[str, Any]:
     }
 
 
-def state_from_dict(data: dict[str, Any]) -> TournamentState:
-    """Reconstruct a TournamentState from a dict, validating schema version."""
+def state_from_dict(
+    data: dict[str, Any], *, validate_integrity: bool = True
+) -> TournamentState:
+    """Reconstruct a TournamentState from a dict, validating schema version.
+
+    ``validate_integrity=False`` is reserved for read-only import diagnostics.
+    Normal callers, including persisted state loading, always retain the full
+    integrity gate.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("Tournament state must be an object")
     schema = data.get("schema_version", "")
     if not schema.startswith("1."):
         raise ValueError(
@@ -778,16 +787,42 @@ def state_from_dict(data: dict[str, Any]) -> TournamentState:
         created_at=data.get("created_at", ""),
         updated_at=data.get("updated_at", ""),
     )
-    integrity_errors = validate_tournament_state_integrity(state)
-    if integrity_errors:
-        raise ValueError(f"Invalid tournament state: {integrity_errors[0]}")
+    if validate_integrity:
+        integrity_errors = validate_tournament_state_integrity(state)
+        if integrity_errors:
+            raise ValueError(f"Invalid tournament state: {integrity_errors[0]}")
     return state
 
 
 def validate_tournament_state_integrity(state: TournamentState) -> list[str]:
     """Return bounded structural errors for imported tournament state."""
     errors: list[str] = []
-    match_ids = {match.get("match_id") for match in state.matches if isinstance(match, dict)}
+    if not isinstance(state.matches, list):
+        return ["group matches must be a list"]
+    expected_matches = {match["match_id"]: match for match in init_state().matches}
+    match_ids: set[str] = set()
+    for match in state.matches:
+        if not isinstance(match, dict):
+            errors.append("group match is not an object")
+            continue
+        match_id = match.get("match_id")
+        if not isinstance(match_id, str) or not match_id:
+            errors.append("group match has an invalid match_id")
+            continue
+        if match_id in match_ids:
+            errors.append(f"duplicate group match {match_id!r}")
+            continue
+        match_ids.add(match_id)
+        expected = expected_matches.get(match_id)
+        if expected is None:
+            errors.append(f"unknown group match {match_id!r}")
+            continue
+        for schedule_field in ("group", "matchday", "home", "away", "stage"):
+            if match.get(schedule_field) != expected[schedule_field]:
+                errors.append(f"group match {match_id!r} has altered {schedule_field}")
+                break
+    if match_ids != set(expected_matches):
+        errors.append("group match list does not match the official tournament schedule")
     for match_id, result in state.results.items():
         if match_id not in match_ids:
             errors.append(f"result references unknown match {match_id!r}")
@@ -798,10 +833,14 @@ def validate_tournament_state_integrity(state: TournamentState) -> list[str]:
             value = result.get(score_field)
             if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 30:
                 errors.append(f"result {match_id!r} has invalid {score_field}")
-    knockout = state.knockout or {}
-    matches = knockout.get("matches", []) if isinstance(knockout, dict) else []
-    if knockout and not isinstance(matches, list):
-        return ["knockout matches must be a list"]
+    knockout = state.knockout
+    if not isinstance(knockout, dict):
+        errors.append("knockout must be an object")
+        return errors[:20]
+    matches = knockout.get("matches", [])
+    if not isinstance(matches, list):
+        errors.append("knockout matches must be a list")
+        return errors[:20]
     for match in matches:
         if not isinstance(match, dict):
             errors.append("knockout match is not an object")
