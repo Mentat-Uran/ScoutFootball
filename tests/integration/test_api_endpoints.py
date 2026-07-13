@@ -139,6 +139,17 @@ def test_world_cup_match_briefing_endpoint(client: TestClient):
     assert "limitations" in data
 
 
+def test_world_cup_knockout_briefing_endpoint_keeps_unresolved_state_explicit(client: TestClient):
+    response = client.get("/world-cup/tournament/knockout/R32-01/briefing")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema"] == "scoutfootball.world-cup-knockout-match-briefing"
+    assert data["status"] in {
+        "not_generated", "not_ready", "not_found", "ok", "briefing_unavailable",
+    }
+
+
 def test_world_cup_squad_balance_comparison_endpoint(client: TestClient):
     response = client.get("/world-cup/squad-balance-comparison/Argentina/France")
 

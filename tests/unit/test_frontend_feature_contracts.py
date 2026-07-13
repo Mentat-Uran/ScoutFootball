@@ -284,6 +284,14 @@ def test_prematch_tactical_handoff_keeps_context_separate() -> None:
     assert 'version: "1.1.0"' in tactical_js
 
 
+def test_knockout_briefing_handoff_keeps_unresolved_slots_explicit() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    assert "openKnockoutMatchBriefing" in app_js
+    assert "/world-cup/tournament/knockout/${encodeURIComponent(matchId)}/briefing" in app_js
+    assert "no opponent or briefing is inferred" in app_js
+    assert "wc-ko-brief" in app_js
+
+
 def test_action_value_dossier_export_keeps_local_scouting_context_separate() -> None:
     app_js = _read(FRONTEND / "app.js")
     assert 'schema: "scoutfootball.action-value-research-dossier-export"' in app_js

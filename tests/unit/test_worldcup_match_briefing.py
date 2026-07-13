@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from scoutfootball import api
 from scoutfootball.api import get_world_cup_match_briefing
 
 
@@ -29,3 +30,44 @@ def test_world_cup_match_briefing_rejects_unknown_team() -> None:
 
     assert "error" in briefing
     assert "Unknown XI" in briefing["error"]
+
+
+class _BracketState:
+    def __init__(self, match: dict) -> None:
+        self.knockout = {"matches": [match], "provisional": True}
+        self._match = match
+
+    def knockout_match_by_id(self, match_id: str) -> dict | None:
+        return self._match if match_id == self._match["match_id"] else None
+
+
+def test_knockout_briefing_reuses_populated_fixture_and_keeps_context(monkeypatch) -> None:
+    match = {
+        "match_id": "R32-01", "round": "r32", "round_label": "Round of 32",
+        "position": 1, "status": "ready", "home": "Argentina", "away": "France",
+    }
+    monkeypatch.setattr(api, "_wc_tournament_state", lambda: _BracketState(match))
+    monkeypatch.setattr(api, "get_world_cup_match_briefing", lambda home, away: {
+        "schema": "scoutfootball.world-cup-match-briefing", "status": "ok",
+        "fixture": {"home_team": home, "away_team": away}, "limitations": [],
+    })
+
+    briefing = api.get_wc_knockout_match_briefing("R32-01")
+
+    assert briefing["status"] == "ok"
+    assert briefing["fixture"] == {"home_team": "Argentina", "away_team": "France"}
+    assert briefing["knockout_context"]["match_id"] == "R32-01"
+    assert briefing["knockout_context"]["bracket_provisional"] is True
+
+
+def test_knockout_briefing_does_not_infer_unresolved_opponent(monkeypatch) -> None:
+    match = {
+        "match_id": "R16-01", "round": "r16", "round_label": "Round of 16",
+        "position": 1, "status": "not_ready", "home": None, "away": None,
+    }
+    monkeypatch.setattr(api, "_wc_tournament_state", lambda: _BracketState(match))
+
+    briefing = api.get_wc_knockout_match_briefing("R16-01")
+
+    assert briefing["status"] == "not_ready"
+    assert briefing["fixture"] == {"home_team": None, "away_team": None}

@@ -2,6 +2,8 @@
 
 ## Recently Merged
 
+- **World Cup Knockout Match Briefing Handoff (2026-07-13, Round 48):** Populated local knockout cards can now open a source-bounded match briefing that retains match ID, round, position, and provisional bracket context. Unresolved winner slots return `not_ready` without inferring an opponent. Unit, API, and frontend contract tests passed. Current work is on `codex/integration`.
+
 - **Action-Value Rating Candidate Bridge (2026-07-13, Round 47):** Added a source-bounded endpoint and action-detail panel for strict rating-record candidates. It requires normalized name, team, and season agreement, records candidates separately in dossier exports, and retains explicit human-verification and non-additive boundaries rather than treating StatsBomb IDs as rating IDs. Unit, API, and frontend contract validation passed. Current work is on `codex/integration`.
 
 - **Prediction-to-Tactical Evidence Handoff (2026-07-13, Round 46):** The general pre-match tactical-board handoff now records bounded, browser-local head-to-head/form and momentum snapshots in tactical decision-pack v1.1.0. The metadata is sanitized on import, explicitly non-additive to prediction probabilities, and never asserts a lineup or tactical recommendation. Tactical decision-pack and frontend contract tests passed. Current work is on `codex/integration`.

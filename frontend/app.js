@@ -14112,6 +14112,12 @@ function renderWcKnockoutBracket() {
         });
     });
 
+    panel.querySelectorAll(".wc-ko-brief").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            void openKnockoutMatchBriefing(btn.dataset.matchId);
+        });
+    });
+
     // Auto-fetch probabilities if not yet loaded
     if (!wcApiData.knockoutProbabilities) {
         fetchWcKnockoutProbabilities().then(() => {
@@ -14148,7 +14154,7 @@ function renderKnockoutMatchCard(m, z, prob) {
                 <span style="font-weight:bold;margin:0 0.3rem">${hg}-${ag}${decidedByPen ? " (pen)" : ""}</span>
                 <span style="font-weight:${m.winner === m.away ? 'bold' : 'normal'}">${escapeHtml(away)}</span>
             </div>
-            <button class="text-button wc-ko-clear" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem;margin-top:0.2rem;color:var(--status-low)">${z ? "清除" : "Clear"}</button>
+            <div style="display:flex;gap:0.3rem;margin-top:0.2rem"><button class="text-button wc-ko-brief" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem">${z ? "简报" : "Brief"}</button><button class="text-button wc-ko-clear" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem;color:var(--status-low)">${z ? "清除" : "Clear"}</button></div>
         </div>`;
     }
 
@@ -14176,7 +14182,37 @@ function renderKnockoutMatchCard(m, z, prob) {
             <button class="text-button wc-ko-apply" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.4rem">${z ? "录入" : "Apply"}</button>
         </div>
         ${probBar}
+        <button class="text-button wc-ko-brief" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem;margin-top:0.3rem">${z ? "加载赛前简报" : "Load briefing"}</button>
     </div>`;
+}
+
+async function openKnockoutMatchBriefing(matchId) {
+    const z = appState.lang === "zh";
+    try {
+        const briefing = await fetchJson(`/world-cup/tournament/knockout/${encodeURIComponent(matchId)}/briefing`);
+        if (briefing?.status !== "ok") {
+            alert(briefing?.status === "not_ready"
+                ? (z ? "该淘汰赛席位尚未确定，不会推断对手或生成简报。" : "This knockout slot is unresolved; no opponent or briefing is inferred.")
+                : (z ? "本地淘汰赛简报不可用。" : "The local knockout briefing is unavailable."));
+            return;
+        }
+        const fixture = briefing.fixture || {};
+        const home = fixture.home_team;
+        const away = fixture.away_team;
+        if (!home || !away) return;
+        const cacheKey = `${home}|${away}`;
+        wcApiData.matchBriefingCache[cacheKey] = briefing;
+        appState.wcCompareA = home;
+        appState.wcCompareB = away;
+        await Promise.all([
+            fetchWcSquad(home), fetchWcSquad(away), fetchWcMatchPrediction(home, away),
+            fetchWcSquadBalanceComparison(home, away),
+        ]);
+        await setView("wc_compare");
+    } catch (err) {
+        console.warn("[WC] knockout briefing failed:", err);
+        alert(z ? "加载本地淘汰赛简报失败。" : "Failed to load the local knockout briefing.");
+    }
 }
 
 async function fetchWcMatchPrediction(teamA, teamB) {
