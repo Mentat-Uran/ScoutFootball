@@ -17,7 +17,11 @@ from pathlib import Path
 
 import pytest
 
-from scoutfootball.api import export_wc_tournament_state, import_wc_tournament_state
+from scoutfootball.api import (
+    export_wc_tournament_state,
+    import_wc_tournament_state,
+    preview_wc_tournament_import,
+)
 from scoutfootball.worldcup.tournament import (
     apply_result,
     generate_knockout_bracket,
@@ -125,6 +129,26 @@ class TestExportWcTournamentState:
 
 
 class TestImportWcTournamentState:
+    def test_preview_reports_differences_without_writing_local_state(self, patched_state_path):
+        current = load_state()
+        current_match_id = current.matches[0]["match_id"]
+        apply_result(current, current_match_id, 1, 0)
+        save_state(current, patched_state_path)
+
+        incoming = init_state()
+        incoming_match_id = incoming.matches[1]["match_id"]
+        apply_result(incoming, incoming_match_id, 2, 0)
+        encoded = base64.urlsafe_b64encode(
+            json.dumps(state_to_dict(incoming)).encode("utf-8")
+        ).decode("ascii")
+
+        preview = preview_wc_tournament_import(encoded)
+
+        assert preview["status"] == "ok"
+        assert preview["requires_confirmation"] is True
+        assert preview["differences"]["group_results_added"] == 1
+        assert preview["differences"]["group_results_removed"] == 1
+        assert current_match_id in load_state().results
     def test_import_round_trip(self, patched_state_path):
         """Export → import should reproduce the same state."""
         # Apply some results to make the state non-trivial
