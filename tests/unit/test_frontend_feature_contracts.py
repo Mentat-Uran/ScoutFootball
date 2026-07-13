@@ -252,3 +252,6 @@ def test_shortlist_decision_pack_exports_are_local_and_formula_safe() -> None:
     assert "row.map(csvCell).join(\",\")" in app_js
     assert "scout-export-decision-pack-json" in index_html
     assert "scout-export-decision-pack-csv" in index_html
+    assert "sendShortlistToTacticalBoard" in app_js
+    assert "browser-local-shortlist" in app_js
+    assert "scout-shortlist-to-tactical" in index_html
