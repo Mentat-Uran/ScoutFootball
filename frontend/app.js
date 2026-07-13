@@ -12592,6 +12592,7 @@ let wcApiData = {
     knockoutBracket: null,  // from /world-cup/tournament/knockout
     knockoutProbabilities: null,  // from /world-cup/tournament/knockout/probabilities
     knockoutReviews: {},  // match ID → local pre-recording result review
+    knockoutReviewLedger: null,  // local application tournament review audit
     knockoutScenarios: {},  // team → scenario data from /world-cup/tournament/knockout/scenarios/{team}
     groupStageSimulation: null,  // from /world-cup/tournament/group-simulation
     tournamentExport: null,  // from /world-cup/tournament/export
@@ -13275,6 +13276,7 @@ function renderWcTournament() {
                 <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
                     <button class="text-button" id="wc-ko-generate" type="button" style="font-size:0.75rem">${z ? "生成对阵" : "Generate Bracket"}</button>
                     <button class="text-button" id="wc-ko-refresh" type="button" style="font-size:0.75rem">↻</button>
+                    <button class="text-button" id="wc-ko-review-ledger" type="button" style="font-size:0.75rem">${z ? "赛果复盘总览" : "Review Ledger"}</button>
                     <select id="wc-ko-scenario-team" class="filter-select" style="min-width:160px;font-size:0.7rem" data-placeholder="${z ? "夺冠情景" : "Championship Scenarios"}">
                         <option value="">${z ? "— 夺冠情景 —" : "— Scenarios —"}</option>
                     </select>
@@ -13393,6 +13395,17 @@ function renderWcTournament() {
         koRefreshBtn.addEventListener("click", async () => {
             await fetchWcKnockoutBracket();
             renderWcKnockoutBracket();
+        });
+    }
+
+    const koReviewLedgerBtn = document.getElementById("wc-ko-review-ledger");
+    if (koReviewLedgerBtn && !koReviewLedgerBtn.dataset.bound) {
+        koReviewLedgerBtn.dataset.bound = "1";
+        koReviewLedgerBtn.addEventListener("click", async () => {
+            koReviewLedgerBtn.disabled = true;
+            await fetchWcKnockoutReviewLedger();
+            renderWcKnockoutReviewLedger();
+            koReviewLedgerBtn.disabled = false;
         });
     }
 
@@ -13624,6 +13637,62 @@ async function fetchWcKnockoutReview(matchId) {
         console.warn("[WC] knockout result review failed:", err);
         return null;
     }
+}
+
+async function fetchWcKnockoutReviewLedger() {
+    try {
+        const ledger = await fetchJson("/world-cup/tournament/knockout/reviews");
+        wcApiData.knockoutReviewLedger = ledger || null;
+    } catch (err) {
+        console.warn("[WC] knockout review ledger failed:", err);
+        wcApiData.knockoutReviewLedger = null;
+    }
+}
+
+function renderWcKnockoutReviewLedger() {
+    const z = appState.lang === "zh";
+    const bracketPanel = document.getElementById("wc-ko-bracket-panel");
+    if (!bracketPanel || !bracketPanel.parentElement) return;
+    let panel = document.getElementById("wc-ko-review-ledger-panel");
+    if (!panel) {
+        panel = document.createElement("div");
+        panel.id = "wc-ko-review-ledger-panel";
+        bracketPanel.parentElement.insertBefore(panel, bracketPanel);
+    }
+    const ledger = wcApiData.knockoutReviewLedger;
+    if (!ledger || ledger.status === "not_generated") {
+        panel.innerHTML = `<p style="font-size:0.75rem;color:var(--text-muted);margin:0 0 0.65rem">${z ? "尚未生成本地淘汰赛对阵表，无法汇总赛果复盘。" : "No local knockout bracket is available for a result-review ledger."}</p>`;
+        return;
+    }
+    const summary = ledger.summary || {};
+    const reviews = Array.isArray(ledger.reviews) ? ledger.reviews : [];
+    const rows = reviews.map((review) => {
+        const fixture = review.fixture || {};
+        const outcome = review.recorded_outcome || {};
+        const comparison = review.comparison || {};
+        const direction = comparison.directional_result === "matched_direction"
+            ? (z ? "方向一致" : "Matched")
+            : comparison.directional_result === "recorded_upset"
+                ? (z ? "本地冷门" : "Recorded upset")
+                : review.status === "snapshot_not_recorded"
+                    ? (z ? "缺少赛前快照" : "Snapshot missing")
+                    : (z ? "无方向判断" : "No call");
+        return `<tr><td>${escapeHtml(review.match_id || "")}</td><td>${escapeHtml(fixture.home_team || "TBD")} ${outcome.home_goals ?? "-"}-${outcome.away_goals ?? "-"} ${escapeHtml(fixture.away_team || "TBD")}</td><td>${escapeHtml(direction)}</td></tr>`;
+    }).join("");
+    panel.innerHTML = `<div style="margin-bottom:0.65rem;padding:0.65rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03))">
+        <div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:center"><strong style="font-size:0.8rem">${z ? "本地赛果复盘总览" : "Local Result Review Ledger"}</strong><button class="text-button" id="wc-ko-review-ledger-export" type="button" style="font-size:0.68rem">${z ? "导出 JSON" : "Export JSON"}</button></div>
+        <p style="font-size:0.67rem;color:var(--text-muted);margin:0.3rem 0">${z ? "已完成" : "Completed"}: ${summary.completed_matches || 0} · ${z ? "有赛前快照" : "Snapshots"}: ${summary.reviews_with_snapshot || 0} · ${z ? "缺失" : "Missing"}: ${summary.snapshots_missing || 0} · ${z ? "方向一致" : "Matched"}: ${summary.matched_direction || 0} · ${z ? "本地冷门" : "Upsets"}: ${summary.recorded_upset || 0}</p>
+        ${rows ? `<div class="table-scroll"><table style="font-size:0.7rem"><thead><tr><th>ID</th><th>${z ? "本地录入赛果" : "Local recorded result"}</th><th>${z ? "对照" : "Comparison"}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p style="font-size:0.7rem;color:var(--text-muted)">${z ? "尚无已录入淘汰赛赛果。" : "No local knockout results have been recorded."}</p>`}
+        <p style="font-size:0.62rem;color:var(--text-muted);margin:0.4rem 0 0">${z ? "仅审计本地应用状态；不是官方赛果或模型校准报告。" : "Audits local application state only; not an official-result feed or calibration report."}</p>
+    </div>`;
+    const exportButton = panel.querySelector("#wc-ko-review-ledger-export");
+    if (exportButton) exportButton.addEventListener("click", () => {
+        _downloadLocalBriefing(
+            JSON.stringify({ ...ledger, exported_at: new Date().toISOString() }, null, 2),
+            "scoutfootball-local-knockout-review-ledger.json",
+            "application/json;charset=utf-8",
+        );
+    });
 }
 
 function downloadWcKnockoutReview(review) {

@@ -7442,7 +7442,7 @@ def get_wc_knockout_match_briefing(match_id: str) -> dict[str, Any]:
             ],
         })
     briefing["knockout_context"] = context
-    briefing["knockout_context"]["source"] = "browser-local tournament bracket state"
+    briefing["knockout_context"]["source"] = "local application tournament state"
     briefing["limitations"] = [
         *briefing.get("limitations", []),
         "Knockout placement reflects the local bracket state and is not an official "
@@ -7511,19 +7511,18 @@ def _capture_wc_knockout_prediction_snapshot(state: Any, match_id: str) -> dict[
         return None
 
 
-def get_wc_knockout_match_review(match_id: str) -> dict[str, Any]:
+def _build_wc_knockout_match_review(state: Any, match_id: str) -> dict[str, Any]:
     """Compare a locally recorded result with its captured pre-result snapshot.
 
     It is intentionally a one-fixture comparison, not a claim about model
     calibration or predictive quality. Older and non-API bracket entries can
     have a completed result without a snapshot and remain explicitly unknown.
     """
-    state = _wc_tournament_state()
     base = {
         "schema": "scoutfootball.world-cup-knockout-result-review",
         "version": "1.0.0",
         "match_id": match_id,
-        "recording_scope": "browser-local tournament bracket state",
+        "recording_scope": "local application tournament state",
     }
     if not state.knockout or not state.knockout.get("matches"):
         return _clean_json_value({
@@ -7622,6 +7621,67 @@ def get_wc_knockout_match_review(match_id: str) -> dict[str, Any]:
             "snapshot; it is not a calibration, accuracy, or official-result assessment.",
             "Clearing the local result also removes this snapshot to avoid retaining "
             "a stale matchup comparison.",
+        ],
+    })
+
+
+def get_wc_knockout_match_review(match_id: str) -> dict[str, Any]:
+    """Return one local knockout result review."""
+    return _build_wc_knockout_match_review(_wc_tournament_state(), match_id)
+
+
+def get_wc_knockout_review_ledger() -> dict[str, Any]:
+    """Return a compact, local-only summary of recorded knockout reviews.
+
+    This aggregates only completed locally recorded bracket entries. It does
+    not fill missing snapshots, and the directional counts are explicitly not
+    calibration or accuracy metrics.
+    """
+    state = _wc_tournament_state()
+    base = {
+        "schema": "scoutfootball.world-cup-knockout-review-ledger",
+        "version": "1.0.0",
+        "recording_scope": "local application tournament state",
+    }
+    if not state.knockout or not state.knockout.get("matches"):
+        return _clean_json_value({
+            **base,
+            "status": "not_generated",
+            "reviews": [],
+            "summary": {"completed_matches": 0, "reviews_with_snapshot": 0},
+            "limitations": ["No local knockout bracket has been generated."],
+        })
+    completed = [
+        match for match in state.knockout["matches"] if match.get("winner")
+    ]
+    reviews = [
+        _build_wc_knockout_match_review(state, match["match_id"])
+        for match in completed
+    ]
+    direction_counts = {
+        label: sum(
+            review.get("comparison", {}).get("directional_result") == label
+            for review in reviews
+        )
+        for label in ("matched_direction", "recorded_upset", "no_directional_call")
+    }
+    return _clean_json_value({
+        **base,
+        "status": "ok",
+        "reviews": reviews,
+        "summary": {
+            "completed_matches": len(completed),
+            "reviews_with_snapshot": sum(review.get("status") == "ok" for review in reviews),
+            "snapshots_missing": sum(
+                review.get("status") == "snapshot_not_recorded" for review in reviews
+            ),
+            **direction_counts,
+        },
+        "limitations": [
+            "This is a local-result audit summary, not an official tournament feed "
+            "or a model calibration report.",
+            "Completed entries without a captured pre-recording snapshot remain "
+            "missing rather than being inferred after the result.",
         ],
     })
 

@@ -89,7 +89,7 @@ def test_knockout_result_review_compares_only_a_captured_local_snapshot(monkeypa
     review = api.get_wc_knockout_match_review("R32-01")
 
     assert review["status"] == "ok"
-    assert review["recording_scope"] == "browser-local tournament bracket state"
+    assert review["recording_scope"] == "local application tournament state"
     assert review["comparison"]["predicted_winner"] == "Argentina"
     assert review["comparison"]["recorded_winner"] == "France"
     assert review["comparison"]["directional_result"] == "recorded_upset"
@@ -127,3 +127,33 @@ def test_knockout_prediction_snapshot_is_captured_before_result_projection(monke
         > snapshot["prediction"]["away_win_probability"]
     )
     assert snapshot["source"] == "pre-recording local knockout bracket projection"
+
+
+def test_knockout_review_ledger_keeps_missing_snapshots_explicit(monkeypatch) -> None:
+    completed = {
+        "match_id": "R32-01", "round": "r32", "position": 1, "status": "completed",
+        "home": "Argentina", "away": "France", "home_goals": 1, "away_goals": 0,
+        "winner": "Argentina", "decided_by": "regular",
+        "prediction_snapshot": {
+            "prediction": {"home_win_probability": 0.6, "away_win_probability": 0.4}
+        },
+    }
+    older = {
+        "match_id": "R32-02", "round": "r32", "position": 2, "status": "completed",
+        "home": "Brazil", "away": "Spain", "home_goals": 0, "away_goals": 1,
+        "winner": "Spain", "decided_by": "regular",
+    }
+    state = _BracketState(completed)
+    state.knockout["matches"].append(older)
+    state.knockout_match_by_id = lambda match_id: next(
+        (match for match in state.knockout["matches"] if match["match_id"] == match_id), None
+    )
+    monkeypatch.setattr(api, "_wc_tournament_state", lambda: state)
+
+    ledger = api.get_wc_knockout_review_ledger()
+
+    assert ledger["status"] == "ok"
+    assert ledger["recording_scope"] == "local application tournament state"
+    assert ledger["summary"]["completed_matches"] == 2
+    assert ledger["summary"]["reviews_with_snapshot"] == 1
+    assert ledger["summary"]["snapshots_missing"] == 1

@@ -92,6 +92,7 @@ from scoutfootball.api import (
     get_wc_knockout_match_briefing,
     get_wc_knockout_match_review,
     get_wc_knockout_probabilities,
+    get_wc_knockout_review_ledger,
     get_wc_knockout_scenarios,
     get_wc_predictions,
     get_wc_schedule,
@@ -948,6 +949,10 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/tournament/knockout/{match_id}/review")
     def wc_knockout_match_review(match_id: str):
         return get_wc_knockout_match_review(match_id)
+
+    @app.get("/world-cup/tournament/knockout/reviews")
+    def wc_knockout_review_ledger():
+        return get_wc_knockout_review_ledger()
 
     @app.post("/world-cup/tournament/knockout/generate")
     def wc_knockout_generate():

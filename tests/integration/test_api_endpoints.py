@@ -159,7 +159,17 @@ def test_world_cup_knockout_review_endpoint_never_backfills_a_prediction(client:
     assert data["status"] in {
         "not_generated", "not_found", "not_completed", "snapshot_not_recorded", "ok",
     }
-    assert data["recording_scope"] == "browser-local tournament bracket state"
+    assert data["recording_scope"] == "local application tournament state"
+
+
+def test_world_cup_knockout_review_ledger_endpoint_is_local_only(client: TestClient):
+    response = client.get("/world-cup/tournament/knockout/reviews")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema"] == "scoutfootball.world-cup-knockout-review-ledger"
+    assert data["recording_scope"] == "local application tournament state"
+    assert data["status"] in {"not_generated", "ok"}
 
 
 def test_world_cup_squad_balance_comparison_endpoint(client: TestClient):
