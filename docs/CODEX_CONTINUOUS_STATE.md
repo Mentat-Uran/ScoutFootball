@@ -2,6 +2,8 @@
 
 ## Recently Merged
 
+- **Browser-Local Match Prediction Export (2026-07-13, Round 43):** Added JSON and formula-safe CSV reports for the exact prediction currently shown in the match view. The versioned payload records fixture, selected model output, confidence intervals when available, and loaded coverage context while stating its non-guarantee/non-betting boundary. Frontend syntax and contract tests passed. Current work is on `codex/integration`.
+
 - **Shortlist Tactical-Board Handoff (2026-07-13, Round 42):** Added a browser-local shortcut that creates a fresh tactical-board project from the current shortlist. Each marker includes the local priority, recommendation, target role, and rationale/risk context; the project keeps an explicit non-lineup/non-transfer boundary. Frontend syntax and contract tests passed. Current work is on `codex/integration`.
 
 - **Player Comparison to Local Shortlist (2026-07-13, Round 41):** Added a versioned local JSON export for player comparisons and controls that place either comparison subject into the current browser-local shortlist. The controls show their local-only boundary and reuse the existing shortlist/decision-pack flow; they do not create a server-side recommendation. Frontend syntax and contract tests passed. Current work is on `codex/integration`.

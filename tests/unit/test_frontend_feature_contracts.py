@@ -255,3 +255,14 @@ def test_shortlist_decision_pack_exports_are_local_and_formula_safe() -> None:
     assert "sendShortlistToTacticalBoard" in app_js
     assert "browser-local-shortlist" in app_js
     assert "scout-shortlist-to-tactical" in index_html
+
+
+def test_match_prediction_exports_are_local_and_bounded() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    html = _read(FRONTEND / "index.html")
+    assert "buildCurrentPredictionExport" in app_js
+    assert 'schema: "scoutfootball.match-prediction-export"' in app_js
+    assert "exportCurrentPredictionJSON" in app_js
+    assert "exportCurrentPredictionCSV" in app_js
+    assert "row.map(csvCell).join(\",\")" in app_js
+    assert "btn-prediction-export-json" in html
