@@ -264,6 +264,12 @@ def test_match_prediction_exports_are_local_and_bounded() -> None:
     assert 'schema: "scoutfootball.match-prediction-export"' in app_js
     assert "exportCurrentPredictionJSON" in app_js
     assert "exportCurrentPredictionCSV" in app_js
+    assert 'version: "1.1.0"' in app_js
+    assert "contextual_evidence" in app_js
+    assert "non_additive_to_prediction: true" in app_js
+    assert "compactHeadToHeadEvidence" in app_js
+    assert "compactMomentumEvidence" in app_js
+    assert "capturePredictionEvidence" in app_js
     assert "row.map(csvCell).join(\",\")" in app_js
     assert "btn-prediction-export-json" in html
 
