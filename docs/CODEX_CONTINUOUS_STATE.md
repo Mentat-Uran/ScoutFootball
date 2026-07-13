@@ -2,6 +2,8 @@
 
 ## Recently Merged
 
+- **Shortlist Tactical-Board Handoff (2026-07-13, Round 42):** Added a browser-local shortcut that creates a fresh tactical-board project from the current shortlist. Each marker includes the local priority, recommendation, target role, and rationale/risk context; the project keeps an explicit non-lineup/non-transfer boundary. Frontend syntax and contract tests passed. Current work is on `codex/integration`.
+
 - **Player Comparison to Local Shortlist (2026-07-13, Round 41):** Added a versioned local JSON export for player comparisons and controls that place either comparison subject into the current browser-local shortlist. The controls show their local-only boundary and reuse the existing shortlist/decision-pack flow; they do not create a server-side recommendation. Frontend syntax and contract tests passed. Current work is on `codex/integration`.
 
 - **Browser-Local Shortlist Decision Pack (2026-07-13, Round 40):** Added JSON and formula-safe CSV exports that combine the loaded shortlist with browser-local priority, recommendation, target-role, and rationale/risk dossiers. The versioned pack sorts urgent candidates first, handles an empty shortlist explicitly, and states that it is not an audit trail, transfer instruction, or sync artifact. Frontend syntax, contract, and scouting-workspace tests passed. Current work is on `codex/integration`.

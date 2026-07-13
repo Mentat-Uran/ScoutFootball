@@ -1488,6 +1488,11 @@ The player comparison view can export the loaded comparison as
 displayed player to the browser-local shortlist. Adding a player does not
 persist a server-side recommendation or synchronize the shortlist.
 
+The scouting view can create a browser-local tactical-board project from the
+current shortlist. Player markers carry local dossier context only and the
+project explicitly states that it is not a confirmed lineup or transfer
+recommendation.
+
 ---
 
 ## 10. Cross-Provider Schema Reference

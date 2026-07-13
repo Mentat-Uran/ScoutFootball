@@ -12160,6 +12160,10 @@ function bindEvents() {
     if (scoutDecisionPackCsvButton) {
         scoutDecisionPackCsvButton.addEventListener("click", exportShortlistDecisionPackCSV);
     }
+    const scoutShortlistTacticalButton = document.getElementById("scout-shortlist-to-tactical");
+    if (scoutShortlistTacticalButton) {
+        scoutShortlistTacticalButton.addEventListener("click", sendShortlistToTacticalBoard);
+    }
 
     const scoutWorkspaceExportButton = document.getElementById("scout-export-workspace");
     if (scoutWorkspaceExportButton) {
@@ -16253,6 +16257,40 @@ function sendToTacticalBoard(player) {
     };
     if (!tacticalProject.objects) tacticalProject.objects = [];
     tacticalProject.objects.push(marker);
+    if (typeof TACTICAL_BOARD !== "undefined" && TACTICAL_BOARD.saveProject) {
+        TACTICAL_BOARD.saveProject(tacticalProject);
+    }
+    setView("tactical");
+}
+
+function sendShortlistToTacticalBoard() {
+    const players = mergeScoutingRows(shortlistData, getPlayerShortlist());
+    if (!players.length) return;
+    tacticalProject = typeof TACTICAL_BOARD !== "undefined"
+        ? TACTICAL_BOARD.createProject("ScoutFootball shortlist tactical review")
+        : { title: "ScoutFootball shortlist tactical review", objects: [] };
+    tacticalProject.objects = players.map((player, index) => {
+        const dossier = getShortlistDossier(player);
+        return {
+            type: "player_marker",
+            id: `shortlist_${Date.now()}_${index}`,
+            label: player.player_name || player.name || "Player",
+            position: player.position_group || player.position || "",
+            rating: player.optimized_score ?? player.rating ?? null,
+            team: player.team || "",
+            x: 20 + (index % 4) * 20,
+            y: 28 + Math.floor(index / 4) * 18,
+            shortlist_context: {
+                priority: dossier.priority,
+                recommendation: dossier.recommendation,
+                target_role: dossier.target_role,
+                rationale: dossier.rationale,
+                scope: "browser-local-shortlist",
+            },
+        };
+    });
+    tacticalProject.source_attribution = "ScoutFootball browser-local shortlist tactical review";
+    tacticalProject.notes = "Shortlist and dossier context are browser-local only; not a confirmed lineup or transfer recommendation.";
     if (typeof TACTICAL_BOARD !== "undefined" && TACTICAL_BOARD.saveProject) {
         TACTICAL_BOARD.saveProject(tacticalProject);
     }
