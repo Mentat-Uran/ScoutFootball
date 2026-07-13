@@ -12938,6 +12938,28 @@ async function fetchWcTournamentQualificationImpact(group) {
     return null;
 }
 
+function exportWcQualificationImpactJSON(impact) {
+    if (impact?.schema !== "scoutfootball.world-cup-qualification-impact") return;
+    const payload = {
+        schema: "scoutfootball.world-cup-qualification-impact-export",
+        version: "1.0.0",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        impact,
+        limitations: [
+            "Based only on locally recorded group results.",
+            "Not an official qualification decision or a match prediction.",
+        ],
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `scoutfootball-qualification-impact-group-${impact.group || "unknown"}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
 async function fetchWcTournamentScenarios(team) {
     if (!team) return null;
     try {
@@ -13165,7 +13187,7 @@ function renderWcTournament() {
                     ${z ? "前 2 名直接出线，第 3 名参与最佳小组第三评比" : "Top 2 advance; 3rd enters best-thirds ranking"}
                 </p>
                 ${impact ? `<div style="margin-top:0.6rem;padding:0.5rem;border-left:2px solid var(--accent);font-size:0.72rem">
-                    <strong>${z ? "本地出线影响" : "Local qualification impact"}</strong><br>
+                    <div style="display:flex;justify-content:space-between;gap:0.4rem"><strong>${z ? "本地出线影响" : "Local qualification impact"}</strong><button class="text-button" id="wc-qualification-export" type="button" style="font-size:0.65rem">${z ? "导出 JSON" : "Export JSON"}</button></div>
                     ${z ? "第三名" : "Third"}: ${escapeHtml(impact.third_place?.team || "—")} · ${z ? "跨组排名" : "cross-group rank"} ${impact.third_place?.rank || "—"}/${impact.third_place?.cutoff_rank || 8}
                     · ${impact.third_place?.currently_within_cutoff ? (z ? "当前在线内" : "currently inside") : (z ? "当前在线外" : "currently outside")}<br>
                     ${z ? "本组未赛" : "Group matches remaining"}: ${impact.matches_remaining ?? "—"}
@@ -13333,6 +13355,10 @@ function renderWcTournament() {
             ]);
             renderWcTournament();
         });
+    }
+    const qualificationExport = document.getElementById("wc-qualification-export");
+    if (qualificationExport && impact) {
+        qualificationExport.addEventListener("click", () => exportWcQualificationImpactJSON(impact));
     }
 
     const refreshBtn = document.getElementById("wc-tournament-refresh");
