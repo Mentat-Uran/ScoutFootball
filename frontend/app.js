@@ -13993,7 +13993,12 @@ function renderWcImportDialog() {
             const preview = await fetchWcTournamentImportPreview(encoded);
             previewBtn.disabled = false;
             if (preview?.status !== "ok") {
-                msgEl.textContent = z ? "预览失败，未写入本地状态。" : "Preview failed; local state was not written.";
+                const issues = Array.isArray(preview?.integrity_errors)
+                    ? preview.integrity_errors.slice(0, 3).join("; ") : "";
+                const detail = issues ? ` ${issues}` : "";
+                msgEl.textContent = z
+                    ? `预览失败，未写入本地状态。${detail}`
+                    : `Preview failed; local state was not written.${detail}`;
                 msgEl.style.color = "var(--status-low-color,#f44336)";
                 if (confirmBtn) confirmBtn.disabled = true;
                 return;

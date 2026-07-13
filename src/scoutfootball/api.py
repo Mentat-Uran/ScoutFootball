@@ -7902,7 +7902,10 @@ def _decode_wc_tournament_import(encoded: str) -> tuple[Any | None, dict | None]
     import base64
     import json
 
-    from scoutfootball.worldcup.tournament import state_from_dict
+    from scoutfootball.worldcup.tournament import (
+        state_from_dict,
+        validate_tournament_state_integrity,
+    )
 
     try:
         # Add padding if missing
@@ -7917,12 +7920,22 @@ def _decode_wc_tournament_import(encoded: str) -> tuple[Any | None, dict | None]
         })
 
     try:
-        state = state_from_dict(state_dict)
+        state = state_from_dict(state_dict, validate_integrity=False)
     except ValueError as exc:
         return None, _clean_json_value({
             "status": "error",
             "code": "invalid_state",
             "message": str(exc),
+        })
+
+    integrity_errors = validate_tournament_state_integrity(state)
+    if integrity_errors:
+        return None, _clean_json_value({
+            "status": "error",
+            "code": "integrity_failed",
+            "message": "Tournament state failed integrity validation.",
+            "integrity_errors": integrity_errors,
+            "recording_scope": "local application tournament state",
         })
 
     return state, None

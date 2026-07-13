@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -170,6 +173,22 @@ def test_world_cup_knockout_review_ledger_endpoint_is_local_only(client: TestCli
     assert data["schema"] == "scoutfootball.world-cup-knockout-review-ledger"
     assert data["recording_scope"] == "local application tournament state"
     assert data["status"] in {"not_generated", "ok"}
+
+
+def test_tournament_import_preview_reports_integrity_without_persisting(client: TestClient):
+    from scoutfootball.worldcup.tournament import init_state, state_to_dict
+
+    incoming = state_to_dict(init_state())
+    incoming["matches"][0]["home"] = "Altered Team"
+    encoded = base64.urlsafe_b64encode(json.dumps(incoming).encode("utf-8")).decode("ascii")
+
+    response = client.post("/world-cup/tournament/import/preview", json={"encoded": encoded})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["code"] == "integrity_failed"
+    assert any("altered home" in issue for issue in data["integrity_errors"])
 
 
 def test_world_cup_squad_balance_comparison_endpoint(client: TestClient):

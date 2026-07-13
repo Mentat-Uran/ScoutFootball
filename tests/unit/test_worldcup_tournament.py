@@ -461,6 +461,15 @@ class TestPersistence:
         assert any("unknown match" in error for error in errors)
         assert any("not a fixture participant" in error for error in errors)
 
+    def test_integrity_rejects_altered_schedule_and_non_object_knockout(self, fresh_state):
+        fresh_state.matches[0]["home"] = "Altered Team"
+        fresh_state.knockout = "not-a-bracket"
+
+        errors = validate_tournament_state_integrity(fresh_state)
+
+        assert any("altered home" in error for error in errors)
+        assert "knockout must be an object" in errors
+
     def test_save_and_load_state(self, fresh_state, tmp_path: Path):
         apply_result(fresh_state, "A-1-Mexico-South Africa-000", 2, 1)
         path = tmp_path / "tournament_state.json"

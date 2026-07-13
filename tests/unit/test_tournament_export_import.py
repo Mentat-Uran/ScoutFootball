@@ -149,6 +149,46 @@ class TestImportWcTournamentState:
         assert preview["differences"]["group_results_added"] == 1
         assert preview["differences"]["group_results_removed"] == 1
         assert current_match_id in load_state().results
+
+    def test_preview_reports_all_integrity_issues_without_writing_local_state(
+        self, patched_state_path
+    ):
+        current = load_state()
+        current_match_id = current.matches[0]["match_id"]
+        apply_result(current, current_match_id, 1, 0)
+        save_state(current, patched_state_path)
+
+        incoming = state_to_dict(init_state())
+        incoming["matches"][0]["home"] = "Altered Team"
+        incoming["results"] = {
+            "unknown-match": {"home_goals": 1, "away_goals": 0},
+            incoming["matches"][1]["match_id"]: {"home_goals": True, "away_goals": -1},
+        }
+        incoming["knockout"] = {"matches": [{
+            "match_id": "r32-01", "home": "Argentina", "away": "France",
+            "winner": "Unknown XI", "status": "completed", "home_goals": 1,
+            "away_goals": 0,
+        }]}
+        encoded = base64.urlsafe_b64encode(json.dumps(incoming).encode("utf-8")).decode("ascii")
+
+        preview = preview_wc_tournament_import(encoded)
+        import_result = import_wc_tournament_state(encoded)
+
+        assert preview["status"] == "error"
+        assert preview["code"] == "integrity_failed"
+        assert preview["integrity_errors"]
+        assert any("altered home" in issue for issue in preview["integrity_errors"])
+        assert any("unknown match" in issue for issue in preview["integrity_errors"])
+        assert any("invalid home_goals" in issue for issue in preview["integrity_errors"])
+        assert any("not a fixture participant" in issue for issue in preview["integrity_errors"])
+        assert import_result["code"] == "integrity_failed"
+        assert load_state().results == {
+            current_match_id: {
+                "home_goals": 1,
+                "away_goals": 0,
+                "status": "completed",
+            }
+        }
     def test_import_round_trip(self, patched_state_path):
         """Export → import should reproduce the same state."""
         # Apply some results to make the state non-trivial
