@@ -410,6 +410,55 @@ def determine_advancing_teams(
     }
 
 
+def qualification_impact(state: TournamentState, group: str) -> dict[str, Any]:
+    """Explain the current local qualification picture for one group.
+
+    This is a standings interpretation only.  It does not predict results or
+    assert an official qualification decision while any group is incomplete.
+    """
+    letter = group.upper()
+    if letter not in GROUPS:
+        raise ValueError(f"Unknown group: {group!r}")
+    standings = compute_group_standings(state, letter)
+    all_thirds = compute_best_thirds(state, limit=12)
+    third = all_thirds[[entry["group"] for entry in all_thirds].index(letter)]
+    third_rank = next(
+        index + 1 for index, entry in enumerate(all_thirds) if entry["group"] == letter
+    )
+    cutline = all_thirds[7] if len(all_thirds) >= 8 else None
+    completed = sum(
+        _match_completed(state.results.get(match["match_id"]))
+        for match in state.matches if match.get("group") == letter
+    )
+    return {
+        "schema": "scoutfootball.world-cup-qualification-impact",
+        "version": "1.0.0",
+        "group": letter,
+        "group_complete": completed == 6,
+        "matches_recorded": completed,
+        "matches_remaining": max(0, 6 - completed),
+        "direct_positions": [
+            {"position": index + 1, "team": row.team, "status": (
+                "qualified" if completed == 6 else "currently_direct"
+            )}
+            for index, row in enumerate(standings[:2])
+        ],
+        "third_place": {
+            **third,
+            "rank": third_rank,
+            "cutoff_rank": 8,
+            "currently_within_cutoff": third_rank <= 8,
+        },
+        "cutline": cutline,
+        "provisional": completed != 6 or any(entry["provisional"] for entry in all_thirds),
+        "limitations": [
+            "Based only on locally recorded group results.",
+            "Best-third ordering is provisional until every relevant group match is recorded.",
+            "This is not an official qualification decision or a match prediction.",
+        ],
+    }
+
+
 def _is_complete_group(state: TournamentState, group: str) -> bool:
     """Check if all 6 group-stage matches in this group have results."""
     count = 0

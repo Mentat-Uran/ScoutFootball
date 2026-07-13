@@ -12586,6 +12586,7 @@ let wcApiData = {
     outlookLoading: new Set(),
     tournament: null,       // from /world-cup/tournament/summary
     tournamentMatches: null, // from /world-cup/tournament/matches
+    tournamentQualificationImpact: null, // selected group local standings impact
     tournamentScenarios: null, // team -> scenarios
     tournamentSelectedGroup: "A",
     tournamentLoading: false,
@@ -12921,6 +12922,22 @@ async function fetchWcTournamentMatches(group) {
     }
 }
 
+async function fetchWcTournamentQualificationImpact(group) {
+    try {
+        const data = await fetchJson(`/world-cup/tournament/qualification-impact?group=${encodeURIComponent(group)}`, {
+            timeout: 15000,
+        });
+        if (data?.schema === "scoutfootball.world-cup-qualification-impact") {
+            wcApiData.tournamentQualificationImpact = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] qualification impact unavailable:", e.message);
+    }
+    wcApiData.tournamentQualificationImpact = null;
+    return null;
+}
+
 async function fetchWcTournamentScenarios(team) {
     if (!team) return null;
     try {
@@ -13015,6 +13032,7 @@ async function loadAndRenderWcTournament() {
     await Promise.all([
         fetchWcTournamentSummary(),
         fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+        fetchWcTournamentQualificationImpact(wcApiData.tournamentSelectedGroup),
     ]);
     wcApiData.tournamentLoading = false;
     renderWcTournament();
@@ -13066,6 +13084,7 @@ function renderWcTournament() {
 
     // Best thirds (list of dicts)
     const bestThirds = data.best_thirds || [];
+    const impact = wcApiData.tournamentQualificationImpact;
 
     // Advancing (winners/runners_up are lists of dicts with 'team' key)
     const adv = data.advancing || { winners: [], runners_up: [], best_thirds: [], all_advancing: [], provisional: true };
@@ -13145,6 +13164,13 @@ function renderWcTournament() {
                 <p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem">
                     ${z ? "前 2 名直接出线，第 3 名参与最佳小组第三评比" : "Top 2 advance; 3rd enters best-thirds ranking"}
                 </p>
+                ${impact ? `<div style="margin-top:0.6rem;padding:0.5rem;border-left:2px solid var(--accent);font-size:0.72rem">
+                    <strong>${z ? "本地出线影响" : "Local qualification impact"}</strong><br>
+                    ${z ? "第三名" : "Third"}: ${escapeHtml(impact.third_place?.team || "—")} · ${z ? "跨组排名" : "cross-group rank"} ${impact.third_place?.rank || "—"}/${impact.third_place?.cutoff_rank || 8}
+                    · ${impact.third_place?.currently_within_cutoff ? (z ? "当前在线内" : "currently inside") : (z ? "当前在线外" : "currently outside")}<br>
+                    ${z ? "本组未赛" : "Group matches remaining"}: ${impact.matches_remaining ?? "—"}
+                    ${impact.provisional ? ` · ${z ? "暂定" : "provisional"}` : ""}
+                </div>` : ""}
             </article>
 
             <article class="liquid-panel compact">
@@ -13300,8 +13326,11 @@ function renderWcTournament() {
         groupSelect.dataset.bound = "1";
         groupSelect.addEventListener("change", async (e) => {
             wcApiData.tournamentSelectedGroup = e.target.value;
-            await fetchWcTournamentMatches(e.target.value);
-            await fetchWcTournamentSummary();
+            await Promise.all([
+                fetchWcTournamentMatches(e.target.value),
+                fetchWcTournamentSummary(),
+                fetchWcTournamentQualificationImpact(e.target.value),
+            ]);
             renderWcTournament();
         });
     }
