@@ -1499,6 +1499,11 @@ selected fixture, model output, confidence intervals when loaded, and coverage
 context, and is browser-local only. It is not a betting instruction, guarantee,
 or live match intelligence.
 
+Action-value dossier exports may include a separate browser-local shortlist
+dossier context. It is explicitly marked non-additive to all action-value
+sections and remains a local decision annotation, not a model feature or
+server-side recommendation.
+
 ---
 
 ## 10. Cross-Provider Schema Reference
