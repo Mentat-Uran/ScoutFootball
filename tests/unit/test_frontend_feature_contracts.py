@@ -229,3 +229,8 @@ def test_world_cup_role_comparison_is_api_backed_and_bounded() -> None:
     assert "/world-cup/squad-balance-comparison/" in app_js
     assert "wc-compare-role-depth" in app_js
     assert "wc-compare-role-depth" in index_html
+    assert "exportWcSquadBalanceComparisonJSON" in app_js
+    assert "exportWcSquadBalanceComparisonCSV" in app_js
+    assert 'schema: "scoutfootball.world-cup-squad-balance-comparison-export"' in app_js
+    assert "wc-export-role-comparison-json" in index_html
+    assert "wc-export-role-comparison-csv" in index_html

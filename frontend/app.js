@@ -14001,6 +14001,13 @@ function _safeBriefingFilename(briefing) {
     return raw.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
 }
 
+function _safeWcComparisonFilename(comparison) {
+    const teams = comparison?.teams || {};
+    const teamA = teams.team_a?.team || "team_a";
+    const teamB = teams.team_b?.team || "team_b";
+    return `${teamA}_vs_${teamB}`.replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+}
+
 function _downloadLocalBriefing(content, filename, type) {
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
@@ -14024,6 +14031,62 @@ function exportWcBriefingJSON(briefing) {
         JSON.stringify(payload, null, 2),
         `${_safeBriefingFilename(briefing)}_world_cup_briefing.json`,
         "application/json;charset=utf-8",
+    );
+}
+
+function exportWcSquadBalanceComparisonJSON(comparison) {
+    if (comparison?.status !== "ok") return;
+    const payload = {
+        schema: "scoutfootball.world-cup-squad-balance-comparison-export",
+        version: "1.0.0",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        comparison,
+    };
+    _downloadLocalBriefing(
+        JSON.stringify(payload, null, 2),
+        `${_safeWcComparisonFilename(comparison)}_squad_role_comparison.json`,
+        "application/json;charset=utf-8",
+    );
+}
+
+function exportWcSquadBalanceComparisonCSV(comparison) {
+    if (comparison?.status !== "ok") return;
+    const teams = comparison.teams || {};
+    const teamA = teams.team_a?.team || "team_a";
+    const teamB = teams.team_b?.team || "team_b";
+    const lines = [
+        ["# World Cup Expected-Callup Role Comparison"],
+        ["team_a", teamA],
+        ["team_b", teamB],
+        ["storage_scope", "browser-local-download"],
+        [],
+        ["role", `${teamA}_count`, `${teamA}_target`, `${teamA}_rated_players`, `${teamA}_rating_coverage`, `${teamB}_count`, `${teamB}_target`, `${teamB}_rated_players`, `${teamB}_rating_coverage`, "count_difference", "rated_player_difference", "rating_coverage_difference"],
+    ];
+    for (const row of comparison.roles || []) {
+        const teamARole = row.team_a || {};
+        const teamBRole = row.team_b || {};
+        lines.push([
+            row.role || "",
+            teamARole.count ?? "",
+            teamARole.planning_target ?? "",
+            teamARole.rated_players ?? "",
+            teamARole.rating_coverage ?? "",
+            teamBRole.count ?? "",
+            teamBRole.planning_target ?? "",
+            teamBRole.rated_players ?? "",
+            teamBRole.rating_coverage ?? "",
+            row.count_difference ?? "",
+            row.rated_player_difference ?? "",
+            row.rating_coverage_difference ?? "",
+        ]);
+    }
+    lines.push([], ["# Limitation"], [comparison.disclaimer || ""]);
+    lines.push([], ["# Exported", new Date().toISOString(), `ScoutFootball v${APP_VERSION}`]);
+    _downloadLocalBriefing(
+        `\uFEFF${lines.map((row) => row.map(csvCell).join(",")).join("\n")}`,
+        `${_safeWcComparisonFilename(comparison)}_squad_role_comparison.csv`,
+        "text/csv;charset=utf-8",
     );
 }
 
@@ -14488,6 +14551,8 @@ function renderWcCompare() {
     const comparison = wcApiData.squadBalanceComparisonCache[`${teamA}|${teamB}`];
     const roleDepth = document.getElementById("wc-compare-role-depth");
     const roleDepthNote = document.getElementById("wc-compare-role-depth-note");
+    const exportJson = document.getElementById("wc-export-role-comparison-json");
+    const exportCsv = document.getElementById("wc-export-role-comparison-csv");
     if (comparison?.status === "ok") {
         roleDepth.innerHTML = (comparison.roles || []).map((row) => {
             const a = row.team_a || {};
@@ -14501,6 +14566,14 @@ function renderWcCompare() {
     } else {
         roleDepth.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">${escapeHtml(appState.lang === "zh" ? "位置深度比较暂不可用" : "Role-depth comparison unavailable")}</td></tr>`;
         roleDepthNote.textContent = "";
+    }
+    if (exportJson) {
+        exportJson.disabled = comparison?.status !== "ok";
+        exportJson.onclick = () => exportWcSquadBalanceComparisonJSON(comparison);
+    }
+    if (exportCsv) {
+        exportCsv.disabled = comparison?.status !== "ok";
+        exportCsv.onclick = () => exportWcSquadBalanceComparisonCSV(comparison);
     }
 
     // Chart
