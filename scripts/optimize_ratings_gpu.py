@@ -195,6 +195,12 @@ def main():
             for item in data_coverage["sources"]
         )
     )
+    for status in data_coverage["artifact_statuses"]:
+        if status["status"] != "loaded":
+            print(
+                f"  optional source {status['source']}: {status['status']} "
+                f"({status.get('error_type', 'not found')})"
+            )
 
     # 出场标记：不足 20 场的球员仍参与评分，但不参与优化训练
     min_matches_opt = 20
