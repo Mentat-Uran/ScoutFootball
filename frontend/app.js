@@ -3672,6 +3672,7 @@ async function renderMomentum(home, away) {
     statusPill.className = "status-pill status-medium";
 
     const data = await fetchMomentum(home, away, hg, ag, minute);
+    capturePredictionEvidence("momentum", home, away, compactMomentumEvidence(data));
     if (!data || data.error) {
         statusPill.textContent = z ? "错误" : "error";
         statusPill.className = "status-pill status-low";
@@ -6659,6 +6660,7 @@ async function renderHeadToHead(home, away) {
     if (statusPill) { statusPill.textContent = "loading"; statusPill.className = "status-pill status-medium"; }
 
     const data = await fetchHeadToHead(home, away);
+    capturePredictionEvidence("head_to_head", home, away, compactHeadToHeadEvidence(data));
 
     if (!data || data.error) {
         container.innerHTML = `<p class="h2h-message">交锋记录加载失败</p>`;
@@ -7409,6 +7411,86 @@ function renderSameCohortComparison(data) {
 }
 
 let currentPrediction = null;
+let currentPredictionEvidence = {
+    fixture_key: null,
+    head_to_head: { status: "not_loaded" },
+    momentum: { status: "not_loaded" },
+};
+
+function predictionFixtureKey(home, away) {
+    return `${String(home || "").trim().toLowerCase()}::${String(away || "").trim().toLowerCase()}`;
+}
+
+function resetCurrentPredictionEvidence(home, away) {
+    currentPredictionEvidence = {
+        fixture_key: predictionFixtureKey(home, away),
+        head_to_head: { status: "loading" },
+        momentum: { status: "loading" },
+    };
+}
+
+function capturePredictionEvidence(kind, home, away, evidence) {
+    if (currentPredictionEvidence.fixture_key !== predictionFixtureKey(home, away)) return;
+    currentPredictionEvidence[kind] = evidence;
+}
+
+function compactHeadToHeadEvidence(data) {
+    if (!data || data.error) return { status: "unavailable" };
+    const summary = data.summary || {};
+    const coverage = data.data_coverage || {};
+    return {
+        status: "available",
+        summary: {
+            total_meetings: Number(summary.total_meetings) || 0,
+            home_wins: Number(summary.home_wins) || 0,
+            draws: Number(summary.draws) || 0,
+            away_wins: Number(summary.away_wins) || 0,
+            home_goals_avg: Number(summary.home_goals_avg) || 0,
+            away_goals_avg: Number(summary.away_goals_avg) || 0,
+            last_meeting_date: summary.last_meeting_date || null,
+        },
+        recent_form: {
+            home: data.home_form_summary || {},
+            away: data.away_form_summary || {},
+            home_trend: data.home_form_trend || null,
+            away_trend: data.away_form_trend || null,
+        },
+        data_coverage: {
+            source: coverage.source || null,
+            seasons_covered: Array.isArray(coverage.seasons_covered) ? coverage.seasons_covered : [],
+            total_matches_scanned: Number(coverage.total_matches_scanned) || 0,
+        },
+    };
+}
+
+function compactMomentumEvidence(data) {
+    if (!data || data.error || !Array.isArray(data.timeline) || data.timeline.length === 0) return { status: "unavailable" };
+    const point = data.timeline[0] || {};
+    return {
+        status: "available",
+        current_scoreline: {
+            home_goals: Number(data.current_home_goals) || 0,
+            away_goals: Number(data.current_away_goals) || 0,
+            minute: Number(data.current_minute) || 0,
+        },
+        remaining_outcome_probabilities: {
+            home_win: point.home_win ?? null,
+            draw: point.draw ?? null,
+            away_win: point.away_win ?? null,
+        },
+    };
+}
+
+function currentPredictionEvidenceFor(match) {
+    if (currentPredictionEvidence.fixture_key !== predictionFixtureKey(match.home, match.away)) {
+        return {
+            fixture_key: predictionFixtureKey(match.home, match.away),
+            head_to_head: { status: "not_loaded" },
+            momentum: { status: "not_loaded" },
+        };
+    }
+    return currentPredictionEvidence;
+}
 
 function selectedPredictionCalibration() {
     const direct = (currentPrediction && currentPrediction.calibration) || {};
@@ -7459,15 +7541,21 @@ function renderMatchSelectors() {
 let _matchRenderId = 0;
 function buildCurrentPredictionExport() {
     const match = selectedMatch();
+    const evidence = currentPredictionEvidenceFor(match);
     return {
         schema: "scoutfootball.match-prediction-export",
-        version: "1.0.0",
+        version: "1.1.0",
         exported_at: new Date().toISOString(),
         storage_scope: "browser-local-download",
         fixture: { home_team: match.home, away_team: match.away },
         prediction: { home_win: match.hw, draw: match.draw, away_win: match.aw, home_expected_goals: match.xh, away_expected_goals: match.xa, model_type: match.model_type, model_version: match.model_version, confidence_intervals: match.confidence_intervals || null },
         coverage: predictionMeta,
-        limitations: ["Prediction is model context, not a guarantee, betting instruction, or live match intelligence.", "Coverage and calibration fields reflect the loaded local/API snapshot."],
+        contextual_evidence: {
+            non_additive_to_prediction: true,
+            head_to_head: evidence.head_to_head,
+            momentum: evidence.momentum,
+        },
+        limitations: ["Prediction is model context, not a guarantee, betting instruction, or live match intelligence.", "Coverage and calibration fields reflect the loaded local/API snapshot.", "Head-to-head, recent form, and momentum are separately loaded context; they do not alter or add to the exported pre-match probabilities.", "An unavailable context section means the report makes no inference from missing data."],
     };
 }
 function _downloadPredictionExport(content, filename, type) {
@@ -7479,11 +7567,19 @@ function exportCurrentPredictionJSON() {
 }
 function exportCurrentPredictionCSV() {
     const payload = buildCurrentPredictionExport(); const p = payload.prediction;
-    const lines = [["# ScoutFootball Match Prediction"], ["home_team", payload.fixture.home_team], ["away_team", payload.fixture.away_team], ["model_type", p.model_type || ""], ["model_version", p.model_version || ""], ["home_win", p.home_win ?? ""], ["draw", p.draw ?? ""], ["away_win", p.away_win ?? ""], ["home_expected_goals", p.home_expected_goals ?? ""], ["away_expected_goals", p.away_expected_goals ?? ""], ["storage_scope", payload.storage_scope], [], ["# Limitations"], ...payload.limitations.map((x) => [x])];
+    const h2h = payload.contextual_evidence.head_to_head || {};
+    const h2hSummary = h2h.summary || {};
+    const homeTrend = h2h.recent_form?.home_trend || {};
+    const awayTrend = h2h.recent_form?.away_trend || {};
+    const momentum = payload.contextual_evidence.momentum || {};
+    const scoreline = momentum.current_scoreline || {};
+    const remaining = momentum.remaining_outcome_probabilities || {};
+    const lines = [["# ScoutFootball Match Prediction"], ["home_team", payload.fixture.home_team], ["away_team", payload.fixture.away_team], ["model_type", p.model_type || ""], ["model_version", p.model_version || ""], ["home_win", p.home_win ?? ""], ["draw", p.draw ?? ""], ["away_win", p.away_win ?? ""], ["home_expected_goals", p.home_expected_goals ?? ""], ["away_expected_goals", p.away_expected_goals ?? ""], ["storage_scope", payload.storage_scope], [], ["# Contextual evidence (separate; non-additive to prediction)"], ["head_to_head_status", h2h.status || "not_loaded"], ["h2h_total_meetings", h2hSummary.total_meetings ?? ""], ["h2h_home_wins", h2hSummary.home_wins ?? ""], ["h2h_draws", h2hSummary.draws ?? ""], ["h2h_away_wins", h2hSummary.away_wins ?? ""], ["home_form_trend", homeTrend.trend_label || ""], ["away_form_trend", awayTrend.trend_label || ""], ["momentum_status", momentum.status || "not_loaded"], ["momentum_minute", scoreline.minute ?? ""], ["momentum_home_goals", scoreline.home_goals ?? ""], ["momentum_away_goals", scoreline.away_goals ?? ""], ["remaining_home_win", remaining.home_win ?? ""], ["remaining_draw", remaining.draw ?? ""], ["remaining_away_win", remaining.away_win ?? ""], [], ["# Limitations"], ...payload.limitations.map((x) => [x])];
     _downloadPredictionExport(`\uFEFF${lines.map((row) => row.map(csvCell).join(",")).join("\n")}`, "scoutfootball-match-prediction.csv", "text/csv;charset=utf-8");
 }
 async function renderMatches() {
     const myId = ++_matchRenderId;
+    resetCurrentPredictionEvidence(appState.home, appState.away);
     // Fetch prediction from API
     currentPrediction = await fetchPrediction(appState.home, appState.away);
     if (myId !== _matchRenderId) return; // stale
