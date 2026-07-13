@@ -166,6 +166,9 @@ def _cmd_audit_truth_labels(args: argparse.Namespace) -> None:
     for source, count in report["excluded_source_counts"].items():
         print(f"  Excluded {source}: {count}")
     print(f"  Status: {report['status']}")
+    temporal = report["temporal"]
+    print(f"  Temporally eligible: {temporal['temporally_eligible_rows']}")
+    print(f"  Post-season snapshots: {temporal['post_season_rows']}")
     print(f"  Note: {report['caveat']}")
 
 

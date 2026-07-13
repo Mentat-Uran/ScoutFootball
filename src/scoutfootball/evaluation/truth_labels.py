@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+import re
 from typing import Any
 
 import pandas as pd
@@ -55,6 +56,50 @@ SUPERVISION_ELIGIBLE_SOURCES = frozenset(
 SELF_REFERENTIAL_LABEL_SOURCES = frozenset({LabelSource.EXPERT_TIER.value})
 
 
+def _season_end_date(value: object) -> pd.Timestamp:
+    """Return the conservative May 31 cut-off for a compact season code."""
+    match = re.fullmatch(r"(\d{2})(\d{2})", str(value).strip())
+    if match is None:
+        return pd.NaT
+    return pd.Timestamp(year=2000 + int(match.group(2)), month=5, day=31)
+
+
+def truth_label_temporal_report(df: pd.DataFrame) -> dict[str, int]:
+    """Audit whether independently sourced labels were known during a season.
+
+    This is deliberately an audit, not automatic proof of causal collection:
+    a date does not establish how a market value or manual label was produced.
+    """
+    required = {"label_source", "season", "as_of_date"}
+    if required - set(df.columns):
+        return {
+            "temporally_eligible_rows": 0,
+            "missing_or_invalid_as_of_rows": 0,
+            "invalid_season_rows": 0,
+            "post_season_rows": 0,
+        }
+    sources = df["label_source"].fillna("").astype(str).str.strip().str.lower()
+    candidates = df.loc[sources.isin(SUPERVISION_ELIGIBLE_SOURCES)].copy()
+    if candidates.empty:
+        return {
+            "temporally_eligible_rows": 0,
+            "missing_or_invalid_as_of_rows": 0,
+            "invalid_season_rows": 0,
+            "post_season_rows": 0,
+        }
+    as_of = pd.to_datetime(candidates["as_of_date"], errors="coerce", utc=True).dt.tz_localize(None)
+    season_end = candidates["season"].map(_season_end_date)
+    valid_as_of = as_of.notna()
+    valid_season = season_end.notna()
+    eligible = valid_as_of & valid_season & as_of.le(season_end)
+    return {
+        "temporally_eligible_rows": int(eligible.sum()),
+        "missing_or_invalid_as_of_rows": int((~valid_as_of).sum()),
+        "invalid_season_rows": int((~valid_season).sum()),
+        "post_season_rows": int((valid_as_of & valid_season & as_of.gt(season_end)).sum()),
+    }
+
+
 def truth_label_supervision_report(df: pd.DataFrame) -> dict[str, Any]:
     """Summarise which labels are eligible for supervised rating use.
 
@@ -72,12 +117,14 @@ def truth_label_supervision_report(df: pd.DataFrame) -> dict[str, Any]:
             "excluded_source_counts": {},
             "status": "missing_label_source",
             "caveat": "Source eligibility does not prove collection independence.",
+            "temporal": truth_label_temporal_report(df),
         }
 
     sources = df["label_source"].fillna("").astype(str).str.strip().str.lower()
     eligible_mask = sources.isin(SUPERVISION_ELIGIBLE_SOURCES)
     eligible = sources[eligible_mask].value_counts().sort_index().to_dict()
     excluded = sources[~eligible_mask].value_counts().sort_index().to_dict()
+    temporal = truth_label_temporal_report(df)
     return {
         "policy": "source-policy-v1",
         "total_rows": int(len(df)),
@@ -87,6 +134,7 @@ def truth_label_supervision_report(df: pd.DataFrame) -> dict[str, Any]:
         "excluded_source_counts": {str(key): int(value) for key, value in excluded.items()},
         "status": "eligible_labels_available" if eligible_mask.any() else "no_eligible_labels",
         "caveat": "Source eligibility does not prove collection independence.",
+        "temporal": temporal,
     }
 
 

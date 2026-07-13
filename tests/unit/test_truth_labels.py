@@ -10,6 +10,7 @@ from scoutfootball.evaluation.truth_labels import (
     create_empty_truth_labels,
     filter_supervision_eligible_truth_labels,
     truth_label_supervision_report,
+    truth_label_temporal_report,
     validate_truth_labels,
     workspace_to_truth_labels,
 )
@@ -148,6 +149,29 @@ class TestTruthLabelSupervisionPolicy:
         assert report["eligible_rows"] == 2
         assert report["excluded_source_counts"] == {"expert_tier": 1}
         assert eligible["label_source"].tolist() == ["award", "manual_calibration"]
+
+    def test_temporal_report_separates_pre_and_post_season_labels(self) -> None:
+        labels = pd.DataFrame(
+            {
+                "player_id": ["p1", "p2", "p3", "p4"],
+                "season": ["2425", "2425", "bad", "2425"],
+                "label_source": ["award", "award", "award", "expert_tier"],
+                "label_confidence": ["high"] * 4,
+                "label_value": [1.0] * 4,
+                "as_of_date": ["2025-05-01", "2025-06-01", "2025-05-01", "2025-05-01"],
+                "position_scope": ["all"] * 4,
+                "manual_review_flag": [False] * 4,
+            },
+        )
+
+        report = truth_label_temporal_report(labels)
+
+        assert report == {
+            "temporally_eligible_rows": 1,
+            "missing_or_invalid_as_of_rows": 0,
+            "invalid_season_rows": 1,
+            "post_season_rows": 1,
+        }
 
 
 class TestWorkspaceToTruthLabels:
