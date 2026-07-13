@@ -771,6 +771,74 @@ const i18n = {
         uncertainty_correct: "正确",
         uncertainty_label: "标签",
         uncertainty_no_points: "无不确定点数据",
+        profit_loss_title: "回测盈亏模拟",
+        profit_loss_desc: "Flat-stake 和 Kelly 投注策略的累计盈亏",
+        profit_loss_fetch: "加载",
+        profit_loss_loading: "计算盈亏中…",
+        profit_loss_not_available: "暂无回测数据",
+        profit_loss_error: "加载盈亏模拟失败",
+        profit_loss_n_matches: "比赛数",
+        profit_loss_win_rate: "胜率",
+        profit_loss_flat_roi: "Flat ROI",
+        profit_loss_kelly_roi: "Kelly ROI",
+        profit_loss_flat_profit: "Flat 总盈亏",
+        profit_loss_kelly_profit: "Kelly 总盈亏",
+        profit_loss_max_dd: "最大回撤",
+        profit_loss_avg_conf: "平均置信度",
+        profit_loss_assessment: "评估",
+        profit_loss_match: "场次",
+        profit_loss_predicted: "预测",
+        profit_loss_actual: "实际",
+        profit_loss_correct: "正确",
+        profit_loss_prob: "概率",
+        profit_loss_odds: "隐含赔率",
+        profit_loss_flat_stake: "Flat 盈亏",
+        profit_loss_cum_flat: "Flat 累计",
+        profit_loss_kelly_stake: "Kelly 盈亏",
+        profit_loss_cum_kelly: "Kelly 累计",
+        profit_loss_no_points: "无盈亏数据",
+        trajectory_title: "累计性能轨迹",
+        trajectory_desc: "累计 accuracy/Brier/profit 趋势与变点检测",
+        trajectory_fetch: "加载",
+        trajectory_loading: "计算轨迹中…",
+        trajectory_not_available: "暂无回测数据",
+        trajectory_error: "加载轨迹失败",
+        trajectory_n_matches: "比赛数",
+        trajectory_final_acc: "最终准确率",
+        trajectory_final_brier: "最终 Brier",
+        trajectory_final_profit: "最终盈亏",
+        trajectory_trend: "趋势",
+        trajectory_best_win: "最佳窗口准确率",
+        trajectory_worst_win: "最差窗口准确率",
+        trajectory_change_points: "变点数",
+        trajectory_index: "序号",
+        trajectory_cum_acc: "累计准确率",
+        trajectory_cum_brier: "累计 Brier",
+        trajectory_cum_profit: "累计盈亏",
+        trajectory_roll_acc: "滚动准确率",
+        trajectory_roll_brier: "滚动 Brier",
+        trajectory_date: "日期",
+        trajectory_no_points: "无轨迹数据",
+        difficulty_title: "比赛难度分层",
+        difficulty_desc: "按预测难度分层评估模型表现",
+        difficulty_fetch: "加载",
+        difficulty_loading: "计算分层中…",
+        difficulty_not_available: "暂无回测数据",
+        difficulty_error: "加载分层失败",
+        difficulty_n_matches: "比赛数",
+        difficulty_overall_acc: "总体准确率",
+        difficulty_overall_brier: "总体 Brier",
+        difficulty_best_tier: "最佳层",
+        difficulty_worst_tier: "最差层",
+        difficulty_tier: "分层",
+        difficulty_acc: "准确率",
+        difficulty_brier: "Brier",
+        difficulty_rps: "RPS",
+        difficulty_log_loss: "LogLoss",
+        difficulty_conf: "平均置信度",
+        difficulty_cal_gap: "校准差距",
+        difficulty_assessment: "评估",
+        difficulty_no_tiers: "无分层数据",
     },
     en: {
         nav_overview: "Overview",
@@ -1543,6 +1611,74 @@ const i18n = {
         uncertainty_correct: "Correct",
         uncertainty_label: "Label",
         uncertainty_no_points: "No uncertainty points",
+        profit_loss_title: "Backtest Profit/Loss Simulation",
+        profit_loss_desc: "Flat-stake and Kelly betting strategy cumulative P/L",
+        profit_loss_fetch: "Load",
+        profit_loss_loading: "Computing profit/loss...",
+        profit_loss_not_available: "No backtest data available",
+        profit_loss_error: "Failed to load P/L simulation",
+        profit_loss_n_matches: "Matches",
+        profit_loss_win_rate: "Win rate",
+        profit_loss_flat_roi: "Flat ROI",
+        profit_loss_kelly_roi: "Kelly ROI",
+        profit_loss_flat_profit: "Flat total P/L",
+        profit_loss_kelly_profit: "Kelly total P/L",
+        profit_loss_max_dd: "Max drawdown",
+        profit_loss_avg_conf: "Avg confidence",
+        profit_loss_assessment: "Assessment",
+        profit_loss_match: "Match",
+        profit_loss_predicted: "Predicted",
+        profit_loss_actual: "Actual",
+        profit_loss_correct: "Correct",
+        profit_loss_prob: "Probability",
+        profit_loss_odds: "Implied odds",
+        profit_loss_flat_stake: "Flat P/L",
+        profit_loss_cum_flat: "Flat cumul",
+        profit_loss_kelly_stake: "Kelly P/L",
+        profit_loss_cum_kelly: "Kelly cumul",
+        profit_loss_no_points: "No P/L data",
+        trajectory_title: "Cumulative Performance Trajectory",
+        trajectory_desc: "Cumulative accuracy/Brier/profit trends and change-point detection",
+        trajectory_fetch: "Load",
+        trajectory_loading: "Computing trajectory...",
+        trajectory_not_available: "No backtest data available",
+        trajectory_error: "Failed to load trajectory",
+        trajectory_n_matches: "Matches",
+        trajectory_final_acc: "Final accuracy",
+        trajectory_final_brier: "Final Brier",
+        trajectory_final_profit: "Final profit",
+        trajectory_trend: "Trend",
+        trajectory_best_win: "Best window accuracy",
+        trajectory_worst_win: "Worst window accuracy",
+        trajectory_change_points: "Change points",
+        trajectory_index: "Index",
+        trajectory_cum_acc: "Cumulative accuracy",
+        trajectory_cum_brier: "Cumulative Brier",
+        trajectory_cum_profit: "Cumulative profit",
+        trajectory_roll_acc: "Rolling accuracy",
+        trajectory_roll_brier: "Rolling Brier",
+        trajectory_date: "Date",
+        trajectory_no_points: "No trajectory data",
+        difficulty_title: "Match Difficulty Stratification",
+        difficulty_desc: "Per-difficulty-tier model performance evaluation",
+        difficulty_fetch: "Load",
+        difficulty_loading: "Computing stratification...",
+        difficulty_not_available: "No backtest data available",
+        difficulty_error: "Failed to load stratification",
+        difficulty_n_matches: "Matches",
+        difficulty_overall_acc: "Overall accuracy",
+        difficulty_overall_brier: "Overall Brier",
+        difficulty_best_tier: "Best tier",
+        difficulty_worst_tier: "Worst tier",
+        difficulty_tier: "Tier",
+        difficulty_acc: "Accuracy",
+        difficulty_brier: "Brier",
+        difficulty_rps: "RPS",
+        difficulty_log_loss: "LogLoss",
+        difficulty_conf: "Avg confidence",
+        difficulty_cal_gap: "Calibration gap",
+        difficulty_assessment: "Assessment",
+        difficulty_no_tiers: "No tier data",
     },
 };
 
@@ -6205,6 +6341,314 @@ async function fetchAndRenderUncertainty() {
     if (btn) btn.disabled = false;
 }
 
+async function fetchAndRenderProfitLoss() {
+    const body = document.getElementById("backtest-profit-loss-body");
+    const btn = document.getElementById("btn-profit-loss");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("profit_loss_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/profit-loss");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("profit_loss_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("profit_loss_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const assessmentColors = {
+            "profitable": "var(--status-high, #4ade80)",
+            "breakeven": "var(--status-medium, #fbbf24)",
+            "unprofitable": "var(--status-low, #f87171)",
+        };
+        const assColor = assessmentColors[data.assessment] || "var(--text-muted)";
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.win_rate || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_win_rate"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.flat_roi || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.flat_roi || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_flat_roi"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${assColor}">${escapeHtml(data.assessment || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_assessment"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_flat_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.total_flat_profit || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_flat_profit"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.max_flat_drawdown || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_max_dd"))} (Flat)</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_kelly_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.total_kelly_profit || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_kelly_profit"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.kelly_roi || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.kelly_roi || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_kelly_roi"))}</div>
+            </div>
+        </div>`;
+        const points = Array.isArray(data.points) ? data.points : [];
+        if (points.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.68rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("profit_loss_match"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_predicted"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_actual"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_correct"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_prob"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_odds"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_flat_stake"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_cum_flat"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_kelly_stake"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("profit_loss_cum_kelly"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            const shown = points.slice(0, 50);
+            for (const p of shown) {
+                const correctMark = p.correct ? "✓" : "✗";
+                const correctColor = p.correct ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                const flatColor = Number(p.flat_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                const kellyColor = Number(p.kelly_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem">${p.match_index ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right">${escapeHtml(p.predicted_outcome || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right">${escapeHtml(p.actual_outcome || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${correctColor}">${correctMark}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.model_probability || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.implied_odds || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${flatColor}">${Number(p.flat_profit || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.cumulative_flat_profit || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${kellyColor}">${Number(p.kelly_profit || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.cumulative_kelly_profit || 0).toFixed(4)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+            if (points.length > 50) {
+                html += `<p style="margin-top:0.3rem;font-size:0.68rem;color:var(--text-muted)">Showing 50 of ${points.length} points</p>`;
+            }
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("profit_loss_no_points"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("profit_loss_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderTrajectory() {
+    const body = document.getElementById("backtest-trajectory-body");
+    const btn = document.getElementById("btn-trajectory");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("trajectory_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/trajectory");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("trajectory_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("trajectory_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const trendColors = {
+            "improving": "var(--status-high, #4ade80)",
+            "degrading": "var(--status-low, #f87171)",
+            "stable": "var(--status-medium, #fbbf24)",
+            "insufficient_data": "var(--text-muted)",
+        };
+        const trendColor = trendColors[data.trend] || "var(--text-muted)";
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.final_accuracy || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.final_brier || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_brier"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_trend"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.final_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.final_profit || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_profit"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.best_window_accuracy || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_best_win"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.worst_window_accuracy || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_worst_win"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${data.n_change_points ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_change_points"))}</div>
+            </div>
+        </div>`;
+        const points = Array.isArray(data.points) ? data.points : [];
+        if (points.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.68rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("trajectory_index"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("trajectory_cum_acc"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("trajectory_cum_brier"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("trajectory_cum_profit"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("trajectory_roll_acc"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("trajectory_roll_brier"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("trajectory_date"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            const shown = points.slice(0, 50);
+            for (const p of shown) {
+                const profitColor = Number(p.cumulative_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem">${p.match_index ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.cumulative_accuracy || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(p.cumulative_brier || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${profitColor}">${Number(p.cumulative_profit || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${p.rolling_accuracy != null ? Number(p.rolling_accuracy).toFixed(4) : "–"}</td>
+                    <td style="padding:0.25rem;text-align:right">${p.rolling_brier != null ? Number(p.rolling_brier).toFixed(4) : "–"}</td>
+                    <td style="padding:0.25rem;text-align:right;font-size:0.65rem">${escapeHtml(p.match_date || "–")}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+            if (points.length > 50) {
+                html += `<p style="margin-top:0.3rem;font-size:0.68rem;color:var(--text-muted)">Showing 50 of ${points.length} points</p>`;
+            }
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("trajectory_no_points"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("trajectory_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function fetchAndRenderDifficulty() {
+    const body = document.getElementById("backtest-difficulty-body");
+    const btn = document.getElementById("btn-difficulty");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("difficulty_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/difficulty");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("difficulty_not_available"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("difficulty_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_accuracy || 0).toFixed(4)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_overall_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${escapeHtml(data.best_tier || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_best_tier"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${escapeHtml(data.worst_tier || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_worst_tier"))}</div>
+            </div>
+        </div>`;
+        const tiers = Array.isArray(data.tiers) ? data.tiers : [];
+        if (tiers.length > 0) {
+            html += `<table class="data-table" style="width:100%;font-size:0.7rem;border-collapse:collapse">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);text-align:left">
+                        <th style="padding:0.25rem">${escapeHtml(t("difficulty_tier"))}</th>
+                        <th style="padding:0.25rem;text-align:right">N</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("difficulty_acc"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("difficulty_brier"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("difficulty_rps"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("difficulty_log_loss"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("difficulty_conf"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("difficulty_cal_gap"))}</th>
+                        <th style="padding:0.25rem;text-align:right">${escapeHtml(t("difficulty_assessment"))}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            const assessmentColors = {
+                "strong": "var(--status-high, #4ade80)",
+                "average": "var(--status-medium, #fbbf24)",
+                "weak": "var(--status-low, #f87171)",
+                "no_data": "var(--text-muted)",
+            };
+            for (const tr of tiers) {
+                const brierColor = `hsl(${Math.max(0, 120 - Number(tr.brier || 0) * 200)}, 70%, 45%)`;
+                const assColor = assessmentColors[tr.assessment] || "var(--text-muted)";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.25rem;font-size:0.65rem">${escapeHtml(tr.tier || "–")}</td>
+                    <td style="padding:0.25rem;text-align:right">${tr.n_matches ?? 0}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(tr.accuracy || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;font-weight:600;color:${brierColor}">${Number(tr.brier || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(tr.rps || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${tr.log_loss != null ? Number(tr.log_loss).toFixed(4) : "–"}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(tr.avg_confidence || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right">${Number(tr.calibration_gap || 0).toFixed(4)}</td>
+                    <td style="padding:0.25rem;text-align:right;color:${assColor}">${escapeHtml(tr.assessment || "–")}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        } else {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("difficulty_no_tiers"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("difficulty_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
 async function renderHeadToHead(home, away) {
     const container = document.getElementById("match-h2h-content");
     const statusPill = document.getElementById("h2h-status");
@@ -9790,6 +10234,12 @@ async function renderBacktest() {
         if (teamDriftPanel) teamDriftPanel.style.display = "block";
         const uncertaintyPanel = document.getElementById("backtest-uncertainty-panel");
         if (uncertaintyPanel) uncertaintyPanel.style.display = "block";
+        const profitLossPanel = document.getElementById("backtest-profit-loss-panel");
+        if (profitLossPanel) profitLossPanel.style.display = "block";
+        const trajectoryPanel = document.getElementById("backtest-trajectory-panel");
+        if (trajectoryPanel) trajectoryPanel.style.display = "block";
+        const difficultyPanel = document.getElementById("backtest-difficulty-panel");
+        if (difficultyPanel) difficultyPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -10716,6 +11166,36 @@ function bindEvents() {
         uncertaintyBtn.addEventListener("click", () => {
             fetchAndRenderUncertainty().catch(
                 (e) => console.warn("Uncertainty failed:", e)
+            );
+        });
+    }
+
+    // Profit/Loss button: flat-stake and Kelly betting simulation
+    const profitLossBtn = document.getElementById("btn-profit-loss");
+    if (profitLossBtn) {
+        profitLossBtn.addEventListener("click", () => {
+            fetchAndRenderProfitLoss().catch(
+                (e) => console.warn("Profit/Loss failed:", e)
+            );
+        });
+    }
+
+    // Trajectory button: cumulative performance trajectory
+    const trajectoryBtn = document.getElementById("btn-trajectory");
+    if (trajectoryBtn) {
+        trajectoryBtn.addEventListener("click", () => {
+            fetchAndRenderTrajectory().catch(
+                (e) => console.warn("Trajectory failed:", e)
+            );
+        });
+    }
+
+    // Difficulty button: match difficulty stratification
+    const difficultyBtn = document.getElementById("btn-difficulty");
+    if (difficultyBtn) {
+        difficultyBtn.addEventListener("click", () => {
+            fetchAndRenderDifficulty().catch(
+                (e) => console.warn("Difficulty failed:", e)
             );
         });
     }

@@ -4044,6 +4044,325 @@ def get_prediction_uncertainty(
         return {"status": "error", "message": str(exc)}
 
 
+def get_profit_loss_simulation(
+    *,
+    max_points: int = 500,
+) -> dict:
+    """Return profit/loss simulation from backtest predictions.
+
+    Simulates flat-stake and Kelly betting on the model's predicted
+    outcome using implied odds from model probabilities. Prefers
+    Dixon-Coles decay predictions, falls back to Poisson. Cached for
+    5 minutes.
+    """
+    import time
+
+    cache_key = f"profit_loss_{max_points}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_profit_loss_simulation,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_profit_loss_simulation(
+                    preds_df,
+                    max_points=max_points,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_matches": report.n_matches,
+                    "n_correct": report.n_correct,
+                    "win_rate": report.win_rate,
+                    "total_flat_stake": report.total_flat_stake,
+                    "total_flat_profit": report.total_flat_profit,
+                    "flat_roi": report.flat_roi,
+                    "max_flat_drawdown": report.max_flat_drawdown,
+                    "total_kelly_stake": report.total_kelly_stake,
+                    "total_kelly_profit": report.total_kelly_profit,
+                    "kelly_roi": report.kelly_roi,
+                    "max_kelly_drawdown": report.max_kelly_drawdown,
+                    "avg_confidence": report.avg_confidence,
+                    "assessment": report.assessment,
+                    "disclaimer": report.disclaimer,
+                    "points": [
+                        {
+                            "match_index": p.match_index,
+                            "predicted_outcome": p.predicted_outcome,
+                            "actual_outcome": p.actual_outcome,
+                            "correct": p.correct,
+                            "model_probability": p.model_probability,
+                            "implied_odds": p.implied_odds,
+                            "flat_stake": p.flat_stake,
+                            "flat_profit": p.flat_profit,
+                            "cumulative_flat_profit": p.cumulative_flat_profit,
+                            "kelly_fraction": p.kelly_fraction,
+                            "kelly_stake": p.kelly_stake,
+                            "kelly_profit": p.kelly_profit,
+                            "cumulative_kelly_profit": p.cumulative_kelly_profit,
+                        }
+                        for p in report.points
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_cumulative_trajectory(
+    *,
+    rolling_window: int = 50,
+    max_points: int = 500,
+    change_threshold: float = 0.05,
+) -> dict:
+    """Return cumulative performance trajectory from backtest predictions.
+
+    Tracks running accuracy, Brier, and profit over the backtest timeline.
+    Prefers Dixon-Coles decay predictions, falls back to Poisson.
+    Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = f"trajectory_{rolling_window}_{max_points}_{change_threshold}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_cumulative_trajectory,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_cumulative_trajectory(
+                    preds_df,
+                    rolling_window=rolling_window,
+                    max_points=max_points,
+                    change_threshold=change_threshold,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_matches": report.n_matches,
+                    "final_accuracy": report.final_accuracy,
+                    "final_brier": report.final_brier,
+                    "final_profit": report.final_profit,
+                    "trend": report.trend,
+                    "best_window_accuracy": report.best_window_accuracy,
+                    "worst_window_accuracy": report.worst_window_accuracy,
+                    "n_change_points": report.n_change_points,
+                    "disclaimer": report.disclaimer,
+                    "points": [
+                        {
+                            "match_index": p.match_index,
+                            "cumulative_accuracy": p.cumulative_accuracy,
+                            "cumulative_brier": p.cumulative_brier,
+                            "cumulative_profit": p.cumulative_profit,
+                            "rolling_accuracy": p.rolling_accuracy,
+                            "rolling_brier": p.rolling_brier,
+                            "match_date": p.match_date,
+                        }
+                        for p in report.points
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_difficulty_stratification(
+    *,
+    easy_threshold: float = 0.6,
+    hard_threshold: float = 0.4,
+    n_bins: int = 5,
+) -> dict:
+    """Return match difficulty stratification from backtest predictions.
+
+    Buckets predictions by difficulty (max predicted probability) and
+    computes per-tier metrics. Prefers Dixon-Coles decay predictions,
+    falls back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = f"difficulty_{easy_threshold}_{hard_threshold}_{n_bins}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_difficulty_stratification,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_difficulty_stratification(
+                    preds_df,
+                    easy_threshold=easy_threshold,
+                    hard_threshold=hard_threshold,
+                    n_bins=n_bins,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_matches": report.n_matches,
+                    "overall_accuracy": report.overall_accuracy,
+                    "overall_brier": report.overall_brier,
+                    "best_tier": report.best_tier,
+                    "worst_tier": report.worst_tier,
+                    "disclaimer": report.disclaimer,
+                    "tiers": [
+                        {
+                            "tier": t.tier,
+                            "n_matches": t.n_matches,
+                            "accuracy": t.accuracy,
+                            "brier": t.brier,
+                            "rps": t.rps,
+                            "log_loss": t.log_loss,
+                            "avg_confidence": t.avg_confidence,
+                            "calibration_gap": t.calibration_gap,
+                            "assessment": t.assessment,
+                        }
+                        for t in report.tiers
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
     """Return an aggregated prediction diagnostics summary for a fixture.
 

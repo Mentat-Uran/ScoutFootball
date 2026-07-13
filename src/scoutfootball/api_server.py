@@ -34,8 +34,10 @@ from scoutfootball.api import (
     get_ci_width_analysis,
     get_confidence_distribution,
     get_confidence_interval_plot,
+    get_cumulative_trajectory,
     get_data_drift,
     get_decay_tuning,
+    get_difficulty_stratification,
     get_ensemble_attribution,
     get_ensemble_attribution_ci,
     get_ensemble_prediction,
@@ -66,6 +68,7 @@ from scoutfootball.api import (
     get_prediction_summary,
     get_prediction_uncertainty,
     get_probability_heatmap,
+    get_profit_loss_simulation,
     get_ratings_meta,
     get_reliability_diagram,
     get_review_queue,
@@ -498,6 +501,36 @@ def create_app() -> FastAPI:
         max_points: int = Query(500, ge=10, le=5000),
     ):
         return get_prediction_uncertainty(max_points=max_points)
+
+    @app.get("/predictions/calibration/profit-loss")
+    def predictions_calibration_profit_loss(
+        max_points: int = Query(500, ge=10, le=5000),
+    ):
+        return get_profit_loss_simulation(max_points=max_points)
+
+    @app.get("/predictions/calibration/trajectory")
+    def predictions_calibration_trajectory(
+        rolling_window: int = Query(50, ge=5, le=500),
+        max_points: int = Query(500, ge=10, le=5000),
+        change_threshold: float = Query(0.05, ge=0.01, le=0.5),
+    ):
+        return get_cumulative_trajectory(
+            rolling_window=rolling_window,
+            max_points=max_points,
+            change_threshold=change_threshold,
+        )
+
+    @app.get("/predictions/calibration/difficulty")
+    def predictions_calibration_difficulty(
+        easy_threshold: float = Query(0.6, ge=0.3, le=0.95),
+        hard_threshold: float = Query(0.4, ge=0.05, le=0.7),
+        n_bins: int = Query(5, ge=2, le=20),
+    ):
+        return get_difficulty_stratification(
+            easy_threshold=easy_threshold,
+            hard_threshold=hard_threshold,
+            n_bins=n_bins,
+        )
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")
     def predictions_attribution(home_team: str, away_team: str):

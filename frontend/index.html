@@ -1857,6 +1857,39 @@
                     </div>
                     <div id="backtest-uncertainty-body" style="padding:0.5rem 0.8rem"></div>
                 </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-profit-loss-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="profit_loss_title">回测盈亏模拟</h3>
+                            <span class="kicker" data-i18n="profit_loss_desc">Flat-stake 和 Kelly 投注策略的累计盈亏</span>
+                        </div>
+                        <button class="text-button" id="btn-profit-loss" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="profit_loss_fetch">加载</button>
+                    </div>
+                    <div id="backtest-profit-loss-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-trajectory-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="trajectory_title">累计性能轨迹</h3>
+                            <span class="kicker" data-i18n="trajectory_desc">累计 accuracy/Brier/profit 趋势与变点检测</span>
+                        </div>
+                        <button class="text-button" id="btn-trajectory" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="trajectory_fetch">加载</button>
+                    </div>
+                    <div id="backtest-trajectory-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-difficulty-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="difficulty_title">比赛难度分层</h3>
+                            <span class="kicker" data-i18n="difficulty_desc">按预测难度分层评估模型表现</span>
+                        </div>
+                        <button class="text-button" id="btn-difficulty" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="difficulty_fetch">加载</button>
+                    </div>
+                    <div id="backtest-difficulty-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->
