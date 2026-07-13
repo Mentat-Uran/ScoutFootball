@@ -1851,6 +1851,7 @@ let predictionMeta = { status: "no_data" };
 let predictionCalibration = {};
 let valueSummaryMeta = { sample_count: 0, metrics: {} };
 let modelRuns = { count: 0, runs: [] };
+let truthLabelSupervision = { status: "no_data", report: {} };
 let watchlistData = [];
 let shortlistData = [];
 let actionValueSummary = { status: "no_data", players: [], metrics: {} };
@@ -2008,6 +2009,15 @@ async function fetchModelRuns() {
     } catch (err) {
         console.warn("Failed to fetch model runs:", err);
         return { count: 0, runs: [] };
+    }
+}
+
+async function fetchTruthLabelSupervision() {
+    try {
+        return await fetchJson("/reports/truth-labels");
+    } catch (err) {
+        console.warn("Failed to fetch truth-label supervision report:", err);
+        return { status: "no_data", report: {} };
     }
 }
 
@@ -9220,6 +9230,25 @@ function renderReports() {
         : predictionLabel;
     document.getElementById("report-prediction-status").className = `status-pill ${predictionReady ? "status-medium" : "status-low"}`;
 
+    const supervisionPanel = document.getElementById("truth-label-supervision-content");
+    if (supervisionPanel) {
+        const report = truthLabelSupervision.report || {};
+        const z = appState.lang === "zh";
+        const eligible = Number(report.eligible_rows || 0);
+        const total = Number(report.total_rows || 0);
+        const excluded = Object.entries(report.excluded_source_counts || {})
+            .map(([source, count]) => `${escapeHtml(source)}: ${escapeHtml(String(count))}`)
+            .join(" · ");
+        if (truthLabelSupervision.status === "no_data") {
+            supervisionPanel.textContent = z ? "未找到本地真值标签产物。" : "No local truth-label artifact found.";
+        } else {
+            supervisionPanel.innerHTML = `
+                <div><strong>${eligible.toLocaleString()} / ${total.toLocaleString()}</strong> ${z ? "行可用于监督" : "rows eligible for supervision"}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "已排除循环或未获准来源：" : "Excluded circular or unapproved sources: "}${excluded || (z ? "无" : "none")}</div>
+                <div style="margin-top:0.35rem;color:var(--text-muted)">${escapeHtml(report.caveat || "")}</div>`;
+        }
+    }
+
     document.getElementById("model-runs-count").textContent = String(modelRuns.count || 0);
     const runList = document.getElementById("model-runs-list");
     const runs = (modelRuns.runs || []).slice(0, 12);
@@ -16144,7 +16173,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadWatchlistNotes();
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, truthSupervision, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
         fetchArtifacts(),
@@ -16154,6 +16183,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fetchPredictionMeta(),
         fetchPredictionCalibration(),
         fetchModelRuns(),
+        fetchTruthLabelSupervision(),
         fetchWatchlist(),
         fetchShortlist(),
         fetchActionValues(),
@@ -16171,6 +16201,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     predictionMeta = predictionArtifact;
     predictionCalibration = predictionCalibrationData;
     modelRuns = runs;
+    truthLabelSupervision = truthSupervision;
     watchlistData = watchlistRows;
     shortlistData = shortlistRows;
     actionValueSummary = actionValues;

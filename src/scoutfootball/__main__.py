@@ -138,6 +138,28 @@ def _cmd_import_truth_labels(args: argparse.Namespace) -> None:
     print(f"  Total labels in file: {len(combined)}")
 
 
+def _cmd_audit_truth_labels(args: argparse.Namespace) -> None:
+    """Audit source-policy eligibility before rating supervision is enabled."""
+    from scoutfootball.evaluation.truth_labels import truth_label_supervision_report
+
+    path = Path(args.input).resolve()
+    if not path.exists():
+        print(f"Error: truth labels file not found: {path}")
+        sys.exit(1)
+    report = truth_label_supervision_report(pd.read_parquet(path))
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+    print("Truth-label supervision audit (source-policy-v1)")
+    print(f"  Total rows: {report['total_rows']}")
+    print(f"  Eligible rows: {report['eligible_rows']}")
+    print(f"  Excluded rows: {report['excluded_rows']}")
+    for source, count in report["excluded_source_counts"].items():
+        print(f"  Excluded {source}: {count}")
+    print(f"  Status: {report['status']}")
+    print(f"  Note: {report['caveat']}")
+
+
 def _cmd_serve(args: argparse.Namespace) -> None:
     try:
         import uvicorn
@@ -1380,6 +1402,17 @@ def main() -> None:
         help="Position scope for labels (default: all)",
     )
 
+    truth_audit_p = sub.add_parser(
+        "audit-truth-labels",
+        help="Audit which truth labels are eligible for rating supervision",
+    )
+    truth_audit_p.add_argument(
+        "--input", type=str,
+        default="data/gold/feature_store/player_truth_labels.parquet",
+        help="Truth-label Parquet input path",
+    )
+    truth_audit_p.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
     bt_p = sub.add_parser(
         "backtest",
         help="Run probability calibration backtest (Poisson vs Dixon-Coles)",
@@ -1546,6 +1579,7 @@ def main() -> None:
         "action-value-matches": _cmd_action_value_matches,
         "export-ratings": _cmd_export_ratings,
         "import-truth-labels": _cmd_import_truth_labels,
+        "audit-truth-labels": _cmd_audit_truth_labels,
         "backtest": _cmd_backtest,
         "tune-predictions": _cmd_tune_predictions,
         "optimize-ensemble": _cmd_optimize_ensemble,

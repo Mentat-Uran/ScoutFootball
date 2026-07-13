@@ -40,6 +40,67 @@ TRUTH_LABELS_SCHEMA: dict[str, str] = {
 
 TRUTH_LABELS_COLUMNS = list(TRUTH_LABELS_SCHEMA.keys())
 
+# A label produced from the score it is meant to supervise is useful for a
+# descriptive tier, but is not evidence for training or evaluating that same
+# score.  Keep this policy explicit rather than relying on callers to remember
+# how an import was produced.
+SUPERVISION_ELIGIBLE_SOURCES = frozenset(
+    {
+        LabelSource.TRANSFERMARKT_VALUE.value,
+        LabelSource.AWARD.value,
+        LabelSource.MANUAL_CALIBRATION.value,
+        LabelSource.SCOUTING_REVIEW.value,
+    },
+)
+SELF_REFERENTIAL_LABEL_SOURCES = frozenset({LabelSource.EXPERT_TIER.value})
+
+
+def truth_label_supervision_report(df: pd.DataFrame) -> dict[str, Any]:
+    """Summarise which labels are eligible for supervised rating use.
+
+    This is a source-policy guard, not proof that a manual or scouting label
+    was collected independently.  It prevents known self-referential
+    ``expert_tier`` rows from being used to train or anchor the optimizer.
+    """
+    if "label_source" not in df.columns:
+        return {
+            "policy": "source-policy-v1",
+            "total_rows": int(len(df)),
+            "eligible_rows": 0,
+            "excluded_rows": int(len(df)),
+            "eligible_source_counts": {},
+            "excluded_source_counts": {},
+            "status": "missing_label_source",
+            "caveat": "Source eligibility does not prove collection independence.",
+        }
+
+    sources = df["label_source"].fillna("").astype(str).str.strip().str.lower()
+    eligible_mask = sources.isin(SUPERVISION_ELIGIBLE_SOURCES)
+    eligible = sources[eligible_mask].value_counts().sort_index().to_dict()
+    excluded = sources[~eligible_mask].value_counts().sort_index().to_dict()
+    return {
+        "policy": "source-policy-v1",
+        "total_rows": int(len(df)),
+        "eligible_rows": int(eligible_mask.sum()),
+        "excluded_rows": int((~eligible_mask).sum()),
+        "eligible_source_counts": {str(key): int(value) for key, value in eligible.items()},
+        "excluded_source_counts": {str(key): int(value) for key, value in excluded.items()},
+        "status": "eligible_labels_available" if eligible_mask.any() else "no_eligible_labels",
+        "caveat": "Source eligibility does not prove collection independence.",
+    }
+
+
+def filter_supervision_eligible_truth_labels(df: pd.DataFrame) -> pd.DataFrame:
+    """Return only labels allowed for supervised training and score anchors."""
+    report = truth_label_supervision_report(df)
+    if "label_source" not in df.columns:
+        result = df.iloc[0:0].copy()
+    else:
+        sources = df["label_source"].fillna("").astype(str).str.strip().str.lower()
+        result = df.loc[sources.isin(SUPERVISION_ELIGIBLE_SOURCES)].copy()
+    result.attrs["supervision_report"] = report
+    return result
+
 
 def validate_truth_labels(df: pd.DataFrame) -> list[str]:
     """Validate a truth labels DataFrame against the schema.

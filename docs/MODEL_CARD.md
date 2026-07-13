@@ -89,6 +89,18 @@ Test Spearman: mean=0.716, std=0.001
 - 新增 `src/scoutfootball/models/player_rating_nn.py` 和 `scoutfootball train-rating-nn`：监督式 sklearn MLP 候选模型，按赛季时间切分，输出 metrics/predictions/model 到 `data/models/player_rating_nn/`。
 - 当前真值标签表为空，NN 候选和 truth-anchor 都只完成代码入口与 skip 行为验证；完整训练和模型卡指标待标签层补齐后执行。
 
+### Truth-label source policy（2026-07-13）
+
+- `source-policy-v1` prevents circular supervision: locally generated
+  `expert_tier` rows are excluded from both the MLP candidate and optimizer
+  truth-anchor because they were derived from `optimized_score`.
+- `scoutfootball audit-truth-labels` and `GET /reports/truth-labels` expose
+  the eligible/excluded source counts. This is only a source-policy screen;
+  it does not prove that a remaining manual or scouting label was collected
+  independently.
+- The current tracked label artifact has zero eligible rows, so no NN or
+  truth-anchor holdout number may be presented as player-level validation.
+
 ### v1.3.1-dev（2026-06-09）
 
 - 新增 train-fitted league residual offset：输出 `pred_points_global`、`pred_points_league_offset`、`pred_points_calibrated`。

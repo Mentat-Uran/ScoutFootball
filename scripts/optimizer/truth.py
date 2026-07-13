@@ -9,6 +9,11 @@ import numpy as np
 import pandas as pd
 import torch
 
+from scoutfootball.evaluation.truth_labels import (
+    filter_supervision_eligible_truth_labels,
+    truth_label_supervision_report,
+)
+
 CONFIDENCE_WEIGHTS = {
     "high": 1.0,
     "medium": 0.65,
@@ -51,12 +56,14 @@ def resolve_truth_labels(
     if missing:
         raise ValueError(f"truth labels missing columns: {sorted(missing)}")
 
-    work = labels.copy()
+    supervision_report = truth_label_supervision_report(labels)
+    work = filter_supervision_eligible_truth_labels(labels)
     work["season"] = work["season"].astype(str)
     work["label_value"] = pd.to_numeric(work["label_value"], errors="coerce")
     work = work[work["label_value"].notna() & np.isfinite(work["label_value"])]
     if work.empty:
-        return pd.DataFrame()
+        work.attrs["supervision_report"] = supervision_report
+        return work
 
     if "player_name" not in work.columns:
         # Try bridge merge via feature matrix (player_id as key)
@@ -117,6 +124,7 @@ def resolve_truth_labels(
         )
         .reset_index(drop=True)
     )
+    grouped.attrs["supervision_report"] = supervision_report
     return grouped
 
 
@@ -130,11 +138,18 @@ def build_truth_label_anchor(
     """Build row-indexed truth anchors for a training DataFrame."""
     labels = resolve_truth_labels(data_dir)
     if labels.empty:
+        report = labels.attrs.get("supervision_report", {})
+        reason = (
+            "no supervision-eligible player truth labels"
+            if report.get("status") == "no_eligible_labels"
+            else "no resolved player truth labels"
+        )
         return {
             "enabled": False,
-            "reason": "no resolved player truth labels",
+            "reason": reason,
             "n_labels": 0,
             "n_matched": 0,
+            "supervision_report": report,
         }
 
     players = pd.DataFrame(
@@ -153,6 +168,7 @@ def build_truth_label_anchor(
             "reason": f"matched truth labels below min_labels ({n_matched} < {int(min_labels)})",
             "n_labels": int(len(labels)),
             "n_matched": n_matched,
+            "supervision_report": labels.attrs.get("supervision_report", {}),
         }
 
     return {
@@ -160,6 +176,7 @@ def build_truth_label_anchor(
         "reason": "enabled",
         "n_labels": int(len(labels)),
         "n_matched": n_matched,
+        "supervision_report": labels.attrs.get("supervision_report", {}),
         "row_idx": torch.tensor(matched["row_idx"].to_numpy(), dtype=torch.long, device=device),
         "label_value": torch.tensor(
             matched["label_value"].to_numpy(dtype=np.float32),

@@ -285,6 +285,17 @@ def test_shortlist_decision_pack_exports_are_local_and_formula_safe() -> None:
     assert "scout-shortlist-to-tactical" in index_html
 
 
+def test_truth_label_supervision_report_is_wired_to_reports_view() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    index_html = _read(FRONTEND / "index.html")
+
+    assert "fetchTruthLabelSupervision" in app_js
+    assert 'fetchJson("/reports/truth-labels")' in app_js
+    assert "truthLabelSupervision" in app_js
+    assert "truth-label-supervision-content" in index_html
+    assert "/reports/truth-labels" in index_html
+
+
 def test_match_prediction_exports_are_local_and_bounded() -> None:
     app_js = _read(FRONTEND / "app.js")
     html = _read(FRONTEND / "index.html")

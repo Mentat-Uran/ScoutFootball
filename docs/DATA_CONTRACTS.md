@@ -215,8 +215,17 @@ Coordinate transformation: `x_internal = x_statsbomb / 120 * 100`
   (approved → 1.0/high, rejected → 0.0/medium). Populated via
   `workspace_to_truth_labels()` + CLI `import-truth-labels --workspace`.
 
-**Status**: Schema exists; populated with expert_tier + award labels (~7,857
-rows). Scouting-review labels are injected on demand from workspace exports.
+**Supervision source policy (`source-policy-v1`)**: `transfermarkt_value`,
+`award`, `manual_calibration`, and `scouting_review` are eligible for the NN
+candidate and optimizer truth-anchor. `expert_tier` is excluded because the
+current local tier import was derived from `optimized_score`, so using it would
+create a circular target. Eligibility is a guardrail, not proof that a manual
+or scouting label was collected independently.
+
+Use `scoutfootball audit-truth-labels` or `GET /reports/truth-labels` to see
+the exact row/source counts used by the policy. The current tracked artifact
+has no supervision-eligible rows; training and truth anchoring must remain
+skipped until independent labels are imported.
 
 ---
 
