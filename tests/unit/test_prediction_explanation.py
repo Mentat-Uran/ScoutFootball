@@ -30,7 +30,9 @@ from scoutfootball.evaluation.backtests import (
     compute_ci_width_analysis,
     compute_confidence_distribution,
     compute_confidence_interval_plot,
+    compute_cumulative_trajectory,
     compute_data_drift,
+    compute_difficulty_stratification,
     compute_error_analysis,
     compute_error_clustering,
     compute_feature_importance,
@@ -42,6 +44,7 @@ from scoutfootball.evaluation.backtests import (
     compute_prediction_staleness,
     compute_prediction_uncertainty,
     compute_probability_heatmap,
+    compute_profit_loss_simulation,
     compute_reliability_diagram,
     compute_scenario_stress_test,
     compute_scoreline_calibration,
@@ -4914,4 +4917,692 @@ class TestPredictionUncertaintyAPI:
         api_module._BACKTEST_CACHE.clear()
         r1 = api_module.get_prediction_uncertainty()
         r2 = api_module.get_prediction_uncertainty()
+        assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# Round 35: Profit/Loss Simulation
+# ---------------------------------------------------------------------------
+
+
+def _make_pl_df(n: int = 100, seed: int = 42) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    rows = []
+    for i in range(n):
+        h = float(rng.uniform(0.2, 0.7))
+        d = float(rng.uniform(0.1, 0.3))
+        a = 1.0 - h - d
+        if a < 0.05:
+            a = 0.05
+            h = 1.0 - d - a
+        outcome = rng.choice(["home_win", "draw", "away_win"], p=[h, d, a])
+        rows.append({
+            "home_win_probability": h,
+            "draw_probability": d,
+            "away_win_probability": a,
+            "actual_outcome": outcome,
+            "match_date": pd.Timestamp("2024-01-01") + pd.Timedelta(days=i),
+        })
+    return pd.DataFrame(rows)
+
+
+class TestComputeProfitLossSimulation:
+    def test_returns_report(self) -> None:
+        df = _make_pl_df(n=50)
+        report = compute_profit_loss_simulation(df)
+        assert report is not None
+        assert report.n_matches == 50
+
+    def test_report_fields(self) -> None:
+        df = _make_pl_df(n=30)
+        report = compute_profit_loss_simulation(df)
+        assert hasattr(report, "win_rate")
+        assert hasattr(report, "flat_roi")
+        assert hasattr(report, "kelly_roi")
+        assert hasattr(report, "assessment")
+        assert hasattr(report, "disclaimer")
+        assert 0.0 <= report.win_rate <= 1.0
+
+    def test_n_correct_matches_win_rate(self) -> None:
+        df = _make_pl_df(n=40)
+        report = compute_profit_loss_simulation(df)
+        assert report.n_correct == int(report.win_rate * report.n_matches)
+
+    def test_max_points_caps_points(self) -> None:
+        df = _make_pl_df(n=200)
+        report = compute_profit_loss_simulation(df, max_points=50)
+        assert len(report.points) <= 50
+
+    def test_empty_df(self) -> None:
+        df = pd.DataFrame(columns=[
+            "home_win_probability", "draw_probability",
+            "away_win_probability", "actual_outcome",
+        ])
+        report = compute_profit_loss_simulation(df)
+        assert report.n_matches == 0
+        assert report.win_rate == 0.0
+        assert len(report.points) == 0
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"actual_outcome": ["home_win"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_profit_loss_simulation(df)
+
+    def test_missing_actual_outcome_raises(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.5],
+            "draw_probability": [0.3],
+            "away_win_probability": [0.2],
+        })
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_profit_loss_simulation(df)
+
+    def test_assessment_profitable(self) -> None:
+        """All correct predictions with high confidence → profitable."""
+        n = 20
+        df = pd.DataFrame({
+            "home_win_probability": [0.8] * n,
+            "draw_probability": [0.1] * n,
+            "away_win_probability": [0.1] * n,
+            "actual_outcome": ["home_win"] * n,
+        })
+        report = compute_profit_loss_simulation(df)
+        assert report.assessment == "profitable"
+        assert report.flat_roi > 0
+
+    def test_assessment_unprofitable(self) -> None:
+        """All wrong predictions with high confidence → unprofitable."""
+        n = 20
+        df = pd.DataFrame({
+            "home_win_probability": [0.8] * n,
+            "draw_probability": [0.1] * n,
+            "away_win_probability": [0.1] * n,
+            "actual_outcome": ["away_win"] * n,
+        })
+        report = compute_profit_loss_simulation(df)
+        assert report.assessment == "unprofitable"
+        assert report.flat_roi < 0
+
+    def test_drawdown_nonneg(self) -> None:
+        df = _make_pl_df(n=100)
+        report = compute_profit_loss_simulation(df)
+        assert report.max_flat_drawdown >= 0
+        assert report.max_kelly_drawdown >= 0
+
+    def test_kelly_stake_nonneg(self) -> None:
+        df = _make_pl_df(n=50)
+        report = compute_profit_loss_simulation(df)
+        assert report.total_kelly_stake >= 0
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_pl_df(n=10)
+        report = compute_profit_loss_simulation(df)
+        assert report.disclaimer
+        assert len(report.disclaimer) > 10
+
+    def test_point_fields(self) -> None:
+        df = _make_pl_df(n=5)
+        report = compute_profit_loss_simulation(df, max_points=5)
+        assert len(report.points) == 5
+        p = report.points[0]
+        assert hasattr(p, "match_index")
+        assert hasattr(p, "predicted_outcome")
+        assert hasattr(p, "actual_outcome")
+        assert hasattr(p, "correct")
+        assert hasattr(p, "model_probability")
+        assert hasattr(p, "implied_odds")
+        assert hasattr(p, "flat_profit")
+        assert hasattr(p, "cumulative_flat_profit")
+        assert hasattr(p, "kelly_fraction")
+        assert hasattr(p, "kelly_profit")
+        assert hasattr(p, "cumulative_kelly_profit")
+
+    def test_match_date_sorting(self) -> None:
+        df = _make_pl_df(n=30)
+        df = df.sample(frac=1, random_state=99).reset_index(drop=True)
+        report = compute_profit_loss_simulation(df, max_points=30)
+        dates = [p.match_index for p in report.points]
+        # After sorting by match_date, indices should be in original order
+        # (since _make_pl_df creates dates in order 0..n-1)
+        assert dates == list(range(30))
+
+    def test_flat_profit_correct(self) -> None:
+        """When correct, flat profit = odds - 1 = 1/prob - 1."""
+        df = pd.DataFrame({
+            "home_win_probability": [0.5],
+            "draw_probability": [0.3],
+            "away_win_probability": [0.2],
+            "actual_outcome": ["home_win"],
+        })
+        report = compute_profit_loss_simulation(df, max_points=1)
+        p = report.points[0]
+        assert p.correct is True
+        assert abs(p.flat_profit - (1.0 / 0.5 - 1.0)) < 1e-6
+
+    def test_flat_profit_wrong(self) -> None:
+        """When wrong, flat profit = -1."""
+        df = pd.DataFrame({
+            "home_win_probability": [0.5],
+            "draw_probability": [0.3],
+            "away_win_probability": [0.2],
+            "actual_outcome": ["away_win"],
+        })
+        report = compute_profit_loss_simulation(df, max_points=1)
+        p = report.points[0]
+        assert p.correct is False
+        assert p.flat_profit == -1.0
+
+
+class TestProfitLossAPI:
+    def test_no_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_profit_loss_simulation()
+        assert result["status"] == "not_available"
+
+    def test_with_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_pl_df(n=50)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_profit_loss_simulation()
+        assert result["status"] == "ok"
+        assert result["n_matches"] == 50
+        assert "points" in result
+
+    def test_synthesizes_actual_outcome(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        rng = np.random.default_rng(7)
+        n = 30
+        df = pd.DataFrame({
+            "home_win_probability": rng.uniform(0.2, 0.6, n),
+            "draw_probability": rng.uniform(0.1, 0.3, n),
+            "home_goals": rng.integers(0, 5, n),
+            "away_goals": rng.integers(0, 5, n),
+        })
+        df["away_win_probability"] = 1.0 - df["home_win_probability"] - df["draw_probability"]
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_profit_loss_simulation()
+        assert result["status"] == "ok"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_pl_df(n=40)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_profit_loss_simulation()
+        r2 = api_module.get_profit_loss_simulation()
+        assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# Round 35: Cumulative Trajectory
+# ---------------------------------------------------------------------------
+
+
+def _make_traj_df(n: int = 200, seed: int = 42) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    rows = []
+    for i in range(n):
+        h = float(rng.uniform(0.2, 0.7))
+        d = float(rng.uniform(0.1, 0.3))
+        a = 1.0 - h - d
+        if a < 0.05:
+            a = 0.05
+            h = 1.0 - d - a
+        outcome = rng.choice(["home_win", "draw", "away_win"], p=[h, d, a])
+        rows.append({
+            "home_win_probability": h,
+            "draw_probability": d,
+            "away_win_probability": a,
+            "actual_outcome": outcome,
+            "match_date": pd.Timestamp("2024-01-01") + pd.Timedelta(days=i),
+        })
+    return pd.DataFrame(rows)
+
+
+class TestComputeCumulativeTrajectory:
+    def test_returns_report(self) -> None:
+        df = _make_traj_df(n=100)
+        report = compute_cumulative_trajectory(df)
+        assert report is not None
+        assert report.n_matches == 100
+
+    def test_report_fields(self) -> None:
+        df = _make_traj_df(n=100)
+        report = compute_cumulative_trajectory(df)
+        assert hasattr(report, "final_accuracy")
+        assert hasattr(report, "final_brier")
+        assert hasattr(report, "final_profit")
+        assert hasattr(report, "trend")
+        assert hasattr(report, "best_window_accuracy")
+        assert hasattr(report, "worst_window_accuracy")
+        assert hasattr(report, "n_change_points")
+        assert hasattr(report, "disclaimer")
+
+    def test_final_accuracy_in_range(self) -> None:
+        df = _make_traj_df(n=50)
+        report = compute_cumulative_trajectory(df)
+        assert 0.0 <= report.final_accuracy <= 1.0
+
+    def test_final_brier_nonneg(self) -> None:
+        df = _make_traj_df(n=50)
+        report = compute_cumulative_trajectory(df)
+        assert report.final_brier >= 0.0
+
+    def test_best_gte_worst(self) -> None:
+        df = _make_traj_df(n=200)
+        report = compute_cumulative_trajectory(df)
+        assert report.best_window_accuracy >= report.worst_window_accuracy
+
+    def test_max_points_caps(self) -> None:
+        df = _make_traj_df(n=500)
+        report = compute_cumulative_trajectory(df, max_points=100)
+        assert len(report.points) <= 100
+
+    def test_empty_df(self) -> None:
+        df = pd.DataFrame(columns=[
+            "home_win_probability", "draw_probability",
+            "away_win_probability", "actual_outcome",
+        ])
+        report = compute_cumulative_trajectory(df)
+        assert report.n_matches == 0
+        assert len(report.points) == 0
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"actual_outcome": ["home_win"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_cumulative_trajectory(df)
+
+    def test_trend_insufficient_data(self) -> None:
+        df = _make_traj_df(n=30)
+        report = compute_cumulative_trajectory(df, rolling_window=50)
+        assert report.trend == "insufficient_data"
+
+    def test_trend_with_enough_data(self) -> None:
+        df = _make_traj_df(n=300)
+        report = compute_cumulative_trajectory(df, rolling_window=50)
+        assert report.trend in ("improving", "degrading", "stable", "insufficient_data")
+
+    def test_change_points_nonneg(self) -> None:
+        df = _make_traj_df(n=300)
+        report = compute_cumulative_trajectory(df, rolling_window=50)
+        assert report.n_change_points >= 0
+
+    def test_point_fields(self) -> None:
+        df = _make_traj_df(n=10)
+        report = compute_cumulative_trajectory(df, max_points=10)
+        assert len(report.points) == 10
+        p = report.points[0]
+        assert hasattr(p, "match_index")
+        assert hasattr(p, "cumulative_accuracy")
+        assert hasattr(p, "cumulative_brier")
+        assert hasattr(p, "cumulative_profit")
+        assert hasattr(p, "rolling_accuracy")
+        assert hasattr(p, "rolling_brier")
+        assert hasattr(p, "match_date")
+
+    def test_cumulative_accuracy_monotonic_direction(self) -> None:
+        """Final cumulative accuracy should equal report.final_accuracy."""
+        df = _make_traj_df(n=50)
+        report = compute_cumulative_trajectory(df, max_points=50)
+        assert len(report.points) == 50
+        last = report.points[-1]
+        assert abs(last.cumulative_accuracy - report.final_accuracy) < 1e-4
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_traj_df(n=20)
+        report = compute_cumulative_trajectory(df)
+        assert report.disclaimer
+        assert len(report.disclaimer) > 10
+
+    def test_match_date_sorted(self) -> None:
+        df = _make_traj_df(n=30)
+        df_shuffled = df.sample(frac=1, random_state=99).reset_index(drop=True)
+        report = compute_cumulative_trajectory(df_shuffled, max_points=30)
+        dates = [p.match_date for p in report.points if p.match_date]
+        if dates:
+            assert dates == sorted(dates)
+
+    def test_no_match_date_column(self) -> None:
+        df = _make_traj_df(n=20)
+        df = df.drop(columns=["match_date"])
+        report = compute_cumulative_trajectory(df, max_points=20)
+        assert report.n_matches == 20
+        for p in report.points:
+            assert p.match_date is None
+
+
+class TestCumulativeTrajectoryAPI:
+    def test_no_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_cumulative_trajectory()
+        assert result["status"] == "not_available"
+
+    def test_with_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_traj_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_cumulative_trajectory()
+        assert result["status"] == "ok"
+        assert result["n_matches"] == 100
+        assert "points" in result
+
+    def test_poisson_fallback(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_traj_df(n=50)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "poisson_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_cumulative_trajectory()
+        assert result["status"] == "ok"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_traj_df(n=60)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_cumulative_trajectory()
+        r2 = api_module.get_cumulative_trajectory()
+        assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# Round 35: Difficulty Stratification
+# ---------------------------------------------------------------------------
+
+
+def _make_diff_df(n: int = 200, seed: int = 42) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    rows = []
+    for _ in range(n):
+        h = float(rng.uniform(0.2, 0.8))
+        d = float(rng.uniform(0.1, 0.3))
+        a = 1.0 - h - d
+        if a < 0.05:
+            a = 0.05
+            h = 1.0 - d - a
+        outcome = rng.choice(["home_win", "draw", "away_win"], p=[h, d, a])
+        rows.append({
+            "home_win_probability": h,
+            "draw_probability": d,
+            "away_win_probability": a,
+            "actual_outcome": outcome,
+        })
+    return pd.DataFrame(rows)
+
+
+class TestComputeDifficultyStratification:
+    def test_returns_report(self) -> None:
+        df = _make_diff_df(n=100)
+        report = compute_difficulty_stratification(df)
+        assert report is not None
+        assert report.n_matches == 100
+
+    def test_report_fields(self) -> None:
+        df = _make_diff_df(n=100)
+        report = compute_difficulty_stratification(df)
+        assert hasattr(report, "tiers")
+        assert hasattr(report, "overall_accuracy")
+        assert hasattr(report, "overall_brier")
+        assert hasattr(report, "best_tier")
+        assert hasattr(report, "worst_tier")
+        assert hasattr(report, "disclaimer")
+
+    def test_coarse_tiers_present(self) -> None:
+        df = _make_diff_df(n=200)
+        report = compute_difficulty_stratification(df)
+        tier_names = [t.tier for t in report.tiers]
+        assert "easy" in tier_names
+        assert "medium" in tier_names
+        assert "hard" in tier_names
+
+    def test_tier_fields(self) -> None:
+        df = _make_diff_df(n=100)
+        report = compute_difficulty_stratification(df)
+        for t in report.tiers:
+            assert hasattr(t, "tier")
+            assert hasattr(t, "n_matches")
+            assert hasattr(t, "accuracy")
+            assert hasattr(t, "brier")
+            assert hasattr(t, "rps")
+            assert hasattr(t, "log_loss")
+            assert hasattr(t, "avg_confidence")
+            assert hasattr(t, "calibration_gap")
+            assert hasattr(t, "assessment")
+
+    def test_n_matches_sum(self) -> None:
+        df = _make_diff_df(n=200)
+        report = compute_difficulty_stratification(df)
+        coarse_tiers = [t for t in report.tiers if t.tier in ("easy", "medium", "hard")]
+        total = sum(t.n_matches for t in coarse_tiers)
+        assert total == report.n_matches
+
+    def test_invalid_thresholds_raises(self) -> None:
+        df = _make_diff_df(n=10)
+        with pytest.raises(ValueError, match="hard_threshold < easy_threshold"):
+            compute_difficulty_stratification(df, easy_threshold=0.3, hard_threshold=0.5)
+
+    def test_invalid_n_bins_raises(self) -> None:
+        df = _make_diff_df(n=10)
+        with pytest.raises(ValueError, match="n_bins"):
+            compute_difficulty_stratification(df, n_bins=1)
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"actual_outcome": ["home_win"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_difficulty_stratification(df)
+
+    def test_empty_df(self) -> None:
+        df = pd.DataFrame(columns=[
+            "home_win_probability", "draw_probability",
+            "away_win_probability", "actual_outcome",
+        ])
+        report = compute_difficulty_stratification(df)
+        assert report.n_matches == 0
+
+    def test_best_tier_not_none(self) -> None:
+        df = _make_diff_df(n=200)
+        report = compute_difficulty_stratification(df)
+        assert report.best_tier is not None
+        assert report.worst_tier is not None
+
+    def test_assessment_labels(self) -> None:
+        df = _make_diff_df(n=200)
+        report = compute_difficulty_stratification(df)
+        for t in report.tiers:
+            if t.n_matches > 0:
+                assert t.assessment in ("strong", "average", "weak")
+
+    def test_calibration_gap(self) -> None:
+        df = _make_diff_df(n=200)
+        report = compute_difficulty_stratification(df)
+        for t in report.tiers:
+            if t.n_matches > 0:
+                expected = round(t.avg_confidence - t.accuracy, 4)
+                assert abs(t.calibration_gap - expected) < 1e-3
+
+    def test_with_exact_score(self) -> None:
+        df = _make_diff_df(n=100)
+        rng = np.random.default_rng(5)
+        df["exact_score_probability"] = rng.uniform(0.01, 0.1, len(df))
+        report = compute_difficulty_stratification(df)
+        for t in report.tiers:
+            if t.n_matches > 0:
+                assert t.log_loss is not None
+
+    def test_without_exact_score(self) -> None:
+        df = _make_diff_df(n=100)
+        report = compute_difficulty_stratification(df)
+        for t in report.tiers:
+            assert t.log_loss is None
+
+    def test_disclaimer_present(self) -> None:
+        df = _make_diff_df(n=20)
+        report = compute_difficulty_stratification(df)
+        assert report.disclaimer
+        assert len(report.disclaimer) > 10
+
+    def test_fine_grained_bins(self) -> None:
+        df = _make_diff_df(n=200)
+        report = compute_difficulty_stratification(df, n_bins=5)
+        bin_tiers = [t for t in report.tiers if t.tier.startswith("bin_")]
+        assert len(bin_tiers) > 0
+
+    def test_custom_thresholds(self) -> None:
+        df = _make_diff_df(n=200)
+        report = compute_difficulty_stratification(df, easy_threshold=0.7, hard_threshold=0.3)
+        tier_names = [t.tier for t in report.tiers]
+        assert "easy" in tier_names
+        assert "medium" in tier_names
+        assert "hard" in tier_names
+
+
+class TestDifficultyStratificationAPI:
+    def test_no_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_difficulty_stratification()
+        assert result["status"] == "not_available"
+
+    def test_with_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_diff_df(n=100)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_difficulty_stratification()
+        assert result["status"] == "ok"
+        assert result["n_matches"] == 100
+        assert "tiers" in result
+
+    def test_synthesizes_actual_outcome(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        rng = np.random.default_rng(3)
+        n = 30
+        df = pd.DataFrame({
+            "home_win_probability": rng.uniform(0.2, 0.6, n),
+            "draw_probability": rng.uniform(0.1, 0.3, n),
+            "home_goals": rng.integers(0, 5, n),
+            "away_goals": rng.integers(0, 5, n),
+        })
+        df["away_win_probability"] = 1.0 - df["home_win_probability"] - df["draw_probability"]
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_difficulty_stratification()
+        assert result["status"] == "ok"
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_diff_df(n=80)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_difficulty_stratification()
+        r2 = api_module.get_difficulty_stratification()
         assert r1 == r2

@@ -5794,3 +5794,605 @@ def compute_prediction_uncertainty(
         entropy_accuracy_correlation=correlation,
         disclaimer=disclaimer,
     )
+
+
+# ---------------------------------------------------------------------------
+# Profit/Loss Simulation
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProfitLossPoint:
+    """Per-match profit/loss record for betting simulation."""
+
+    match_index: int
+    predicted_outcome: str
+    actual_outcome: str
+    correct: bool
+    model_probability: float
+    implied_odds: float
+    flat_stake: float
+    flat_profit: float
+    cumulative_flat_profit: float
+    kelly_fraction: float
+    kelly_stake: float
+    kelly_profit: float
+    cumulative_kelly_profit: float
+
+
+@dataclass(frozen=True)
+class ProfitLossSimulationReport:
+    """Profit/loss simulation report for a flat-stake and Kelly betting strategy.
+
+    Simulates betting 1 unit (flat) or Kelly-fraction stake on the model's
+    predicted outcome (argmax of 1x2 probabilities) for each match, using
+    implied odds from the model's own probabilities (1/prob). This is a
+    self-referential simulation — it measures whether the model's confidence
+    is well-calibrated, not whether it beats real bookmaker odds.
+    """
+
+    points: list[ProfitLossPoint]
+    n_matches: int
+    n_correct: int
+    win_rate: float
+    total_flat_stake: float
+    total_flat_profit: float
+    flat_roi: float
+    max_flat_drawdown: float
+    total_kelly_stake: float
+    total_kelly_profit: float
+    kelly_roi: float
+    max_kelly_drawdown: float
+    avg_confidence: float
+    assessment: str
+    disclaimer: str
+
+
+def compute_profit_loss_simulation(
+    predictions: pd.DataFrame,
+    *,
+    max_points: int = 500,
+) -> ProfitLossSimulationReport:
+    """Simulate flat-stake and Kelly betting on backtest predictions.
+
+    For each match, bets on the argmax outcome using implied odds (1/prob).
+    Flat-stake bets 1 unit per match; Kelly sizes stake by edge.
+
+    Args:
+        predictions: DataFrame with ``home_win_probability``,
+            ``draw_probability``, ``away_win_probability``, and
+            ``actual_outcome`` columns. Optional: ``match_date``.
+        max_points: Maximum number of per-match points to return
+            (keeps first N after sorting by match_date if available).
+
+    Returns:
+        :class:`ProfitLossSimulationReport` with per-match points and
+        aggregate P/L metrics.
+
+    Raises:
+        ValueError: If required probability or outcome columns are missing.
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    disclaimer = (
+        "Self-referential P/L simulation using implied odds from model "
+        "probabilities. Positive ROI indicates well-calibrated confidence, "
+        "not real-world betting profitability."
+    )
+
+    df = predictions.copy().reset_index(drop=True)
+    if "match_date" in df.columns:
+        df = df.sort_values("match_date").reset_index(drop=True)
+
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+    probs = df[probs_cols].to_numpy()
+    predicted_idx = np.argmax(probs, axis=1)
+    max_probs = probs[np.arange(len(df)), predicted_idx]
+    outcome_labels = ["home_win", "draw", "away_win"]
+    predicted_outcomes = [outcome_labels[i] for i in predicted_idx]
+    actual_outcomes = df["actual_outcome"].astype(str).tolist()
+
+    points: list[ProfitLossPoint] = []
+    cum_flat = 0.0
+    cum_kelly = 0.0
+    peak_flat = 0.0
+    peak_kelly = 0.0
+    max_flat_dd = 0.0
+    max_kelly_dd = 0.0
+    n_correct = 0
+
+    for i in range(len(df)):
+        p = float(max_probs[i])
+        p_safe = max(p, 1e-12)
+        odds = 1.0 / p_safe
+        correct = predicted_outcomes[i] == actual_outcomes[i]
+        if correct:
+            n_correct += 1
+
+        flat_stake = 1.0
+        flat_profit = (odds - 1.0) if correct else -1.0
+        cum_flat += flat_profit
+        peak_flat = max(peak_flat, cum_flat)
+        flat_dd = peak_flat - cum_flat
+        max_flat_dd = max(max_flat_dd, flat_dd)
+
+        kelly_frac = (p * odds - 1.0) / (odds - 1.0) if odds > 1.0 else 0.0
+        kelly_frac = max(0.0, min(1.0, kelly_frac))
+        kelly_stake = kelly_frac
+        kelly_profit = kelly_stake * (odds - 1.0) if correct else -kelly_stake
+        cum_kelly += kelly_profit
+        peak_kelly = max(peak_kelly, cum_kelly)
+        kelly_dd = peak_kelly - cum_kelly
+        max_kelly_dd = max(max_kelly_dd, kelly_dd)
+
+        if i < max_points:
+            points.append(ProfitLossPoint(
+                match_index=int(i),
+                predicted_outcome=predicted_outcomes[i],
+                actual_outcome=actual_outcomes[i],
+                correct=correct,
+                model_probability=round(p, 4),
+                implied_odds=round(odds, 4),
+                flat_stake=round(flat_stake, 4),
+                flat_profit=round(flat_profit, 4),
+                cumulative_flat_profit=round(cum_flat, 4),
+                kelly_fraction=round(kelly_frac, 4),
+                kelly_stake=round(kelly_stake, 4),
+                kelly_profit=round(kelly_profit, 4),
+                cumulative_kelly_profit=round(cum_kelly, 4),
+            ))
+
+    n = len(df)
+    win_rate = n_correct / n if n > 0 else 0.0
+    total_flat_stake = float(n)
+    total_flat_profit = cum_flat
+    flat_roi = cum_flat / total_flat_stake if total_flat_stake > 0 else 0.0
+    total_kelly_profit = cum_kelly
+    # Compute total Kelly stake over ALL matches (not just max_points)
+    total_kelly_stake_full = 0.0
+    for i in range(n):
+        p = float(max_probs[i])
+        p_safe = max(p, 1e-12)
+        odds = 1.0 / p_safe
+        kf = (p * odds - 1.0) / (odds - 1.0) if odds > 1.0 else 0.0
+        kf = max(0.0, min(1.0, kf))
+        total_kelly_stake_full += kf
+    kelly_roi = total_kelly_profit / total_kelly_stake_full if total_kelly_stake_full > 0 else 0.0
+
+    if flat_roi > 0.05:
+        assessment = "profitable"
+    elif flat_roi < -0.02:
+        assessment = "unprofitable"
+    else:
+        assessment = "breakeven"
+
+    avg_conf = float(np.mean(max_probs)) if n > 0 else 0.0
+
+    return ProfitLossSimulationReport(
+        points=points,
+        n_matches=int(n),
+        n_correct=int(n_correct),
+        win_rate=round(win_rate, 4),
+        total_flat_stake=round(total_flat_stake, 4),
+        total_flat_profit=round(total_flat_profit, 4),
+        flat_roi=round(flat_roi, 4),
+        max_flat_drawdown=round(max_flat_dd, 4),
+        total_kelly_stake=round(total_kelly_stake_full, 4),
+        total_kelly_profit=round(total_kelly_profit, 4),
+        kelly_roi=round(kelly_roi, 4),
+        max_kelly_drawdown=round(max_kelly_dd, 4),
+        avg_confidence=round(avg_conf, 4),
+        assessment=assessment,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cumulative Performance Trajectory
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TrajectoryPoint:
+    """A single point in the cumulative performance trajectory."""
+
+    match_index: int
+    cumulative_accuracy: float
+    cumulative_brier: float
+    cumulative_profit: float
+    rolling_accuracy: float | None
+    rolling_brier: float | None
+    match_date: str | None
+
+
+@dataclass(frozen=True)
+class CumulativeTrajectoryReport:
+    """Cumulative performance trajectory over the backtest timeline.
+
+    Tracks running accuracy, Brier, and flat-stake profit as each match
+    is added. Optionally computes a rolling-window comparison to detect
+    local trend changes.
+    """
+
+    points: list[TrajectoryPoint]
+    n_matches: int
+    final_accuracy: float
+    final_brier: float
+    final_profit: float
+    trend: str
+    best_window_accuracy: float
+    worst_window_accuracy: float
+    n_change_points: int
+    disclaimer: str
+
+
+def compute_cumulative_trajectory(
+    predictions: pd.DataFrame,
+    *,
+    rolling_window: int = 50,
+    max_points: int = 500,
+    change_threshold: float = 0.05,
+) -> CumulativeTrajectoryReport:
+    """Compute cumulative performance trajectory over the backtest timeline.
+
+    Sorts by ``match_date`` (if present) and computes running accuracy,
+    Brier, and flat-stake profit. Optionally computes rolling-window
+    metrics for trend change detection.
+
+    Args:
+        predictions: DataFrame with probability and outcome columns.
+        rolling_window: Window size for rolling metrics (default 50).
+        max_points: Maximum trajectory points to return (subsampled evenly).
+        change_threshold: Accuracy change threshold for change-point detection.
+
+    Returns:
+        :class:`CumulativeTrajectoryReport` with trajectory points and summary.
+
+    Raises:
+        ValueError: If required columns are missing.
+    """
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    disclaimer = (
+        "Cumulative trajectory tracks running metrics over the backtest "
+        "timeline. Change points indicate significant accuracy shifts."
+    )
+
+    df = predictions.copy().reset_index(drop=True)
+    if "match_date" in df.columns:
+        df = df.sort_values("match_date").reset_index(drop=True)
+
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+    n = len(df)
+    if n == 0:
+        return CumulativeTrajectoryReport(
+            points=[],
+            n_matches=0,
+            final_accuracy=0.0,
+            final_brier=0.0,
+            final_profit=0.0,
+            trend="insufficient_data",
+            best_window_accuracy=0.0,
+            worst_window_accuracy=0.0,
+            n_change_points=0,
+            disclaimer=disclaimer,
+        )
+
+    probs = df[probs_cols].to_numpy()
+    predicted_idx = np.argmax(probs, axis=1)
+    max_probs = probs[np.arange(n), predicted_idx]
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    actual_idx = df["actual_outcome"].map(outcome_map).to_numpy()
+    correct_arr = (predicted_idx == actual_idx).astype(float)
+
+    # Brier per match
+    actuals_1x2 = np.vstack(
+        df["actual_outcome"].map({
+            "home_win": [1.0, 0.0, 0.0],
+            "draw": [0.0, 1.0, 0.0],
+            "away_win": [0.0, 0.0, 1.0],
+        }).tolist()
+    )
+    brier_arr = np.sum((probs - actuals_1x2) ** 2, axis=1)
+
+    # Flat-stake profit per match
+    odds_arr = 1.0 / np.maximum(max_probs, 1e-12)
+    profit_arr = np.where(correct_arr > 0, odds_arr - 1.0, -1.0)
+
+    n = len(df)
+    cum_correct = np.cumsum(correct_arr)
+    cum_brier = np.cumsum(brier_arr)
+    cum_profit = np.cumsum(profit_arr)
+    indices = np.arange(1, n + 1)
+    cum_accuracy = cum_correct / indices
+    cum_brier_mean = cum_brier / indices
+
+    # Rolling metrics
+    if n >= rolling_window:
+        s_correct = pd.Series(correct_arr)
+        s_brier = pd.Series(brier_arr)
+        rolling_acc = s_correct.rolling(rolling_window, min_periods=1).mean().to_numpy()
+        rolling_brier = s_brier.rolling(rolling_window, min_periods=1).mean().to_numpy()
+    else:
+        rolling_acc = cum_accuracy.copy()
+        rolling_brier = cum_brier_mean.copy()
+
+    # Change-point detection: where rolling accuracy changes by > threshold
+    n_change = 0
+    if n >= rolling_window * 2:
+        rolling_changes = np.abs(np.diff(rolling_acc[rolling_window - 1:]))
+        n_change = int(np.sum(rolling_changes > change_threshold))
+
+    # Best/worst rolling window accuracy
+    if n >= rolling_window:
+        best_win = float(np.max(rolling_acc[rolling_window - 1:]))
+        worst_win = float(np.min(rolling_acc[rolling_window - 1:]))
+    else:
+        best_win = float(np.max(rolling_acc)) if n > 0 else 0.0
+        worst_win = float(np.min(rolling_acc)) if n > 0 else 0.0
+
+    # Trend: compare first half vs second half rolling accuracy
+    if n >= rolling_window * 2:
+        mid = n // 2
+        first_half = float(np.mean(rolling_acc[rolling_window - 1:mid]))
+        second_half = float(np.mean(rolling_acc[mid:]))
+        if second_half > first_half + change_threshold:
+            trend = "improving"
+        elif second_half < first_half - change_threshold:
+            trend = "degrading"
+        else:
+            trend = "stable"
+    else:
+        trend = "insufficient_data"
+
+    # Subsample points if needed
+    if n <= max_points:
+        sample_indices = list(range(n))
+    else:
+        sample_indices = np.linspace(0, n - 1, max_points, dtype=int).tolist()
+
+    if "match_date" in df.columns:
+        match_dates = df["match_date"].astype(str).tolist()
+    else:
+        match_dates = [None] * n
+
+    points: list[TrajectoryPoint] = []
+    for i in sample_indices:
+        points.append(TrajectoryPoint(
+            match_index=int(i),
+            cumulative_accuracy=round(float(cum_accuracy[i]), 4),
+            cumulative_brier=round(float(cum_brier_mean[i]), 4),
+            cumulative_profit=round(float(cum_profit[i]), 4),
+            rolling_accuracy=round(float(rolling_acc[i]), 4),
+            rolling_brier=round(float(rolling_brier[i]), 4),
+            match_date=match_dates[i],
+        ))
+
+    final_acc = float(cum_accuracy[-1]) if n > 0 else 0.0
+    final_brier = float(cum_brier_mean[-1]) if n > 0 else 0.0
+    final_profit = float(cum_profit[-1]) if n > 0 else 0.0
+
+    return CumulativeTrajectoryReport(
+        points=points,
+        n_matches=int(n),
+        final_accuracy=round(final_acc, 4),
+        final_brier=round(final_brier, 4),
+        final_profit=round(final_profit, 4),
+        trend=trend,
+        best_window_accuracy=round(best_win, 4),
+        worst_window_accuracy=round(worst_win, 4),
+        n_change_points=n_change,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Match Difficulty Stratification
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DifficultyTier:
+    """Per-tier metrics for a difficulty stratification bucket."""
+
+    tier: str
+    n_matches: int
+    accuracy: float
+    brier: float
+    rps: float
+    log_loss: float | None
+    avg_confidence: float
+    calibration_gap: float
+    assessment: str
+
+
+@dataclass(frozen=True)
+class DifficultyStratificationReport:
+    """Match difficulty stratification report.
+
+    Buckets backtest predictions by difficulty (max predicted probability)
+    and closeness (margin between top-1 and top-2 probabilities), then
+    computes per-tier metrics to reveal where the model excels or struggles.
+    """
+
+    tiers: list[DifficultyTier]
+    n_matches: int
+    overall_accuracy: float
+    overall_brier: float
+    best_tier: str | None
+    worst_tier: str | None
+    disclaimer: str
+
+
+def compute_difficulty_stratification(
+    predictions: pd.DataFrame,
+    *,
+    easy_threshold: float = 0.6,
+    hard_threshold: float = 0.4,
+    n_bins: int = 5,
+) -> DifficultyStratificationReport:
+    """Compute per-difficulty-tier metrics for backtest predictions.
+
+    Classifies each match into difficulty tiers by max predicted
+    probability: ``easy`` (≥ easy_threshold), ``medium`` (between
+    thresholds), ``hard`` (< hard_threshold). Also computes a fine-grained
+    ``n_bins`` quantile bucketing for the difficulty dimension.
+
+    Args:
+        predictions: DataFrame with probability and outcome columns.
+        easy_threshold: Max prob ≥ this → ``easy`` tier (default 0.6).
+        hard_threshold: Max prob < this → ``hard`` tier (default 0.4).
+        n_bins: Number of quantile bins for fine-grained difficulty analysis.
+
+    Returns:
+        :class:`DifficultyStratificationReport` with per-tier metrics.
+
+    Raises:
+        ValueError: If required columns are missing or thresholds are invalid.
+    """
+    if not (0.0 < hard_threshold < easy_threshold < 1.0):
+        raise ValueError(
+            "Require 0.0 < hard_threshold < easy_threshold < 1.0"
+        )
+    if n_bins < 2 or n_bins > 20:
+        raise ValueError("n_bins must be in [2, 20]")
+
+    required = {
+        "home_win_probability", "draw_probability", "away_win_probability",
+        "actual_outcome",
+    }
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    disclaimer = (
+        "Difficulty stratification reveals model performance across "
+        "prediction difficulty tiers; small tiers may have high variance."
+    )
+
+    df = predictions.copy().reset_index(drop=True)
+    probs_cols = [
+        "home_win_probability", "draw_probability", "away_win_probability",
+    ]
+    df["_max_prob"] = df[probs_cols].max(axis=1)
+    sorted_probs = df[probs_cols].to_numpy()
+    sorted_desc = np.sort(sorted_probs, axis=1)[:, ::-1]
+    df["_margin"] = sorted_desc[:, 0] - sorted_desc[:, 1]
+
+    # Ensure actual_outcome
+    if "actual_outcome" not in df.columns:
+        if "home_goals" in df.columns and "away_goals" in df.columns:
+            df["actual_outcome"] = np.where(
+                df["home_goals"] > df["away_goals"], "home_win",
+                np.where(
+                    df["home_goals"] == df["away_goals"], "draw", "away_win",
+                ),
+            )
+
+    has_exact = "exact_score_probability" in df.columns
+
+    # Assign coarse tiers
+    def _coarse_tier(mp: float) -> str:
+        if mp >= easy_threshold:
+            return "easy"
+        if mp < hard_threshold:
+            return "hard"
+        return "medium"
+
+    df["_tier"] = df["_max_prob"].apply(_coarse_tier)
+
+    # Fine-grained quantile bins
+    try:
+        df["_bin"] = pd.qcut(df["_max_prob"], n_bins, labels=False, duplicates="drop")
+    except Exception:
+        df["_bin"] = pd.cut(df["_max_prob"], n_bins, labels=False)
+
+    actual_n_bins = int(df["_bin"].nunique()) if "_bin" in df.columns else 0
+
+    tiers: list[DifficultyTier] = []
+
+    def _compute_tier_metrics(tier_df: pd.DataFrame, tier_label: str) -> DifficultyTier:
+        if tier_df.empty:
+            return DifficultyTier(
+                tier=tier_label, n_matches=0, accuracy=0.0, brier=0.0,
+                rps=0.0, log_loss=None, avg_confidence=0.0,
+                calibration_gap=0.0, assessment="no_data",
+            )
+        acc = _accuracy_for_df(tier_df)
+        brier = _brier_1x2(tier_df)
+        rps = _ranked_probability_score(tier_df)
+        log_loss = None
+        if has_exact and "exact_score_probability" in tier_df.columns:
+            log_loss = _exact_score_log_loss(tier_df)
+        conf = _avg_confidence_for_df(tier_df)
+        # Calibration gap: avg_confidence - accuracy (positive = overconfident)
+        cal_gap = conf - acc
+        if acc >= 0.60:
+            assessment = "strong"
+        elif acc >= 0.45:
+            assessment = "average"
+        else:
+            assessment = "weak"
+        return DifficultyTier(
+            tier=tier_label,
+            n_matches=int(len(tier_df)),
+            accuracy=round(acc, 4),
+            brier=round(brier, 4),
+            rps=round(rps, 4),
+            log_loss=round(log_loss, 4) if log_loss is not None else None,
+            avg_confidence=round(conf, 4),
+            calibration_gap=round(cal_gap, 4),
+            assessment=assessment,
+        )
+
+    # Coarse tiers
+    for tier_label in ["easy", "medium", "hard"]:
+        tier_df = df[df["_tier"] == tier_label]
+        tiers.append(_compute_tier_metrics(tier_df, tier_label))
+
+    # Fine-grained bin tiers (only if different from coarse)
+    if actual_n_bins > 0:
+        for bin_idx in range(actual_n_bins):
+            bin_df = df[df["_bin"] == bin_idx]
+            if not bin_df.empty:
+                lo = float(bin_df["_max_prob"].min())
+                hi = float(bin_df["_max_prob"].max())
+                tier_label = f"bin_{bin_idx}_[{lo:.2f},{hi:.2f}]"
+                tiers.append(_compute_tier_metrics(bin_df, tier_label))
+
+    overall_acc = _accuracy_for_df(df) if not df.empty else 0.0
+    overall_brier = _brier_1x2(df) if not df.empty else 0.0
+
+    # Best/worst tier by accuracy (among non-empty coarse tiers)
+    coarse_tiers = [t for t in tiers if t.tier in ("easy", "medium", "hard") and t.n_matches > 0]
+    best_tier = max(coarse_tiers, key=lambda t: t.accuracy).tier if coarse_tiers else None
+    worst_tier = min(coarse_tiers, key=lambda t: t.accuracy).tier if coarse_tiers else None
+
+    return DifficultyStratificationReport(
+        tiers=tiers,
+        n_matches=int(len(df)),
+        overall_accuracy=round(overall_acc, 4),
+        overall_brier=round(overall_brier, 4),
+        best_tier=best_tier,
+        worst_tier=worst_tier,
+        disclaimer=disclaimer,
+    )
