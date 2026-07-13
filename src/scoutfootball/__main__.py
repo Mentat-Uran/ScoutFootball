@@ -450,6 +450,33 @@ def _cmd_tournament_qualification(args: argparse.Namespace) -> None:
     print("Status: provisional" if impact["provisional"] else "Status: group complete")
 
 
+def _cmd_tournament_tiebreaks(args: argparse.Namespace) -> None:
+    """Show local tied-cluster and head-to-head availability diagnostics."""
+    from scoutfootball.worldcup.tournament import group_tiebreak_diagnostics
+
+    try:
+        diagnostics = group_tiebreak_diagnostics(_tournament_load_state(args), args.group)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
+    if args.json:
+        print(json.dumps(diagnostics, indent=2, ensure_ascii=False))
+        return
+    print(f"Group {diagnostics['group']} local tiebreak diagnostics")
+    clusters = diagnostics["tied_clusters"]
+    if not clusters:
+        print("No current ties on points, goal difference, and goals scored.")
+        return
+    for cluster in clusters:
+        teams = ", ".join(cluster["teams"])
+        status = "available" if cluster["head_to_head_available"] else "incomplete; provisional"
+        print(
+            f"Positions {cluster['positions']}: {teams} | H2H "
+            f"{cluster['head_to_head_matches_recorded']}/"
+            f"{cluster['head_to_head_matches_required']} ({status})"
+        )
+
+
 def _cmd_tournament_knockout_generate(args: argparse.Namespace) -> None:
     from scoutfootball.worldcup.tournament import (
         DEFAULT_STATE_PATH,
@@ -603,6 +630,7 @@ def _cmd_tournament(args: argparse.Namespace) -> None:
         "scenarios": _cmd_tournament_scenarios,
         "matches": _cmd_tournament_matches,
         "qualification": _cmd_tournament_qualification,
+        "tiebreaks": _cmd_tournament_tiebreaks,
     }.get(action)
     if handler is None:
         print(f"Unknown tournament action: {action}")
@@ -1467,6 +1495,13 @@ def main() -> None:
     tour_qualification.add_argument("--group", required=True, help="Group letter A-L")
     tour_qualification.add_argument("--state-path", type=str, default=None)
     tour_qualification.add_argument("--json", action="store_true")
+
+    tour_tiebreaks = tour_sub.add_parser(
+        "tiebreaks", help="Explain local tied clusters and H2H availability"
+    )
+    tour_tiebreaks.add_argument("--group", required=True, help="Group letter A-L")
+    tour_tiebreaks.add_argument("--state-path", type=str, default=None)
+    tour_tiebreaks.add_argument("--json", action="store_true")
 
     # ── tournament knockout ──
     tour_ko = tour_sub.add_parser("knockout", help="Manage knockout bracket")

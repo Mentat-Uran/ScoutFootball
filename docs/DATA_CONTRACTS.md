@@ -838,6 +838,9 @@ scored, together with the number of head-to-head fixtures recorded versus
 required. It exposes only the availability of the locally calculated rule; it
 does not model fair-play or drawing of lots, and never represents a local
 display order as an official ranking decision.
+The same result is available offline through
+`scoutfootball tournament tiebreaks --group A [--json]` and never writes
+tournament state.
 
 **Response**:
 ```json
