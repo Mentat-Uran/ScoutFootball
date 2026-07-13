@@ -7809,6 +7809,13 @@ def get_wc_knockout_probabilities() -> dict:
     return _clean_json_value(result)
 
 
+def get_wc_qualification_impact(group: str) -> dict:
+    """Return the local standings impact for a selected World Cup group."""
+    from scoutfootball.worldcup.tournament import qualification_impact
+
+    return _clean_json_value(qualification_impact(_wc_tournament_state(), group))
+
+
 def get_wc_knockout_scenarios(team: str, num_simulations: int = 5000) -> dict:
     """Return knockout advancement scenarios for a specific team.
 

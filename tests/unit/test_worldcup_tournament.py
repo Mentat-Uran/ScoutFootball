@@ -32,6 +32,7 @@ from scoutfootball.worldcup.tournament import (
     determine_advancing_teams,
     init_state,
     load_state,
+    qualification_impact,
     reset_state,
     save_state,
     state_from_dict,
@@ -429,6 +430,29 @@ class TestTournamentSummary:
     def test_summary_standings_all_groups(self, fresh_state):
         summary = tournament_summary(fresh_state)
         assert len(summary["standings"]) == 12
+
+
+class TestQualificationImpact:
+    def test_fresh_group_is_explicitly_provisional(self, fresh_state):
+        impact = qualification_impact(fresh_state, "a")
+
+        assert impact["schema"] == "scoutfootball.world-cup-qualification-impact"
+        assert impact["group"] == "A"
+        assert impact["matches_remaining"] == 6
+        assert impact["provisional"] is True
+        assert impact["third_place"]["cutoff_rank"] == 8
+        assert 1 <= impact["third_place"]["rank"] <= 12
+
+    def test_completed_group_marks_direct_positions_as_qualified(self, group_a_completed):
+        impact = qualification_impact(group_a_completed, "A")
+
+        assert impact["group_complete"] is True
+        assert impact["matches_remaining"] == 0
+        assert all(row["status"] == "qualified" for row in impact["direct_positions"])
+
+    def test_unknown_group_is_rejected(self, fresh_state):
+        with pytest.raises(ValueError, match="Unknown group"):
+            qualification_impact(fresh_state, "Z")
 
 
 # ── Persistence ─────────────────────────────────────────────────────────

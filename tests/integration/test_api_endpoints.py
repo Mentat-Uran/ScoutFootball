@@ -191,6 +191,17 @@ def test_tournament_import_preview_reports_integrity_without_persisting(client: 
     assert any("altered home" in issue for issue in data["integrity_errors"])
 
 
+def test_tournament_qualification_impact_endpoint_is_local_and_provisional(client: TestClient):
+    response = client.get("/world-cup/tournament/qualification-impact?group=A")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema"] == "scoutfootball.world-cup-qualification-impact"
+    assert data["group"] == "A"
+    assert data["third_place"]["cutoff_rank"] == 8
+    assert "locally recorded group results" in data["limitations"][0]
+
+
 def test_world_cup_squad_balance_comparison_endpoint(client: TestClient):
     response = client.get("/world-cup/squad-balance-comparison/Argentina/France")
 

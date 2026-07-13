@@ -95,6 +95,7 @@ from scoutfootball.api import (
     get_wc_knockout_review_ledger,
     get_wc_knockout_scenarios,
     get_wc_predictions,
+    get_wc_qualification_impact,
     get_wc_schedule,
     get_wc_squad,
     get_wc_squad_balance_comparison,
@@ -910,6 +911,10 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/tournament/standings")
     def wc_tournament_standings(group: str | None = None):
         return get_wc_tournament_standings(group=group)
+
+    @app.get("/world-cup/tournament/qualification-impact")
+    def wc_tournament_qualification_impact(group: str):
+        return get_wc_qualification_impact(group)
 
     @app.get("/world-cup/tournament/matches")
     def wc_tournament_matches(

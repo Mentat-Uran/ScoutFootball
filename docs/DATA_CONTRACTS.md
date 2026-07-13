@@ -819,6 +819,14 @@ per-match win probabilities and Monte Carlo tournament win probabilities.
 ### GET /world-cup/tournament/summary
 Tournament-wide summary: completion rate, all 12 group standings, best thirds, and advancing teams.
 
+### GET /world-cup/tournament/qualification-impact?group=A
+
+Read-only local standings interpretation for one group. Returns the current
+top two, its third-placed team's cross-group rank against the eight best-third
+slots, the current cutline, and recorded/remaining group matches. `provisional`
+remains true until the relevant local results are complete; this is neither an
+official qualification decision nor a match prediction.
+
 **Response**:
 ```json
 {
