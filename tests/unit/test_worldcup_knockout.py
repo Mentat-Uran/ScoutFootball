@@ -167,11 +167,13 @@ class TestClearKnockoutResult:
     def test_clear_removes_result(self, state_with_bracket):
         state = state_with_bracket
         apply_knockout_result(state, "r32-01", 2, 0)
+        state.knockout_match_by_id("r32-01")["prediction_snapshot"] = {"version": "test"}
         clear_knockout_result(state, "r32-01")
         m = state.knockout_match_by_id("r32-01")
         assert m["winner"] is None
         assert m["home_goals"] is None
         assert m["status"] == "scheduled"
+        assert "prediction_snapshot" not in m
 
     def test_clear_cascades_downstream(self, state_with_bracket):
         state = state_with_bracket
@@ -182,12 +184,14 @@ class TestClearKnockoutResult:
         assert r16_01["home"] is not None
         assert r16_01["away"] is not None
         apply_knockout_result(state, "r16-01", 3, 1)
+        r16_01["prediction_snapshot"] = {"version": "test"}
 
         # Now clear R32-01 — should cascade clear R16-01
         clear_knockout_result(state, "r32-01")
         r16_01 = state.knockout_match_by_id("r16-01")
         assert r16_01["home"] is None
         assert r16_01["winner"] is None
+        assert "prediction_snapshot" not in r16_01
         # Away slot (from R32-02) should still be filled
         assert r16_01["away"] is not None
 

@@ -2,7 +2,8 @@
 
 ## Recently Merged
 
-- **World Cup Knockout Match Briefing Handoff (2026-07-13, Round 48):** Populated local knockout cards can now open a source-bounded match briefing that retains match ID, round, position, and provisional bracket context. Unresolved winner slots return `not_ready` without inferring an opponent. Unit, API, and frontend contract tests passed. Current work is on `codex/integration`.
+- **World Cup Knockout Local Result Review (2026-07-13, Round 49):** API-recorded knockout results now retain an immutable pre-recording Bradley-Terry matchup snapshot. Completed cards can render/export a local-only directional comparison, while older or imported results explicitly return `snapshot_not_recorded` rather than fabricating a pre-match claim. Clearing a result removes its snapshot, including cascade clears. Current work is on `codex/integration`.
+- **World Cup Knockout Match Briefing Handoff (2026-07-13, Round 48):** Populated local knockout cards can now open a source-bounded match briefing that retains match ID, round, position, and provisional bracket context. Unresolved winner slots return `not_ready` without inferring an opponent. Unit, API, and frontend contract tests passed.
 
 - **Action-Value Rating Candidate Bridge (2026-07-13, Round 47):** Added a source-bounded endpoint and action-detail panel for strict rating-record candidates. It requires normalized name, team, and season agreement, records candidates separately in dossier exports, and retains explicit human-verification and non-additive boundaries rather than treating StatsBomb IDs as rating IDs. Unit, API, and frontend contract validation passed. Current work is on `codex/integration`.
 

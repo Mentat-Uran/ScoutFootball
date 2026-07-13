@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from scoutfootball import api
 from scoutfootball.api import get_world_cup_match_briefing
+from scoutfootball.worldcup.tournament import generate_knockout_bracket, init_state
 
 
 def test_world_cup_match_briefing_returns_prediction_and_coverage() -> None:
@@ -71,3 +72,58 @@ def test_knockout_briefing_does_not_infer_unresolved_opponent(monkeypatch) -> No
 
     assert briefing["status"] == "not_ready"
     assert briefing["fixture"] == {"home_team": None, "away_team": None}
+
+
+def test_knockout_result_review_compares_only_a_captured_local_snapshot(monkeypatch) -> None:
+    match = {
+        "match_id": "R32-01", "round": "r32", "round_label": "Round of 32",
+        "position": 1, "status": "completed", "home": "Argentina", "away": "France",
+        "home_goals": 0, "away_goals": 1, "winner": "France", "decided_by": "regular",
+        "prediction_snapshot": {
+            "schema": "scoutfootball.world-cup-knockout-prediction-snapshot",
+            "prediction": {"home_win_probability": 0.7, "away_win_probability": 0.3},
+        },
+    }
+    monkeypatch.setattr(api, "_wc_tournament_state", lambda: _BracketState(match))
+
+    review = api.get_wc_knockout_match_review("R32-01")
+
+    assert review["status"] == "ok"
+    assert review["recording_scope"] == "browser-local tournament bracket state"
+    assert review["comparison"]["predicted_winner"] == "Argentina"
+    assert review["comparison"]["recorded_winner"] == "France"
+    assert review["comparison"]["directional_result"] == "recorded_upset"
+    assert review["comparison"]["recorded_winner_probability"] == 0.3
+
+
+def test_knockout_result_review_does_not_backfill_missing_snapshot(monkeypatch) -> None:
+    match = {
+        "match_id": "R32-01", "round": "r32", "position": 1, "status": "completed",
+        "home": "Argentina", "away": "France", "home_goals": 2, "away_goals": 1,
+        "winner": "Argentina", "decided_by": "regular",
+    }
+    monkeypatch.setattr(api, "_wc_tournament_state", lambda: _BracketState(match))
+
+    review = api.get_wc_knockout_match_review("R32-01")
+
+    assert review["status"] == "snapshot_not_recorded"
+    assert "no retrospective" in " ".join(review["limitations"]).lower()
+
+
+def test_knockout_prediction_snapshot_is_captured_before_result_projection(monkeypatch) -> None:
+    state = init_state()
+    state.knockout = generate_knockout_bracket(state)
+    match = state.knockout_match_by_id("r32-01")
+    monkeypatch.setattr(api, "_get_wc_enriched_squads", lambda: ({"Argentina": [], "France": []}, {
+        match["home"]: 0.8, match["away"]: 0.2,
+    }))
+
+    snapshot = api._capture_wc_knockout_prediction_snapshot(state, "r32-01")
+
+    assert snapshot is not None
+    assert snapshot["fixture"] == {"home_team": match["home"], "away_team": match["away"]}
+    assert (
+        snapshot["prediction"]["home_win_probability"]
+        > snapshot["prediction"]["away_win_probability"]
+    )
+    assert snapshot["source"] == "pre-recording local knockout bracket projection"

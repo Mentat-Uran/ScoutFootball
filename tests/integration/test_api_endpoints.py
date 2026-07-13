@@ -150,6 +150,18 @@ def test_world_cup_knockout_briefing_endpoint_keeps_unresolved_state_explicit(cl
     }
 
 
+def test_world_cup_knockout_review_endpoint_never_backfills_a_prediction(client: TestClient):
+    response = client.get("/world-cup/tournament/knockout/R32-01/review")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema"] == "scoutfootball.world-cup-knockout-result-review"
+    assert data["status"] in {
+        "not_generated", "not_found", "not_completed", "snapshot_not_recorded", "ok",
+    }
+    assert data["recording_scope"] == "browser-local tournament bracket state"
+
+
 def test_world_cup_squad_balance_comparison_endpoint(client: TestClient):
     response = client.get("/world-cup/squad-balance-comparison/Argentina/France")
 

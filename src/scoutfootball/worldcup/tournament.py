@@ -1135,6 +1135,7 @@ def clear_knockout_result(state: TournamentState, match_id: str) -> TournamentSt
     match["status"] = "scheduled"
     match.pop("decided_by", None)
     match.pop("penalties_winner", None)
+    match.pop("prediction_snapshot", None)
 
     if match["round"] == "final":
         state.knockout.pop("champion", None)
@@ -1207,6 +1208,7 @@ def _cascade_clear_downstream(state: TournamentState, match: dict[str, Any]) -> 
         next_match["status"] = "scheduled"
         next_match.pop("decided_by", None)
         next_match.pop("penalties_winner", None)
+        next_match.pop("prediction_snapshot", None)
         if next_match["round"] == "final":
             state.knockout.pop("champion", None)
 

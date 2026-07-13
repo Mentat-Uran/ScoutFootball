@@ -12591,6 +12591,7 @@ let wcApiData = {
     tournamentLoading: false,
     knockoutBracket: null,  // from /world-cup/tournament/knockout
     knockoutProbabilities: null,  // from /world-cup/tournament/knockout/probabilities
+    knockoutReviews: {},  // match ID → local pre-recording result review
     knockoutScenarios: {},  // team → scenario data from /world-cup/tournament/knockout/scenarios/{team}
     groupStageSimulation: null,  // from /world-cup/tournament/group-simulation
     tournamentExport: null,  // from /world-cup/tournament/export
@@ -13585,6 +13586,7 @@ async function applyKnockoutResult(matchId, homeGoals, awayGoals, penaltiesWinne
         const data = await fetchJson(url, { method: "POST" });
         if (data && data.status === "ok") {
             wcApiData.knockoutProbabilities = null;  // invalidate cache
+            delete wcApiData.knockoutReviews[matchId];
             await fetchWcKnockoutBracket();
             renderWcKnockoutBracket();
         } else if (data && data.message) {
@@ -13601,12 +13603,42 @@ async function clearKnockoutResult(matchId) {
         const data = await fetchJson(url, { method: "DELETE" });
         if (data && data.status === "ok") {
             wcApiData.knockoutProbabilities = null;  // invalidate cache
+            delete wcApiData.knockoutReviews[matchId];
             await fetchWcKnockoutBracket();
             renderWcKnockoutBracket();
         }
     } catch (e) {
         // Silent fail
     }
+}
+
+async function fetchWcKnockoutReview(matchId) {
+    try {
+        const review = await fetchJson(`/world-cup/tournament/knockout/${encodeURIComponent(matchId)}/review`);
+        if (review) {
+            wcApiData.knockoutReviews[matchId] = review;
+            renderWcKnockoutBracket();
+        }
+        return review;
+    } catch (err) {
+        console.warn("[WC] knockout result review failed:", err);
+        return null;
+    }
+}
+
+function downloadWcKnockoutReview(review) {
+    if (!review) return;
+    const matchId = String(review.match_id || "knockout-match").replace(/[^a-z0-9_-]+/gi, "-");
+    const payload = {
+        ...review,
+        exported_at: new Date().toISOString(),
+        export_scope: "browser download; the recorded tournament result remains local to this ScoutFootball instance",
+    };
+    _downloadLocalBriefing(
+        JSON.stringify(payload, null, 2),
+        `scoutfootball-${matchId}-local-result-review.json`,
+        "application/json;charset=utf-8",
+    );
 }
 
 async function fetchWcKnockoutProbabilities() {
@@ -14118,6 +14150,20 @@ function renderWcKnockoutBracket() {
         });
     });
 
+    panel.querySelectorAll(".wc-ko-review").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            void fetchWcKnockoutReview(btn.dataset.matchId);
+        });
+    });
+
+    panel.querySelectorAll(".wc-ko-review-export").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const matchId = btn.dataset.matchId;
+            const review = wcApiData.knockoutReviews[matchId] || await fetchWcKnockoutReview(matchId);
+            if (review) downloadWcKnockoutReview(review);
+        });
+    });
+
     // Auto-fetch probabilities if not yet loaded
     if (!wcApiData.knockoutProbabilities) {
         fetchWcKnockoutProbabilities().then(() => {
@@ -14134,6 +14180,25 @@ function renderKnockoutMatchCard(m, z, prob) {
     const ag = m.away_goals;
     const isReady = m.home != null && m.away != null;
     const decidedByPen = m.decided_by === "penalties";
+    const review = wcApiData.knockoutReviews[m.match_id];
+    let reviewHtml = "";
+    if (review?.status === "ok") {
+        const snapshot = review.prediction_snapshot || {};
+        const prediction = snapshot.prediction || {};
+        const comparison = review.comparison || {};
+        const resultText = comparison.directional_result === "matched_direction"
+            ? (z ? "方向一致" : "direction matched")
+            : comparison.directional_result === "recorded_upset"
+                ? (z ? "本地录入结果偏离模型方向" : "recorded upset")
+                : (z ? "没有方向性判断" : "no directional call");
+        reviewHtml = `<div style="margin-top:0.35rem;padding:0.3rem;background:var(--bg-elevated);border-radius:4px;font-size:0.62rem;color:var(--text-muted)">
+            <div>${z ? "赛前本地快照" : "Pre-recording snapshot"}: ${(Number(prediction.home_win_probability || 0) * 100).toFixed(0)}% / ${(Number(prediction.away_win_probability || 0) * 100).toFixed(0)}%</div>
+            <div>${escapeHtml(resultText)} · ${z ? "胜方当时概率" : "winner probability"} ${(Number(comparison.recorded_winner_probability || 0) * 100).toFixed(0)}%</div>
+            <div style="margin-top:0.15rem">${z ? "仅与本地录入结果对照，不构成模型评估。" : "Local result comparison only; not a model evaluation."}</div>
+        </div>`;
+    } else if (review?.status === "snapshot_not_recorded") {
+        reviewHtml = `<div style="margin-top:0.35rem;font-size:0.62rem;color:var(--text-muted)">${z ? "此旧本地赛果没有赛前快照；不会反推模型判断。" : "This older local result has no pre-recording snapshot; no model call is inferred."}</div>`;
+    }
 
     // Probability bar HTML (for ready-for-input matches)
     const probBar = (prob && prob.home_win_probability != null && prob.away_win_probability != null)
@@ -14154,7 +14219,8 @@ function renderKnockoutMatchCard(m, z, prob) {
                 <span style="font-weight:bold;margin:0 0.3rem">${hg}-${ag}${decidedByPen ? " (pen)" : ""}</span>
                 <span style="font-weight:${m.winner === m.away ? 'bold' : 'normal'}">${escapeHtml(away)}</span>
             </div>
-            <div style="display:flex;gap:0.3rem;margin-top:0.2rem"><button class="text-button wc-ko-brief" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem">${z ? "简报" : "Brief"}</button><button class="text-button wc-ko-clear" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem;color:var(--status-low)">${z ? "清除" : "Clear"}</button></div>
+            <div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-top:0.2rem"><button class="text-button wc-ko-brief" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem">${z ? "简报" : "Brief"}</button><button class="text-button wc-ko-review" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem">${z ? "本地复盘" : "Review"}</button><button class="text-button wc-ko-review-export" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem">${z ? "导出复盘" : "Export review"}</button><button class="text-button wc-ko-clear" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.65rem;padding:0.1rem 0.3rem;color:var(--status-low)">${z ? "清除" : "Clear"}</button></div>
+            ${reviewHtml}
         </div>`;
     }
 
