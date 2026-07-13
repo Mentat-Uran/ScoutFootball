@@ -4369,6 +4369,126 @@ def get_difficulty_stratification(
         return {"status": "error", "message": str(exc)}
 
 
+def get_prediction_streaks(
+    *,
+    high_confidence_threshold: float = 0.60,
+    low_confidence_threshold: float = 0.40,
+    max_points: int = 500,
+) -> dict:
+    """Return consecutive correct/wrong prediction streak analysis.
+
+    Walks the backtest predictions timeline (sorted by ``match_date`` when
+    available) and tracks current/longest streaks plus streak-break
+    patterns: ``upset_breaks`` (high-confidence wrong ending a correct
+    run), ``recovery_breaks`` (low-confidence correct ending a wrong
+    run), and ``neutral_breaks``. Prefers Dixon-Coles decay predictions,
+    falls back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = (
+        f"streaks_{high_confidence_threshold}_"
+        f"{low_confidence_threshold}_{max_points}"
+    )
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_prediction_streaks,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_prediction_streaks(
+                    preds_df,
+                    high_confidence_threshold=high_confidence_threshold,
+                    low_confidence_threshold=low_confidence_threshold,
+                    max_points=max_points,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_matches": report.n_matches,
+                    "current_streak": report.current_streak,
+                    "current_streak_type": report.current_streak_type,
+                    "longest_correct_streak": report.longest_correct_streak,
+                    "longest_wrong_streak": report.longest_wrong_streak,
+                    "total_streak_breaks": report.total_streak_breaks,
+                    "upset_breaks": report.upset_breaks,
+                    "recovery_breaks": report.recovery_breaks,
+                    "neutral_breaks": report.neutral_breaks,
+                    "upset_rate": report.upset_rate,
+                    "recovery_rate": report.recovery_rate,
+                    "avg_correct_streak_length": report.avg_correct_streak_length,
+                    "avg_wrong_streak_length": report.avg_wrong_streak_length,
+                    "disclaimer": report.disclaimer,
+                    "points": [
+                        {
+                            "match_index": p.match_index,
+                            "streak_sign": p.streak_sign,
+                            "streak_length": p.streak_length,
+                            "confidence": p.confidence,
+                            "predicted_outcome": p.predicted_outcome,
+                            "actual_outcome": p.actual_outcome,
+                            "correct": p.correct,
+                            "streak_break_type": p.streak_break_type,
+                            "match_id": p.match_id,
+                            "home_team": p.home_team,
+                            "away_team": p.away_team,
+                            "match_date": p.match_date,
+                        }
+                        for p in report.points
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
     """Return an aggregated prediction diagnostics summary for a fixture.
 

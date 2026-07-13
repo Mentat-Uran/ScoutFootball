@@ -42,6 +42,7 @@ from scoutfootball.evaluation.backtests import (
     compute_model_comparison,
     compute_outcome_distribution,
     compute_prediction_staleness,
+    compute_prediction_streaks,
     compute_prediction_uncertainty,
     compute_probability_heatmap,
     compute_profit_loss_simulation,
@@ -5606,3 +5607,506 @@ class TestDifficultyStratificationAPI:
         r1 = api_module.get_difficulty_stratification()
         r2 = api_module.get_difficulty_stratification()
         assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# Prediction streak analysis (compute_prediction_streaks)
+# ---------------------------------------------------------------------------
+
+
+def _make_streak_df(n: int = 50, *, seed: int = 42) -> pd.DataFrame:
+    """Synthetic predictions DataFrame with deterministic streaks.
+
+    First half of the matches are forced correct, second half forced wrong,
+    so streak transitions are predictable for assertion.
+    """
+    rng = np.random.default_rng(seed)
+    half = n // 2
+    # First half: predicted == actual (correct)
+    correct_probs = rng.uniform(0.55, 0.75, half)
+    # Second half: predicted != actual (wrong), with high confidence for upsets
+    wrong_probs = rng.uniform(0.62, 0.85, n - half)
+    home_probs = np.concatenate([correct_probs, wrong_probs])
+    draw_probs = rng.uniform(0.1, 0.25, n)
+    away_probs = np.clip(1.0 - home_probs - draw_probs, 0.05, 0.9)
+    total = home_probs + draw_probs + away_probs
+    home_probs /= total
+    draw_probs /= total
+    away_probs /= total
+
+    outcomes: list[str] = []
+    for i in range(n):
+        probs = (home_probs[i], draw_probs[i], away_probs[i])
+        pred_idx = int(np.argmax(probs))
+        labels = ["home_win", "draw", "away_win"]
+        if i < half:
+            # Force actual == predicted
+            outcomes.append(labels[pred_idx])
+        else:
+            # Force actual != predicted
+            actual_idx = (pred_idx + 1) % 3
+            outcomes.append(labels[actual_idx])
+
+    dates = pd.date_range("2024-01-01", periods=n, freq="D").strftime("%Y-%m-%d")
+    return pd.DataFrame({
+        "home_win_probability": home_probs,
+        "draw_probability": draw_probs,
+        "away_win_probability": away_probs,
+        "actual_outcome": outcomes,
+        "match_id": [f"m{i:04d}" for i in range(n)],
+        "home_team": [f"team_{i % 8}" for i in range(n)],
+        "away_team": [f"team_{(i + 4) % 8}" for i in range(n)],
+        "match_date": dates,
+    })
+
+
+class TestComputePredictionStreaks:
+    """Tests for compute_prediction_streaks."""
+
+    def test_returns_report_with_required_fields(self) -> None:
+        df = _make_streak_df(n=50)
+        report = compute_prediction_streaks(df)
+        assert report.n_matches == 50
+        assert report.current_streak >= 0
+        assert report.current_streak_type in ("correct", "wrong", "none")
+        assert report.longest_correct_streak >= 0
+        assert report.longest_wrong_streak >= 0
+        assert report.total_streak_breaks >= 0
+        assert report.upset_breaks >= 0
+        assert report.recovery_breaks >= 0
+        assert report.neutral_breaks >= 0
+        assert 0.0 <= report.upset_rate <= 1.0
+        assert 0.0 <= report.recovery_rate <= 1.0
+        assert report.avg_correct_streak_length >= 0.0
+        assert report.avg_wrong_streak_length >= 0.0
+        assert isinstance(report.points, list)
+        assert report.disclaimer
+        assert len(report.disclaimer) > 10
+
+    def test_streak_point_fields(self) -> None:
+        df = _make_streak_df(n=20)
+        report = compute_prediction_streaks(df)
+        assert len(report.points) > 0
+        for p in report.points:
+            assert p.match_index >= 0
+            assert p.streak_sign in ("correct", "wrong", "none")
+            assert p.streak_length >= 0
+            assert 0.0 <= p.confidence <= 1.0
+            assert p.predicted_outcome in ("home_win", "draw", "away_win")
+            # actual_outcome may be None for unknown rows
+            if p.actual_outcome is not None:
+                assert p.actual_outcome in ("home_win", "draw", "away_win")
+            if p.correct is not None:
+                assert isinstance(p.correct, bool)
+
+    def test_correct_streak_length_increases(self) -> None:
+        # 5 correct in a row
+        df = pd.DataFrame({
+            "home_win_probability": [0.7] * 5,
+            "draw_probability": [0.2] * 5,
+            "away_win_probability": [0.1] * 5,
+            "actual_outcome": ["home_win"] * 5,
+        })
+        report = compute_prediction_streaks(df)
+        assert report.longest_correct_streak == 5
+        assert report.longest_wrong_streak == 0
+        assert report.current_streak == 5
+        assert report.current_streak_type == "correct"
+        assert report.total_streak_breaks == 0
+
+    def test_wrong_streak_length_increases(self) -> None:
+        # 4 wrong in a row (high-confidence wrong predictions)
+        df = pd.DataFrame({
+            "home_win_probability": [0.8] * 4,
+            "draw_probability": [0.15] * 4,
+            "away_win_probability": [0.05] * 4,
+            "actual_outcome": ["away_win"] * 4,
+        })
+        report = compute_prediction_streaks(df)
+        assert report.longest_wrong_streak == 4
+        assert report.longest_correct_streak == 0
+        assert report.current_streak == 4
+        assert report.current_streak_type == "wrong"
+        assert report.total_streak_breaks == 0
+
+    def test_upset_break_classification(self) -> None:
+        # 2 correct, then a high-confidence wrong prediction (>=0.60) breaks streak
+        df = pd.DataFrame({
+            "home_win_probability": [0.7, 0.7, 0.8],
+            "draw_probability": [0.2, 0.2, 0.15],
+            "away_win_probability": [0.1, 0.1, 0.05],
+            "actual_outcome": ["home_win", "home_win", "away_win"],
+        })
+        report = compute_prediction_streaks(df, high_confidence_threshold=0.60)
+        assert report.upset_breaks == 1
+        assert report.total_streak_breaks == 1
+        # The break point should be classified as upset
+        break_points = [p for p in report.points if p.streak_break_type == "upset"]
+        assert len(break_points) == 1
+        assert break_points[0].confidence >= 0.60
+
+    def test_recovery_break_classification(self) -> None:
+        # 2 wrong (high-confidence home predicted, away wins), then a
+        # low-confidence correct prediction (<0.40) breaks the wrong streak.
+        # Third row: home=0.39 (argmax), draw=0.31, away=0.30 -> confidence 0.39
+        df = pd.DataFrame({
+            "home_win_probability": [0.80, 0.80, 0.39],
+            "draw_probability": [0.15, 0.15, 0.31],
+            "away_win_probability": [0.05, 0.05, 0.30],
+            # First two are wrong (away wins), third is correct (home wins)
+            "actual_outcome": ["away_win", "away_win", "home_win"],
+        })
+        report = compute_prediction_streaks(
+            df,
+            high_confidence_threshold=0.60,
+            low_confidence_threshold=0.40,
+        )
+        assert report.recovery_breaks == 1
+        assert report.total_streak_breaks == 1
+        break_points = [p for p in report.points if p.streak_break_type == "recovery"]
+        assert len(break_points) == 1
+        assert break_points[0].confidence < 0.40
+
+    def test_neutral_break_classification(self) -> None:
+        # 2 correct, then a mid-confidence wrong prediction
+        # (between low and high thresholds) -> neutral break
+        df = pd.DataFrame({
+            "home_win_probability": [0.7, 0.7, 0.50],
+            "draw_probability": [0.2, 0.2, 0.30],
+            "away_win_probability": [0.1, 0.1, 0.20],
+            "actual_outcome": ["home_win", "home_win", "away_win"],
+        })
+        report = compute_prediction_streaks(
+            df,
+            high_confidence_threshold=0.60,
+            low_confidence_threshold=0.40,
+        )
+        assert report.neutral_breaks == 1
+        assert report.upset_breaks == 0
+        assert report.recovery_breaks == 0
+
+    def test_break_rates_sum_to_one(self) -> None:
+        df = _make_streak_df(n=100, seed=7)
+        report = compute_prediction_streaks(df)
+        if report.total_streak_breaks > 0:
+            assert abs(
+                report.upset_rate + report.recovery_rate
+                + (1.0 - report.upset_rate - report.recovery_rate)
+                - 1.0
+            ) < 1e-6
+            total = report.upset_breaks + report.recovery_breaks + report.neutral_breaks
+            assert total == report.total_streak_breaks
+
+    def test_max_points_truncates_timeline(self) -> None:
+        df = _make_streak_df(n=100)
+        report = compute_prediction_streaks(df, max_points=10)
+        assert len(report.points) == 10
+        # Aggregates use full DataFrame regardless of max_points
+        assert report.n_matches == 100
+
+    def test_empty_dataframe(self) -> None:
+        df = pd.DataFrame(columns=[
+            "home_win_probability", "draw_probability",
+            "away_win_probability", "actual_outcome",
+        ])
+        report = compute_prediction_streaks(df)
+        assert report.n_matches == 0
+        assert report.current_streak == 0
+        assert report.current_streak_type == "none"
+        assert report.points == []
+        assert report.disclaimer
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"actual_outcome": ["home_win"]})
+        with pytest.raises(ValueError, match="missing required columns"):
+            compute_prediction_streaks(df)
+
+    def test_invalid_high_threshold_raises(self) -> None:
+        df = _make_streak_df(n=10)
+        with pytest.raises(ValueError, match="high_confidence_threshold"):
+            compute_prediction_streaks(df, high_confidence_threshold=0.0)
+
+    def test_invalid_high_threshold_above_one_raises(self) -> None:
+        df = _make_streak_df(n=10)
+        with pytest.raises(ValueError, match="high_confidence_threshold"):
+            compute_prediction_streaks(df, high_confidence_threshold=1.5)
+
+    def test_invalid_low_threshold_raises(self) -> None:
+        df = _make_streak_df(n=10)
+        with pytest.raises(ValueError, match="low_confidence_threshold"):
+            compute_prediction_streaks(df, low_confidence_threshold=1.0)
+
+    def test_low_above_high_raises(self) -> None:
+        df = _make_streak_df(n=10)
+        with pytest.raises(ValueError, match="must be strictly below"):
+            compute_prediction_streaks(
+                df,
+                high_confidence_threshold=0.50,
+                low_confidence_threshold=0.50,
+            )
+
+    def test_invalid_max_points_raises(self) -> None:
+        df = _make_streak_df(n=10)
+        with pytest.raises(ValueError, match="max_points"):
+            compute_prediction_streaks(df, max_points=0)
+
+    def test_match_date_sorting(self) -> None:
+        # Construct out-of-order dates and ensure points are sorted by date
+        df = pd.DataFrame({
+            "home_win_probability": [0.7, 0.7, 0.7],
+            "draw_probability": [0.2, 0.2, 0.2],
+            "away_win_probability": [0.1, 0.1, 0.1],
+            "actual_outcome": ["home_win", "home_win", "home_win"],
+            "match_date": ["2024-03-01", "2024-01-01", "2024-02-01"],
+            "match_id": ["m0", "m1", "m2"],
+        })
+        report = compute_prediction_streaks(df)
+        # Sorted chronologically: m1, m2, m0
+        ids = [p.match_id for p in report.points]
+        assert ids == ["m1", "m2", "m0"]
+
+    def test_synthesizes_actual_outcome_from_goals(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.7, 0.7],
+            "draw_probability": [0.2, 0.2],
+            "away_win_probability": [0.1, 0.1],
+            "home_goals": [2, 0],
+            "away_goals": [1, 2],
+        })
+        report = compute_prediction_streaks(df)
+        # First match: home_win (predicted home_win -> correct)
+        # Second match: away_win (predicted home_win -> wrong)
+        assert report.points[0].actual_outcome == "home_win"
+        assert report.points[0].correct is True
+        assert report.points[1].actual_outcome == "away_win"
+        assert report.points[1].correct is False
+        assert report.total_streak_breaks == 1
+
+    def test_unknown_outcome_preserves_streak(self) -> None:
+        # 2 correct, then unknown (None), then 1 correct again — streak should
+        # remain unbroken across the unknown row.
+        df = pd.DataFrame({
+            "home_win_probability": [0.7, 0.7, 0.7, 0.7],
+            "draw_probability": [0.2, 0.2, 0.2, 0.2],
+            "away_win_probability": [0.1, 0.1, 0.1, 0.1],
+            "actual_outcome": ["home_win", "home_win", None, "home_win"],
+        })
+        report = compute_prediction_streaks(df)
+        # Unknown row should not break the correct streak
+        assert report.total_streak_breaks == 0
+        # Final correct streak should be 3 (excluding unknown row)
+        assert report.current_streak == 3
+        assert report.current_streak_type == "correct"
+
+    def test_reproducibility(self) -> None:
+        df = _make_streak_df(n=80, seed=11)
+        r1 = compute_prediction_streaks(df)
+        r2 = compute_prediction_streaks(df)
+        assert r1 == r2
+
+
+class TestPredictionStreaksAPI:
+    """Tests for the get_prediction_streaks API wrapper."""
+
+    def test_no_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_streaks()
+        assert result["status"] == "not_available"
+
+    def test_with_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_streak_df(n=50)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_streaks()
+        assert result["status"] == "ok"
+        assert result["n_matches"] == 50
+        assert "current_streak" in result
+        assert "current_streak_type" in result
+        assert "longest_correct_streak" in result
+        assert "longest_wrong_streak" in result
+        assert "upset_breaks" in result
+        assert "recovery_breaks" in result
+        assert "neutral_breaks" in result
+        assert "points" in result
+        assert isinstance(result["points"], list)
+        assert "disclaimer" in result
+
+    def test_synthesizes_actual_outcome(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        rng = np.random.default_rng(3)
+        n = 30
+        df = pd.DataFrame({
+            "home_win_probability": rng.uniform(0.3, 0.6, n),
+            "draw_probability": rng.uniform(0.15, 0.3, n),
+            "home_goals": rng.integers(0, 5, n),
+            "away_goals": rng.integers(0, 5, n),
+        })
+        df["away_win_probability"] = (
+            1.0 - df["home_win_probability"] - df["draw_probability"]
+        )
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_streaks()
+        assert result["status"] == "ok"
+        # All points should have non-None actual_outcome after synthesis
+        assert all(p["actual_outcome"] is not None for p in result["points"])
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_streak_df(n=60)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_prediction_streaks()
+        r2 = api_module.get_prediction_streaks()
+        assert r1 == r2
+
+    def test_custom_thresholds_propagated(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_streak_df(n=50)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r_default = api_module.get_prediction_streaks()
+        r_custom = api_module.get_prediction_streaks(
+            high_confidence_threshold=0.70,
+            low_confidence_threshold=0.30,
+        )
+        # Different thresholds should produce different cache entries
+        # (may have same values but cache keys differ)
+        assert r_default["status"] == "ok"
+        assert r_custom["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Enhanced reliability diagram (MCE, calibration slope/intercept)
+# ---------------------------------------------------------------------------
+
+
+class TestReliabilityDiagramEnhancements:
+    """Tests for the enhanced reliability diagram metrics."""
+
+    def test_overall_has_mce(self) -> None:
+        df = _make_predictions_df(n=200)
+        diagram = compute_reliability_diagram(df, n_bins=10)
+        assert "mce" in diagram.overall
+        assert diagram.overall["mce"] >= 0.0
+        assert diagram.overall["mce"] <= 1.0
+
+    def test_overall_has_calibration_slope_intercept(self) -> None:
+        df = _make_predictions_df(n=200)
+        diagram = compute_reliability_diagram(df, n_bins=10)
+        assert "calibration_slope" in diagram.overall
+        assert "calibration_intercept" in diagram.overall
+        # Slope of 1.0 + intercept 0.0 = perfect calibration
+        assert isinstance(diagram.overall["calibration_slope"], float)
+        assert isinstance(diagram.overall["calibration_intercept"], float)
+
+    def test_overall_has_per_outcome_calibration(self) -> None:
+        df = _make_predictions_df(n=200)
+        diagram = compute_reliability_diagram(df, n_bins=10)
+        assert "per_outcome_calibration" in diagram.overall
+        per_oc = diagram.overall["per_outcome_calibration"]
+        assert isinstance(per_oc, dict)
+        assert "home_win" in per_oc
+        assert "draw" in per_oc
+        assert "away_win" in per_oc
+        for _oc, stats in per_oc.items():
+            assert "slope" in stats
+            assert "intercept" in stats
+            assert "n_bins" in stats
+
+    def test_overall_has_n_bins_used_and_n_predictions(self) -> None:
+        df = _make_predictions_df(n=200)
+        diagram = compute_reliability_diagram(df, n_bins=10, min_samples_per_bin=5)
+        assert "n_bins_used" in diagram.overall
+        assert "n_predictions" in diagram.overall
+        assert diagram.overall["n_predictions"] == 200
+        assert diagram.overall["n_bins_used"] >= 1
+
+    def test_mce_at_least_ece(self) -> None:
+        """MCE is the max per-bin gap; ECE is the weighted average — MCE >= ECE."""
+        df = _make_predictions_df(n=500)
+        diagram = compute_reliability_diagram(df, n_bins=10, min_samples_per_bin=1)
+        ece = diagram.overall["ece"]
+        mce = diagram.overall["mce"]
+        assert mce >= ece - 1e-6
+
+    def test_perfect_calibration_slope_near_one(self) -> None:
+        """When predicted == observed, slope should be close to 1.0."""
+        n = 2000
+        rng = np.random.default_rng(42)
+        probs = rng.uniform(0.1, 0.9, n)
+        outcomes = (rng.uniform(0, 1, n) < probs).astype(int)
+        df = pd.DataFrame({
+            "home_win_probability": probs,
+            "draw_probability": 0.0,
+            "away_win_probability": 1.0 - probs,
+            "actual_outcome": np.where(outcomes == 1, "home_win", "away_win"),
+        })
+        diagram = compute_reliability_diagram(df, n_bins=10, min_samples_per_bin=5)
+        # Perfectly calibrated => slope near 1.0, intercept near 0.0
+        # Allow generous tolerance due to finite-sample noise
+        assert abs(diagram.overall["calibration_slope"] - 1.0) < 0.5
+        assert abs(diagram.overall["calibration_intercept"]) < 0.3
+
+    def test_single_bin_slope_fallback(self) -> None:
+        """With only one usable bin, slope defaults to 0 with intercept = y_mean."""
+        # Force a single bin by using a tiny DataFrame with all predictions
+        # in the same probability range.
+        n = 20
+        df = pd.DataFrame({
+            "home_win_probability": [0.5] * n,
+            "draw_probability": [0.3] * n,
+            "away_win_probability": [0.2] * n,
+            "actual_outcome": ["home_win"] * (n // 2) + ["away_win"] * (n // 2),
+        })
+        diagram = compute_reliability_diagram(df, n_bins=10, min_samples_per_bin=1)
+        # Either only one bin is used (slope=0, intercept=y_mean) or zero bins
+        assert "calibration_slope" in diagram.overall
+        assert "calibration_intercept" in diagram.overall

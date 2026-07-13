@@ -839,6 +839,33 @@ const i18n = {
         difficulty_cal_gap: "校准差距",
         difficulty_assessment: "评估",
         difficulty_no_tiers: "无分层数据",
+        streaks_title: "预测连胜/连败分析",
+        streaks_desc: "追踪连续正确/错误预测的时序模式与中断类型(爆冷/反弹/中性)",
+        streaks_fetch: "加载",
+        streaks_loading: "计算连胜/连败…",
+        streaks_not_available: "暂无回测数据",
+        streaks_error: "加载连胜分析失败",
+        streaks_n_matches: "比赛数",
+        streaks_current: "当前连胜",
+        streaks_current_type: "当前类型",
+        streaks_longest_correct: "最长连胜",
+        streaks_longest_wrong: "最长连败",
+        streaks_total_breaks: "总中断次数",
+        streaks_upset_breaks: "爆冷中断",
+        streaks_recovery_breaks: "反弹中断",
+        streaks_neutral_breaks: "中性中断",
+        streaks_upset_rate: "爆冷率",
+        streaks_recovery_rate: "反弹率",
+        streaks_avg_correct: "平均连胜长度",
+        streaks_avg_wrong: "平均连败长度",
+        streaks_chart_tip: "每场比赛的连胜长度与置信度,爆冷/反弹中断以颜色标记",
+        streaks_correct: "正确",
+        streaks_wrong: "错误",
+        streaks_none: "未知",
+        streaks_upset: "爆冷",
+        streaks_recovery: "反弹",
+        streaks_neutral: "中性",
+        streaks_no_points: "无连胜时间线数据",
     },
     en: {
         nav_overview: "Overview",
@@ -1679,6 +1706,33 @@ const i18n = {
         difficulty_cal_gap: "Calibration gap",
         difficulty_assessment: "Assessment",
         difficulty_no_tiers: "No tier data",
+        streaks_title: "Prediction Streak Analysis",
+        streaks_desc: "Track consecutive correct/wrong prediction runs and break types (upset/recovery/neutral)",
+        streaks_fetch: "Load",
+        streaks_loading: "Computing streaks…",
+        streaks_not_available: "No backtest data available",
+        streaks_error: "Failed to load streak analysis",
+        streaks_n_matches: "Matches",
+        streaks_current: "Current streak",
+        streaks_current_type: "Current type",
+        streaks_longest_correct: "Longest correct",
+        streaks_longest_wrong: "Longest wrong",
+        streaks_total_breaks: "Total breaks",
+        streaks_upset_breaks: "Upset breaks",
+        streaks_recovery_breaks: "Recovery breaks",
+        streaks_neutral_breaks: "Neutral breaks",
+        streaks_upset_rate: "Upset rate",
+        streaks_recovery_rate: "Recovery rate",
+        streaks_avg_correct: "Avg correct length",
+        streaks_avg_wrong: "Avg wrong length",
+        streaks_chart_tip: "Per-match streak length and confidence; upset/recovery breaks are color-coded",
+        streaks_correct: "Correct",
+        streaks_wrong: "Wrong",
+        streaks_none: "Unknown",
+        streaks_upset: "Upset",
+        streaks_recovery: "Recovery",
+        streaks_neutral: "Neutral",
+        streaks_no_points: "No streak timeline data",
     },
 };
 
@@ -5168,8 +5222,11 @@ async function fetchAndRenderTemporalValidation() {
             html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
         }
         body.innerHTML = html;
+        _renderTemporalValidationChart(data);
     } catch (e) {
         body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("temporal_val_error"))}: ${escapeHtml(String(e))}</p>`;
+        const chart = getChart("backtest-temporal-validation-chart");
+        if (chart) chart.clear();
     }
     if (btn) btn.disabled = false;
 }
@@ -5235,8 +5292,11 @@ async function fetchAndRenderProbabilityHeatmap() {
             html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
         }
         body.innerHTML = html;
+        _renderProbabilityHeatmapChart(data);
     } catch (e) {
         body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("prob_heatmap_error"))}: ${escapeHtml(String(e))}</p>`;
+        const chart = getChart("backtest-probability-heatmap-chart");
+        if (chart) chart.clear();
     }
     if (btn) btn.disabled = false;
 }
@@ -5381,8 +5441,11 @@ async function fetchAndRenderConfidenceIntervalPlot() {
             html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
         }
         body.innerHTML = html;
+        _renderCIPlotChart(data);
     } catch (e) {
         body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("ci_plot_error"))}: ${escapeHtml(String(e))}</p>`;
+        const chart = getChart("backtest-ci-plot-chart");
+        if (chart) chart.clear();
     }
     if (btn) btn.disabled = false;
 }
@@ -5624,8 +5687,11 @@ async function fetchAndRenderFeatureImportance() {
             html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
         }
         body.innerHTML = html;
+        _renderFeatureImportanceChart(data);
     } catch (e) {
         body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("feature_importance_error"))}: ${escapeHtml(String(e))}</p>`;
+        const chart = getChart("backtest-feature-importance-chart");
+        if (chart) chart.clear();
     }
     if (btn) btn.disabled = false;
 }
@@ -5786,8 +5852,11 @@ async function fetchAndRenderDriftHeatmap() {
             html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
         }
         body.innerHTML = html;
+        _renderDriftHeatmapChart(data);
     } catch (e) {
         body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("drift_heatmap_error"))}: ${escapeHtml(String(e))}</p>`;
+        const chart = getChart("backtest-drift-heatmap-chart");
+        if (chart) chart.clear();
     }
     if (btn) btn.disabled = false;
 }
@@ -10616,6 +10685,8 @@ async function renderBacktest() {
         if (trajectoryPanel) trajectoryPanel.style.display = "block";
         const difficultyPanel = document.getElementById("backtest-difficulty-panel");
         if (difficultyPanel) difficultyPanel.style.display = "block";
+        const streaksPanel = document.getElementById("backtest-streaks-panel");
+        if (streaksPanel) streaksPanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -11068,6 +11139,667 @@ function _renderBacktestFoldChart(data, models, folds) {
         },
         series,
     }, true);
+}
+
+// ---------------------------------------------------------------------------
+// ECharts visualizations for backtest panels
+// ---------------------------------------------------------------------------
+
+function _renderTemporalValidationChart(data) {
+    const chart = getChart("backtest-temporal-validation-chart");
+    if (!chart) return;
+    const z = appState.lang === "zh";
+    const windows = Array.isArray(data.windows) ? data.windows : [];
+    if (windows.length === 0) {
+        chart.clear();
+        return;
+    }
+    const labels = windows.map((w) => w.window_label || "");
+    const mkSeries = (key, name, color) => ({
+        name,
+        type: "line",
+        smooth: true,
+        symbol: "circle",
+        symbolSize: 6,
+        data: windows.map((w) => (w[key] != null ? Number(w[key]) : null)),
+        lineStyle: { width: 2, color },
+        itemStyle: { color },
+        emphasis: { focus: "series" },
+    });
+    const accPct = windows.map((w) =>
+        w.accuracy != null ? Number(w.accuracy) * 100 : null,
+    );
+    const confPct = windows.map((w) =>
+        w.avg_confidence != null ? Number(w.avg_confidence) * 100 : null,
+    );
+    chart.setOption({
+        tooltip: { trigger: "axis", axisPointer: { type: "cross" } },
+        legend: { top: 5, textStyle: { fontSize: 10, color: "#aaa" }, type: "scroll" },
+        grid: { left: "8%", right: "8%", bottom: "8%", top: "18%" },
+        xAxis: {
+            type: "category",
+            data: labels,
+            axisLabel: { color: "#aaa", fontSize: 9, rotate: 30 },
+        },
+        yAxis: [
+            {
+                type: "value",
+                name: z ? "误差（越低越好）" : "Error (lower=better)",
+                position: "left",
+                nameTextStyle: { color: "#888", fontSize: 10 },
+                axisLabel: { color: "#aaa", fontSize: 10 },
+                splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
+            },
+            {
+                type: "value",
+                name: z ? "准确率/置信度 %" : "Acc/Conf %",
+                position: "right",
+                min: 0,
+                max: 100,
+                nameTextStyle: { color: "#888", fontSize: 10 },
+                axisLabel: { color: "#aaa", fontSize: 10, formatter: "{value}%" },
+                splitLine: { show: false },
+            },
+        ],
+        series: [
+            mkSeries("brier", "Brier", "#4f9cff"),
+            mkSeries("rps", "RPS", "#6bcf7f"),
+            mkSeries("log_loss", "Log Loss", "#f5a623"),
+            {
+                name: z ? "准确率" : "Accuracy",
+                type: "line",
+                yAxisIndex: 1,
+                smooth: true,
+                symbol: "diamond",
+                symbolSize: 6,
+                data: accPct,
+                lineStyle: { width: 2, color: "#e879f9", type: "dashed" },
+                itemStyle: { color: "#e879f9" },
+            },
+            {
+                name: z ? "平均置信度" : "Avg Confidence",
+                type: "line",
+                yAxisIndex: 1,
+                smooth: true,
+                symbol: "triangle",
+                symbolSize: 6,
+                data: confPct,
+                lineStyle: { width: 2, color: "#94a3b8", type: "dotted" },
+                itemStyle: { color: "#94a3b8" },
+            },
+        ],
+    }, true);
+}
+
+function _renderProbabilityHeatmapChart(data) {
+    const chart = getChart("backtest-probability-heatmap-chart");
+    if (!chart) return;
+    const z = appState.lang === "zh";
+    const cells = Array.isArray(data.cells) ? data.cells : [];
+    if (cells.length === 0) {
+        chart.clear();
+        return;
+    }
+    // Build a matrix indexed by home_bin × away_bin
+    const homeBins = [];
+    const awayBins = [];
+    const seenHome = new Set();
+    const seenAway = new Set();
+    for (const c of cells) {
+        if (!seenHome.has(c.home_bin)) {
+            seenHome.add(c.home_bin);
+            homeBins.push(c.home_bin);
+        }
+        if (!seenAway.has(c.away_bin)) {
+            seenAway.add(c.away_bin);
+            awayBins.push(c.away_bin);
+        }
+    }
+    // Render two heatmaps side-by-side using ECharts heatmap series:
+    // density and accuracy. We'll show accuracy as the primary heatmap.
+    const accData = [];
+    const densityData = [];
+    for (const c of cells) {
+        const hi = homeBins.indexOf(c.home_bin);
+        const ai = awayBins.indexOf(c.away_bin);
+        if (hi < 0 || ai < 0) continue;
+        accData.push([ai, hi, c.accuracy != null ? Number(c.accuracy) : 0]);
+        densityData.push([ai, hi, c.density != null ? Number(c.density) : 0]);
+    }
+    chart.setOption({
+        tooltip: {
+            position: "top",
+            formatter: (p) => {
+                const idx = p.data;
+                const home = homeBins[idx[1]];
+                const away = awayBins[idx[0]];
+                const cell = cells.find(
+                    (c) => c.home_bin === home && c.away_bin === away,
+                );
+                if (!cell) return "";
+                const fmtPct = (v) => (v != null ? `${(Number(v) * 100).toFixed(1)}%` : "–");
+                return `${home} × ${away}<br/>` +
+                    `N: ${cell.count ?? 0}<br/>` +
+                    `${z ? "密度" : "Density"}: ${fmtPct(cell.density)}<br/>` +
+                    `${z ? "准确率" : "Accuracy"}: ${fmtPct(cell.accuracy)}<br/>` +
+                    `${z ? "置信度" : "Conf"}: ${fmtPct(cell.avg_confidence)}`;
+            },
+        },
+        grid: { left: "12%", right: "12%", bottom: "10%", top: "15%" },
+        xAxis: {
+            type: "category",
+            data: awayBins,
+            name: z ? "客胜概率桶" : "Away win bin",
+            nameLocation: "middle",
+            nameGap: 25,
+            splitArea: { show: true },
+            axisLabel: { color: "#aaa", fontSize: 9 },
+        },
+        yAxis: {
+            type: "category",
+            data: homeBins,
+            name: z ? "主胜概率桶" : "Home win bin",
+            splitArea: { show: true },
+            axisLabel: { color: "#aaa", fontSize: 9 },
+        },
+        visualMap: [
+            {
+                min: 0,
+                max: 1,
+                calculable: true,
+                orient: "horizontal",
+                left: "center",
+                bottom: "2%",
+                textStyle: { color: "#aaa", fontSize: 9 },
+                inRange: { color: ["#f87171", "#fbbf24", "#4ade80"] },
+                seriesIndex: 0,
+                text: [z ? "高准确率" : "High acc", z ? "低准确率" : "Low acc"],
+            },
+            {
+                min: 0,
+                max: Math.max(0.01, ...densityData.map((d) => d[2])),
+                calculable: true,
+                orient: "horizontal",
+                left: "center",
+                bottom: "12%",
+                textStyle: { color: "#aaa", fontSize: 9 },
+                inRange: { color: ["#1e293b", "#4f9cff"] },
+                seriesIndex: 1,
+                text: [z ? "高密度" : "High density", z ? "低密度" : "Low density"],
+                show: false,
+            },
+        ],
+        series: [
+            {
+                name: z ? "准确率" : "Accuracy",
+                type: "heatmap",
+                data: accData,
+                label: { show: false },
+                emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.5)" } },
+            },
+            {
+                name: z ? "密度" : "Density",
+                type: "heatmap",
+                data: densityData,
+                visible: false,
+                label: { show: false },
+            },
+        ],
+    }, true);
+}
+
+function _renderCIPlotChart(data) {
+    const chart = getChart("backtest-ci-plot-chart");
+    if (!chart) return;
+    const z = appState.lang === "zh";
+    const points = Array.isArray(data.points) ? data.points : [];
+    if (points.length === 0) {
+        chart.clear();
+        return;
+    }
+    // Split points by correctness for color-coded scatter
+    const correct = [];
+    const wrong = [];
+    for (const p of points) {
+        const conf = Number(p.confidence || 0);
+        const width = Number(p.ci_width || 0);
+        const item = {
+            value: [conf, width],
+            label: {
+                show: false,
+                formatter: p.match_id || p.home_team || "",
+            },
+        };
+        if (p.correct === true) {
+            correct.push(item);
+        } else if (p.correct === false) {
+            wrong.push(item);
+        }
+    }
+    chart.setOption({
+        tooltip: {
+            trigger: "item",
+            formatter: (p) => {
+                const label = p.data.label?.formatter || "";
+                return `${label}<br/>` +
+                    `${z ? "置信度" : "Confidence"}: ${p.value[0].toFixed(3)}<br/>` +
+                    `${z ? "CI 宽度" : "CI width"}: ${p.value[1].toFixed(3)}`;
+            },
+        },
+        legend: {
+            top: 5,
+            textStyle: { fontSize: 10, color: "#aaa" },
+            data: [z ? "正确" : "Correct", z ? "错误" : "Wrong"],
+        },
+        grid: { left: "8%", right: "5%", bottom: "10%", top: "15%" },
+        xAxis: {
+            type: "value",
+            name: z ? "置信度" : "Confidence",
+            min: 0,
+            max: 1,
+            nameTextStyle: { color: "#888", fontSize: 10 },
+            axisLabel: { color: "#aaa", fontSize: 10 },
+            splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
+        },
+        yAxis: {
+            type: "value",
+            name: z ? "CI 宽度" : "CI width",
+            nameTextStyle: { color: "#888", fontSize: 10 },
+            axisLabel: { color: "#aaa", fontSize: 10 },
+            splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
+        },
+        series: [
+            {
+                name: z ? "正确" : "Correct",
+                type: "scatter",
+                data: correct,
+                symbolSize: 6,
+                itemStyle: { color: "#4ade80", opacity: 0.7 },
+            },
+            {
+                name: z ? "错误" : "Wrong",
+                type: "scatter",
+                data: wrong,
+                symbolSize: 6,
+                itemStyle: { color: "#f87171", opacity: 0.7 },
+            },
+        ],
+    }, true);
+}
+
+function _renderFeatureImportanceChart(data) {
+    const chart = getChart("backtest-feature-importance-chart");
+    if (!chart) return;
+    const z = appState.lang === "zh";
+    const features = Array.isArray(data.features) ? data.features : [];
+    if (features.length === 0) {
+        chart.clear();
+        return;
+    }
+    // Top 15 features, reversed for horizontal bar display (largest on top)
+    const top = features.slice(0, 15).reverse();
+    const featureNames = top.map((f) => f.feature || "–");
+    const importanceValues = top.map((f) => Number(f.importance || 0));
+    chart.setOption({
+        tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            formatter: (params) => {
+                const p = params[0];
+                const idx = p.dataIndex;
+                const f = top[idx];
+                return `${escapeHtml(f.feature || "–")}<br/>` +
+                    `${z ? "重要性" : "Importance"}: ${Number(f.importance || 0).toFixed(6)}<br/>` +
+                    `${z ? "均值" : "Mean"}: ${Number(f.mean_value || 0).toFixed(4)}<br/>` +
+                    `${z ? "标准差" : "Std"}: ${Number(f.std_value || 0).toFixed(4)}<br/>` +
+                    `N: ${f.n_matches ?? 0}`;
+            },
+        },
+        grid: { left: "20%", right: "8%", bottom: "8%", top: "8%" },
+        xAxis: {
+            type: "value",
+            name: z ? "重要性（Brier 分离度）" : "Importance (Brier separation)",
+            nameTextStyle: { color: "#888", fontSize: 10 },
+            axisLabel: { color: "#aaa", fontSize: 10 },
+            splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
+        },
+        yAxis: {
+            type: "category",
+            data: featureNames,
+            axisLabel: { color: "#aaa", fontSize: 9 },
+        },
+        series: [
+            {
+                name: z ? "重要性" : "Importance",
+                type: "bar",
+                data: importanceValues,
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: "#4f9cff" },
+                        { offset: 1, color: "#6bcf7f" },
+                    ]),
+                },
+            },
+        ],
+    }, true);
+}
+
+function _renderDriftHeatmapChart(data) {
+    const chart = getChart("backtest-drift-heatmap-chart");
+    if (!chart) return;
+    const z = appState.lang === "zh";
+    const cells = Array.isArray(data.cells) ? data.cells : [];
+    if (cells.length === 0) {
+        chart.clear();
+        return;
+    }
+    // Build matrix: rows = time windows, columns = confidence buckets
+    const windows = [];
+    const buckets = [];
+    const seenW = new Set();
+    const seenB = new Set();
+    for (const c of cells) {
+        const wLabel = `${c.window_start || "–"}→${c.window_end || "–"}`;
+        if (!seenW.has(wLabel)) {
+            seenW.add(wLabel);
+            windows.push(wLabel);
+        }
+        if (!seenB.has(c.confidence_bucket)) {
+            seenB.add(c.confidence_bucket);
+            buckets.push(c.confidence_bucket);
+        }
+    }
+    const brierData = [];
+    const rpsData = [];
+    for (const c of cells) {
+        const wLabel = `${c.window_start || "–"}→${c.window_end || "–"}`;
+        const wi = windows.indexOf(wLabel);
+        const bi = buckets.indexOf(c.confidence_bucket);
+        if (wi < 0 || bi < 0) continue;
+        brierData.push([bi, wi, Number(c.brier || 0)]);
+        rpsData.push([bi, wi, Number(c.rps || 0)]);
+    }
+    const maxBrier = Math.max(0.01, ...brierData.map((d) => d[2]));
+    chart.setOption({
+        tooltip: {
+            position: "top",
+            formatter: (p) => {
+                const idx = p.data;
+                const wLabel = windows[idx[1]];
+                const bLabel = buckets[idx[0]];
+                const cell = cells.find((c) => {
+                    const wl = `${c.window_start || "–"}→${c.window_end || "–"}`;
+                    return wl === wLabel && c.confidence_bucket === bLabel;
+                });
+                if (!cell) return "";
+                return `${wLabel}<br/>${bLabel}<br/>` +
+                    `N: ${cell.n_matches ?? 0}<br/>` +
+                    `${z ? "准确率" : "Acc"}: ${Number(cell.accuracy || 0).toFixed(4)}<br/>` +
+                    `Brier: ${Number(cell.brier || 0).toFixed(4)}<br/>` +
+                    `RPS: ${Number(cell.rps || 0).toFixed(4)}`;
+            },
+        },
+        grid: { left: "15%", right: "10%", bottom: "12%", top: "8%" },
+        xAxis: {
+            type: "category",
+            data: buckets,
+            name: z ? "置信度分桶" : "Confidence bucket",
+            nameLocation: "middle",
+            nameGap: 28,
+            splitArea: { show: true },
+            axisLabel: { color: "#aaa", fontSize: 9, rotate: 30 },
+        },
+        yAxis: {
+            type: "category",
+            data: windows,
+            splitArea: { show: true },
+            axisLabel: { color: "#aaa", fontSize: 8 },
+        },
+        visualMap: {
+            min: 0,
+            max: maxBrier,
+            calculable: true,
+            orient: "horizontal",
+            left: "center",
+            bottom: "2%",
+            textStyle: { color: "#aaa", fontSize: 9 },
+            inRange: { color: ["#4ade80", "#fbbf24", "#f87171"] },
+            text: [z ? "高 Brier" : "High Brier", z ? "低 Brier" : "Low Brier"],
+        },
+        series: [
+            {
+                name: "Brier",
+                type: "heatmap",
+                data: brierData,
+                label: { show: false },
+                emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.5)" } },
+            },
+        ],
+    }, true);
+}
+
+function _renderPredictionStreaksChart(data) {
+    const chart = getChart("backtest-streaks-chart");
+    if (!chart) return;
+    const z = appState.lang === "zh";
+    const points = Array.isArray(data.points) ? data.points : [];
+    if (points.length === 0) {
+        chart.clear();
+        return;
+    }
+    // Two Y-axes: streak length (signed: +correct, -wrong) and confidence
+    const labels = points.map((p, i) => `#${p.match_index + 1}`);
+    const streakSigned = points.map((p) => {
+        if (p.streak_sign === "correct") return Number(p.streak_length);
+        if (p.streak_sign === "wrong") return -Number(p.streak_length);
+        return 0;
+    });
+    const confidence = points.map((p) => Number(p.confidence || 0));
+    // Color-code break points
+    const markPoints = [];
+    for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        if (p.streak_break_type === "upset") {
+            markPoints.push({
+                coord: [i, streakSigned[i]],
+                itemStyle: { color: "#f87171" },
+                symbol: "pin",
+                symbolSize: 36,
+                value: z ? "爆冷" : "Upset",
+            });
+        } else if (p.streak_break_type === "recovery") {
+            markPoints.push({
+                coord: [i, streakSigned[i]],
+                itemStyle: { color: "#4ade80" },
+                symbol: "pin",
+                symbolSize: 36,
+                value: z ? "反弹" : "Recovery",
+            });
+        }
+    }
+    chart.setOption({
+        tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "cross" },
+            formatter: (params) => {
+                const idx = params[0]?.dataIndex ?? 0;
+                const p = points[idx];
+                if (!p) return "";
+                const signLabel = p.streak_sign === "correct"
+                    ? (z ? "正确" : "Correct")
+                    : p.streak_sign === "wrong"
+                        ? (z ? "错误" : "Wrong")
+                        : (z ? "未知" : "Unknown");
+                const breakLabel = p.streak_break_type
+                    ? ` · ${p.streak_break_type === "upset"
+                        ? (z ? "爆冷" : "Upset")
+                        : p.streak_break_type === "recovery"
+                            ? (z ? "反弹" : "Recovery")
+                            : (z ? "中性" : "Neutral")}`
+                    : "";
+                const teams = p.home_team && p.away_team
+                    ? `${escapeHtml(p.home_team)} vs ${escapeHtml(p.away_team)}`
+                    : "";
+                const date = p.match_date || "";
+                return `${date ? `${date} ` : ""}#${p.match_index + 1}${teams ? `<br/>${teams}` : ""}<br/>` +
+                    `${z ? "连胜标记" : "Streak"}: ${signLabel} (${p.streak_length})${breakLabel}<br/>` +
+                    `${z ? "置信度" : "Confidence"}: ${(Number(p.confidence || 0) * 100).toFixed(1)}%<br/>` +
+                    `${z ? "预测" : "Predicted"}: ${p.predicted_outcome || "–"} · ${z ? "实际" : "Actual"}: ${p.actual_outcome || "–"}`;
+            },
+        },
+        legend: {
+            top: 5,
+            textStyle: { fontSize: 10, color: "#aaa" },
+            data: [z ? "连胜长度（正=正确，负=错误）" : "Streak (+correct, −wrong)", z ? "置信度" : "Confidence"],
+        },
+        grid: { left: "8%", right: "8%", bottom: "10%", top: "15%" },
+        xAxis: {
+            type: "category",
+            data: labels,
+            axisLabel: { color: "#aaa", fontSize: 8, rotate: 30 },
+        },
+        yAxis: [
+            {
+                type: "value",
+                name: z ? "连胜长度" : "Streak length",
+                position: "left",
+                nameTextStyle: { color: "#888", fontSize: 10 },
+                axisLabel: { color: "#aaa", fontSize: 10 },
+                splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
+            },
+            {
+                type: "value",
+                name: z ? "置信度" : "Confidence",
+                position: "right",
+                min: 0,
+                max: 1,
+                nameTextStyle: { color: "#888", fontSize: 10 },
+                axisLabel: { color: "#aaa", fontSize: 10, formatter: "{value}" },
+                splitLine: { show: false },
+            },
+        ],
+        series: [
+            {
+                name: z ? "连胜长度（正=正确，负=错误）" : "Streak (+correct, −wrong)",
+                type: "bar",
+                data: streakSigned.map((v, i) => ({
+                    value: v,
+                    itemStyle: {
+                        color: v > 0 ? "#4ade80" : v < 0 ? "#f87171" : "#94a3b8",
+                    },
+                })),
+                markPoint: { data: markPoints, symbolSize: 36 },
+                barWidth: "60%",
+            },
+            {
+                name: z ? "置信度" : "Confidence",
+                type: "line",
+                yAxisIndex: 1,
+                smooth: true,
+                symbol: "circle",
+                symbolSize: 4,
+                data: confidence,
+                lineStyle: { width: 2, color: "#4f9cff" },
+                itemStyle: { color: "#4f9cff" },
+            },
+        ],
+    }, true);
+}
+
+async function fetchAndRenderPredictionStreaks() {
+    const body = document.getElementById("backtest-streaks-body");
+    const btn = document.getElementById("btn-prediction-streaks");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("streaks_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/streaks");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("streaks_not_available"))}</p>`;
+            const chart = getChart("backtest-streaks-chart");
+            if (chart) chart.clear();
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("streaks_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            const chart = getChart("backtest-streaks-chart");
+            if (chart) chart.clear();
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const z = appState.lang === "zh";
+        const fmtPct = (v) => (v == null) ? "–" : `${(Number(v) * 100).toFixed(1)}%`;
+        const fmtNum = (v) => (v == null) ? "–" : String(v);
+        const currentTypeLabel = {
+            correct: z ? "正确" : "Correct",
+            wrong: z ? "错误" : "Wrong",
+            none: z ? "无" : "None",
+        }[data.current_streak_type || "none"] || "–";
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${fmtNum(data.n_matches)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:var(--accent)">${fmtNum(data.current_streak)} <span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(currentTypeLabel)}</span></div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_current"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:#4ade80">${fmtNum(data.longest_correct_streak)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_longest_correct"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:#f87171">${fmtNum(data.longest_wrong_streak)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_longest_wrong"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${fmtNum(data.total_streak_breaks)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_total_breaks"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:#f87171">${fmtNum(data.upset_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.upset_rate)})</span></div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_upset_breaks"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:#4ade80">${fmtNum(data.recovery_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.recovery_rate)})</span></div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_recovery_breaks"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${fmtNum(data.neutral_breaks)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_neutral_breaks"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.avg_correct_streak_length || 0).toFixed(2)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_avg_correct"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${Number(data.avg_wrong_streak_length || 0).toFixed(2)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_avg_wrong"))}</div>
+            </div>
+        </div>`;
+        const points = Array.isArray(data.points) ? data.points : [];
+        if (points.length > 0) {
+            html += `<p style="margin-top:0.3rem;font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_chart_tip"))}</p>`;
+        } else {
+            html += `<p style="margin-top:0.3rem;font-size:0.85rem;color:var(--text-muted)">${escapeHtml(t("streaks_no_points"))}</p>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+        // Render the ECharts streak timeline
+        _renderPredictionStreaksChart(data);
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("streaks_error"))}: ${escapeHtml(String(e))}</p>`;
+        const chart = getChart("backtest-streaks-chart");
+        if (chart) chart.clear();
+    }
+    if (btn) btn.disabled = false;
 }
 
 function exportPlayers() {
@@ -11578,6 +12310,16 @@ function bindEvents() {
         difficultyBtn.addEventListener("click", () => {
             fetchAndRenderDifficulty().catch(
                 (e) => console.warn("Difficulty failed:", e)
+            );
+        });
+    }
+
+    // Streaks button: prediction streak analysis
+    const streaksBtn = document.getElementById("btn-prediction-streaks");
+    if (streaksBtn) {
+        streaksBtn.addEventListener("click", () => {
+            fetchAndRenderPredictionStreaks().catch(
+                (e) => console.warn("Streaks failed:", e)
             );
         });
     }
