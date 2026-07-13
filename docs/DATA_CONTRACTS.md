@@ -245,6 +245,12 @@ current local tier import was derived from `optimized_score`, so using it would
 create a circular target. Eligibility is a guardrail, not proof that a manual
 or scouting label was collected independently.
 
+The audit also reports `temporal`: for eligible sources, a label is
+temporally eligible only when its `as_of_date` is on or before the conservative
+May 31 end date of its compact season code. Post-season snapshots and malformed
+dates remain visible as audit findings; this date check alone does not prove
+that a label was causally collected.
+
 Use `scoutfootball audit-truth-labels` or `GET /reports/truth-labels` to see
 the exact row/source counts used by the policy. The current tracked artifact
 has no supervision-eligible rows; training and truth anchoring must remain
