@@ -767,7 +767,7 @@ def state_from_dict(data: dict[str, Any]) -> TournamentState:
     results = data.get("results") or {}
     if not isinstance(results, dict):
         raise ValueError("Tournament state 'results' must be a dict")
-    return TournamentState(
+    state = TournamentState(
         schema_version=schema,
         tournament_start=data.get("tournament_start", TOURNAMENT_START),
         tournament_end=data.get("tournament_end", TOURNAMENT_END),
@@ -778,6 +778,49 @@ def state_from_dict(data: dict[str, Any]) -> TournamentState:
         created_at=data.get("created_at", ""),
         updated_at=data.get("updated_at", ""),
     )
+    integrity_errors = validate_tournament_state_integrity(state)
+    if integrity_errors:
+        raise ValueError(f"Invalid tournament state: {integrity_errors[0]}")
+    return state
+
+
+def validate_tournament_state_integrity(state: TournamentState) -> list[str]:
+    """Return bounded structural errors for imported tournament state."""
+    errors: list[str] = []
+    match_ids = {match.get("match_id") for match in state.matches if isinstance(match, dict)}
+    for match_id, result in state.results.items():
+        if match_id not in match_ids:
+            errors.append(f"result references unknown match {match_id!r}")
+        if not isinstance(result, dict):
+            errors.append(f"result for {match_id!r} is not an object")
+            continue
+        for score_field in ("home_goals", "away_goals"):
+            value = result.get(score_field)
+            if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 30:
+                errors.append(f"result {match_id!r} has invalid {score_field}")
+    knockout = state.knockout or {}
+    matches = knockout.get("matches", []) if isinstance(knockout, dict) else []
+    if knockout and not isinstance(matches, list):
+        return ["knockout matches must be a list"]
+    for match in matches:
+        if not isinstance(match, dict):
+            errors.append("knockout match is not an object")
+            continue
+        home, away, winner = match.get("home"), match.get("away"), match.get("winner")
+        completed = match.get("status") == "completed"
+        if winner is not None and winner not in (home, away):
+            errors.append(
+                f"knockout winner is not a fixture participant for {match.get('match_id')!r}"
+            )
+        if completed and (
+            winner is None or match.get("home_goals") is None or match.get("away_goals") is None
+        ):
+            errors.append(f"completed knockout match lacks result for {match.get('match_id')!r}")
+        if match.get("prediction_snapshot") is not None and not completed:
+            errors.append(
+                f"uncompleted knockout match has prediction snapshot for {match.get('match_id')!r}"
+            )
+    return errors[:20]
 
 
 def save_state(state: TournamentState, path: str | Path) -> Path:

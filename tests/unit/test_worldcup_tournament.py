@@ -37,6 +37,7 @@ from scoutfootball.worldcup.tournament import (
     state_from_dict,
     state_to_dict,
     tournament_summary,
+    validate_tournament_state_integrity,
 )
 
 # ── Fixtures ────────────────────────────────────────────────────────────
@@ -447,6 +448,18 @@ class TestPersistence:
         assert restored.schema_version == fresh_state.schema_version
         assert len(restored.matches) == len(fresh_state.matches)
         assert restored.results == fresh_state.results
+
+    def test_integrity_reports_unknown_result_and_invalid_knockout_winner(self, fresh_state):
+        fresh_state.results["unknown-match"] = {"home_goals": 1, "away_goals": 0}
+        fresh_state.knockout = {"matches": [{
+            "match_id": "r32-01", "home": "Argentina", "away": "France",
+            "winner": "Unknown XI", "status": "completed", "home_goals": 1, "away_goals": 0,
+        }]}
+
+        errors = validate_tournament_state_integrity(fresh_state)
+
+        assert any("unknown match" in error for error in errors)
+        assert any("not a fixture participant" in error for error in errors)
 
     def test_save_and_load_state(self, fresh_state, tmp_path: Path):
         apply_result(fresh_state, "A-1-Mexico-South Africa-000", 2, 1)
