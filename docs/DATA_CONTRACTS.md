@@ -1483,6 +1483,11 @@ recommendation, target-role, and rationale/risk fields. It is not server-side
 audit data, a transfer instruction, or cross-device synchronization; CSV uses
 the shared formula-injection guard.
 
+The player comparison view can export the loaded comparison as
+`scoutfootball.player-comparison-export` v1.0.0 JSON and can add either
+displayed player to the browser-local shortlist. Adding a player does not
+persist a server-side recommendation or synchronize the shortlist.
+
 ---
 
 ## 10. Cross-Provider Schema Reference
