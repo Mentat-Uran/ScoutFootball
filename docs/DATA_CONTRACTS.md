@@ -1517,6 +1517,15 @@ dossier context. It is explicitly marked non-additive to all action-value
 sections and remains a local decision annotation, not a model feature or
 server-side recommendation.
 
+`GET /action-values/players/{player_id}/rating-links` returns the separate
+`scoutfootball.action-value-rating-links` v1.0.0 contract. StatsBomb action
+identifiers and rating artifacts have no shared stable player identifier, so it
+only yields candidates when normalized player name, team, and season all agree.
+Candidates are not confirmed identities, model features, shortlist entries, or
+merged action-value/rating scores; the UI requires human verification and does
+not infer a name-only link. Action-value dossier exports may preserve these
+strict candidates as a separate, non-additive rating reference.
+
 ---
 
 ## 10. Cross-Provider Schema Reference

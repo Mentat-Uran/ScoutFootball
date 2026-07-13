@@ -5488,6 +5488,33 @@ def get_action_value_player_context(player_id: str) -> dict[str, Any]:
     )
 
 
+def get_action_value_rating_links(player_id: str) -> dict[str, Any]:
+    """Return conservative, human-verifiable rating candidates for an action player."""
+    import pandas as pd
+
+    from scoutfootball.action_value.identity import attach_team_names
+    from scoutfootball.action_value.rating_links import build_action_value_rating_links
+
+    settings = _settings()
+    xt_path = settings.data_root / "gold" / "feature_store" / "player_action_value.parquet"
+    matches_path = settings.raw_root / "statsbomb_open" / "matches_all.parquet"
+    try:
+        xt = pd.read_parquet(xt_path) if xt_path.exists() else pd.DataFrame()
+    except Exception:
+        xt = pd.DataFrame()
+    try:
+        matches = pd.read_parquet(matches_path) if matches_path.exists() else pd.DataFrame()
+    except Exception:
+        matches = pd.DataFrame()
+    try:
+        ratings = load_player_ratings()
+    except Exception:
+        ratings = pd.DataFrame()
+    return _clean_json_value(
+        build_action_value_rating_links(player_id, attach_team_names(xt, matches), ratings)
+    )
+
+
 def get_player_match_action_values(limit: int = 100, offset: int = 0) -> dict[str, Any]:
     """Read the generated, sample-bounded player-match xT artifact."""
     import json

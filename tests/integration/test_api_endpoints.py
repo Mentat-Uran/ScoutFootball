@@ -43,6 +43,21 @@ def test_action_values_endpoint(client: TestClient):
     assert response.status_code == 200
 
 
+def test_action_value_rating_links_endpoint_is_explicit_about_candidate_status(client: TestClient):
+    response = client.get("/action-values/players/8945/rating-links")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema"] == "scoutfootball.action-value-rating-links"
+    assert payload["status"] in {
+        "candidate_available", "no_strict_candidate", "not_found", "rating_artifact_unavailable",
+    }
+    assert isinstance(payload["rating_candidates"], list)
+    assert any("human verification" in item for item in payload["limitations"])
+    if payload["status"] == "candidate_available":
+        assert payload["rating_candidates"][0]["match_basis"] == "normalized_name_team_season"
+
+
 def test_player_match_action_values_endpoint_is_explicit_before_generation(client: TestClient):
     response = client.get("/action-values/matches")
     assert response.status_code == 200
