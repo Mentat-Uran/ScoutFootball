@@ -9,6 +9,7 @@ from scoutfootball.evaluation.truth_labels import (
     LabelSource,
     create_empty_truth_labels,
     filter_supervision_eligible_truth_labels,
+    merge_truth_label_rows,
     truth_label_supervision_report,
     truth_label_temporal_report,
     validate_truth_labels,
@@ -56,6 +57,35 @@ class TestCreateEmptyTruthLabels:
         assert df["player_id"].dtype.name == "string"
         assert df["label_value"].dtype == "float64"
         assert df["manual_review_flag"].dtype == "bool"
+
+
+class TestMergeTruthLabelRows:
+    def test_replaces_only_matching_player_season_and_source(self) -> None:
+        existing = pd.DataFrame(
+            {
+                "player_id": ["p1", "p1", "p2"],
+                "season": ["2425", "2425", "2425"],
+                "label_source": ["transfermarkt_value", "scouting_review", "transfermarkt_value"],
+                "label_confidence": ["medium", "high", "medium"],
+                "label_value": [10.0, 1.0, 20.0],
+                "as_of_date": ["2025-05-01"] * 3,
+                "position_scope": ["all"] * 3,
+                "manual_review_flag": [False, True, False],
+            },
+        )
+        incoming = existing.iloc[[0]].copy()
+        incoming["label_value"] = 15.0
+
+        combined, replaced = merge_truth_label_rows(existing, incoming)
+
+        assert replaced == 1
+        assert len(combined) == 3
+        assert combined.loc[
+            (combined["player_id"] == "p1")
+            & (combined["label_source"] == "transfermarkt_value"),
+            "label_value",
+        ].item() == 15.0
+        assert (combined["label_source"] == "scouting_review").sum() == 1
 
 
 class TestValidateTruthLabels:

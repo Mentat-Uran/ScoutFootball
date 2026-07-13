@@ -256,6 +256,17 @@ the exact row/source counts used by the policy. The current tracked artifact
 has no supervision-eligible rows; training and truth anchoring must remain
 skipped until independent labels are imported.
 
+**Manual Transfermarkt import**: only a local CSV or Parquet snapshot is
+accepted; this project does not scrape Transfermarkt. Use
+`scoutfootball import-transfermarkt-truth-labels --snapshot <file> --season <YYZZ> --dry-run`
+to validate the source date, show the source-scoped replacement count, preview
+name-and-season resolution against the local rating matrix, and inspect the
+temporal audit without writing. A real import preserves each source
+`snapshot_date` as `as_of_date` by default. `--as-of-date YYYY-MM-DD` is an
+explicit provenance override, not a way to make a post-season value appear to
+have been known earlier. Re-imports replace only the same
+`player_id + season + label_source` key; labels from other sources remain.
+
 ---
 
 ## 7. team_match.parquet

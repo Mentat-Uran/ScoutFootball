@@ -210,6 +210,35 @@ def create_empty_truth_labels() -> pd.DataFrame:
     )
 
 
+def merge_truth_label_rows(
+    existing: pd.DataFrame,
+    incoming: pd.DataFrame,
+) -> tuple[pd.DataFrame, int]:
+    """Replace only existing rows with the same player, season, and source.
+
+    Labels from another source are deliberately retained: a market-value
+    snapshot and a scouting decision can both be evidence for the same player.
+    This operation is scoped enough for repeatable local imports while keeping
+    the schema's duplicate-key invariant intact.
+    """
+    if incoming.empty:
+        return existing.copy(), 0
+    key_columns = ["player_id", "season", "label_source"]
+    if any(column not in incoming.columns for column in key_columns):
+        raise ValueError("Incoming truth labels are missing merge key columns")
+    if existing.empty:
+        return incoming.copy(), 0
+    if any(column not in existing.columns for column in key_columns):
+        raise ValueError("Existing truth labels are missing merge key columns")
+
+    incoming_keys = pd.MultiIndex.from_frame(incoming[key_columns].astype("string"))
+    existing_keys = pd.MultiIndex.from_frame(existing[key_columns].astype("string"))
+    replace_mask = existing_keys.isin(incoming_keys)
+    retained = existing.loc[~replace_mask].copy()
+    combined = pd.concat([retained, incoming], ignore_index=True)
+    return combined, int(replace_mask.sum())
+
+
 def workspace_to_truth_labels(
     workspace: dict[str, Any],
     *,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from unittest.mock import patch
 
 import pandas as pd
@@ -92,13 +92,26 @@ class TestSnapshotToTruthLabelsValidationFailure:
 
 class TestSnapshotToTruthLabelsAsOfDate:
     @patch("scoutfootball.adapters.transfermarkt_manual.load_snapshot")
-    def test_as_of_date_format(self, mock_load) -> None:
+    def test_preserves_source_snapshot_date(self, mock_load) -> None:
         mock_load.return_value.dataframe = _make_snapshot_df()
         result = snapshot_to_truth_labels("dummy.csv", "2526")
 
-        today = datetime.now(tz=UTC).strftime("%Y-%m-%d")
-        assert (result["as_of_date"] == today).all()
+        assert (result["as_of_date"] == "2025-06-01").all()
 
         # Verify YYYY-MM-DD format
         as_of = result["as_of_date"].iloc[0]
         datetime.strptime(as_of, "%Y-%m-%d")  # raises if format is wrong
+
+    @patch("scoutfootball.adapters.transfermarkt_manual.load_snapshot")
+    def test_allows_explicit_iso_date_override(self, mock_load) -> None:
+        mock_load.return_value.dataframe = _make_snapshot_df()
+        result = snapshot_to_truth_labels("dummy.csv", "2526", as_of_date="2025-05-31")
+
+        assert (result["as_of_date"] == "2025-05-31").all()
+
+    @patch("scoutfootball.adapters.transfermarkt_manual.load_snapshot")
+    def test_rejects_non_iso_date_override(self, mock_load) -> None:
+        mock_load.return_value.dataframe = _make_snapshot_df()
+
+        with pytest.raises(ValueError, match="ISO YYYY-MM-DD"):
+            snapshot_to_truth_labels("dummy.csv", "2526", as_of_date="2025/05/31")

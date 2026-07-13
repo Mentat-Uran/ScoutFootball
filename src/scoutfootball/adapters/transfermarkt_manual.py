@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -113,12 +113,12 @@ def _normalize_snapshot_frame(frame: pd.DataFrame) -> pd.DataFrame:
             "snapshot_date": pd.to_datetime(renamed["snapshot_date"], errors="coerce").dt.date,
             "market_value": renamed["market_value_raw"].map(_parse_money),
             "contract_end": pd.to_datetime(
-                renamed.get("contract_end"),
+                renamed.get("contract_end", pd.Series(pd.NaT, index=renamed.index)),
                 errors="coerce",
             ).dt.date,
             "transfer_fee": renamed.get(
                 "transfer_fee_raw",
-                pd.Series(dtype="object"),
+                pd.Series(index=renamed.index, dtype="object"),
             ).map(_parse_money),
             "data_source": SOURCE_NAME,
             "import_method": "local_file",
@@ -170,6 +170,7 @@ def snapshot_to_truth_labels(
     path: str | Path,
     season: str,
     confidence: str = "medium",
+    as_of_date: str | None = None,
 ) -> pd.DataFrame:
     """Import a Transfermarkt snapshot and convert to truth labels format.
 
@@ -181,6 +182,9 @@ def snapshot_to_truth_labels(
         season: Season identifier (e.g., "2526").
         confidence: Confidence level ("high", "medium", "low").
             Transfermarkt market values are proxy labels, so "medium" is default.
+        as_of_date: Optional ISO date override.  When omitted, each label keeps
+            the source row's ``snapshot_date``.  Prefer the source date so
+            temporal audits can distinguish in-season and post-season values.
 
     Returns:
         DataFrame matching the player_truth_labels schema.
@@ -188,14 +192,24 @@ def snapshot_to_truth_labels(
     result = load_snapshot(path)
     df = result.dataframe
 
-    today = datetime.now(tz=UTC).strftime("%Y-%m-%d")
+    if as_of_date is not None:
+        try:
+            resolved_as_of_date = date.fromisoformat(as_of_date).isoformat()
+        except ValueError as exc:
+            raise ValueError("as_of_date must use ISO YYYY-MM-DD format") from exc
+        as_of_dates: pd.Series | str = resolved_as_of_date
+    else:
+        as_of_dates = pd.to_datetime(df["snapshot_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        if as_of_dates.isna().any():
+            raise ValueError("Transfermarkt snapshot contains invalid snapshot_date values")
+
     labels = pd.DataFrame({
         "player_id": df["player_name"].astype("string"),
         "season": season,
         "label_source": "transfermarkt_value",
         "label_confidence": confidence,
         "label_value": df["market_value"].astype("float64"),
-        "as_of_date": today,
+        "as_of_date": as_of_dates,
         "position_scope": "all",
         "manual_review_flag": False,
     })
