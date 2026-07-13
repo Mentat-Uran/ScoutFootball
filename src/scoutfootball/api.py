@@ -5727,6 +5727,47 @@ def get_truth_label_supervision() -> dict:
     )
 
 
+def get_transfermarkt_identity_report() -> dict:
+    """Return the latest local Transfermarkt identity resolution audit."""
+    path = _settings().gold_root / "feature_store" / "transfermarkt_identity_report.json"
+    if not path.exists():
+        return {
+            "schema": "scoutfootball.transfermarkt-identity-report",
+            "version": "1.0.0",
+            "status": "no_data",
+            "path": path.name,
+            "report": {},
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        logger.warning("Unable to read Transfermarkt identity report: %s", exc)
+        return {
+            "schema": "scoutfootball.transfermarkt-identity-report",
+            "version": "1.0.0",
+            "status": "unavailable",
+            "path": path.name,
+            "report": {},
+        }
+    if not isinstance(payload, dict):
+        return {
+            "schema": "scoutfootball.transfermarkt-identity-report",
+            "version": "1.0.0",
+            "status": "unavailable",
+            "path": path.name,
+            "report": {},
+        }
+    return _clean_json_value(
+        {
+            "schema": "scoutfootball.transfermarkt-identity-report",
+            "version": "1.0.0",
+            "status": "available",
+            "path": path.name,
+            "report": payload,
+        },
+    )
+
+
 def _get_scouting_queues(force_refresh: bool = False):
     """Build and cache scouting queues to avoid redundant computation.
 

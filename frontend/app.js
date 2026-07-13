@@ -1852,6 +1852,7 @@ let predictionCalibration = {};
 let valueSummaryMeta = { sample_count: 0, metrics: {} };
 let modelRuns = { count: 0, runs: [] };
 let truthLabelSupervision = { status: "no_data", report: {} };
+let transfermarktIdentityReport = { status: "no_data", report: {} };
 let watchlistData = [];
 let shortlistData = [];
 let actionValueSummary = { status: "no_data", players: [], metrics: {} };
@@ -2017,6 +2018,15 @@ async function fetchTruthLabelSupervision() {
         return await fetchJson("/reports/truth-labels");
     } catch (err) {
         console.warn("Failed to fetch truth-label supervision report:", err);
+        return { status: "no_data", report: {} };
+    }
+}
+
+async function fetchTransfermarktIdentityReport() {
+    try {
+        return await fetchJson("/reports/transfermarkt-identities");
+    } catch (err) {
+        console.warn("Failed to fetch Transfermarkt identity report:", err);
         return { status: "no_data", report: {} };
     }
 }
@@ -9239,6 +9249,10 @@ function renderReports() {
         const temporal = report.temporal || {};
         const temporallyEligible = Number(temporal.temporally_eligible_rows || 0);
         const postSeason = Number(temporal.post_season_rows || 0);
+        const identity = transfermarktIdentityReport.report || {};
+        const identityMapped = Number(identity.mapped_rows || 0);
+        const identityTotal = Number(identity.total_rows || 0);
+        const identityReview = Number(identity.review_rows || 0);
         const excluded = Object.entries(report.excluded_source_counts || {})
             .map(([source, count]) => `${escapeHtml(source)}: ${escapeHtml(String(count))}`)
             .join(" · ");
@@ -9249,6 +9263,7 @@ function renderReports() {
                 <div><strong>${eligible.toLocaleString()} / ${total.toLocaleString()}</strong> ${z ? "行可用于监督" : "rows eligible for supervision"}</div>
                 <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "已排除循环或未获准来源：" : "Excluded circular or unapproved sources: "}${excluded || (z ? "无" : "none")}</div>
                 <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "赛季内时间可用：" : "Temporally in-season: "}${temporallyEligible.toLocaleString()}${z ? "；赛后快照：" : "; post-season snapshots: "}${postSeason.toLocaleString()}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${transfermarktIdentityReport.status === "available" ? `Transfermarkt identity matches: ${identityMapped.toLocaleString()} / ${identityTotal.toLocaleString()}; review: ${identityReview.toLocaleString()}` : "No local Transfermarkt identity report."}</div>
                 <div style="margin-top:0.35rem;color:var(--text-muted)">${escapeHtml(report.caveat || "")}</div>`;
         }
     }
@@ -16177,7 +16192,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadWatchlistNotes();
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, truthSupervision, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, truthSupervision, transfermarktIdentity, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
         fetchArtifacts(),
@@ -16188,6 +16203,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fetchPredictionCalibration(),
         fetchModelRuns(),
         fetchTruthLabelSupervision(),
+        fetchTransfermarktIdentityReport(),
         fetchWatchlist(),
         fetchShortlist(),
         fetchActionValues(),
@@ -16206,6 +16222,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     predictionCalibration = predictionCalibrationData;
     modelRuns = runs;
     truthLabelSupervision = truthSupervision;
+    transfermarktIdentityReport = transfermarktIdentity;
     watchlistData = watchlistRows;
     shortlistData = shortlistRows;
     actionValueSummary = actionValues;

@@ -190,7 +190,7 @@ def snapshot_to_truth_labels(
         DataFrame matching the player_truth_labels schema.
     """
     result = load_snapshot(path)
-    df = result.dataframe
+    df = result.dataframe.reset_index(drop=True)
 
     if as_of_date is not None:
         try:

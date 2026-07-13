@@ -40,6 +40,16 @@ def test_truth_label_supervision_endpoint_exposes_source_policy(client: TestClie
     assert "caveat" in payload["report"]
 
 
+def test_transfermarkt_identity_report_endpoint_preserves_no_data_boundary(client: TestClient):
+    response = client.get("/reports/transfermarkt-identities")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema"] == "scoutfootball.transfermarkt-identity-report"
+    assert payload["status"] in {"available", "no_data", "unavailable"}
+    assert "report" in payload
+
+
 def test_ratings_snapshots_endpoint(client: TestClient):
     """/ratings/snapshots should return 200."""
     response = client.get("/ratings/snapshots")
