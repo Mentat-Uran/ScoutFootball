@@ -2,6 +2,7 @@
 
 ## Recently Merged
 
+- **World Cup Qualification CLI and Local Snapshot (2026-07-13, Round 57):** The local qualification interpretation is available through `tournament qualification --group`, including JSON for offline workflows. The page can download its exact loaded response as a versioned browser-local JSON snapshot without creating a server record, sync, official decision, or prediction. Current work is on `codex/integration`.
 - **World Cup Group Qualification Impact (2026-07-13, Round 56):** The tournament standings view now obtains a read-only, group-specific qualification-impact summary: local third-place rank against the eight-slot cutline, current direct places, remaining matches, and a provisional boundary. It is not an official qualification feed or prediction. Current work is on `codex/integration`.
 - **World Cup Tournament Import Stale-Preview Guard (2026-07-13, Round 55):** Preview now returns a deterministic local-state fingerprint. The browser returns it on confirmation; a changed local state yields `stale_preview` with no write, requiring another read-only preview. Current work is on `codex/integration`.
 - **World Cup Tournament Import Change Ledger (2026-07-13, Round 54):** Successful import previews now identify bounded, schedule-ordered group-result replacements and knockout record changes before the browser enables overwrite. Detail rendering uses text nodes, preserves the local-only boundary, and never makes preview a persistence or official-results workflow. Current work is on `codex/integration`.

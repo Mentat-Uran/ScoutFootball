@@ -237,6 +237,15 @@ def test_tournament_import_preview_renders_bounded_change_ledgers_as_text() -> N
     assert "preview?.knockout_changes" in app_js
     assert 'document.createElement("li")' in app_js
     assert 'row.textContent = formatItem(item)' in app_js
+
+
+def test_qualification_impact_has_local_export_contract() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "exportWcQualificationImpactJSON" in app_js
+    assert 'schema: "scoutfootball.world-cup-qualification-impact-export"' in app_js
+    assert 'storage_scope: "browser-local-download"' in app_js
+    assert 'id="wc-qualification-export"' in app_js
     assert "# Squad Role Depth" in app_js
     assert "team?.squad?.balance?.roles" in app_js
     assert "data.squad_balance" in app_js

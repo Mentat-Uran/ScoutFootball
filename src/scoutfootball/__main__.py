@@ -428,6 +428,28 @@ def _cmd_tournament_matches(args: argparse.Namespace) -> None:
     print(f"\n{len(rows)} matches shown.")
 
 
+def _cmd_tournament_qualification(args: argparse.Namespace) -> None:
+    """Show local best-third cutoff impact for one group."""
+    from scoutfootball.worldcup.tournament import qualification_impact
+
+    try:
+        impact = qualification_impact(_tournament_load_state(args), args.group)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
+    if args.json:
+        print(json.dumps(impact, indent=2, ensure_ascii=False))
+        return
+    third = impact["third_place"]
+    print(f"Group {impact['group']} local qualification impact")
+    print(f"Recorded: {impact['matches_recorded']}/6; remaining: {impact['matches_remaining']}")
+    print(
+        f"Third: {third['team']} | rank {third['rank']}/{third['cutoff_rank']} | "
+        f"{'inside' if third['currently_within_cutoff'] else 'outside'} current cutoff"
+    )
+    print("Status: provisional" if impact["provisional"] else "Status: group complete")
+
+
 def _cmd_tournament_knockout_generate(args: argparse.Namespace) -> None:
     from scoutfootball.worldcup.tournament import (
         DEFAULT_STATE_PATH,
@@ -580,6 +602,7 @@ def _cmd_tournament(args: argparse.Namespace) -> None:
         "reset": _cmd_tournament_reset,
         "scenarios": _cmd_tournament_scenarios,
         "matches": _cmd_tournament_matches,
+        "qualification": _cmd_tournament_qualification,
     }.get(action)
     if handler is None:
         print(f"Unknown tournament action: {action}")
@@ -1437,6 +1460,13 @@ def main() -> None:
     tour_matches.add_argument("--pending", action="store_true", help="Only unplayed matches")
     tour_matches.add_argument("--state-path", type=str, default=None)
     tour_matches.add_argument("--json", action="store_true")
+
+    tour_qualification = tour_sub.add_parser(
+        "qualification", help="Explain local best-third cutoff impact for a group"
+    )
+    tour_qualification.add_argument("--group", required=True, help="Group letter A-L")
+    tour_qualification.add_argument("--state-path", type=str, default=None)
+    tour_qualification.add_argument("--json", action="store_true")
 
     # ── tournament knockout ──
     tour_ko = tour_sub.add_parser("knockout", help="Manage knockout bracket")

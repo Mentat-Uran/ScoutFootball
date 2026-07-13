@@ -826,6 +826,10 @@ top two, its third-placed team's cross-group rank against the eight best-third
 slots, the current cutline, and recorded/remaining group matches. `provisional`
 remains true until the relevant local results are complete; this is neither an
 official qualification decision nor a match prediction.
+The matching CLI is `scoutfootball tournament qualification --group A [--json]`.
+The page can download the exact loaded response in a separate
+`scoutfootball.world-cup-qualification-impact-export` v1.0.0 local JSON file;
+it creates no server-side audit record or synchronization.
 
 **Response**:
 ```json
