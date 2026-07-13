@@ -12587,6 +12587,7 @@ let wcApiData = {
     tournament: null,       // from /world-cup/tournament/summary
     tournamentMatches: null, // from /world-cup/tournament/matches
     tournamentQualificationImpact: null, // selected group local standings impact
+    tournamentTiebreakDiagnostics: null, // selected group local tied clusters
     tournamentScenarios: null, // team -> scenarios
     tournamentSelectedGroup: "A",
     tournamentLoading: false,
@@ -12938,6 +12939,22 @@ async function fetchWcTournamentQualificationImpact(group) {
     return null;
 }
 
+async function fetchWcTournamentTiebreakDiagnostics(group) {
+    try {
+        const data = await fetchJson(`/world-cup/tournament/tiebreak-diagnostics?group=${encodeURIComponent(group)}`, {
+            timeout: 15000,
+        });
+        if (data?.schema === "scoutfootball.world-cup-group-tiebreak-diagnostics") {
+            wcApiData.tournamentTiebreakDiagnostics = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] tiebreak diagnostics unavailable:", e.message);
+    }
+    wcApiData.tournamentTiebreakDiagnostics = null;
+    return null;
+}
+
 function exportWcQualificationImpactJSON(impact) {
     if (impact?.schema !== "scoutfootball.world-cup-qualification-impact") return;
     const payload = {
@@ -13055,6 +13072,7 @@ async function loadAndRenderWcTournament() {
         fetchWcTournamentSummary(),
         fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentQualificationImpact(wcApiData.tournamentSelectedGroup),
+        fetchWcTournamentTiebreakDiagnostics(wcApiData.tournamentSelectedGroup),
     ]);
     wcApiData.tournamentLoading = false;
     renderWcTournament();
@@ -13107,6 +13125,7 @@ function renderWcTournament() {
     // Best thirds (list of dicts)
     const bestThirds = data.best_thirds || [];
     const impact = wcApiData.tournamentQualificationImpact;
+    const tiebreaks = wcApiData.tournamentTiebreakDiagnostics;
 
     // Advancing (winners/runners_up are lists of dicts with 'team' key)
     const adv = data.advancing || { winners: [], runners_up: [], best_thirds: [], all_advancing: [], provisional: true };
@@ -13193,6 +13212,7 @@ function renderWcTournament() {
                     ${z ? "本组未赛" : "Group matches remaining"}: ${impact.matches_remaining ?? "—"}
                     ${impact.provisional ? ` · ${z ? "暂定" : "provisional"}` : ""}
                 </div>` : ""}
+                ${tiebreaks?.tied_clusters?.length ? `<div style="margin-top:0.5rem;font-size:0.7rem;color:var(--text-muted)">${tiebreaks.tied_clusters.map((cluster) => `${z ? "同分" : "Tied"} ${cluster.positions.join("/")}: ${cluster.teams.map(escapeHtml).join(", ")} · ${z ? "相互交手" : "H2H"} ${cluster.head_to_head_matches_recorded}/${cluster.head_to_head_matches_required}${cluster.head_to_head_available ? "" : ` (${z ? "未完整，顺序暂定" : "incomplete; order provisional"})`}`).join("<br>")}</div>` : ""}
             </article>
 
             <article class="liquid-panel compact">
@@ -13352,6 +13372,7 @@ function renderWcTournament() {
                 fetchWcTournamentMatches(e.target.value),
                 fetchWcTournamentSummary(),
                 fetchWcTournamentQualificationImpact(e.target.value),
+                fetchWcTournamentTiebreakDiagnostics(e.target.value),
             ]);
             renderWcTournament();
         });

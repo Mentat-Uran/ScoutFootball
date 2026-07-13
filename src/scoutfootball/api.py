@@ -7816,6 +7816,13 @@ def get_wc_qualification_impact(group: str) -> dict:
     return _clean_json_value(qualification_impact(_wc_tournament_state(), group))
 
 
+def get_wc_group_tiebreak_diagnostics(group: str) -> dict:
+    """Return local tied-cluster diagnostics for one group standings table."""
+    from scoutfootball.worldcup.tournament import group_tiebreak_diagnostics
+
+    return _clean_json_value(group_tiebreak_diagnostics(_wc_tournament_state(), group))
+
+
 def get_wc_knockout_scenarios(team: str, num_simulations: int = 5000) -> dict:
     """Return knockout advancement scenarios for a specific team.
 

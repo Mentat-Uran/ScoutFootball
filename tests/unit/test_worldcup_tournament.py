@@ -30,6 +30,7 @@ from scoutfootball.worldcup.tournament import (
     compute_group_standings,
     compute_team_scenarios,
     determine_advancing_teams,
+    group_tiebreak_diagnostics,
     init_state,
     load_state,
     qualification_impact,
@@ -453,6 +454,30 @@ class TestQualificationImpact:
     def test_unknown_group_is_rejected(self, fresh_state):
         with pytest.raises(ValueError, match="Unknown group"):
             qualification_impact(fresh_state, "Z")
+
+
+class TestGroupTiebreakDiagnostics:
+    def test_unplayed_tie_is_explicitly_provisional(self, fresh_state):
+        diagnostics = group_tiebreak_diagnostics(fresh_state, "A")
+
+        cluster = diagnostics["tied_clusters"][0]
+        assert cluster["teams"]
+        assert cluster["head_to_head_matches_recorded"] == 0
+        assert cluster["head_to_head_available"] is False
+        assert cluster["display_order_is_provisional"] is True
+
+    def test_completed_tied_group_has_head_to_head_available(self, fresh_state):
+        for match in fresh_state.matches:
+            if match["group"] == "A":
+                assert apply_result(fresh_state, match["match_id"], 0, 0)
+
+        diagnostics = group_tiebreak_diagnostics(fresh_state, "A")
+
+        cluster = diagnostics["tied_clusters"][0]
+        assert cluster["head_to_head_matches_recorded"] == 6
+        assert cluster["head_to_head_matches_required"] == 6
+        assert cluster["head_to_head_available"] is True
+        assert cluster["display_order_is_provisional"] is False
 
 
 # ── Persistence ─────────────────────────────────────────────────────────

@@ -320,7 +320,66 @@ def compute_group_standings(
 
 def _team_sort_index(team: str) -> int:
     """Stable secondary sort key — simply hash the team name to a small int."""
-    return hash(team) % 1000
+    ordered_teams = sorted(team_name for teams in GROUPS.values() for team_name in teams)
+    return len(ordered_teams) - ordered_teams.index(team)
+
+
+def group_tiebreak_diagnostics(state: TournamentState, group: str) -> dict[str, Any]:
+    """Describe tied clusters and whether their head-to-head is complete."""
+    letter = group.upper()
+    if letter not in GROUPS:
+        raise ValueError(f"Unknown group: {group!r}")
+    standings = compute_group_standings(state, letter)
+    clusters: list[dict[str, Any]] = []
+    index = 0
+    while index < len(standings):
+        first = standings[index]
+        cluster = [first]
+        cursor = index + 1
+        while cursor < len(standings):
+            candidate = standings[cursor]
+            if (candidate.points, candidate.goal_difference, candidate.goals_for) != (
+                first.points, first.goal_difference, first.goals_for
+            ):
+                break
+            cluster.append(candidate)
+            cursor += 1
+        if len(cluster) > 1:
+            teams = [entry.team for entry in cluster]
+            recorded = sum(
+                _match_completed(state.results.get(match["match_id"]))
+                for match in state.matches
+                if match.get("group") == letter
+                and match.get("home") in teams
+                and match.get("away") in teams
+            )
+            required = len(teams) * (len(teams) - 1) // 2
+            clusters.append({
+                "positions": list(range(index + 1, cursor + 1)),
+                "teams": teams,
+                "points": first.points,
+                "goal_difference": first.goal_difference,
+                "goals_for": first.goals_for,
+                "head_to_head_matches_recorded": recorded,
+                "head_to_head_matches_required": required,
+                "head_to_head_available": recorded == required,
+                "display_order_is_provisional": recorded != required,
+            })
+        index = cursor
+    return {
+        "schema": "scoutfootball.world-cup-group-tiebreak-diagnostics",
+        "version": "1.0.0",
+        "group": letter,
+        "tied_clusters": clusters,
+        "limitations": [
+            "Head-to-head is only evaluated after all matches within a tied cluster are recorded.",
+            (
+                "Fair-play points and drawing of lots are not modelled; "
+                "unresolved display order is provisional."
+            ),
+            "Based only on locally recorded group results, not an official ranking decision.",
+        ],
+    }
 
 
 def compute_all_standings(state: TournamentState) -> dict[str, list[GroupStanding]]:
