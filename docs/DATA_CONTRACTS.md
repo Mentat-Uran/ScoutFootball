@@ -742,8 +742,18 @@ accuracy, calibration, or model-quality assessment. Existing/imported results
 without a snapshot return `snapshot_not_recorded`; the service never derives a
 retrospective prediction from post-result probabilities. Clearing a result,
 including a cascaded downstream result, removes its snapshot. The completed
-card can render this local-only review and download its JSON without creating
-server-side sharing or synchronization.
+card can render this local-only review and download its JSON. The tournament
+state is persisted by the local application API, rather than browser storage;
+manual export/import is explicit and does not create automatic sharing or
+synchronization.
+
+`GET /world-cup/tournament/knockout/reviews` exposes the compact
+`scoutfootball.world-cup-knockout-review-ledger` v1.0.0 for all completed
+locally recorded knockout matches. Its `summary` separates completed entries,
+captured snapshots, missing snapshots, and directional comparisons. It does
+not backfill missing snapshots and is never an official-result feed,
+calibration statistic, or model-accuracy report. The World Cup page can render
+and locally download this ledger as JSON.
 
 The general match-prediction tactical handoff writes a bounded
 `scoutfootball.tactical-decision-pack` v1.1.0 into the browser-local board
