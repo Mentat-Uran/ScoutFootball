@@ -30,6 +30,8 @@ ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，
 
 **校准边界**：积分校准层只能在训练赛季拟合，holdout/test 必须复用训练集 `slope/intercept` 和训练集联赛 residual offset；不能用测试集实际积分重新拟合。
 
+**历史代理可观测性**：Understat 十赛季聚合行可扩展 Big Five 历史覆盖，但仅提供分钟和出场等赛季汇总。优化器将其标记为 `starts_observed=false`，不再由出场数推断首发数；模型运行记录会保存每个来源的行数、赛季和可观测首发行数。历史代理可用于球队积分的时间验证，不能单独支持首发可靠性结论。
+
 ## 当前指标
 
 以下指标来自 v1.3 GPU 重跑结果（2026-06-09 23:05，本地 `optimized_params_meta.json`）。v1.3.1-dev 新增的 league-bias loss 尚未完整重跑。

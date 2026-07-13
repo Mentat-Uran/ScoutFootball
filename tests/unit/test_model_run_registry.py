@@ -8,8 +8,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 
+try:
+    import torch as _installed_torch
+except ImportError:
+    _installed_torch = None
+
 # Save the real torch module before mocking (if it exists)
-_real_torch = sys.modules.get("torch", None)
+_real_torch = _installed_torch
 
 # Mock torch before importing the script — it's a top-level dependency
 # that may not be installed in the test environment. Must provide enough
@@ -17,7 +22,8 @@ _real_torch = sys.modules.get("torch", None)
 _mock_torch = MagicMock()
 _mock_torch.Tensor = type("Tensor", (), {})
 _mock_torch.is_tensor = lambda x: False
-sys.modules["torch"] = _mock_torch
+if _real_torch is None:
+    sys.modules["torch"] = _mock_torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from optimizer.data import build_run_lineage, compute_input_hash, save_model_run  # noqa: E402
@@ -27,6 +33,9 @@ if _real_torch is not None:
     sys.modules["torch"] = _real_torch
 else:
     sys.modules.pop("torch", None)
+    for module_name in list(sys.modules):
+        if module_name == "optimizer" or module_name.startswith("optimizer."):
+            sys.modules.pop(module_name, None)
 
 
 class TestSaveModelRun:
@@ -145,6 +154,31 @@ class TestSaveModelRun:
             meta = json.load(f)
         assert "position_metrics" in meta
         assert meta["position_metrics"]["GK"]["spearman"] == 0.70
+
+    def test_data_coverage_persisted(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        coverage = {
+            "rows": 3,
+            "starts_observed_rows": 1,
+            "sources": [
+                {
+                    "source_name": "understat",
+                    "data_granularity": "season_proxy",
+                    "rows": 2,
+                    "seasons": ["2122"],
+                    "starts_observed_rows": 0,
+                },
+            ],
+        }
+        run_dir = save_model_run(
+            params,
+            {"spearman": 0.65},
+            output_dir=tmp_path,
+            data_coverage=coverage,
+        )
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+
+        assert meta["data_coverage"] == coverage
 
     def test_error_cases_computed_when_holdout_exists(self, tmp_path):
         # Create a holdout predictions parquet in the expected location
