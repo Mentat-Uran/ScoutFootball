@@ -175,6 +175,28 @@ class TestImportWcTournamentState:
         assert len(preview["result_changes"]["items"]) == 20
         assert preview["result_changes"]["truncated"] is True
 
+    def test_import_rejects_a_preview_that_has_gone_stale(self, patched_state_path):
+        incoming = init_state()
+        apply_result(incoming, incoming.matches[0]["match_id"], 2, 0)
+        encoded = base64.urlsafe_b64encode(
+            json.dumps(state_to_dict(incoming)).encode("utf-8")
+        ).decode("ascii")
+        preview = preview_wc_tournament_import(encoded)
+
+        current = load_state()
+        current_match_id = current.matches[1]["match_id"]
+        apply_result(current, current_match_id, 1, 1)
+        save_state(current, patched_state_path)
+
+        result = import_wc_tournament_state(
+            encoded,
+            expected_current_fingerprint=preview["current_state_fingerprint"],
+        )
+
+        assert result["status"] == "error"
+        assert result["code"] == "stale_preview"
+        assert current_match_id in load_state().results
+
     def test_preview_reports_all_integrity_issues_without_writing_local_state(
         self, patched_state_path
     ):

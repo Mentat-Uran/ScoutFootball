@@ -13847,12 +13847,15 @@ async function fetchWcTournamentExport() {
     }
 }
 
-async function fetchWcTournamentImport(encoded) {
+async function fetchWcTournamentImport(encoded, expectedCurrentFingerprint) {
     try {
         const resp = await fetch(`${API_BASE}/world-cup/tournament/import`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ encoded }),
+            body: JSON.stringify({
+                encoded,
+                expected_current_fingerprint: expectedCurrentFingerprint,
+            }),
         });
         const data = await resp.json();
         return data;
@@ -14052,6 +14055,7 @@ function renderWcImportDialog() {
             const d = preview.differences || {};
             const incoming = preview.incoming || {};
             dlg.dataset.previewFor = encoded;
+            dlg.dataset.previewStateFingerprint = preview.current_state_fingerprint || "";
             msgEl.textContent = (z
                 ? `导入将替换为 ${incoming.group_results || 0} 个小组赛果；新增 ${d.group_results_added || 0}，移除 ${d.group_results_removed || 0}，变更 ${d.group_results_changed || 0}，可能移除 ${d.knockout_snapshots_removed || 0} 个赛前快照。`
                 : `Import will replace with ${incoming.group_results || 0} group results; add ${d.group_results_added || 0}, remove ${d.group_results_removed || 0}, change ${d.group_results_changed || 0}, and may remove ${d.knockout_snapshots_removed || 0} pre-recording snapshots.`);
@@ -14069,7 +14073,7 @@ function renderWcImportDialog() {
                 msgEl.style.color = "var(--status-low-color,#f44336)";
                 return;
             }
-            if (dlg.dataset.previewFor !== encoded) {
+            if (dlg.dataset.previewFor !== encoded || !dlg.dataset.previewStateFingerprint) {
                 msgEl.textContent = z ? "请先预览当前编码的差异。" : "Preview differences for the current encoded state first.";
                 msgEl.style.color = "var(--status-low-color,#f44336)";
                 return;
@@ -14077,7 +14081,9 @@ function renderWcImportDialog() {
             confirmBtn.disabled = true;
             confirmBtn.textContent = z ? "导入中..." : "Importing...";
             msgEl.textContent = "";
-            const result = await fetchWcTournamentImport(encoded);
+            const result = await fetchWcTournamentImport(
+                encoded, dlg.dataset.previewStateFingerprint
+            );
             confirmBtn.disabled = false;
             confirmBtn.textContent = z ? "导入" : "Import";
             if (result && result.status === "ok") {
@@ -14099,6 +14105,7 @@ function renderWcImportDialog() {
                 const knownCodes = {
                     decode_failed: z ? "解码失败：编码格式无效" : "Decode failed: invalid encoding",
                     invalid_state: z ? "状态数据无效：schema 不兼容" : "Invalid state: incompatible schema",
+                    stale_preview: z ? "本地状态已变更，请重新预览后再导入" : "Local state changed; preview again before importing",
                     request_failed: z ? "请求失败：API 不可用" : "Request failed: API unavailable",
                 };
                 msgEl.textContent = knownCodes[code] || (z ? "导入失败" : "Import failed") + ` (${code})`;

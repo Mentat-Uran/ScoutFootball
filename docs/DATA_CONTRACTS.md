@@ -770,6 +770,10 @@ ledgers. Each has `items`, `total`, and `truncated`; the result ledger contains
 the scheduled fixture plus the current/incoming local result, while the
 knockout ledger only describes local record and snapshot-presence changes. It
 is an overwrite-impact aid, not an official result feed or an audit history.
+They also return `current_state_fingerprint`. The browser sends it as
+`expected_current_fingerprint` when confirming; if local state changed after
+preview, import returns `stale_preview` and writes nothing. Direct API callers
+may omit the optional field for backward compatibility.
 
 The general match-prediction tactical handoff writes a bounded
 `scoutfootball.tactical-decision-pack` v1.1.0 into the browser-local board

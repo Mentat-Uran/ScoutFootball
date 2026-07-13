@@ -1003,7 +1003,12 @@ def create_app() -> FastAPI:
         encoded = body.get("encoded", "")
         if not encoded:
             raise HTTPException(status_code=400, detail={"code": "missing_encoded"})
-        return import_wc_tournament_state(encoded)
+        fingerprint = body.get("expected_current_fingerprint")
+        if fingerprint is not None and not isinstance(fingerprint, str):
+            raise HTTPException(status_code=400, detail={"code": "invalid_fingerprint"})
+        return import_wc_tournament_state(
+            encoded, expected_current_fingerprint=fingerprint
+        )
 
     @app.post("/world-cup/tournament/import/preview")
     async def wc_tournament_import_preview(request: Request):
