@@ -2,6 +2,7 @@
 
 ## Recently Merged
 
+- **World Cup Tournament Import Stale-Preview Guard (2026-07-13, Round 55):** Preview now returns a deterministic local-state fingerprint. The browser returns it on confirmation; a changed local state yields `stale_preview` with no write, requiring another read-only preview. Current work is on `codex/integration`.
 - **World Cup Tournament Import Change Ledger (2026-07-13, Round 54):** Successful import previews now identify bounded, schedule-ordered group-result replacements and knockout record changes before the browser enables overwrite. Detail rendering uses text nodes, preserves the local-only boundary, and never makes preview a persistence or official-results workflow. Current work is on `codex/integration`.
 - **World Cup Tournament Import Integrity Diagnostics (2026-07-13, Round 53):** Read-only preview and import now reject malformed-but-decodable tournament state with bounded fixture, score, and knockout diagnostics. The browser shows the first issues, keeps confirmation disabled, and neither preview nor failed import writes or repairs local state. Current work is on `codex/integration`.
 - **World Cup Tournament Import Preview (2026-07-13, Round 51):** Encoded tournament state now has a read-only import preview with result/snapshot replacement differences before the browser enables the explicit local-state overwrite. Preview performs no write and import remains a full local replacement rather than merge, sync, or official result ingestion. Current work is on `codex/integration`.

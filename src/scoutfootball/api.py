@@ -7956,6 +7956,19 @@ def _wc_import_state_counts(state: Any) -> dict[str, int]:
     }
 
 
+def _wc_tournament_state_fingerprint(state: Any) -> str:
+    """Return a stable local-state version token for import confirmation."""
+    import hashlib
+    import json
+
+    from scoutfootball.worldcup.tournament import state_to_dict
+
+    payload = json.dumps(
+        state_to_dict(state), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _wc_import_result_change_ledger(current: Any, incoming: Any, *, limit: int = 20) -> dict:
     """Describe bounded group-result replacement effects in schedule order."""
     changes: list[dict] = []
@@ -8055,6 +8068,7 @@ def preview_wc_tournament_import(encoded: str) -> dict:
         "version": "1.0.0",
         "status": "ok",
         "recording_scope": "local application tournament state",
+        "current_state_fingerprint": _wc_tournament_state_fingerprint(current),
         "incoming": {
             "schema_version": incoming.schema_version,
             "matches": len(incoming.matches),
@@ -8086,7 +8100,9 @@ def preview_wc_tournament_import(encoded: str) -> dict:
     })
 
 
-def import_wc_tournament_state(encoded: str) -> dict:
+def import_wc_tournament_state(
+    encoded: str, *, expected_current_fingerprint: str | None = None
+) -> dict:
     """Import a shared tournament state and persist it after UI confirmation.
 
     Programmatic callers remain supported; the application UI first calls the
@@ -8097,6 +8113,19 @@ def import_wc_tournament_state(encoded: str) -> dict:
     state, error = _decode_wc_tournament_import(encoded)
     if error:
         return error
+
+    if expected_current_fingerprint is not None:
+        current_fingerprint = _wc_tournament_state_fingerprint(_wc_tournament_state())
+        if current_fingerprint != expected_current_fingerprint:
+            return _clean_json_value({
+                "status": "error",
+                "code": "stale_preview",
+                "message": (
+                    "Local tournament state changed after preview; "
+                    "preview again before importing."
+                ),
+                "recording_scope": "local application tournament state",
+            })
 
     save_state(state, DEFAULT_STATE_PATH)
     return _clean_json_value({
