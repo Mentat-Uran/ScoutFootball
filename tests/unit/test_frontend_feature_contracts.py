@@ -178,6 +178,10 @@ def test_player_comparison_export_button_and_function_exist() -> None:
     assert "exportPlayerComparisonCSV" in app_js
     assert "lastCompareData" in app_js
     assert "exportPlayerComparisonCSV" in app_js
+    assert "exportPlayerComparisonJSON" in app_js
+    assert 'schema: "scoutfootball.player-comparison-export"' in app_js
+    assert 'id="btn-compare-export-json"' in html
+    assert "compare-add-shortlist" in app_js
 
 
 def test_form_trend_rendering_is_present() -> None:

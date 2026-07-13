@@ -6864,6 +6864,40 @@ async function renderCompare() {
         exportBtn.dataset.bound = "1";
         exportBtn.addEventListener("click", exportPlayerComparisonCSV);
     }
+    const exportJsonBtn = document.getElementById("btn-compare-export-json");
+    if (exportJsonBtn && !exportJsonBtn.dataset.bound) {
+        exportJsonBtn.dataset.bound = "1";
+        exportJsonBtn.addEventListener("click", exportPlayerComparisonJSON);
+    }
+}
+
+function _safeCompareFilename(data) {
+    const left = (data?.player_a?.name || "player_a").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+    const right = (data?.player_b?.name || "player_b").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
+    return `compare_${left}_vs_${right}`;
+}
+
+function exportPlayerComparisonJSON() {
+    const comparison = appState.lastCompareData;
+    if (!comparison || comparison.error) return;
+    const payload = {
+        schema: "scoutfootball.player-comparison-export",
+        version: "1.0.0",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        comparison,
+        limitations: [
+            "Position percentiles are relative to each player's loaded position pool.",
+            "This export is not a transfer recommendation or a server-side audit record.",
+        ],
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${_safeCompareFilename(comparison)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
 }
 
 function exportPlayerComparisonCSV() {
@@ -6871,8 +6905,6 @@ function exportPlayerComparisonCSV() {
     if (!data || data.error) return;
     const nameA = data.player_a ? data.player_a.name : "A";
     const nameB = data.player_b ? data.player_b.name : "B";
-    const safeA = (nameA || "player_a").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
-    const safeB = (nameB || "player_b").replace(/[^a-zA-Z0-9\u4e00-\u9fff_-]/g, "_");
     const lines = [];
 
     // Section 1: Player profiles
@@ -6919,7 +6951,7 @@ function exportPlayerComparisonCSV() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `compare_${safeA}_vs_${safeB}.csv`;
+    link.download = `${_safeCompareFilename(data)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
 }
@@ -6927,6 +6959,27 @@ function exportPlayerComparisonCSV() {
 async function _renderCompareResult(a, b) {
     const data = await fetchPlayerComparison(a, b);
     appState.lastCompareData = data;
+    const shortlistActions = document.getElementById("compare-shortlist-actions");
+    if (shortlistActions) {
+        const players = [data.player_a, data.player_b].filter(Boolean);
+        shortlistActions.style.display = players.length ? "flex" : "none";
+        shortlistActions.innerHTML = `${players.map((player, index) => `<button class="text-button compare-add-shortlist" data-compare-shortlist-index="${index}" type="button">${escapeHtml(appState.lang === "zh" ? `加入短名单：${player.name || "球员"}` : `Add to shortlist: ${player.name || "Player"}`)}</button>`).join("")}<span class="toolbar-status">${escapeHtml(appState.lang === "zh" ? "仅保存到当前浏览器" : "Saved in this browser only")}</span>`;
+        shortlistActions.querySelectorAll(".compare-add-shortlist").forEach((button) => {
+            button.addEventListener("click", () => {
+                const player = players[Number(button.dataset.compareShortlistIndex)];
+                if (!player) return;
+                const key = String(player.player_id || player.key || player.name || "");
+                if (!key) return;
+                const list = getPlayerShortlist();
+                if (!list.some((entry) => entry.key === key)) {
+                    list.push({ key, name: player.name || "", team: player.team || "", position: player.position_group || player.position || "", rating: player.rating ?? "" });
+                    savePlayerShortlist(list);
+                }
+                button.disabled = true;
+                button.textContent = appState.lang === "zh" ? "已加入短名单" : "Added to shortlist";
+            });
+        });
+    }
     const wrap = document.getElementById("compare-result-wrap");
     const pctPanel = document.getElementById("compare-pct-panel");
 
