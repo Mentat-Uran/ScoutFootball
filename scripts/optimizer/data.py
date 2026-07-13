@@ -35,8 +35,15 @@ def summarize_optimizer_data_coverage(frame: pd.DataFrame) -> dict:
     The summary is persisted with each model run so a later score comparison can
     distinguish an FBref-backed run from one that includes Understat history.
     """
+    artifact_statuses = list(frame.attrs.get("optimizer_artifact_statuses", []))
     if frame.empty:
-        return {"rows": 0, "seasons": [], "sources": [], "starts_observed_rows": 0}
+        return {
+            "rows": 0,
+            "seasons": [],
+            "sources": [],
+            "starts_observed_rows": 0,
+            "artifact_statuses": artifact_statuses,
+        }
 
     work = frame.copy()
     if "source_name" not in work.columns:
@@ -62,6 +69,7 @@ def summarize_optimizer_data_coverage(frame: pd.DataFrame) -> dict:
         "rows": int(len(work)),
         "seasons": sorted({str(value) for value in work.get("season", pd.Series(dtype=str))}),
         "starts_observed_rows": int(starts_observed.sum()),
+        "artifact_statuses": artifact_statuses,
         "sources": [
             {
                 "source_name": str(row["source_name"]),
@@ -74,9 +82,43 @@ def summarize_optimizer_data_coverage(frame: pd.DataFrame) -> dict:
         ],
     }
 
+
+def _read_optional_parquet(
+    path: Path,
+    *,
+    source: str,
+    artifact_statuses: list[dict],
+) -> pd.DataFrame | None:
+    """Read an optional optimizer source without hiding its failure state."""
+    if not path.exists():
+        artifact_statuses.append({"source": source, "status": "missing", "path": str(path)})
+        return None
+    try:
+        frame = pd.read_parquet(path)
+    except Exception as exc:
+        artifact_statuses.append(
+            {
+                "source": source,
+                "status": "unreadable",
+                "path": str(path),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
+        print(f"  Optional {source} unavailable ({type(exc).__name__}): {exc}")
+        return None
+    artifact_statuses.append({"source": source, "status": "loaded", "path": str(path)})
+    return frame
+
+
 def load_data(data_dir: Path):
     """加载 FBref 球员数据 (standard + misc + shooting) + Football-Data 球队积分。"""
-    fbref = pd.read_parquet(data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet")
+    artifact_statuses: list[dict] = []
+    standard_path = data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet"
+    fbref = pd.read_parquet(standard_path)
+    artifact_statuses.append(
+        {"source": "fbref_standard", "status": "loaded", "path": str(standard_path)},
+    )
 
     goals = fbref[("Performance", "Gls")].values.astype(np.float32)
     assists_col = fbref[("Performance", "Ast")].values.astype(np.float32)
@@ -134,8 +176,12 @@ def load_data(data_dir: Path):
     misc_path = data_dir / "raw" / "fbref" / "player_misc_5seasons.parquet"
     if not misc_path.exists():
         misc_path = data_dir / "raw" / "fbref" / "player_misc_3seasons.parquet"
-    if misc_path.exists():
-        misc = pd.read_parquet(misc_path)
+    misc = _read_optional_parquet(
+        misc_path,
+        source="fbref_misc",
+        artifact_statuses=artifact_statuses,
+    )
+    if misc is not None:
         misc_idx = misc.index.to_frame(index=False)
         # Normalize league names in misc index
         misc_league_norm = misc_idx["league"].map(league_name_map).fillna(misc_idx["league"])
@@ -179,8 +225,12 @@ def load_data(data_dir: Path):
     shoot_path = data_dir / "raw" / "fbref" / "player_shooting_5seasons.parquet"
     if not shoot_path.exists():
         shoot_path = data_dir / "raw" / "fbref" / "player_shooting_3seasons.parquet"
-    if shoot_path.exists():
-        shooting = pd.read_parquet(shoot_path)
+    shooting = _read_optional_parquet(
+        shoot_path,
+        source="fbref_shooting",
+        artifact_statuses=artifact_statuses,
+    )
+    if shooting is not None:
         shoot_idx = shooting.index.to_frame(index=False)
         shoot_league_norm = shoot_idx["league"].map(league_name_map).fillna(shoot_idx["league"])
         shoot_data = pd.DataFrame({
@@ -276,9 +326,13 @@ def load_data(data_dir: Path):
 
     # Load Understat data for additional seasons
     understat_path = data_dir / "raw" / "understat" / "players_10seasons.parquet"
-    if understat_path.exists():
+    understat = _read_optional_parquet(
+        understat_path,
+        source="understat",
+        artifact_statuses=artifact_statuses,
+    )
+    if understat is not None:
         print("  加载 Understat 数据...")
-        understat = pd.read_parquet(understat_path)
         
         # Normalize league names
         understat_league_map = {
@@ -437,7 +491,11 @@ def load_data(data_dir: Path):
     df = refine_role_positions(df)
 
     # Team standings + match-level data (for Dixon-Coles)
-    fd = pd.read_parquet(data_dir / "raw" / "football_data" / "combined_results.parquet")
+    results_path = data_dir / "raw" / "football_data" / "combined_results.parquet"
+    fd = pd.read_parquet(results_path)
+    artifact_statuses.append(
+        {"source": "football_data_results", "status": "loaded", "path": str(results_path)},
+    )
     standings_rows = []
     match_rows = []
     for _, row in fd.iterrows():
@@ -484,6 +542,7 @@ def load_data(data_dir: Path):
         if n_nan > 0:
             print(f"  {col}: {n_nan}/{n_total} 行缺失 ({n_nan/n_total*100:.1f}%)")
 
+    df.attrs["optimizer_artifact_statuses"] = artifact_statuses
     return df, team_pts, matches_df
 
 

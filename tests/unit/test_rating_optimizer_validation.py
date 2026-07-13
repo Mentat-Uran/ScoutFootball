@@ -54,6 +54,7 @@ def _load_optimizer_module():
     mod.make_season_splits = _d.make_season_splits
     mod.compute_input_hash = _d.compute_input_hash
     mod.summarize_optimizer_data_coverage = _d.summarize_optimizer_data_coverage
+    mod.read_optional_parquet = _d._read_optional_parquet
     mod.save_model_run = _d.save_model_run
     mod.build_dc_tensors = _d.build_dc_tensors
     mod.evaluate_params = _d.evaluate_params
@@ -294,6 +295,42 @@ def test_optimizer_data_coverage_marks_unobserved_starts() -> None:
             "rows": 1,
             "seasons": ["2122"],
             "starts_observed_rows": 0,
+        },
+    ]
+
+
+def test_optimizer_data_coverage_includes_optional_artifact_states() -> None:
+    opt = _load_optimizer_module()
+    frame = pd.DataFrame({"season": ["2425"], "source_name": ["fbref"]})
+    frame.attrs["optimizer_artifact_statuses"] = [
+        {"source": "fbref_misc", "status": "unreadable", "error_type": "OSError"},
+    ]
+
+    coverage = opt.summarize_optimizer_data_coverage(frame)
+
+    assert coverage["artifact_statuses"] == frame.attrs["optimizer_artifact_statuses"]
+
+
+def test_optional_parquet_read_records_error_without_raising(tmp_path, monkeypatch) -> None:
+    opt = _load_optimizer_module()
+    path = tmp_path / "broken.parquet"
+    path.write_bytes(b"not-a-parquet-file")
+    statuses: list[dict] = []
+
+    def _raise(_path):
+        raise OSError("corrupt test parquet")
+
+    monkeypatch.setattr("optimizer.data.pd.read_parquet", _raise)
+    frame = opt.read_optional_parquet(path, source="fbref_misc", artifact_statuses=statuses)
+
+    assert frame is None
+    assert statuses == [
+        {
+            "source": "fbref_misc",
+            "status": "unreadable",
+            "path": str(path),
+            "error_type": "OSError",
+            "error": "corrupt test parquet",
         },
     ]
 

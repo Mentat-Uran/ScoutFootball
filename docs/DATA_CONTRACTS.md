@@ -201,6 +201,16 @@ match events. The pipeline excludes seasons already covered by FBref and does
 not import RFPL rows because this rating route has no aligned team-results
 target for that competition.
 
+### Optimizer optional-artifact status
+
+Optimizer run metadata may include `data_coverage.artifact_statuses`, one item
+per raw input with `source`, `status`, and `path`; an unreadable optional file
+also records `error_type` and a bounded error message. `fbref_misc`,
+`fbref_shooting`, and `understat` are optional enrichment inputs: `missing` or
+`unreadable` means their dependent fields fall back to explicit missing-data
+handling. The FBref standard table and Football-Data results remain required;
+a run cannot be interpreted as complete if either cannot be read.
+
 ---
 
 ## 6. player_truth_labels.parquet
@@ -694,7 +704,9 @@ captured retroactively. A missing manifest yields `status: partial`.
 
 ### GET /reports/model-runs/{run_id}
 Full details for a single model run, including the same lineage object for
-reproducibility review.
+reproducibility review. New runs may also include `data_coverage` with source
+rows, observed-field counts, and optional-artifact statuses. Historic runs
+without that field are not retroactively labelled as fully audited.
 
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
