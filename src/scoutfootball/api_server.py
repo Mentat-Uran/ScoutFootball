@@ -23,6 +23,7 @@ from scoutfootball.api import (
     generate_wc_knockout_bracket,
     get_action_value_evidence,
     get_action_value_evidence_index,
+    get_action_value_player_context,
     get_action_value_summary,
     get_artifacts_summary,
     get_backtest_comparison,
@@ -666,6 +667,10 @@ def create_app() -> FastAPI:
     @app.get("/action-values/evidence/{player_id}")
     def action_value_evidence(player_id: str):
         return get_action_value_evidence(player_id)
+
+    @app.get("/action-values/players/{player_id}/context")
+    def action_value_player_context(player_id: str):
+        return get_action_value_player_context(player_id)
 
     @app.get("/action-values/matches")
     def player_match_action_values(limit: int = 100, offset: int = 0):

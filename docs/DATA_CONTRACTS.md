@@ -585,6 +585,20 @@ full `player_action_value.parquet` aggregate. This limitation is machine-readabl
 as `coverage.xt_grid_scope: "sample_recomputed"` and
 `coverage.aggregate_comparability: "not_directly_comparable"`.
 
+### GET /action-values/players/{player_id}/context
+
+Read-only player research dossier. It returns `models.xt.rows`,
+`models.vaep.rows`, and `match_sample.rows` as independent sections, plus a
+mandatory `comparability` object with `direct_numeric_comparison: false` and
+`additive: false`. xT rows are player-team-season samples; VAEP rows are
+player-team career aggregates and their season fields are coverage context
+only. Match-level xT comes from the separately recomputed tracked sample.
+
+The endpoint is for side-by-side inspection and JSON export, never for summing
+values or building a cross-model ranking. Missing player IDs return
+`invalid_player_id`; unknown IDs return `not_found` with explicit unavailable
+model sections.
+
 Static deployments use `frontend/data/action_value_evidence.json`, a versioned
 `{schema_version, coverage, player_index, players}` snapshot. Both endpoints
 retain `StatsBomb Open Data` source attribution and degrade to explicit

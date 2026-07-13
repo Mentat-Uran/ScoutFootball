@@ -120,6 +120,36 @@
             .sort((a, b) => order.get(text(a.key)) - order.get(text(b.key)));
     }
 
+    function playerContextFromRows(playerId, xtRows, vaepRows, matchRows) {
+        const id = text(playerId);
+        const matching = (rows) => (Array.isArray(rows) ? rows : []).filter(
+            (row) => text(row && row.player_id) === id
+        );
+        const xt = matching(xtRows);
+        const vaep = matching(vaepRows);
+        const matches = playerMatchRows(matchRows, id);
+        const name = [...xt, ...vaep, ...matches]
+            .map((row) => text(row && row.player_name))
+            .find(Boolean) || "";
+        return {
+            schema: "scoutfootball.action-value-player-context",
+            version: "1.0.0",
+            status: xt.length || vaep.length || matches.length ? "ok" : "not_found",
+            player_id: id,
+            player_name: name,
+            models: {
+                xt: { status: xt.length ? "available" : "not_available", granularity: "player_team_season", rows: xt },
+                vaep: { status: vaep.length ? "available" : "not_available", granularity: "player_team_career", rows: vaep },
+            },
+            match_sample: { status: matches.length ? "available" : "not_available", coverage_scope: "sample", rows: matches },
+            comparability: {
+                direct_numeric_comparison: false,
+                additive: false,
+                reason: "xT, VAEP, and match evidence have different aggregation scopes and are displayed side by side only.",
+            },
+        };
+    }
+
     return Object.freeze({
         coreActionTypes,
         evidencePlayerIds,
@@ -127,6 +157,7 @@
         filterRows,
         hasEvidence,
         identitySummary,
+        playerContextFromRows,
         playerMatchRows,
         rowCompetitions,
         rowSeasons,
