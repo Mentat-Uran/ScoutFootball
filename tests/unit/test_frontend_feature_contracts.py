@@ -289,3 +289,12 @@ def test_action_value_dossier_export_keeps_local_scouting_context_separate() -> 
     assert 'schema: "scoutfootball.action-value-research-dossier-export"' in app_js
     assert "browser-local-shortlist-dossier" in app_js
     assert "non_additive_to_action_values: true" in app_js
+
+
+def test_action_value_rating_candidates_require_strict_identity_context() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    assert "fetchActionValueRatingLinks" in app_js
+    assert "renderActionValueRatingLinks" in app_js
+    assert "strict-name-team-season-candidates" in app_js
+    assert "requires_human_identity_verification: true" in app_js
+    assert "name-only links are not inferred" in app_js

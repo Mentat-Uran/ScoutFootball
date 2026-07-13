@@ -6830,6 +6830,15 @@ async function fetchActionValuePlayerContext(playerId) {
     }
 }
 
+async function fetchActionValueRatingLinks(playerId) {
+    try {
+        return await fetchJson(`/action-values/players/${encodeURIComponent(playerId)}/rating-links`);
+    } catch (err) {
+        console.warn("Failed to fetch action-value rating links:", err);
+        return { status: "rating_artifact_unavailable", rating_candidates: [] };
+    }
+}
+
 async function renderCompare() {
     const btn = document.getElementById("compare-btn");
     const inputA = document.getElementById("compare-input-a");
@@ -9714,6 +9723,13 @@ function showActionValueDetail(player, mode) {
             </div>
             <div id="action-context-content" data-player-id="${escapeAttr(String(player.player_id || ""))}" aria-live="polite"><p class="action-evidence-message">${escapeHtml(appState.lang === "zh" ? "正在加载独立模型上下文..." : "Loading separate model contexts...")}</p></div>
         </section>
+        <section class="action-evidence-section" aria-labelledby="action-rating-links-title">
+            <div class="action-evidence-head">
+                <div><p class="eyebrow">Rating reference</p><h4 id="action-rating-links-title">${escapeHtml(appState.lang === "zh" ? "评分记录候选" : "Rating-record candidates")}</h4></div>
+                <span class="status-pill status-medium" id="action-rating-links-status">loading</span>
+            </div>
+            <div id="action-rating-links-content" data-player-id="${escapeAttr(String(player.player_id || ""))}" aria-live="polite"><p class="action-evidence-message">${escapeHtml(appState.lang === "zh" ? "正在核对姓名、球队和赛季..." : "Checking name, team, and season...")}</p></div>
+        </section>
         <section class="action-evidence-section" aria-labelledby="action-evidence-title">
             <div class="action-evidence-head">
                 <div><p class="eyebrow">StatsBomb sample evidence</p><h4 id="action-evidence-title">${escapeHtml(appState.lang === "zh" ? "比赛级 xT 证据" : "Match-level xT evidence")}</h4></div>
@@ -9724,6 +9740,7 @@ function showActionValueDetail(player, mode) {
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
     void renderActionValuePlayerContext(player);
+    void renderActionValueRatingLinks(player);
     void renderActionValueEvidence(player);
 }
 
@@ -9737,11 +9754,12 @@ function actionContextRows(title, rows, metricKey, contextKey) {
     }).join("")}</section>`;
 }
 
-function downloadActionValueContext(data, player = {}) {
+async function downloadActionValueContext(data, player = {}) {
     const shortlistContext = getShortlistDossier(player);
+    const ratingLinks = await fetchActionValueRatingLinks(String(player.player_id || data.player_id || ""));
     const payload = {
         schema: "scoutfootball.action-value-research-dossier-export",
-        version: "1.0.0",
+        version: "1.1.0",
         exported_at: new Date().toISOString(),
         storage_scope: "browser-local-download",
         action_value_context: data,
@@ -9752,9 +9770,17 @@ function downloadActionValueContext(data, player = {}) {
             dossier: shortlistContext,
             non_additive_to_action_values: true,
         },
+        rating_reference: {
+            scope: "strict-name-team-season-candidates",
+            status: ratingLinks?.status || "rating_artifact_unavailable",
+            candidates: Array.isArray(ratingLinks?.rating_candidates) ? ratingLinks.rating_candidates : [],
+            non_additive_to_action_values: true,
+            requires_human_identity_verification: true,
+        },
         limitations: [
             "xT, VAEP, and match-sample values retain their own granularities and are not additive.",
             "Scouting context is browser-local decision context, not a model feature or server-side recommendation.",
+            "Rating references are strict identity candidates, not confirmed links or a merged scoring signal.",
         ],
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -9792,6 +9818,42 @@ async function renderActionValuePlayerContext(player) {
         <button class="text-button" id="action-context-export" type="button">${escapeHtml(appState.lang === "zh" ? "导出研究档案 JSON" : "Export research dossier JSON")}</button>`;
     target.querySelector("#action-context-export")?.addEventListener("click", () => downloadActionValueContext(data, player));
     if (status) { status.textContent = "READY"; status.className = "status-pill status-high"; }
+}
+
+function openActionValueRatingCandidate(candidate) {
+    const linked = players.find((row) => row.name === candidate.player
+        && row.team === candidate.team && row.season === candidate.season);
+    if (!linked) return;
+    appState.selectedPlayerKey = linked.key;
+    void setView("players");
+}
+
+async function renderActionValueRatingLinks(player) {
+    const target = document.getElementById("action-rating-links-content");
+    const status = document.getElementById("action-rating-links-status");
+    const playerId = String(player.player_id || "");
+    if (!target || !playerId) return;
+    const data = await fetchActionValueRatingLinks(playerId);
+    if (target.dataset.playerId !== playerId) return;
+    const candidates = Array.isArray(data?.rating_candidates) ? data.rating_candidates : [];
+    const boundary = appState.lang === "zh"
+        ? "候选仅由规范化姓名、球队和赛季一致产生；StatsBomb 与评分产物没有共享的稳定球员 ID，必须人工核验。"
+        : "Candidates require normalized name, team, and season agreement. StatsBomb and rating artifacts have no shared stable player ID, so human verification remains required.";
+    if (data?.status !== "candidate_available" || candidates.length === 0) {
+        target.innerHTML = `<div class="action-detail-boundary">${escapeHtml(boundary)}<br>${escapeHtml(appState.lang === "zh" ? "当前没有严格评分候选；不会按姓名单独推断关联。" : "No strict rating candidate is available; name-only links are not inferred.")}</div>`;
+        if (status) { status.textContent = "NO LINK"; status.className = "status-pill status-low"; }
+        return;
+    }
+    const rows = candidates.map((candidate, index) => {
+        const loaded = players.some((row) => row.name === candidate.player
+            && row.team === candidate.team && row.season === candidate.season);
+        return `<div class="action-evidence-breakdown-row"><span>${escapeHtml(candidate.player)} <small>${escapeHtml(`${candidate.team} · ${candidate.season} · ${candidate.league || ""}`)}</small></span><strong>${escapeHtml(String(Number(candidate.optimized_score || 0).toFixed(1)))}</strong>${loaded ? `<button class="text-button" type="button" data-action-rating-candidate="${index}">${escapeHtml(appState.lang === "zh" ? "打开评分画像" : "Open rating profile")}</button>` : ""}</div>`;
+    }).join("");
+    target.innerHTML = `<div class="action-detail-boundary">${escapeHtml(boundary)}</div><div class="action-evidence-breakdown"><h5>${escapeHtml(appState.lang === "zh" ? "严格候选（非确认身份）" : "Strict candidates (not confirmed identities)")}</h5>${rows}</div>`;
+    target.querySelectorAll("[data-action-rating-candidate]").forEach((button) => {
+        button.addEventListener("click", () => openActionValueRatingCandidate(candidates[Number(button.dataset.actionRatingCandidate)]));
+    });
+    if (status) { status.textContent = "CANDIDATE"; status.className = "status-pill status-medium"; }
 }
 
 function actionEvidenceBreakdown(title, rows) {
