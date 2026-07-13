@@ -690,6 +690,10 @@ target, rated-player count, rating coverage, average rating, and transparent
 count/coverage differences. The response deliberately does not assign a role
 advantage or recommend a lineup. It is unavailable for unknown teams and is
 not a confirmed roster, injury report, or tactical assessment.
+The comparison page can download this response as a browser-local JSON export
+(`scoutfootball.world-cup-squad-balance-comparison-export` v1.0.0) or a CSV
+role table. Both retain the bounded disclaimer; CSV values use the shared
+formula-injection guard and neither action writes server state.
 
 ### GET /world-cup/match-briefings/{home_team}/{away_team}
 Returns a versioned, source-bounded World Cup pre-match briefing. It combines

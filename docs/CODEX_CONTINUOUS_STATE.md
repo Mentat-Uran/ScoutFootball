@@ -2,6 +2,8 @@
 
 ## Recently Merged
 
+- **World Cup Role Comparison Local Export (2026-07-13, Round 39):** Added browser-local JSON and formula-safe CSV exports for the expected-callup role comparison. Exports contain the two selected teams, per-role count/target/rated-player/coverage deltas, timestamp, and the contract limitation; they never write server state. Frontend syntax, frontend contract, and Node tests passed. Current work is on `codex/integration`.
+
 - **World Cup Expected-Callup Role Comparison (2026-07-13, Round 38):** Added a versioned two-team role-depth comparison endpoint and wired the World Cup comparison page to show each listed role's count/target, rating coverage, and transparent deltas. The API and UI explicitly avoid role-superiority, starting-lineup, injury, or confirmed-roster claims. Targeted API/frontend validation and a live local comparison smoke test passed. Current work is on `codex/integration`; no external roster refresh is required.
 
 - **World Cup Expected-Callup Squad Balance (2026-07-13, Round 37):** Added a versioned role-depth diagnostic for the local expected-callup snapshot. Squad, team-outlook, and match-briefing responses now expose counts, rated-player coverage, average ratings, unit summaries, and planning flags for GK/CB/FB/DM/CM/AM/W/ST. The World Cup outlook renders the role pills and the browser-local briefing CSV exports the same rows. The contract explicitly says this is not a confirmed 26-player roster, lineup, injury report, or tactical recommendation. Targeted World Cup/API tests, full Ruff, frontend syntax validation, and a live local API smoke test passed. Current work is on `codex/integration`; no external data refresh is required for this code-only contract addition.
