@@ -2,6 +2,8 @@
 
 ## Recently Merged
 
+- **Browser-Local Shortlist Decision Pack (2026-07-13, Round 40):** Added JSON and formula-safe CSV exports that combine the loaded shortlist with browser-local priority, recommendation, target-role, and rationale/risk dossiers. The versioned pack sorts urgent candidates first, handles an empty shortlist explicitly, and states that it is not an audit trail, transfer instruction, or sync artifact. Frontend syntax, contract, and scouting-workspace tests passed. Current work is on `codex/integration`.
+
 - **World Cup Role Comparison Local Export (2026-07-13, Round 39):** Added browser-local JSON and formula-safe CSV exports for the expected-callup role comparison. Exports contain the two selected teams, per-role count/target/rated-player/coverage deltas, timestamp, and the contract limitation; they never write server state. Frontend syntax, frontend contract, and Node tests passed. Current work is on `codex/integration`.
 
 - **World Cup Expected-Callup Role Comparison (2026-07-13, Round 38):** Added a versioned two-team role-depth comparison endpoint and wired the World Cup comparison page to show each listed role's count/target, rating coverage, and transparent deltas. The API and UI explicitly avoid role-superiority, starting-lineup, injury, or confirmed-roster claims. Targeted API/frontend validation and a live local comparison smoke test passed. Current work is on `codex/integration`; no external roster refresh is required.

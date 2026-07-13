@@ -234,3 +234,17 @@ def test_world_cup_role_comparison_is_api_backed_and_bounded() -> None:
     assert 'schema: "scoutfootball.world-cup-squad-balance-comparison-export"' in app_js
     assert "wc-export-role-comparison-json" in index_html
     assert "wc-export-role-comparison-csv" in index_html
+
+
+def test_shortlist_decision_pack_exports_are_local_and_formula_safe() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    index_html = _read(FRONTEND / "index.html")
+
+    assert "buildShortlistDecisionPack" in app_js
+    assert "exportShortlistDecisionPackJSON" in app_js
+    assert "exportShortlistDecisionPackCSV" in app_js
+    assert 'schema: "scoutfootball.shortlist-decision-pack"' in app_js
+    assert 'storage_scope: "browser-local-download"' in app_js
+    assert "row.map(csvCell).join(\",\")" in app_js
+    assert "scout-export-decision-pack-json" in index_html
+    assert "scout-export-decision-pack-csv" in index_html

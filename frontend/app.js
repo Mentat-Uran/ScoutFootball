@@ -12099,6 +12099,14 @@ function bindEvents() {
     }
     const scoutExportButton = document.getElementById("scout-export-csv");
     if (scoutExportButton) scoutExportButton.addEventListener("click", exportReviewQueueCSV);
+    const scoutDecisionPackJsonButton = document.getElementById("scout-export-decision-pack-json");
+    if (scoutDecisionPackJsonButton) {
+        scoutDecisionPackJsonButton.addEventListener("click", exportShortlistDecisionPackJSON);
+    }
+    const scoutDecisionPackCsvButton = document.getElementById("scout-export-decision-pack-csv");
+    if (scoutDecisionPackCsvButton) {
+        scoutDecisionPackCsvButton.addEventListener("click", exportShortlistDecisionPackCSV);
+    }
 
     const scoutWorkspaceExportButton = document.getElementById("scout-export-workspace");
     if (scoutWorkspaceExportButton) {
@@ -16342,4 +16350,90 @@ function exportReviewQueueCSV() {
     link.download = "scoutfootball-review-queue.csv";
     link.click();
     URL.revokeObjectURL(url);
+}
+
+function buildShortlistDecisionPack() {
+    const priorityOrder = { urgent: 0, standard: 1, monitor: 2 };
+    const players = mergeScoutingRows(shortlistData, getPlayerShortlist())
+        .map((player) => {
+            const dossier = getShortlistDossier(player);
+            return {
+                player_id: player.player_id || player.key || "",
+                player: player.player_name || player.name || "",
+                team: player.team || "",
+                position: player.position_group || player.position || "",
+                rating: player.optimized_score ?? player.rating ?? null,
+                confidence: player.confidence_level || player.confidence || "",
+                reason_code: player.reason_code || "",
+                priority: dossier.priority,
+                recommendation: dossier.recommendation,
+                target_role: dossier.target_role,
+                rationale_and_risks: dossier.rationale,
+            };
+        })
+        .sort((left, right) => (
+            (priorityOrder[left.priority] ?? 9) - (priorityOrder[right.priority] ?? 9)
+            || Number(right.rating || 0) - Number(left.rating || 0)
+            || left.player.localeCompare(right.player)
+        ));
+    return {
+        schema: "scoutfootball.shortlist-decision-pack",
+        version: "1.0.0",
+        status: players.length ? "ok" : "empty",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        player_count: players.length,
+        players,
+        limitations: [
+            "Shortlist selection and dossiers are browser-local decision context.",
+            "This export is not a server-side audit record, transfer instruction, or cross-device sync artifact.",
+            "Ratings and confidence reflect the loaded local or API data snapshot and may have incomplete coverage.",
+        ],
+    };
+}
+
+function _downloadShortlistDecisionPack(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportShortlistDecisionPackJSON() {
+    const pack = buildShortlistDecisionPack();
+    _downloadShortlistDecisionPack(
+        JSON.stringify(pack, null, 2),
+        "scoutfootball-shortlist-decision-pack.json",
+        "application/json;charset=utf-8",
+    );
+}
+
+function exportShortlistDecisionPackCSV() {
+    const pack = buildShortlistDecisionPack();
+    const lines = [
+        ["# ScoutFootball Shortlist Decision Pack"],
+        ["storage_scope", pack.storage_scope],
+        ["player_count", pack.player_count],
+        [],
+        ["player_id", "player", "team", "position", "rating", "confidence", "reason_code", "priority", "recommendation", "target_role", "rationale_and_risks"],
+        ...pack.players.map((player) => [
+            player.player_id, player.player, player.team, player.position,
+            player.rating ?? "", player.confidence, player.reason_code,
+            player.priority, player.recommendation, player.target_role,
+            player.rationale_and_risks,
+        ]),
+        [],
+        ["# Limitations"],
+        ...pack.limitations.map((limitation) => [limitation]),
+        [],
+        ["# Exported", pack.exported_at, `ScoutFootball v${APP_VERSION}`],
+    ];
+    _downloadShortlistDecisionPack(
+        `\uFEFF${lines.map((row) => row.map(csvCell).join(",")).join("\n")}`,
+        "scoutfootball-shortlist-decision-pack.csv",
+        "text/csv;charset=utf-8",
+    );
 }

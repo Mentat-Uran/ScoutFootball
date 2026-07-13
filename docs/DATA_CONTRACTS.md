@@ -1476,6 +1476,13 @@ The workspace is an explicit backup and transfer format for browser-local scouti
 
 Imports are limited to 1 MB, 1,000 status/note/dossier entries and 500 selected players. Unknown statuses, forbidden object keys, oversized strings, invalid dossier enums and unsupported major versions are rejected or sanitized. Safe merge unions selections and uses the workspace with the newer audit timestamp for conflicting status/note/dossier keys; explicit replacement is the only overwrite path. A dossier is browser-local decision context, not a server-side recommendation or a claim that a transfer is in progress.
 
+The scouting view can also export the current shortlist as a browser-local
+`scoutfootball.shortlist-decision-pack` v1.0.0 JSON or CSV artifact. It keeps
+the loaded shortlist rows together with locally stored priority,
+recommendation, target-role, and rationale/risk fields. It is not server-side
+audit data, a transfer instruction, or cross-device synchronization; CSV uses
+the shared formula-injection guard.
+
 ---
 
 ## 10. Cross-Provider Schema Reference
