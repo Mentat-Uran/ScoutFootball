@@ -2,6 +2,8 @@
 
 ## Recently Merged
 
+- **Prediction-to-Tactical Evidence Handoff (2026-07-13, Round 46):** The general pre-match tactical-board handoff now records bounded, browser-local head-to-head/form and momentum snapshots in tactical decision-pack v1.1.0. The metadata is sanitized on import, explicitly non-additive to prediction probabilities, and never asserts a lineup or tactical recommendation. Tactical decision-pack and frontend contract tests passed. Current work is on `codex/integration`.
+
 - **Prediction Report Contextual Evidence (2026-07-13, Round 45):** Browser-local match-prediction exports now capture compact head-to-head/recent-form and current momentum sections when independently loaded. They are explicitly non-additive to the pre-match model output, do not change probabilities, preserve unavailable states, and reject stale fixture results. Frontend syntax and contract tests passed. Current work is on `codex/integration`.
 
 - **Action-Value Dossier with Local Scouting Context (2026-07-13, Round 44):** Action-value research exports now carry an optional, clearly separate browser-local shortlist dossier section. The contract makes the local annotation non-additive to xT, VAEP, and match-sample evidence and never treats it as a model feature or server-side recommendation. Frontend syntax and contract tests passed. Current work is on `codex/integration`.

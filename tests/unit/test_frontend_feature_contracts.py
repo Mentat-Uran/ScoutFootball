@@ -274,6 +274,16 @@ def test_match_prediction_exports_are_local_and_bounded() -> None:
     assert "btn-prediction-export-json" in html
 
 
+def test_prematch_tactical_handoff_keeps_context_separate() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    tactical_js = _read(FRONTEND / "tactical-board.js")
+    assert "buildPrematchDecisionPack" in app_js
+    assert "currentPredictionEvidenceFor(match)" in app_js
+    assert "contextual_evidence" in app_js
+    assert "non_additive_to_prediction: true" in tactical_js
+    assert 'version: "1.1.0"' in tactical_js
+
+
 def test_action_value_dossier_export_keeps_local_scouting_context_separate() -> None:
     app_js = _read(FRONTEND / "app.js")
     assert 'schema: "scoutfootball.action-value-research-dossier-export"' in app_js
