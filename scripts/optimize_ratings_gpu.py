@@ -56,6 +56,7 @@ from optimizer.data import (
     make_holdout_split,
     permutation_feature_importance,
     save_model_run,
+    summarize_optimizer_data_coverage,
 )
 from optimizer.optimization import _get_default_params_tensor, optimize
 from optimizer.scoring import build_feature_tensors
@@ -185,6 +186,15 @@ def main():
     else:
         df, team_pts = data_load_result
         matches_df = None
+    data_coverage = summarize_optimizer_data_coverage(df)
+    print(
+        "  data coverage: "
+        + ", ".join(
+            f"{item['source_name']}={item['rows']} rows "
+            f"(starts observed={item['starts_observed_rows']})"
+            for item in data_coverage["sources"]
+        )
+    )
 
     # 出场标记：不足 20 场的球员仍参与评分，但不参与优化训练
     min_matches_opt = 20
@@ -520,6 +530,7 @@ def main():
         args=args,
         feat_hash=feat_hash,
         data_dir=data_dir,
+        data_coverage=data_coverage,
     )
 
     print(f"\n{'='*80}")

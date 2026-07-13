@@ -53,6 +53,7 @@ def _load_optimizer_module():
     # data
     mod.make_season_splits = _d.make_season_splits
     mod.compute_input_hash = _d.compute_input_hash
+    mod.summarize_optimizer_data_coverage = _d.summarize_optimizer_data_coverage
     mod.save_model_run = _d.save_model_run
     mod.build_dc_tensors = _d.build_dc_tensors
     mod.evaluate_params = _d.evaluate_params
@@ -213,6 +214,88 @@ def test_team_aggregation_weights_reduce_raw_minutes_dominance() -> None:
     robust_avg = opt.compute_team_avg_ratings(feat, ratings, torch.device("cpu"))[0]
     raw_avg = float((ratings.numpy() * raw_share).sum())
     assert robust_avg > raw_avg
+
+
+def test_unknown_start_counts_do_not_change_proxy_rating() -> None:
+    opt = _load_optimizer_module()
+    base = {
+        "team": "Example FC",
+        "league": "Premier League",
+        "season": "2024-2025",
+        "sub_position": "CM",
+        "pos_idx": opt.POS_TO_IDX["CM"],
+        "matches": 24,
+        "minutes": 1600,
+        "npg_p90": 0.12,
+        "assists_p90": 0.10,
+        "g_a_volume": 6.0,
+        "defense_composite": 1.0,
+        "possession_composite": 1.0,
+        "npg_trend": 0.0,
+        "experience_factor": 1.0,
+    }
+    proxy = pd.DataFrame(
+        [
+            {**base, "player": "Unknown zero", "starts": 0, "starts_observed": False},
+            {**base, "player": "Unknown full", "starts": 24, "starts_observed": False},
+        ],
+    )
+    observed = proxy.copy()
+    observed["starts_observed"] = True
+
+    params = opt._get_default_params_tensor(torch.device("cpu"))
+    unknown_ratings = opt.compute_ratings_torch(
+        opt.build_feature_tensors(proxy), params, torch.device("cpu"),
+    )
+    observed_ratings = opt.compute_ratings_torch(
+        opt.build_feature_tensors(observed), params, torch.device("cpu"),
+    )
+
+    assert torch.allclose(unknown_ratings[0], unknown_ratings[1])
+    assert observed_ratings[1] > observed_ratings[0]
+
+
+def test_optimizer_data_coverage_marks_unobserved_starts() -> None:
+    opt = _load_optimizer_module()
+    coverage = opt.summarize_optimizer_data_coverage(
+        pd.DataFrame(
+            [
+                {
+                    "player": "FBref Player",
+                    "season": "2425",
+                    "source_name": "fbref",
+                    "data_granularity": "season_proxy",
+                    "starts_observed": True,
+                },
+                {
+                    "player": "Understat Player",
+                    "season": "2122",
+                    "source_name": "understat",
+                    "data_granularity": "season_proxy",
+                    "starts_observed": False,
+                },
+            ],
+        ),
+    )
+
+    assert coverage["rows"] == 2
+    assert coverage["starts_observed_rows"] == 1
+    assert coverage["sources"] == [
+        {
+            "source_name": "fbref",
+            "data_granularity": "season_proxy",
+            "rows": 1,
+            "seasons": ["2425"],
+            "starts_observed_rows": 1,
+        },
+        {
+            "source_name": "understat",
+            "data_granularity": "season_proxy",
+            "rows": 1,
+            "seasons": ["2122"],
+            "starts_observed_rows": 0,
+        },
+    ]
 
 
 def test_refine_role_positions_uses_history_and_profile_signals() -> None:

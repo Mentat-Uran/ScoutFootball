@@ -155,6 +155,12 @@ def build_feature_tensors(
         ),
         "minutes": torch.tensor(df["minutes"].values, dtype=torch.float32),
         "starts": torch.tensor(df["starts"].values, dtype=torch.float32),
+        "starts_observed": torch.tensor(
+            df["starts_observed"].fillna(False).astype(np.float32).values
+            if "starts_observed" in df.columns
+            else np.ones(n_rows, dtype=np.float32),
+            dtype=torch.float32,
+        ),
         "matches": torch.tensor(df["matches"].values, dtype=torch.float32),
         "league_med": torch.tensor(league_med_arr, dtype=torch.float32),
         "league_idx": torch.tensor(league_idx, dtype=torch.long),
@@ -319,6 +325,7 @@ def compute_ratings_torch(
 
     minutes = feat["minutes"].to(device)
     starts_t = feat["starts"].to(device)
+    starts_observed = feat.get("starts_observed", torch.ones_like(starts_t)).to(device)
     matches_t = feat["matches"].to(device)
     league_med = feat["league_med"].to(device)
 
@@ -328,8 +335,23 @@ def compute_ratings_torch(
     avail_pct = torch.clamp(matches_t / STANDARD_SEASON_MATCHES, max=1.0) * 100
     role_stab = torch.full_like(minutes, 50.0)
 
-    availability = (min_share * avail_sw[0] + start_rate_score * avail_sw[1]
-                    + avail_pct * avail_sw[2] + role_stab * avail_sw[3])
+    availability_with_starts = (
+        min_share * avail_sw[0]
+        + start_rate_score * avail_sw[1]
+        + avail_pct * avail_sw[2]
+        + role_stab * avail_sw[3]
+    )
+    # A historical season proxy may know appearances and minutes but not starts.
+    # Renormalize the observable availability terms instead of treating an
+    # unknown start count as zero starts.
+    observed_weight = avail_sw[0] + avail_sw[2] + avail_sw[3]
+    availability_without_starts = (
+        min_share * avail_sw[0] + avail_pct * avail_sw[2] + role_stab * avail_sw[3]
+    ) / torch.clamp(observed_weight, min=1e-6)
+    availability = (
+        starts_observed * availability_with_starts
+        + (1.0 - starts_observed) * availability_without_starts
+    )
 
     # ── Attack (percentile-based, pre-computed) ──
     npg_pct = feat["npg_pct"].to(device)
@@ -405,13 +427,14 @@ def compute_ratings_torch(
     # 首发率惩罚 (保持原有逻辑)
     sr = starts_t / torch.clamp(matches_t, min=1)
     rel_starts_ref = 0.3 + scalar["rel_starts_scale"] * 0.4
-    start_rel = 0.85 + 0.15 * torch.clamp(sr / rel_starts_ref, max=1.0)
+    start_rel_observed = 0.85 + 0.15 * torch.clamp(sr / rel_starts_ref, max=1.0)
+    start_rel = starts_observed * start_rel_observed + (1.0 - starts_observed)
 
     # ── 高首发率伤病保护 ──
     # 首发率 >= 70% 的球员，低分钟数大概率是伤病/转会导致，不是替补刷分。
     # 对这类球员，分钟惩罚的底分从 0.42 提升到 0.72，爬坡终点从 1200 降到 900。
     # 这样一个首发率 90%、500 分钟的球员 reliability ≈ 0.85 而非 0.49。
-    high_start_mask = sr >= INJURY_START_RATE_THRESHOLD
+    high_start_mask = (sr >= INJURY_START_RATE_THRESHOLD) & starts_observed.bool()
     injury_min_floor = INJURY_MIN_FLOOR
     injury_min_ceiling = INJURY_MIN_CEILING
     injury_min_progress = torch.clamp(

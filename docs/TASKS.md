@@ -67,6 +67,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 
 - [x] **评分监督标签独立性审计（2026-07-13）**：新增 `source-policy-v1`，将当前由 `optimized_score` 派生的 `expert_tier` 明确排除在 NN 训练和 optimizer truth-anchor 之外；CLI `audit-truth-labels`、`GET /reports/truth-labels` 与报告页展示可用/排除的来源计数。当前本地 29,723 行均为 `expert_tier`，因此监督路径必须保持跳过，不能再报告其 NN holdout 为独立验证。
 - [x] **Understat 历史评分覆盖（2026-07-14）**：`players_10seasons.parquet` 的 Big Five 赛季聚合统计现可作为明确标记的 Understat season proxy 接入 `player_match` 与 `rating_feature_matrix`；FBref 重叠赛季优先，RFPL 因缺少对应球队积分目标被排除。基于当前本地快照，内存验证将评分矩阵从 8,141 行扩展到 26,678 行，覆盖 1617–2526 的十个赛季；生成产物仍需显式执行 `build-features`。
+- [x] **历史代理出勤可观测性（2026-07-14）**：评分优化器不再将 Understat 的 `games` 当成 `starts`。没有首发字段的行使用重新归一化的分钟/出场/角色稳定性出勤分和中性首发可靠性；模型运行 `meta.json` 记录来源、赛季、行数及可观测首发行数，避免把历史代理误解为完整出勤数据。
 - **评分校准仍未闭环**：v1.3.1-dev 的 train-fitted league residual offset 和 league-bias loss 代码已写入，但完整 GPU 重跑、CV、稳定性、feature importance 和 Barcelona/Real Madrid/Burnley 等误差复盘仍待执行。
 - **强队/降级队偏差仍需复盘**：当前模型仍记录强队系统性低估和降级队高估，不能只用整体 Spearman/Pearson 宣称球员真实水平已解决。
 - **世界杯模块仍是混合/样例视图**：世界杯赛程、名单、对比和出线页还没有全量官方阵容、更多联赛评分覆盖、国家队阵容 API 和低覆盖分层说明，不能写成完整真实后端能力。

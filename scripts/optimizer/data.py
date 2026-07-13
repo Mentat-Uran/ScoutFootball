@@ -26,6 +26,54 @@ from .constants import (
 
 # ── 数据加载 ──────────────────────────────────────────────────────────────
 
+
+def summarize_optimizer_data_coverage(frame: pd.DataFrame) -> dict:
+    """Return source and field-observability coverage for an optimizer input.
+
+    Season aggregates can be useful historical proxies, but they must not be
+    represented as having match-level fields that their source does not expose.
+    The summary is persisted with each model run so a later score comparison can
+    distinguish an FBref-backed run from one that includes Understat history.
+    """
+    if frame.empty:
+        return {"rows": 0, "seasons": [], "sources": [], "starts_observed_rows": 0}
+
+    work = frame.copy()
+    if "source_name" not in work.columns:
+        work["source_name"] = "unknown"
+    if "data_granularity" not in work.columns:
+        work["data_granularity"] = "unknown"
+    if "starts_observed" not in work.columns:
+        work["starts_observed"] = True
+
+    starts_observed = work["starts_observed"].fillna(False).astype(bool)
+    sources = (
+        work.assign(_starts_observed=starts_observed)
+        .groupby(["source_name", "data_granularity"], dropna=False)
+        .agg(
+            rows=("source_name", "size"),
+            seasons=("season", lambda values: sorted({str(value) for value in values})),
+            starts_observed_rows=("_starts_observed", "sum"),
+        )
+        .reset_index()
+        .sort_values(["source_name", "data_granularity"])
+    )
+    return {
+        "rows": int(len(work)),
+        "seasons": sorted({str(value) for value in work.get("season", pd.Series(dtype=str))}),
+        "starts_observed_rows": int(starts_observed.sum()),
+        "sources": [
+            {
+                "source_name": str(row["source_name"]),
+                "data_granularity": str(row["data_granularity"]),
+                "rows": int(row["rows"]),
+                "seasons": list(row["seasons"]),
+                "starts_observed_rows": int(row["starts_observed_rows"]),
+            }
+            for _, row in sources.iterrows()
+        ],
+    }
+
 def load_data(data_dir: Path):
     """加载 FBref 球员数据 (standard + misc + shooting) + Football-Data 球队积分。"""
     fbref = pd.read_parquet(data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet")
@@ -75,6 +123,9 @@ def load_data(data_dir: Path):
         "matches": matches, "starts": starts, "minutes": minutes,
         "npg_p90": npg_p90, "assists_p90": assists_p90, "g_a_volume": g_a_volume,
     })
+    df["source_name"] = "fbref"
+    df["data_granularity"] = "season_proxy"
+    df["starts_observed"] = True
 
     # Normalize team names to Football-Data canonical form
     df["team"] = df["team"].apply(normalize_team_name)
@@ -237,9 +288,8 @@ def load_data(data_dir: Path):
             "Serie_A": "Serie A",
             "Ligue_1": "Ligue 1",
         }
-        understat["league"] = (
-            understat["league"].map(understat_league_map).fillna(understat["league"])
-        )
+        understat["league"] = understat["league"].map(understat_league_map)
+        understat = understat[understat["league"].notna()].copy()
         
         # Convert numeric columns
         for col in ["games", "time", "goals", "xG", "assists", "xA", "npxG", "shots", "key_passes"]:
@@ -258,7 +308,13 @@ def load_data(data_dir: Path):
         safe_min_us = np.maximum(understat["time"].values.astype(np.float32), 1.0)
         understat["minutes"] = understat["time"].values.astype(np.float32)
         understat["matches"] = understat["games"].values.astype(np.float32)
-        understat["starts"] = understat["games"].values.astype(np.float32)  # Approximate
+        # Understat's aggregate snapshot has appearances but no starts field.
+        # Preserve an explicit sentinel and make the scorer ignore it rather
+        # than pretending every appearance was a start.
+        understat["starts"] = 0.0
+        understat["starts_observed"] = False
+        understat["source_name"] = "understat"
+        understat["data_granularity"] = "season_proxy"
         
         # Position mapping
         understat_pos_details = understat["position"].apply(map_position_detailed)
@@ -280,7 +336,8 @@ def load_data(data_dir: Path):
         understat_df = understat[[
             "player_name", "team_title", "league", "season", "position",
             "sub_position", "pos_idx", "position_source", "position_confidence",
-            "matches", "starts", "minutes",
+            "matches", "starts", "starts_observed", "minutes",
+            "source_name", "data_granularity",
             "npg_p90", "assists_p90", "g_a_volume",
         ]].copy()
         understat_df = understat_df.rename(
@@ -1172,6 +1229,7 @@ def save_model_run(
     output_dir: Path | None = None,
     feat_hash: str | None = None,
     data_dir: Path | None = None,
+    data_coverage: dict | None = None,
 ):
     """Save model run with full provenance to data/models/runs/<timestamp>/.
 
@@ -1204,6 +1262,8 @@ def save_model_run(
         },
         "lineage": build_run_lineage(data_dir or Path("data"), input_hash=feat_hash),
     }
+    if data_coverage is not None:
+        meta["data_coverage"] = _json_ready(data_coverage)
 
     # Dependency versions for reproducibility
     dep_versions: dict[str, str] = {
