@@ -683,6 +683,14 @@ flags relative to internal role-depth targets. It is not a confirmed 26-player
 roster, lineup, injury report, or tactical recommendation; missing or thin
 roles only describe the local expected-callup list.
 
+### GET /world-cup/squad-balance-comparison/{team_a}/{team_b}
+Returns a versioned, side-by-side comparison of the two teams' local
+expected-callup snapshots. Each listed role reports both sides' count, planning
+target, rated-player count, rating coverage, average rating, and transparent
+count/coverage differences. The response deliberately does not assign a role
+advantage or recommend a lineup. It is unavailable for unknown teams and is
+not a confirmed roster, injury report, or tactical assessment.
+
 ### GET /world-cup/match-briefings/{home_team}/{away_team}
 Returns a versioned, source-bounded World Cup pre-match briefing. It combines
 the simplified strength-ratio Poisson output with each side's local
@@ -692,7 +700,8 @@ tactical recommendation.
 
 **Response**: `{ schema, version, status, fixture, prediction, teams, source_attribution, limitations }`.
 `teams.home` and `teams.away` include `squad.rating_coverage`,
-`squad.top_rated_players`, `squad.balance`, and bounded strength components. Static exports may
+`squad.top_rated_players`, `squad.balance`, and bounded strength components.
+Static exports may
 provide `/data/worldcup/match_briefings.json`; if no matching static briefing
 exists, the frontend shows it as unavailable rather than synthesizing one.
 `input_snapshot` records the current rating run ID/input hash and feature

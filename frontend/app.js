@@ -10918,6 +10918,7 @@ function bindEvents() {
         await Promise.all([
             fetchWcSquad(e.target.value),
             fetchWcMatchPrediction(e.target.value, appState.wcCompareB),
+            fetchWcSquadBalanceComparison(e.target.value, appState.wcCompareB),
         ]);
         renderWcCompare();
     });
@@ -10933,6 +10934,7 @@ function bindEvents() {
         await Promise.all([
             fetchWcSquad(e.target.value),
             fetchWcMatchPrediction(appState.wcCompareA, e.target.value),
+            fetchWcSquadBalanceComparison(appState.wcCompareA, e.target.value),
         ]);
         renderWcCompare();
     });
@@ -12301,6 +12303,7 @@ let wcApiData = {
     groups: null,       // from /world-cup/groups
     schedule: null,     // from /world-cup/schedule
     squadCache: {},     // team -> from /world-cup/squads/{team}
+    squadBalanceComparisonCache: {}, // ordered team pair -> role-depth comparison
     predictions: null,  // from /world-cup/predictions
     knockout: null,     // from /world-cup/knockout
     matchPredictionCache: {}, // home|away -> single-match prediction
@@ -12377,6 +12380,28 @@ async function fetchWcSquad(team) {
         if (appState.view === "wc_squads" && appState.wcSquadTeam === team) {
             renderWcSquads();
         }
+    }
+}
+
+async function fetchWcSquadBalanceComparison(teamA, teamB) {
+    if (!teamA || !teamB) return null;
+    const cacheKey = `${teamA}|${teamB}`;
+    if (wcApiData.squadBalanceComparisonCache[cacheKey]) {
+        return wcApiData.squadBalanceComparisonCache[cacheKey];
+    }
+    try {
+        const data = await fetchJson(
+            `/world-cup/squad-balance-comparison/${encodeURIComponent(teamA)}/${encodeURIComponent(teamB)}`,
+            { fetchOpts: { signal: AbortSignal.timeout(60000) } },
+        );
+        if (data?.status === "ok") {
+            wcApiData.squadBalanceComparisonCache[cacheKey] = data;
+            wcApiData.apiOnline = true;
+        }
+        return data;
+    } catch (e) {
+        console.warn("[WC] fetchWcSquadBalanceComparison failed:", e.message);
+        return null;
     }
 }
 
@@ -14445,6 +14470,8 @@ function renderWcCompare() {
 
     document.getElementById("wc-compare-a-name").textContent = teamA;
     document.getElementById("wc-compare-b-name").textContent = teamB;
+    document.getElementById("wc-compare-role-a-name").textContent = teamA;
+    document.getElementById("wc-compare-role-b-name").textContent = teamB;
 
     const avgA = ratedA.length > 0 ? (ratedA.reduce((s, p) => s + p.rating, 0) / ratedA.length).toFixed(2) : "—";
     const avgB = ratedB.length > 0 ? (ratedB.reduce((s, p) => s + p.rating, 0) / ratedB.length).toFixed(2) : "—";
@@ -14457,6 +14484,24 @@ function renderWcCompare() {
         [t("wc_big5"), big5A, big5B],
         [t("wc_avg_rating"), avgA, avgB],
     ].map(([label, a, b]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(a)}</td><td>${escapeHtml(b)}</td></tr>`).join("");
+
+    const comparison = wcApiData.squadBalanceComparisonCache[`${teamA}|${teamB}`];
+    const roleDepth = document.getElementById("wc-compare-role-depth");
+    const roleDepthNote = document.getElementById("wc-compare-role-depth-note");
+    if (comparison?.status === "ok") {
+        roleDepth.innerHTML = (comparison.roles || []).map((row) => {
+            const a = row.team_a || {};
+            const b = row.team_b || {};
+            const countDelta = Number(row.count_difference || 0);
+            const coverageDelta = Number(row.rating_coverage_difference || 0);
+            const formatSide = (details) => `${Number(details.count || 0)}/${Number(details.planning_target || 0)} · ${Math.round(Number(details.rating_coverage || 0) * 100)}%`;
+            return `<tr><td>${escapeHtml(row.role || "—")}</td><td>${escapeHtml(formatSide(a))}</td><td>${escapeHtml(formatSide(b))}</td><td>${escapeHtml(countDelta > 0 ? `+${countDelta}` : String(countDelta))}</td><td>${escapeHtml(`${coverageDelta > 0 ? "+" : ""}${Math.round(coverageDelta * 100)}pp`)}</td></tr>`;
+        }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">—</td></tr>`;
+        roleDepthNote.textContent = comparison.disclaimer || "";
+    } else {
+        roleDepth.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">${escapeHtml(appState.lang === "zh" ? "位置深度比较暂不可用" : "Role-depth comparison unavailable")}</td></tr>`;
+        roleDepthNote.textContent = "";
+    }
 
     // Chart
     const chart = getChart("wc-compare-chart");
@@ -14817,6 +14862,7 @@ async function initWorldCup() {
     await Promise.all([
         fetchWcSquad("Argentina"),
         fetchWcSquad("France"),
+        fetchWcSquadBalanceComparison("Argentina", "France"),
         fetchWcMatchPrediction("Argentina", "France"),
         fetchWcTeamOutlook("Argentina"),
     ]);

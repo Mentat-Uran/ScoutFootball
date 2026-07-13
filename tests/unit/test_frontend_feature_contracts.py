@@ -219,3 +219,13 @@ def test_world_cup_briefing_exports_keep_local_scope_and_csv_safety() -> None:
     assert "data.squad_balance" in app_js
     assert "wc-export-briefing-json" in app_js
     assert "wc-export-briefing-csv" in app_js
+
+
+def test_world_cup_role_comparison_is_api_backed_and_bounded() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    index_html = _read(FRONTEND / "index.html")
+
+    assert "fetchWcSquadBalanceComparison" in app_js
+    assert "/world-cup/squad-balance-comparison/" in app_js
+    assert "wc-compare-role-depth" in app_js
+    assert "wc-compare-role-depth" in index_html

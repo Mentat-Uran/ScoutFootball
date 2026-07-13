@@ -6947,6 +6947,52 @@ def get_wc_squad(team: str) -> dict:
     })
 
 
+def get_wc_squad_balance_comparison(team_a: str, team_b: str) -> dict:
+    """Compare two expected-callup snapshots without inferring a lineup."""
+    enriched_squads, _ = _get_wc_enriched_squads()
+    missing = [team for team in (team_a, team_b) if team not in enriched_squads]
+    if missing:
+        return {
+            "status": "error",
+            "error": f"Team(s) not found in World Cup data: {', '.join(missing)}",
+        }
+
+    team_a_balance = compute_squad_balance(enriched_squads[team_a])
+    team_b_balance = compute_squad_balance(enriched_squads[team_b])
+    role_rows = []
+    for role, team_a_role in team_a_balance["roles"].items():
+        team_b_role = team_b_balance["roles"][role]
+        role_rows.append({
+            "role": role,
+            "team_a": team_a_role,
+            "team_b": team_b_role,
+            "count_difference": team_a_role["count"] - team_b_role["count"],
+            "rated_player_difference": (
+                team_a_role["rated_players"] - team_b_role["rated_players"]
+            ),
+            "rating_coverage_difference": round(
+                team_a_role["rating_coverage"] - team_b_role["rating_coverage"], 4
+            ),
+        })
+
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-squad-balance-comparison",
+        "version": "1.0.0",
+        "status": "ok",
+        "scope": "expected_callup_snapshot",
+        "teams": {
+            "team_a": {"team": team_a, "balance": team_a_balance},
+            "team_b": {"team": team_b, "balance": team_b_balance},
+        },
+        "roles": role_rows,
+        "disclaimer": (
+            "This compares local expected-callup snapshots only. It is not a "
+            "confirmed roster, lineup, injury report, tactical recommendation, "
+            "or claim that one team is stronger in a role."
+        ),
+    })
+
+
 def get_wc_predictions() -> dict:
     """Return World Cup group stage predictions based on team strengths."""
     enriched, strengths = _get_wc_enriched_squads()
