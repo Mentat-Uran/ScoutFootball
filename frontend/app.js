@@ -7457,6 +7457,31 @@ function renderMatchSelectors() {
 }
 
 let _matchRenderId = 0;
+function buildCurrentPredictionExport() {
+    const match = selectedMatch();
+    return {
+        schema: "scoutfootball.match-prediction-export",
+        version: "1.0.0",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        fixture: { home_team: match.home, away_team: match.away },
+        prediction: { home_win: match.hw, draw: match.draw, away_win: match.aw, home_expected_goals: match.xh, away_expected_goals: match.xa, model_type: match.model_type, model_version: match.model_version, confidence_intervals: match.confidence_intervals || null },
+        coverage: predictionMeta,
+        limitations: ["Prediction is model context, not a guarantee, betting instruction, or live match intelligence.", "Coverage and calibration fields reflect the loaded local/API snapshot."],
+    };
+}
+function _downloadPredictionExport(content, filename, type) {
+    const blob = new Blob([content], { type }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url);
+}
+function exportCurrentPredictionJSON() {
+    const payload = buildCurrentPredictionExport();
+    _downloadPredictionExport(JSON.stringify(payload, null, 2), "scoutfootball-match-prediction.json", "application/json;charset=utf-8");
+}
+function exportCurrentPredictionCSV() {
+    const payload = buildCurrentPredictionExport(); const p = payload.prediction;
+    const lines = [["# ScoutFootball Match Prediction"], ["home_team", payload.fixture.home_team], ["away_team", payload.fixture.away_team], ["model_type", p.model_type || ""], ["model_version", p.model_version || ""], ["home_win", p.home_win ?? ""], ["draw", p.draw ?? ""], ["away_win", p.away_win ?? ""], ["home_expected_goals", p.home_expected_goals ?? ""], ["away_expected_goals", p.away_expected_goals ?? ""], ["storage_scope", payload.storage_scope], [], ["# Limitations"], ...payload.limitations.map((x) => [x])];
+    _downloadPredictionExport(`\uFEFF${lines.map((row) => row.map(csvCell).join(",")).join("\n")}`, "scoutfootball-match-prediction.csv", "text/csv;charset=utf-8");
+}
 async function renderMatches() {
     const myId = ++_matchRenderId;
     // Fetch prediction from API
@@ -10999,6 +11024,10 @@ function bindEvents() {
             createPrematchPlan();
         });
     }
+    const predictionJsonBtn = document.getElementById("btn-prediction-export-json");
+    if (predictionJsonBtn) predictionJsonBtn.addEventListener("click", exportCurrentPredictionJSON);
+    const predictionCsvBtn = document.getElementById("btn-prediction-export-csv");
+    if (predictionCsvBtn) predictionCsvBtn.addEventListener("click", exportCurrentPredictionCSV);
 
     // Momentum update button: re-fetch momentum with current scoreline/minute
     const momentumBtn = document.getElementById("btn-momentum-update");
