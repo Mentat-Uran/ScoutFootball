@@ -10,6 +10,7 @@ from .rating_matrix import (
 )
 from .team_match import build_team_match_features
 from .team_rolling import build_team_rolling_features
+from .understat_history import build_understat_season_proxy
 
 __all__ = [
     "build_player_match_features",
@@ -20,4 +21,5 @@ __all__ = [
     "fill_missing_with_position_median",
     "mark_missing_fields",
     "write_feature_manifest",
+    "build_understat_season_proxy",
 ]

@@ -5612,7 +5612,18 @@ def get_artifacts_summary() -> dict:
     if not player_match.empty and "data_granularity" in player_match.columns:
         match_count = (player_match["data_granularity"] == "match").sum()
         proxy_count = (player_match["data_granularity"] == "season_proxy").sum()
-        pm_coverage = f"{match_count} real + {proxy_count} season proxy"
+        source_counts = (
+            player_match["source_name"].fillna("unknown").value_counts().sort_index().to_dict()
+            if "source_name" in player_match.columns
+            else {}
+        )
+        source_summary = ", ".join(
+            f"{source}={int(count)}" for source, count in source_counts.items()
+        )
+        pm_coverage = (
+            f"{match_count} real + {proxy_count} season proxy"
+            + (f" ({source_summary})" if source_summary else "")
+        )
 
     artifact_registry = [
         _artifact_file_info(
