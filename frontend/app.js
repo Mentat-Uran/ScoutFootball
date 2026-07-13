@@ -13874,6 +13874,51 @@ async function fetchWcTournamentImportPreview(encoded) {
     }
 }
 
+function renderWcTournamentImportPreviewDetails(dialog, preview, z) {
+    const detailsEl = dialog.querySelector("#wc-ko-import-details");
+    if (!detailsEl) return;
+    detailsEl.replaceChildren();
+    const ledgers = [
+        [preview?.result_changes, z ? "赛果变更" : "Result changes", (item) => {
+            const before = item.current_result
+                ? `${item.home} ${item.current_result.home_goals}–${item.current_result.away_goals} ${item.away}`
+                : (z ? "未记录" : "not recorded");
+            const after = item.incoming_result
+                ? `${item.home} ${item.incoming_result.home_goals}–${item.incoming_result.away_goals} ${item.away}`
+                : (z ? "移除" : "removed");
+            return `${item.change_type}: ${before} → ${after}`;
+        }],
+        [preview?.knockout_changes, z ? "淘汰赛记录变更" : "Knockout record changes", (item) => {
+            const fixture = [item.home, item.away].filter(Boolean).join(" vs ") || item.match_id;
+            const before = item.current_completed ? (z ? "已完成" : "completed") : (z ? "未完成" : "not completed");
+            const after = item.incoming_completed ? (z ? "已完成" : "completed") : (z ? "未完成" : "not completed");
+            return `${item.change_type}: ${fixture} (${before} → ${after})`;
+        }],
+    ];
+    for (const [ledger, label, formatItem] of ledgers) {
+        if (!ledger?.total) continue;
+        const heading = document.createElement("div");
+        heading.textContent = `${label} (${ledger.total})`;
+        heading.style.marginTop = "0.35rem";
+        heading.style.fontWeight = "600";
+        detailsEl.appendChild(heading);
+        const list = document.createElement("ul");
+        list.style.margin = "0.2rem 0 0.35rem 1rem";
+        list.style.padding = "0";
+        for (const item of ledger.items || []) {
+            const row = document.createElement("li");
+            row.textContent = formatItem(item);
+            list.appendChild(row);
+        }
+        if (ledger.truncated) {
+            const row = document.createElement("li");
+            row.textContent = z ? "其余变更已省略。" : "Additional changes omitted.";
+            list.appendChild(row);
+        }
+        detailsEl.appendChild(list);
+    }
+}
+
 function renderWcShareDialog() {
     const z = appState.lang === "zh";
     const data = wcApiData.tournamentExport;
@@ -13970,6 +14015,7 @@ function renderWcImportDialog() {
         <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "先预览编码的状态差异，再确认替换本地应用中的锦标赛状态。" : "Preview state differences first, then explicitly confirm replacement of the local application tournament state."}</p>
         <textarea id="wc-ko-import-code" placeholder="${z ? "粘贴编码..." : "Paste encoded string..."}" style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:4px;background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical"></textarea>
         <div id="wc-ko-import-msg" style="font-size:0.7rem;margin-top:0.4rem;min-height:1rem"></div>
+        <div id="wc-ko-import-details" style="font-size:0.7rem;color:var(--text-muted)"></div>
         <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
             <button class="text-button" id="wc-ko-import-preview" type="button" style="font-size:0.75rem">${z ? "预览差异" : "Preview Differences"}</button>
             <button class="text-button" id="wc-ko-import-confirm" type="button" disabled style="font-size:0.75rem">${z ? "确认导入" : "Confirm Import"}</button>
@@ -14009,6 +14055,7 @@ function renderWcImportDialog() {
             msgEl.textContent = (z
                 ? `导入将替换为 ${incoming.group_results || 0} 个小组赛果；新增 ${d.group_results_added || 0}，移除 ${d.group_results_removed || 0}，变更 ${d.group_results_changed || 0}，可能移除 ${d.knockout_snapshots_removed || 0} 个赛前快照。`
                 : `Import will replace with ${incoming.group_results || 0} group results; add ${d.group_results_added || 0}, remove ${d.group_results_removed || 0}, change ${d.group_results_changed || 0}, and may remove ${d.knockout_snapshots_removed || 0} pre-recording snapshots.`);
+            renderWcTournamentImportPreviewDetails(dlg, preview, z);
             msgEl.style.color = "var(--text-muted)";
             if (confirmBtn) confirmBtn.disabled = false;
         });

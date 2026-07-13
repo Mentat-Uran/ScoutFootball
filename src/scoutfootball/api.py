@@ -7956,6 +7956,84 @@ def _wc_import_state_counts(state: Any) -> dict[str, int]:
     }
 
 
+def _wc_import_result_change_ledger(current: Any, incoming: Any, *, limit: int = 20) -> dict:
+    """Describe bounded group-result replacement effects in schedule order."""
+    changes: list[dict] = []
+    for match in current.matches:
+        match_id = match["match_id"]
+        before = current.results.get(match_id)
+        after = incoming.results.get(match_id)
+        if before == after:
+            continue
+        if before is None:
+            change_type = "added"
+        elif after is None:
+            change_type = "removed"
+        else:
+            change_type = "changed"
+        changes.append({
+            "match_id": match_id,
+            "group": match.get("group"),
+            "home": match.get("home"),
+            "away": match.get("away"),
+            "change_type": change_type,
+            "current_result": before,
+            "incoming_result": after,
+        })
+    return {
+        "items": changes[:limit],
+        "total": len(changes),
+        "truncated": len(changes) > limit,
+    }
+
+
+def _wc_import_knockout_change_ledger(current: Any, incoming: Any, *, limit: int = 20) -> dict:
+    """Describe bounded knockout record effects without interpreting them as facts."""
+    def indexed_matches(state: Any) -> dict[str, dict]:
+        matches = (state.knockout or {}).get("matches", [])
+        return {
+            match["match_id"]: match
+            for match in matches
+            if isinstance(match, dict) and isinstance(match.get("match_id"), str)
+        }
+
+    current_matches = indexed_matches(current)
+    incoming_matches = indexed_matches(incoming)
+    changes: list[dict] = []
+    for match_id in sorted(set(current_matches) | set(incoming_matches)):
+        before = current_matches.get(match_id)
+        after = incoming_matches.get(match_id)
+        if before == after:
+            continue
+        if before is None:
+            change_type = "added"
+        elif after is None:
+            change_type = "removed"
+        else:
+            change_type = "changed"
+        reference = after or before or {}
+        changes.append({
+            "match_id": match_id,
+            "round": reference.get("round"),
+            "home": reference.get("home"),
+            "away": reference.get("away"),
+            "change_type": change_type,
+            "current_completed": bool((before or {}).get("winner")),
+            "incoming_completed": bool((after or {}).get("winner")),
+            "current_snapshot_recorded": isinstance(
+                (before or {}).get("prediction_snapshot"), dict
+            ),
+            "incoming_snapshot_recorded": isinstance(
+                (after or {}).get("prediction_snapshot"), dict
+            ),
+        })
+    return {
+        "items": changes[:limit],
+        "total": len(changes),
+        "truncated": len(changes) > limit,
+    }
+
+
 def preview_wc_tournament_import(encoded: str) -> dict:
     """Validate an import and report bounded local-state replacement risks."""
     incoming, error = _decode_wc_tournament_import(encoded)
@@ -7970,6 +8048,8 @@ def preview_wc_tournament_import(encoded: str) -> dict:
     )
     current_counts = _wc_import_state_counts(current)
     incoming_counts = _wc_import_state_counts(incoming)
+    result_change_ledger = _wc_import_result_change_ledger(current, incoming)
+    knockout_change_ledger = _wc_import_knockout_change_ledger(current, incoming)
     return _clean_json_value({
         "schema": "scoutfootball.world-cup-tournament-import-preview",
         "version": "1.0.0",
@@ -7995,6 +8075,8 @@ def preview_wc_tournament_import(encoded: str) -> dict:
                 - incoming_counts["knockout_prediction_snapshots"],
             ),
         },
+        "result_changes": result_change_ledger,
+        "knockout_changes": knockout_change_ledger,
         "requires_confirmation": True,
         "limitations": [
             "Preview validates the encoded local tournament state but does not write it.",

@@ -148,7 +148,32 @@ class TestImportWcTournamentState:
         assert preview["requires_confirmation"] is True
         assert preview["differences"]["group_results_added"] == 1
         assert preview["differences"]["group_results_removed"] == 1
+        assert preview["result_changes"]["total"] == 2
+        assert preview["result_changes"]["truncated"] is False
+        changes = preview["result_changes"]["items"]
+        assert changes[0]["match_id"] == current_match_id
+        assert changes[0]["change_type"] == "removed"
+        assert changes[0]["current_result"]["home_goals"] == 1
+        assert changes[1]["match_id"] == incoming_match_id
+        assert changes[1]["change_type"] == "added"
+        assert changes[1]["incoming_result"]["home_goals"] == 2
+        assert preview["knockout_changes"] == {"items": [], "total": 0, "truncated": False}
         assert current_match_id in load_state().results
+
+    def test_preview_bounds_change_ledger_to_twenty_items(self, patched_state_path):
+        incoming = init_state()
+        for index, match in enumerate(incoming.matches[:21]):
+            apply_result(incoming, match["match_id"], index % 4, 0)
+        encoded = base64.urlsafe_b64encode(
+            json.dumps(state_to_dict(incoming)).encode("utf-8")
+        ).decode("ascii")
+
+        preview = preview_wc_tournament_import(encoded)
+
+        assert preview["status"] == "ok"
+        assert preview["result_changes"]["total"] == 21
+        assert len(preview["result_changes"]["items"]) == 20
+        assert preview["result_changes"]["truncated"] is True
 
     def test_preview_reports_all_integrity_issues_without_writing_local_state(
         self, patched_state_path

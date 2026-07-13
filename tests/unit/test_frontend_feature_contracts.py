@@ -227,6 +227,16 @@ def test_tournament_import_preview_keeps_integrity_diagnostics_read_only() -> No
     assert "preview?.integrity_errors" in app_js
     assert "local state was not written" in app_js
     assert "dlg.dataset.previewFor !== encoded" in app_js
+
+
+def test_tournament_import_preview_renders_bounded_change_ledgers_as_text() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "renderWcTournamentImportPreviewDetails" in app_js
+    assert "preview?.result_changes" in app_js
+    assert "preview?.knockout_changes" in app_js
+    assert 'document.createElement("li")' in app_js
+    assert 'row.textContent = formatItem(item)' in app_js
     assert "# Squad Role Depth" in app_js
     assert "team?.squad?.balance?.roles" in app_js
     assert "data.squad_balance" in app_js

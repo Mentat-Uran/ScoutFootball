@@ -765,6 +765,11 @@ Malformed but decodable states return `status: error`, `code:
 integrity_failed`, and up to 20 `integrity_errors` describing score, fixture,
 or knockout inconsistencies. These diagnostics are read-only; they do not
 partially import, repair, or persist any state.
+Successful previews also expose bounded `result_changes` and `knockout_changes`
+ledgers. Each has `items`, `total`, and `truncated`; the result ledger contains
+the scheduled fixture plus the current/incoming local result, while the
+knockout ledger only describes local record and snapshot-presence changes. It
+is an overwrite-impact aid, not an official result feed or an audit history.
 
 The general match-prediction tactical handoff writes a bounded
 `scoutfootball.tactical-decision-pack` v1.1.0 into the browser-local board
