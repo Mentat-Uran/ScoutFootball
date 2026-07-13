@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -7450,6 +7451,181 @@ def get_wc_knockout_match_briefing(match_id: str) -> dict[str, Any]:
     return _clean_json_value(briefing)
 
 
+def _capture_wc_knockout_prediction_snapshot(state: Any, match_id: str) -> dict[str, Any] | None:
+    """Capture the live matchup projection before a local result is recorded.
+
+    This deliberately uses the knockout Bradley-Terry projection, not the
+    post-result projection that marks a completed fixture as probability 1.0.
+    The snapshot is optional: unavailable squad-strength artifacts must not
+    prevent a user from recording a local bracket result.
+    """
+    from scoutfootball.worldcup.data import project_knockout_probabilities
+    from scoutfootball.worldcup.tournament import get_knockout_overview
+
+    try:
+        overview = get_knockout_overview(state)
+        _squads, strengths = _get_wc_enriched_squads()
+        if not overview.get("generated") or not strengths:
+            return None
+        projection = project_knockout_probabilities(
+            overview, strengths, num_simulations=0
+        )
+        match_probability = next(
+            (
+                item
+                for item in projection.get("match_probabilities", [])
+                if item.get("match_id") == match_id
+            ),
+            None,
+        )
+        if not match_probability:
+            return None
+        home = match_probability.get("home")
+        away = match_probability.get("away")
+        home_probability = match_probability.get("home_win_probability")
+        away_probability = match_probability.get("away_win_probability")
+        if not home or not away or home_probability is None or away_probability is None:
+            return None
+        return {
+            "schema": "scoutfootball.world-cup-knockout-prediction-snapshot",
+            "version": "1.0.0",
+            "captured_at": datetime.now(UTC).isoformat(),
+            "fixture": {"home_team": home, "away_team": away},
+            "prediction": {
+                "home_win_probability": home_probability,
+                "away_win_probability": away_probability,
+                "model_type": "bradley_terry_strength",
+                "model_version": "wc-knockout-1.0",
+                "home_strength": strengths.get(home, 0.2),
+                "away_strength": strengths.get(away, 0.2),
+            },
+            "source": "pre-recording local knockout bracket projection",
+            "limitations": [
+                "This is a locally captured pre-recording model snapshot, not an "
+                "official fixture or result feed.",
+                "The simplified strength model does not include live availability, "
+                "tactics, form, or market odds.",
+            ],
+        }
+    except Exception:
+        return None
+
+
+def get_wc_knockout_match_review(match_id: str) -> dict[str, Any]:
+    """Compare a locally recorded result with its captured pre-result snapshot.
+
+    It is intentionally a one-fixture comparison, not a claim about model
+    calibration or predictive quality. Older and non-API bracket entries can
+    have a completed result without a snapshot and remain explicitly unknown.
+    """
+    state = _wc_tournament_state()
+    base = {
+        "schema": "scoutfootball.world-cup-knockout-result-review",
+        "version": "1.0.0",
+        "match_id": match_id,
+        "recording_scope": "browser-local tournament bracket state",
+    }
+    if not state.knockout or not state.knockout.get("matches"):
+        return _clean_json_value({
+            **base,
+            "status": "not_generated",
+            "limitations": ["No local knockout bracket has been generated."],
+        })
+    match = state.knockout_match_by_id(match_id)
+    if not match:
+        return _clean_json_value({
+            **base,
+            "status": "not_found",
+            "limitations": ["The requested match ID is not in the local knockout bracket."],
+        })
+    fixture = {"home_team": match.get("home"), "away_team": match.get("away")}
+    outcome = {
+        "home_goals": match.get("home_goals"),
+        "away_goals": match.get("away_goals"),
+        "recorded_winner": match.get("winner"),
+        "decided_by": match.get("decided_by"),
+    }
+    if not match.get("winner"):
+        return _clean_json_value({
+            **base,
+            "status": "not_completed",
+            "fixture": fixture,
+            "recorded_outcome": outcome,
+            "limitations": ["A local result must be recorded before a review is available."],
+        })
+    snapshot = match.get("prediction_snapshot")
+    if not isinstance(snapshot, dict):
+        return _clean_json_value({
+            **base,
+            "status": "snapshot_not_recorded",
+            "fixture": fixture,
+            "recorded_outcome": outcome,
+            "limitations": [
+                "This local result has no pre-recording prediction snapshot, so no "
+                "retrospective model comparison is inferred.",
+            ],
+        })
+    prediction = snapshot.get("prediction")
+    if not isinstance(prediction, dict):
+        return _clean_json_value({
+            **base,
+            "status": "snapshot_unusable",
+            "fixture": fixture,
+            "recorded_outcome": outcome,
+            "limitations": [
+                "The stored pre-recording snapshot has no usable matchup probabilities."
+            ],
+        })
+    home_probability = prediction.get("home_win_probability")
+    away_probability = prediction.get("away_win_probability")
+    home = fixture["home_team"]
+    away = fixture["away_team"]
+    if not isinstance(home_probability, (int, float)) or not isinstance(
+        away_probability, (int, float)
+    ):
+        return _clean_json_value({
+            **base,
+            "status": "snapshot_unusable",
+            "fixture": fixture,
+            "recorded_outcome": outcome,
+            "limitations": [
+                "The stored pre-recording snapshot has invalid matchup probabilities."
+            ],
+        })
+    if home_probability > away_probability:
+        predicted_winner = home
+    elif away_probability > home_probability:
+        predicted_winner = away
+    else:
+        predicted_winner = None
+    recorded_winner = outcome["recorded_winner"]
+    result_label = (
+        "no_directional_call" if predicted_winner is None
+        else "matched_direction" if predicted_winner == recorded_winner
+        else "recorded_upset"
+    )
+    recorded_probability = home_probability if recorded_winner == home else away_probability
+    return _clean_json_value({
+        **base,
+        "status": "ok",
+        "fixture": fixture,
+        "recorded_outcome": outcome,
+        "prediction_snapshot": snapshot,
+        "comparison": {
+            "predicted_winner": predicted_winner,
+            "recorded_winner": recorded_winner,
+            "recorded_winner_probability": recorded_probability,
+            "directional_result": result_label,
+        },
+        "limitations": [
+            "This compares one locally recorded result with a captured pre-recording "
+            "snapshot; it is not a calibration, accuracy, or official-result assessment.",
+            "Clearing the local result also removes this snapshot to avoid retaining "
+            "a stale matchup comparison.",
+        ],
+    })
+
+
 def generate_wc_knockout_bracket() -> dict:
     """Generate the knockout bracket from current group standings and persist."""
     from scoutfootball.worldcup.tournament import (
@@ -7488,6 +7664,7 @@ def apply_wc_knockout_result(
     )
 
     state = _wc_tournament_state()
+    prediction_snapshot = _capture_wc_knockout_prediction_snapshot(state, match_id)
     try:
         apply_knockout_result(
             state,
@@ -7498,9 +7675,11 @@ def apply_wc_knockout_result(
         )
     except ValueError as exc:
         return _clean_json_value({"status": "error", "message": str(exc)})
-    save_state(state, DEFAULT_STATE_PATH)
 
     match = state.knockout_match_by_id(match_id)
+    if prediction_snapshot is not None:
+        match["prediction_snapshot"] = prediction_snapshot
+    save_state(state, DEFAULT_STATE_PATH)
     return _clean_json_value({
         "status": "ok",
         "match_id": match_id,
@@ -7510,6 +7689,7 @@ def apply_wc_knockout_result(
         "away_goals": away_goals,
         "winner": match["winner"],
         "decided_by": match.get("decided_by"),
+        "prediction_snapshot_recorded": prediction_snapshot is not None,
         "saved_to": DEFAULT_STATE_PATH,
     })
 

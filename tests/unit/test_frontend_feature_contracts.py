@@ -292,6 +292,14 @@ def test_knockout_briefing_handoff_keeps_unresolved_slots_explicit() -> None:
     assert "wc-ko-brief" in app_js
 
 
+def test_knockout_result_review_uses_a_local_pre_recording_snapshot() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "/world-cup/tournament/knockout/${encodeURIComponent(matchId)}/review" in app_js
+    assert "wc-ko-review" in app_js
+    assert "Local result comparison only; not a model evaluation." in app_js
+
+
 def test_action_value_dossier_export_keeps_local_scouting_context_separate() -> None:
     app_js = _read(FRONTEND / "app.js")
     assert 'schema: "scoutfootball.action-value-research-dossier-export"' in app_js

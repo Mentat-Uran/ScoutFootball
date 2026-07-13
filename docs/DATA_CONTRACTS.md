@@ -730,6 +730,21 @@ open a populated matchup in the comparison/briefing flow; any export retains
 the local bracket context and remains neither an official fixture confirmation
 nor a tactical recommendation.
 
+`GET /world-cup/tournament/knockout/{match_id}/review` is a separate
+`scoutfootball.world-cup-knockout-result-review` v1.0.0 contract for a
+completed **locally recorded** knockout result. When the API records a result,
+it first stores a `scoutfootball.world-cup-knockout-prediction-snapshot`
+v1.0.0 of the live Bradley-Terry matchup projection. The review returns that
+immutable snapshot, the local score/winner, and a limited directional
+comparison (`matched_direction`, `recorded_upset`, or `no_directional_call`).
+It is not an official-result feed and must not be interpreted as a one-match
+accuracy, calibration, or model-quality assessment. Existing/imported results
+without a snapshot return `snapshot_not_recorded`; the service never derives a
+retrospective prediction from post-result probabilities. Clearing a result,
+including a cascaded downstream result, removes its snapshot. The completed
+card can render this local-only review and download its JSON without creating
+server-side sharing or synchronization.
+
 The general match-prediction tactical handoff writes a bounded
 `scoutfootball.tactical-decision-pack` v1.1.0 into the browser-local board
 project. Alongside the loaded model output and provenance, it may preserve the
