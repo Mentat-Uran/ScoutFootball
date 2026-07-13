@@ -82,6 +82,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] **对比到短名单工作流**：球员对比现可导出版本化 JSON，并可将任一比较对象加入浏览器本地 shortlist，再进入既有决策包导出；不写入服务端或宣称转会建议。
 - [x] **短名单战术板交接**：球探页可将当前浏览器本地 shortlist 作为带 dossier 上下文的球员标记创建到战术板；明确不构成确认首发或转会建议。
 - [x] **预测报告本地导出**：比赛预测页可导出当前已加载的模型、概率、预期进球、置信区间和覆盖上下文为 JSON/CSV；明确不是保证、投注指令或实时比赛情报。
+- [x] **动作价值到球探上下文**：动作价值研究档案导出可并列包含浏览器本地 shortlist dossier，并显式标记为不可与 xT/VAEP/比赛样本相加的决策注释。
 - **比分预测仍是 baseline**：Independent Poisson 和 Dixon-Coles 可用，回测对比页（`/predictions/backtest`）已实现 log_loss/brier/rps 指标对比、isotonic 校准效果展示和 per-fold 趋势图（ECharts）。Decay 参数调优已实现（`tune-predictions` CLI + `tune_dixon_coles_decay()` 网格搜索 + `/predictions/tuning` API + 前端面板）。Bootstrap 置信区间已实现（`bootstrap_prediction_confidence()` + `/predictions/{home}/{away}` 的 `confidence_intervals` 字段 + 前端区间显示）。Form-weighted DC 预测已实现（`fit_dixon_coles_with_form()` + `?model=form` 端点 + 前端模型选择器）。集成预测已实现（`ensemble_prediction()` + `?model=ensemble` 端点 + 前端 Ensemble 选项和 per-model 分解表）。校准漂移监控已实现（`compute_calibration_drift()` + `/predictions/drift` 端点 + 前端漂移面板含 STABLE/DRIFT 状态和窗口表）。In-play 比赛势头预测已实现（`compute_momentum()` + `/predictions/{home}/{away}/momentum` 端点 + 前端 ECharts 时间线可视化，支持任意比分/分钟查询剩余比赛结果概率）。Ensemble 最优权重回测和低比分校准细化仍可进一步优化。
 - **跨供应商标准化仍停留在规划**：internal event/tracking schema、DATA_CONTRACTS、kloppy/floodlight/CDF 对照、schema validation fixture 和空数据行为测试仍待补。
 - **空间/视频/离球研究没有进入默认能力**：StatsBomb 360、Metrica/open tracking、space control、off-ball value、xG+、GCN/Transformer/RL 都只能在有合规样例、baseline 和模型卡后启动。

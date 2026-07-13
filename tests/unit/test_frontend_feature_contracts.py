@@ -266,3 +266,10 @@ def test_match_prediction_exports_are_local_and_bounded() -> None:
     assert "exportCurrentPredictionCSV" in app_js
     assert "row.map(csvCell).join(\",\")" in app_js
     assert "btn-prediction-export-json" in html
+
+
+def test_action_value_dossier_export_keeps_local_scouting_context_separate() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    assert 'schema: "scoutfootball.action-value-research-dossier-export"' in app_js
+    assert "browser-local-shortlist-dossier" in app_js
+    assert "non_additive_to_action_values: true" in app_js

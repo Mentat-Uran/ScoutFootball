@@ -9641,8 +9641,27 @@ function actionContextRows(title, rows, metricKey, contextKey) {
     }).join("")}</section>`;
 }
 
-function downloadActionValueContext(data) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+function downloadActionValueContext(data, player = {}) {
+    const shortlistContext = getShortlistDossier(player);
+    const payload = {
+        schema: "scoutfootball.action-value-research-dossier-export",
+        version: "1.0.0",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        action_value_context: data,
+        scouting_context: {
+            scope: "browser-local-shortlist-dossier",
+            player_key: scoutingPlayerKey(player),
+            in_shortlist: isInPlayerShortlist(scoutingPlayerKey(player)),
+            dossier: shortlistContext,
+            non_additive_to_action_values: true,
+        },
+        limitations: [
+            "xT, VAEP, and match-sample values retain their own granularities and are not additive.",
+            "Scouting context is browser-local decision context, not a model feature or server-side recommendation.",
+        ],
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -9675,7 +9694,7 @@ async function renderActionValuePlayerContext(player) {
         </div>
         <div class="action-evidence-scope"><strong>${matchRows.length}</strong> ${escapeHtml(appState.lang === "zh" ? "场版本化比赛样例" : "versioned match samples")}<span>${escapeHtml(appState.lang === "zh" ? "比赛级 xT 使用独立样例网格，不能与上方聚合数值相加。" : "Match-level xT uses a separate sample grid and is not additive with aggregate values.")}</span></div>
         <button class="text-button" id="action-context-export" type="button">${escapeHtml(appState.lang === "zh" ? "导出研究档案 JSON" : "Export research dossier JSON")}</button>`;
-    target.querySelector("#action-context-export")?.addEventListener("click", () => downloadActionValueContext(data));
+    target.querySelector("#action-context-export")?.addEventListener("click", () => downloadActionValueContext(data, player));
     if (status) { status.textContent = "READY"; status.className = "status-pill status-high"; }
 }
 
