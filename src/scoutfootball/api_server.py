@@ -82,6 +82,7 @@ from scoutfootball.api import (
     get_team_comparison,
     get_team_strength,
     get_temporal_validation,
+    get_truth_label_supervision,
     get_value_bet_analysis,
     get_value_summary,
     get_watchlist,
@@ -861,6 +862,10 @@ def create_app() -> FastAPI:
     @app.get("/reports/model-runs/{run_id}")
     def report_model_run_detail(run_id: str):
         return get_model_run_detail(run_id)
+
+    @app.get("/reports/truth-labels")
+    def report_truth_labels():
+        return get_truth_label_supervision()
 
     # ── World Cup endpoints ──────────────────────────────────────────────
 

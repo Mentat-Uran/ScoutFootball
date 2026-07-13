@@ -28,6 +28,17 @@ def test_artifacts_endpoint(client: TestClient):
     assert "artifacts" in data or "data_source_label" in data
 
 
+def test_truth_label_supervision_endpoint_exposes_source_policy(client: TestClient):
+    response = client.get("/reports/truth-labels")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema"] == "scoutfootball.truth-label-supervision"
+    assert payload["status"] in {"eligible_labels_available", "no_eligible_labels", "no_data"}
+    assert "eligible_rows" in payload["report"]
+    assert "caveat" in payload["report"]
+
+
 def test_ratings_snapshots_endpoint(client: TestClient):
     """/ratings/snapshots should return 200."""
     response = client.get("/ratings/snapshots")

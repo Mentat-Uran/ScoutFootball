@@ -8,6 +8,8 @@ from scoutfootball.evaluation.truth_labels import (
     LabelConfidence,
     LabelSource,
     create_empty_truth_labels,
+    filter_supervision_eligible_truth_labels,
+    truth_label_supervision_report,
     validate_truth_labels,
     workspace_to_truth_labels,
 )
@@ -123,6 +125,29 @@ class TestValidateTruthLabels:
         df = create_empty_truth_labels()
         errors = validate_truth_labels(df)
         assert errors == []
+
+
+class TestTruthLabelSupervisionPolicy:
+    def test_self_referential_expert_tiers_are_excluded(self) -> None:
+        labels = pd.DataFrame(
+            {
+                "player_id": ["p1", "p2", "p3"],
+                "season": ["2425", "2425", "2425"],
+                "label_source": ["expert_tier", "award", "manual_calibration"],
+                "label_confidence": ["medium", "high", "high"],
+                "label_value": [1.0, 5.0, 3.0],
+                "as_of_date": ["2025-06-01"] * 3,
+                "position_scope": ["all"] * 3,
+                "manual_review_flag": [False] * 3,
+            },
+        )
+
+        report = truth_label_supervision_report(labels)
+        eligible = filter_supervision_eligible_truth_labels(labels)
+
+        assert report["eligible_rows"] == 2
+        assert report["excluded_source_counts"] == {"expert_tier": 1}
+        assert eligible["label_source"].tolist() == ["award", "manual_calibration"]
 
 
 class TestWorkspaceToTruthLabels:

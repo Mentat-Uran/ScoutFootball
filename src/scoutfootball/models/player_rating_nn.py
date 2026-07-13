@@ -146,7 +146,10 @@ def build_player_rating_nn_dataset(
     if feature_matrix.empty or truth_labels.empty:
         return pd.DataFrame()
 
-    from scoutfootball.evaluation.truth_labels import validate_truth_labels
+    from scoutfootball.evaluation.truth_labels import (
+        filter_supervision_eligible_truth_labels,
+        validate_truth_labels,
+    )
 
     errors = validate_truth_labels(truth_labels)
     if errors:
@@ -161,7 +164,7 @@ def build_player_rating_nn_dataset(
         raise ValueError("rating feature matrix must contain player_name")
     features["season"] = features["season_id"].astype(str)
 
-    labels = truth_labels.copy()
+    labels = filter_supervision_eligible_truth_labels(truth_labels)
     labels["season"] = labels["season"].astype(str)
     labels["label_value"] = pd.to_numeric(labels["label_value"], errors="coerce")
     labels = labels[labels["label_value"].notna() & np.isfinite(labels["label_value"])]
@@ -309,6 +312,9 @@ def train_player_rating_nn(
 ) -> PlayerRatingNNResult:
     """Train a supervised MLP candidate against player truth labels."""
     cfg = config or PlayerRatingNNConfig()
+    from scoutfootball.evaluation.truth_labels import truth_label_supervision_report
+
+    supervision_report = truth_label_supervision_report(truth_labels)
     dataset = build_player_rating_nn_dataset(
         feature_matrix,
         truth_labels,
@@ -317,8 +323,15 @@ def train_player_rating_nn(
     if len(dataset) < cfg.min_labels:
         return PlayerRatingNNResult(
             trained=False,
-            status=f"skipped: {len(dataset)} resolved labels, need at least {cfg.min_labels}",
-            metrics={"n_labels": int(len(dataset)), "min_labels": int(cfg.min_labels)},
+            status=(
+                f"skipped: {len(dataset)} supervision-eligible resolved labels, "
+                f"need at least {cfg.min_labels}"
+            ),
+            metrics={
+                "n_labels": int(len(dataset)),
+                "min_labels": int(cfg.min_labels),
+                "truth_label_supervision": supervision_report,
+            },
             predictions=pd.DataFrame(),
             feature_columns=[],
             category_columns=[],
@@ -329,7 +342,7 @@ def train_player_rating_nn(
         return PlayerRatingNNResult(
             trained=False,
             status="skipped: no usable feature columns",
-            metrics={"n_labels": int(len(dataset))},
+            metrics={"n_labels": int(len(dataset)), "truth_label_supervision": supervision_report},
             predictions=pd.DataFrame(),
             feature_columns=[],
             category_columns=[],
@@ -343,7 +356,7 @@ def train_player_rating_nn(
         return PlayerRatingNNResult(
             trained=False,
             status="skipped: need at least two chronological seasons for holdout",
-            metrics={"n_labels": int(len(dataset))},
+            metrics={"n_labels": int(len(dataset)), "truth_label_supervision": supervision_report},
             predictions=pd.DataFrame(),
             feature_columns=[],
             category_columns=[],
@@ -365,6 +378,7 @@ def train_player_rating_nn(
 
     metrics = {
         "n_labels": int(len(dataset)),
+        "truth_label_supervision": supervision_report,
         "train_seasons": list(train_seasons),
         "test_seasons": list(test_seasons),
         "train": _regression_metrics(y_train, train_pred),

@@ -108,6 +108,22 @@ def test_train_player_rating_nn_skips_empty_labels() -> None:
     assert result.status.startswith("skipped:")
 
 
+def test_train_player_rating_nn_skips_self_referential_labels() -> None:
+    features = _sample_feature_matrix()
+    labels = _sample_truth_labels(features)
+    labels["label_source"] = "expert_tier"
+
+    result = train_player_rating_nn(
+        features,
+        labels,
+        config=PlayerRatingNNConfig(min_labels=10, max_iter=20),
+    )
+
+    assert result.trained is False
+    assert result.metrics["n_labels"] == 0
+    assert result.metrics["truth_label_supervision"]["excluded_rows"] == len(labels)
+
+
 def test_train_player_rating_nn_with_synthetic_labels_writes_artifacts(tmp_path: Path) -> None:
     features = _sample_feature_matrix()
     labels = _sample_truth_labels(features)

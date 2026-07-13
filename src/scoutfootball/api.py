@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -52,6 +53,8 @@ from scoutfootball.worldcup.data import (
 from scoutfootball.worldcup.data import (
     simulate_knockout as _simulate_knockout,
 )
+
+logger = logging.getLogger(__name__)
 
 _STATSBOMB_ATTRIBUTION = (
     "StatsBomb Open Data must be attributed in any public display. "
@@ -5671,6 +5674,46 @@ def get_artifacts_summary() -> dict:
             "transfermarkt": "Transfermarkt — manual import only, no automated scraping",
         },
     })
+
+
+def get_truth_label_supervision() -> dict:
+    """Report source-policy eligibility for rating supervision labels.
+
+    The endpoint is deliberately diagnostic: a source-policy eligible label is
+    not automatically presented as independent proof of player impact.
+    """
+    from scoutfootball.evaluation.truth_labels import truth_label_supervision_report
+
+    path = _settings().gold_root / "feature_store" / "player_truth_labels.parquet"
+    if not path.exists():
+        return {
+            "schema": "scoutfootball.truth-label-supervision",
+            "version": "1.0.0",
+            "status": "no_data",
+            "path": path.name,
+            "report": truth_label_supervision_report(pd.DataFrame()),
+        }
+    try:
+        labels = _read_parquet(path)
+    except Exception as exc:
+        logger.warning("Unable to read truth labels for supervision report: %s", exc)
+        return {
+            "schema": "scoutfootball.truth-label-supervision",
+            "version": "1.0.0",
+            "status": "unavailable",
+            "path": path.name,
+            "report": truth_label_supervision_report(pd.DataFrame()),
+        }
+    report = truth_label_supervision_report(labels)
+    return _clean_json_value(
+        {
+            "schema": "scoutfootball.truth-label-supervision",
+            "version": "1.0.0",
+            "status": report["status"],
+            "path": path.name,
+            "report": report,
+        },
+    )
 
 
 def _get_scouting_queues(force_refresh: bool = False):
