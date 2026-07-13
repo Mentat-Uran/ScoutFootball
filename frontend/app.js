@@ -12506,6 +12506,23 @@ function renderWcOutlook(outlook) {
     const ratedStr = (rated !== undefined && rated !== null && total !== undefined && total !== null)
         ? `${rated}/${total}` : null;
     const scorePct = (v) => (v === undefined || v === null) ? null : `${Math.round((v || 0) * 100)}%`;
+    const balance = data.squad_balance || {};
+    const roleLabels = z
+        ? { GK: "门将", CB: "中卫", FB: "边后卫", DM: "后腰", CM: "中场", AM: "前腰", W: "边锋", ST: "中锋" }
+        : { GK: "GK", CB: "CB", FB: "FB", DM: "DM", CM: "CM", AM: "AM", W: "W", ST: "ST" };
+    const roleBalance = Object.entries(balance.roles || {}).map(([role, details]) => {
+        const count = Number(details.count || 0);
+        const target = Number(details.planning_target || 0);
+        const state = String(details.depth_status || "unknown");
+        const color = state === "deep" ? "status-high" : state === "adequate" ? "status-medium" : "status-low";
+        return `<span class="status-pill ${color}" style="font-size:0.68rem;margin:0.12rem">${escapeHtml(roleLabels[role] || role)} ${count}/${target}</span>`;
+    }).join("");
+    const planningFlags = (balance.planning_flags || []).map((flag) =>
+        `${roleLabels[flag.role] || flag.role} ${flag.count}/${flag.target}`
+    );
+    const balanceNote = balance.disclaimer
+        ? `<p style="font-size:0.68rem;color:var(--text-muted);line-height:1.4;margin:0.45rem 0 0">${escapeHtml(balance.disclaimer)}</p>`
+        : "";
 
     const disclaimer = data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);margin-top:0.8rem;line-height:1.5">${escapeHtml(data.disclaimer)}</p>` : "";
 
@@ -12549,6 +12566,12 @@ function renderWcOutlook(outlook) {
                 ${_sbRow(z ? "五大联赛占比" : "Big5 Ratio", scorePct(sb.big5_ratio))}
             </div>
         </div>
+    </div>
+    <div style="margin-top:1rem">
+        <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-secondary, #ccc)">${z ? "阵容位置深度" : "Squad Role Depth"}</h4>
+        <div>${roleBalance || `<span style="color:var(--text-muted);font-size:0.8rem">—</span>`}</div>
+        ${planningFlags.length ? `<p style="font-size:0.72rem;color:var(--warn, #f5a623);margin:0.45rem 0 0">${escapeHtml(z ? "规划关注：" : "Planning flags: ")}${escapeHtml(planningFlags.join(" · "))}</p>` : ""}
+        ${balanceNote}
     </div>
     <div style="margin-top:1rem">
         <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-secondary, #ccc)">${z ? "淘汰赛投影路径" : "Projected Knockout Path"}</h4>
@@ -14018,6 +14041,19 @@ function exportWcBriefingCSV(briefing) {
     for (const team of [teams.home, teams.away]) {
         for (const player of team?.squad?.top_rated_players || []) {
             lines.push([team.team || "", player.name || "", player.position || "", player.club || "", player.rating ?? "", player.rating_confidence || ""]);
+        }
+    }
+    lines.push([], ["# Squad Role Depth"], ["team", "role", "count", "planning_target", "depth_status", "rating_coverage"]);
+    for (const team of [teams.home, teams.away]) {
+        for (const [role, details] of Object.entries(team?.squad?.balance?.roles || {})) {
+            lines.push([
+                team.team || "",
+                role,
+                details.count ?? "",
+                details.planning_target ?? "",
+                details.depth_status ?? "",
+                details.rating_coverage ?? "",
+            ]);
         }
     }
     lines.push([], ["# Limitations"], ["limitation"]);

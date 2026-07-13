@@ -1844,6 +1844,107 @@ def compute_team_strength_details(
     return strengths
 
 
+_SQUAD_ROLE_TARGETS = {
+    "GK": 2,
+    "CB": 4,
+    "FB": 4,
+    "DM": 1,
+    "CM": 4,
+    "AM": 1,
+    "W": 3,
+    "ST": 3,
+}
+_SQUAD_UNITS = {
+    "goalkeepers": ("GK",),
+    "defense": ("CB", "FB"),
+    "midfield": ("DM", "CM", "AM"),
+    "attack": ("W", "ST"),
+}
+
+
+def compute_squad_balance(squad: list[SquadPlayer]) -> dict:
+    """Summarize role coverage for a planning view, not a confirmed lineup.
+
+    The roster source is an expected-callup snapshot. Position counts therefore
+    describe that snapshot only; a ``thin`` flag means the list has fewer than
+    the product's planning target for the role, not that a national team lacks
+    the role in reality.
+    """
+    by_role: dict[str, dict] = {}
+    for role, target in _SQUAD_ROLE_TARGETS.items():
+        players = [player for player in squad if player.position == role]
+        rated = [
+            player
+            for player in players
+            if player.has_rating and player.rating is not None
+        ]
+        count = len(players)
+        if count == 0:
+            depth = "missing"
+        elif count < target:
+            depth = "thin"
+        elif count == target:
+            depth = "adequate"
+        else:
+            depth = "deep"
+        by_role[role] = {
+            "count": count,
+            "planning_target": target,
+            "depth_status": depth,
+            "rated_players": len(rated),
+            "rating_coverage": round(len(rated) / count, 4) if count else 0.0,
+            "avg_rating": (
+                round(sum(player.rating for player in rated) / len(rated), 2)
+                if rated
+                else None
+            ),
+        }
+
+    units: dict[str, dict] = {}
+    for unit, roles in _SQUAD_UNITS.items():
+        players = [player for player in squad if player.position in roles]
+        rated = [
+            player
+            for player in players
+            if player.has_rating and player.rating is not None
+        ]
+        units[unit] = {
+            "roles": list(roles),
+            "count": len(players),
+            "rated_players": len(rated),
+            "rating_coverage": round(len(rated) / len(players), 4) if players else 0.0,
+            "avg_rating": (
+                round(sum(player.rating for player in rated) / len(rated), 2)
+                if rated
+                else None
+            ),
+        }
+
+    planning_flags = [
+        {
+            "role": role,
+            "status": values["depth_status"],
+            "count": values["count"],
+            "target": values["planning_target"],
+        }
+        for role, values in by_role.items()
+        if values["depth_status"] in {"missing", "thin"}
+    ]
+    return {
+        "schema": "scoutfootball.world-cup-squad-balance",
+        "version": "1.0.0",
+        "status": "ok" if squad else "no_squad",
+        "scope": "expected_callup_snapshot",
+        "roles": by_role,
+        "units": units,
+        "planning_flags": planning_flags,
+        "disclaimer": (
+            "Role depth is calculated from the expected-callup snapshot and is not a "
+            "confirmed 26-player roster, lineup, injury report, or tactical recommendation."
+        ),
+    }
+
+
 def compute_group_predictions(
     team_strengths: dict[str, float],
 ) -> list[dict]:

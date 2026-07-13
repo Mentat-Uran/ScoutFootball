@@ -69,6 +69,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - **评分校准仍未闭环**：v1.3.1-dev 的 train-fitted league residual offset 和 league-bias loss 代码已写入，但完整 GPU 重跑、CV、稳定性、feature importance 和 Barcelona/Real Madrid/Burnley 等误差复盘仍待执行。
 - **强队/降级队偏差仍需复盘**：当前模型仍记录强队系统性低估和降级队高估，不能只用整体 Spearman/Pearson 宣称球员真实水平已解决。
 - **世界杯模块仍是混合/样例视图**：世界杯赛程、名单、对比和出线页还没有全量官方阵容、更多联赛评分覆盖、国家队阵容 API 和低覆盖分层说明，不能写成完整真实后端能力。
+- [x] **预计名单阵容结构诊断**：世界杯球队前景、名单 API 与赛前简报现在按 GK/CB/FB/DM/CM/AM/W/ST 提供预计征召快照的位置数量、评分覆盖和规划深度标记；该诊断明确不是官方 26 人名单、首发、伤病或战术建议。
 - **前端 API 联调不完整**：球员页还缺搜索、分页、完整 player profile 指标、报告导出；身价页还缺 value-fairness OOF report 细分；比赛预测页还缺统一 prediction service、模型版本、Brier/log loss/RPS 和校准状态。
 - **报告页信息不足**：model-run registry 列表端点展示基础指标、依赖版本、输入 hash、误差案例和复现命令；详情端点提供 feature_importance parquet 级数据、params_summary min/max 和 data_attribution；前端展开时异步加载详情端点。数据归属面板展示 /license 端点的归属信息，模型运行对比视图支持选择两个 run 对比 holdout 指标。
 - **动作价值仍是样本能力**：`player_value_metrics.parquet` 只代表 StatsBomb 事件价值样本；P2 产物尚未完成全量 internal actions/xT/VAEP 管线、socceraction 依赖评估和公开图表 attribution。

@@ -214,5 +214,8 @@ def test_world_cup_briefing_exports_keep_local_scope_and_csv_safety() -> None:
     assert 'schema: "scoutfootball.world-cup-match-briefing-export"' in app_js
     assert 'storage_scope: "browser-local-download"' in app_js
     assert 'row.map(csvCell).join(",")' in app_js
+    assert "# Squad Role Depth" in app_js
+    assert "team?.squad?.balance?.roles" in app_js
+    assert "data.squad_balance" in app_js
     assert "wc-export-briefing-json" in app_js
     assert "wc-export-briefing-csv" in app_js

@@ -120,4 +120,5 @@ def test_world_cup_match_briefing_endpoint(client: TestClient):
     assert data["status"] == "ok"
     assert data["schema"] == "scoutfootball.world-cup-match-briefing"
     assert data["prediction"]["model_type"] == "world_cup_strength_poisson"
+    assert data["teams"]["home"]["squad"]["balance"]["scope"] == "expected_callup_snapshot"
     assert "limitations" in data
