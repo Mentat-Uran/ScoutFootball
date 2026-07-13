@@ -6811,6 +6811,23 @@ async function fetchActionValueEvidence(playerId) {
     }
 }
 
+async function fetchActionValuePlayerContext(playerId) {
+    try {
+        return await fetchJson(`/action-values/players/${encodeURIComponent(playerId)}/context`);
+    } catch (err) {
+        const explorer = typeof ACTION_VALUE_EXPLORER !== "undefined" ? ACTION_VALUE_EXPLORER : null;
+        if (explorer) {
+            return explorer.playerContextFromRows(
+                playerId,
+                actionValueSummary.xt_players || actionValueSummary.players || [],
+                actionValueSummary.vaep_players || [],
+                actionValueMatchSummary.rows || [],
+            );
+        }
+        return { status: "not_available", models: {}, match_sample: { rows: [] } };
+    }
+}
+
 async function renderCompare() {
     const btn = document.getElementById("compare-btn");
     const inputA = document.getElementById("compare-input-a");
@@ -9516,6 +9533,13 @@ function showActionValueDetail(player, mode) {
         <div class="action-detail-boundary">${escapeHtml(mode === "vaep"
             ? (appState.lang === "zh" ? "VAEP 按球员—球队生涯聚合；赛季仅用于说明底层覆盖范围，不能解释为单赛季 VAEP。" : "VAEP is aggregated by player-team career. Seasons describe source coverage and are not season-level VAEP values.")
             : (appState.lang === "zh" ? "xT 行对应一个球员—球队—赛季样本。" : "Each xT row represents a player-team-season sample."))}</div>
+        <section class="action-evidence-section" aria-labelledby="action-context-title">
+            <div class="action-evidence-head">
+                <div><p class="eyebrow">Model context</p><h4 id="action-context-title">${escapeHtml(appState.lang === "zh" ? "跨模型研究档案" : "Cross-model research dossier")}</h4></div>
+                <span class="status-pill status-medium" id="action-context-status">loading</span>
+            </div>
+            <div id="action-context-content" data-player-id="${escapeAttr(String(player.player_id || ""))}" aria-live="polite"><p class="action-evidence-message">${escapeHtml(appState.lang === "zh" ? "正在加载独立模型上下文..." : "Loading separate model contexts...")}</p></div>
+        </section>
         <section class="action-evidence-section" aria-labelledby="action-evidence-title">
             <div class="action-evidence-head">
                 <div><p class="eyebrow">StatsBomb sample evidence</p><h4 id="action-evidence-title">${escapeHtml(appState.lang === "zh" ? "比赛级 xT 证据" : "Match-level xT evidence")}</h4></div>
@@ -9525,7 +9549,56 @@ function showActionValueDetail(player, mode) {
         </section>`;
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
+    void renderActionValuePlayerContext(player);
     void renderActionValueEvidence(player);
+}
+
+function actionContextRows(title, rows, metricKey, contextKey) {
+    const items = Array.isArray(rows) ? rows : [];
+    if (!items.length) return `<section class="action-evidence-breakdown"><h5>${escapeHtml(title)}</h5><p class="action-evidence-message">–</p></section>`;
+    return `<section class="action-evidence-breakdown"><h5>${escapeHtml(title)}</h5>${items.map((row) => {
+        const team = row.team_name || (row.team_id ? `Team ID ${row.team_id}` : "–");
+        const context = row[contextKey] || row.season || "–";
+        return `<div class="action-evidence-breakdown-row"><span>${escapeHtml(team)} <small>${escapeHtml(String(context))}</small></span><strong>${safeNum(row[metricKey] || 0, 3)} / 90</strong></div>`;
+    }).join("")}</section>`;
+}
+
+function downloadActionValueContext(data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `action-value-context-${String(data.player_id || "player")}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+async function renderActionValuePlayerContext(player) {
+    const target = document.getElementById("action-context-content");
+    const status = document.getElementById("action-context-status");
+    const playerId = String(player.player_id || "");
+    if (!target || !playerId) return;
+    const data = await fetchActionValuePlayerContext(playerId);
+    if (target.dataset.playerId !== playerId) return;
+    const xtRows = data?.models?.xt?.rows || [];
+    const vaepRows = data?.models?.vaep?.rows || [];
+    const matchRows = data?.match_sample?.rows || [];
+    if (data?.status !== "ok") {
+        target.innerHTML = `<div class="action-detail-boundary">${escapeHtml(appState.lang === "zh" ? "未找到该球员的跨模型上下文；当前排名仍保持原始模型粒度。" : "No cross-model context was found; rankings retain their original model granularity.")}</div>`;
+        if (status) { status.textContent = "N/A"; status.className = "status-pill status-low"; }
+        return;
+    }
+    const reason = data.comparability?.reason || "These values are not additive or directly comparable.";
+    target.innerHTML = `
+        <div class="action-detail-boundary"><strong>${escapeHtml(appState.lang === "zh" ? "不可合并比较" : "Non-additive comparison")}</strong> · ${escapeHtml(reason)}</div>
+        <div class="action-evidence-breakdown-grid">
+            ${actionContextRows("xT · player-team-season", xtRows, "xt_per_90", "season")}
+            ${actionContextRows("VAEP · player-team-career", vaepRows, "vaep_per_90", "season_context")}
+        </div>
+        <div class="action-evidence-scope"><strong>${matchRows.length}</strong> ${escapeHtml(appState.lang === "zh" ? "场版本化比赛样例" : "versioned match samples")}<span>${escapeHtml(appState.lang === "zh" ? "比赛级 xT 使用独立样例网格，不能与上方聚合数值相加。" : "Match-level xT uses a separate sample grid and is not additive with aggregate values.")}</span></div>
+        <button class="text-button" id="action-context-export" type="button">${escapeHtml(appState.lang === "zh" ? "导出研究档案 JSON" : "Export research dossier JSON")}</button>`;
+    target.querySelector("#action-context-export")?.addEventListener("click", () => downloadActionValueContext(data));
+    if (status) { status.textContent = "READY"; status.className = "status-pill status-high"; }
 }
 
 function actionEvidenceBreakdown(title, rows) {

@@ -291,6 +291,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] 增加显式启用的本地 scouting workspace 持久化：v1.x 校验、仅回环访问、`If-Match` 乐观并发、原子写入、更新前不可变备份，以及前端保存/加载和冲突预览；不开放默认远程写入。
 - [x] 补齐 VAEP `player_id -> player_name/team/season` 映射与未映射覆盖率。
 - [x] 动作价值多维下钻：球队/赛季/赛事/分钟/搜索联合筛选，筛选选项动态聚合，身份覆盖率摘要，未映射球员回退显示 ID（`frontend/action-value-explorer.js`）。
+- [x] 动作价值球员研究档案：`GET /action-values/players/{player_id}/context` 将 xT 球员—球队—赛季行、VAEP 球员—球队生涯行与版本化比赛样例并列返回；前端详情弹窗支持离线回退和 JSON 导出，并强制显示 `direct_numeric_comparison: false` / `additive: false`，不生成跨模型合并排名。
 - [x] 增加 3 场跟踪样本的球员→比赛→动作证据下钻：pass/carry/shot、目标区域、时间段、高价值动作坐标，以及 API/静态回退和样本外边界提示。
 - [ ] 生成可版本化的全量比赛级动作产物，补比赛日期/分钟/赛事覆盖和置信区间；在评分融合前完成时间切分与独立评估。3 场样本重算的 xT 不得与完整聚合榜直接比较或相加。
 

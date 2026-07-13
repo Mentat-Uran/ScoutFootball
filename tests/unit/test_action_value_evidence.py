@@ -164,3 +164,17 @@ def test_evidence_api_index_detail_and_missing_player() -> None:
     missing = client.get("/action-values/evidence/not-a-player")
     assert missing.status_code == 200
     assert missing.json()["status"] == "not_found"
+
+
+def test_player_context_api_keeps_model_granularities_separate() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/action-values/players/5503/context")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["models"]["xt"]["granularity"] == "player_team_season"
+    assert data["models"]["vaep"]["granularity"] == "player_team_career"
+    assert data["comparability"]["direct_numeric_comparison"] is False
+    assert data["comparability"]["additive"] is False

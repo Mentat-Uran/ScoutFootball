@@ -5449,6 +5449,43 @@ def get_action_value_evidence(player_id: str) -> dict[str, Any]:
     return _clean_json_value(_get_action_value_evidence(player_id))
 
 
+def get_action_value_player_context(player_id: str) -> dict[str, Any]:
+    """Return a non-additive xT/VAEP/match-evidence dossier for one player."""
+    import pandas as pd
+
+    from scoutfootball.action_value.context import build_player_action_value_context
+    from scoutfootball.action_value.identity import attach_team_names, enrich_vaep_identities
+
+    settings = _settings()
+    feature_root = settings.data_root / "gold" / "feature_store"
+
+    def read(name: str) -> pd.DataFrame:
+        path = feature_root / name
+        if not path.exists():
+            return pd.DataFrame()
+        try:
+            return _read_parquet(path)
+        except Exception:
+            return pd.DataFrame()
+
+    xt = read("player_action_value.parquet")
+    vaep = read("player_vaep.parquet")
+    sample = read("player_match_action_value_sample.parquet")
+    matches_path = settings.raw_root / "statsbomb_open" / "matches_all.parquet"
+    try:
+        matches = _read_parquet(matches_path) if matches_path.exists() else pd.DataFrame()
+    except Exception:
+        matches = pd.DataFrame()
+    return _clean_json_value(
+        build_player_action_value_context(
+            player_id,
+            attach_team_names(xt, matches),
+            enrich_vaep_identities(vaep, xt, matches),
+            sample,
+        )
+    )
+
+
 def get_player_match_action_values(limit: int = 100, offset: int = 0) -> dict[str, Any]:
     """Read the generated, sample-bounded player-match xT artifact."""
     import json

@@ -97,3 +97,17 @@ test("player-match rows are isolated by player and ordered by match date", () =>
     ], "10");
     assert.deepEqual(result.map((row) => row.match_date), ["2024-01-02", "2024-01-01"]);
 });
+
+test("builds a local dossier without merging model values", () => {
+    const dossier = explorer.playerContextFromRows(
+        "10",
+        [{ player_id: "10", player_name: "Ada Forward", season: "2023/2024", xt_per_90: 0.4 }],
+        [{ player_id: 10, player_name: "Ada Forward", season_context: "2022/2023 | 2023/2024", vaep_per_90: 1.2 }],
+        [{ player_id: "10", match_date: "2024-01-01", xt_per_90: 0.2 }],
+    );
+    assert.equal(dossier.status, "ok");
+    assert.equal(dossier.models.xt.granularity, "player_team_season");
+    assert.equal(dossier.models.vaep.granularity, "player_team_career");
+    assert.equal(dossier.comparability.additive, false);
+    assert.equal(dossier.match_sample.rows.length, 1);
+});
