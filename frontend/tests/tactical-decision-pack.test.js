@@ -27,6 +27,22 @@ test("creates a decision pack with recorded prediction output and provenance", (
             briefing_version: "1.0.0",
             briefing_source: "Local rating artifacts",
         },
+        contextual_evidence: {
+            non_additive_to_prediction: false,
+            head_to_head: {
+                status: "available",
+                summary: { total_meetings: 8, home_wins: 4, draws: 2, away_wins: 2 },
+                recent_form: {
+                    home_trend: { trend_label: "improving" },
+                    away_trend: { trend_label: "declining" },
+                },
+            },
+            momentum: {
+                status: "available",
+                current_scoreline: { home_goals: 1, away_goals: 0, minute: 62 },
+                remaining_outcome_probabilities: { home_win: 0.72, draw: 0.18, away_win: 0.1 },
+            },
+        },
         limitations: ["Model context only."],
     });
 
@@ -37,7 +53,14 @@ test("creates a decision pack with recorded prediction output and provenance", (
     assert.equal(pack.provenance.model_run_id, "prediction-run-22");
     assert.equal(pack.provenance.briefing_schema, "scoutfootball.world-cup-match-briefing");
     assert.equal(pack.provenance.briefing_version, "1.0.0");
+    assert.equal(pack.version, "1.1.0");
+    assert.equal(pack.contextual_evidence.non_additive_to_prediction, true);
+    assert.equal(pack.contextual_evidence.head_to_head.summary.total_meetings, 8);
+    assert.equal(pack.contextual_evidence.head_to_head.recent_form.home_trend, "improving");
+    assert.equal(pack.contextual_evidence.momentum.current_scoreline.minute, 62);
     assert.match(board.formatDecisionPackNotes(pack), /Home win: 51%/);
+    assert.match(board.formatDecisionPackNotes(pack), /Separate context \(non-additive\): H2H 8 meetings/);
+    assert.match(board.formatDecisionPackNotes(pack), /Momentum query \(separate context\): 1-0 at 62'/);
     assert.match(board.formatDecisionPackNotes(pack), /model run prediction-run-22/);
 });
 
@@ -80,13 +103,16 @@ test("round-trips constrained decision-pack metadata and drops untrusted fields"
     const pack = imported.metadata.decision_pack;
 
     assert.equal(pack.schema, "scoutfootball.tactical-decision-pack");
-    assert.equal(pack.version, "1.0.0");
+    assert.equal(pack.version, "1.1.0");
     assert.equal(pack.prediction.probabilities.home_win, 1);
     assert.equal(pack.prediction.probabilities.draw, 0);
     assert.equal(pack.prediction.expected_goals.home, 20);
     assert.equal(pack.prediction.score_matrix.length, 12);
     assert.equal(pack.prediction.score_matrix[0].length, 12);
     assert.equal(pack.provenance.unsafe, undefined);
+    assert.equal(pack.contextual_evidence.non_additive_to_prediction, true);
+    assert.equal(pack.contextual_evidence.head_to_head.status, "not_loaded");
+    assert.equal(pack.contextual_evidence.momentum.status, "not_loaded");
     assert.equal(pack.limitations[0].length, 120);
     assert.equal(Object.hasOwn(imported.metadata, "unsafe"), false);
 });

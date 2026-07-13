@@ -721,6 +721,15 @@ also stores the bounded briefing schema, version, and source attribution. The
 tactical JSON export preview surfaces those fields so the board can be checked
 against a compatible local briefing export.
 
+The general match-prediction tactical handoff writes a bounded
+`scoutfootball.tactical-decision-pack` v1.1.0 into the browser-local board
+project. Alongside the loaded model output and provenance, it may preserve the
+already loaded head-to-head/recent-form summary and momentum query. These are
+explicitly `non_additive_to_prediction`, cannot change the recorded
+probabilities, and do not create a lineup, player availability claim, or
+tactical recommendation. The pack keeps unavailable context as unavailable and
+sanitizes imported metadata to its compact numeric/status schema.
+
 ### GET /world-cup/knockout
 World Cup knockout bracket simulation.
 

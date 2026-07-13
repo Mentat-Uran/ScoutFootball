@@ -1141,9 +1141,38 @@ const TACTICAL_BOARD = {
         const limitations = Array.isArray(pack.limitations)
             ? pack.limitations.slice(0, 6).map((item) => this._safeString(item).slice(0, 300)).filter(Boolean)
             : [];
+        const contextual = pack.contextual_evidence && typeof pack.contextual_evidence === "object"
+            ? pack.contextual_evidence
+            : {};
+        const contextStatus = (value) => ["available", "unavailable", "loading", "not_loaded"].includes(value)
+            ? value
+            : "not_loaded";
+        const nullableNumber = (value, min, max) => {
+            const number = Number(value);
+            return Number.isFinite(number) ? this._clampNumber(number, min, max, 0) : null;
+        };
+        const nullableInteger = (value, min, max) => {
+            const number = Number(value);
+            return Number.isFinite(number) ? Math.round(this._clampNumber(number, min, max, 0)) : null;
+        };
+        const trend = (value) => ["improving", "declining", "stable", "insufficient", "insufficient_data", "no_data"].includes(value)
+            ? value
+            : "";
+        const h2h = contextual.head_to_head && typeof contextual.head_to_head === "object"
+            ? contextual.head_to_head
+            : {};
+        const h2hSummary = h2h.summary && typeof h2h.summary === "object" ? h2h.summary : {};
+        const recentForm = h2h.recent_form && typeof h2h.recent_form === "object" ? h2h.recent_form : {};
+        const momentum = contextual.momentum && typeof contextual.momentum === "object" ? contextual.momentum : {};
+        const scoreline = momentum.current_scoreline && typeof momentum.current_scoreline === "object"
+            ? momentum.current_scoreline
+            : {};
+        const remaining = momentum.remaining_outcome_probabilities && typeof momentum.remaining_outcome_probabilities === "object"
+            ? momentum.remaining_outcome_probabilities
+            : {};
         return {
             schema: "scoutfootball.tactical-decision-pack",
-            version: "1.0.0",
+            version: "1.1.0",
             created_at: this._safeString(pack.created_at, new Date().toISOString()),
             match: {
                 home_team: this._safeString(match.home_team).slice(0, 120),
@@ -1178,11 +1207,40 @@ const TACTICAL_BOARD = {
                 briefing_version: this._safeString(provenance.briefing_version).slice(0, 40),
                 briefing_source: this._safeString(provenance.briefing_source).slice(0, 240),
             },
+            contextual_evidence: {
+                non_additive_to_prediction: true,
+                head_to_head: {
+                    status: contextStatus(h2h.status),
+                    summary: {
+                        total_meetings: nullableInteger(h2hSummary.total_meetings, 0, 100000),
+                        home_wins: nullableInteger(h2hSummary.home_wins, 0, 100000),
+                        draws: nullableInteger(h2hSummary.draws, 0, 100000),
+                        away_wins: nullableInteger(h2hSummary.away_wins, 0, 100000),
+                    },
+                    recent_form: {
+                        home_trend: trend(recentForm.home_trend?.trend_label),
+                        away_trend: trend(recentForm.away_trend?.trend_label),
+                    },
+                },
+                momentum: {
+                    status: contextStatus(momentum.status),
+                    current_scoreline: {
+                        home_goals: nullableInteger(scoreline.home_goals, 0, 20),
+                        away_goals: nullableInteger(scoreline.away_goals, 0, 20),
+                        minute: nullableInteger(scoreline.minute, 0, 120),
+                    },
+                    remaining_outcome_probabilities: {
+                        home_win: nullableNumber(remaining.home_win, 0, 1),
+                        draw: nullableNumber(remaining.draw, 0, 1),
+                        away_win: nullableNumber(remaining.away_win, 0, 1),
+                    },
+                },
+            },
             limitations,
         };
     },
 
-    createDecisionPack({ match = {}, prediction = {}, provenance = {}, limitations = [] } = {}) {
+    createDecisionPack({ match = {}, prediction = {}, provenance = {}, contextual_evidence = {}, limitations = [] } = {}) {
         return this._sanitizeDecisionPack({
             created_at: new Date().toISOString(),
             match: {
@@ -1191,6 +1249,7 @@ const TACTICAL_BOARD = {
             },
             prediction,
             provenance,
+            contextual_evidence,
             limitations,
         });
     },
@@ -1210,6 +1269,20 @@ const TACTICAL_BOARD = {
             lines.push(`Expected goals: ${(prediction.expected_goals.home || 0).toFixed(2)} / ${(prediction.expected_goals.away || 0).toFixed(2)}`);
         } else {
             lines.push("Prediction output was not loaded. No fallback probability or score estimate was recorded.");
+        }
+        const context = safe.contextual_evidence || {};
+        const h2h = context.head_to_head || {};
+        const momentum = context.momentum || {};
+        if (h2h.status === "available") {
+            const summary = h2h.summary || {};
+            const form = h2h.recent_form || {};
+            lines.push(`Separate context (non-additive): H2H ${summary.total_meetings ?? 0} meetings; form ${form.home_trend || "not recorded"} / ${form.away_trend || "not recorded"}.`);
+        } else {
+            lines.push(`Separate context (non-additive): H2H ${h2h.status || "not loaded"}.`);
+        }
+        if (momentum.status === "available") {
+            const scoreline = momentum.current_scoreline || {};
+            lines.push(`Momentum query (separate context): ${scoreline.home_goals ?? "?"}-${scoreline.away_goals ?? "?"} at ${scoreline.minute ?? "?"}'.`);
         }
         lines.push(`Provenance: ${safe.provenance.model_run_id ? `model run ${safe.provenance.model_run_id}` : safe.provenance.snapshot}${safe.provenance.input_hash ? ` | input ${safe.provenance.input_hash}` : ""}`);
         if (safe.limitations.length) lines.push(`Limitations: ${safe.limitations.join(" ")}`);

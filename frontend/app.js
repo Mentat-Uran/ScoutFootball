@@ -15290,6 +15290,7 @@ function buildPrematchDecisionPack(match) {
         || artifact.poisson?.input_hash
         || "";
     const modelRunId = response?.model_run_id || artifact.model_run_id || "";
+    const evidence = currentPredictionEvidenceFor(match);
     return TACTICAL_BOARD.createDecisionPack({
         match: { home: match.home, away: match.away },
         prediction: {
@@ -15317,9 +15318,15 @@ function buildPrematchDecisionPack(match) {
             lineage_status: modelRunId ? "recorded" : (artifact.status === "ok" ? "artifact_snapshot" : "not_recorded"),
             snapshot: modelRunId ? "local model run record" : "local prediction artifact snapshot",
         },
+        contextual_evidence: {
+            non_additive_to_prediction: true,
+            head_to_head: evidence.head_to_head,
+            momentum: evidence.momentum,
+        },
         limitations: [
             "Pre-match probabilities are model context, not a tactical recommendation.",
             "This decision pack and JSON export are browser-local; they are not synchronized to a server.",
+            "Head-to-head, recent form, and momentum are separate context only; they do not change probabilities or prescribe tactics.",
             ...(isAvailable ? [] : ["Prediction output was unavailable when this plan was created; no fallback estimate is included."]),
         ],
     });
@@ -15343,7 +15350,19 @@ function renderTacticalDecisionPack() {
     const provenanceLabel = provenance.model_run_id
         ? `model run ${provenance.model_run_id}`
         : (provenance.snapshot || "local artifact snapshot");
-    el.textContent = `${status} · ${model}${version}\nCoverage: ${coverage}\nProvenance: ${provenanceLabel}${provenance.input_hash ? ` · input ${provenance.input_hash}` : ""}\nLocal-only: this decision pack remains in this browser and exported JSON.`;
+    const context = pack.contextual_evidence || {};
+    const h2h = context.head_to_head || {};
+    const momentum = context.momentum || {};
+    const h2hSummary = h2h.summary || {};
+    const form = h2h.recent_form || {};
+    const h2hLabel = h2h.status === "available"
+        ? `${h2hSummary.total_meetings ?? 0} meetings; form ${form.home_trend || "not recorded"} / ${form.away_trend || "not recorded"}`
+        : (h2h.status || "not loaded");
+    const scoreline = momentum.current_scoreline || {};
+    const momentumLabel = momentum.status === "available"
+        ? `${scoreline.home_goals ?? "?"}-${scoreline.away_goals ?? "?"} at ${scoreline.minute ?? "?"}'`
+        : (momentum.status || "not loaded");
+    el.textContent = `${status} · ${model}${version}\nCoverage: ${coverage}\nProvenance: ${provenanceLabel}${provenance.input_hash ? ` · input ${provenance.input_hash}` : ""}\nSeparate context (non-additive): H2H ${h2hLabel}; momentum ${momentumLabel}.\nLocal-only: this decision pack remains in this browser and exported JSON.`;
     el.hidden = false;
 }
 
