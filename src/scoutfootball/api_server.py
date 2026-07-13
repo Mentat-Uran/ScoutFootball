@@ -86,6 +86,7 @@ from scoutfootball.api import (
     get_value_summary,
     get_watchlist,
     get_wc_group_stage_simulation,
+    get_wc_group_tiebreak_diagnostics,
     get_wc_groups,
     get_wc_knockout,
     get_wc_knockout_bracket,
@@ -915,6 +916,10 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/tournament/qualification-impact")
     def wc_tournament_qualification_impact(group: str):
         return get_wc_qualification_impact(group)
+
+    @app.get("/world-cup/tournament/tiebreak-diagnostics")
+    def wc_tournament_tiebreak_diagnostics(group: str):
+        return get_wc_group_tiebreak_diagnostics(group)
 
     @app.get("/world-cup/tournament/matches")
     def wc_tournament_matches(

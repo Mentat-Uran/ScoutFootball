@@ -202,6 +202,16 @@ def test_tournament_qualification_impact_endpoint_is_local_and_provisional(clien
     assert "locally recorded group results" in data["limitations"][0]
 
 
+def test_tournament_tiebreak_diagnostics_endpoint_exposes_local_boundary(client: TestClient):
+    response = client.get("/world-cup/tournament/tiebreak-diagnostics?group=A")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema"] == "scoutfootball.world-cup-group-tiebreak-diagnostics"
+    assert data["group"] == "A"
+    assert "not an official ranking decision" in data["limitations"][-1]
+
+
 def test_world_cup_squad_balance_comparison_endpoint(client: TestClient):
     response = client.get("/world-cup/squad-balance-comparison/Argentina/France")
 

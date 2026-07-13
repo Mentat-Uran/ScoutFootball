@@ -831,6 +831,14 @@ The page can download the exact loaded response in a separate
 `scoutfootball.world-cup-qualification-impact-export` v1.0.0 local JSON file;
 it creates no server-side audit record or synchronization.
 
+### GET /world-cup/tournament/tiebreak-diagnostics?group=A
+
+Returns tied clusters that remain after points, goal difference, and goals
+scored, together with the number of head-to-head fixtures recorded versus
+required. It exposes only the availability of the locally calculated rule; it
+does not model fair-play or drawing of lots, and never represents a local
+display order as an official ranking decision.
+
 **Response**:
 ```json
 {
