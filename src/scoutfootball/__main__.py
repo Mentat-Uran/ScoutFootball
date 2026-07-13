@@ -77,6 +77,15 @@ def _cmd_validate(_args: argparse.Namespace) -> None:
     print(report.summary())
 
 
+def _cmd_optimizer_preflight(args: argparse.Namespace) -> None:
+    from scoutfootball.evaluation.optimizer_preflight import optimizer_preflight
+
+    report = optimizer_preflight(Path(args.data_dir).resolve())
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    if not report["ready"]:
+        sys.exit(2)
+
+
 def _cmd_import_truth_labels(args: argparse.Namespace) -> None:
     """Import scouting workspace review decisions as truth labels."""
     import json as _json
@@ -1351,6 +1360,15 @@ def main() -> None:
     nn_p.add_argument("--seed", type=int, default=42)
     nn_p.add_argument("--output-dir", type=str, default=None)
     sub.add_parser("validate", help="Run pre-training data validation")
+    preflight_p = sub.add_parser(
+        "optimizer-preflight",
+        help="Check rating optimizer runtime and raw inputs",
+    )
+    preflight_p.add_argument(
+        "--data-dir",
+        default="data",
+        help="Directory containing raw optimizer inputs",
+    )
 
     av_p = sub.add_parser(
         "action-value",
@@ -1575,6 +1593,7 @@ def main() -> None:
         "train": _cmd_train,
         "train-rating-nn": _cmd_train_rating_nn,
         "validate": _cmd_validate,
+        "optimizer-preflight": _cmd_optimizer_preflight,
         "action-value": _cmd_action_value,
         "action-value-matches": _cmd_action_value_matches,
         "export-ratings": _cmd_export_ratings,
