@@ -1626,10 +1626,72 @@ def compute_reliability_diagram(
         calibration_error = 0.0
         rms_calibration_error = 0.0
 
+    # MCE (Maximum Calibration Error) — worst-case per-bin gap across
+    # all retained bins. Empty bin list yields 0.0.
+    if all_bins:
+        mce = float(max(
+            abs(b.mean_predicted - b.observed_frequency) for b in all_bins
+        ))
+    else:
+        mce = 0.0
+
+    # Overall calibration intercept/slope via OLS regression of
+    # observed_frequency on mean_predicted across all retained bins.
+    # Ideal values: slope=1.0, intercept=0.0. Slope<1 signals
+    # over-confidence (predictions move faster than observed frequencies).
+    if len(all_bins) >= 2:
+        x = np.array([b.mean_predicted for b in all_bins], dtype=float)
+        y = np.array([b.observed_frequency for b in all_bins], dtype=float)
+        x_mean = float(x.mean())
+        y_mean = float(y.mean())
+        denom = float(((x - x_mean) ** 2).sum())
+        if denom > 0:
+            slope = float(((x - x_mean) * (y - y_mean)).sum() / denom)
+            intercept = float(y_mean - slope * x_mean)
+        else:
+            slope = 0.0
+            intercept = y_mean
+    else:
+        slope = 0.0
+        intercept = 0.0
+
+    # Per-outcome intercept/slope (only when ≥2 bins survived for the
+    # outcome). Useful for diagnosing which outcome is miscalibrated.
+    per_outcome_calibration: dict[str, dict[str, float]] = {}
+    for outcome in outcomes:
+        outcome_bins = per_outcome[outcome]
+        if len(outcome_bins) >= 2:
+            xo = np.array([b.mean_predicted for b in outcome_bins], dtype=float)
+            yo = np.array([b.observed_frequency for b in outcome_bins], dtype=float)
+            xo_mean = float(xo.mean())
+            yo_mean = float(yo.mean())
+            denom_o = float(((xo - xo_mean) ** 2).sum())
+            if denom_o > 0:
+                slope_o = float(((xo - xo_mean) * (yo - yo_mean)).sum() / denom_o)
+                intercept_o = float(yo_mean - slope_o * xo_mean)
+            else:
+                slope_o = 0.0
+                intercept_o = yo_mean
+            per_outcome_calibration[outcome] = {
+                "slope": round(slope_o, 4),
+                "intercept": round(intercept_o, 4),
+                "n_bins": len(outcome_bins),
+            }
+        else:
+            per_outcome_calibration[outcome] = {
+                "slope": 0.0,
+                "intercept": 0.0,
+                "n_bins": len(outcome_bins),
+            }
+
     # ECE (Expected Calibration Error) — same as calibration_error
     overall = {
         "ece": float(calibration_error),
         "rms_calibration_error": rms_calibration_error,
+        "mce": mce,
+        "calibration_slope": round(slope, 4),
+        "calibration_intercept": round(intercept, 4),
+        "per_outcome_calibration": per_outcome_calibration,
         "n_bins_used": len(all_bins),
         "n_predictions": len(df),
     }
@@ -6394,5 +6456,375 @@ def compute_difficulty_stratification(
         overall_brier=round(overall_brier, 4),
         best_tier=best_tier,
         worst_tier=worst_tier,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prediction streak analysis (consecutive correct/wrong runs + break patterns)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StreakPoint:
+    """Per-match streak snapshot, ordered by ``match_date`` when available."""
+
+    match_index: int
+    streak_sign: str  # "correct" | "wrong" | "none"
+    streak_length: int
+    confidence: float
+    predicted_outcome: str | None
+    actual_outcome: str | None
+    correct: bool | None
+    streak_break_type: str | None  # "upset" | "recovery" | "neutral" | None on first row
+    match_id: str | None = None
+    home_team: str | None = None
+    away_team: str | None = None
+    match_date: str | None = None
+
+
+@dataclass(frozen=True)
+class StreakAnalysisReport:
+    """Aggregate summary of consecutive correct/wrong prediction runs.
+
+    ``upset_breaks`` counts high-confidence wrong predictions that ended a
+    correct streak; ``recovery_breaks`` counts low-confidence correct
+    predictions that ended a wrong streak. ``neutral_breaks`` counts all
+    other streak transitions.
+    """
+
+    n_matches: int
+    current_streak: int
+    current_streak_type: str  # "correct" | "wrong" | "none"
+    longest_correct_streak: int
+    longest_wrong_streak: int
+    total_streak_breaks: int
+    upset_breaks: int
+    recovery_breaks: int
+    neutral_breaks: int
+    upset_rate: float
+    recovery_rate: float
+    avg_correct_streak_length: float
+    avg_wrong_streak_length: float
+    points: list[StreakPoint]
+    disclaimer: str
+
+
+def _streak_outcome_label(actual_outcome: str | None) -> str | None:
+    """Normalize an actual outcome label for streak reporting."""
+    if actual_outcome is None:
+        return None
+    text = str(actual_outcome).strip().lower()
+    aliases = {
+        "h": "home_win",
+        "home": "home_win",
+        "home_win": "home_win",
+        "1": "home_win",
+        "d": "draw",
+        "draw": "draw",
+        "0": "draw",
+        "a": "away_win",
+        "away": "away_win",
+        "away_win": "away_win",
+        "2": "away_win",
+    }
+    return aliases.get(text, text)
+
+
+def compute_prediction_streaks(
+    predictions: pd.DataFrame,
+    *,
+    high_confidence_threshold: float = 0.60,
+    low_confidence_threshold: float = 0.40,
+    max_points: int = 1000,
+) -> StreakAnalysisReport:
+    """Track consecutive correct/wrong prediction runs and streak breaks.
+
+    Sorts predictions by ``match_date`` when available (falling back to
+    original order) and walks the per-match correctness flag to identify
+    streak transitions. A streak ends when the correctness sign flips.
+
+    - ``upset_break``: a high-confidence (>= ``high_confidence_threshold``)
+      wrong prediction that ends a correct streak.
+    - ``recovery_break``: a low-confidence (< ``low_confidence_threshold``)
+      correct prediction that ends a wrong streak.
+    - ``neutral_break``: any other streak transition.
+
+    Args:
+        predictions: DataFrame with probability columns. When
+            ``actual_outcome`` is present it is used directly; otherwise
+            it is synthesized from ``home_goals``/``away_goals``.
+        high_confidence_threshold: Confidence at or above which a wrong
+            prediction is considered an "upset" break. Must be in (0, 1].
+        low_confidence_threshold: Confidence below which a correct
+            prediction is considered a "recovery" break. Must be in
+            [0, 1) and strictly below ``high_confidence_threshold``.
+        max_points: Maximum number of per-match points to return (keeps
+            the first N after sorting; aggregates always use the full
+            DataFrame).
+
+    Returns:
+        StreakAnalysisReport with aggregate streak stats and a per-match
+        timeline.
+
+    Raises:
+        ValueError: If probability columns are missing, the thresholds
+            are out of range, or ``max_points`` is below 1.
+    """
+    required = {"home_win_probability", "draw_probability", "away_win_probability"}
+    missing = sorted(required.difference(predictions.columns))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"predictions is missing required columns: {missing_text}")
+
+    if not (0.0 < high_confidence_threshold <= 1.0):
+        raise ValueError(
+            "high_confidence_threshold must be in (0, 1], got "
+            f"{high_confidence_threshold}",
+        )
+    if not (0.0 <= low_confidence_threshold < 1.0):
+        raise ValueError(
+            "low_confidence_threshold must be in [0, 1), got "
+            f"{low_confidence_threshold}",
+        )
+    if low_confidence_threshold >= high_confidence_threshold:
+        raise ValueError(
+            "low_confidence_threshold ("
+            f"{low_confidence_threshold}) must be strictly below "
+            f"high_confidence_threshold ({high_confidence_threshold})"
+        )
+    if max_points < 1:
+        raise ValueError(f"max_points must be >= 1, got {max_points}")
+
+    disclaimer = (
+        "Streak analysis tracks consecutive correct/wrong predictions on "
+        "the backtest sample. Streak lengths are sensitive to ordering "
+        "and sample size; they are descriptive only and do not imply a "
+        "predictive pattern for future matches."
+    )
+
+    df = predictions.copy()
+    probs_cols = [
+        "home_win_probability",
+        "draw_probability",
+        "away_win_probability",
+    ]
+    for col in probs_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=probs_cols)
+    if df.empty:
+        return StreakAnalysisReport(
+            n_matches=0,
+            current_streak=0,
+            current_streak_type="none",
+            longest_correct_streak=0,
+            longest_wrong_streak=0,
+            total_streak_breaks=0,
+            upset_breaks=0,
+            recovery_breaks=0,
+            neutral_breaks=0,
+            upset_rate=0.0,
+            recovery_rate=0.0,
+            avg_correct_streak_length=0.0,
+            avg_wrong_streak_length=0.0,
+            points=[],
+            disclaimer=disclaimer,
+        )
+
+    if "actual_outcome" not in df.columns:
+        if {"home_goals", "away_goals"}.issubset(df.columns):
+            df["actual_outcome"] = np.where(
+                df["home_goals"] > df["away_goals"],
+                "home_win",
+                np.where(
+                    df["home_goals"] < df["away_goals"], "away_win", "draw",
+                ),
+            )
+        else:
+            df["actual_outcome"] = None
+
+    if "match_date" in df.columns:
+        df["_sort_key"] = pd.to_datetime(df["match_date"], errors="coerce")
+        df = df.sort_values(by="_sort_key", kind="stable", na_position="last")
+    else:
+        df["_sort_key"] = range(len(df))
+
+    df = df.reset_index(drop=True)
+
+    probs = df[probs_cols].to_numpy()
+    pred_idx = probs.argmax(axis=1)
+    outcome_labels = ["home_win", "draw", "away_win"]
+    predicted_outcomes = [outcome_labels[i] for i in pred_idx]
+    actual_outcomes_raw = df["actual_outcome"].tolist()
+    actual_outcomes = [_streak_outcome_label(a) for a in actual_outcomes_raw]
+    confidence = probs.max(axis=1)
+
+    correct_flags: list[bool | None] = []
+    for pred, act in zip(predicted_outcomes, actual_outcomes, strict=True):
+        if act is None:
+            correct_flags.append(None)
+        else:
+            correct_flags.append(pred == act)
+
+    optional_cols = {
+        "match_id": "match_id",
+        "home_team": "home_team",
+        "away_team": "away_team",
+        "match_date": "match_date",
+    }
+    available_optional = {
+        field: (col if col in df.columns else None)
+        for field, col in optional_cols.items()
+    }
+
+    points: list[StreakPoint] = []
+    current_sign = "none"
+    current_len = 0
+    longest_correct = 0
+    longest_wrong = 0
+    correct_streak_lengths: list[int] = []
+    wrong_streak_lengths: list[int] = []
+    total_breaks = 0
+    upset_breaks = 0
+    recovery_breaks = 0
+    neutral_breaks = 0
+
+    for i, correct in enumerate(correct_flags):
+        if correct is None:
+            # Unknown outcome — preserve current streak sign but do not
+            # extend it; emit a "none" point without breaking the run.
+            points.append(StreakPoint(
+                match_index=i,
+                streak_sign="none",
+                streak_length=current_len,
+                confidence=round(float(confidence[i]), 4),
+                predicted_outcome=predicted_outcomes[i],
+                actual_outcome=actual_outcomes[i],
+                correct=None,
+                streak_break_type=None,
+                match_id=(
+                    str(df.at[i, available_optional["match_id"]])
+                    if available_optional["match_id"] else None
+                ),
+                home_team=(
+                    str(df.at[i, available_optional["home_team"]])
+                    if available_optional["home_team"] else None
+                ),
+                away_team=(
+                    str(df.at[i, available_optional["away_team"]])
+                    if available_optional["away_team"] else None
+                ),
+                match_date=(
+                    str(df.at[i, available_optional["match_date"]])
+                    if available_optional["match_date"] else None
+                ),
+            ))
+            continue
+
+        sign = "correct" if correct else "wrong"
+        break_type: str | None = None
+        if current_sign == "none":
+            # First known outcome — start of first streak.
+            current_sign = sign
+            current_len = 1
+            break_type = None
+        elif sign == current_sign:
+            current_len += 1
+            break_type = None
+        else:
+            # Streak transition: classify the break using the new match.
+            total_breaks += 1
+            if (
+                sign == "wrong"
+                and confidence[i] >= high_confidence_threshold
+            ):
+                break_type = "upset"
+                upset_breaks += 1
+            elif (
+                sign == "correct"
+                and confidence[i] < low_confidence_threshold
+            ):
+                break_type = "recovery"
+                recovery_breaks += 1
+            else:
+                break_type = "neutral"
+                neutral_breaks += 1
+            # Close out the previous streak.
+            if current_sign == "correct":
+                correct_streak_lengths.append(current_len)
+                longest_correct = max(longest_correct, current_len)
+            else:
+                wrong_streak_lengths.append(current_len)
+                longest_wrong = max(longest_wrong, current_len)
+            current_sign = sign
+            current_len = 1
+
+        if sign == "correct":
+            longest_correct = max(longest_correct, current_len)
+        else:
+            longest_wrong = max(longest_wrong, current_len)
+
+        points.append(StreakPoint(
+            match_index=i,
+            streak_sign=sign,
+            streak_length=current_len,
+            confidence=round(float(confidence[i]), 4),
+            predicted_outcome=predicted_outcomes[i],
+            actual_outcome=actual_outcomes[i],
+            correct=correct,
+            streak_break_type=break_type,
+            match_id=(
+                str(df.at[i, available_optional["match_id"]])
+                if available_optional["match_id"] else None
+            ),
+            home_team=(
+                str(df.at[i, available_optional["home_team"]])
+                if available_optional["home_team"] else None
+            ),
+            away_team=(
+                str(df.at[i, available_optional["away_team"]])
+                if available_optional["away_team"] else None
+            ),
+            match_date=(
+                str(df.at[i, available_optional["match_date"]])
+                if available_optional["match_date"] else None
+            ),
+        ))
+
+    # Close the final streak.
+    if current_sign == "correct":
+        correct_streak_lengths.append(current_len)
+        longest_correct = max(longest_correct, current_len)
+    elif current_sign == "wrong":
+        wrong_streak_lengths.append(current_len)
+        longest_wrong = max(longest_wrong, current_len)
+
+    avg_correct = (
+        round(sum(correct_streak_lengths) / len(correct_streak_lengths), 4)
+        if correct_streak_lengths else 0.0
+    )
+    avg_wrong = (
+        round(sum(wrong_streak_lengths) / len(wrong_streak_lengths), 4)
+        if wrong_streak_lengths else 0.0
+    )
+
+    upset_rate = round(upset_breaks / total_breaks, 4) if total_breaks else 0.0
+    recovery_rate = round(recovery_breaks / total_breaks, 4) if total_breaks else 0.0
+
+    return StreakAnalysisReport(
+        n_matches=int(len(df)),
+        current_streak=current_len if current_sign != "none" else 0,
+        current_streak_type=current_sign,
+        longest_correct_streak=longest_correct,
+        longest_wrong_streak=longest_wrong,
+        total_streak_breaks=total_breaks,
+        upset_breaks=upset_breaks,
+        recovery_breaks=recovery_breaks,
+        neutral_breaks=neutral_breaks,
+        upset_rate=upset_rate,
+        recovery_rate=recovery_rate,
+        avg_correct_streak_length=avg_correct,
+        avg_wrong_streak_length=avg_wrong,
+        points=points[:max_points],
         disclaimer=disclaimer,
     )

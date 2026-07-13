@@ -1743,6 +1743,7 @@
                         <button class="text-button" id="btn-temporal-validation" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="temporal_val_fetch">加载</button>
                     </div>
                     <div id="backtest-temporal-validation-body" style="padding:0.5rem 0.8rem"></div>
+                    <div id="backtest-temporal-validation-chart" style="width:100%;height:280px;padding:0 0.5rem"></div>
                 </article>
                 <article class="liquid-panel chart-panel" id="backtest-probability-heatmap-panel" style="margin-top:1rem;display:none">
                     <div class="panel-head">
@@ -1753,6 +1754,7 @@
                         <button class="text-button" id="btn-probability-heatmap" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="prob_heatmap_fetch">加载</button>
                     </div>
                     <div id="backtest-probability-heatmap-body" style="padding:0.5rem 0.8rem"></div>
+                    <div id="backtest-probability-heatmap-chart" style="width:100%;height:320px;padding:0 0.5rem"></div>
                 </article>
                 <article class="liquid-panel chart-panel" id="backtest-prediction-staleness-panel" style="margin-top:1rem;display:none">
                     <div class="panel-head">
@@ -1774,6 +1776,7 @@
                         <button class="text-button" id="btn-ci-plot" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="ci_plot_fetch">加载</button>
                     </div>
                     <div id="backtest-ci-plot-body" style="padding:0.5rem 0.8rem"></div>
+                    <div id="backtest-ci-plot-chart" style="width:100%;height:300px;padding:0 0.5rem"></div>
                 </article>
 
                 <article class="liquid-panel chart-panel" id="backtest-fold-comparison-panel" style="margin-top:1rem;display:none">
@@ -1807,6 +1810,7 @@
                         <button class="text-button" id="btn-feature-importance" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="feature_importance_fetch">加载</button>
                     </div>
                     <div id="backtest-feature-importance-body" style="padding:0.5rem 0.8rem"></div>
+                    <div id="backtest-feature-importance-chart" style="width:100%;height:300px;padding:0 0.5rem"></div>
                 </article>
 
                 <article class="liquid-panel chart-panel" id="backtest-ci-coverage-panel" style="margin-top:1rem;display:none">
@@ -1829,6 +1833,7 @@
                         <button class="text-button" id="btn-drift-heatmap" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="drift_heatmap_fetch">加载</button>
                     </div>
                     <div id="backtest-drift-heatmap-body" style="padding:0.5rem 0.8rem"></div>
+                    <div id="backtest-drift-heatmap-chart" style="width:100%;height:340px;padding:0 0.5rem"></div>
                 </article>
 
                 <article class="liquid-panel chart-panel" id="backtest-error-clustering-panel" style="margin-top:1rem;display:none">
@@ -1928,6 +1933,18 @@
                         <button class="text-button" id="btn-difficulty" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="difficulty_fetch">加载</button>
                     </div>
                     <div id="backtest-difficulty-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-streaks-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="streaks_title">预测连胜/连败分析</h3>
+                            <span class="kicker" data-i18n="streaks_desc">追踪连续正确/错误预测的时序模式与中断类型(爆冷/反弹/中性)</span>
+                        </div>
+                        <button class="text-button" id="btn-prediction-streaks" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="streaks_fetch">加载</button>
+                    </div>
+                    <div id="backtest-streaks-body" style="padding:0.5rem 0.8rem"></div>
+                    <div id="backtest-streaks-chart" style="width:100%;height:300px;padding:0 0.5rem"></div>
                 </article>
             </section>
 

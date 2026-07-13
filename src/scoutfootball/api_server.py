@@ -67,6 +67,7 @@ from scoutfootball.api import (
     get_prediction_calibration,
     get_prediction_diagnostics,
     get_prediction_staleness,
+    get_prediction_streaks,
     get_prediction_summary,
     get_prediction_uncertainty,
     get_probability_heatmap,
@@ -541,6 +542,18 @@ def create_app() -> FastAPI:
             easy_threshold=easy_threshold,
             hard_threshold=hard_threshold,
             n_bins=n_bins,
+        )
+
+    @app.get("/predictions/calibration/streaks")
+    def predictions_calibration_streaks(
+        high_confidence_threshold: float = Query(0.60, ge=0.05, le=1.0),
+        low_confidence_threshold: float = Query(0.40, ge=0.0, le=0.95),
+        max_points: int = Query(500, ge=10, le=5000),
+    ):
+        return get_prediction_streaks(
+            high_confidence_threshold=high_confidence_threshold,
+            low_confidence_threshold=low_confidence_threshold,
+            max_points=max_points,
         )
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")
