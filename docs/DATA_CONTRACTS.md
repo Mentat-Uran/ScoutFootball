@@ -185,8 +185,21 @@ Coordinate transformation: `x_internal = x_statsbomb / 120 * 100`
 | finishing_shrunk | float | Shrunk finishing metric |
 | statsbomb_open_source_covered | bool | StatsBomb coverage flag |
 | fbref_source_covered | bool | FBref coverage flag |
+| understat_source_covered | bool | Understat historical season-proxy coverage flag |
 | has_expected_metrics | bool | xG/xA data available |
 | has_ball_value_data | bool | Ball value data available |
+
+---
+
+### Historical Understat season proxies
+
+`data/raw/understat/players_10seasons.parquet` may extend `player_match` and
+`rating_feature_matrix` for Big Five seasons that are not present in the local
+FBref proxy. These rows use `source_name="understat"` and
+`data_granularity="season_proxy"`; they are aggregate season statistics, not
+match events. The pipeline excludes seasons already covered by FBref and does
+not import RFPL rows because this rating route has no aligned team-results
+target for that competition.
 
 ---
 

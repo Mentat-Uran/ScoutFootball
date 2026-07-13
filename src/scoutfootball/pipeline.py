@@ -17,6 +17,7 @@ from scoutfootball.features.player_rolling import build_player_rolling_features
 from scoutfootball.features.rating_matrix import build_rating_feature_matrix, write_feature_manifest
 from scoutfootball.features.team_match import build_team_match_features
 from scoutfootball.features.team_rolling import build_team_rolling_features
+from scoutfootball.features.understat_history import build_understat_season_proxy
 from scoutfootball.models.match_prediction import (
     fit_dixon_coles,
     fit_independent_poisson,
@@ -92,18 +93,25 @@ def run_build_features(
         team_rolling.to_parquet(team_rolling_path, index=False)
         results["team_rolling"] = f"ok ({len(team_rolling)} rows -> {team_rolling_path.name})"
 
-        # Combine StatsBomb per-match data (if available) with FBref season proxy
+        # Combine StatsBomb per-match data with season proxies.  FBref stays
+        # authoritative for overlapping recent seasons; local Understat rows
+        # extend the historical Big Five coverage only.
         sb_match = _build_player_match_from_statsbomb(resolved)
         fbref_proxy = _build_player_match_proxy_from_fbref(resolved)
+        understat_proxy = _build_player_match_proxy_from_understat(
+            resolved,
+            excluded_season_ids=set(fbref_proxy["season_id"].dropna().astype(str)),
+        )
+        proxy_frames = [fbref_proxy, understat_proxy]
 
         if not sb_match.empty:
-            player_match = pd.concat([sb_match, fbref_proxy], ignore_index=True, sort=False)
+            player_match = pd.concat([sb_match, *proxy_frames], ignore_index=True, sort=False)
             match_count = (player_match["data_granularity"] == "match").sum()
             proxy_count = (player_match["data_granularity"] == "season_proxy").sum()
             granularity_info = f"{match_count} match-level + {proxy_count} season-proxy"
         else:
-            player_match = fbref_proxy
-            granularity_info = "season-level FBref proxy only"
+            player_match = pd.concat(proxy_frames, ignore_index=True, sort=False)
+            granularity_info = "season-level FBref + Understat proxies"
 
         player_match_path = resolved.gold_root / "feature_store" / "player_match.parquet"
         player_match.to_parquet(player_match_path, index=False)
@@ -802,6 +810,25 @@ def _build_player_match_proxy_from_fbref(settings: PlatformSettings) -> pd.DataF
 
     player_match = build_player_match_features(proxy)
     return player_match
+
+
+def _build_player_match_proxy_from_understat(
+    settings: PlatformSettings,
+    *,
+    excluded_season_ids: set[str],
+) -> pd.DataFrame:
+    input_path = settings.raw_root / "understat" / "players_10seasons.parquet"
+    if not input_path.exists():
+        logger.info("Understat historical player snapshot not found: %s", input_path)
+        return pd.DataFrame()
+    try:
+        return build_understat_season_proxy(
+            pd.read_parquet(input_path),
+            excluded_season_ids=excluded_season_ids,
+        )
+    except Exception as exc:
+        logger.warning("Understat historical player proxy unavailable: %s", exc)
+        return pd.DataFrame()
 
 
 def _save_poisson_artifacts(

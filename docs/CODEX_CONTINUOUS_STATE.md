@@ -2,6 +2,8 @@
 
 ## Recently Merged
 
+- **Understat Historical Rating Coverage (2026-07-14, Round 61):** Local Big Five Understat snapshots now form explicit season proxies for historical seasons absent from FBref, while FBref retains priority in overlap and RFPL remains excluded without aligned team-results targets. An in-memory build expands the local rating matrix from 8,141 to 26,678 rows across 1617–2526; no generated data artifact was committed over the user's pending manifest change. Current work is on `codex/round61-understat-history`; next candidates are source-provenance/temporal label imports and the league-bias optimizer rerun.
+
 - **Rating Supervision Source-Policy Guard (2026-07-13, Round 60):** Added `source-policy-v1` across label contracts, NN training, and GPU optimizer truth anchors. Labels generated from the current optimizer's `optimized_score` (`expert_tier`) are excluded as circular; the CLI, read-only API, and reports view expose the resulting eligible/excluded source counts. The tracked artifact currently has no eligible labels, so supervised training/anchoring correctly skip rather than produce a misleading holdout. Current work is on `codex/round60-truth-independence`; next candidates are importing independently sourced labels with temporal provenance and running the league-bias optimizer rerun.
 
 - **World Cup Tiebreak Diagnostics CLI (2026-07-13, Round 59):** `tournament tiebreaks --group` now exposes the same read-only tied-cluster and head-to-head availability explanation used by the API and browser. Text and JSON modes explicitly retain the local, provisional ranking boundary. Current work is on `codex/integration`.

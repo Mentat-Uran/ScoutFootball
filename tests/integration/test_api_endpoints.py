@@ -26,6 +26,7 @@ def test_artifacts_endpoint(client: TestClient):
     assert response.status_code == 200
     data = response.json()
     assert "artifacts" in data or "data_source_label" in data
+    assert "player_match_coverage" in data["data_health"]
 
 
 def test_truth_label_supervision_endpoint_exposes_source_policy(client: TestClient):
