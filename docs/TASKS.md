@@ -649,3 +649,7 @@ PYTHONPATH=src uv run python -m scoutfootball validate
 ```bash
 SOCCERDATA_DIR=./data/soccerdata uv run python -m scoutfootball ingest --sources fbref
 ```
+
+## Recent autonomous delivery
+
+- [x] **Dated Transfermarkt label intake (2026-07-14):** Local CSV/Parquet snapshots now enter `player_truth_labels.parquet` through `import-transfermarkt-truth-labels`. The preview validates without writing, preserves source `snapshot_date` by default, reports source-scoped replacement, rating-matrix name/season coverage, and temporal eligibility; re-imports never delete other label sources. The reports UI now shows post-season snapshot counts alongside source-policy eligibility.

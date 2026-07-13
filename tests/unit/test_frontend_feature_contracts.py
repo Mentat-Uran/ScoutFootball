@@ -292,6 +292,8 @@ def test_truth_label_supervision_report_is_wired_to_reports_view() -> None:
     assert "fetchTruthLabelSupervision" in app_js
     assert 'fetchJson("/reports/truth-labels")' in app_js
     assert "truthLabelSupervision" in app_js
+    assert "temporally_eligible_rows" in app_js
+    assert "post_season_rows" in app_js
     assert "truth-label-supervision-content" in index_html
     assert "/reports/truth-labels" in index_html
 

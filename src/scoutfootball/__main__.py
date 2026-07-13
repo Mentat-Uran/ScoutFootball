@@ -92,6 +92,8 @@ def _cmd_import_truth_labels(args: argparse.Namespace) -> None:
     from pathlib import Path as _Path
 
     from scoutfootball.evaluation.truth_labels import (
+        create_empty_truth_labels,
+        merge_truth_label_rows,
         validate_truth_labels,
         workspace_to_truth_labels,
     )
@@ -116,22 +118,9 @@ def _cmd_import_truth_labels(args: argparse.Namespace) -> None:
 
     # Merge with existing truth labels if present
     output_path = _Path(args.output).resolve()
-    if output_path.exists():
-        existing = pd.read_parquet(output_path)
-        # Remove old scouting_review labels for the same player_ids to avoid duplicates
-        if not existing.empty:
-            new_ids = set(new_labels["player_id"].unique())
-            mask = ~(
-                (existing["label_source"] == "scouting_review")
-                & (existing["player_id"].isin(new_ids))
-            )
-            existing = existing[mask]
-            combined = pd.concat([existing, new_labels], ignore_index=True)
-        else:
-            combined = new_labels
-    else:
-        combined = new_labels
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = pd.read_parquet(output_path) if output_path.exists() else create_empty_truth_labels()
+    combined, _replaced = merge_truth_label_rows(existing, new_labels)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     errors = validate_truth_labels(combined)
     if errors:
@@ -144,6 +133,124 @@ def _cmd_import_truth_labels(args: argparse.Namespace) -> None:
     print(f"Imported {len(new_labels)} scouting review labels to {output_path}")
     print(f"  Approved: {(new_labels['label_value'] == 1.0).sum()}")
     print(f"  Rejected: {(new_labels['label_value'] == 0.0).sum()}")
+    print(f"  Total labels in file: {len(combined)}")
+
+
+def _transfermarkt_feature_coverage(
+    labels: pd.DataFrame,
+    feature_matrix_path: Path,
+) -> dict[str, object]:
+    """Report whether a local snapshot can resolve to the current rating matrix."""
+    if not feature_matrix_path.exists():
+        return {"status": "not_checked", "reason": "rating_feature_matrix_not_found"}
+    try:
+        features = pd.read_parquet(feature_matrix_path, columns=["player_id", "season_id"])
+    except Exception as exc:
+        return {
+            "status": "not_checked",
+            "reason": f"feature_matrix_unreadable:{type(exc).__name__}",
+        }
+    if not {"player_id", "season_id"}.issubset(features.columns):
+        return {"status": "not_checked", "reason": "feature_matrix_missing_join_columns"}
+
+    def _name(value: object) -> str:
+        return str(value).split("|", maxsplit=1)[0].strip().casefold()
+
+    label_keys = {
+        (_name(row.player_id), str(row.season))
+        for row in labels[["player_id", "season"]].itertuples(index=False)
+    }
+    feature_keys = {
+        (_name(row.player_id), str(row.season_id))
+        for row in features[["player_id", "season_id"]].itertuples(index=False)
+    }
+    matched = label_keys & feature_keys
+    return {
+        "status": "checked",
+        "unique_player_seasons": len(label_keys),
+        "matched_player_seasons": len(matched),
+        "unmatched_player_seasons": len(label_keys - matched),
+    }
+
+
+def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
+    """Import a dated, local Transfermarkt snapshot as independent proxy labels."""
+    from scoutfootball.adapters.transfermarkt_manual import snapshot_to_truth_labels
+    from scoutfootball.evaluation.truth_labels import (
+        create_empty_truth_labels,
+        merge_truth_label_rows,
+        truth_label_supervision_report,
+        validate_truth_labels,
+    )
+
+    snapshot_path = Path(args.snapshot).resolve()
+    if not snapshot_path.exists():
+        print(f"Error: snapshot file not found: {snapshot_path}")
+        sys.exit(1)
+    try:
+        new_labels = snapshot_to_truth_labels(
+            snapshot_path,
+            args.season,
+            confidence=args.confidence,
+            as_of_date=args.as_of_date,
+        )
+    except Exception as exc:
+        print(f"Error: unable to prepare Transfermarkt labels: {exc}")
+        sys.exit(1)
+
+    output_path = Path(args.output).resolve()
+    try:
+        existing = (
+            pd.read_parquet(output_path)
+            if output_path.exists()
+            else create_empty_truth_labels()
+        )
+        combined, replaced_rows = merge_truth_label_rows(existing, new_labels)
+    except (OSError, ValueError) as exc:
+        print(f"Error: unable to load or merge existing truth labels: {exc}")
+        sys.exit(1)
+
+    errors = validate_truth_labels(combined)
+    if errors:
+        print("Validation errors:")
+        for error in errors:
+            print(f"  - {error}")
+        sys.exit(1)
+
+    report = truth_label_supervision_report(combined)
+    summary = {
+        "source": "transfermarkt_value",
+        "snapshot": str(snapshot_path),
+        "season": str(args.season),
+        "incoming_rows": int(len(new_labels)),
+        "replaced_rows": replaced_rows,
+        "total_rows": int(len(combined)),
+        "as_of_date_min": str(new_labels["as_of_date"].min()),
+        "as_of_date_max": str(new_labels["as_of_date"].max()),
+        "feature_coverage": _transfermarkt_feature_coverage(
+            new_labels,
+            Path(args.feature_matrix).resolve(),
+        ),
+        "temporal": report["temporal"],
+        "dry_run": bool(args.dry_run),
+    }
+    if args.dry_run:
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+        return
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    combined.to_parquet(output_path, index=False)
+    print(f"Imported {len(new_labels)} dated Transfermarkt labels to {output_path}")
+    print(f"  Replaced matching player-season-source rows: {replaced_rows}")
+    print(f"  Source snapshot dates: {summary['as_of_date_min']} to {summary['as_of_date_max']}")
+    coverage = summary["feature_coverage"]
+    if coverage["status"] == "checked":
+        print(
+            "  Rating-matrix matches: "
+            f"{coverage['matched_player_seasons']} / {coverage['unique_player_seasons']}"
+        )
+    else:
+        print(f"  Rating-matrix coverage: {coverage['reason']}")
     print(f"  Total labels in file: {len(combined)}")
 
 
@@ -1423,6 +1530,41 @@ def main() -> None:
         help="Position scope for labels (default: all)",
     )
 
+    transfermarkt_truth_p = sub.add_parser(
+        "import-transfermarkt-truth-labels",
+        help="Import a dated local Transfermarkt snapshot as proxy truth labels",
+    )
+    transfermarkt_truth_p.add_argument(
+        "--snapshot", type=str, required=True,
+        help="Local Transfermarkt CSV or Parquet snapshot; network import is not supported",
+    )
+    transfermarkt_truth_p.add_argument(
+        "--season", type=str, required=True,
+        help="Compact season code for the labels (for example: 2526)",
+    )
+    transfermarkt_truth_p.add_argument(
+        "--output", type=str,
+        default="data/gold/feature_store/player_truth_labels.parquet",
+        help="Output truth labels parquet path",
+    )
+    transfermarkt_truth_p.add_argument(
+        "--confidence", choices=["high", "medium", "low"], default="medium",
+        help="Proxy-label confidence (default: medium)",
+    )
+    transfermarkt_truth_p.add_argument(
+        "--as-of-date", type=str, default=None,
+        help="Optional ISO date override; defaults to each source snapshot_date",
+    )
+    transfermarkt_truth_p.add_argument(
+        "--feature-matrix", type=str,
+        default="data/gold/feature_store/rating_feature_matrix.parquet",
+        help="Rating feature matrix used for local name-and-season coverage preview",
+    )
+    transfermarkt_truth_p.add_argument(
+        "--dry-run", action="store_true",
+        help="Validate, merge in memory, and print the time/coverage preview without writing",
+    )
+
     truth_audit_p = sub.add_parser(
         "audit-truth-labels",
         help="Audit which truth labels are eligible for rating supervision",
@@ -1601,6 +1743,7 @@ def main() -> None:
         "action-value-matches": _cmd_action_value_matches,
         "export-ratings": _cmd_export_ratings,
         "import-truth-labels": _cmd_import_truth_labels,
+        "import-transfermarkt-truth-labels": _cmd_import_transfermarkt_truth_labels,
         "audit-truth-labels": _cmd_audit_truth_labels,
         "backtest": _cmd_backtest,
         "tune-predictions": _cmd_tune_predictions,

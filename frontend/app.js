@@ -9236,6 +9236,9 @@ function renderReports() {
         const z = appState.lang === "zh";
         const eligible = Number(report.eligible_rows || 0);
         const total = Number(report.total_rows || 0);
+        const temporal = report.temporal || {};
+        const temporallyEligible = Number(temporal.temporally_eligible_rows || 0);
+        const postSeason = Number(temporal.post_season_rows || 0);
         const excluded = Object.entries(report.excluded_source_counts || {})
             .map(([source, count]) => `${escapeHtml(source)}: ${escapeHtml(String(count))}`)
             .join(" · ");
@@ -9245,6 +9248,7 @@ function renderReports() {
             supervisionPanel.innerHTML = `
                 <div><strong>${eligible.toLocaleString()} / ${total.toLocaleString()}</strong> ${z ? "行可用于监督" : "rows eligible for supervision"}</div>
                 <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "已排除循环或未获准来源：" : "Excluded circular or unapproved sources: "}${excluded || (z ? "无" : "none")}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "赛季内时间可用：" : "Temporally in-season: "}${temporallyEligible.toLocaleString()}${z ? "；赛后快照：" : "; post-season snapshots: "}${postSeason.toLocaleString()}</div>
                 <div style="margin-top:0.35rem;color:var(--text-muted)">${escapeHtml(report.caveat || "")}</div>`;
         }
     }
