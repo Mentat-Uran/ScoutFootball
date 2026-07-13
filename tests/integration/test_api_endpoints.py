@@ -122,3 +122,12 @@ def test_world_cup_match_briefing_endpoint(client: TestClient):
     assert data["prediction"]["model_type"] == "world_cup_strength_poisson"
     assert data["teams"]["home"]["squad"]["balance"]["scope"] == "expected_callup_snapshot"
     assert "limitations" in data
+
+
+def test_world_cup_squad_balance_comparison_endpoint(client: TestClient):
+    response = client.get("/world-cup/squad-balance-comparison/Argentina/France")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["roles"][0]["role"] == "GK"
