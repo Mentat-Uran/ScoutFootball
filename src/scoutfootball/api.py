@@ -7383,6 +7383,73 @@ def get_wc_knockout_bracket() -> dict:
     return _clean_json_value(overview)
 
 
+def get_wc_knockout_match_briefing(match_id: str) -> dict[str, Any]:
+    """Return a source-bounded briefing for a populated knockout matchup.
+
+    The bracket state determines whether a fixture is known.  Placeholder
+    winner slots stay explicitly unavailable instead of receiving a synthetic
+    briefing or a predicted opponent.
+    """
+    state = _wc_tournament_state()
+    if not state.knockout or not state.knockout.get("matches"):
+        return _clean_json_value({
+            "schema": "scoutfootball.world-cup-knockout-match-briefing",
+            "version": "1.0.0",
+            "status": "not_generated",
+            "match_id": match_id,
+            "limitations": ["No local knockout bracket has been generated."],
+        })
+    match = state.knockout_match_by_id(match_id)
+    if not match:
+        return _clean_json_value({
+            "schema": "scoutfootball.world-cup-knockout-match-briefing",
+            "version": "1.0.0",
+            "status": "not_found",
+            "match_id": match_id,
+            "limitations": ["The requested match ID is not in the local knockout bracket."],
+        })
+    context = {
+        "match_id": match.get("match_id"),
+        "round": match.get("round"),
+        "round_label": match.get("round_label"),
+        "position": match.get("position"),
+        "bracket_provisional": bool(state.knockout.get("provisional", True)),
+        "match_status": match.get("status"),
+    }
+    if not match.get("home") or not match.get("away"):
+        return _clean_json_value({
+            "schema": "scoutfootball.world-cup-knockout-match-briefing",
+            "version": "1.0.0",
+            "status": "not_ready",
+            "knockout_context": context,
+            "fixture": {"home_team": match.get("home"), "away_team": match.get("away")},
+            "limitations": [
+                "This knockout slot has an unresolved participant; no opponent or "
+                "briefing is inferred.",
+            ],
+        })
+    briefing = get_world_cup_match_briefing(match["home"], match["away"])
+    if briefing.get("error"):
+        return _clean_json_value({
+            "schema": "scoutfootball.world-cup-knockout-match-briefing",
+            "version": "1.0.0",
+            "status": "briefing_unavailable",
+            "knockout_context": context,
+            "fixture": {"home_team": match["home"], "away_team": match["away"]},
+            "limitations": [
+                "The local match briefing was unavailable for this populated bracket fixture.",
+            ],
+        })
+    briefing["knockout_context"] = context
+    briefing["knockout_context"]["source"] = "browser-local tournament bracket state"
+    briefing["limitations"] = [
+        *briefing.get("limitations", []),
+        "Knockout placement reflects the local bracket state and is not an official "
+        "fixture confirmation.",
+    ]
+    return _clean_json_value(briefing)
+
+
 def generate_wc_knockout_bracket() -> dict:
     """Generate the knockout bracket from current group standings and persist."""
     from scoutfootball.worldcup.tournament import (

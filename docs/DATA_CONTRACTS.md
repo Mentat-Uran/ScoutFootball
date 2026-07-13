@@ -721,6 +721,15 @@ also stores the bounded briefing schema, version, and source attribution. The
 tactical JSON export preview surfaces those fields so the board can be checked
 against a compatible local briefing export.
 
+`GET /world-cup/tournament/knockout/{match_id}/briefing` exposes a populated
+local knockout matchup through the same source-bounded match-briefing contract,
+with an additional `knockout_context` containing match ID, round, bracket
+position, local provisional status, and match status. It returns `not_ready`
+for unresolved winner slots and never predicts an opponent. The frontend can
+open a populated matchup in the comparison/briefing flow; any export retains
+the local bracket context and remains neither an official fixture confirmation
+nor a tactical recommendation.
+
 The general match-prediction tactical handoff writes a bounded
 `scoutfootball.tactical-decision-pack` v1.1.0 into the browser-local board
 project. Alongside the loaded model output and provenance, it may preserve the
