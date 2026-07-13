@@ -37,6 +37,7 @@ data/soccerdata/**
 .trae/
 
 # Build artifacts
+dist/
 scoutlab-gpu-server.zip
 *.zip
 desktop/build/
