@@ -373,6 +373,40 @@
                         </table>
                     </div>
                 </article>
+
+                <article class="liquid-panel compact-panel" id="compare-multi-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="compare_multi_title">多人对比 (2–5)</h3>
+                    </div>
+                    <div style="padding:var(--space)">
+                        <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="compare_multi_names_label">球员名单 (逗号分隔)</label>
+                        <input type="text" id="compare-multi-input" class="filter-input" placeholder="Player A, Player B, Player C" style="width:100%;margin-top:0.3rem">
+                        <div style="display:flex;gap:var(--space);align-items:center;margin-top:0.6rem;flex-wrap:wrap">
+                            <button id="compare-multi-btn" class="cta-button" type="button" data-i18n="compare_multi_button">对比</button>
+                            <span id="compare-multi-status" style="font-size:0.75rem;color:var(--text-muted)"></span>
+                        </div>
+                    </div>
+                    <div id="compare-multi-result" style="padding:0 var(--space) var(--space) var(--space);display:none">
+                        <div id="compare-multi-players" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.6rem"></div>
+                        <h4 style="font-size:0.82rem;color:var(--text-muted);margin:0.6rem 0 0.3rem 0" data-i18n="compare_multi_pct_matrix">百分位矩阵</h4>
+                        <div class="table-scroll">
+                            <table class="data-table" id="compare-multi-pct-table">
+                                <thead id="compare-multi-pct-thead"></thead>
+                                <tbody id="compare-multi-pct-tbody"></tbody>
+                            </table>
+                        </div>
+                        <h4 style="font-size:0.82rem;color:var(--text-muted);margin:0.8rem 0 0.3rem 0" data-i18n="compare_multi_ranking">综合排名</h4>
+                        <div id="compare-multi-ranking" style="font-size:0.82rem"></div>
+                        <h4 style="font-size:0.82rem;color:var(--text-muted);margin:0.8rem 0 0.3rem 0" data-i18n="compare_multi_similarity">两两相似度</h4>
+                        <div class="table-scroll">
+                            <table class="data-table" id="compare-multi-sim-table">
+                                <thead id="compare-multi-sim-thead"></thead>
+                                <tbody id="compare-multi-sim-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="compare-multi-disclaimer" style="font-size:0.65rem;color:var(--text-muted);margin-top:0.6rem;font-style:italic"></div>
+                    </div>
+                </article>
             </section>
 
             <section class="view" id="view-value" aria-label="value">

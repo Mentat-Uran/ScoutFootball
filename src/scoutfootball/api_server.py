@@ -60,9 +60,13 @@ from scoutfootball.api import (
     get_model_run_detail,
     get_model_runs,
     get_outcome_distribution,
+    get_player_career_trajectory,
     get_player_comparison,
+    get_player_comparison_multi,
+    get_player_peer_benchmark,
     get_player_profile,
     get_player_ratings,
+    get_player_role_fit,
     get_prediction_anomalies,
     get_prediction_attribution,
     get_prediction_attribution_ci,
@@ -771,6 +775,22 @@ def create_app() -> FastAPI:
     def players_compare(a: str, b: str):
         return get_player_comparison(a, b)
 
+    @app.get("/players/compare-multi")
+    def players_compare_multi(
+        names: str,
+        season: str | None = None,
+    ):
+        """Compare 2-5 players side-by-side.
+
+        ``names`` is a comma-separated list (e.g. ``?names=Alice,Bob,Carol``).
+        Whitespace around each name is trimmed. The endpoint resolves each
+        name to its best season (or to ``season`` when supplied) and returns
+        a percentile matrix, metric rankings, composite ranking and pairwise
+        similarity matrix.
+        """
+        player_names = [n.strip() for n in names.split(",") if n.strip()]
+        return get_player_comparison_multi(player_names, season=season)
+
     @app.get("/players/{player_name}/similar")
     def players_similar(
         player_name: str,
@@ -788,6 +808,36 @@ def create_app() -> FastAPI:
             same_position_only=same_position_only,
             league=league,
             min_minutes=min_minutes,
+        )
+
+    @app.get("/players/{player_name}/career-trajectory")
+    def player_career_trajectory(
+        player_name: str,
+        season: str | None = None,
+        position_group: str | None = None,
+    ):
+        return get_player_career_trajectory(
+            player_name, season=season, position_group=position_group
+        )
+
+    @app.get("/players/{player_name}/role-fit")
+    def player_role_fit(
+        player_name: str,
+        season: str | None = None,
+        position_group: str | None = None,
+    ):
+        return get_player_role_fit(
+            player_name, season=season, position_group=position_group
+        )
+
+    @app.get("/players/{player_name}/peer-benchmark")
+    def player_peer_benchmark(
+        player_name: str,
+        season: str | None = None,
+        position_group: str | None = None,
+    ):
+        return get_player_peer_benchmark(
+            player_name, season=season, position_group=position_group
         )
 
     @app.get("/player/{player_name}/profile")
