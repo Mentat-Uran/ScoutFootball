@@ -1835,6 +1835,129 @@ Non-`ok` statuses: `no_data` (empty input or no position_group column),
 gap types and strength labels are heuristic thresholds, not transfer
 recommendations or tactical advice.
 
+### GET /positions/action-profile
+
+Granular per-90 action profile for each standard position group. Decomposes
+the 4 composite style features (npg_p90/assists_p90/defense_composite/
+possession_composite) into 7 granular per-90 actions
+(tackles_p90/interceptions_p90/crosses_p90/fouls_drawn_p90/fouls_p90/
+g_a_volume/npg_p90) with minutes-weighted means. Position groups with zero
+qualifying players are listed in `missing_positions`.
+
+**Query params**: `league` (optional, case-insensitive), `season` (optional),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2526",
+  "n_positions": 4,
+  "position_groups": [
+    {
+      "position_group": "ST",
+      "n_players": 8,
+      "total_minutes": 11200,
+      "tackles_p90": 0.35, "interceptions_p90": 0.22,
+      "crosses_p90": 0.10, "fouls_drawn_p90": 0.55,
+      "fouls_p90": 0.42, "g_a_volume": 7.8, "npg_p90": 0.52
+    }
+  ],
+  "missing_positions": ["GK", "DM", "AM", "W"],
+  "action_features": ["tackles_p90", "interceptions_p90", "crosses_p90",
+    "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"],
+  "disclaimer": "Position action profile decomposes composite style scores..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input, no position_group column, missing
+action columns, or no players above the minutes threshold). This is a
+descriptive overlay — it does not predict future performance or rank positions
+by quality.
+
+### GET /positions/{position_group}/action-similarity
+
+Rank position groups by similarity to the target position group's 7-dimensional
+per-90 action vector (tackles/interceptions/crosses/fouls_drawn/fouls/
+g_a_volume/npg_p90). Cosine similarity is the primary ranking key (descending);
+Euclidean distance on the raw vectors is provided for reference.
+
+**Path params**: `position_group` (case-insensitive, one of GK/CB/FB/DM/CM/AM/W/ST)
+
+**Query params**: `league` (optional, case-insensitive), `season` (optional),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "position_group": "ST",
+  "league": "Premier League",
+  "season": "2526",
+  "n_candidates": 3,
+  "target_action_vector": [0.35, 0.22, 0.10, 0.55, 0.42, 7.8, 0.52],
+  "target_action_vector_labels": ["tackles_p90", "interceptions_p90", "crosses_p90",
+    "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"],
+  "neighbors": [
+    {
+      "position_group": "AM",
+      "cosine_similarity": 0.842,
+      "euclidean_distance": 1.235
+    }
+  ],
+  "disclaimer": "Action-based position similarity is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or missing action columns),
+`invalid_position` (when position_group is not one of the 8 canonical groups),
+`position_not_found` (when the target position group is absent from the data
+or has no players above the minutes threshold). `cosine_similarity` ∈ [-1, 1].
+This is a descriptive overlay — similar action signatures do not imply similar
+tactical roles, quality, or future trajectories.
+
+### GET /positions/trend-overlay
+
+Cross-season improvement/decline trends for each position group. For each
+standard position group, computes minutes-weighted means of npg_trend /
+def_trend / pos_trend (the cross-season improvement metrics from the rating
+pipeline) and assigns a trend_label (improving >0.05 / declining <-0.05 /
+stable |val|<0.05) per dimension.
+
+**Query params**: `league` (optional, case-insensitive), `season` (optional),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2526",
+  "n_positions": 4,
+  "position_groups": [
+    {
+      "position_group": "ST",
+      "n_players": 8,
+      "total_minutes": 11200,
+      "dimensions": [
+        { "feature": "npg_trend", "value": 0.103, "trend_label": "improving" },
+        { "feature": "def_trend", "value": 0.022, "trend_label": "stable" },
+        { "feature": "pos_trend", "value": -0.098, "trend_label": "declining" }
+      ]
+    }
+  ],
+  "missing_positions": ["GK", "DM", "AM", "W"],
+  "trend_features": ["npg_trend", "def_trend", "pos_trend"],
+  "disclaimer": "Position trend overlay aggregates per-player cross-season..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input, no position_group column, missing
+trend columns, or no players above the minutes threshold). `trend_label` ∈
+{improving, declining, stable}. This is a descriptive overlay — it does not
+predict future trends or rank positions by quality.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.
