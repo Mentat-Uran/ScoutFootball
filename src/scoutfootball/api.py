@@ -7493,6 +7493,339 @@ def get_wc_tournament_scenarios(team: str, max_scenarios: int = 30) -> dict:
     })
 
 
+def get_backtest_report_card() -> dict:
+    """Return a letter-graded report card aggregating model quality.
+
+    Grades six dimensions (accuracy, calibration, discrimination, sharpness,
+    confidence alignment, stability) on a 0–100 scale mapped to A/B/C/D/F.
+    Prefers Dixon-Coles decay predictions, falls back to Poisson. Cached
+    for 5 minutes.
+    """
+    import time
+
+    cache_key = "report_card"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_backtest_report_card,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        model_type = "dixon_coles_decay"
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+            model_type = "poisson"
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_backtest_report_card(
+                    preds_df, model_type=model_type
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "overall_grade": report.overall_grade,
+                    "overall_score": report.overall_score,
+                    "n_matches": report.n_matches,
+                    "model_type": report.model_type,
+                    "summary": report.summary,
+                    "disclaimer": report.disclaimer,
+                    "dimensions": [
+                        {
+                            "name": d.name,
+                            "grade": d.grade,
+                            "score": d.score,
+                            "metric_value": d.metric_value,
+                            "metric_name": d.metric_name,
+                            "assessment": d.assessment,
+                            "threshold": d.threshold,
+                        }
+                        for d in report.dimensions
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_prediction_anomalies(
+    *,
+    high_entropy_threshold: float = 0.85,
+    overconfident_threshold: float = 0.60,
+    underconfident_threshold: float = 0.40,
+    outlier_high_threshold: float = 0.90,
+    outlier_low_threshold: float = 0.35,
+    max_anomalies: int = 500,
+) -> dict:
+    """Return flagged prediction anomalies for review.
+
+    Detects high-entropy, overconfident-wrong, underconfident-correct, and
+    outlier-confidence predictions. Prefers Dixon-Coles decay predictions,
+    falls back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = (
+        f"anomalies_{high_entropy_threshold}_{overconfident_threshold}_"
+        f"{underconfident_threshold}_{outlier_high_threshold}_"
+        f"{outlier_low_threshold}_{max_anomalies}"
+    )
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_prediction_anomalies,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                report = compute_prediction_anomalies(
+                    preds_df,
+                    high_entropy_threshold=high_entropy_threshold,
+                    overconfident_threshold=overconfident_threshold,
+                    underconfident_threshold=underconfident_threshold,
+                    outlier_high_threshold=outlier_high_threshold,
+                    outlier_low_threshold=outlier_low_threshold,
+                    max_anomalies=max_anomalies,
+                )
+                result = _clean_json_value({
+                    "status": "ok",
+                    "n_matches": report.n_matches,
+                    "n_anomalies": report.n_anomalies,
+                    "anomaly_counts": report.anomaly_counts,
+                    "severity_counts": report.severity_counts,
+                    "high_entropy_count": report.high_entropy_count,
+                    "overconfident_wrong_count": report.overconfident_wrong_count,
+                    "underconfident_correct_count": report.underconfident_correct_count,
+                    "outlier_confidence_count": report.outlier_confidence_count,
+                    "disclaimer": report.disclaimer,
+                    "anomalies": [
+                        {
+                            "match_index": a.match_index,
+                            "anomaly_type": a.anomaly_type,
+                            "severity": a.severity,
+                            "confidence": a.confidence,
+                            "predicted_outcome": a.predicted_outcome,
+                            "actual_outcome": a.actual_outcome,
+                            "correct": a.correct,
+                            "explanation": a.explanation,
+                            "match_id": a.match_id,
+                            "home_team": a.home_team,
+                            "away_team": a.away_team,
+                        }
+                        for a in report.anomalies
+                    ],
+                })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+def get_team_performance_profile(
+    team: str,
+    *,
+    top_n: int = 5,
+    min_matches: int = 3,
+) -> dict:
+    """Return a backtest-derived performance profile for a single team.
+
+    Filters backtest predictions to matches involving *team* and computes
+    accuracy, over/underperformance, goals, clean sheets, common scorelines,
+    and worst/best predictions. Prefers Dixon-Coles decay predictions, falls
+    back to Poisson. Cached for 5 minutes.
+    """
+    import time
+
+    cache_key = f"team_profile_{team}_{top_n}_{min_matches}"
+    now = time.time()
+    cached = _BACKTEST_CACHE.get(cache_key)
+    if (
+        cached is not None
+        and now - _BACKTEST_CACHE.get(f"{cache_key}_timestamp", 0) < _BACKTEST_TTL_SECONDS
+    ):
+        return cached
+
+    try:
+        from scoutfootball.evaluation.backtests import (
+            compute_team_performance_profile,
+        )
+
+        settings = _settings()
+        pred_path = (
+            settings.report_root
+            / "calibration_backtest"
+            / "dixon_coles_decay_backtest_predictions.parquet"
+        )
+        if not pred_path.exists():
+            pred_path = (
+                settings.report_root
+                / "calibration_backtest"
+                / "poisson_backtest_predictions.parquet"
+            )
+        if not pred_path.exists():
+            result = {
+                "status": "not_available",
+                "instructions": (
+                    "Run 'scoutfootball tune-predictions --run-backtest' "
+                    "to generate backtest artifacts"
+                ),
+            }
+        else:
+            preds_df = _read_parquet(pred_path)
+            if preds_df.empty:
+                result = {"status": "no_data"}
+            else:
+                if "actual_outcome" not in preds_df.columns:
+                    if "home_goals" in preds_df.columns and "away_goals" in preds_df.columns:
+                        import numpy as np
+
+                        preds_df["actual_outcome"] = np.where(
+                            preds_df["home_goals"] > preds_df["away_goals"],
+                            "home_win",
+                            np.where(
+                                preds_df["home_goals"] == preds_df["away_goals"],
+                                "draw",
+                                "away_win",
+                            ),
+                        )
+                profile = compute_team_performance_profile(
+                    preds_df,
+                    team,
+                    top_n=top_n,
+                    min_matches=min_matches,
+                )
+                if profile is None:
+                    result = {
+                        "status": "not_found",
+                        "team": team,
+                        "message": (
+                            f"Team '{team}' has fewer than {min_matches} "
+                            f"backtest predictions."
+                        ),
+                    }
+                else:
+                    result = _clean_json_value({
+                        "status": "ok",
+                        "team": profile.team,
+                        "n_matches": profile.n_matches,
+                        "n_home": profile.n_home,
+                        "n_away": profile.n_away,
+                        "overall_accuracy": profile.overall_accuracy,
+                        "home_accuracy": profile.home_accuracy,
+                        "away_accuracy": profile.away_accuracy,
+                        "avg_confidence": profile.avg_confidence,
+                        "calibration_gap": profile.calibration_gap,
+                        "overperformance": profile.overperformance,
+                        "n_wins": profile.n_wins,
+                        "n_draws": profile.n_draws,
+                        "n_losses": profile.n_losses,
+                        "avg_goals_scored": profile.avg_goals_scored,
+                        "avg_goals_conceded": profile.avg_goals_conceded,
+                        "clean_sheet_rate": profile.clean_sheet_rate,
+                        "btts_rate": profile.btts_rate,
+                        "common_scorelines": [
+                            {"scoreline": s, "count": c}
+                            for s, c in profile.common_scorelines
+                        ],
+                        "worst_predictions": profile.worst_predictions,
+                        "best_predictions": profile.best_predictions,
+                        "assessment": profile.assessment,
+                        "disclaimer": profile.disclaimer,
+                    })
+
+        _BACKTEST_CACHE[cache_key] = result
+        _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 def apply_wc_tournament_result(
     match_id: str,
     home_goals: int,

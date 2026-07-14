@@ -28,6 +28,7 @@ from scoutfootball.api import (
     get_action_value_summary,
     get_artifacts_summary,
     get_backtest_comparison,
+    get_backtest_report_card,
     get_calibration_comparison,
     get_calibration_drift,
     get_calibration_drift_heatmap,
@@ -62,6 +63,7 @@ from scoutfootball.api import (
     get_player_comparison,
     get_player_profile,
     get_player_ratings,
+    get_prediction_anomalies,
     get_prediction_attribution,
     get_prediction_attribution_ci,
     get_prediction_calibration,
@@ -81,6 +83,7 @@ from scoutfootball.api import (
     get_team_accuracy,
     get_team_calibration_drift,
     get_team_comparison,
+    get_team_performance_profile,
     get_team_strength,
     get_temporal_validation,
     get_transfermarkt_identity_report,
@@ -546,14 +549,46 @@ def create_app() -> FastAPI:
 
     @app.get("/predictions/calibration/streaks")
     def predictions_calibration_streaks(
-        high_confidence_threshold: float = Query(0.60, ge=0.05, le=1.0),
-        low_confidence_threshold: float = Query(0.40, ge=0.0, le=0.95),
+        high_confident_threshold: float = Query(0.60, ge=0.05, le=1.0),
+        low_confident_threshold: float = Query(0.40, ge=0.0, le=0.95),
         max_points: int = Query(500, ge=10, le=5000),
     ):
         return get_prediction_streaks(
-            high_confidence_threshold=high_confidence_threshold,
-            low_confidence_threshold=low_confidence_threshold,
+            high_confident_threshold=high_confident_threshold,
+            low_confident_threshold=low_confident_threshold,
             max_points=max_points,
+        )
+
+    @app.get("/predictions/calibration/report-card")
+    def predictions_calibration_report_card():
+        return get_backtest_report_card()
+
+    @app.get("/predictions/calibration/anomalies")
+    def predictions_calibration_anomalies(
+        high_entropy_threshold: float = Query(0.85, ge=0.01, le=1.0),
+        overconfident_threshold: float = Query(0.60, ge=0.01, le=0.99),
+        underconfident_threshold: float = Query(0.40, ge=0.01, le=0.99),
+        outlier_high_threshold: float = Query(0.90, ge=0.01, le=1.0),
+        outlier_low_threshold: float = Query(0.35, ge=0.01, le=0.99),
+        max_anomalies: int = Query(500, ge=10, le=5000),
+    ):
+        return get_prediction_anomalies(
+            high_entropy_threshold=high_entropy_threshold,
+            overconfident_threshold=overconfident_threshold,
+            underconfident_threshold=underconfident_threshold,
+            outlier_high_threshold=outlier_high_threshold,
+            outlier_low_threshold=outlier_low_threshold,
+            max_anomalies=max_anomalies,
+        )
+
+    @app.get("/predictions/calibration/team-profile")
+    def predictions_calibration_team_profile(
+        team: str = Query(..., max_length=128),
+        top_n: int = Query(5, ge=1, le=50),
+        min_matches: int = Query(3, ge=1, le=100),
+    ):
+        return get_team_performance_profile(
+            team, top_n=top_n, min_matches=min_matches,
         )
 
     @app.get("/predictions/{home_team}/{away_team}/attribution")

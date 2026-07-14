@@ -24,6 +24,7 @@ import pytest
 
 from scoutfootball.evaluation.backtests import (
     CalibrationComparison,
+    compute_backtest_report_card,
     compute_calibration_comparison,
     compute_calibration_drift_heatmap,
     compute_ci_coverage,
@@ -41,6 +42,7 @@ from scoutfootball.evaluation.backtests import (
     compute_league_error_analysis,
     compute_model_comparison,
     compute_outcome_distribution,
+    compute_prediction_anomalies,
     compute_prediction_staleness,
     compute_prediction_streaks,
     compute_prediction_uncertainty,
@@ -51,6 +53,7 @@ from scoutfootball.evaluation.backtests import (
     compute_scoreline_calibration,
     compute_team_accuracy,
     compute_team_calibration_drift,
+    compute_team_performance_profile,
     compute_temporal_validation,
     compute_value_bets,
 )
@@ -6110,3 +6113,775 @@ class TestReliabilityDiagramEnhancements:
         # Either only one bin is used (slope=0, intercept=y_mean) or zero bins
         assert "calibration_slope" in diagram.overall
         assert "calibration_intercept" in diagram.overall
+
+
+# ---------------------------------------------------------------------------
+# Round 69: Backtest Report Card
+# ---------------------------------------------------------------------------
+
+
+def _make_report_card_df(n: int = 100, *, seed: int = 42) -> pd.DataFrame:
+    """Synthetic predictions DataFrame for report card testing."""
+    rng = np.random.default_rng(seed)
+    home_probs = rng.uniform(0.35, 0.7, n)
+    draw_probs = rng.uniform(0.15, 0.3, n)
+    away_probs = np.clip(1.0 - home_probs - draw_probs, 0.05, 0.9)
+    total = home_probs + draw_probs + away_probs
+    home_probs /= total
+    draw_probs /= total
+    away_probs /= total
+
+    outcomes: list[str] = []
+    labels = ["home_win", "draw", "away_win"]
+    for i in range(n):
+        probs = (home_probs[i], draw_probs[i], away_probs[i])
+        pred_idx = int(np.argmax(probs))
+        # 60% correct
+        if rng.random() < 0.6:
+            outcomes.append(labels[pred_idx])
+        else:
+            outcomes.append(labels[(pred_idx + 1) % 3])
+
+    dates = pd.date_range("2024-01-01", periods=n, freq="D").strftime("%Y-%m-%d")
+    return pd.DataFrame({
+        "home_win_probability": home_probs,
+        "draw_probability": draw_probs,
+        "away_win_probability": away_probs,
+        "actual_outcome": outcomes,
+        "match_date": dates,
+    })
+
+
+class TestComputeBacktestReportCard:
+    """Tests for compute_backtest_report_card."""
+
+    def test_returns_card_with_required_fields(self) -> None:
+        df = _make_report_card_df(n=100)
+        card = compute_backtest_report_card(df)
+        assert card.n_matches == 100
+        assert card.overall_grade in ("A", "B", "C", "D", "F")
+        assert 0.0 <= card.overall_score <= 100.0
+        assert isinstance(card.dimensions, list)
+        assert len(card.dimensions) == 6
+        assert card.model_type is None
+        assert card.summary
+        assert card.disclaimer
+        assert len(card.disclaimer) > 10
+
+    def test_dimension_fields(self) -> None:
+        df = _make_report_card_df(n=50)
+        card = compute_backtest_report_card(df)
+        for dim in card.dimensions:
+            assert dim.name
+            assert dim.grade in ("A", "B", "C", "D", "F")
+            assert 0.0 <= dim.score <= 100.0
+            assert dim.metric_name
+            assert dim.assessment in ("excellent", "good", "average", "poor", "failing", "unknown")
+            assert dim.threshold
+
+    def test_grade_from_score_thresholds(self) -> None:
+        from scoutfootball.evaluation.backtests import _grade_from_score
+        assert _grade_from_score(95) == "A"
+        assert _grade_from_score(90) == "A"
+        assert _grade_from_score(89.9) == "B"
+        assert _grade_from_score(80) == "B"
+        assert _grade_from_score(79.9) == "C"
+        assert _grade_from_score(65) == "C"
+        assert _grade_from_score(64.9) == "D"
+        assert _grade_from_score(50) == "D"
+        assert _grade_from_score(49.9) == "F"
+        assert _grade_from_score(0) == "F"
+
+    def test_assessment_from_grade(self) -> None:
+        from scoutfootball.evaluation.backtests import _assessment_from_grade
+        assert _assessment_from_grade("A") == "excellent"
+        assert _assessment_from_grade("B") == "good"
+        assert _assessment_from_grade("C") == "average"
+        assert _assessment_from_grade("D") == "poor"
+        assert _assessment_from_grade("F") == "failing"
+        assert _assessment_from_grade("X") == "unknown"
+
+    def test_empty_df_returns_f_grade(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [],
+            "draw_probability": [],
+            "away_win_probability": [],
+            "actual_outcome": [],
+        })
+        card = compute_backtest_report_card(df)
+        assert card.n_matches == 0
+        assert card.overall_grade == "F"
+        assert card.overall_score == 0.0
+        assert card.dimensions == []
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"actual_outcome": ["home_win"]})
+        with pytest.raises(ValueError, match="probability columns"):
+            compute_backtest_report_card(df)
+
+    def test_missing_actual_outcome_raises(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.5],
+            "draw_probability": [0.3],
+            "away_win_probability": [0.2],
+        })
+        with pytest.raises(ValueError, match="actual_outcome"):
+            compute_backtest_report_card(df)
+
+    def test_model_type_propagated(self) -> None:
+        df = _make_report_card_df(n=30)
+        card = compute_backtest_report_card(df, model_type="dixon_coles_decay")
+        assert card.model_type == "dixon_coles_decay"
+        assert "dixon_coles_decay" in card.summary or card.model_type == "dixon_coles_decay"
+
+    def test_stability_uses_temporal_halves(self) -> None:
+        # 40 matches with stable accuracy across halves should yield higher
+        # stability score than a DataFrame with a sharp drop.
+        df_stable = _make_report_card_df(n=40, seed=1)
+        card_stable = compute_backtest_report_card(df_stable)
+        stab_dim = next(d for d in card_stable.dimensions if d.name == "stability")
+        assert stab_dim.score >= 0.0
+
+    def test_overall_score_in_dimension_range(self) -> None:
+        df = _make_report_card_df(n=80, seed=7)
+        card = compute_backtest_report_card(df)
+        scores = [d.score for d in card.dimensions]
+        # Overall should be a weighted average, so within min/max of dims
+        assert min(scores) - 0.1 <= card.overall_score <= max(scores) + 0.1
+
+    def test_perfect_predictions_high_grade(self) -> None:
+        # All correct with very high confidence (conf close to accuracy)
+        n = 30
+        df = pd.DataFrame({
+            "home_win_probability": [0.92] * n,
+            "draw_probability": [0.06] * n,
+            "away_win_probability": [0.02] * n,
+            "actual_outcome": ["home_win"] * n,
+        })
+        card = compute_backtest_report_card(df)
+        # Perfect accuracy with high, well-aligned confidence should yield
+        # a high overall score.
+        assert card.overall_score >= 70.0
+        acc_dim = next(d for d in card.dimensions if d.name == "accuracy")
+        assert acc_dim.grade in ("A", "B")
+
+
+# ---------------------------------------------------------------------------
+# Round 69: Backtest Report Card API
+# ---------------------------------------------------------------------------
+
+
+class TestBacktestReportCardAPI:
+    """Tests for the get_backtest_report_card API wrapper."""
+
+    def test_no_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_backtest_report_card()
+        assert result["status"] == "not_available"
+
+    def test_with_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_report_card_df(n=50)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_backtest_report_card()
+        assert result["status"] == "ok"
+        assert result["n_matches"] == 50
+        assert "overall_grade" in result
+        assert "overall_score" in result
+        assert "dimensions" in result
+        assert isinstance(result["dimensions"], list)
+        assert len(result["dimensions"]) == 6
+        assert "summary" in result
+        assert "disclaimer" in result
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_report_card_df(n=60)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_backtest_report_card()
+        r2 = api_module.get_backtest_report_card()
+        assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# Round 69: Prediction Anomaly Detection
+# ---------------------------------------------------------------------------
+
+
+def _make_anomaly_df(n: int = 50, *, seed: int = 11) -> pd.DataFrame:
+    """Synthetic predictions DataFrame for anomaly testing."""
+    rng = np.random.default_rng(seed)
+    home_probs = rng.uniform(0.3, 0.8, n)
+    draw_probs = rng.uniform(0.1, 0.25, n)
+    away_probs = np.clip(1.0 - home_probs - draw_probs, 0.05, 0.9)
+    total = home_probs + draw_probs + away_probs
+    home_probs /= total
+    draw_probs /= total
+    away_probs /= total
+
+    outcomes: list[str] = []
+    labels = ["home_win", "draw", "away_win"]
+    for i in range(n):
+        probs = (home_probs[i], draw_probs[i], away_probs[i])
+        pred_idx = int(np.argmax(probs))
+        if rng.random() < 0.65:
+            outcomes.append(labels[pred_idx])
+        else:
+            outcomes.append(labels[(pred_idx + 1) % 3])
+
+    return pd.DataFrame({
+        "home_win_probability": home_probs,
+        "draw_probability": draw_probs,
+        "away_win_probability": away_probs,
+        "actual_outcome": outcomes,
+        "match_id": [f"m{i:04d}" for i in range(n)],
+        "home_team": [f"team_{i % 6}" for i in range(n)],
+        "away_team": [f"team_{(i + 3) % 6}" for i in range(n)],
+    })
+
+
+class TestComputePredictionAnomalies:
+    """Tests for compute_prediction_anomalies."""
+
+    def test_returns_report_with_required_fields(self) -> None:
+        df = _make_anomaly_df(n=50)
+        report = compute_prediction_anomalies(df)
+        assert report.n_matches == 50
+        assert report.n_anomalies >= 0
+        assert isinstance(report.anomaly_counts, dict)
+        assert isinstance(report.severity_counts, dict)
+        assert isinstance(report.anomalies, list)
+        assert report.high_entropy_count >= 0
+        assert report.overconfident_wrong_count >= 0
+        assert report.underconfident_correct_count >= 0
+        assert report.outlier_confidence_count >= 0
+        assert report.disclaimer
+        assert len(report.disclaimer) > 10
+
+    def test_anomaly_entry_fields(self) -> None:
+        df = _make_anomaly_df(n=80, seed=5)
+        report = compute_prediction_anomalies(df)
+        for a in report.anomalies:
+            assert a.match_index >= 0
+            assert a.anomaly_type in (
+                "high_entropy",
+                "overconfident_wrong",
+                "underconfident_correct",
+                "outlier_confidence_high",
+                "outlier_confidence_low",
+            )
+            assert a.severity in ("low", "medium", "high", "critical")
+            assert 0.0 <= a.confidence <= 1.0
+            assert a.predicted_outcome in ("home_win", "draw", "away_win")
+            assert a.explanation
+
+    def test_overconfident_wrong_detection(self) -> None:
+        # High-confidence wrong prediction should be flagged
+        df = pd.DataFrame({
+            "home_win_probability": [0.85, 0.4],
+            "draw_probability": [0.10, 0.3],
+            "away_win_probability": [0.05, 0.3],
+            "actual_outcome": ["away_win", "draw"],
+        })
+        report = compute_prediction_anomalies(df, overconfident_threshold=0.60)
+        assert report.overconfident_wrong_count >= 1
+        oc = [a for a in report.anomalies if a.anomaly_type == "overconfident_wrong"]
+        assert len(oc) >= 1
+        assert oc[0].severity in ("high", "critical")
+
+    def test_overconfident_critical_severity(self) -> None:
+        # Confidence >= 0.80 wrong should be critical
+        df = pd.DataFrame({
+            "home_win_probability": [0.90],
+            "draw_probability": [0.07],
+            "away_win_probability": [0.03],
+            "actual_outcome": ["away_win"],
+        })
+        report = compute_prediction_anomalies(df)
+        oc = [a for a in report.anomalies if a.anomaly_type == "overconfident_wrong"]
+        assert len(oc) == 1
+        assert oc[0].severity == "critical"
+
+    def test_underconfident_correct_detection(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.38],
+            "draw_probability": [0.32],
+            "away_win_probability": [0.30],
+            "actual_outcome": ["home_win"],
+        })
+        report = compute_prediction_anomalies(df, underconfident_threshold=0.40)
+        uc = [a for a in report.anomalies if a.anomaly_type == "underconfident_correct"]
+        assert len(uc) == 1
+        assert uc[0].severity == "low"
+
+    def test_outlier_high_confidence_detection(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.95],
+            "draw_probability": [0.04],
+            "away_win_probability": [0.01],
+            "actual_outcome": ["home_win"],
+        })
+        report = compute_prediction_anomalies(df, outlier_high_threshold=0.90)
+        oh = [a for a in report.anomalies if a.anomaly_type == "outlier_confidence_high"]
+        assert len(oh) == 1
+        assert oh[0].severity == "high"  # >= 0.95
+
+    def test_outlier_low_confidence_detection(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.36],
+            "draw_probability": [0.34],
+            "away_win_probability": [0.30],
+            "actual_outcome": ["home_win"],
+        })
+        report = compute_prediction_anomalies(df, outlier_low_threshold=0.40)
+        ol = [a for a in report.anomalies if a.anomaly_type == "outlier_confidence_low"]
+        assert len(ol) == 1
+        assert ol[0].severity == "medium"
+
+    def test_empty_df_returns_zero_anomalies(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [],
+            "draw_probability": [],
+            "away_win_probability": [],
+        })
+        report = compute_prediction_anomalies(df)
+        assert report.n_matches == 0
+        assert report.n_anomalies == 0
+        assert report.anomalies == []
+
+    def test_invalid_thresholds_raise(self) -> None:
+        df = _make_anomaly_df(n=5)
+        with pytest.raises(ValueError, match="high_entropy_threshold"):
+            compute_prediction_anomalies(df, high_entropy_threshold=0.0)
+        with pytest.raises(ValueError, match="overconfident_threshold"):
+            compute_prediction_anomalies(df, overconfident_threshold=1.0)
+        with pytest.raises(ValueError, match="outlier_low_threshold"):
+            compute_prediction_anomalies(
+                df, outlier_low_threshold=0.9, outlier_high_threshold=0.5,
+            )
+        with pytest.raises(ValueError, match="max_anomalies"):
+            compute_prediction_anomalies(df, max_anomalies=0)
+
+    def test_max_anomalies_truncates(self) -> None:
+        df = _make_anomaly_df(n=100, seed=99)
+        report = compute_prediction_anomalies(df, max_anomalies=10)
+        assert len(report.anomalies) <= 10
+        # n_anomalies reflects total detected, not truncated
+        assert report.n_anomalies >= len(report.anomalies)
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({"actual_outcome": ["home_win"]})
+        with pytest.raises(ValueError, match="probability columns"):
+            compute_prediction_anomalies(df)
+
+    def test_severity_sort_order(self) -> None:
+        df = _make_anomaly_df(n=80, seed=3)
+        report = compute_prediction_anomalies(df)
+        if len(report.anomalies) >= 2:
+            sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+            for i in range(len(report.anomalies) - 1):
+                a, b = report.anomalies[i], report.anomalies[i + 1]
+                assert sev_order[a.severity] <= sev_order[b.severity]
+
+    def test_no_actual_outcome_skips_correct_dependent(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.95, 0.30],
+            "draw_probability": [0.04, 0.36],
+            "away_win_probability": [0.01, 0.34],
+        })
+        report = compute_prediction_anomalies(df)
+        # No actual_outcome => no overconfident_wrong / underconfident_correct
+        assert report.overconfident_wrong_count == 0
+        assert report.underconfident_correct_count == 0
+        # But outlier flags should still work (0.95 >= 0.90 high threshold)
+        assert report.outlier_confidence_count >= 1
+
+
+# ---------------------------------------------------------------------------
+# Round 69: Prediction Anomaly Detection API
+# ---------------------------------------------------------------------------
+
+
+class TestPredictionAnomaliesAPI:
+    """Tests for the get_prediction_anomalies API wrapper."""
+
+    def test_no_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_anomalies()
+        assert result["status"] == "not_available"
+
+    def test_with_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_anomaly_df(n=50)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_prediction_anomalies()
+        assert result["status"] == "ok"
+        assert result["n_matches"] == 50
+        assert "n_anomalies" in result
+        assert "anomaly_counts" in result
+        assert "severity_counts" in result
+        assert "anomalies" in result
+        assert isinstance(result["anomalies"], list)
+        assert "disclaimer" in result
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_anomaly_df(n=60)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_prediction_anomalies()
+        r2 = api_module.get_prediction_anomalies()
+        assert r1 == r2
+
+    def test_custom_thresholds(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_anomaly_df(n=50)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r = api_module.get_prediction_anomalies(
+            high_entropy_threshold=0.80,
+            overconfident_threshold=0.55,
+            max_anomalies=50,
+        )
+        assert r["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Round 69: Team Performance Profile
+# ---------------------------------------------------------------------------
+
+
+def _make_team_profile_df(n: int = 30, *, seed: int = 7) -> pd.DataFrame:
+    """Synthetic predictions DataFrame for team profile testing."""
+    rng = np.random.default_rng(seed)
+    home_probs = rng.uniform(0.35, 0.7, n)
+    draw_probs = rng.uniform(0.15, 0.3, n)
+    away_probs = np.clip(1.0 - home_probs - draw_probs, 0.05, 0.9)
+    total = home_probs + draw_probs + away_probs
+    home_probs /= total
+    draw_probs /= total
+    away_probs /= total
+
+    outcomes: list[str] = []
+    labels = ["home_win", "draw", "away_win"]
+    home_goals_list: list[int] = []
+    away_goals_list: list[int] = []
+    for i in range(n):
+        probs = (home_probs[i], draw_probs[i], away_probs[i])
+        pred_idx = int(np.argmax(probs))
+        if rng.random() < 0.6:
+            outcomes.append(labels[pred_idx])
+        else:
+            outcomes.append(labels[(pred_idx + 1) % 3])
+        home_goals_list.append(int(rng.integers(0, 4)))
+        away_goals_list.append(int(rng.integers(0, 4)))
+
+    return pd.DataFrame({
+        "home_win_probability": home_probs,
+        "draw_probability": draw_probs,
+        "away_win_probability": away_probs,
+        "actual_outcome": outcomes,
+        "home_goals": home_goals_list,
+        "away_goals": away_goals_list,
+        "match_id": [f"m{i:04d}" for i in range(n)],
+        "home_team": ["Arsenal"] * (n // 2) + ["Chelsea"] * (n - n // 2),
+        "away_team": ["Tottenham"] * (n // 2) + ["Liverpool"] * (n - n // 2),
+    })
+
+
+class TestComputeTeamPerformanceProfile:
+    """Tests for compute_team_performance_profile."""
+
+    def test_returns_profile_with_required_fields(self) -> None:
+        df = _make_team_profile_df(n=30)
+        profile = compute_team_performance_profile(df, "Arsenal")
+        assert profile is not None
+        assert profile.team == "Arsenal"
+        assert profile.n_matches > 0
+        assert profile.n_home >= 0
+        assert profile.n_away >= 0
+        assert 0.0 <= profile.overall_accuracy <= 1.0
+        assert 0.0 <= profile.home_accuracy <= 1.0
+        assert 0.0 <= profile.away_accuracy <= 1.0
+        assert 0.0 <= profile.avg_confidence <= 1.0
+        assert isinstance(profile.calibration_gap, float)
+        assert isinstance(profile.overperformance, float)
+        assert profile.n_wins + profile.n_draws + profile.n_losses == profile.n_matches
+        assert profile.avg_goals_scored >= 0.0
+        assert profile.avg_goals_conceded >= 0.0
+        assert 0.0 <= profile.clean_sheet_rate <= 1.0
+        assert 0.0 <= profile.btts_rate <= 1.0
+        assert isinstance(profile.common_scorelines, list)
+        assert isinstance(profile.worst_predictions, list)
+        assert isinstance(profile.best_predictions, list)
+        assert profile.assessment in ("overperformer", "underperformer", "aligned")
+        assert profile.disclaimer
+        assert len(profile.disclaimer) > 10
+
+    def test_returns_none_when_insufficient_matches(self) -> None:
+        df = _make_team_profile_df(n=30)
+        # Non-existent team
+        profile = compute_team_performance_profile(df, "Unknown FC", min_matches=3)
+        assert profile is None
+
+    def test_min_matches_threshold(self) -> None:
+        df = _make_team_profile_df(n=30)
+        # Arsenal has n//2 = 15 matches, raise threshold to exceed
+        profile = compute_team_performance_profile(df, "Arsenal", min_matches=20)
+        assert profile is None
+
+    def test_overperformer_classification(self) -> None:
+        # Arsenal wins all its home matches despite low predicted probability
+        n = 10
+        df = pd.DataFrame({
+            "home_win_probability": [0.30] * n,
+            "draw_probability": [0.35] * n,
+            "away_win_probability": [0.35] * n,
+            "actual_outcome": ["home_win"] * n,
+            "home_goals": [2] * n,
+            "away_goals": [0] * n,
+            "home_team": ["Arsenal"] * n,
+            "away_team": ["Chelsea"] * n,
+        })
+        profile = compute_team_performance_profile(df, "Arsenal", min_matches=3)
+        assert profile is not None
+        # actual win rate = 1.0, predicted win rate = 0.30
+        assert profile.overperformance > 0.05
+        assert profile.assessment == "overperformer"
+
+    def test_underperformer_classification(self) -> None:
+        n = 10
+        df = pd.DataFrame({
+            "home_win_probability": [0.80] * n,
+            "draw_probability": [0.15] * n,
+            "away_win_probability": [0.05] * n,
+            "actual_outcome": ["away_win"] * n,
+            "home_goals": [0] * n,
+            "away_goals": [2] * n,
+            "home_team": ["Arsenal"] * n,
+            "away_team": ["Chelsea"] * n,
+        })
+        profile = compute_team_performance_profile(df, "Arsenal", min_matches=3)
+        assert profile is not None
+        # actual win rate = 0, predicted win rate = 0.80
+        assert profile.overperformance < -0.05
+        assert profile.assessment == "underperformer"
+
+    def test_aligned_classification(self) -> None:
+        n = 10
+        df = pd.DataFrame({
+            "home_win_probability": [0.50] * n,
+            "draw_probability": [0.25] * n,
+            "away_win_probability": [0.25] * n,
+            "actual_outcome": ["home_win"] * 5 + ["away_win"] * 5,
+            "home_goals": [2] * 5 + [0] * 5,
+            "away_goals": [0] * 5 + [2] * 5,
+            "home_team": ["Arsenal"] * n,
+            "away_team": ["Chelsea"] * n,
+        })
+        profile = compute_team_performance_profile(df, "Arsenal", min_matches=3)
+        assert profile is not None
+        # actual win rate = 0.5, predicted win rate = 0.5
+        assert abs(profile.overperformance) <= 0.05
+        assert profile.assessment == "aligned"
+
+    def test_empty_team_raises(self) -> None:
+        df = _make_team_profile_df(n=10)
+        with pytest.raises(ValueError, match="team"):
+            compute_team_performance_profile(df, "")
+
+    def test_top_n_invalid_raises(self) -> None:
+        df = _make_team_profile_df(n=10)
+        with pytest.raises(ValueError, match="top_n"):
+            compute_team_performance_profile(df, "Arsenal", top_n=0)
+
+    def test_missing_prob_columns_raises(self) -> None:
+        df = pd.DataFrame({
+            "home_team": ["Arsenal"],
+            "away_team": ["Chelsea"],
+        })
+        with pytest.raises(ValueError, match="probability columns"):
+            compute_team_performance_profile(df, "Arsenal")
+
+    def test_missing_team_columns_raises(self) -> None:
+        df = pd.DataFrame({
+            "home_win_probability": [0.5],
+            "draw_probability": [0.3],
+            "away_win_probability": [0.2],
+        })
+        with pytest.raises(ValueError, match="home_team"):
+            compute_team_performance_profile(df, "Arsenal")
+
+    def test_worst_predictions_are_highest_brier(self) -> None:
+        df = _make_team_profile_df(n=30, seed=2)
+        profile = compute_team_performance_profile(df, "Arsenal", top_n=3)
+        assert profile is not None
+        if len(profile.worst_predictions) >= 2:
+            briers = [p["brier"] for p in profile.worst_predictions]
+            assert briers == sorted(briers, reverse=True)
+
+    def test_best_predictions_are_lowest_brier_correct(self) -> None:
+        df = _make_team_profile_df(n=30, seed=4)
+        profile = compute_team_performance_profile(df, "Arsenal", top_n=3)
+        assert profile is not None
+        # All best predictions should be correct (predicted == actual)
+        for p in profile.best_predictions:
+            assert p["predicted_outcome"] == p["actual_outcome"]
+
+    def test_home_and_away_split(self) -> None:
+        df = _make_team_profile_df(n=30)
+        profile = compute_team_performance_profile(df, "Arsenal")
+        assert profile is not None
+        assert profile.n_home + profile.n_away == profile.n_matches
+        # Arsenal is home in first half
+        assert profile.n_home == 15
+
+
+# ---------------------------------------------------------------------------
+# Round 69: Team Performance Profile API
+# ---------------------------------------------------------------------------
+
+
+class TestTeamPerformanceProfileAPI:
+    """Tests for the get_team_performance_profile API wrapper."""
+
+    def test_no_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_team_performance_profile("Arsenal")
+        assert result["status"] == "not_available"
+
+    def test_team_not_found(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_profile_df(n=30)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_team_performance_profile("Unknown FC")
+        assert result["status"] == "not_found"
+
+    def test_with_data(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_profile_df(n=30)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        result = api_module.get_team_performance_profile("Arsenal")
+        assert result["status"] == "ok"
+        assert result["team"] == "Arsenal"
+        assert result["n_matches"] > 0
+        assert "overall_accuracy" in result
+        assert "home_accuracy" in result
+        assert "away_accuracy" in result
+        assert "overperformance" in result
+        assert "assessment" in result
+        assert "worst_predictions" in result
+        assert "best_predictions" in result
+        assert "disclaimer" in result
+
+    def test_cache_hit(self, monkeypatch, tmp_path) -> None:
+        from scoutfootball import api as api_module
+
+        df = _make_team_profile_df(n=30)
+        tmp_path = Path(tmp_path) / "calibration_backtest"
+        tmp_path.mkdir()
+        df.to_parquet(
+            tmp_path / "dixon_coles_decay_backtest_predictions.parquet",
+            index=False,
+        )
+        monkeypatch.setattr(
+            api_module, "_settings",
+            lambda: type("S", (), {"report_root": Path(tmp_path.parent)})(),
+        )
+        api_module._BACKTEST_CACHE.clear()
+        r1 = api_module.get_team_performance_profile("Arsenal")
+        r2 = api_module.get_team_performance_profile("Arsenal")
+        assert r1 == r2

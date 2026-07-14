@@ -866,6 +866,86 @@ const i18n = {
         streaks_recovery: "反弹",
         streaks_neutral: "中性",
         streaks_no_points: "无连胜时间线数据",
+        report_card_title: "回测评分卡",
+        report_card_desc: "模型质量多维度评分卡（A-F 等级制）",
+        report_card_fetch: "加载",
+        report_card_loading: "计算评分卡…",
+        report_card_not_available: "暂无回测数据",
+        report_card_error: "加载评分卡失败",
+        report_card_overall: "总评",
+        report_card_score: "得分",
+        report_card_grade: "等级",
+        report_card_n_matches: "比赛数",
+        report_card_model_type: "模型",
+        report_card_summary: "概要",
+        report_card_dimension: "维度",
+        report_card_metric: "指标值",
+        report_card_assessment: "评估",
+        report_card_threshold: "阈值规则",
+        report_card_radar_tip: "六维度雷达图：准确率/校准/区分度/锐度/置信度对齐/稳定性",
+        report_card_disclaimer: "评分卡基于本地回测样本，等级仅供参考，不构成模型准确性保证",
+        anomalies_title: "预测异常检测",
+        anomalies_desc: "高熵/过度自信/低置信等异常预测识别与严重度分级",
+        anomalies_fetch: "加载",
+        anomalies_loading: "检测异常预测…",
+        anomalies_not_available: "暂无回测数据",
+        anomalies_error: "加载异常检测失败",
+        anomalies_n_matches: "比赛数",
+        anomalies_n_anomalies: "异常数",
+        anomalies_high_entropy: "高熵",
+        anomalies_overconfident_wrong: "过度自信错误",
+        anomalies_underconfident_correct: "低置信正确",
+        anomalies_outlier_high: "异常高置信",
+        anomalies_outlier_low: "异常低置信",
+        anomalies_severity_critical: "严重",
+        anomalies_severity_high: "高",
+        anomalies_severity_medium: "中",
+        anomalies_severity_low: "低",
+        anomalies_table_tip: "异常列表按严重度排序，最多展示 max_anomalies 条",
+        anomalies_no_anomalies: "未检测到异常预测",
+        anomalies_col_idx: "#",
+        anomalies_col_type: "类型",
+        anomalies_col_severity: "严重度",
+        anomalies_col_conf: "置信度",
+        anomalies_col_pred: "预测",
+        anomalies_col_actual: "实际",
+        anomalies_col_correct: "正确",
+        anomalies_col_teams: "对阵",
+        anomalies_disclaimer: "异常检测基于本地回测，阈值可调，结果不构成投注或确定性建议",
+        team_profile_title: "球队预测表现档案",
+        team_profile_desc: "单队预测准确率/校准/超额表现/常见比分/最佳最差预测",
+        team_profile_fetch: "加载",
+        team_profile_loading: "加载球队档案…",
+        team_profile_not_found: "未找到球队或样本不足",
+        team_profile_error: "加载球队档案失败",
+        team_profile_input_placeholder: "球队名称",
+        team_profile_n_matches: "比赛数",
+        team_profile_home: "主场",
+        team_profile_away: "客场",
+        team_profile_overall_acc: "总准确率",
+        team_profile_home_acc: "主场准确率",
+        team_profile_away_acc: "客场准确率",
+        team_profile_avg_conf: "平均置信度",
+        team_profile_cal_gap: "校准偏差",
+        team_profile_overperf: "超额表现",
+        team_profile_wdl: "胜/平/负",
+        team_profile_avg_gf: "场均进球",
+        team_profile_avg_ga: "场均失球",
+        team_profile_clean_sheet: "零封率",
+        team_profile_btts: "双方进球率",
+        team_profile_common_scorelines: "常见比分",
+        team_profile_worst_preds: "最差预测",
+        team_profile_best_preds: "最佳预测",
+        team_profile_assessment: "评估",
+        team_profile_overperformer: "超额表现者",
+        team_profile_underperformer: "低于预期",
+        team_profile_aligned: "符合预期",
+        team_profile_disclaimer: "球队档案基于本地回测样本，需满足最低比赛数门槛",
+        team_profile_col_brier: "Brier",
+        team_profile_col_conf: "置信度",
+        team_profile_col_pred: "预测",
+        team_profile_col_actual: "实际",
+        team_profile_col_match: "对阵",
     },
     en: {
         nav_overview: "Overview",
@@ -1733,6 +1813,86 @@ const i18n = {
         streaks_recovery: "Recovery",
         streaks_neutral: "Neutral",
         streaks_no_points: "No streak timeline data",
+        report_card_title: "Backtest Report Card",
+        report_card_desc: "Multi-dimension model quality report card (A-F grading)",
+        report_card_fetch: "Load",
+        report_card_loading: "Computing report card…",
+        report_card_not_available: "No backtest data available",
+        report_card_error: "Failed to load report card",
+        report_card_overall: "Overall Score",
+        report_card_score: "Score",
+        report_card_grade: "Grade",
+        report_card_n_matches: "Matches",
+        report_card_model_type: "Model",
+        report_card_summary: "Summary",
+        report_card_dimension: "Dimension",
+        report_card_metric: "Metric Value",
+        report_card_assessment: "Assessment",
+        report_card_threshold: "Threshold Rule",
+        report_card_radar_tip: "Six-dimension radar: accuracy / calibration / discrimination / sharpness / confidence alignment / stability",
+        report_card_disclaimer: "Report card is based on local backtest sample; grades are advisory and do not guarantee model accuracy",
+        anomalies_title: "Prediction Anomaly Detection",
+        anomalies_desc: "Identify high-entropy / overconfident / underconfident anomalies with severity grading",
+        anomalies_fetch: "Load",
+        anomalies_loading: "Detecting anomalies…",
+        anomalies_not_available: "No backtest data available",
+        anomalies_error: "Failed to load anomaly detection",
+        anomalies_n_matches: "Matches",
+        anomalies_n_anomalies: "Anomalies",
+        anomalies_high_entropy: "High Entropy",
+        anomalies_overconfident_wrong: "Overconfident Wrong",
+        anomalies_underconfident_correct: "Underconfident Correct",
+        anomalies_outlier_high: "Outlier High Conf",
+        anomalies_outlier_low: "Outlier Low Conf",
+        anomalies_severity_critical: "Critical",
+        anomalies_severity_high: "High",
+        anomalies_severity_medium: "Medium",
+        anomalies_severity_low: "Low",
+        anomalies_table_tip: "Anomalies sorted by severity; at most max_anomalies rows displayed",
+        anomalies_no_anomalies: "No anomalies detected",
+        anomalies_col_idx: "#",
+        anomalies_col_type: "Type",
+        anomalies_col_severity: "Severity",
+        anomalies_col_conf: "Confidence",
+        anomalies_col_pred: "Predicted",
+        anomalies_col_actual: "Actual",
+        anomalies_col_correct: "Correct",
+        anomalies_col_teams: "Match",
+        anomalies_disclaimer: "Anomaly detection is based on local backtest with tunable thresholds; not betting or definitive advice",
+        team_profile_title: "Team Performance Profile",
+        team_profile_desc: "Per-team prediction accuracy / calibration / overperformance / common scorelines / best-worst predictions",
+        team_profile_fetch: "Load",
+        team_profile_loading: "Loading team profile…",
+        team_profile_not_found: "Team not found or insufficient samples",
+        team_profile_error: "Failed to load team profile",
+        team_profile_input_placeholder: "Team name",
+        team_profile_n_matches: "Matches",
+        team_profile_home: "Home",
+        team_profile_away: "Away",
+        team_profile_overall_acc: "Overall Accuracy",
+        team_profile_home_acc: "Home Accuracy",
+        team_profile_away_acc: "Away Accuracy",
+        team_profile_avg_conf: "Avg Confidence",
+        team_profile_cal_gap: "Calibration Gap",
+        team_profile_overperf: "Overperformance",
+        team_profile_wdl: "W/D/L",
+        team_profile_avg_gf: "Avg Goals For",
+        team_profile_avg_ga: "Avg Goals Against",
+        team_profile_clean_sheet: "Clean Sheet Rate",
+        team_profile_btts: "BTTS Rate",
+        team_profile_common_scorelines: "Common Scorelines",
+        team_profile_worst_preds: "Worst Predictions",
+        team_profile_best_preds: "Best Predictions",
+        team_profile_assessment: "Assessment",
+        team_profile_overperformer: "Overperformer",
+        team_profile_underperformer: "Underperformer",
+        team_profile_aligned: "Aligned",
+        team_profile_disclaimer: "Team profile is based on local backtest sample; requires minimum match count threshold",
+        team_profile_col_brier: "Brier",
+        team_profile_col_conf: "Confidence",
+        team_profile_col_pred: "Predicted",
+        team_profile_col_actual: "Actual",
+        team_profile_col_match: "Match",
     },
 };
 
@@ -10687,6 +10847,12 @@ async function renderBacktest() {
         if (difficultyPanel) difficultyPanel.style.display = "block";
         const streaksPanel = document.getElementById("backtest-streaks-panel");
         if (streaksPanel) streaksPanel.style.display = "block";
+        const reportCardPanel = document.getElementById("backtest-report-card-panel");
+        if (reportCardPanel) reportCardPanel.style.display = "block";
+        const anomaliesPanel = document.getElementById("backtest-anomalies-panel");
+        if (anomaliesPanel) anomaliesPanel.style.display = "block";
+        const teamProfilePanel = document.getElementById("backtest-team-profile-panel");
+        if (teamProfilePanel) teamProfilePanel.style.display = "block";
     } catch (err) {
         if (statusPill) {
             statusPill.textContent = z ? "错误" : "error";
@@ -11802,6 +11968,409 @@ async function fetchAndRenderPredictionStreaks() {
     if (btn) btn.disabled = false;
 }
 
+// ── Backtest Report Card ────────────────────────────────────────────────
+async function fetchAndRenderBacktestReportCard() {
+    const body = document.getElementById("backtest-report-card-body");
+    const btn = document.getElementById("btn-backtest-report-card");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("report_card_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/report-card");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("report_card_not_available"))}</p>`;
+            const chart = getChart("backtest-report-card-chart");
+            if (chart) chart.clear();
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("report_card_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            const chart = getChart("backtest-report-card-chart");
+            if (chart) chart.clear();
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const z = appState.lang === "zh";
+        const fmtPct = (v) => (v == null) ? "–" : `${(Number(v) * 100).toFixed(1)}%`;
+        const fmtScore = (v) => (v == null) ? "–" : Number(v).toFixed(1);
+        const gradeColors = { A: "#4ade80", B: "#a3e635", C: "#facc15", D: "#fb923c", F: "#f87171" };
+        const overallGrade = data.overall_grade || "–";
+        const gradeColor = gradeColors[overallGrade] || "var(--text-base)";
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.6rem;font-weight:700;color:${gradeColor}">${escapeHtml(overallGrade)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_grade"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.2rem;font-weight:600">${fmtScore(data.overall_score)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_score"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600">${escapeHtml(data.model_type || "–")}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_model_type"))}</div>
+            </div>
+        </div>`;
+        const dims = Array.isArray(data.dimensions) ? data.dimensions : [];
+        if (dims.length > 0) {
+            html += `<table style="width:100%;border-collapse:collapse;font-size:0.78rem;margin-bottom:0.6rem">
+                <thead><tr style="text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border-color)">
+                    <th style="padding:0.3rem">${escapeHtml(t("report_card_dimension"))}</th>
+                    <th style="padding:0.3rem;text-align:center">${escapeHtml(t("report_card_grade"))}</th>
+                    <th style="padding:0.3rem;text-align:center">${escapeHtml(t("report_card_score"))}</th>
+                    <th style="padding:0.3rem;text-align:center">${escapeHtml(t("report_card_metric"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("report_card_assessment"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("report_card_threshold"))}</th>
+                </tr></thead><tbody>`;
+            for (const d of dims) {
+                const dg = d.grade || "–";
+                const dc = gradeColors[dg] || "var(--text-base)";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem">${escapeHtml(d.name || "")}</td>
+                    <td style="padding:0.3rem;text-align:center;font-weight:600;color:${dc}">${escapeHtml(dg)}</td>
+                    <td style="padding:0.3rem;text-align:center">${fmtScore(d.score)}</td>
+                    <td style="padding:0.3rem;text-align:center;font-family:monospace">${escapeHtml(String(d.metric_value ?? "–"))}</td>
+                    <td style="padding:0.3rem">${escapeHtml(d.assessment || "")}</td>
+                    <td style="padding:0.3rem;font-size:0.72rem;color:var(--text-muted)">${escapeHtml(d.threshold || "")}</td>
+                </tr>`;
+            }
+            html += `</tbody></table>`;
+        }
+        if (data.summary) {
+            html += `<p style="margin:0.3rem 0;font-size:0.8rem;color:var(--text-base)">${escapeHtml(data.summary)}</p>`;
+        }
+        html += `<p style="margin-top:0.3rem;font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_radar_tip"))}</p>`;
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+        _renderReportCardChart(data);
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("report_card_error"))}: ${escapeHtml(String(e))}</p>`;
+        const chart = getChart("backtest-report-card-chart");
+        if (chart) chart.clear();
+    }
+    if (btn) btn.disabled = false;
+}
+
+function _renderReportCardChart(data) {
+    const chart = getChart("backtest-report-card-chart");
+    if (!chart) return;
+    const z = appState.lang === "zh";
+    const dims = Array.isArray(data.dimensions) ? data.dimensions : [];
+    if (dims.length === 0) {
+        chart.clear();
+        return;
+    }
+    const indicator = dims.map((d) => ({ name: d.name || "", max: 100 }));
+    const values = dims.map((d) => Number(d.score || 0));
+    chart.setOption({
+        tooltip: { trigger: "item" },
+        legend: { show: false },
+        radar: {
+            indicator,
+            shape: "polygon",
+            axisName: { color: chartTextColor(), fontWeight: 600, fontSize: 11 },
+            splitLine: { lineStyle: { color: chartGridColor() } },
+            axisLine: { lineStyle: { color: chartGridColor() } },
+            splitArea: { show: false },
+        },
+        series: [{
+            type: "radar",
+            data: [{
+                value: values,
+                name: z ? "得分" : "Score",
+                areaStyle: { color: "rgba(79,156,255,0.18)" },
+                lineStyle: { color: "#4f9cff", width: 2 },
+                itemStyle: { color: "#4f9cff" },
+            }],
+        }],
+    }, true);
+}
+
+// ── Prediction Anomaly Detection ────────────────────────────────────────
+async function fetchAndRenderPredictionAnomalies() {
+    const body = document.getElementById("backtest-anomalies-body");
+    const btn = document.getElementById("btn-prediction-anomalies");
+    if (!body) return;
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("anomalies_loading"))}</p>`;
+    try {
+        const data = await apiFetch("/predictions/calibration/anomalies");
+        if (!data || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("anomalies_not_available"))}</p>`;
+            const chart = getChart("backtest-anomalies-chart");
+            if (chart) chart.clear();
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("anomalies_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            const chart = getChart("backtest-anomalies-chart");
+            if (chart) chart.clear();
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const z = appState.lang === "zh";
+        const fmtPct = (v) => (v == null) ? "–" : `${(Number(v) * 100).toFixed(1)}%`;
+        const sevColors = { critical: "#dc2626", high: "#f87171", medium: "#fbbf24", low: "#a3e635" };
+        const typeLabels = {
+            high_entropy: t("anomalies_high_entropy"),
+            overconfident_wrong: t("anomalies_overconfident_wrong"),
+            underconfident_correct: t("anomalies_underconfident_correct"),
+            outlier_confidence_high: t("anomalies_outlier_high"),
+            outlier_confidence_low: t("anomalies_outlier_low"),
+        };
+        const sevLabels = {
+            critical: t("anomalies_severity_critical"),
+            high: t("anomalies_severity_high"),
+            medium: t("anomalies_severity_medium"),
+            low: t("anomalies_severity_low"),
+        };
+        const counts = data.anomaly_counts || {};
+        let html = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.4rem;margin-bottom:0.6rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600;color:#f87171">${escapeHtml(String(data.n_anomalies ?? "–"))}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_n_anomalies"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600">${escapeHtml(String(counts.high_entropy ?? 0))}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_high_entropy"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:#f87171">${escapeHtml(String(counts.overconfident_wrong ?? 0))}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_overconfident_wrong"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:#4ade80">${escapeHtml(String(counts.underconfident_correct ?? 0))}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_underconfident_correct"))}</div>
+            </div>
+        </div>`;
+        const anomalies = Array.isArray(data.anomalies) ? data.anomalies : [];
+        if (anomalies.length === 0) {
+            html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("anomalies_no_anomalies"))}</p>`;
+        } else {
+            html += `<p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(t("anomalies_table_tip"))}</p>`;
+            html += `<div style="max-height:320px;overflow:auto;border:1px solid var(--border-color);border-radius:6px"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
+                <thead style="position:sticky;top:0;background:var(--bg-elevated)"><tr style="text-align:left;color:var(--text-muted)">
+                    <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_idx"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_type"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_severity"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_conf"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_pred"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_actual"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_teams"))}</th>
+                </tr></thead><tbody>`;
+            for (const a of anomalies) {
+                const sev = a.severity || "low";
+                const sc = sevColors[sev] || "var(--text-base)";
+                const teams = a.home_team && a.away_team ? `${a.home_team} v ${a.away_team}` : "–";
+                html += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem">${escapeHtml(String(a.match_index ?? "–"))}</td>
+                    <td style="padding:0.3rem">${escapeHtml(typeLabels[a.anomaly_type] || a.anomaly_type || "–")}</td>
+                    <td style="padding:0.3rem;color:${sc};font-weight:600">${escapeHtml(sevLabels[sev] || sev)}</td>
+                    <td style="padding:0.3rem;font-family:monospace">${fmtPct(a.confidence)}</td>
+                    <td style="padding:0.3rem">${escapeHtml(a.predicted_outcome || "–")}</td>
+                    <td style="padding:0.3rem">${escapeHtml(a.actual_outcome || "–")}</td>
+                    <td style="padding:0.3rem;font-size:0.7rem">${escapeHtml(teams)}</td>
+                </tr>`;
+            }
+            html += `</tbody></table></div>`;
+        }
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+        _renderAnomaliesChart(data, sevColors, sevLabels);
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("anomalies_error"))}: ${escapeHtml(String(e))}</p>`;
+        const chart = getChart("backtest-anomalies-chart");
+        if (chart) chart.clear();
+    }
+    if (btn) btn.disabled = false;
+}
+
+function _renderAnomaliesChart(data, sevColors, sevLabels) {
+    const chart = getChart("backtest-anomalies-chart");
+    if (!chart) return;
+    const sevCounts = data.severity_counts || {};
+    const keys = ["critical", "high", "medium", "low"];
+    const series = keys
+        .filter((k) => (sevCounts[k] || 0) > 0)
+        .map((k) => ({
+            name: sevLabels[k] || k,
+            value: sevCounts[k] || 0,
+            itemStyle: { color: sevColors[k] },
+        }));
+    if (series.length === 0) {
+        chart.clear();
+        return;
+    }
+    chart.setOption({
+        tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+        legend: { bottom: 0, textStyle: { color: chartTextColor(), fontSize: 11 } },
+        series: [{
+            type: "pie",
+            radius: ["38%", "62%"],
+            center: ["50%", "45%"],
+            avoidLabelOverlap: true,
+            label: { color: chartTextColor(), fontSize: 11 },
+            data: series,
+        }],
+    }, true);
+}
+
+// ── Team Performance Profile ────────────────────────────────────────────
+async function fetchAndRenderTeamProfile(team) {
+    const body = document.getElementById("backtest-team-profile-body");
+    const btn = document.getElementById("btn-team-profile");
+    if (!body) return;
+    if (!team || !team.trim()) {
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_profile_not_found"))}</p>`;
+        return;
+    }
+    if (btn) btn.disabled = true;
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_profile_loading"))}</p>`;
+    try {
+        const qs = `team=${encodeURIComponent(team.trim())}`;
+        const data = await apiFetch(`/predictions/calibration/team-profile?${qs}`);
+        if (!data || data.status === "not_found" || data.status === "not_available") {
+            body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_profile_not_found"))}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        if (data.status === "error") {
+            body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("team_profile_error"))}: ${escapeHtml(data.message || "")}</p>`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const z = appState.lang === "zh";
+        const fmtPct = (v) => (v == null) ? "–" : `${(Number(v) * 100).toFixed(1)}%`;
+        const fmtNum = (v, d = 2) => (v == null) ? "–" : Number(v).toFixed(d);
+        const assessmentMap = {
+            overperformer: t("team_profile_overperformer"),
+            underperformer: t("team_profile_underperformer"),
+            aligned: t("team_profile_aligned"),
+        };
+        const assessmentColor = { overperformer: "#4ade80", underperformer: "#f87171", aligned: "var(--text-base)" };
+        const assessment = data.assessment || "aligned";
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_n_matches"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_home ?? "–"))}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_home"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_away ?? "–"))}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_away"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:1.0rem;font-weight:600;color:${assessmentColor[assessment] || "var(--text-base)"}">${escapeHtml(assessmentMap[assessment] || assessment)}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_assessment"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.overall_accuracy)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_overall_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.home_accuracy)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_home_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.away_accuracy)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_away_acc"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.avg_confidence)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_avg_conf"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600">${fmtNum(data.calibration_gap, 3)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_cal_gap"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600;color:${assessmentColor[assessment] || "var(--text-base)"}">${fmtNum(data.overperformance, 3)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_overperf"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600">${escapeHtml(String(data.n_wins ?? 0))}/${escapeHtml(String(data.n_draws ?? 0))}/${escapeHtml(String(data.n_losses ?? 0))}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_wdl"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.9rem;font-weight:600">${fmtNum(data.avg_goals_scored, 2)}/${fmtNum(data.avg_goals_conceded, 2)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_avg_gf"))}/${escapeHtml(t("team_profile_avg_ga"))}</div>
+            </div>
+        </div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.4rem;margin-bottom:0.6rem">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.clean_sheet_rate)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_clean_sheet"))}</div>
+            </div>
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+                <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.btts_rate)}</div>
+                <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_btts"))}</div>
+            </div>
+        </div>`;
+        const scorelines = Array.isArray(data.common_scorelines) ? data.common_scorelines : [];
+        if (scorelines.length > 0) {
+            html += `<h4 style="margin:0.4rem 0 0.2rem;font-size:0.82rem">${escapeHtml(t("team_profile_common_scorelines"))}</h4>`;
+            html += `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.6rem">`;
+            for (const s of scorelines) {
+                html += `<span style="padding:0.2rem 0.5rem;background:var(--bg-elevated);border-radius:4px;font-size:0.75rem;font-family:monospace">${escapeHtml(String(s[0] || "–"))} × ${escapeHtml(String(s[1] || 0))}</span>`;
+            }
+            html += `</div>`;
+        }
+        const renderPredList = (title, preds) => {
+            if (!Array.isArray(preds) || preds.length === 0) return "";
+            let h = `<h4 style="margin:0.4rem 0 0.2rem;font-size:0.82rem">${escapeHtml(title)}</h4>`;
+            h += `<div style="max-height:200px;overflow:auto;border:1px solid var(--border-color);border-radius:6px"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
+                <thead style="position:sticky;top:0;background:var(--bg-elevated)"><tr style="text-align:left;color:var(--text-muted)">
+                    <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_match"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_pred"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_actual"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_conf"))}</th>
+                    <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_brier"))}</th>
+                </tr></thead><tbody>`;
+            for (const p of preds) {
+                const teams = p.home_team && p.away_team ? `${p.home_team} v ${p.away_team}` : "–";
+                h += `<tr style="border-bottom:1px solid var(--border-color)">
+                    <td style="padding:0.3rem;font-size:0.7rem">${escapeHtml(teams)}</td>
+                    <td style="padding:0.3rem">${escapeHtml(p.predicted_outcome || "–")}</td>
+                    <td style="padding:0.3rem">${escapeHtml(p.actual_outcome || "–")}</td>
+                    <td style="padding:0.3rem;font-family:monospace">${fmtPct(p.confidence)}</td>
+                    <td style="padding:0.3rem;font-family:monospace">${fmtNum(p.brier, 3)}</td>
+                </tr>`;
+            }
+            h += `</tbody></table></div>`;
+            return h;
+        };
+        html += renderPredList(t("team_profile_worst_preds"), data.worst_predictions);
+        html += renderPredList(t("team_profile_best_preds"), data.best_predictions);
+        if (data.disclaimer) {
+            html += `<p style="margin-top:0.4rem;font-size:0.68rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`;
+        }
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--text-low);font-size:0.85rem">${escapeHtml(t("team_profile_error"))}: ${escapeHtml(String(e))}</p>`;
+    }
+    if (btn) btn.disabled = false;
+}
+
 function exportPlayers() {
     const header = ["rank", "player", "position", "team", "league", "season", "rating", "confidence", "minutes", "goals", "assists"];
     const rows = filteredPlayers().map((player, index) => [
@@ -12321,6 +12890,50 @@ function bindEvents() {
             fetchAndRenderPredictionStreaks().catch(
                 (e) => console.warn("Streaks failed:", e)
             );
+        });
+    }
+
+    // Report card button: backtest report card
+    const reportCardBtn = document.getElementById("btn-backtest-report-card");
+    if (reportCardBtn) {
+        reportCardBtn.addEventListener("click", () => {
+            fetchAndRenderBacktestReportCard().catch(
+                (e) => console.warn("Report card failed:", e)
+            );
+        });
+    }
+
+    // Anomalies button: prediction anomaly detection
+    const anomaliesBtn = document.getElementById("btn-prediction-anomalies");
+    if (anomaliesBtn) {
+        anomaliesBtn.addEventListener("click", () => {
+            fetchAndRenderPredictionAnomalies().catch(
+                (e) => console.warn("Anomalies failed:", e)
+            );
+        });
+    }
+
+    // Team profile button: team performance profile
+    const teamProfileBtn = document.getElementById("btn-team-profile");
+    if (teamProfileBtn) {
+        teamProfileBtn.addEventListener("click", () => {
+            const input = document.getElementById("team-profile-input");
+            const team = input ? input.value : "";
+            fetchAndRenderTeamProfile(team).catch(
+                (e) => console.warn("Team profile failed:", e)
+            );
+        });
+    }
+    const teamProfileInput = document.getElementById("team-profile-input");
+    if (teamProfileInput) {
+        teamProfileInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                const team = teamProfileInput.value;
+                fetchAndRenderTeamProfile(team).catch(
+                    (err) => console.warn("Team profile failed:", err)
+                );
+            }
         });
     }
 

@@ -6828,3 +6828,876 @@ def compute_prediction_streaks(
         points=points[:max_points],
         disclaimer=disclaimer,
     )
+
+
+# ---------------------------------------------------------------------------
+# Backtest Report Card (letter-graded model quality summary)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ReportCardDimension:
+    """Single dimension grade in the backtest report card."""
+
+    name: str
+    grade: str  # A / B / C / D / F
+    score: float  # 0–100
+    metric_value: float
+    metric_name: str
+    assessment: str  # excellent / good / average / poor / failing
+    threshold: str  # human-readable threshold description
+
+
+@dataclass(frozen=True)
+class BacktestReportCard:
+    """Aggregated letter-graded report card across model quality dimensions."""
+
+    overall_grade: str
+    overall_score: float
+    dimensions: list[ReportCardDimension]
+    n_matches: int
+    model_type: str | None
+    summary: str
+    disclaimer: str
+
+
+def _grade_from_score(score: float) -> str:
+    """Convert a 0–100 score to a letter grade."""
+    if score >= 90:
+        return "A"
+    if score >= 80:
+        return "B"
+    if score >= 65:
+        return "C"
+    if score >= 50:
+        return "D"
+    return "F"
+
+
+def _assessment_from_grade(grade: str) -> str:
+    """Convert a letter grade to an assessment label."""
+    return {
+        "A": "excellent",
+        "B": "good",
+        "C": "average",
+        "D": "poor",
+        "F": "failing",
+    }.get(grade, "unknown")
+
+
+def compute_backtest_report_card(
+    predictions: pd.DataFrame,
+    *,
+    model_type: str | None = None,
+) -> BacktestReportCard:
+    """Compute a letter-graded report card aggregating model quality dimensions.
+
+    Grades six dimensions on a 0–100 scale, each mapped to A/B/C/D/F:
+
+    - **Accuracy**: argmax hit rate.
+    - **Calibration**: Expected Calibration Error (ECE) — lower is better.
+    - **Discrimination**: Brier score — lower is better.
+    - **Sharpness**: Ranked Probability Score (RPS) — lower is better.
+    - **Confidence Alignment**: |avg_confidence − accuracy| — lower is better.
+    - **Stability**: 1 − std(accuracy) across temporal halves — higher is better.
+
+    The overall score is a weighted average (accuracy 25%, calibration 20%,
+    discrimination 20%, sharpness 15%, confidence 10%, stability 10%).
+
+    Args:
+        predictions: DataFrame with backtest prediction columns.
+        model_type: Optional model label (e.g. "dixon_coles_decay").
+
+    Returns:
+        BacktestReportCard with per-dimension grades and overall grade.
+
+    Raises:
+        ValueError: If required probability or outcome columns are missing.
+    """
+    prob_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    missing = [c for c in prob_cols if c not in predictions.columns]
+    if missing:
+        raise ValueError(f"Missing required probability columns: {missing}")
+    if "actual_outcome" not in predictions.columns:
+        raise ValueError("Missing required column: actual_outcome")
+
+    df = predictions.copy()
+    n = int(len(df))
+    disclaimer = (
+        "Backtest report card is a retrospective summary on historical data; "
+        "it does not guarantee future performance."
+    )
+
+    if n == 0:
+        return BacktestReportCard(
+            overall_grade="F",
+            overall_score=0.0,
+            dimensions=[],
+            n_matches=0,
+            model_type=model_type,
+            summary="No predictions available for grading.",
+            disclaimer=disclaimer,
+        )
+
+    # --- Accuracy ---
+    accuracy = _accuracy_for_df(df)
+    acc_score = min(100.0, accuracy * 100.0 / 0.55)  # 55% → 100
+    acc_score = max(0.0, acc_score)
+
+    # --- Calibration (ECE) ---
+    ece = 0.0
+    n_bins = 10
+    bin_edges = np.linspace(1.0 / 3.0, 1.0, n_bins + 1)
+    probs = df[prob_cols].to_numpy()
+    max_probs = np.max(probs, axis=1)
+    predicted_idx = np.argmax(probs, axis=1)
+    outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+    actual_idx = df["actual_outcome"].map(outcome_map).to_numpy()
+    correct_flags = (predicted_idx == actual_idx).astype(float)
+    for i in range(n_bins):
+        lo, hi = bin_edges[i], bin_edges[i + 1]
+        if i == n_bins - 1:
+            mask = (max_probs >= lo) & (max_probs <= hi)
+        else:
+            mask = (max_probs >= lo) & (max_probs < hi)
+        count = int(mask.sum())
+        if count == 0:
+            continue
+        avg_conf = float(max_probs[mask].mean())
+        avg_acc = float(correct_flags[mask].mean())
+        ece += count * abs(avg_conf - avg_acc)
+    ece /= n
+    # ECE: 0 → 100, 0.20 → 0
+    cal_score = max(0.0, min(100.0, (1.0 - ece / 0.20) * 100.0))
+
+    # --- Discrimination (Brier) ---
+    brier = _brier_1x2(df)
+    # Brier: 0 → 100, 0.33 → 0
+    disc_score = max(0.0, min(100.0, (1.0 - brier / 0.33) * 100.0))
+
+    # --- Sharpness (RPS) ---
+    rps = _ranked_probability_score(df)
+    # RPS: 0 → 100, 0.25 → 0
+    sharp_score = max(0.0, min(100.0, (1.0 - rps / 0.25) * 100.0))
+
+    # --- Confidence Alignment ---
+    avg_conf = _avg_confidence_for_df(df)
+    alignment_gap = abs(avg_conf - accuracy)
+    # gap: 0 → 100, 0.20 → 0
+    conf_score = max(0.0, min(100.0, (1.0 - alignment_gap / 0.20) * 100.0))
+
+    # --- Stability (temporal halves) ---
+    stab_score = 50.0  # default when insufficient data
+    if "match_date" in df.columns and n >= 20:
+        try:
+            df_sorted = df.sort_values("match_date").reset_index(drop=True)
+            half = n // 2
+            first_acc = _accuracy_for_df(df_sorted.iloc[:half])
+            second_acc = _accuracy_for_df(df_sorted.iloc[half:])
+            stab_diff = abs(second_acc - first_acc)
+            # diff: 0 → 100, 0.15 → 0
+            stab_score = max(0.0, min(100.0, (1.0 - stab_diff / 0.15) * 100.0))
+        except Exception:
+            stab_score = 50.0
+
+    dimensions = [
+        ReportCardDimension(
+            name="accuracy",
+            grade=_grade_from_score(acc_score),
+            score=round(acc_score, 1),
+            metric_value=round(accuracy, 4),
+            metric_name="accuracy",
+            assessment=_assessment_from_grade(_grade_from_score(acc_score)),
+            threshold="55%+ → A, 44%+ → B, 33%+ → C, 25%+ → D",
+        ),
+        ReportCardDimension(
+            name="calibration",
+            grade=_grade_from_score(cal_score),
+            score=round(cal_score, 1),
+            metric_value=round(ece, 4),
+            metric_name="ECE",
+            assessment=_assessment_from_grade(_grade_from_score(cal_score)),
+            threshold="ECE<0.04 → A, <0.08 → B, <0.12 → C, <0.16 → D",
+        ),
+        ReportCardDimension(
+            name="discrimination",
+            grade=_grade_from_score(disc_score),
+            score=round(disc_score, 1),
+            metric_value=round(brier, 4),
+            metric_name="Brier",
+            assessment=_assessment_from_grade(_grade_from_score(disc_score)),
+            threshold="Brier<0.17 → A, <0.21 → B, <0.25 → C, <0.29 → D",
+        ),
+        ReportCardDimension(
+            name="sharpness",
+            grade=_grade_from_score(sharp_score),
+            score=round(sharp_score, 1),
+            metric_value=round(rps, 4),
+            metric_name="RPS",
+            assessment=_assessment_from_grade(_grade_from_score(sharp_score)),
+            threshold="RPS<0.13 → A, <0.16 → B, <0.19 → C, <0.22 → D",
+        ),
+        ReportCardDimension(
+            name="confidence_alignment",
+            grade=_grade_from_score(conf_score),
+            score=round(conf_score, 1),
+            metric_value=round(alignment_gap, 4),
+            metric_name="|conf−acc|",
+            assessment=_assessment_from_grade(_grade_from_score(conf_score)),
+            threshold="gap<0.03 → A, <0.06 → B, <0.10 → C, <0.14 → D",
+        ),
+        ReportCardDimension(
+            name="stability",
+            grade=_grade_from_score(stab_score),
+            score=round(stab_score, 1),
+            metric_value=round(stab_score / 100.0, 4),
+            metric_name="stability_score",
+            assessment=_assessment_from_grade(_grade_from_score(stab_score)),
+            threshold="diff<0.03 → A, <0.06 → B, <0.09 → C, <0.12 → D",
+        ),
+    ]
+
+    weights = {
+        "accuracy": 0.25,
+        "calibration": 0.20,
+        "discrimination": 0.20,
+        "sharpness": 0.15,
+        "confidence_alignment": 0.10,
+        "stability": 0.10,
+    }
+    overall_score = sum(
+        dim.score * weights.get(dim.name, 0.0) for dim in dimensions
+    )
+    overall_grade = _grade_from_score(overall_score)
+
+    grade_counts: dict[str, int] = {}
+    for dim in dimensions:
+        grade_counts[dim.grade] = grade_counts.get(dim.grade, 0) + 1
+
+    summary = (
+        f"Overall grade {overall_grade} ({overall_score:.1f}/100) "
+        f"across {n} predictions. "
+        f"Accuracy={accuracy:.1%}, Brier={brier:.4f}, RPS={rps:.4f}, "
+        f"ECE={ece:.4f}. "
+        f"Grade distribution: "
+        + ", ".join(f"{g}×{c}" for g, c in sorted(grade_counts.items()))
+        + "."
+    )
+
+    return BacktestReportCard(
+        overall_grade=overall_grade,
+        overall_score=round(overall_score, 1),
+        dimensions=dimensions,
+        n_matches=n,
+        model_type=model_type,
+        summary=summary,
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prediction Anomaly Detection (flag unreliable or noteworthy predictions)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AnomalyEntry:
+    """A single flagged prediction anomaly."""
+
+    match_index: int
+    anomaly_type: str
+    severity: str  # low / medium / high / critical
+    confidence: float
+    predicted_outcome: str
+    actual_outcome: str | None
+    correct: bool | None
+    explanation: str
+    match_id: str | None
+    home_team: str | None
+    away_team: str | None
+
+
+@dataclass(frozen=True)
+class AnomalyReport:
+    """Summary of detected prediction anomalies."""
+
+    n_matches: int
+    n_anomalies: int
+    anomaly_counts: dict[str, int]
+    severity_counts: dict[str, int]
+    anomalies: list[AnomalyEntry]
+    high_entropy_count: int
+    overconfident_wrong_count: int
+    underconfident_correct_count: int
+    outlier_confidence_count: int
+    disclaimer: str
+
+
+def compute_prediction_anomalies(
+    predictions: pd.DataFrame,
+    *,
+    high_entropy_threshold: float = 0.85,
+    overconfident_threshold: float = 0.60,
+    underconfident_threshold: float = 0.40,
+    outlier_high_threshold: float = 0.90,
+    outlier_low_threshold: float = 0.35,
+    max_anomalies: int = 500,
+) -> AnomalyReport:
+    """Flag predictions that are potentially unreliable or noteworthy.
+
+    Detects five anomaly types:
+
+    - ``high_entropy``: Shannon entropy ≥ *high_entropy_threshold* — the model
+      is very uncertain about the outcome.
+    - ``overconfident_wrong``: confidence ≥ *overconfident_threshold* but the
+      prediction was wrong — potential calibration issue.
+    - ``underconfident_correct``: confidence < *underconfident_threshold* but
+      the prediction was correct — the model undervalued the true outcome.
+    - ``outlier_confidence_high``: confidence ≥ *outlier_high_threshold* —
+      extreme confidence that may indicate overfitting.
+    - ``outlier_confidence_low``: confidence < *outlier_low_threshold* —
+      very low confidence that may indicate data sparsity.
+
+    Each anomaly is assigned a severity: ``low``, ``medium``, ``high``, or
+    ``critical``.
+
+    Args:
+        predictions: DataFrame with backtest prediction columns.
+        high_entropy_threshold: Entropy threshold for ``high_entropy``.
+        overconfident_threshold: Confidence threshold for ``overconfident_wrong``.
+        underconfident_threshold: Confidence threshold for ``underconfident_correct``.
+        outlier_high_threshold: Upper confidence bound for outlier detection.
+        outlier_low_threshold: Lower confidence bound for outlier detection.
+        max_anomalies: Maximum number of anomaly entries to return.
+
+    Returns:
+        AnomalyReport with flagged predictions and summary counts.
+
+    Raises:
+        ValueError: If required probability columns are missing or thresholds
+            are invalid.
+    """
+    if not 0.0 < high_entropy_threshold <= 1.0:
+        raise ValueError("high_entropy_threshold must be in (0, 1]")
+    if not 0.0 < overconfident_threshold < 1.0:
+        raise ValueError("overconfident_threshold must be in (0, 1)")
+    if not 0.0 < underconfident_threshold < 1.0:
+        raise ValueError("underconfident_threshold must be in (0, 1)")
+    if not 0.0 < outlier_low_threshold < outlier_high_threshold < 1.0:
+        raise ValueError(
+            "outlier_low_threshold must be < outlier_high_threshold, both in (0, 1)"
+        )
+    if max_anomalies < 1:
+        raise ValueError("max_anomalies must be >= 1")
+
+    prob_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    missing = [c for c in prob_cols if c not in predictions.columns]
+    if missing:
+        raise ValueError(f"Missing required probability columns: {missing}")
+
+    df = predictions.copy()
+    n = int(len(df))
+    disclaimer = (
+        "Anomaly detection flags predictions for review; flagged matches "
+        "are not guaranteed to be wrong, and unflagged matches are not "
+        "guaranteed to be correct."
+    )
+
+    if n == 0:
+        return AnomalyReport(
+            n_matches=0,
+            n_anomalies=0,
+            anomaly_counts={},
+            severity_counts={},
+            anomalies=[],
+            high_entropy_count=0,
+            overconfident_wrong_count=0,
+            underconfident_correct_count=0,
+            outlier_confidence_count=0,
+            disclaimer=disclaimer,
+        )
+
+    has_actual = "actual_outcome" in df.columns
+    optional_cols = {
+        "match_id": "match_id" in df.columns,
+        "home_team": "home_team" in df.columns,
+        "away_team": "away_team" in df.columns,
+    }
+
+    probs = df[prob_cols].to_numpy()
+    max_probs = np.max(probs, axis=1)
+    predicted_idx = np.argmax(probs, axis=1)
+    outcome_labels = ["home_win", "draw", "away_win"]
+    predicted_outcomes = [outcome_labels[i] for i in predicted_idx]
+
+    actual_outcomes: list[str | None] = [None] * n
+    correct_flags: list[bool | None] = [None] * n
+    if has_actual:
+        outcome_map = {"home_win": 0, "draw": 1, "away_win": 2}
+        actual_idx = df["actual_outcome"].map(outcome_map).to_numpy()
+        for i in range(n):
+            ai = actual_idx[i]
+            if pd.isna(ai):
+                actual_outcomes[i] = None
+                correct_flags[i] = None
+            else:
+                actual_outcomes[i] = outcome_labels[int(ai)]
+                correct_flags[i] = bool(predicted_idx[i] == int(ai))
+
+    anomalies: list[AnomalyEntry] = []
+    counts: dict[str, int] = {
+        "high_entropy": 0,
+        "overconfident_wrong": 0,
+        "underconfident_correct": 0,
+        "outlier_confidence_high": 0,
+        "outlier_confidence_low": 0,
+    }
+    sev_counts: dict[str, int] = {
+        "low": 0,
+        "medium": 0,
+        "high": 0,
+        "critical": 0,
+    }
+
+    for i in range(n):
+        conf = float(max_probs[i])
+        probs_vec = [float(probs[i, j]) for j in range(3)]
+        entropy = _shannon_entropy(probs_vec)
+        predicted = predicted_outcomes[i]
+        actual = actual_outcomes[i]
+        correct = correct_flags[i]
+
+        match_id = (
+            str(df.at[df.index[i], "match_id"])
+            if optional_cols["match_id"] and pd.notna(df.at[df.index[i], "match_id"])
+            else None
+        )
+        home_team = (
+            str(df.at[df.index[i], "home_team"])
+            if optional_cols["home_team"] and pd.notna(df.at[df.index[i], "home_team"])
+            else None
+        )
+        away_team = (
+            str(df.at[df.index[i], "away_team"])
+            if optional_cols["away_team"] and pd.notna(df.at[df.index[i], "away_team"])
+            else None
+        )
+
+        # high_entropy
+        if entropy >= high_entropy_threshold:
+            severity = "high" if entropy >= 0.95 else "medium"
+            anomalies.append(AnomalyEntry(
+                match_index=i,
+                anomaly_type="high_entropy",
+                severity=severity,
+                confidence=round(conf, 4),
+                predicted_outcome=predicted,
+                actual_outcome=actual,
+                correct=correct,
+                explanation=(
+                    f"Entropy {entropy:.3f} ≥ {high_entropy_threshold} — "
+                    "model is very uncertain."
+                ),
+                match_id=match_id,
+                home_team=home_team,
+                away_team=away_team,
+            ))
+            counts["high_entropy"] += 1
+            sev_counts[severity] += 1
+
+        # overconfident_wrong
+        if correct is False and conf >= overconfident_threshold:
+            severity = "critical" if conf >= 0.80 else "high"
+            anomalies.append(AnomalyEntry(
+                match_index=i,
+                anomaly_type="overconfident_wrong",
+                severity=severity,
+                confidence=round(conf, 4),
+                predicted_outcome=predicted,
+                actual_outcome=actual,
+                correct=correct,
+                explanation=(
+                    f"Confidence {conf:.1%} ≥ {overconfident_threshold:.0%} but "
+                    f"prediction was wrong (actual: {actual})."
+                ),
+                match_id=match_id,
+                home_team=home_team,
+                away_team=away_team,
+            ))
+            counts["overconfident_wrong"] += 1
+            sev_counts[severity] += 1
+
+        # underconfident_correct
+        if correct is True and conf < underconfident_threshold:
+            severity = "low"
+            anomalies.append(AnomalyEntry(
+                match_index=i,
+                anomaly_type="underconfident_correct",
+                severity=severity,
+                confidence=round(conf, 4),
+                predicted_outcome=predicted,
+                actual_outcome=actual,
+                correct=correct,
+                explanation=(
+                    f"Confidence {conf:.1%} < {underconfident_threshold:.0%} but "
+                    f"prediction was correct — model undervalued the outcome."
+                ),
+                match_id=match_id,
+                home_team=home_team,
+                away_team=away_team,
+            ))
+            counts["underconfident_correct"] += 1
+            sev_counts[severity] += 1
+
+        # outlier_confidence_high
+        if conf >= outlier_high_threshold:
+            severity = "medium" if conf < 0.95 else "high"
+            anomalies.append(AnomalyEntry(
+                match_index=i,
+                anomaly_type="outlier_confidence_high",
+                severity=severity,
+                confidence=round(conf, 4),
+                predicted_outcome=predicted,
+                actual_outcome=actual,
+                correct=correct,
+                explanation=(
+                    f"Confidence {conf:.1%} ≥ {outlier_high_threshold:.0%} — "
+                    f"extreme confidence, verify data coverage."
+                ),
+                match_id=match_id,
+                home_team=home_team,
+                away_team=away_team,
+            ))
+            counts["outlier_confidence_high"] += 1
+            sev_counts[severity] += 1
+
+        # outlier_confidence_low
+        if conf < outlier_low_threshold:
+            severity = "medium"
+            anomalies.append(AnomalyEntry(
+                match_index=i,
+                anomaly_type="outlier_confidence_low",
+                severity=severity,
+                confidence=round(conf, 4),
+                predicted_outcome=predicted,
+                actual_outcome=actual,
+                correct=correct,
+                explanation=(
+                    f"Confidence {conf:.1%} < {outlier_low_threshold:.0%} — "
+                    f"very low confidence, potential data sparsity."
+                ),
+                match_id=match_id,
+                home_team=home_team,
+                away_team=away_team,
+            ))
+            counts["outlier_confidence_low"] += 1
+            sev_counts[severity] += 1
+
+    # Sort by severity (critical first), then by confidence descending
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    anomalies.sort(key=lambda a: (sev_order.get(a.severity, 4), -a.confidence))
+
+    return AnomalyReport(
+        n_matches=n,
+        n_anomalies=len(anomalies),
+        anomaly_counts=counts,
+        severity_counts=sev_counts,
+        anomalies=anomalies[:max_anomalies],
+        high_entropy_count=counts["high_entropy"],
+        overconfident_wrong_count=counts["overconfident_wrong"],
+        underconfident_correct_count=counts["underconfident_correct"],
+        outlier_confidence_count=(
+            counts["outlier_confidence_high"] + counts["outlier_confidence_low"]
+        ),
+        disclaimer=disclaimer,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Team Performance Profile (backtest-derived team-level analysis)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TeamPerformanceProfile:
+    """Backtest-derived performance profile for a single team."""
+
+    team: str
+    n_matches: int
+    n_home: int
+    n_away: int
+    overall_accuracy: float
+    home_accuracy: float
+    away_accuracy: float
+    avg_confidence: float
+    calibration_gap: float
+    overperformance: float  # actual win rate − predicted win rate
+    n_wins: int
+    n_draws: int
+    n_losses: int
+    avg_goals_scored: float
+    avg_goals_conceded: float
+    clean_sheet_rate: float
+    btts_rate: float  # both teams to score
+    common_scorelines: list[tuple[str, int]]  # (scoreline, count)
+    worst_predictions: list[dict[str, Any]]  # top-N highest-Brier matches
+    best_predictions: list[dict[str, Any]]  # top-N lowest-Brier correct matches
+    assessment: str  # overperformer / underperformer / aligned
+    disclaimer: str
+
+
+def compute_team_performance_profile(
+    predictions: pd.DataFrame,
+    team: str,
+    *,
+    top_n: int = 5,
+    min_matches: int = 3,
+) -> TeamPerformanceProfile | None:
+    """Compute a backtest-derived performance profile for a single team.
+
+    Filters backtest predictions to matches involving *team* (as either home
+    or away) and computes:
+
+    - Overall / home / away prediction accuracy.
+    - Average confidence and calibration gap.
+    - Over/underperformance (actual win rate vs predicted win rate).
+    - Win/draw/loss record, average goals scored/conceded.
+    - Clean sheet rate and BTTS (both teams to score) rate.
+    - Most common score lines.
+    - Worst predictions (highest Brier) and best predictions (lowest Brier
+      among correct).
+
+    Args:
+        predictions: DataFrame with backtest prediction columns.
+        team: Team name to profile.
+        top_n: Number of worst/best predictions to return.
+        min_matches: Minimum matches for a meaningful profile; returns ``None``
+            if fewer matches involve the team.
+
+    Returns:
+        TeamPerformanceProfile or ``None`` if the team has fewer than
+        *min_matches* matches.
+
+    Raises:
+        ValueError: If required probability columns are missing or *team*
+            is empty.
+    """
+    if not team or not team.strip():
+        raise ValueError("team must be a non-empty string")
+    if top_n < 1:
+        raise ValueError("top_n must be >= 1")
+
+    prob_cols = ["home_win_probability", "draw_probability", "away_win_probability"]
+    missing = [c for c in prob_cols if c not in predictions.columns]
+    if missing:
+        raise ValueError(f"Missing required probability columns: {missing}")
+
+    if "home_team" not in predictions.columns or "away_team" not in predictions.columns:
+        raise ValueError("home_team and away_team columns are required")
+
+    disclaimer = (
+        "Team performance profile is derived from backtest predictions on "
+        "historical data; it reflects model behavior, not definitive team ability."
+    )
+
+    df = predictions.copy()
+    home_mask = df["home_team"] == team
+    away_mask = df["away_team"] == team
+    team_mask = home_mask | away_mask
+    team_df = df[team_mask].copy()
+
+    n = int(len(team_df))
+    if n < min_matches:
+        return None
+
+    n_home = int(home_mask.sum())
+    n_away = int(away_mask.sum())
+
+    # Accuracy
+    overall_acc = _accuracy_for_df(team_df) if n > 0 else 0.0
+    home_df = df[home_mask].copy()
+    away_df = df[away_mask].copy()
+    home_acc = _accuracy_for_df(home_df) if n_home > 0 else 0.0
+    away_acc = _accuracy_for_df(away_df) if n_away > 0 else 0.0
+    avg_conf = _avg_confidence_for_df(team_df) if n > 0 else 0.0
+    cal_gap = round(avg_conf - overall_acc, 4)
+
+    # Win/draw/loss and goals
+    n_wins = 0
+    n_draws = 0
+    n_losses = 0
+    goals_scored: list[float] = []
+    goals_conceded: list[float] = []
+    clean_sheets = 0
+    btts = 0
+    scoreline_counts: dict[str, int] = {}
+
+    has_goals = "home_goals" in df.columns and "away_goals" in df.columns
+    has_actual = "actual_outcome" in df.columns
+
+    for idx in team_df.index:
+        row = team_df.loc[idx]
+        is_home = row["home_team"] == team
+
+        if has_actual:
+            actual = row.get("actual_outcome")
+            if is_home:
+                if actual == "home_win":
+                    n_wins += 1
+                elif actual == "draw":
+                    n_draws += 1
+                elif actual == "away_win":
+                    n_losses += 1
+            else:
+                if actual == "away_win":
+                    n_wins += 1
+                elif actual == "draw":
+                    n_draws += 1
+                elif actual == "home_win":
+                    n_losses += 1
+
+        if has_goals:
+            hg = float(row["home_goals"]) if pd.notna(row.get("home_goals")) else 0.0
+            ag = float(row["away_goals"]) if pd.notna(row.get("away_goals")) else 0.0
+            if is_home:
+                goals_scored.append(hg)
+                goals_conceded.append(ag)
+                if ag == 0:
+                    clean_sheets += 1
+                if hg > 0 and ag > 0:
+                    btts += 1
+                sl = f"{int(hg)}-{int(ag)}"
+            else:
+                goals_scored.append(ag)
+                goals_conceded.append(hg)
+                if hg == 0:
+                    clean_sheets += 1
+                if hg > 0 and ag > 0:
+                    btts += 1
+                sl = f"{int(ag)}-{int(hg)}"
+            scoreline_counts[sl] = scoreline_counts.get(sl, 0) + 1
+
+    avg_gs = round(float(np.mean(goals_scored)), 2) if goals_scored else 0.0
+    avg_gc = round(float(np.mean(goals_conceded)), 2) if goals_conceded else 0.0
+    cs_rate = round(clean_sheets / n, 4) if n > 0 else 0.0
+    btts_rate = round(btts / n, 4) if n > 0 else 0.0
+
+    common_scorelines = sorted(
+        scoreline_counts.items(), key=lambda x: x[1], reverse=True
+    )[:5]
+
+    # Over/underperformance
+    overperformance = 0.0
+    if has_actual and n > 0:
+        actual_wins = n_wins
+        predicted_wins = 0.0
+        for idx in team_df.index:
+            row = team_df.loc[idx]
+            is_home = row["home_team"] == team
+            if is_home:
+                predicted_wins += float(row["home_win_probability"])
+            else:
+                predicted_wins += float(row["away_win_probability"])
+        actual_win_rate = actual_wins / n
+        predicted_win_rate = predicted_wins / n
+        overperformance = round(actual_win_rate - predicted_win_rate, 4)
+
+    if overperformance > 0.05:
+        assessment = "overperformer"
+    elif overperformance < -0.05:
+        assessment = "underperformer"
+    else:
+        assessment = "aligned"
+
+    # Worst/best predictions
+    worst: list[dict[str, Any]] = []
+    best: list[dict[str, Any]] = []
+    if has_actual and n > 0:
+        brier_values: list[tuple[int, float]] = []
+        for idx in team_df.index:
+            row = team_df.loc[idx]
+            b = _brier_per_match(
+                float(row["home_win_probability"]),
+                float(row["draw_probability"]),
+                float(row["away_win_probability"]),
+                str(row["actual_outcome"]),
+            )
+            brier_values.append((idx, b))
+
+        brier_values.sort(key=lambda x: x[1], reverse=True)
+        for idx, b in brier_values[:top_n]:
+            row = team_df.loc[idx]
+            worst.append({
+                "home_team": str(row.get("home_team", "")),
+                "away_team": str(row.get("away_team", "")),
+                "predicted_outcome": str(
+                    ["home_win", "draw", "away_win"][int(np.argmax([
+                        float(row["home_win_probability"]),
+                        float(row["draw_probability"]),
+                        float(row["away_win_probability"]),
+                    ]))]
+                ),
+                "actual_outcome": str(row.get("actual_outcome", "")),
+                "confidence": round(float(max(
+                    row["home_win_probability"],
+                    row["draw_probability"],
+                    row["away_win_probability"],
+                )), 4),
+                "brier": round(b, 4),
+            })
+
+        correct_briers = [
+            (idx, b) for idx, b in brier_values
+            if str(team_df.loc[idx, "actual_outcome"])
+            == ["home_win", "draw", "away_win"][int(np.argmax([
+                float(team_df.loc[idx, "home_win_probability"]),
+                float(team_df.loc[idx, "draw_probability"]),
+                float(team_df.loc[idx, "away_win_probability"]),
+            ]))]
+        ]
+        correct_briers.sort(key=lambda x: x[1])
+        for idx, b in correct_briers[:top_n]:
+            row = team_df.loc[idx]
+            best.append({
+                "home_team": str(row.get("home_team", "")),
+                "away_team": str(row.get("away_team", "")),
+                "predicted_outcome": str(
+                    ["home_win", "draw", "away_win"][int(np.argmax([
+                        float(row["home_win_probability"]),
+                        float(row["draw_probability"]),
+                        float(row["away_win_probability"]),
+                    ]))]
+                ),
+                "actual_outcome": str(row.get("actual_outcome", "")),
+                "confidence": round(float(max(
+                    row["home_win_probability"],
+                    row["draw_probability"],
+                    row["away_win_probability"],
+                )), 4),
+                "brier": round(b, 4),
+            })
+
+    return TeamPerformanceProfile(
+        team=team,
+        n_matches=n,
+        n_home=n_home,
+        n_away=n_away,
+        overall_accuracy=round(overall_acc, 4),
+        home_accuracy=round(home_acc, 4),
+        away_accuracy=round(away_acc, 4),
+        avg_confidence=round(avg_conf, 4),
+        calibration_gap=cal_gap,
+        overperformance=overperformance,
+        n_wins=n_wins,
+        n_draws=n_draws,
+        n_losses=n_losses,
+        avg_goals_scored=avg_gs,
+        avg_goals_conceded=avg_gc,
+        clean_sheet_rate=cs_rate,
+        btts_rate=btts_rate,
+        common_scorelines=common_scorelines,
+        worst_predictions=worst,
+        best_predictions=best,
+        assessment=assessment,
+        disclaimer=disclaimer,
+    )

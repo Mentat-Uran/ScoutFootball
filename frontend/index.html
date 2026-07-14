@@ -1946,6 +1946,44 @@
                     <div id="backtest-streaks-body" style="padding:0.5rem 0.8rem"></div>
                     <div id="backtest-streaks-chart" style="width:100%;height:300px;padding:0 0.5rem"></div>
                 </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-report-card-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="report_card_title">回测评分卡</h3>
+                            <span class="kicker" data-i18n="report_card_desc">模型质量多维度评分卡（A-F 等级制）</span>
+                        </div>
+                        <button class="text-button" id="btn-backtest-report-card" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="report_card_fetch">加载</button>
+                    </div>
+                    <div id="backtest-report-card-body" style="padding:0.5rem 0.8rem"></div>
+                    <div id="backtest-report-card-chart" style="width:100%;height:340px;padding:0 0.5rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-anomalies-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="anomalies_title">预测异常检测</h3>
+                            <span class="kicker" data-i18n="anomalies_desc">高熵/过度自信/低置信等异常预测识别与严重度分级</span>
+                        </div>
+                        <button class="text-button" id="btn-prediction-anomalies" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="anomalies_fetch">加载</button>
+                    </div>
+                    <div id="backtest-anomalies-body" style="padding:0.5rem 0.8rem"></div>
+                    <div id="backtest-anomalies-chart" style="width:100%;height:280px;padding:0 0.5rem"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" id="backtest-team-profile-panel" style="margin-top:1rem;display:none">
+                    <div class="panel-head">
+                        <div>
+                            <h3 data-i18n="team_profile_title">球队预测表现档案</h3>
+                            <span class="kicker" data-i18n="team_profile_desc">单队预测准确率/校准/超额表现/常见比分/最佳最差预测</span>
+                        </div>
+                        <div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">
+                            <input id="team-profile-input" type="text" placeholder="Team name" style="font-size:0.75rem;padding:0.25rem 0.5rem;width:160px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:4px;color:var(--text-base)" />
+                            <button class="text-button" id="btn-team-profile" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="team_profile_fetch">加载</button>
+                        </div>
+                    </div>
+                    <div id="backtest-team-profile-body" style="padding:0.5rem 0.8rem"></div>
+                </article>
             </section>
 
             <!-- Help / User Guide -->
