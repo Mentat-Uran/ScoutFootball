@@ -7331,6 +7331,78 @@ def get_team_style_clusters(
     return _clean_json_value(result)
 
 
+def get_player_style_fit(
+    player_name: str,
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    n_clusters: int = 4,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Compute a player's style-fit to each team-style cluster.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_player_style_fit`.
+    """
+    from scoutfootball.features.team_style import compute_player_style_fit
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "player": player_name,
+            "clusters": [],
+        }
+    result = compute_player_style_fit(
+        df,
+        player_name,
+        season=season,
+        league=league,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
+def get_cluster_recruits(
+    cluster_id: int,
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    n_clusters: int = 4,
+    min_minutes_total: float = 1800.0,
+    min_player_minutes: float = 500.0,
+    position_group: str | None = None,
+    top_n: int = 20,
+    exclude_cluster_teams: bool = True,
+) -> dict:
+    """Rank players by style-fit to a specific team-style cluster.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_cluster_recruits`.
+    """
+    from scoutfootball.features.team_style import compute_cluster_recruits
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "cluster_id": cluster_id,
+            "recruits": [],
+        }
+    result = compute_cluster_recruits(
+        df,
+        cluster_id,
+        season=season,
+        league=league,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+        min_player_minutes=min_player_minutes,
+        position_group=position_group,
+        top_n=top_n,
+        exclude_cluster_teams=exclude_cluster_teams,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 
