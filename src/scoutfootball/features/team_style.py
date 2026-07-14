@@ -1611,3 +1611,439 @@ def compute_style_atlas(
             "labels less meaningful."
         ),
     }
+
+
+# ── Cross-season style drift (Round 75) ──────────────────────────────────
+
+
+def _drift_label(delta: float, mean_val: float, rel_threshold: float = 0.05) -> str:
+    """Classify a dimension's drift direction.
+
+    Uses a relative threshold: the change must exceed ``rel_threshold``
+    of the absolute mean to count as rising/falling. Guarded against
+    zero-mean dimensions.
+    """
+    eps = 1e-9
+    denom = abs(mean_val) if abs(mean_val) > eps else 1.0
+    if abs(delta) > rel_threshold * denom:
+        return "rising" if delta > 0 else "falling"
+    return "stable"
+
+
+def _linear_slope_and_r2(
+    x: np.ndarray, y: np.ndarray
+) -> tuple[float, float]:
+    """Least-squares slope and R² for a 1-D linear fit.
+
+    Returns ``(slope, r2)``. With fewer than 2 points the slope is 0
+    and R² is 0. With 2 points R² is always 1.0 (perfect linear fit).
+    """
+    n = len(x)
+    if n < 2:
+        return 0.0, 0.0
+    slope = float(np.polyfit(x, y, 1)[0])
+    # R² = 1 - SS_res / SS_tot
+    y_pred = slope * x + (float(y.mean()) - slope * float(x.mean()))
+    ss_res = float(np.sum((y - y_pred) ** 2))
+    ss_tot = float(np.sum((y - y.mean()) ** 2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 1e-12 else 1.0
+    return slope, r2
+
+
+def compute_team_style_drift(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    league: str | None = None,
+    min_minutes_total: float = _MIN_MINUTES_TOTAL,
+) -> dict[str, Any]:
+    """Compute a single team's style trajectory across multiple seasons.
+
+    For each of the four style dimensions, fits a least-squares slope
+    across the team's available seasons and reports the per-season
+    values, the net delta (latest - earliest), the slope (change per
+    season step), an R² consistency score, and a drift label
+    (rising/falling/stable using a 5% relative threshold).
+
+    Requires at least 2 seasons of profiles for the target team.
+    Returns ``status="insufficient_seasons"`` otherwise.
+
+    This is a descriptive overlay — it does not predict future style
+    or rank teams by quality.
+    """
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": "Empty rating matrix or missing team name.",
+        }
+
+    profiles = compute_team_style_profiles(
+        df,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    team_lower = str(team).lower()
+    team_profiles = [p for p in profiles if p.team.lower() == team_lower]
+    if not team_profiles:
+        return {
+            "status": "team_not_found",
+            "team": team,
+            "league": league,
+            "disclaimer": (
+                f"No team-season profile found for '{team}'"
+                + (f" in league '{league}'." if league else ".")
+            ),
+        }
+
+    # Sort by season (lexicographic works for "2324"/"2425"/"2526").
+    team_profiles.sort(key=lambda p: p.season)
+    seasons = [p.season for p in team_profiles]
+    n_seasons = len(seasons)
+    if n_seasons < 2:
+        return {
+            "status": "insufficient_seasons",
+            "team": team_profiles[0].team,
+            "league": team_profiles[0].league,
+            "seasons": seasons,
+            "n_seasons": n_seasons,
+            "disclaimer": (
+                "Style drift requires at least 2 seasons of profiles; "
+                f"only {n_seasons} found."
+            ),
+        }
+
+    x = np.arange(n_seasons, dtype=float)
+    dimensions: list[dict[str, Any]] = []
+    for feat in _STYLE_FEATURES:
+        attr = _feat_to_attr(feat)
+        vals = np.array(
+            [getattr(p, attr) for p in team_profiles], dtype=float
+        )
+        slope, r2 = _linear_slope_and_r2(x, vals)
+        delta = float(vals[-1] - vals[0])
+        mean_val = float(vals.mean())
+        label = _drift_label(delta, mean_val)
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _DIM_LABELS[feat],
+                "slope": round(slope, 4),
+                "delta": round(delta, 3),
+                "r_squared": round(r2, 3),
+                "mean": round(mean_val, 3),
+                "drift_label": label,
+                "per_season": [
+                    {
+                        "season": seasons[i],
+                        "value": round(float(vals[i]), 3),
+                    }
+                    for i in range(n_seasons)
+                ],
+            }
+        )
+
+    return {
+        "status": "ok",
+        "team": team_profiles[0].team,
+        "league": team_profiles[0].league,
+        "seasons": seasons,
+        "n_seasons": n_seasons,
+        "dimensions": dimensions,
+        "disclaimer": (
+            "Style drift is a descriptive trajectory computed from "
+            "minutes-weighted per-player style composites across seasons. "
+            "Slopes and deltas describe observed changes — they do not "
+            "predict future style or rank teams by quality. The drift "
+            "label uses a 5% relative threshold and is less reliable "
+            "with only 2 seasons or low sample sizes."
+        ),
+    }
+
+
+def compute_league_style_evolution(
+    df: pd.DataFrame,
+    *,
+    league: str | None = None,
+    min_minutes_total: float = _MIN_MINUTES_TOTAL,
+) -> dict[str, Any]:
+    """Compute league-wide style evolution across seasons.
+
+    Groups team-season profiles by season and computes the median and
+    mean for each style dimension per season. Then fits a least-squares
+    slope across seasons for each dimension to show whether the league
+    average is rising, falling, or stable over time.
+
+    Requires at least 2 seasons of data. Returns
+    ``status="insufficient_seasons"`` otherwise.
+
+    This is a descriptive population view — it does not predict future
+    league style or rank seasons by quality.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = compute_team_style_profiles(
+        df,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "disclaimer": (
+                "No team-season profiles meet the minimum minutes "
+                f"threshold ({min_minutes_total:.0f} min)."
+            ),
+        }
+
+    # Group by season.
+    by_season: dict[str, list[TeamStyleProfile]] = {}
+    for p in profiles:
+        by_season.setdefault(p.season, []).append(p)
+    seasons_sorted = sorted(by_season.keys())
+    n_seasons = len(seasons_sorted)
+    if n_seasons < 2:
+        return {
+            "status": "insufficient_seasons",
+            "league": league,
+            "seasons": seasons_sorted,
+            "n_seasons": n_seasons,
+            "disclaimer": (
+                "League evolution requires at least 2 seasons; "
+                f"only {n_seasons} found."
+            ),
+        }
+
+    x = np.arange(n_seasons, dtype=float)
+    per_season_summary: list[dict[str, Any]] = []
+    for s in seasons_sorted:
+        season_profiles = by_season[s]
+        entry: dict[str, Any] = {
+            "season": s,
+            "n_teams": len(season_profiles),
+        }
+        for feat in _STYLE_FEATURES:
+            attr = _feat_to_attr(feat)
+            vals = np.array(
+                [getattr(p, attr) for p in season_profiles], dtype=float
+            )
+            entry[feat] = {
+                "median": round(float(np.median(vals)), 3),
+                "mean": round(float(vals.mean()), 3),
+                "std": round(float(vals.std(ddof=0)), 3),
+                "min": round(float(vals.min()), 3),
+                "max": round(float(vals.max()), 3),
+            }
+        per_season_summary.append(entry)
+
+    dimensions: list[dict[str, Any]] = []
+    for feat in _STYLE_FEATURES:
+        attr = _feat_to_attr(feat)
+        medians = np.array(
+            [
+                float(np.median(
+                    [getattr(p, attr) for p in by_season[s]]
+                ))
+                for s in seasons_sorted
+            ],
+            dtype=float,
+        )
+        means = np.array(
+            [
+                float(np.mean(
+                    [getattr(p, attr) for p in by_season[s]]
+                ))
+                for s in seasons_sorted
+            ],
+            dtype=float,
+        )
+        slope_med, r2_med = _linear_slope_and_r2(x, medians)
+        slope_mean, r2_mean = _linear_slope_and_r2(x, means)
+        delta_med = float(medians[-1] - medians[0])
+        delta_mean = float(means[-1] - means[0])
+        label = _drift_label(delta_med, float(medians.mean()))
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _DIM_LABELS[feat],
+                "median_slope": round(slope_med, 4),
+                "median_delta": round(delta_med, 3),
+                "median_r_squared": round(r2_med, 3),
+                "mean_slope": round(slope_mean, 4),
+                "mean_delta": round(delta_mean, 3),
+                "mean_r_squared": round(r2_mean, 3),
+                "evolution_label": label,
+            }
+        )
+
+    return {
+        "status": "ok",
+        "league": league,
+        "seasons": seasons_sorted,
+        "n_seasons": n_seasons,
+        "per_season": per_season_summary,
+        "dimensions": dimensions,
+        "disclaimer": (
+            "League style evolution is a descriptive population view "
+            "computed from minutes-weighted per-player style composites. "
+            "Per-season medians/means and their slopes describe observed "
+            "league-wide trends — they do not predict future style or "
+            "rank seasons by quality. Evolution labels use a 5% relative "
+            "threshold on the median delta and are less reliable with "
+            "few seasons or uneven team coverage."
+        ),
+    }
+
+
+def compute_style_drift_neighbors(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    league: str | None = None,
+    top_n: int = 10,
+    min_seasons: int = 2,
+    min_minutes_total: float = _MIN_MINUTES_TOTAL,
+) -> dict[str, Any]:
+    """Find teams with similar style-drift patterns.
+
+    For every team with at least ``min_seasons`` profiles, computes a
+    4-dimensional drift vector (least-squares slope per style dimension).
+    Ranks other teams by cosine similarity to the target team's drift
+    vector (descending), with Euclidean distance on the raw slope
+    vectors for reference.
+
+    Requires the target team to have at least ``min_seasons`` profiles
+    and at least one other team with sufficient seasons. Returns
+    ``status="insufficient_seasons"`` otherwise.
+
+    This is a descriptive overlay — similar drift does not imply similar
+    quality or future trajectory.
+    """
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": "Empty rating matrix or missing team name.",
+        }
+
+    min_seasons = max(2, int(min_seasons))
+    top_n = max(1, min(50, int(top_n)))
+
+    profiles = compute_team_style_profiles(
+        df,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": (
+                "No team-season profiles meet the minimum minutes "
+                f"threshold ({min_minutes_total:.0f} min)."
+            ),
+        }
+
+    # Group profiles by team.
+    by_team: dict[str, list[TeamStyleProfile]] = {}
+    for p in profiles:
+        by_team.setdefault(p.team, []).append(p)
+
+    # Compute drift vectors for all teams with enough seasons.
+    team_lower = str(team).lower()
+    drift_vectors: dict[str, np.ndarray] = {}
+    team_seasons: dict[str, list[str]] = {}
+    for t_name, t_profiles in by_team.items():
+        t_profiles.sort(key=lambda p: p.season)
+        if len(t_profiles) < min_seasons:
+            continue
+        x = np.arange(len(t_profiles), dtype=float)
+        vec = np.zeros(len(_STYLE_FEATURES), dtype=float)
+        for i, feat in enumerate(_STYLE_FEATURES):
+            attr = _feat_to_attr(feat)
+            vals = np.array(
+                [getattr(p, attr) for p in t_profiles], dtype=float
+            )
+            slope, _ = _linear_slope_and_r2(x, vals)
+            vec[i] = slope
+        drift_vectors[t_name] = vec
+        team_seasons[t_name] = [p.season for p in t_profiles]
+
+    if team_lower not in {t.lower() for t in drift_vectors}:
+        return {
+            "status": "team_not_found",
+            "team": team,
+            "league": league,
+            "min_seasons": min_seasons,
+            "disclaimer": (
+                f"Target team '{team}' has fewer than {min_seasons} "
+                "seasons of profiles; cannot compute a drift vector."
+            ),
+        }
+
+    # Find the target team's actual key (preserve original case).
+    target_key = team
+    for t in drift_vectors:
+        if t.lower() == team_lower:
+            target_key = t
+            break
+    target_vec = drift_vectors[target_key]
+    target_norm = np.linalg.norm(target_vec)
+
+    neighbors: list[dict[str, Any]] = []
+    for t_name, vec in drift_vectors.items():
+        if t_name.lower() == team_lower:
+            continue
+        vec_norm = np.linalg.norm(vec)
+        # Cosine similarity.
+        denom = target_norm * vec_norm
+        if denom > 1e-12:
+            cos_sim = float(
+                np.dot(target_vec, vec) / denom
+            )
+        else:
+            cos_sim = 0.0
+        # Euclidean distance on raw slope vectors.
+        dist = float(np.linalg.norm(target_vec - vec))
+        neighbors.append(
+            {
+                "team": t_name,
+                "league": by_team[t_name][0].league,
+                "n_seasons": len(team_seasons[t_name]),
+                "seasons": team_seasons[t_name],
+                "cosine_similarity": round(cos_sim, 4),
+                "euclidean_distance": round(dist, 4),
+                "drift_vector": [
+                    round(float(v), 4) for v in vec
+                ],
+            }
+        )
+
+    neighbors.sort(key=lambda n: n["cosine_similarity"], reverse=True)
+    neighbors = neighbors[:top_n]
+
+    return {
+        "status": "ok",
+        "team": target_key,
+        "league": by_team[target_key][0].league,
+        "seasons": team_seasons[target_key],
+        "n_seasons": len(team_seasons[target_key]),
+        "target_drift_vector": [
+            round(float(v), 4) for v in target_vec
+        ],
+        "target_drift_vector_labels": list(_STYLE_FEATURES),
+        "n_candidates": len(drift_vectors) - 1,
+        "neighbors": neighbors,
+        "disclaimer": (
+            "Style drift neighbors are a descriptive overlay computed "
+            "from least-squares style slopes across seasons. Cosine "
+            "similarity on drift vectors identifies teams whose styles "
+            "are evolving in a similar direction — it does not imply "
+            "similar quality, identical tactical identity, or future "
+            "trajectory. Teams with only 2 seasons have noisier slopes."
+        ),
+    }

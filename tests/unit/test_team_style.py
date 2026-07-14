@@ -14,12 +14,15 @@ import pytest
 from scoutfootball.features.team_style import (
     compute_cluster_recruits,
     compute_cluster_similarity_matrix,
+    compute_league_style_evolution,
     compute_league_style_percentiles,
     compute_player_style_fit,
     compute_style_atlas,
+    compute_style_drift_neighbors,
     compute_style_matchup,
     compute_style_neighbors,
     compute_team_style_clusters,
+    compute_team_style_drift,
     compute_team_style_profiles,
 )
 
@@ -1049,3 +1052,386 @@ def test_atlas_no_mutation(style_df):
     original = style_df.copy()
     compute_style_atlas(style_df)
     pd.testing.assert_frame_equal(style_df, original)
+
+
+# ── Multi-season fixture for drift tests (Round 75) ──────────────────────
+
+
+def _build_multi_season_df() -> pd.DataFrame:
+    """Build a synthetic frame with 6 teams across 3 seasons.
+
+    Team Riser:   attack rises sharply across seasons (0.3 → 0.5 → 0.7)
+    Team Faller:  defense falls sharply (80 → 60 → 40)
+    Team Stable:  minimal change on all dimensions
+    Team Riser2:  attack also rises (0.35 → 0.55 → 0.65) — drift neighbor of Riser
+    Team Faller2: defense also falls (75 → 55 → 45) — drift neighbor of Faller
+    Team One:     only 1 season (for insufficient_seasons tests)
+    """
+    rows: list[dict] = []
+    # (team, league, season, npg, ast, defc, poss)
+    templates = [
+        # Team Riser: rising attack
+        ("Team Riser", "Premier League", "2324", 0.30, 0.20, 50.0, 50.0),
+        ("Team Riser", "Premier League", "2425", 0.50, 0.20, 50.0, 50.0),
+        ("Team Riser", "Premier League", "2526", 0.70, 0.20, 50.0, 50.0),
+        # Team Faller: falling defense
+        ("Team Faller", "La Liga", "2324", 0.30, 0.20, 80.0, 50.0),
+        ("Team Faller", "La Liga", "2425", 0.30, 0.20, 60.0, 50.0),
+        ("Team Faller", "La Liga", "2526", 0.30, 0.20, 40.0, 50.0),
+        # Team Stable: minimal change
+        ("Team Stable", "Bundesliga", "2324", 0.30, 0.20, 50.0, 50.0),
+        ("Team Stable", "Bundesliga", "2425", 0.31, 0.21, 50.5, 50.5),
+        ("Team Stable", "Bundesliga", "2526", 0.30, 0.20, 50.0, 50.0),
+        # Team Riser2: also rising attack (drift neighbor of Riser)
+        ("Team Riser2", "Premier League", "2324", 0.35, 0.20, 50.0, 50.0),
+        ("Team Riser2", "Premier League", "2425", 0.55, 0.20, 50.0, 50.0),
+        ("Team Riser2", "Premier League", "2526", 0.65, 0.20, 50.0, 50.0),
+        # Team Faller2: also falling defense (drift neighbor of Faller)
+        ("Team Faller2", "La Liga", "2324", 0.30, 0.20, 75.0, 50.0),
+        ("Team Faller2", "La Liga", "2425", 0.30, 0.20, 55.0, 50.0),
+        ("Team Faller2", "La Liga", "2526", 0.30, 0.20, 45.0, 50.0),
+        # Team One: only 1 season
+        ("Team One", "Serie A", "2526", 0.30, 0.20, 50.0, 50.0),
+    ]
+    for team, league, season, npg, ast, defc, poss in templates:
+        for i in range(4):
+            rows.append({
+                "player": f"{team} {season} P{i}",
+                "player_id": f"{team}_{season}_{i}",
+                "team": team,
+                "league": league,
+                "season": season,
+                "position_group": "ST" if i == 0 else ("CM" if i < 2 else "CB"),
+                "sub_position": "ST",
+                "optimized_score": 60.0 + i * 3,
+                "minutes": 1800.0 - i * 50,
+                "matches": 20,
+                "npg_p90": npg + i * 0.01,
+                "assists_p90": ast + i * 0.005,
+                "defense_composite": defc + i * 0.5,
+                "possession_composite": poss + i * 0.3,
+                "confidence_level": "HIGH",
+                "low_appearance": False,
+            })
+    return pd.DataFrame(rows)
+
+
+@pytest.fixture
+def multi_season_df() -> pd.DataFrame:
+    return _build_multi_season_df()
+
+
+# ── compute_team_style_drift ─────────────────────────────────────────────
+
+
+def test_drift_empty():
+    """Empty input should return no_data."""
+    result = compute_team_style_drift(pd.DataFrame(), "Team A")
+    assert result["status"] == "no_data"
+
+
+def test_drift_team_not_found(multi_season_df):
+    """Team not in data should return team_not_found."""
+    result = compute_team_style_drift(multi_season_df, "Team Nobody")
+    assert result["status"] == "team_not_found"
+
+
+def test_drift_insufficient_seasons(multi_season_df):
+    """Team with only 1 season should return insufficient_seasons."""
+    result = compute_team_style_drift(multi_season_df, "Team One")
+    assert result["status"] == "insufficient_seasons"
+    assert result["n_seasons"] == 1
+
+
+def test_drift_basic(multi_season_df):
+    """Multi-season team should return ok with expected fields."""
+    result = compute_team_style_drift(multi_season_df, "Team Riser")
+    assert result["status"] == "ok"
+    assert result["team"] == "Team Riser"
+    assert result["n_seasons"] == 3
+    assert result["seasons"] == ["2324", "2425", "2526"]
+
+
+def test_drift_dimensions(multi_season_df):
+    """Should return 4 dimensions with all expected fields."""
+    result = compute_team_style_drift(multi_season_df, "Team Riser")
+    assert len(result["dimensions"]) == 4
+    for d in result["dimensions"]:
+        assert "feature" in d
+        assert "label" in d
+        assert "slope" in d
+        assert "delta" in d
+        assert "r_squared" in d
+        assert "mean" in d
+        assert "drift_label" in d
+        assert "per_season" in d
+        assert len(d["per_season"]) == 3
+
+
+def test_drift_per_season_sorted(multi_season_df):
+    """Per-season values should be sorted by season ascending."""
+    result = compute_team_style_drift(multi_season_df, "Team Riser")
+    seasons_in_result = [
+        d["per_season"][0]["season"] for d in result["dimensions"]
+    ]
+    assert all(s == "2324" for s in seasons_in_result)
+
+
+def test_drift_rising_label(multi_season_df):
+    """Team Riser's attack should have a 'rising' drift label."""
+    result = compute_team_style_drift(multi_season_df, "Team Riser")
+    attack_dim = next(
+        d for d in result["dimensions"] if d["feature"] == "npg_p90"
+    )
+    assert attack_dim["drift_label"] == "rising"
+    assert attack_dim["delta"] > 0
+    assert attack_dim["slope"] > 0
+
+
+def test_drift_falling_label(multi_season_df):
+    """Team Faller's defense should have a 'falling' drift label."""
+    result = compute_team_style_drift(multi_season_df, "Team Faller")
+    defense_dim = next(
+        d for d in result["dimensions"] if d["feature"] == "defense_composite"
+    )
+    assert defense_dim["drift_label"] == "falling"
+    assert defense_dim["delta"] < 0
+    assert defense_dim["slope"] < 0
+
+
+def test_drift_stable_label(multi_season_df):
+    """Team Stable's dimensions should mostly be 'stable'."""
+    result = compute_team_style_drift(multi_season_df, "Team Stable")
+    stable_count = sum(
+        1 for d in result["dimensions"] if d["drift_label"] == "stable"
+    )
+    assert stable_count >= 3  # at least 3 of 4 dimensions stable
+
+
+def test_drift_case_insensitive(multi_season_df):
+    """Team name lookup should be case-insensitive."""
+    result = compute_team_style_drift(multi_season_df, "team riser")
+    assert result["status"] == "ok"
+    assert result["team"] == "Team Riser"
+
+
+def test_drift_league_filter(multi_season_df):
+    """League filter should work."""
+    result = compute_team_style_drift(
+        multi_season_df, "Team Riser", league="premier league"
+    )
+    assert result["status"] == "ok"
+    result_other = compute_team_style_drift(
+        multi_season_df, "Team Riser", league="la liga"
+    )
+    assert result_other["status"] == "team_not_found"
+
+
+def test_drift_disclaimer_present(multi_season_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_team_style_drift(multi_season_df, "Team Riser")
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_drift_no_mutation(multi_season_df):
+    """Original DataFrame should not be mutated."""
+    original = multi_season_df.copy()
+    compute_team_style_drift(multi_season_df, "Team Riser")
+    pd.testing.assert_frame_equal(multi_season_df, original)
+
+
+# ── compute_league_style_evolution ───────────────────────────────────────
+
+
+def test_evolution_empty():
+    """Empty input should return no_data."""
+    result = compute_league_style_evolution(pd.DataFrame())
+    assert result["status"] == "no_data"
+
+
+def test_evolution_insufficient_seasons(style_df):
+    """Single-season data should return insufficient_seasons."""
+    result = compute_league_style_evolution(style_df)
+    assert result["status"] == "insufficient_seasons"
+
+
+def test_evolution_basic(multi_season_df):
+    """Multi-season data should return ok."""
+    result = compute_league_style_evolution(multi_season_df)
+    assert result["status"] == "ok"
+    assert result["n_seasons"] == 3
+    assert result["seasons"] == ["2324", "2425", "2526"]
+
+
+def test_evolution_per_season(multi_season_df):
+    """Per-season summary should have one entry per season with n_teams."""
+    result = compute_league_style_evolution(multi_season_df)
+    assert len(result["per_season"]) == 3
+    for entry in result["per_season"]:
+        assert "season" in entry
+        assert "n_teams" in entry
+        assert entry["n_teams"] > 0
+        for feat in ("npg_p90", "assists_p90", "defense_composite", "possession_composite"):
+            assert feat in entry
+            assert "median" in entry[feat]
+            assert "mean" in entry[feat]
+
+
+def test_evolution_dimensions(multi_season_df):
+    """Should return 4 dimensions with median and mean slopes."""
+    result = compute_league_style_evolution(multi_season_df)
+    assert len(result["dimensions"]) == 4
+    for d in result["dimensions"]:
+        assert "median_slope" in d
+        assert "median_delta" in d
+        assert "median_r_squared" in d
+        assert "mean_slope" in d
+        assert "mean_delta" in d
+        assert "mean_r_squared" in d
+        assert "evolution_label" in d
+
+
+def test_evolution_seasons_sorted(multi_season_df):
+    """Seasons should be sorted ascending."""
+    result = compute_league_style_evolution(multi_season_df)
+    assert result["seasons"] == sorted(result["seasons"])
+
+
+def test_evolution_league_filter(multi_season_df):
+    """League filter should narrow results."""
+    result = compute_league_style_evolution(
+        multi_season_df, league="premier league"
+    )
+    assert result["status"] == "ok"
+    # Only Team Riser and Team Riser2 in Premier League
+    for entry in result["per_season"]:
+        assert entry["n_teams"] == 2
+
+
+def test_evolution_disclaimer_present(multi_season_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_league_style_evolution(multi_season_df)
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_evolution_no_mutation(multi_season_df):
+    """Original DataFrame should not be mutated."""
+    original = multi_season_df.copy()
+    compute_league_style_evolution(multi_season_df)
+    pd.testing.assert_frame_equal(multi_season_df, original)
+
+
+# ── compute_style_drift_neighbors ────────────────────────────────────────
+
+
+def test_drift_neighbors_empty():
+    """Empty input should return no_data."""
+    result = compute_style_drift_neighbors(pd.DataFrame(), "Team A")
+    assert result["status"] == "no_data"
+
+
+def test_drift_neighbors_team_not_found(multi_season_df):
+    """Team not in data should return team_not_found."""
+    result = compute_style_drift_neighbors(multi_season_df, "Team Nobody")
+    assert result["status"] == "team_not_found"
+
+
+def test_drift_neighbors_insufficient_seasons(multi_season_df):
+    """Target team with too few seasons should return team_not_found."""
+    result = compute_style_drift_neighbors(
+        multi_season_df, "Team One", min_seasons=2
+    )
+    assert result["status"] == "team_not_found"
+
+
+def test_drift_neighbors_basic(multi_season_df):
+    """Should return ok with neighbors list."""
+    result = compute_style_drift_neighbors(multi_season_df, "Team Riser")
+    assert result["status"] == "ok"
+    assert result["team"] == "Team Riser"
+    assert "neighbors" in result
+    assert isinstance(result["neighbors"], list)
+    assert len(result["neighbors"]) > 0
+
+
+def test_drift_neighbors_similarity_descending(multi_season_df):
+    """Neighbors should be sorted by cosine_similarity descending."""
+    result = compute_style_drift_neighbors(multi_season_df, "Team Riser")
+    sims = [n["cosine_similarity"] for n in result["neighbors"]]
+    assert sims == sorted(sims, reverse=True)
+
+
+def test_drift_neighbors_top_n_cap(multi_season_df):
+    """top_n should cap the number of neighbors."""
+    result = compute_style_drift_neighbors(
+        multi_season_df, "Team Riser", top_n=2
+    )
+    assert len(result["neighbors"]) <= 2
+
+
+def test_drift_neighbors_top_n_clamped(multi_season_df):
+    """top_n should be clamped to [1, 50]."""
+    result = compute_style_drift_neighbors(
+        multi_season_df, "Team Riser", top_n=0
+    )
+    assert len(result["neighbors"]) == 1
+    result = compute_style_drift_neighbors(
+        multi_season_df, "Team Riser", top_n=-5
+    )
+    assert len(result["neighbors"]) == 1
+
+
+def test_drift_neighbors_case_insensitive(multi_season_df):
+    """Team name lookup should be case-insensitive."""
+    result = compute_style_drift_neighbors(multi_season_df, "team riser")
+    assert result["status"] == "ok"
+    assert result["team"] == "Team Riser"
+
+
+def test_drift_neighbors_excludes_self(multi_season_df):
+    """Target team should not appear in its own neighbors list."""
+    result = compute_style_drift_neighbors(multi_season_df, "Team Riser")
+    for n in result["neighbors"]:
+        assert n["team"].lower() != "team riser"
+
+
+def test_drift_neighbors_cosine_range(multi_season_df):
+    """Cosine similarity should be in [-1, 1]."""
+    result = compute_style_drift_neighbors(multi_season_df, "Team Riser")
+    for n in result["neighbors"]:
+        assert -1.0 <= n["cosine_similarity"] <= 1.0
+
+
+def test_drift_neighbors_drift_vector(multi_season_df):
+    """Each neighbor should have a 4-element drift_vector."""
+    result = compute_style_drift_neighbors(multi_season_df, "Team Riser")
+    for n in result["neighbors"]:
+        assert "drift_vector" in n
+        assert len(n["drift_vector"]) == 4
+    assert len(result["target_drift_vector"]) == 4
+    assert len(result["target_drift_vector_labels"]) == 4
+
+
+def test_drift_neighbors_riser2_close(multi_season_df):
+    """Team Riser2 (also rising attack) should be the closest neighbor."""
+    result = compute_style_drift_neighbors(multi_season_df, "Team Riser")
+    assert len(result["neighbors"]) > 0
+    # Team Riser2 should be in the top 2 neighbors (both rising attack)
+    top_teams = [n["team"] for n in result["neighbors"][:2]]
+    assert "Team Riser2" in top_teams
+
+
+def test_drift_neighbors_disclaimer_present(multi_season_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_style_drift_neighbors(multi_season_df, "Team Riser")
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_drift_neighbors_no_mutation(multi_season_df):
+    """Original DataFrame should not be mutated."""
+    original = multi_season_df.copy()
+    compute_style_drift_neighbors(multi_season_df, "Team Riser")
+    pd.testing.assert_frame_equal(multi_season_df, original)

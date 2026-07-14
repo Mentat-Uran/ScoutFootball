@@ -7563,6 +7563,83 @@ def get_style_atlas(
     return _clean_json_value(result)
 
 
+def get_team_style_drift(
+    team: str,
+    league: str | None = None,
+    *,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Compute a single team's style trajectory across seasons.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_team_style_drift`.
+    Descriptive overlay — does not predict future style or rank by quality.
+    """
+    from scoutfootball.features.team_style import compute_team_style_drift
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team}
+    result = compute_team_style_drift(
+        df,
+        team,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
+def get_league_style_evolution(
+    league: str | None = None,
+    *,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Compute league-wide style evolution across seasons.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_league_style_evolution`.
+    Descriptive population view — does not predict future style.
+    """
+    from scoutfootball.features.team_style import compute_league_style_evolution
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "dimensions": []}
+    result = compute_league_style_evolution(
+        df,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
+def get_style_drift_neighbors(
+    team: str,
+    league: str | None = None,
+    *,
+    top_n: int = 10,
+    min_seasons: int = 2,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Find teams with similar style-drift patterns.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_style_drift_neighbors`.
+    Descriptive overlay — does not imply similar quality or future trajectory.
+    """
+    from scoutfootball.features.team_style import compute_style_drift_neighbors
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team}
+    result = compute_style_drift_neighbors(
+        df,
+        team,
+        league=league,
+        top_n=top_n,
+        min_seasons=min_seasons,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 

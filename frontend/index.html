@@ -825,6 +825,31 @@
                     <div id="style-neighbors-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                     <div id="style-percentiles-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                 </article>
+
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="style_drift_title">跨赛季风格漂移</h3>
+                        <span id="style-drift-pill" class="status-pill status-medium">—</span>
+                    </div>
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:var(--space)">
+                        <div style="flex:2;min-width:140px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_team">球队</label>
+                            <input type="text" id="style-drift-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:2;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_league">联赛</label>
+                            <input type="text" id="style-drift-league" class="filter-input" placeholder="e.g. Premier League" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:80px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_topn">近邻数</label>
+                            <input type="number" id="style-drift-topn" class="filter-input" value="10" min="1" max="50" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="style-drift-btn" class="cta-button" type="button" data-i18n="style_drift_button">分析</button>
+                    </div>
+                    <div id="style-drift-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="style-evolution-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="style-drift-neighbors-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                </article>
             </section>
 
             <section class="view" id="view-scouting" aria-label="scouting">
