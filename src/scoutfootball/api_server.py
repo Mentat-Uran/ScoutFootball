@@ -39,6 +39,7 @@ from scoutfootball.api import (
     get_cluster_similarity_matrix,
     get_confidence_distribution,
     get_confidence_interval_plot,
+    get_cross_league_position_comparison,
     get_cumulative_trajectory,
     get_data_drift,
     get_decay_tuning,
@@ -72,6 +73,8 @@ from scoutfootball.api import (
     get_player_ratings,
     get_player_role_fit,
     get_player_style_fit,
+    get_position_depth_profile,
+    get_position_gap_report,
     get_position_style_drift,
     get_position_style_drift_neighbors,
     get_position_style_evolution,
@@ -1053,6 +1056,18 @@ def create_app() -> FastAPI:
             min_player_minutes=min_player_minutes,
         )
 
+    @app.get("/positions/depth-profile")
+    def position_depth_profile(
+        league: str | None = None,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_position_depth_profile(
+            league=league,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
     @app.get("/positions/{position_group}/style-drift")
     def position_style_drift(
         position_group: str,
@@ -1074,6 +1089,30 @@ def create_app() -> FastAPI:
         return get_position_style_drift_neighbors(
             position_group,
             league=league,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/positions/{position_group}/cross-league")
+    def cross_league_position_comparison(
+        position_group: str,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_cross_league_position_comparison(
+            position_group,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/{team}/position-gap-report")
+    def position_gap_report(
+        team: str,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_position_gap_report(
+            team,
+            season=season,
             min_player_minutes=min_player_minutes,
         )
 

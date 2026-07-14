@@ -2556,3 +2556,519 @@ def compute_position_style_drift_neighbors(
             "position groups, so the neighbor list is short by design."
         ),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Round 77: Position-group depth profile & cross-league comparison
+# ──────────────────────────────────────────────────────────────────────────
+
+_DEPTH_SHALLOW_THRESHOLD = 2
+_DEPTH_DEEP_THRESHOLD = 4
+_GAP_LEAGUE_PERCENTILE = 40.0  # below 40th percentile = low quality
+
+
+def _compute_position_depth_stats(
+    group: pd.DataFrame,
+    *,
+    min_player_minutes: float,
+) -> dict[str, Any] | None:
+    """Compute depth + style stats for one position-group slice.
+
+    Returns ``None`` when no player passes the minutes threshold.
+    """
+    minutes = (
+        group["minutes"]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0.0)
+        .to_numpy(dtype=float)
+    )
+    mask = minutes >= min_player_minutes
+    if not mask.any():
+        return None
+    minutes_f = minutes[mask]
+    total_minutes = float(minutes_f.sum())
+    if total_minutes <= 0:
+        return None
+    weights = minutes_f / total_minutes
+
+    scores = (
+        group["optimized_score"]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0.0)
+        .to_numpy(dtype=float)[mask]
+    )
+    style_vals: dict[str, float] = {}
+    for feat in _STYLE_FEATURES:
+        col = (
+            group[feat]
+            .apply(pd.to_numeric, errors="coerce")
+            .fillna(0.0)
+            .to_numpy(dtype=float)[mask]
+        )
+        style_vals[feat] = float(np.average(col, weights=weights))
+
+    n_players = int(mask.sum())
+    if n_players == 0:
+        return None
+
+    depth_label = (
+        "deep" if n_players >= _DEPTH_DEEP_THRESHOLD
+        else "adequate" if n_players >= _DEPTH_SHALLOW_THRESHOLD
+        else "shallow"
+    )
+
+    return {
+        "n_players": n_players,
+        "total_minutes": round(total_minutes),
+        "score_min": round(float(scores.min()), 2),
+        "score_median": round(float(np.median(scores)), 2),
+        "score_max": round(float(scores.max()), 2),
+        "score_mean": round(float(scores.mean()), 2),
+        "score_std": round(float(scores.std()) if n_players > 1 else 0.0, 2),
+        "score_p25": round(float(np.percentile(scores, 25)), 2),
+        "score_p75": round(float(np.percentile(scores, 75)), 2),
+        "minutes_median": round(float(np.median(minutes_f)), 0),
+        "minutes_mean": round(float(minutes_f.mean()), 0),
+        "attack": round(style_vals["npg_p90"], 3),
+        "creation": round(style_vals["assists_p90"], 3),
+        "defense": round(style_vals["defense_composite"], 2),
+        "possession": round(style_vals["possession_composite"], 2),
+        "depth_label": depth_label,
+    }
+
+
+def compute_position_depth_profile(
+    df: pd.DataFrame,
+    *,
+    league: str | None = None,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Depth profile for each standard position group.
+
+    For every standard position group (GK/CB/FB/DM/CM/AM/W/ST) present
+    in the data after filtering, computes player count, total minutes,
+    score distribution (min/median/max/mean/std/p25/p75), minutes
+    distribution (median/mean), minutes-weighted style means, and a
+    depth_label (shallow/adequate/deep).
+
+    Position groups with zero qualifying players are listed in
+    ``missing_positions``.
+
+    This is a descriptive overlay — it does not rank positions by
+    quality or predict future depth.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    work = df.copy()
+    if league is not None:
+        work = work[
+            work["league"].astype(str).str.lower() == str(league).lower()
+        ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "position_groups": [],
+                "missing_positions": list(_POSITION_GROUPS),
+                "disclaimer": "No position_group column in rating matrix.",
+            }
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if work.empty:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "No players in standard position groups after filtering.",
+        }
+
+    position_groups: list[dict[str, Any]] = []
+    missing: list[str] = []
+    for pos in _POSITION_GROUPS:
+        sub = work[work["position_group"].astype(str).str.upper() == pos]
+        if sub.empty:
+            missing.append(pos)
+            continue
+        stats = _compute_position_depth_stats(
+            sub, min_player_minutes=min_player_minutes
+        )
+        if stats is None:
+            missing.append(pos)
+            continue
+        stats["position_group"] = pos
+        position_groups.append(stats)
+
+    if not position_groups:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "No position group had players above the minutes threshold.",
+        }
+
+    return {
+        "status": "ok",
+        "league": league,
+        "season": season,
+        "n_positions": len(position_groups),
+        "position_groups": position_groups,
+        "missing_positions": missing,
+        "disclaimer": (
+            "Position depth profile is a descriptive snapshot of the "
+            "current rating matrix. Depth labels (shallow/adequate/deep) "
+            "are based on player count thresholds and do not account "
+            "for injuries, tactical flexibility, or upcoming transfers. "
+            "Score distributions reflect rated players only."
+        ),
+    }
+
+
+def compute_cross_league_position_comparison(
+    df: pd.DataFrame,
+    position_group: str,
+    *,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Compare one position group's depth across leagues.
+
+    For the target position group, groups players by league and computes
+    per-league depth stats (n_players/score distribution/style means).
+    Leagues are ranked by mean score descending and assigned a
+    quality_tier (top/middle/bottom) based on the ranking.
+
+    This is a descriptive overlay — it does not rank leagues by overall
+    quality or predict match outcomes.
+    """
+    if df.empty or not position_group:
+        return {
+            "status": "no_data",
+            "position_group": position_group,
+            "disclaimer": "Empty rating matrix or missing position group.",
+        }
+
+    target_pos = str(position_group).strip().upper()
+    if target_pos not in _POSITION_GROUPS:
+        return {
+            "status": "invalid_position",
+            "position_group": position_group,
+            "valid_positions": list(_POSITION_GROUPS),
+            "disclaimer": (
+                "Position group must be one of the 8 standard groups."
+            ),
+        }
+
+    work = df.copy()
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "position_group": target_pos,
+                "disclaimer": "No position_group column in rating matrix.",
+            }
+    work = work[
+        work["position_group"].astype(str).str.upper() == target_pos
+    ]
+    if work.empty:
+        return {
+            "status": "position_not_found",
+            "position_group": target_pos,
+            "disclaimer": (
+                "Target position group not found in the data after filtering."
+            ),
+        }
+
+    league_stats: list[dict[str, Any]] = []
+    for league_name, group in work.groupby(
+        work["league"].astype(str), sort=False
+    ):
+        stats = _compute_position_depth_stats(
+            group, min_player_minutes=min_player_minutes
+        )
+        if stats is None:
+            continue
+        stats["league"] = str(league_name)
+        league_stats.append(stats)
+
+    if not league_stats:
+        return {
+            "status": "no_data",
+            "position_group": target_pos,
+            "season": season,
+            "disclaimer": (
+                "No league had players above the minutes threshold "
+                "for this position group."
+            ),
+        }
+
+    # Sort by mean score descending
+    league_stats.sort(key=lambda x: x["score_mean"], reverse=True)
+
+    n_leagues = len(league_stats)
+    for i, ls in enumerate(league_stats):
+        if n_leagues <= 2:
+            ls["quality_tier"] = "top" if i == 0 else "bottom"
+        else:
+            top_cutoff = max(1, n_leagues // 3)
+            bottom_cutoff = n_leagues - max(1, n_leagues // 3)
+            if i < top_cutoff:
+                ls["quality_tier"] = "top"
+            elif i >= bottom_cutoff:
+                ls["quality_tier"] = "bottom"
+            else:
+                ls["quality_tier"] = "middle"
+
+    mean_scores = [ls["score_mean"] for ls in league_stats]
+    return {
+        "status": "ok",
+        "position_group": target_pos,
+        "season": season,
+        "n_leagues": n_leagues,
+        "leagues": league_stats,
+        "best_league": league_stats[0]["league"] if league_stats else None,
+        "worst_league": league_stats[-1]["league"] if league_stats else None,
+        "score_spread": round(max(mean_scores) - min(mean_scores), 2)
+        if mean_scores
+        else 0.0,
+        "disclaimer": (
+            "Cross-league position comparison is a descriptive overlay "
+            "based on the current rating matrix. Quality tiers "
+            "(top/middle/bottom) are relative rankings within the "
+            "available leagues and do not account for differences in "
+            "league difficulty, sample size, or rating coverage. Mean "
+            "scores are minutes-weighted."
+        ),
+    }
+
+
+def compute_position_gap_report(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Identify shallow and low-quality position groups for one team.
+
+    For the target team, computes per-position-group depth stats and
+    compares them against league-wide percentiles to identify gaps:
+    - ``shallow``: fewer than 2 qualifying players
+    - ``low_quality``: mean score below the league's 40th percentile
+    - ``deep``: >=4 players and mean score >= league's 60th percentile
+
+    This is a descriptive overlay — it does not recommend transfers,
+    lineups, or tactical changes.
+    """
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": "Empty rating matrix or missing team name.",
+        }
+
+    work = df.copy()
+    work = work[
+        work["team"].astype(str).str.lower() == str(team).strip().lower()
+    ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if work.empty:
+        return {
+            "status": "team_not_found",
+            "team": team,
+            "season": season,
+            "disclaimer": "Team not found in the data after filtering.",
+        }
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "team": team,
+                "season": season,
+                "disclaimer": "No position_group column in rating matrix.",
+            }
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if work.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "season": season,
+            "disclaimer": "No players in standard position groups for this team.",
+        }
+
+    # Determine team's league for league-wide percentile comparison
+    team_leagues = work["league"].astype(str).unique()
+    league_filter = str(team_leagues[0]) if len(team_leagues) > 0 else None
+
+    # League-wide scores per position group (for percentile comparison)
+    league_df = df.copy()
+    if league_filter is not None:
+        league_df = league_df[
+            league_df["league"].astype(str).str.lower()
+            == league_filter.lower()
+        ]
+    if season is not None:
+        league_df = league_df[
+            league_df["season"].astype(str) == str(season)
+        ]
+    if "position_group" not in league_df.columns:
+        if "sub_position" in league_df.columns:
+            league_df["position_group"] = league_df["sub_position"]
+    league_df = league_df[
+        league_df["position_group"].astype(str).str.upper().isin(
+            _POSITION_GROUPS
+        )
+    ]
+
+    league_percentiles: dict[str, dict[str, float]] = {}
+    for pos in _POSITION_GROUPS:
+        sub = league_df[
+            league_df["position_group"].astype(str).str.upper() == pos
+        ]
+        if sub.empty:
+            continue
+        minutes = (
+            sub["minutes"]
+            .apply(pd.to_numeric, errors="coerce")
+            .fillna(0.0)
+            .to_numpy(dtype=float)
+        )
+        mask = minutes >= min_player_minutes
+        if not mask.any():
+            continue
+        scores = (
+            sub["optimized_score"]
+            .apply(pd.to_numeric, errors="coerce")
+            .fillna(0.0)
+            .to_numpy(dtype=float)[mask]
+        )
+        league_percentiles[pos] = {
+            "p40": round(float(np.percentile(scores, 40)), 2),
+            "p60": round(float(np.percentile(scores, 60)), 2),
+            "n_players": int(mask.sum()),
+        }
+
+    position_groups: list[dict[str, Any]] = []
+    gaps: list[dict[str, Any]] = []
+    strengths: list[dict[str, Any]] = []
+    missing: list[str] = []
+
+    for pos in _POSITION_GROUPS:
+        sub = work[work["position_group"].astype(str).str.upper() == pos]
+        if sub.empty:
+            missing.append(pos)
+            gaps.append({
+                "position_group": pos,
+                "gap_type": "missing",
+                "n_players": 0,
+                "reason": "No players in this position group.",
+            })
+            continue
+        stats = _compute_position_depth_stats(
+            sub, min_player_minutes=min_player_minutes
+        )
+        if stats is None:
+            missing.append(pos)
+            gaps.append({
+                "position_group": pos,
+                "gap_type": "shallow",
+                "n_players": 0,
+                "reason": "No players above the minutes threshold.",
+            })
+            continue
+        stats["position_group"] = pos
+        position_groups.append(stats)
+
+        lp = league_percentiles.get(pos)
+        if lp is not None:
+            stats["league_p40"] = lp["p40"]
+            stats["league_p60"] = lp["p60"]
+            stats["league_n_players"] = lp["n_players"]
+
+        n_players = stats["n_players"]
+        mean_score = stats["score_mean"]
+
+        if n_players < _DEPTH_SHALLOW_THRESHOLD:
+            gaps.append({
+                "position_group": pos,
+                "gap_type": "shallow",
+                "n_players": n_players,
+                "mean_score": mean_score,
+                "reason": (
+                    f"Only {n_players} qualifying player(s) — "
+                    f"depth below shallow threshold ({_DEPTH_SHALLOW_THRESHOLD})."
+                ),
+            })
+        elif lp is not None and mean_score < lp["p40"]:
+            gaps.append({
+                "position_group": pos,
+                "gap_type": "low_quality",
+                "n_players": n_players,
+                "mean_score": mean_score,
+                "league_p40": lp["p40"],
+                "reason": (
+                    f"Mean score {mean_score} below league 40th "
+                    f"percentile ({lp['p40']})."
+                ),
+            })
+        elif n_players >= _DEPTH_DEEP_THRESHOLD and lp is not None and mean_score >= lp["p60"]:
+            strengths.append({
+                "position_group": pos,
+                "n_players": n_players,
+                "mean_score": mean_score,
+                "league_p60": lp["p60"],
+                "reason": (
+                    f"Deep roster ({n_players} players) with mean "
+                    f"score {mean_score} >= league 60th percentile "
+                    f"({lp['p60']})."
+                ),
+            })
+
+    return {
+        "status": "ok",
+        "team": team,
+        "league": league_filter,
+        "season": season,
+        "n_positions": len(position_groups),
+        "position_groups": position_groups,
+        "missing_positions": missing,
+        "gaps": gaps,
+        "n_gaps": len(gaps),
+        "strengths": strengths,
+        "n_strengths": len(strengths),
+        "disclaimer": (
+            "Position gap report is a descriptive overlay based on the "
+            "current rating matrix. Gap types (shallow/low_quality/missing) "
+            "and strength labels are heuristic thresholds, not transfer "
+            "recommendations or tactical advice. League percentiles are "
+            "computed from rated players in the team's league and season."
+        ),
+    }

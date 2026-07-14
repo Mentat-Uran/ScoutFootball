@@ -7719,6 +7719,87 @@ def get_position_style_drift_neighbors(
     return _clean_json_value(result)
 
 
+def get_position_depth_profile(
+    league: str | None = None,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Depth profile for each standard position group.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_position_depth_profile`.
+    Descriptive overlay — does not rank positions by quality.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_depth_profile,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "position_groups": []}
+    result = compute_position_depth_profile(
+        df,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_cross_league_position_comparison(
+    position_group: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Compare one position group's depth across leagues.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_cross_league_position_comparison`.
+    Descriptive overlay — does not rank leagues by overall quality.
+    """
+    from scoutfootball.features.team_style import (
+        compute_cross_league_position_comparison,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "position_group": position_group}
+    result = compute_cross_league_position_comparison(
+        df,
+        position_group,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_position_gap_report(
+    team: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Identify shallow and low-quality position groups for one team.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_position_gap_report`.
+    Descriptive overlay — does not recommend transfers or tactical changes.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_gap_report,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team}
+    result = compute_position_gap_report(
+        df,
+        team,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 

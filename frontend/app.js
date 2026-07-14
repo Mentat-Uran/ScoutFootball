@@ -672,6 +672,8 @@ const i18n = {
         style_drift_button: "分析",
         position_style_title: "位置组风格演化",
         position_style_button: "分析",
+        position_depth_title: "位置组深度画像",
+        position_depth_button: "分析",
         backtest_best_decay: "最优 Decay",
         backtest_selection_metric: "选择指标",
         backtest_half_life: "半衰期(天)",
@@ -1673,6 +1675,8 @@ const i18n = {
         style_drift_button: "Analyze",
         position_style_title: "Position-Group Style Evolution",
         position_style_button: "Analyze",
+        position_depth_title: "Position Depth Profile",
+        position_depth_button: "Analyze",
         backtest_best_decay: "Best Decay",
         backtest_selection_metric: "Selection Metric",
         backtest_half_life: "Half-Life (days)",
@@ -2512,6 +2516,45 @@ async function fetchPositionStyleDriftNeighbors(positionGroup, league) {
     } catch (err) {
         console.warn("Failed to fetch position style drift neighbors:", err);
         return { status: "fetch_failed", position_group: positionGroup, neighbors: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchPositionDepthProfile(league, season) {
+    const params = new URLSearchParams();
+    if (league) params.set("league", league);
+    if (season) params.set("season", season);
+    try {
+        const data = await fetchJson("/positions/depth-profile", { params });
+        return data || { status: "no_data", position_groups: [] };
+    } catch (err) {
+        console.warn("Failed to fetch position depth profile:", err);
+        return { status: "fetch_failed", position_groups: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchCrossLeaguePositionComparison(positionGroup, season) {
+    if (!positionGroup) return { status: "no_position" };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    try {
+        const data = await fetchJson(`/positions/${encodeURIComponent(positionGroup)}/cross-league`, { params });
+        return data || { status: "no_data", position_group: positionGroup, leagues: [] };
+    } catch (err) {
+        console.warn("Failed to fetch cross-league position comparison:", err);
+        return { status: "fetch_failed", position_group: positionGroup, leagues: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchPositionGapReport(team, season) {
+    if (!team) return { status: "no_team" };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/position-gap-report`, { params });
+        return data || { status: "no_data", team, gaps: [] };
+    } catch (err) {
+        console.warn("Failed to fetch position gap report:", err);
+        return { status: "fetch_failed", team, gaps: [], error: "fetch_failed" };
     }
 }
 
@@ -9986,6 +10029,7 @@ async function renderTeams() {
     initStyleAtlasControls();
     initStyleDriftControls();
     initPositionStyleControls();
+    initPositionDepthControls();
 }
 
 function renderTeamDetail(team) {
@@ -11399,6 +11443,243 @@ async function _renderPositionStyleDriftNeighbors(pos, league) {
         neighbors.length === 0
             ? `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无近邻数据。" : "No neighbors found.")}</p>`
             : `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>#</th><th>${z ? "位置组" : "Position"}</th><th>${z ? "相似度" : "Similarity"}</th><th>${z ? "距离" : "Distance"}</th><th>${z ? "赛季数" : "Seasons"}</th></tr></thead><tbody>${rows}</tbody></table></div>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+function initPositionDepthControls() {
+    const btn = document.getElementById("position-depth-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+
+    const doScan = async () => {
+        const leagueInput = document.getElementById("position-depth-league");
+        const seasonInput = document.getElementById("position-depth-season");
+        const posInput = document.getElementById("position-depth-pos");
+        const teamInput = document.getElementById("position-depth-team");
+        const league = leagueInput ? leagueInput.value.trim() : "";
+        const season = seasonInput ? seasonInput.value.trim() : "";
+        const pos = posInput ? posInput.value.trim().toUpperCase() : "";
+        const team = teamInput ? teamInput.value.trim() : "";
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+            await Promise.all([
+                _renderPositionDepthProfile(league, season),
+                _renderCrossLeaguePositionComparison(pos, season),
+                _renderPositionGapReport(team, season),
+            ]);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = t("position_depth_button");
+        }
+    };
+
+    btn.addEventListener("click", doScan);
+    const handler = (e) => { if (e.key === "Enter") doScan(); };
+    const ids = ["position-depth-league", "position-depth-season", "position-depth-pos", "position-depth-team"];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("keydown", handler);
+    }
+}
+
+
+async function _renderPositionDepthProfile(league, season) {
+    const wrap = document.getElementById("position-depth-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算位置组深度画像…" : "Computing position depth profile…")}</p>`;
+
+    const data = await fetchPositionDepthProfile(league, season);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无位置组深度数据。" : "No position depth data.")}</p>`;
+        return;
+    }
+
+    const groups = data.position_groups || [];
+    const depthLabelMap = (lbl) => {
+        const m = { deep: z ? "深厚" : "Deep", adequate: z ? "充足" : "Adequate", shallow: z ? "薄弱" : "Shallow" };
+        return m[lbl] || lbl;
+    };
+    const depthLabelClass = (lbl) => {
+        const m = { deep: "status-high", adequate: "status-medium", shallow: "status-low" };
+        return m[lbl] || "status-medium";
+    };
+
+    const rows = groups.map(g => {
+        return `<tr>
+            <td><strong>${escapeHtml(g.position_group || "")}</strong></td>
+            <td>${g.n_players ?? 0}</td>
+            <td>${Number(g.score_mean ?? 0).toFixed(1)}</td>
+            <td>${Number(g.score_median ?? 0).toFixed(1)}</td>
+            <td>${Number(g.score_min ?? 0).toFixed(1)}–${Number(g.score_max ?? 0).toFixed(1)}</td>
+            <td>${Number(g.score_std ?? 0).toFixed(1)}</td>
+            <td>${Number(g.attack ?? 0).toFixed(2)}</td>
+            <td>${Number(g.defense ?? 0).toFixed(1)}</td>
+            <td><span class="status-pill ${depthLabelClass(g.depth_label)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(depthLabelMap(g.depth_label))}</span></td>
+        </tr>`;
+    }).join("");
+
+    const missingHtml = (data.missing_positions || []).length > 0
+        ? `<p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.3rem">${escapeHtml(z ? "缺失位置: " : "Missing: ")}${(data.missing_positions || []).map(s => escapeHtml(s)).join(", ")}</p>`
+        : "";
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "位置组深度画像" : "Position Depth Profile")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${z ? "位置组数" : "Positions"}: ${data.n_positions ?? 0}${league ? " · " + escapeHtml(league) : ""}${season ? " · " + escapeHtml(season) : ""}</div>`,
+        `</div>`,
+        rows
+            ? `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "位置" : "Position"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "均分" : "Mean"}</th><th>${z ? "中位" : "Median"}</th><th>${z ? "范围" : "Range"}</th><th>σ</th><th>${z ? "进攻" : "Attack"}</th><th>${z ? "防守" : "Defense"}</th><th>${z ? "深度" : "Depth"}</th></tr></thead><tbody>${rows}</tbody></table></div>`
+            : `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无位置组数据。" : "No position group data.")}</p>`,
+        missingHtml,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+async function _renderCrossLeaguePositionComparison(pos, season) {
+    const wrap = document.getElementById("position-cross-league-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算跨联赛对比…" : "Computing cross-league comparison…")}</p>`;
+
+    if (!pos) {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请输入位置组。" : "Enter a position group.")}</p>`;
+        return;
+    }
+
+    const data = await fetchCrossLeaguePositionComparison(pos, season);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "invalid_position") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "无效位置组。有效值: " : "Invalid position. Valid: ")}${escapeHtml((data.valid_positions || []).join(", "))}</p>`;
+        return;
+    }
+    if (data.status === "position_not_found" || data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "该位置组无数据。" : "No data for this position group.")}</p>`;
+        return;
+    }
+
+    const tierMap = (tier) => {
+        const m = { top: z ? "上层" : "Top", middle: z ? "中层" : "Middle", bottom: z ? "下层" : "Bottom" };
+        return m[tier] || tier;
+    };
+    const tierClass = (tier) => {
+        const m = { top: "status-high", middle: "status-medium", bottom: "status-low" };
+        return m[tier] || "status-medium";
+    };
+
+    const leagues = data.leagues || [];
+    const rows = leagues.map((lg, i) => {
+        return `<tr>
+            <td>${i + 1}</td>
+            <td><strong>${escapeHtml(lg.league || "")}</strong></td>
+            <td>${lg.n_players ?? 0}</td>
+            <td>${Number(lg.score_mean ?? 0).toFixed(1)}</td>
+            <td>${Number(lg.score_median ?? 0).toFixed(1)}</td>
+            <td>${Number(lg.attack ?? 0).toFixed(2)}</td>
+            <td>${Number(lg.defense ?? 0).toFixed(1)}</td>
+            <td><span class="status-pill ${tierClass(lg.quality_tier)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(tierMap(lg.quality_tier))}</span></td>
+        </tr>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "跨联赛位置组对比" : "Cross-League Position Comparison")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(data.position_group || "")} · ${z ? "联赛数" : "Leagues"}: ${data.n_leagues ?? 0}${season ? " · " + escapeHtml(season) : ""}</div>`,
+        `</div>`,
+        data.best_league ? `<div style="font-size:0.72rem;margin-bottom:0.3rem">${z ? "最强" : "Best"}: <strong>${escapeHtml(data.best_league)}</strong>${data.worst_league ? ` · ${z ? "最弱" : "Worst"}: <strong>${escapeHtml(data.worst_league)}</strong>` : ""} · ${z ? "分差" : "Spread"}: ${Number(data.score_spread ?? 0).toFixed(1)}</div>` : "",
+        rows
+            ? `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>#</th><th>${z ? "联赛" : "League"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "均分" : "Mean"}</th><th>${z ? "中位" : "Median"}</th><th>${z ? "进攻" : "Attack"}</th><th>${z ? "防守" : "Defense"}</th><th>${z ? "层级" : "Tier"}</th></tr></thead><tbody>${rows}</tbody></table></div>`
+            : `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无联赛数据。" : "No league data.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+async function _renderPositionGapReport(team, season) {
+    const wrap = document.getElementById("position-gap-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算位置组缺口报告…" : "Computing position gap report…")}</p>`;
+
+    if (!team) {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请输入球队名。" : "Enter a team name.")}</p>`;
+        return;
+    }
+
+    const data = await fetchPositionGapReport(team, season);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "team_not_found" || data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "未找到球队。" : "Team not found.")}</p>`;
+        return;
+    }
+
+    const gaps = data.gaps || [];
+    const strengths = data.strengths || [];
+    const gapTypeMap = (gt) => {
+        const m = { shallow: z ? "人手不足" : "Shallow", low_quality: z ? "质量偏低" : "Low Quality", missing: z ? "完全缺失" : "Missing" };
+        return m[gt] || gt;
+    };
+    const gapTypeClass = (gt) => {
+        const m = { shallow: "status-low", low_quality: "status-low", missing: "status-low" };
+        return m[gt] || "status-medium";
+    };
+
+    const gapRows = gaps.map(g => {
+        return `<tr>
+            <td><strong>${escapeHtml(g.position_group || "")}</strong></td>
+            <td><span class="status-pill ${gapTypeClass(g.gap_type)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(gapTypeMap(g.gap_type))}</span></td>
+            <td>${g.n_players ?? 0}</td>
+            <td style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(g.reason || "")}</td>
+        </tr>`;
+    }).join("");
+
+    const strengthRows = strengths.map(s => {
+        return `<tr>
+            <td><strong>${escapeHtml(s.position_group || "")}</strong></td>
+            <td>${s.n_players ?? 0}</td>
+            <td>${Number(s.mean_score ?? 0).toFixed(1)}</td>
+            <td style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(s.reason || "")}</td>
+        </tr>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "位置组缺口报告" : "Position Gap Report")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(data.team || "")}${data.league ? " · " + escapeHtml(data.league) : ""}${season ? " · " + escapeHtml(season) : ""}</div>`,
+        `</div>`,
+        `<div style="display:flex;gap:0.6rem;margin-bottom:0.4rem">`,
+            `<div style="flex:1;padding:0.4rem;background:rgba(255,100,100,0.06);border-radius:6px;text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-danger)">${data.n_gaps ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "缺口" : "Gaps"}</div></div>`,
+            `<div style="flex:1;padding:0.4rem;background:rgba(100,255,100,0.06);border-radius:6px;text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-success)">${data.n_strengths ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "优势" : "Strengths"}</div></div>`,
+        `</div>`,
+        gapRows
+            ? `<div style="margin-bottom:0.4rem"><p style="font-size:0.72rem;font-weight:bold;margin:0 0 0.2rem">${z ? "缺口位置" : "Gap Positions"}</p><div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "位置" : "Position"}</th><th>${z ? "类型" : "Type"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "原因" : "Reason"}</th></tr></thead><tbody>${gapRows}</tbody></table></div></div>`
+            : `<p style="font-size:0.85rem;color:var(--text-success);margin-bottom:0.4rem">${escapeHtml(z ? "无位置组缺口。" : "No position gaps detected.")}</p>`,
+        strengthRows
+            ? `<div><p style="font-size:0.72rem;font-weight:bold;margin:0 0 0.2rem">${z ? "优势位置" : "Strength Positions"}</p><div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "位置" : "Position"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "均分" : "Mean"}</th><th>${z ? "原因" : "Reason"}</th></tr></thead><tbody>${strengthRows}</tbody></table></div></div>`
+            : "",
         `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
     ].join("");
 }
