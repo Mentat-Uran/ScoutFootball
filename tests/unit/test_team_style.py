@@ -12,6 +12,8 @@ import pandas as pd
 import pytest
 
 from scoutfootball.features.team_style import (
+    compute_cluster_recruits,
+    compute_player_style_fit,
     compute_team_style_clusters,
     compute_team_style_profiles,
 )
@@ -263,3 +265,243 @@ def test_clusters_season_filter(style_df):
         style_df, season="9999", n_clusters=4
     )
     assert result_empty["status"] == "insufficient_teams"
+
+
+# ── compute_player_style_fit ─────────────────────────────────────────────
+
+
+def test_style_fit_empty():
+    """Empty DataFrame should return no_data."""
+    result = compute_player_style_fit(pd.DataFrame(), "Test Player")
+    assert result["status"] == "no_data"
+    assert result["clusters"] == []
+
+
+def test_style_fit_basic(style_df):
+    """Should return per-cluster fit scores for a known player."""
+    result = compute_player_style_fit(style_df, "Team A P0", n_clusters=4)
+    assert result["status"] == "ok"
+    assert result["player"] == "Team A P0"
+    assert len(result["clusters"]) > 0
+    for c in result["clusters"]:
+        assert "cluster_id" in c
+        assert "label" in c
+        assert "fit_score" in c
+        assert 0 <= c["fit_score"] <= 100
+        assert "cosine_similarity" in c
+        assert -1 <= c["cosine_similarity"] <= 1
+
+
+def test_style_fit_player_not_found(style_df):
+    """Unknown player should return player_not_found."""
+    result = compute_player_style_fit(style_df, "Nobody", n_clusters=4)
+    assert result["status"] == "player_not_found"
+    assert result["clusters"] == []
+
+
+def test_style_fit_case_insensitive(style_df):
+    """Player name match should be case-insensitive."""
+    r1 = compute_player_style_fit(style_df, "Team A P0", n_clusters=4)
+    r2 = compute_player_style_fit(style_df, "team a p0", n_clusters=4)
+    assert r1["status"] == "ok"
+    assert r2["status"] == "ok"
+    assert r1["player_style"] == r2["player_style"]
+
+
+def test_style_fit_sorted_descending(style_df):
+    """Clusters should be sorted by fit_score descending."""
+    result = compute_player_style_fit(style_df, "Team A P0", n_clusters=4)
+    scores = [c["fit_score"] for c in result["clusters"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_style_fit_player_style_fields(style_df):
+    """player_style dict should contain all 4 style features."""
+    result = compute_player_style_fit(style_df, "Team A P0", n_clusters=4)
+    ps = result["player_style"]
+    assert "npg_p90" in ps
+    assert "assists_p90" in ps
+    assert "defense_composite" in ps
+    assert "possession_composite" in ps
+
+
+def test_style_fit_best_fit_cluster(style_df):
+    """best_fit_cluster should match the top cluster label."""
+    result = compute_player_style_fit(style_df, "Team A P0", n_clusters=4)
+    assert result["best_fit_cluster"] == result["clusters"][0]["label"]
+
+
+def test_style_fit_disclaimer_present(style_df):
+    """Result should include a disclaimer."""
+    result = compute_player_style_fit(style_df, "Team A P0", n_clusters=4)
+    assert "disclaimer" in result
+    assert len(result["disclaimer"]) > 0
+
+
+def test_style_fit_insufficient_teams():
+    """Should propagate insufficient_teams status."""
+    df = pd.DataFrame([
+        {"player": "P1", "team": "A", "league": "L", "season": "S",
+         "minutes": 2000.0, "position_group": "ST",
+         "npg_p90": 0.3, "assists_p90": 0.1,
+         "defense_composite": 40.0, "possession_composite": 50.0},
+    ])
+    result = compute_player_style_fit(df, "P1")
+    assert result["status"] == "insufficient_teams"
+
+
+def test_style_fit_no_mutation(style_df):
+    """Original DataFrame should not be mutated."""
+    original = style_df.copy()
+    compute_player_style_fit(style_df, "Team A P0", n_clusters=4)
+    pd.testing.assert_frame_equal(style_df, original)
+
+
+# ── compute_cluster_recruits ─────────────────────────────────────────────
+
+
+def test_recruits_empty():
+    """Empty DataFrame should return no_data."""
+    result = compute_cluster_recruits(pd.DataFrame(), 0)
+    assert result["status"] == "no_data"
+    assert result["recruits"] == []
+
+
+def test_recruits_basic(style_df):
+    """Should return ranked recruits for a valid cluster."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    cid = clusters["clusters"][0]["cluster_id"]
+    result = compute_cluster_recruits(style_df, cid, n_clusters=4, top_n=5)
+    assert result["status"] == "ok"
+    assert result["cluster_id"] == cid
+    assert isinstance(result["recruits"], list)
+    assert len(result["recruits"]) <= 5
+    for r in result["recruits"]:
+        assert "player" in r
+        assert "team" in r
+        assert "fit_score" in r
+        assert 0 <= r["fit_score"] <= 100
+        assert "position_group" in r
+
+
+def test_recruits_sorted_descending(style_df):
+    """Recruits should be sorted by fit_score descending."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    cid = clusters["clusters"][0]["cluster_id"]
+    result = compute_cluster_recruits(style_df, cid, n_clusters=4, top_n=20)
+    scores = [r["fit_score"] for r in result["recruits"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_recruits_cluster_not_found(style_df):
+    """Invalid cluster_id should return cluster_not_found."""
+    result = compute_cluster_recruits(style_df, 999, n_clusters=4)
+    assert result["status"] == "cluster_not_found"
+    assert "available_clusters" in result
+
+
+def test_recruits_exclude_cluster_teams(style_df):
+    """Players from teams in the cluster should be excluded by default."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    target = clusters["clusters"][0]
+    cluster_teams = set(target["teams"])
+    result = compute_cluster_recruits(
+        style_df, target["cluster_id"], n_clusters=4, top_n=50
+    )
+    for r in result["recruits"]:
+        assert r["team"] not in cluster_teams
+
+
+def test_recruits_include_cluster_teams(style_df):
+    """When exclude_cluster_teams=False, cluster team players may appear."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    target = clusters["clusters"][0]
+    result = compute_cluster_recruits(
+        style_df,
+        target["cluster_id"],
+        n_clusters=4,
+        top_n=50,
+        exclude_cluster_teams=False,
+    )
+    assert result["status"] == "ok"
+    # At least some recruits should be returned
+    assert len(result["recruits"]) > 0
+
+
+def test_recruits_top_n_cap(style_df):
+    """top_n should limit the number of returned recruits."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    cid = clusters["clusters"][0]["cluster_id"]
+    result = compute_cluster_recruits(style_df, cid, n_clusters=4, top_n=3)
+    assert len(result["recruits"]) <= 3
+
+
+def test_recruits_position_filter(style_df):
+    """position_group filter should narrow candidates."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    cid = clusters["clusters"][0]["cluster_id"]
+    result = compute_cluster_recruits(
+        style_df, cid, n_clusters=4, top_n=50, position_group="ST"
+    )
+    for r in result["recruits"]:
+        assert r["position_group"] == "ST"
+
+
+def test_recruits_min_minutes(style_df):
+    """min_player_minutes should filter out low-minute players."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    cid = clusters["clusters"][0]["cluster_id"]
+    result = compute_cluster_recruits(
+        style_df, cid, n_clusters=4, top_n=50, min_player_minutes=1900.0
+    )
+    for r in result["recruits"]:
+        assert r["minutes"] >= 1900
+
+
+def test_recruits_n_scanned(style_df):
+    """n_candidates_scanned should reflect total qualifying candidates."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    cid = clusters["clusters"][0]["cluster_id"]
+    result = compute_cluster_recruits(
+        style_df, cid, n_clusters=4, top_n=100,
+        min_player_minutes=0.0, exclude_cluster_teams=False,
+    )
+    assert result["n_candidates_scanned"] >= len(result["recruits"])
+
+
+def test_recruits_disclaimer_present(style_df):
+    """Result should include a disclaimer."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    cid = clusters["clusters"][0]["cluster_id"]
+    result = compute_cluster_recruits(style_df, cid, n_clusters=4)
+    assert "disclaimer" in result
+    assert len(result["disclaimer"]) > 0
+
+
+def test_recruits_no_mutation(style_df):
+    """Original DataFrame should not be mutated."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    original = style_df.copy()
+    cid = clusters["clusters"][0]["cluster_id"]
+    compute_cluster_recruits(style_df, cid, n_clusters=4, top_n=5)
+    pd.testing.assert_frame_equal(style_df, original)

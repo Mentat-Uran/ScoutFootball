@@ -757,11 +757,13 @@
                                         <th data-i18n="teams_style_col_label">风格</th>
                                         <th data-i18n="teams_style_col_n">球队数</th>
                                         <th data-i18n="teams_style_col_teams">球队</th>
+                                        <th data-i18n="col_action">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="teams-style-body"></tbody>
                             </table>
                         </div>
+                        <div id="teams-style-recruits" style="display:none;margin-top:1rem"></div>
                     </div>
                 </article>
             </section>
@@ -857,6 +859,7 @@
                                                 <th data-i18n="risers_col_pos">位置</th>
                                                 <th data-i18n="risers_col_score">评分</th>
                                                 <th>Δ</th>
+                                                <th data-i18n="col_action">操作</th>
                                             </tr>
                                         </thead>
                                         <tbody id="risers-body"></tbody>
@@ -874,6 +877,7 @@
                                                 <th data-i18n="decliners_col_pos">位置</th>
                                                 <th data-i18n="decliners_col_score">评分</th>
                                                 <th>Δ</th>
+                                                <th data-i18n="col_action">操作</th>
                                             </tr>
                                         </thead>
                                         <tbody id="decliners-body"></tbody>
@@ -882,6 +886,29 @@
                             </div>
                         </div>
                     </div>
+                </article>
+
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="style_fit_title">球员风格适配球队簇</h3>
+                        <span id="style-fit-pill" class="status-pill status-medium">—</span>
+                    </div>
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:var(--space)">
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_fit_player">球员姓名</label>
+                            <input type="text" id="style-fit-player" class="filter-input" placeholder="e.g. Haaland" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="risers_season">赛季</label>
+                            <input type="text" id="style-fit-season" class="filter-input" placeholder="e.g. 2526" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:80px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_league">联赛</label>
+                            <input type="text" id="style-fit-league" class="filter-input" placeholder="e.g. Premier League" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="style-fit-btn" class="cta-button" type="button" data-i18n="style_fit_button">计算</button>
+                    </div>
+                    <div id="style-fit-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                 </article>
 
                 <dialog class="workspace-dialog" id="scout-workspace-dialog" aria-labelledby="scout-workspace-dialog-title">

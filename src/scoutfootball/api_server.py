@@ -35,6 +35,7 @@ from scoutfootball.api import (
     get_calibration_drift_timeline,
     get_ci_coverage,
     get_ci_width_analysis,
+    get_cluster_recruits,
     get_confidence_distribution,
     get_confidence_interval_plot,
     get_cumulative_trajectory,
@@ -67,6 +68,7 @@ from scoutfootball.api import (
     get_player_profile,
     get_player_ratings,
     get_player_role_fit,
+    get_player_style_fit,
     get_prediction_anomalies,
     get_prediction_attribution,
     get_prediction_attribution_ci,
@@ -872,6 +874,46 @@ def create_app() -> FastAPI:
             league=league,
             n_clusters=min(8, max(2, n_clusters)),
             min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/players/{player_name}/style-fit")
+    def player_style_fit(
+        player_name: str,
+        season: str | None = None,
+        league: str | None = None,
+        n_clusters: int = 4,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_player_style_fit(
+            player_name,
+            season=season,
+            league=league,
+            n_clusters=min(8, max(2, n_clusters)),
+            min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/teams/style-clusters/recruits")
+    def cluster_recruits(
+        cluster_id: int,
+        season: str | None = None,
+        league: str | None = None,
+        n_clusters: int = 4,
+        min_minutes_total: float = 1800.0,
+        min_player_minutes: float = 500.0,
+        position_group: str | None = None,
+        top_n: int = 20,
+        exclude_cluster_teams: bool = True,
+    ):
+        return get_cluster_recruits(
+            cluster_id,
+            season=season,
+            league=league,
+            n_clusters=min(8, max(2, n_clusters)),
+            min_minutes_total=min_minutes_total,
+            min_player_minutes=min_player_minutes,
+            position_group=position_group,
+            top_n=min(100, max(1, top_n)),
+            exclude_cluster_teams=exclude_cluster_teams,
         )
 
     @app.get("/player/{player_name}/profile")

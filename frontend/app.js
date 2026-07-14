@@ -112,6 +112,10 @@ const i18n = {
         decliners_col_team: "球队",
         decliners_col_pos: "位置",
         decliners_col_score: "评分",
+        col_action: "操作",
+        style_fit_title: "球员风格适配球队簇",
+        style_fit_player: "球员姓名",
+        style_fit_button: "计算",
         scouting_metric_review: "待复核",
         scouting_metric_short: "候选",
         scouting_search: "搜索球员、球队或原因",
@@ -1093,6 +1097,10 @@ const i18n = {
         decliners_col_team: "Team",
         decliners_col_pos: "Pos",
         decliners_col_score: "Score",
+        col_action: "Action",
+        style_fit_title: "Player Style-Fit to Team Clusters",
+        style_fit_player: "Player name",
+        style_fit_button: "Compute",
         scouting_metric_review: "To review",
         scouting_metric_short: "Shortlist",
         scouting_search: "Search player, team, or reason",
@@ -2288,6 +2296,41 @@ async function fetchTeamStyleClusters(season, league, nClusters) {
     } catch (err) {
         console.warn("Failed to fetch team style clusters:", err);
         return { status: "fetch_failed", clusters: [], team_profiles: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchPlayerStyleFit(playerName, season, league, nClusters) {
+    if (!playerName) return { status: "no_player", clusters: [] };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (league) params.set("league", league);
+    params.set("n_clusters", String(Math.max(2, Math.min(8, Number(nClusters) || 4))));
+    try {
+        const data = await fetchJson(`/players/${encodeURIComponent(playerName)}/style-fit`, { params });
+        return data || { status: "no_data", player: playerName, clusters: [] };
+    } catch (err) {
+        console.warn("Failed to fetch player style-fit:", err);
+        return { status: "fetch_failed", player: playerName, clusters: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchClusterRecruits(clusterId, opts) {
+    const o = opts || {};
+    const params = new URLSearchParams();
+    params.set("cluster_id", String(clusterId));
+    if (o.season) params.set("season", o.season);
+    if (o.league) params.set("league", o.league);
+    params.set("n_clusters", String(Math.max(2, Math.min(8, Number(o.nClusters) || 4))));
+    if (o.minPlayerMinutes) params.set("min_player_minutes", String(o.minPlayerMinutes));
+    if (o.positionGroup) params.set("position_group", o.positionGroup);
+    params.set("top_n", String(Math.max(1, Math.min(100, Number(o.topN) || 20))));
+    if (o.excludeClusterTeams === false) params.set("exclude_cluster_teams", "false");
+    try {
+        const data = await fetchJson("/teams/style-clusters/recruits", { params });
+        return data || { status: "no_data", cluster_id: clusterId, recruits: [] };
+    } catch (err) {
+        console.warn("Failed to fetch cluster recruits:", err);
+        return { status: "fetch_failed", cluster_id: clusterId, recruits: [], error: "fetch_failed" };
     }
 }
 
@@ -9030,6 +9073,7 @@ function renderScouting() {
     updateSnapshotStatus();
     renderScoutingWorkspaceStatus();
     initRisersDeclinersControls();
+    initStyleFitControls();
 }
 
 function queueStatusKey(player) {
@@ -10083,8 +10127,19 @@ async function _renderTeamStyleClusters(season, league, nClusters) {
                 <td><strong>${escapeHtml(c.label || (z ? "未命名" : "unlabeled"))}</strong></td>
                 <td>${escapeHtml(String(c.n_teams ?? 0))}</td>
                 <td style="font-size:0.78rem">${teams}${more}</td>
+                <td class="actions-cell">
+                    <button class="action-btn" data-cluster-recruits="${escapeAttr(String(c.cluster_id ?? ""))}" title="${escapeHtml(z ? "查找适配球员" : "Find Recruits")}" type="button">${escapeHtml(z ? "招募" : "Recruits")}</button>
+                </td>
             </tr>`;
         }).join("");
+
+        // Wire recruit buttons.
+        body.querySelectorAll("[data-cluster-recruits]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const cid = btn.getAttribute("data-cluster-recruits");
+                await _renderClusterRecruits(cid, season, league, nClusters);
+            });
+        });
     }
 
     // Scatter chart: project team_profiles onto first two principal composites
@@ -10145,6 +10200,215 @@ async function _renderTeamStyleClusters(season, league, nClusters) {
             },
             series,
         });
+    }
+}
+
+async function _renderClusterRecruits(clusterId, season, league, nClusters) {
+    const wrap = document.getElementById("teams-style-recruits");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在查找适配球员…" : "Loading recruits…")}</p>`;
+
+    const data = await fetchClusterRecruits(clusterId, {
+        season, league, nClusters,
+        topN: 20,
+        minPlayerMinutes: 500,
+    });
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "请求失败" : "fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "cluster_not_found") {
+        wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "簇未找到" : "Cluster not found")}</p>`;
+        return;
+    }
+    if (data.status !== "ok" || (data.recruits || []).length === 0) {
+        wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "无候选球员" : "No candidates")}</p>`;
+        return;
+    }
+
+    const recruits = data.recruits || [];
+    const label = data.cluster_label || "";
+    const header = z
+        ? `簇 ${escapeHtml(String(clusterId))} · ${escapeHtml(label)} · ${data.n_candidates_scanned ?? recruits.length} ${z ? "候选" : "scanned"}`
+        : `Cluster ${escapeHtml(String(clusterId))} · ${escapeHtml(label)} · ${data.n_candidates_scanned ?? recruits.length} scanned`;
+
+    const rows = recruits.map((r, idx) => {
+        const fit = r.fit_score != null ? Number(r.fit_score).toFixed(1) : "—";
+        const cls = Number(r.fit_score) >= 70 ? "status-high" : Number(r.fit_score) >= 50 ? "status-medium" : "status-low";
+        const rating = r.rating != null ? Number(r.rating).toFixed(1) : "—";
+        const playerKey = String(r.player || "");
+        const inWatch = isInPlayerWatchlist(playerKey);
+        const inShort = isInPlayerShortlist(playerKey);
+        return `<tr>
+            <td>${idx + 1}</td>
+            <td><strong>${escapeHtml(r.player || "")}</strong></td>
+            <td>${escapeHtml(r.team || "")}</td>
+            <td>${escapeHtml(r.position_group || "")}</td>
+            <td><span class="status-pill ${cls}">${fit}</span></td>
+            <td>${escapeHtml(rating)}</td>
+            <td>${escapeHtml(String(r.minutes ?? ""))}</td>
+            <td class="actions-cell">
+                <button class="action-btn${inWatch ? ' active' : ''}" data-rec-watch="${escapeAttr(playerKey)}" title="${escapeHtml(t('action_watchlist'))}" type="button">\u25A1</button>
+                <button class="action-btn${inShort ? ' active' : ''}" data-rec-short="${escapeAttr(playerKey)}" title="${escapeHtml(t('action_shortlist'))}" type="button">\u25B3</button>
+            </td>
+        </tr>`;
+    }).join("");
+
+    const disclaimerHtml = data.disclaimer
+        ? `<p style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`
+        : "";
+    wrap.innerHTML = [
+        `<h4>${escapeHtml(header)}</h4>`,
+        disclaimerHtml,
+        `<div class="table-scroll">`,
+        `<table class="data-table">`,
+        `<thead><tr>`,
+        `<th>#</th>`,
+        `<th data-i18n="risers_col_player">${z ? "球员" : "Player"}</th>`,
+        `<th data-i18n="risers_col_team">${z ? "球队" : "Team"}</th>`,
+        `<th data-i18n="risers_col_pos">${z ? "位置" : "Pos"}</th>`,
+        `<th>${z ? "适配分" : "Fit"}</th>`,
+        `<th>${z ? "评分" : "Rating"}</th>`,
+        `<th>${z ? "分钟" : "Min"}</th>`,
+        `<th data-i18n="col_action">${z ? "操作" : "Action"}</th>`,
+        `</tr></thead>`,
+        `<tbody>${rows}</tbody>`,
+        `</table>`,
+        `</div>`,
+    ].join("");
+
+    // Wire watch/shortlist toggle buttons.
+    wrap.querySelectorAll("[data-rec-watch]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const key = btn.getAttribute("data-rec-watch");
+            const row = btn.closest("tr");
+            const name = row?.querySelector("td:nth-child(2) strong")?.textContent || key;
+            const team = row?.querySelector("td:nth-child(3)")?.textContent || "";
+            const pos = row?.querySelector("td:nth-child(4)")?.textContent || "";
+            const ratingText = row?.querySelector("td:nth-child(6)")?.textContent || "";
+            const rating = parseFloat(ratingText) || null;
+            const added = togglePlayerWatchlist({
+                key, name, team, position: pos, rating,
+                reason_code: "cluster_recruit_fit",
+            });
+            btn.classList.toggle("active", added);
+        });
+    });
+    wrap.querySelectorAll("[data-rec-short]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const key = btn.getAttribute("data-rec-short");
+            const row = btn.closest("tr");
+            const name = row?.querySelector("td:nth-child(2) strong")?.textContent || key;
+            const team = row?.querySelector("td:nth-child(3)")?.textContent || "";
+            const pos = row?.querySelector("td:nth-child(4)")?.textContent || "";
+            const ratingText = row?.querySelector("td:nth-child(6)")?.textContent || "";
+            const rating = parseFloat(ratingText) || null;
+            const added = togglePlayerShortlist({
+                key, name, team, position: pos, rating,
+                reason_code: "cluster_recruit_fit",
+            });
+            btn.classList.toggle("active", added);
+        });
+    });
+}
+
+// ── Player style-fit to team clusters ─────────────────────────────────────
+
+function initStyleFitControls() {
+    const btn = document.getElementById("style-fit-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+    const handler = () => {
+        const name = (document.getElementById("style-fit-player")?.value || "").trim();
+        const season = (document.getElementById("style-fit-season")?.value || "").trim();
+        const league = (document.getElementById("style-fit-league")?.value || "").trim();
+        if (!name) return;
+        _renderPlayerStyleFit(name, season, league);
+    };
+    btn.addEventListener("click", handler);
+    const playerInput = document.getElementById("style-fit-player");
+    const seasonInput = document.getElementById("style-fit-season");
+    const leagueInput = document.getElementById("style-fit-league");
+    if (playerInput) playerInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    if (seasonInput) seasonInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    if (leagueInput) leagueInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+}
+
+async function _renderPlayerStyleFit(playerName, season, league) {
+    const wrap = document.getElementById("style-fit-result");
+    const pill = document.getElementById("style-fit-pill");
+    const z = appState.lang === "zh";
+    if (wrap) { wrap.style.display = "block"; wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在计算…" : "Computing…")}</p>`; }
+    if (pill) pill.textContent = "…";
+
+    const data = await fetchPlayerStyleFit(playerName, season, league, 4);
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = z ? "请求失败" : "fetch failed";
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "请求失败" : "fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "player_not_found") {
+        if (pill) pill.textContent = z ? "球员未找到" : "not found";
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data.disclaimer || (z ? "球员未找到" : "Player not found"))}</p>`;
+        return;
+    }
+    if (data.status !== "ok" || (data.clusters || []).length === 0) {
+        if (pill) pill.textContent = z ? "无数据" : "no data";
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data.disclaimer || (z ? "无数据" : "No data"))}</p>`;
+        return;
+    }
+
+    const clusters = data.clusters || [];
+    if (pill) pill.textContent = `${clusters.length} ${z ? "簇" : "clusters"} · ${escapeHtml(data.best_fit_cluster || "")}`;
+
+    const playerStyle = data.player_style || {};
+    const styleRow = Object.entries(playerStyle).map(([k, v]) => {
+        const label = z
+            ? ({ npg_p90: "非点球进球/90", assists_p90: "助攻/90", defense_composite: "防守综合", possession_composite: "控球综合" }[k] || k)
+            : k;
+        return `<span style="display:inline-block;margin-right:0.75rem;font-size:0.78rem;color:var(--text-muted)">${escapeHtml(label)}: <strong>${Number(v).toFixed(2)}</strong></span>`;
+    }).join("");
+
+    const rows = clusters.map(c => {
+        const fit = c.fit_score != null ? Number(c.fit_score).toFixed(1) : "—";
+        const cls = Number(c.fit_score) >= 70 ? "status-high" : Number(c.fit_score) >= 50 ? "status-medium" : "status-low";
+        const teams = (c.teams || []).slice(0, 5).map(escapeHtml).join(", ");
+        const more = (c.teams || []).length > 5 ? ` +${(c.teams || []).length - 5}` : "";
+        return `<tr>
+            <td><span class="status-pill status-high">${escapeHtml(String(c.cluster_id ?? ""))}</span></td>
+            <td><strong>${escapeHtml(c.label || "")}</strong></td>
+            <td>${escapeHtml(String(c.n_teams ?? 0))}</td>
+            <td><span class="status-pill ${cls}">${fit}</span></td>
+            <td style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(String(c.cosine_similarity ?? ""))}</td>
+            <td style="font-size:0.78rem">${teams}${more}</td>
+        </tr>`;
+    }).join("");
+
+    if (wrap) {
+        const disclaimerHtml = data.disclaimer
+            ? `<p style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(data.disclaimer)}</p>`
+            : "";
+        wrap.innerHTML = [
+            `<div style="padding:0.3rem 0 0.5rem">${escapeHtml("")}${styleRow}</div>`,
+            disclaimerHtml,
+            `<div class="table-scroll">`,
+            `<table class="data-table">`,
+            `<thead><tr>`,
+            `<th data-i18n="teams_style_col_cluster">${z ? "簇" : "Cluster"}</th>`,
+            `<th data-i18n="teams_style_col_label">${z ? "风格" : "Label"}</th>`,
+            `<th data-i18n="teams_style_col_n">${z ? "球队数" : "Teams"}</th>`,
+            `<th>${z ? "适配分" : "Fit"}</th>`,
+            `<th>${z ? "余弦" : "Cosine"}</th>`,
+            `<th data-i18n="teams_style_col_teams">${z ? "球队" : "Teams"}</th>`,
+            `</tr></thead>`,
+            `<tbody>${rows}</tbody>`,
+            `</table>`,
+            `</div>`,
+        ].join("");
     }
 }
 
@@ -10213,25 +10477,86 @@ async function _renderRisersDecliners(season, topN) {
             ? (slope > 0 ? `+${slope.toFixed(2)}` : slope.toFixed(2))
             : "—";
         const cls = slope != null && slope > 0 ? "status-high" : slope != null && slope < 0 ? "status-low" : "";
+        const playerKey = String(entry.player_id || entry.player || "");
+        const inWatch = isInPlayerWatchlist(playerKey);
+        const inShort = isInPlayerShortlist(playerKey);
+        const signal = slope != null
+            ? (slope > 0 ? `rising_${slope.toFixed(1)}` : `declining_${slope.toFixed(1)}`)
+            : "trajectory_signal";
         return `<tr>
             <td>${escapeHtml(entry.player || "")}</td>
             <td>${escapeHtml(entry.team || "")}</td>
             <td>${escapeHtml(entry.position_group || "")}</td>
             <td><strong>${score}</strong></td>
             <td><span class="status-pill ${cls}">${slopeText}</span></td>
+            <td class="actions-cell">
+                <button class="action-btn${inWatch ? ' active' : ''}" data-rd-watch="${escapeAttr(playerKey)}" title="${escapeHtml(t('action_watchlist'))}" type="button">\u25A1</button>
+                <button class="action-btn${inShort ? ' active' : ''}" data-rd-short="${escapeAttr(playerKey)}" title="${escapeHtml(t('action_shortlist'))}" type="button">\u25B3</button>
+            </td>
         </tr>`;
     };
 
     if (risersBody) {
         risersBody.innerHTML = risers.length > 0
             ? risers.map(renderRow).join("")
-            : `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:0.6rem">${z ? "暂无显著上升球员" : "No risers found"}</td></tr>`;
+            : `<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:0.6rem">${z ? "暂无显著上升球员" : "No risers found"}</td></tr>`;
     }
     if (declinersBody) {
         declinersBody.innerHTML = decliners.length > 0
             ? decliners.map(renderRow).join("")
-            : `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:0.6rem">${z ? "暂无显著下滑球员" : "No decliners found"}</td></tr>`;
+            : `<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:0.6rem">${z ? "暂无显著下滑球员" : "No decliners found"}</td></tr>`;
     }
+
+    // Wire watch/shortlist toggle buttons for risers and decliners.
+    const wireToggleButtons = (body, entries) => {
+        if (!body) return;
+        body.querySelectorAll("[data-rd-watch]").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const key = btn.dataset.rdWatch;
+                const entry = entries.find((en) => String(en.player_id || en.player || "") === key);
+                if (!entry) return;
+                const slope = entry.trajectory_slope != null ? Number(entry.trajectory_slope) : null;
+                const signal = slope != null
+                    ? (slope > 0 ? `rising_${slope.toFixed(1)}` : `declining_${slope.toFixed(1)}`)
+                    : "trajectory_signal";
+                togglePlayerWatchlist({
+                    key,
+                    name: entry.player || "",
+                    team: entry.team || "",
+                    position: entry.position_group || "",
+                    rating: entry.current_score ?? 0,
+                    reason_code: signal,
+                });
+                _renderRisersDecliners(season, topN);
+                renderScouting();
+            });
+        });
+        body.querySelectorAll("[data-rd-short]").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const key = btn.dataset.rdShort;
+                const entry = entries.find((en) => String(en.player_id || en.player || "") === key);
+                if (!entry) return;
+                const slope = entry.trajectory_slope != null ? Number(entry.trajectory_slope) : null;
+                const signal = slope != null
+                    ? (slope > 0 ? `rising_${slope.toFixed(1)}` : `declining_${slope.toFixed(1)}`)
+                    : "trajectory_signal";
+                togglePlayerShortlist({
+                    key,
+                    name: entry.player || "",
+                    team: entry.team || "",
+                    position: entry.position_group || "",
+                    rating: entry.current_score ?? 0,
+                    reason_code: signal,
+                });
+                _renderRisersDecliners(season, topN);
+                renderScouting();
+            });
+        });
+    };
+    wireToggleButtons(risersBody, risers);
+    wireToggleButtons(declinersBody, decliners);
 }
 
 function renderReports() {
@@ -19008,7 +19333,9 @@ function togglePlayerWatchlist(player) {
     if (idx >= 0) {
         list.splice(idx, 1);
     } else {
-        list.push({ key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating });
+        const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
+        if (player.reason_code) entry.reason_code = player.reason_code;
+        list.push(entry);
     }
     savePlayerWatchlist(list);
     return idx < 0; // true if added
@@ -19019,7 +19346,9 @@ function togglePlayerShortlist(player) {
     if (idx >= 0) {
         list.splice(idx, 1);
     } else {
-        list.push({ key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating });
+        const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
+        if (player.reason_code) entry.reason_code = player.reason_code;
+        list.push(entry);
     }
     savePlayerShortlist(list);
     return idx < 0;
