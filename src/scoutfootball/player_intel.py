@@ -881,6 +881,146 @@ def compute_multi_player_comparison(
     }
 
 
+# ── Riser / decliner watchlist ───────────────────────────────────────────
+
+
+def compute_riser_decliner_watchlist(
+    df: pd.DataFrame,
+    *,
+    min_seasons: int = 2,
+    min_minutes_latest: float = 300.0,
+    top_n: int = 20,
+    riser_threshold: float = 1.0,
+    decliner_threshold: float = -1.0,
+) -> dict[str, Any]:
+    """Scan the full rating matrix for players on the steepest upward or
+    downward career trajectories.
+
+    The trajectory slope is the least-squares slope of ``optimized_score``
+    against season index (see ``_compute_trajectory_slope``). A positive
+    slope means the player has been improving across rated seasons; a
+    negative slope means decline.
+
+    Parameters
+    ----------
+    df:
+        Full rating matrix DataFrame with one row per player-season.
+    min_seasons:
+        Minimum number of rated seasons required to compute a slope.
+        Players with fewer seasons are excluded.
+    min_minutes_latest:
+        Minimum minutes in the most recent rated season. This filters out
+        players whose latest season was a cameo or injury-limited campaign
+        that would distort the "current" view.
+    top_n:
+        Maximum number of risers and decliners to return (each).
+    riser_threshold:
+        Minimum slope to be classified as a riser.
+    decliner_threshold:
+        Maximum (i.e. most negative) slope to be classified as a decliner.
+
+    Returns
+    -------
+    dict
+        ``risers`` and ``decliners`` lists, each with player name, team,
+        position, current score, peak score, slope, n_seasons, and a
+        human-readable trend label. Also returns ``n_scanned`` and a
+        ``disclaimer``.
+    """
+    if df.empty:
+        return {
+            "risers": [],
+            "decliners": [],
+            "n_scanned": 0,
+            "disclaimer": (
+                "Riser/decliner scan unavailable: the local rating matrix "
+                "is empty."
+            ),
+        }
+
+    work = df.copy()
+    # Ensure season is string for sorting.
+    work["season"] = work["season"].astype(str)
+    # Resolve player key: prefer player_id, fall back to player_name.
+    if "player_id" in work.columns and work["player_id"].notna().any():
+        key_col = "player_id"
+    else:
+        key_col = "player_name"
+
+    risers: list[dict[str, Any]] = []
+    decliners: list[dict[str, Any]] = []
+    n_scanned = 0
+
+    for _player_key, group in work.groupby(key_col, sort=False):
+        group = group.sort_values("season", ascending=True).reset_index(drop=True)
+        n_seasons = len(group)
+        if n_seasons < min_seasons:
+            continue
+
+        # Check latest-season minutes floor.
+        latest = group.iloc[-1]
+        latest_minutes = _safe_float(latest.get("minutes")) or 0.0
+        if latest_minutes < min_minutes_latest:
+            continue
+
+        n_scanned += 1
+        slope = _compute_trajectory_slope(group)
+        if slope is None:
+            continue
+
+        current_score = _safe_float(latest.get("optimized_score"))
+        scores = group["optimized_score"].dropna()
+        peak_score = float(scores.max()) if not scores.empty else None
+
+        entry = {
+            "player": str(latest.get("player", latest.get("player_name", ""))),
+            "player_id": str(latest.get("player_id", "")) if "player_id" in group.columns else None,
+            "team": str(latest.get("team", "")),
+            "league": str(latest.get("league", "")),
+            "position_group": str(latest.get("position_group", "")),
+            "current_score": round(current_score, 1) if current_score is not None else None,
+            "peak_score": round(peak_score, 1) if peak_score is not None else None,
+            "trajectory_slope": slope,
+            "n_seasons": n_seasons,
+            "latest_season": str(latest.get("season", "")),
+            "trend_label": (
+                "rising" if slope > 0 else ("declining" if slope < 0 else "flat")
+            ),
+        }
+
+        if slope >= riser_threshold:
+            risers.append(entry)
+        elif slope <= decliner_threshold:
+            decliners.append(entry)
+
+    # Sort risers by slope descending, decliners by slope ascending.
+    risers.sort(key=lambda x: x["trajectory_slope"], reverse=True)
+    decliners.sort(key=lambda x: x["trajectory_slope"])
+
+    risers = risers[:top_n]
+    decliners = decliners[:top_n]
+
+    return {
+        "risers": risers,
+        "decliners": decliners,
+        "n_scanned": n_scanned,
+        "thresholds": {
+            "min_seasons": min_seasons,
+            "min_minutes_latest": min_minutes_latest,
+            "riser_threshold": riser_threshold,
+            "decliner_threshold": decliner_threshold,
+        },
+        "disclaimer": (
+            "Riser/decliner classification is based on the least-squares "
+            "slope of optimized_score across rated seasons in the local "
+            "matrix. It does not account for injuries, tactical changes, "
+            "loan spells, or seasons missing from the data. A rising "
+            "slope is not a guarantee of future improvement, and a "
+            "declining slope is not a transfer recommendation."
+        ),
+    }
+
+
 # ── Small shared helpers ─────────────────────────────────────────────────
 
 

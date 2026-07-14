@@ -501,3 +501,229 @@ def test_multi_compare_no_input_mutation(synthetic_df):
     }
     compute_multi_player_comparison(rows, synthetic_df)
     pd.testing.assert_frame_equal(synthetic_df, original)
+
+
+# ── compute_riser_decliner_watchlist ─────────────────────────────────────
+
+
+from scoutfootball.player_intel import compute_riser_decliner_watchlist  # noqa: E402
+
+
+def _build_multi_season_df() -> pd.DataFrame:
+    """Build a frame with several players across multiple seasons."""
+    rows: list[dict] = []
+    # Riser: 50 -> 60 -> 75 (strong upward slope)
+    for _i, (season, score, minutes) in enumerate([
+        ("2122", 50.0, 1500.0),
+        ("2223", 60.0, 2000.0),
+        ("2324", 75.0, 2500.0),
+    ]):
+        rows.append({
+            "player": "Rising Star", "player_id": "p1",
+            "team": "Team A", "league": "Premier League",
+            "season": season, "position_group": "ST", "sub_position": "ST",
+            "optimized_score": score, "minutes": minutes, "matches": 25,
+            "npg_p90": 0.3, "assists_p90": 0.1,
+            "defense_composite": 10.0, "possession_composite": 30.0,
+            "confidence_level": "HIGH", "low_appearance": False,
+        })
+    # Decliner: 80 -> 70 -> 55 (strong downward slope)
+    for _i, (season, score, minutes) in enumerate([
+        ("2122", 80.0, 2500.0),
+        ("2223", 70.0, 2000.0),
+        ("2324", 55.0, 1000.0),
+    ]):
+        rows.append({
+            "player": "Fading Veteran", "player_id": "p2",
+            "team": "Team B", "league": "La Liga",
+            "season": season, "position_group": "CM", "sub_position": "CM",
+            "optimized_score": score, "minutes": minutes, "matches": 20,
+            "npg_p90": 0.1, "assists_p90": 0.2,
+            "defense_composite": 50.0, "possession_composite": 60.0,
+            "confidence_level": "HIGH", "low_appearance": False,
+        })
+    # Flat player: 65 -> 65 -> 65 (slope = 0)
+    for season in ("2122", "2223", "2324"):
+        rows.append({
+            "player": "Steady Hand", "player_id": "p3",
+            "team": "Team C", "league": "Bundesliga",
+            "season": season, "position_group": "CB", "sub_position": "CB",
+            "optimized_score": 65.0, "minutes": 2000.0, "matches": 25,
+            "npg_p90": 0.02, "assists_p90": 0.01,
+            "defense_composite": 70.0, "possession_composite": 50.0,
+            "confidence_level": "HIGH", "low_appearance": False,
+        })
+    # Single-season player (should be excluded by min_seasons=2)
+    rows.append({
+        "player": "One Season Wonder", "player_id": "p4",
+        "team": "Team D", "league": "Serie A",
+        "season": "2324", "position_group": "ST", "sub_position": "ST",
+        "optimized_score": 90.0, "minutes": 2500.0, "matches": 30,
+        "npg_p90": 0.8, "assists_p90": 0.3,
+        "defense_composite": 5.0, "possession_composite": 25.0,
+        "confidence_level": "HIGH", "low_appearance": False,
+    })
+    # Low latest-minutes player (should be excluded by min_minutes_latest)
+    rows.append({
+        "player": "Injured Star", "player_id": "p5",
+        "team": "Team E", "league": "Ligue 1",
+        "season": "2122", "position_group": "AM", "sub_position": "AM",
+        "optimized_score": 70.0, "minutes": 2000.0, "matches": 25,
+        "npg_p90": 0.3, "assists_p90": 0.25,
+        "defense_composite": 20.0, "possession_composite": 55.0,
+        "confidence_level": "HIGH", "low_appearance": False,
+    })
+    rows.append({
+        "player": "Injured Star", "player_id": "p5",
+        "team": "Team E", "league": "Ligue 1",
+        "season": "2223", "position_group": "AM", "sub_position": "AM",
+        "optimized_score": 80.0, "minutes": 100.0, "matches": 2,
+        "npg_p90": 0.0, "assists_p90": 0.0,
+        "defense_composite": 15.0, "possession_composite": 40.0,
+        "confidence_level": "LOW", "low_appearance": True,
+    })
+    return pd.DataFrame(rows)
+
+
+@pytest.fixture
+def multi_season_df() -> pd.DataFrame:
+    return _build_multi_season_df()
+
+
+def test_riser_decliner_empty():
+    """Empty input should produce a structured 'unavailable' response."""
+    result = compute_riser_decliner_watchlist(pd.DataFrame())
+    assert result["risers"] == []
+    assert result["decliners"] == []
+    assert result["n_scanned"] == 0
+    assert "unavailable" in result["disclaimer"].lower()
+
+
+def test_riser_decliner_basic(multi_season_df):
+    """Rising Star should be in risers, Fading Veteran in decliners."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    riser_names = [r["player"] for r in result["risers"]]
+    decliner_names = [d["player"] for d in result["decliners"]]
+    assert "Rising Star" in riser_names
+    assert "Fading Veteran" in decliner_names
+
+
+def test_riser_decliner_slope_direction(multi_season_df):
+    """Riser slope should be positive, decliner slope negative."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    for r in result["risers"]:
+        assert r["trajectory_slope"] > 0
+        assert r["trend_label"] == "rising"
+    for d in result["decliners"]:
+        assert d["trajectory_slope"] < 0
+        assert d["trend_label"] == "declining"
+
+
+def test_riser_decliner_excludes_single_season(multi_season_df):
+    """One Season Wonder has only 1 season and should not appear."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    all_names = [r["player"] for r in result["risers"]] + [
+        d["player"] for d in result["decliners"]
+    ]
+    assert "One Season Wonder" not in all_names
+
+
+def test_riser_decliner_excludes_low_latest_minutes(multi_season_df):
+    """Injured Star's latest season has only 100 min — should be excluded."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    all_names = [r["player"] for r in result["risers"]] + [
+        d["player"] for d in result["decliners"]
+    ]
+    assert "Injured Star" not in all_names
+
+
+def test_riser_decliner_flat_player_excluded(multi_season_df):
+    """Steady Hand has slope=0, should not appear in risers or decliners."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    all_names = [r["player"] for r in result["risers"]] + [
+        d["player"] for d in result["decliners"]
+    ]
+    assert "Steady Hand" not in all_names
+
+
+def test_riser_decliner_entry_fields(multi_season_df):
+    """Each entry should have all expected fields."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    for entry in result["risers"] + result["decliners"]:
+        assert "player" in entry
+        assert "team" in entry
+        assert "league" in entry
+        assert "position_group" in entry
+        assert "current_score" in entry
+        assert "peak_score" in entry
+        assert "trajectory_slope" in entry
+        assert "n_seasons" in entry
+        assert "latest_season" in entry
+        assert "trend_label" in entry
+
+
+def test_riser_decliner_sorted(multi_season_df):
+    """Risers should be sorted by slope descending, decliners ascending."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    if len(result["risers"]) > 1:
+        slopes = [r["trajectory_slope"] for r in result["risers"]]
+        assert slopes == sorted(slopes, reverse=True)
+    if len(result["decliners"]) > 1:
+        slopes = [d["trajectory_slope"] for d in result["decliners"]]
+        assert slopes == sorted(slopes)
+
+
+def test_riser_decliner_top_n(multi_season_df):
+    """top_n should cap the number of risers and decliners."""
+    result = compute_riser_decliner_watchlist(multi_season_df, top_n=1)
+    assert len(result["risers"]) <= 1
+    assert len(result["decliners"]) <= 1
+
+
+def test_riser_decliner_n_scanned(multi_season_df):
+    """n_scanned should count players that passed min_seasons + minutes filters."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    # Rising Star, Fading Veteran, Steady Hand, Injured Star all have >= 2 seasons
+    # but Injured Star fails min_minutes_latest=300.
+    # So n_scanned should be 3 (Rising Star, Fading Veteran, Steady Hand).
+    assert result["n_scanned"] == 3
+
+
+def test_riser_decliner_thresholds(multi_season_df):
+    """Custom thresholds should filter accordingly."""
+    # Very high riser threshold — Rising Star slope is ~12.5, so 15 should exclude.
+    result = compute_riser_decliner_watchlist(
+        multi_season_df, riser_threshold=15.0
+    )
+    riser_names = [r["player"] for r in result["risers"]]
+    assert "Rising Star" not in riser_names
+
+
+def test_riser_decliner_disclaimer(multi_season_df):
+    """Disclaimer should be present and mention limitations."""
+    result = compute_riser_decliner_watchlist(multi_season_df)
+    assert len(result["disclaimer"]) > 50
+    assert "slope" in result["disclaimer"].lower()
+
+
+def test_riser_decliner_no_mutation(multi_season_df):
+    """Input frame must not be mutated."""
+    original = multi_season_df.copy()
+    compute_riser_decliner_watchlist(multi_season_df)
+    pd.testing.assert_frame_equal(multi_season_df, original)
+
+
+def test_riser_decliner_thresholds_echoed(multi_season_df):
+    """Thresholds dict should echo the parameters used."""
+    result = compute_riser_decliner_watchlist(
+        multi_season_df,
+        min_seasons=3,
+        min_minutes_latest=500.0,
+        riser_threshold=2.0,
+        decliner_threshold=-2.0,
+    )
+    t = result["thresholds"]
+    assert t["min_seasons"] == 3
+    assert t["min_minutes_latest"] == 500.0
+    assert t["riser_threshold"] == 2.0
+    assert t["decliner_threshold"] == -2.0
