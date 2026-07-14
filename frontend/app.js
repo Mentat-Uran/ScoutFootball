@@ -676,6 +676,8 @@ const i18n = {
         position_depth_button: "分析",
         position_action_title: "位置组动作画像与趋势",
         position_action_button: "分析",
+        team_action_title: "球队动作画像与百分位",
+        team_action_button: "分析",
         backtest_best_decay: "最优 Decay",
         backtest_selection_metric: "选择指标",
         backtest_half_life: "半衰期(天)",
@@ -1681,6 +1683,8 @@ const i18n = {
         position_depth_button: "Analyze",
         position_action_title: "Position Action Profile & Trends",
         position_action_button: "Analyze",
+        team_action_title: "Team Action Profile & Percentiles",
+        team_action_button: "Analyze",
         backtest_best_decay: "Best Decay",
         backtest_selection_metric: "Selection Metric",
         backtest_half_life: "Half-Life (days)",
@@ -2599,6 +2603,47 @@ async function fetchPositionTrendOverlay(league, season) {
     } catch (err) {
         console.warn("Failed to fetch position trend overlay:", err);
         return { status: "fetch_failed", position_groups: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchTeamActionProfile(league, season) {
+    const params = new URLSearchParams();
+    if (league) params.set("league", league);
+    if (season) params.set("season", season);
+    try {
+        const data = await fetchJson("/teams/action-profile", { params });
+        return data || { status: "no_data", teams: [] };
+    } catch (err) {
+        console.warn("Failed to fetch team action profile:", err);
+        return { status: "fetch_failed", teams: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchTeamActionPercentiles(team, league, season) {
+    if (!team) return { status: "no_team" };
+    const params = new URLSearchParams();
+    if (league) params.set("league", league);
+    if (season) params.set("season", season);
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/action-percentiles`, { params });
+        return data || { status: "no_data", team, dimensions: [] };
+    } catch (err) {
+        console.warn("Failed to fetch team action percentiles:", err);
+        return { status: "fetch_failed", team, dimensions: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchTeamActionSimilarity(team, league, season) {
+    if (!team) return { status: "no_team" };
+    const params = new URLSearchParams();
+    if (league) params.set("league", league);
+    if (season) params.set("season", season);
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/action-similarity`, { params });
+        return data || { status: "no_data", team, neighbors: [] };
+    } catch (err) {
+        console.warn("Failed to fetch team action similarity:", err);
+        return { status: "fetch_failed", team, neighbors: [], error: "fetch_failed" };
     }
 }
 
@@ -10075,6 +10120,7 @@ async function renderTeams() {
     initPositionStyleControls();
     initPositionDepthControls();
     initPositionActionControls();
+    initTeamActionControls();
 }
 
 function renderTeamDetail(team) {
@@ -11956,6 +12002,247 @@ async function _renderPositionTrendOverlay(league, season) {
         rows
             ? `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "位置" : "Position"}</th><th>${z ? "人数" : "Players"}</th>${dimHeaders}</tr></thead><tbody>${rows}</tbody></table></div>`
             : `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无位置组数据。" : "No position group data.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+function initTeamActionControls() {
+    const btn = document.getElementById("team-action-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+
+    const doScan = async () => {
+        const leagueInput = document.getElementById("team-action-league");
+        const seasonInput = document.getElementById("team-action-season");
+        const teamInput = document.getElementById("team-action-team");
+        const league = leagueInput ? leagueInput.value.trim() : "";
+        const season = seasonInput ? seasonInput.value.trim() : "";
+        const team = teamInput ? teamInput.value.trim() : "";
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+            await Promise.all([
+                _renderTeamActionProfile(league, season),
+                _renderTeamActionPercentiles(team, league, season),
+                _renderTeamActionSimilarity(team, league, season),
+            ]);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = t("team_action_button");
+        }
+    };
+
+    btn.addEventListener("click", doScan);
+    const handler = (e) => { if (e.key === "Enter") doScan(); };
+    const ids = ["team-action-league", "team-action-season", "team-action-team"];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("keydown", handler);
+    }
+}
+
+
+async function _renderTeamActionProfile(league, season) {
+    const wrap = document.getElementById("team-action-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算球队动作画像…" : "Computing team action profile…")}</p>`;
+
+    const data = await fetchTeamActionProfile(league, season);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(data.disclaimer || (z ? "无动作画像数据。" : "No action profile data."))}</p>`;
+        return;
+    }
+
+    const teams = data.teams || [];
+    const features = data.action_features || ["tackles_p90", "interceptions_p90", "crosses_p90", "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"];
+    const featLabel = (f) => {
+        const m = {
+            tackles_p90: z ? "抢断/90" : "Tackles/90",
+            interceptions_p90: z ? "拦截/90" : "Int/90",
+            crosses_p90: z ? "传中/90" : "Crosses/90",
+            fouls_drawn_p90: z ? "被犯/90" : "FlsDrn/90",
+            fouls_p90: z ? "犯规/90" : "Fls/90",
+            g_a_volume: z ? "进球+助攻" : "G+A",
+            npg_p90: z ? "非点球进球/90" : "NPG/90",
+        };
+        return m[f] || f;
+    };
+
+    const rows = teams.map(tm => {
+        const cells = features.map(f => `<td>${Number(tm[f] ?? 0).toFixed(2)}</td>`).join("");
+        return `<tr>
+            <td><strong>${escapeHtml(tm.team || "")}</strong></td>
+            <td>${tm.n_players ?? 0}</td>
+            <td>${Number(tm.total_minutes ?? 0).toLocaleString()}</td>
+            ${cells}
+        </tr>`;
+    }).join("");
+
+    const featHeaders = features.map(f => `<th>${escapeHtml(featLabel(f))}</th>`).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "球队动作画像" : "Team Action Profile")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${z ? "球队数" : "Teams"}: ${data.n_teams ?? 0}${league ? " · " + escapeHtml(league) : ""}${season ? " · " + escapeHtml(season) : ""}</div>`,
+        `</div>`,
+        rows
+            ? `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "球队" : "Team"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "分钟" : "Minutes"}</th>${featHeaders}</tr></thead><tbody>${rows}</tbody></table></div>`
+            : `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无球队数据。" : "No team data.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+async function _renderTeamActionPercentiles(team, league, season) {
+    const wrap = document.getElementById("team-percentiles-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算动作百分位…" : "Computing action percentiles…")}</p>`;
+
+    if (!team) {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请输入球队名称。" : "Enter a team name.")}</p>`;
+        return;
+    }
+
+    const data = await fetchTeamActionPercentiles(team, league, season);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "team_not_found" || data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(data.disclaimer || (z ? "该球队无数据。" : "No data for this team."))}</p>`;
+        return;
+    }
+
+    const dimensions = data.dimensions || [];
+    const quartileLabel = (q) => {
+        const m = {
+            top: z ? "上游" : "Top",
+            upper_mid: z ? "中上" : "Upper-Mid",
+            lower_mid: z ? "中下" : "Lower-Mid",
+            bottom: z ? "下游" : "Bottom",
+        };
+        return m[q] || q;
+    };
+    const quartileClass = (q) => {
+        const m = { top: "status-high", upper_mid: "status-medium", lower_mid: "status-medium", bottom: "status-low" };
+        return m[q] || "status-medium";
+    };
+    const featLabel = (f) => {
+        const m = {
+            tackles_p90: z ? "抢断/90" : "Tackles/90",
+            interceptions_p90: z ? "拦截/90" : "Int/90",
+            crosses_p90: z ? "传中/90" : "Crosses/90",
+            fouls_drawn_p90: z ? "被犯/90" : "FlsDrn/90",
+            fouls_p90: z ? "犯规/90" : "Fls/90",
+            g_a_volume: z ? "进球+助攻" : "G+A",
+            npg_p90: z ? "非点球进球/90" : "NPG/90",
+        };
+        return m[f] || f;
+    };
+
+    const rows = dimensions.map(d => {
+        return `<tr>
+            <td><strong>${escapeHtml(featLabel(d.feature))}</strong></td>
+            <td>${Number(d.value ?? 0).toFixed(3)}</td>
+            <td>${Number(d.percentile ?? 0).toFixed(1)}</td>
+            <td><span class="status-pill ${quartileClass(d.quartile)}" style="font-size:0.6rem;padding:0.05rem 0.3rem">${escapeHtml(quartileLabel(d.quartile))}</span></td>
+            <td>${Number(d.population_min ?? 0).toFixed(3)}</td>
+            <td>${Number(d.population_median ?? 0).toFixed(3)}</td>
+            <td>${Number(d.population_max ?? 0).toFixed(3)}</td>
+        </tr>`;
+    }).join("");
+
+    const target = data.target || {};
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "球队动作百分位" : "Team Action Percentiles")}</p>`,
+            `<div style="font-size:0.8rem"><strong>${escapeHtml(data.team || team)}</strong> <span style="color:var(--text-muted);margin-left:0.4rem;font-size:0.72rem">${z ? "样本数" : "Population"}: ${data.n_population ?? 0}${league ? " · " + escapeHtml(league) : ""}${season ? " · " + escapeHtml(season) : ""}</span></div>`,
+        `</div>`,
+        rows
+            ? `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "动作" : "Action"}</th><th>${z ? "值" : "Value"}</th><th>${z ? "百分位" : "Percentile"}</th><th>${z ? "分位" : "Quartile"}</th><th>${z ? "最小" : "Min"}</th><th>${z ? "中位" : "Median"}</th><th>${z ? "最大" : "Max"}</th></tr></thead><tbody>${rows}</tbody></table></div>`
+            : `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无百分位数据。" : "No percentile data.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+async function _renderTeamActionSimilarity(team, league, season) {
+    const wrap = document.getElementById("team-similarity-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算动作相似度…" : "Computing action similarity…")}</p>`;
+
+    if (!team) {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请输入球队名称。" : "Enter a team name.")}</p>`;
+        return;
+    }
+
+    const data = await fetchTeamActionSimilarity(team, league, season);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "team_not_found" || data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(data.disclaimer || (z ? "该球队无数据。" : "No data for this team."))}</p>`;
+        return;
+    }
+
+    const targetVec = data.target_action_vector || [];
+    const targetLabels = data.target_action_vector_labels || [];
+    const featLabel = (f) => {
+        const m = {
+            tackles_p90: z ? "抢断/90" : "Tkl/90",
+            interceptions_p90: z ? "拦截/90" : "Int/90",
+            crosses_p90: z ? "传中/90" : "Crs/90",
+            fouls_drawn_p90: z ? "被犯/90" : "FlsD/90",
+            fouls_p90: z ? "犯规/90" : "Fls/90",
+            g_a_volume: "G+A",
+            npg_p90: "NPG/90",
+        };
+        return m[f] || f;
+    };
+    const targetVecHtml = targetVec.length > 0
+        ? `<div style="font-size:0.65rem;color:var(--text-muted);line-height:1.5">${targetLabels.map((lbl, i) => `<span style="margin-right:0.4rem">${escapeHtml(featLabel(lbl))}: <strong>${Number(targetVec[i] ?? 0).toFixed(2)}</strong></span>`).join("")}</div>`
+        : "";
+
+    const neighbors = data.neighbors || [];
+    const neighborRows = neighbors.map((n, i) => {
+        return `<tr>
+            <td>${i + 1}</td>
+            <td><strong>${escapeHtml(n.team || "")}</strong></td>
+            <td>${Number(n.cosine_similarity ?? 0).toFixed(3)}</td>
+            <td>${Number(n.euclidean_distance ?? 0).toFixed(3)}</td>
+            <td>${n.n_players ?? 0}</td>
+            <td>${Number(n.total_minutes ?? 0).toLocaleString()}</td>
+        </tr>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "动作相似球队" : "Team Action Similarity")}</p>`,
+            `<div style="font-size:0.8rem"><strong>${escapeHtml(data.team || team)}</strong> <span style="color:var(--text-muted);margin-left:0.4rem;font-size:0.72rem">${z ? "目标动作向量" : "Target vector"}</span></div>`,
+            `<div style="margin-top:0.2rem">${targetVecHtml}</div>`,
+        `</div>`,
+        neighborRows
+            ? `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>#</th><th>${z ? "球队" : "Team"}</th><th>${z ? "余弦相似度" : "Cosine"}</th><th>${z ? "欧氏距离" : "Distance"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "分钟" : "Minutes"}</th></tr></thead><tbody>${neighborRows}</tbody></table></div>`
+            : `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无近邻数据。" : "No neighbors found.")}</p>`,
         `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
     ].join("");
 }

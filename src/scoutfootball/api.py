@@ -7884,6 +7884,95 @@ def get_position_trend_overlay(
     return _clean_json_value(result)
 
 
+def get_team_action_profile(
+    league: str | None = None,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Granular per-90 action profile for each team.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_team_action_profile`.
+    Descriptive overlay — does not rank teams by quality.
+    """
+    from scoutfootball.features.team_style import (
+        compute_team_action_profile,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "teams": []}
+    result = compute_team_action_profile(
+        df,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_league_action_percentiles(
+    team: str,
+    league: str | None = None,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Per-action percentile rank of one team within its league population.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_league_action_percentiles`.
+    Descriptive overlay — percentiles describe relative standing, not
+    absolute quality.
+    """
+    from scoutfootball.features.team_style import (
+        compute_league_action_percentiles,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team}
+    result = compute_league_action_percentiles(
+        df,
+        team,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_team_action_similarity(
+    team: str,
+    league: str | None = None,
+    season: str | None = None,
+    *,
+    top_n: int = 10,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Find teams with similar per-90 action signatures.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_team_action_similarity`.
+    Descriptive overlay — similar action signatures do not imply similar
+    quality or tactical systems.
+    """
+    from scoutfootball.features.team_style import (
+        compute_team_action_similarity,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team}
+    result = compute_team_action_similarity(
+        df,
+        team,
+        league=league,
+        season=season,
+        top_n=top_n,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 

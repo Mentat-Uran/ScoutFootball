@@ -16,6 +16,7 @@ from scoutfootball.features.team_style import (
     compute_cluster_recruits,
     compute_cluster_similarity_matrix,
     compute_cross_league_position_comparison,
+    compute_league_action_percentiles,
     compute_league_style_evolution,
     compute_league_style_percentiles,
     compute_player_style_fit,
@@ -30,6 +31,8 @@ from scoutfootball.features.team_style import (
     compute_style_drift_neighbors,
     compute_style_matchup,
     compute_style_neighbors,
+    compute_team_action_profile,
+    compute_team_action_similarity,
     compute_team_style_clusters,
     compute_team_style_drift,
     compute_team_style_profiles,
@@ -2844,3 +2847,323 @@ def test_trend_overlay_no_mutation(action_df):
     original = action_df.copy()
     compute_position_trend_overlay(action_df, season="2526")
     pd.testing.assert_frame_equal(action_df, original)
+
+
+# ── Round 79: compute_team_action_profile ─────────────────────────────────
+
+
+def test_team_action_profile_empty():
+    """Empty input should return no_data."""
+    result = compute_team_action_profile(pd.DataFrame())
+    assert result["status"] == "no_data"
+    assert result["teams"] == []
+
+
+def test_team_action_profile_basic(action_df):
+    """Should return ok with 2 teams (PL Team + LL Team)."""
+    result = compute_team_action_profile(action_df, season="2526")
+    assert result["status"] == "ok"
+    assert result["n_teams"] == 2
+    teams = [t["team"] for t in result["teams"]]
+    assert "PL Team" in teams
+    assert "LL Team" in teams
+
+
+def test_team_action_profile_fields(action_df):
+    """Each team should have expected fields."""
+    result = compute_team_action_profile(action_df, season="2526")
+    for tm in result["teams"]:
+        assert "team" in tm
+        assert "n_players" in tm
+        assert "total_minutes" in tm
+        for feat in ["tackles_p90", "interceptions_p90", "crosses_p90",
+                      "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"]:
+            assert feat in tm
+            assert isinstance(tm[feat], (int, float))
+
+
+def test_team_action_profile_action_features_list(action_df):
+    """action_features should list the 7 features."""
+    result = compute_team_action_profile(action_df, season="2526")
+    assert result["action_features"] == [
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    ]
+
+
+def test_team_action_profile_league_filter(action_df):
+    """League filter should narrow to 1 team."""
+    result = compute_team_action_profile(action_df, league="Premier League", season="2526")
+    assert result["status"] == "ok"
+    assert result["n_teams"] == 1
+    assert result["teams"][0]["team"] == "PL Team"
+
+
+def test_team_action_profile_season_filter(action_df):
+    """Season filter should work."""
+    result = compute_team_action_profile(action_df, season="2526")
+    assert result["status"] == "ok"
+    assert result["n_teams"] == 2
+    # Non-matching season
+    result2 = compute_team_action_profile(action_df, season="9999")
+    assert result2["status"] == "no_data"
+
+
+def test_team_action_profile_case_insensitive_league(action_df):
+    """League filter should be case-insensitive."""
+    result = compute_team_action_profile(action_df, league="premier league", season="2526")
+    assert result["status"] == "ok"
+    assert result["n_teams"] == 1
+
+
+def test_team_action_profile_no_action_columns():
+    """Missing action columns should return no_data."""
+    df = pd.DataFrame({"team": ["A"], "minutes": [1000], "season": ["2526"]})
+    result = compute_team_action_profile(df)
+    assert result["status"] == "no_data"
+    assert "Missing action columns" in result["disclaimer"]
+
+
+def test_team_action_profile_disclaimer_present(action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_team_action_profile(action_df, season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_team_action_profile_no_mutation(action_df):
+    """Original DataFrame should not be mutated."""
+    original = action_df.copy()
+    compute_team_action_profile(action_df, season="2526")
+    pd.testing.assert_frame_equal(action_df, original)
+
+
+def test_team_action_profile_min_minutes_too_high(action_df):
+    """High min_player_minutes should filter out all players."""
+    result = compute_team_action_profile(action_df, season="2526", min_player_minutes=10000)
+    assert result["status"] == "no_data"
+
+
+def test_team_action_profile_sorted_by_minutes(action_df):
+    """Teams should be sorted by total_minutes descending."""
+    result = compute_team_action_profile(action_df, season="2526")
+    minutes_list = [t["total_minutes"] for t in result["teams"]]
+    assert minutes_list == sorted(minutes_list, reverse=True)
+
+
+# ── Round 79: compute_league_action_percentiles ───────────────────────────
+
+
+def test_team_action_percentiles_empty():
+    """Empty input should return no_data."""
+    result = compute_league_action_percentiles(pd.DataFrame(), "PL Team")
+    assert result["status"] == "no_data"
+
+
+def test_team_action_percentiles_missing_team():
+    """Empty team name should return no_data."""
+    result = compute_league_action_percentiles(pd.DataFrame(), "")
+    assert result["status"] == "no_data"
+
+
+def test_team_action_percentiles_team_not_found(action_df):
+    """Non-existent team should return team_not_found."""
+    result = compute_league_action_percentiles(action_df, "Unknown FC", season="2526")
+    assert result["status"] == "team_not_found"
+    assert "Unknown FC" in result["disclaimer"]
+
+
+def test_team_action_percentiles_basic(action_df):
+    """Should return ok with 7 dimensions."""
+    result = compute_league_action_percentiles(action_df, "PL Team", season="2526")
+    assert result["status"] == "ok"
+    assert result["team"] == "PL Team"
+    assert len(result["dimensions"]) == 7
+    features = [d["feature"] for d in result["dimensions"]]
+    assert features == [
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    ]
+
+
+def test_team_action_percentiles_quartile_labels(action_df):
+    """Each dimension should have a valid quartile label."""
+    result = compute_league_action_percentiles(action_df, "PL Team", season="2526")
+    valid_quartiles = {"top", "upper_mid", "lower_mid", "bottom"}
+    for d in result["dimensions"]:
+        assert d["quartile"] in valid_quartiles
+
+
+def test_team_action_percentiles_percentile_range(action_df):
+    """Percentiles should be between 0 and 100."""
+    result = compute_league_action_percentiles(action_df, "PL Team", season="2526")
+    for d in result["dimensions"]:
+        assert 0 <= d["percentile"] <= 100
+
+
+def test_team_action_percentiles_population_stats(action_df):
+    """Each dimension should have population stats."""
+    result = compute_league_action_percentiles(action_df, "PL Team", season="2526")
+    for d in result["dimensions"]:
+        assert "population_min" in d
+        assert "population_max" in d
+        assert "population_mean" in d
+        assert "population_median" in d
+        assert d["population_min"] <= d["population_median"] <= d["population_max"]
+
+
+def test_team_action_percentiles_league_filter(action_df):
+    """League filter should work but may result in only 1 team in population."""
+    result = compute_league_action_percentiles(
+        action_df, "PL Team", league="Premier League", season="2526"
+    )
+    assert result["status"] == "ok"
+    assert result["n_population"] == 1
+
+
+def test_team_action_percentiles_season_filter(action_df):
+    """Non-matching season should return no_data."""
+    result = compute_league_action_percentiles(action_df, "PL Team", season="9999")
+    assert result["status"] == "no_data"
+
+
+def test_team_action_percentiles_disclaimer_present(action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_league_action_percentiles(action_df, "PL Team", season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_team_action_percentiles_no_mutation(action_df):
+    """Original DataFrame should not be mutated."""
+    original = action_df.copy()
+    compute_league_action_percentiles(action_df, "PL Team", season="2526")
+    pd.testing.assert_frame_equal(action_df, original)
+
+
+def test_team_action_percentiles_target_fields(action_df):
+    """Target should have action_values, population_means, population_stds."""
+    result = compute_league_action_percentiles(action_df, "PL Team", season="2526")
+    target = result["target"]
+    assert "action_values" in target
+    assert "population_means" in target
+    assert "population_stds" in target
+    assert len(target["action_values"]) == 7
+
+
+def test_team_action_percentiles_two_team_population(action_df):
+    """With 2 teams in population, percentiles should be 25 or 75."""
+    result = compute_league_action_percentiles(action_df, "PL Team", season="2526")
+    assert result["n_population"] == 2
+    for d in result["dimensions"]:
+        assert d["percentile"] in (25.0, 75.0)
+
+
+# ── Round 79: compute_team_action_similarity ──────────────────────────────
+
+
+def test_team_action_similarity_empty():
+    """Empty input should return no_data."""
+    result = compute_team_action_similarity(pd.DataFrame(), "PL Team")
+    assert result["status"] == "no_data"
+
+
+def test_team_action_similarity_missing_team():
+    """Empty team name should return no_data."""
+    result = compute_team_action_similarity(pd.DataFrame(), "")
+    assert result["status"] == "no_data"
+
+
+def test_team_action_similarity_team_not_found(action_df):
+    """Non-existent team should return team_not_found."""
+    result = compute_team_action_similarity(action_df, "Unknown FC", season="2526")
+    assert result["status"] == "team_not_found"
+
+
+def test_team_action_similarity_basic(action_df):
+    """Should return ok with 1 neighbor (LL Team)."""
+    result = compute_team_action_similarity(action_df, "PL Team", season="2526")
+    assert result["status"] == "ok"
+    assert result["team"] == "PL Team"
+    assert result["n_candidates"] == 1
+    assert result["neighbors"][0]["team"] == "LL Team"
+
+
+def test_team_action_similarity_cosine_range(action_df):
+    """Cosine similarity should be between -1 and 1."""
+    result = compute_team_action_similarity(action_df, "PL Team", season="2526")
+    for n in result["neighbors"]:
+        assert -1 <= n["cosine_similarity"] <= 1
+
+
+def test_team_action_similarity_sorted_by_cosine(action_df):
+    """Neighbors should be sorted by cosine similarity descending."""
+    result = compute_team_action_similarity(action_df, "PL Team", season="2526")
+    cosines = [n["cosine_similarity"] for n in result["neighbors"]]
+    assert cosines == sorted(cosines, reverse=True)
+
+
+def test_team_action_similarity_excludes_self(action_df):
+    """Target team should not appear in neighbors."""
+    result = compute_team_action_similarity(action_df, "PL Team", season="2526")
+    for n in result["neighbors"]:
+        assert n["team"] != "PL Team"
+
+
+def test_team_action_similarity_top_n(action_df):
+    """top_n should limit the number of neighbors."""
+    result = compute_team_action_similarity(action_df, "PL Team", season="2526", top_n=0)
+    # top_n=0 gets clamped to 1
+    assert len(result["neighbors"]) == 1
+    result2 = compute_team_action_similarity(action_df, "PL Team", season="2526", top_n=5)
+    # Only 1 neighbor available
+    assert len(result2["neighbors"]) == 1
+
+
+def test_team_action_similarity_league_filter(action_df):
+    """League filter should narrow population — PL Team alone has no neighbors."""
+    result = compute_league_action_percentiles(
+        action_df, "PL Team", league="Premier League", season="2526"
+    )
+    assert result["status"] == "ok"
+    # With only 1 team in PL, similarity has no neighbors
+    sim = compute_team_action_similarity(
+        action_df, "PL Team", league="Premier League", season="2526"
+    )
+    assert sim["status"] == "ok"
+    assert sim["n_candidates"] == 0
+
+
+def test_team_action_similarity_target_vector(action_df):
+    """Target action vector should have 7 dimensions."""
+    result = compute_team_action_similarity(action_df, "PL Team", season="2526")
+    assert len(result["target_action_vector"]) == 7
+    assert result["target_action_vector_labels"] == [
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    ]
+
+
+def test_team_action_similarity_disclaimer_present(action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_team_action_similarity(action_df, "PL Team", season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_team_action_similarity_no_mutation(action_df):
+    """Original DataFrame should not be mutated."""
+    original = action_df.copy()
+    compute_team_action_similarity(action_df, "PL Team", season="2526")
+    pd.testing.assert_frame_equal(action_df, original)
+
+
+def test_team_action_similarity_neighbor_fields(action_df):
+    """Each neighbor should have expected fields."""
+    result = compute_team_action_similarity(action_df, "PL Team", season="2526")
+    for n in result["neighbors"]:
+        assert "team" in n
+        assert "cosine_similarity" in n
+        assert "euclidean_distance" in n
+        assert "n_players" in n
+        assert "total_minutes" in n

@@ -56,6 +56,7 @@ from scoutfootball.api import (
     get_form_weighted_prediction,
     get_h2h_bias_correction,
     get_head_to_head,
+    get_league_action_percentiles,
     get_league_error_analysis,
     get_league_style_evolution,
     get_league_style_percentiles,
@@ -104,6 +105,8 @@ from scoutfootball.api import (
     get_style_matchup,
     get_style_neighbors,
     get_team_accuracy,
+    get_team_action_profile,
+    get_team_action_similarity,
     get_team_calibration_drift,
     get_team_comparison,
     get_team_performance_profile,
@@ -1142,6 +1145,48 @@ def create_app() -> FastAPI:
             position_group,
             league=league,
             season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/action-profile")
+    def team_action_profile(
+        league: str | None = None,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_team_action_profile(
+            league=league,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/{team}/action-percentiles")
+    def team_action_percentiles(
+        team: str,
+        league: str | None = None,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_league_action_percentiles(
+            team,
+            league=league,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/{team}/action-similarity")
+    def team_action_similarity(
+        team: str,
+        league: str | None = None,
+        season: str | None = None,
+        top_n: int = 10,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_team_action_similarity(
+            team,
+            league=league,
+            season=season,
+            top_n=top_n,
             min_player_minutes=min_player_minutes,
         )
 
