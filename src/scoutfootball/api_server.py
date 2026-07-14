@@ -55,6 +55,7 @@ from scoutfootball.api import (
     get_h2h_bias_correction,
     get_head_to_head,
     get_league_error_analysis,
+    get_league_style_evolution,
     get_league_style_percentiles,
     get_match_momentum,
     get_match_prediction,
@@ -90,6 +91,7 @@ from scoutfootball.api import (
     get_scoreline_calibration,
     get_shortlist,
     get_style_atlas,
+    get_style_drift_neighbors,
     get_style_matchup,
     get_style_neighbors,
     get_team_accuracy,
@@ -98,6 +100,7 @@ from scoutfootball.api import (
     get_team_performance_profile,
     get_team_strength,
     get_team_style_clusters,
+    get_team_style_drift,
     get_temporal_validation,
     get_transfermarkt_identity_report,
     get_truth_label_supervision,
@@ -996,6 +999,44 @@ def create_app() -> FastAPI:
             season=season,
             league=league,
             n_bins=min(20, max(3, n_bins)),
+            min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/teams/{team}/style-drift")
+    def team_style_drift(
+        team: str,
+        league: str | None = None,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_team_style_drift(
+            team,
+            league=league,
+            min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/teams/style-evolution")
+    def team_style_evolution(
+        league: str | None = None,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_league_style_evolution(
+            league=league,
+            min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/teams/{team}/style-drift-neighbors")
+    def team_style_drift_neighbors(
+        team: str,
+        league: str | None = None,
+        top_n: int = 10,
+        min_seasons: int = 2,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_style_drift_neighbors(
+            team,
+            league=league,
+            top_n=min(50, max(1, top_n)),
+            min_seasons=max(2, min_seasons),
             min_minutes_total=min_minutes_total,
         )
 

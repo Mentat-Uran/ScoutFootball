@@ -1433,6 +1433,127 @@ teams with |z_score| ≥ 2.0 on the standardised dimension; `direction` ∈ {hig
 low}. This is a descriptive population view — it does not rank teams by quality
 or predict outcomes.
 
+### GET /teams/{team}/style-drift
+
+Single team's style trajectory across multiple seasons. For each of the 4 style
+dimensions, computes a least-squares slope, net delta (latest - earliest), R²
+consistency, per-season values, and a drift_label.
+
+**Path params**: `team` (team name, case-insensitive)
+
+**Query params**: `league` (optional, case-insensitive), `min_minutes_total`
+(default 1800.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Arsenal",
+  "league": "Premier League",
+  "seasons": ["2324", "2425", "2526"],
+  "n_seasons": 3,
+  "dimensions": [
+    {
+      "feature": "npg_p90", "label": "attack",
+      "slope": 0.05, "delta": 0.1, "r_squared": 0.95,
+      "mean": 0.45, "drift_label": "rising",
+      "per_season": [
+        { "season": "2324", "value": 0.35 },
+        { "season": "2425", "value": 0.45 },
+        { "season": "2526", "value": 0.55 }
+      ]
+    }
+  ],
+  "disclaimer": "Style drift is a descriptive trajectory..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `team_not_found`, `insufficient_seasons` (when
+the team has fewer than 2 seasons of profiles). `drift_label` ∈ {rising,
+falling, stable} using a 5% relative threshold. This is a descriptive overlay
+— it does not predict future style or rank teams by quality.
+
+### GET /teams/style-evolution
+
+League-wide style evolution across seasons. Groups team-season profiles by
+season, computes median and mean per dimension per season, and fits slopes.
+
+**Query params**: `league` (optional, case-insensitive), `min_minutes_total`
+(default 1800.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": null,
+  "seasons": ["2324", "2425", "2526"],
+  "n_seasons": 3,
+  "per_season": [
+    {
+      "season": "2324", "n_teams": 20,
+      "npg_p90": { "median": 0.3, "mean": 0.32, "std": 0.1, "min": 0.1, "max": 0.6 },
+      "assists_p90": { "median": 0.2, "mean": 0.21, "std": 0.05, "min": 0.1, "max": 0.35 },
+      "defense_composite": { "median": 50.0, "mean": 48.0, "std": 15.0, "min": 10.0, "max": 80.0 },
+      "possession_composite": { "median": 50.0, "mean": 51.0, "std": 12.0, "min": 30.0, "max": 80.0 }
+    }
+  ],
+  "dimensions": [
+    {
+      "feature": "npg_p90", "label": "attack",
+      "median_slope": 0.02, "median_delta": 0.04, "median_r_squared": 0.9,
+      "mean_slope": 0.025, "mean_delta": 0.05, "mean_r_squared": 0.88,
+      "evolution_label": "rising"
+    }
+  ],
+  "disclaimer": "League style evolution is a descriptive population view..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `insufficient_seasons` (when fewer than 2
+seasons available). `evolution_label` ∈ {rising, falling, stable} using a 5%
+relative threshold on the median delta. This is a descriptive population view
+— it does not predict future league style or rank seasons by quality.
+
+### GET /teams/{team}/style-drift-neighbors
+
+Teams with similar style-drift patterns. Computes a 4-dimensional drift vector
+(least-squares slope per dimension) for each team with ≥ `min_seasons` profiles,
+then ranks others by cosine similarity to the target team's drift vector.
+
+**Path params**: `team` (team name, case-insensitive)
+
+**Query params**: `league` (optional, case-insensitive), `top_n` (default 10,
+clamped to 1–50), `min_seasons` (default 2, clamped to ≥ 2), `min_minutes_total`
+(default 1800.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Arsenal",
+  "league": "Premier League",
+  "seasons": ["2324", "2425", "2526"],
+  "n_seasons": 3,
+  "target_drift_vector": [0.05, 0.01, -2.0, 1.5],
+  "target_drift_vector_labels": ["npg_p90", "assists_p90", "defense_composite", "possession_composite"],
+  "n_candidates": 15,
+  "neighbors": [
+    {
+      "team": "Liverpool", "league": "Premier League",
+      "n_seasons": 3, "seasons": ["2324", "2425", "2526"],
+      "cosine_similarity": 0.92, "euclidean_distance": 0.05,
+      "drift_vector": [0.04, 0.02, -1.8, 1.3]
+    }
+  ],
+  "disclaimer": "Style drift neighbors are a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `team_not_found` (when the target team has fewer
+than `min_seasons` profiles). `cosine_similarity` ∈ [-1, 1]. This is a
+descriptive overlay — similar drift does not imply similar quality or future
+trajectory.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.

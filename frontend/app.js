@@ -668,6 +668,8 @@ const i18n = {
         style_atlas_team: "球队",
         style_atlas_topn: "近邻数",
         style_atlas_button: "分析",
+        style_drift_title: "跨赛季风格漂移",
+        style_drift_button: "分析",
         backtest_best_decay: "最优 Decay",
         backtest_selection_metric: "选择指标",
         backtest_half_life: "半衰期(天)",
@@ -1665,6 +1667,8 @@ const i18n = {
         style_atlas_team: "Team",
         style_atlas_topn: "Neighbors",
         style_atlas_button: "Analyze",
+        style_drift_title: "Cross-Season Style Drift",
+        style_drift_button: "Analyze",
         backtest_best_decay: "Best Decay",
         backtest_selection_metric: "Selection Metric",
         backtest_half_life: "Half-Life (days)",
@@ -2426,6 +2430,46 @@ async function fetchStyleAtlas(season, league, nBins) {
     } catch (err) {
         console.warn("Failed to fetch style atlas:", err);
         return { status: "fetch_failed", dimensions: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchTeamStyleDrift(team, league) {
+    if (!team) return { status: "no_team" };
+    const params = new URLSearchParams();
+    if (league) params.set("league", league);
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/style-drift`, { params });
+        return data || { status: "no_data", team, dimensions: [] };
+    } catch (err) {
+        console.warn("Failed to fetch team style drift:", err);
+        return { status: "fetch_failed", team, dimensions: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchLeagueStyleEvolution(league) {
+    const params = new URLSearchParams();
+    if (league) params.set("league", league);
+    try {
+        const data = await fetchJson("/teams/style-evolution", { params });
+        return data || { status: "no_data", dimensions: [] };
+    } catch (err) {
+        console.warn("Failed to fetch league style evolution:", err);
+        return { status: "fetch_failed", dimensions: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchStyleDriftNeighbors(team, league, topN, minSeasons) {
+    if (!team) return { status: "no_team" };
+    const params = new URLSearchParams();
+    if (league) params.set("league", league);
+    params.set("top_n", String(Math.max(1, Math.min(50, Number(topN) || 10))));
+    params.set("min_seasons", String(Math.max(2, Number(minSeasons) || 2)));
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/style-drift-neighbors`, { params });
+        return data || { status: "no_data", team, neighbors: [] };
+    } catch (err) {
+        console.warn("Failed to fetch style drift neighbors:", err);
+        return { status: "fetch_failed", team, neighbors: [], error: "fetch_failed" };
     }
 }
 
@@ -9898,6 +9942,7 @@ async function renderTeams() {
     initTeamCompareControls();
     initTeamStyleClustersControls();
     initStyleAtlasControls();
+    initStyleDriftControls();
 }
 
 function renderTeamDetail(team) {
@@ -10812,6 +10857,246 @@ async function _renderStyleAtlas(season, league) {
             `<div style="font-size:0.72rem;color:var(--text-muted)">${z ? "样本量" : "N"}: ${nPop}${season ? " · " + escapeHtml(season) : ""}${league ? " · " + escapeHtml(league) : ""}</div>`,
         `</div>`,
         dimBlocks || `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无维度数据。" : "No dimension data.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+function initStyleDriftControls() {
+    const btn = document.getElementById("style-drift-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+
+    const doScan = async () => {
+        const teamInput = document.getElementById("style-drift-team");
+        const leagueInput = document.getElementById("style-drift-league");
+        const topNInput = document.getElementById("style-drift-topn");
+        const team = teamInput ? teamInput.value.trim() : "";
+        const league = leagueInput ? leagueInput.value.trim() : "";
+        const topN = topNInput ? Number(topNInput.value) : 10;
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+            await Promise.all([
+                _renderTeamStyleDrift(team, league),
+                _renderLeagueStyleEvolution(league),
+                _renderStyleDriftNeighbors(team, league, topN),
+            ]);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = t("style_drift_button");
+        }
+    };
+
+    btn.addEventListener("click", doScan);
+    const handler = (e) => { if (e.key === "Enter") doScan(); };
+    const ids = ["style-drift-team", "style-drift-league", "style-drift-topn"];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("keydown", handler);
+    }
+}
+
+async function _renderTeamStyleDrift(team, league) {
+    const wrap = document.getElementById("style-drift-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    if (!team) {
+        wrap.style.display = "none";
+        return;
+    }
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算风格漂移…" : "Computing style drift…")}</p>`;
+
+    const data = await fetchTeamStyleDrift(team, league);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请求失败" : "Fetch failed.")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "暂无足够数据。" : "Insufficient data.")}</p>`;
+        return;
+    }
+    if (data.status === "team_not_found") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "未找到球队: " + team : "Team not found: " + team)}</p>`;
+        return;
+    }
+    if (data.status === "insufficient_seasons") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "风格漂移需要至少 2 个赛季数据，当前仅 " + (data.n_seasons ?? 0) + " 个。" : "Style drift requires >= 2 seasons; only " + (data.n_seasons ?? 0) + " found.")}</p>`;
+        return;
+    }
+
+    const dims = data.dimensions || [];
+    const seasons = data.seasons || [];
+    const nSeasons = Number(data.n_seasons ?? 0);
+
+    const driftLabelMap = (lbl) => {
+        const m = { rising: z ? "上升" : "Rising", falling: z ? "下降" : "Falling", stable: z ? "稳定" : "Stable" };
+        return m[lbl] || lbl;
+    };
+    const driftLabelClass = (lbl) => {
+        const m = { rising: "status-high", falling: "status-low", stable: "status-medium" };
+        return m[lbl] || "status-medium";
+    };
+
+    const dimBlocks = dims.map(d => {
+        const perSeason = (d.per_season || []).map(ps => {
+            return `<span style="font-size:0.65rem;color:var(--text-muted);margin-right:0.4rem">${escapeHtml(ps.season)}: <strong>${Number(ps.value ?? 0).toFixed(2)}</strong></span>`;
+        }).join("");
+        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.2rem">
+                <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
+                <span class="status-pill ${driftLabelClass(d.drift_label)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(driftLabelMap(d.drift_label))}</span>
+            </div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem">
+                ${z ? "斜率" : "Slope"}: ${Number(d.slope ?? 0).toFixed(4)} · ${z ? "变化" : "Δ"}: ${Number(d.delta ?? 0).toFixed(3)} · R²: ${Number(d.r_squared ?? 0).toFixed(3)} · ${z ? "均值" : "Mean"}: ${Number(d.mean ?? 0).toFixed(3)}
+            </div>
+            <div>${perSeason}</div>
+        </div>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "跨赛季风格漂移" : "Cross-Season Style Drift")}</p>`,
+            `<div style="font-size:0.8rem"><strong>${escapeHtml(team)}</strong> <span style="color:var(--text-muted);margin-left:0.4rem;font-size:0.72rem">${z ? "赛季数" : "Seasons"}: ${nSeasons} (${escapeHtml(seasons.join(" → "))})</span></div>`,
+        `</div>`,
+        dimBlocks || `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无维度数据。" : "No dimension data.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+async function _renderLeagueStyleEvolution(league) {
+    const wrap = document.getElementById("style-evolution-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算联赛风格演化…" : "Computing league evolution…")}</p>`;
+
+    const data = await fetchLeagueStyleEvolution(league);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请求失败" : "Fetch failed.")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "暂无足够数据。" : "Insufficient data.")}</p>`;
+        return;
+    }
+    if (data.status === "insufficient_seasons") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "联赛演化需要至少 2 个赛季数据。" : "League evolution requires >= 2 seasons.")}</p>`;
+        return;
+    }
+
+    const dims = data.dimensions || [];
+    const perSeason = data.per_season || [];
+    const seasons = data.seasons || [];
+    const nSeasons = Number(data.n_seasons ?? 0);
+
+    const evoLabelMap = (lbl) => {
+        const m = { rising: z ? "上升" : "Rising", falling: z ? "下降" : "Falling", stable: z ? "稳定" : "Stable" };
+        return m[lbl] || lbl;
+    };
+    const evoLabelClass = (lbl) => {
+        const m = { rising: "status-high", falling: "status-low", stable: "status-medium" };
+        return m[lbl] || "status-medium";
+    };
+
+    const dimRows = dims.map(d => {
+        return `<tr>
+            <td><strong>${escapeHtml(d.label || d.feature || "")}</strong></td>
+            <td>${Number(d.median_slope ?? 0).toFixed(4)}</td>
+            <td>${Number(d.median_delta ?? 0).toFixed(3)}</td>
+            <td>${Number(d.median_r_squared ?? 0).toFixed(3)}</td>
+            <td>${Number(d.mean_slope ?? 0).toFixed(4)}</td>
+            <td>${Number(d.mean_delta ?? 0).toFixed(3)}</td>
+            <td><span class="status-pill ${evoLabelClass(d.evolution_label)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(evoLabelMap(d.evolution_label))}</span></td>
+        </tr>`;
+    }).join("");
+
+    const seasonCols = seasons.map(s => `<th style="font-size:0.65rem">${escapeHtml(s)}</th>`).join("");
+    const seasonRows = dims.map(d => {
+        const cells = perSeason.map(ps => {
+            const stat = ps[d.feature] || {};
+            return `<td style="font-size:0.65rem">${Number(stat.median ?? 0).toFixed(2)}</td>`;
+        }).join("");
+        return `<tr><td style="font-size:0.7rem"><strong>${escapeHtml(d.label || d.feature || "")}</strong></td>${cells}</tr>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "联赛风格演化" : "League Style Evolution")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${z ? "赛季数" : "Seasons"}: ${nSeasons}${league ? " · " + escapeHtml(league) : ""}</div>`,
+        `</div>`,
+        `<div class="table-scroll" style="margin-bottom:0.6rem"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "维度" : "Dimension"}</th><th>${z ? "中位斜率" : "Med Slope"}</th><th>${z ? "中位Δ" : "Med Δ"}</th><th>Med R²</th><th>${z ? "均值斜率" : "Mean Slope"}</th><th>${z ? "均值Δ" : "Mean Δ"}</th><th>${z ? "趋势" : "Trend"}</th></tr></thead><tbody>${dimRows}</tbody></table></div>`,
+        `<p class="eyebrow" style="margin:0.4rem 0 0.2rem">${escapeHtml(z ? "逐赛季中位值" : "Per-Season Medians")}</p>`,
+        `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "维度" : "Dimension"}</th>${seasonCols}</tr></thead><tbody>${seasonRows}</tbody></table></div>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+async function _renderStyleDriftNeighbors(team, league, topN) {
+    const wrap = document.getElementById("style-drift-neighbors-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    if (!team) {
+        wrap.style.display = "none";
+        return;
+    }
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在检索漂移近邻…" : "Fetching drift neighbors…")}</p>`;
+
+    const data = await fetchStyleDriftNeighbors(team, league, topN, 2);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请求失败" : "Fetch failed.")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "暂无足够数据。" : "Insufficient data.")}</p>`;
+        return;
+    }
+    if (data.status === "team_not_found") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "目标球队赛季数不足或未找到: " + team : "Team not found or insufficient seasons: " + team)}</p>`;
+        return;
+    }
+
+    const neighbors = data.neighbors || [];
+    const targetVec = data.target_drift_vector || [];
+    const vecLabels = data.target_drift_vector_labels || [];
+    const nCand = Number(data.n_candidates ?? 0);
+
+    const targetVecHtml = targetVec.map((v, i) => {
+        return `<span style="font-size:0.65rem;color:var(--text-muted);margin-right:0.4rem">${escapeHtml(vecLabels[i] || "")}: <strong>${Number(v ?? 0).toFixed(4)}</strong></span>`;
+    }).join("");
+
+    const rows = neighbors.map((n, idx) => {
+        const sim = Number(n.cosine_similarity ?? 0);
+        const dist = Number(n.euclidean_distance ?? 0);
+        const simPct = (sim * 100).toFixed(1);
+        return `<tr>
+            <td>${idx + 1}</td>
+            <td><strong>${escapeHtml(n.team || "")}</strong></td>
+            <td>${simPct}%</td>
+            <td>${dist.toFixed(4)}</td>
+            <td>${escapeHtml(n.league || "")}</td>
+            <td>${Number(n.n_seasons ?? 0)}</td>
+        </tr>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "风格漂移近邻" : "Style Drift Neighbors")}</p>`,
+            `<div style="font-size:0.8rem"><strong>${escapeHtml(team)}</strong> <span style="color:var(--text-muted);margin-left:0.4rem;font-size:0.72rem">${z ? "候选" : "Candidates"}: ${nCand}</span></div>`,
+            `<div style="margin-top:0.2rem">${targetVecHtml}</div>`,
+        `</div>`,
+        neighbors.length === 0
+            ? `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无近邻数据。" : "No neighbors found.")}</p>`
+            : `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>#</th><th>${z ? "球队" : "Team"}</th><th>${z ? "相似度" : "Similarity"}</th><th>${z ? "距离" : "Distance"}</th><th>${z ? "联赛" : "League"}</th><th>${z ? "赛季数" : "Seasons"}</th></tr></thead><tbody>${rows}</tbody></table></div>`,
         `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
     ].join("");
 }
