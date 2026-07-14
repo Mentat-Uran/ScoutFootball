@@ -7473,6 +7473,96 @@ def get_style_matchup(
     return _clean_json_value(result)
 
 
+def get_style_neighbors(
+    team: str,
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    top_n: int = 10,
+    n_clusters: int = 4,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Find the nearest tactical-style neighbors for a team.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_style_neighbors`.
+    Interpretive overlay — does not predict match outcomes or rank by quality.
+    """
+    from scoutfootball.features.team_style import compute_style_neighbors
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team}
+    result = compute_style_neighbors(
+        df,
+        team,
+        season=season,
+        league=league,
+        top_n=top_n,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
+def get_league_style_percentiles(
+    team: str,
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Per-dimension percentile rank of a team within its league population.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_league_style_percentiles`.
+    Descriptive overlay — percentiles are relative, not absolute.
+    """
+    from scoutfootball.features.team_style import (
+        compute_league_style_percentiles,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team}
+    result = compute_league_style_percentiles(
+        df,
+        team,
+        season=season,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
+def get_style_atlas(
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    n_bins: int = 8,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """League-wide distribution of team styles across all dimensions.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_style_atlas`.
+    Descriptive population view — does not rank teams by quality.
+    """
+    from scoutfootball.features.team_style import compute_style_atlas
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "dimensions": [],
+        }
+    result = compute_style_atlas(
+        df,
+        season=season,
+        league=league,
+        n_bins=n_bins,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 
