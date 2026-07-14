@@ -946,6 +946,17 @@ const i18n = {
         team_profile_col_pred: "预测",
         team_profile_col_actual: "实际",
         team_profile_col_match: "对阵",
+        compare_multi_title: "多人对比 (2–5)",
+        compare_multi_names_label: "球员名单 (逗号分隔)",
+        compare_multi_button: "对比",
+        compare_multi_pct_matrix: "百分位矩阵",
+        compare_multi_ranking: "综合排名",
+        compare_multi_similarity: "两两相似度",
+        compare_multi_err_min: "至少需要 2 名球员",
+        compare_multi_err_max: "最多支持 5 名球员",
+        compare_multi_err_not_found: "未找到球员",
+        compare_multi_err_no_data: "无评分数据",
+        compare_multi_loading: "加载中...",
     },
     en: {
         nav_overview: "Overview",
@@ -1893,6 +1904,17 @@ const i18n = {
         team_profile_col_pred: "Predicted",
         team_profile_col_actual: "Actual",
         team_profile_col_match: "Match",
+        compare_multi_title: "Multi-Player Compare (2–5)",
+        compare_multi_names_label: "Player names (comma-separated)",
+        compare_multi_button: "Compare",
+        compare_multi_pct_matrix: "Percentile Matrix",
+        compare_multi_ranking: "Composite Ranking",
+        compare_multi_similarity: "Pairwise Similarity",
+        compare_multi_err_min: "Need at least 2 players",
+        compare_multi_err_max: "Maximum 5 players supported",
+        compare_multi_err_not_found: "Players not found",
+        compare_multi_err_no_data: "No rating data available",
+        compare_multi_loading: "Loading...",
     },
 };
 
@@ -2960,6 +2982,198 @@ async function renderPlayerProfile() {
             if (slNote) noteHtml += (noteHtml ? " | " : "") + (appState.lang === "zh" ? "候选: " : "Short: ") + escapeHtml(slNote);
             return `<div><span>${escapeHtml(label)}</span><strong style="font-size:0.82rem;color:var(--text-muted)">${noteHtml}</strong></div>`;
         })()}
+        ${/* Career trajectory */ (() => {
+            const traj = profile ? (profile.career_trajectory || null) : null;
+            if (!traj || traj.available === false || !traj.seasons || traj.seasons.length === 0) return '';
+            const z = appState.lang === 'zh';
+            const seasons = traj.seasons;
+            const peak = traj.peak;
+            const phases = traj.phases || [];
+            const yoy = traj.yoy_deltas || [];
+            const transitions = traj.position_transitions || [];
+            const metrics = traj.metrics || {};
+            const header = z ? '生涯轨迹' : 'Career Trajectory';
+            const peakLabel = z ? '峰值赛季' : 'Peak season';
+            const phasesLabel = z ? '发展阶段' : 'Phases';
+            const yoyLabel = z ? '同比变化' : 'YoY Deltas';
+            const transitionLabel = z ? '位置转换' : 'Position Transitions';
+            const phaseNames = {
+                prospect: z ? '成长期' : 'Prospect',
+                prime: z ? '巅峰期' : 'Prime',
+                decline: z ? '下滑期' : 'Decline',
+                veteran: z ? '老将期' : 'Veteran',
+            };
+            let peakHtml = '';
+            if (peak) {
+                peakHtml = `<div style="display:flex;gap:0.6rem;align-items:baseline;flex-wrap:wrap;font-size:0.78rem;margin-bottom:0.3rem">
+                    <span style="color:var(--text-muted)">${escapeHtml(peakLabel)}:</span>
+                    <strong>${escapeHtml(String(peak.season || ''))}</strong>
+                    <span style="color:var(--text-muted)">·</span>
+                    <span>${escapeHtml(String(peak.optimized_score ?? ''))}</span>
+                    <span style="color:var(--text-muted)">·</span>
+                    <span>${escapeHtml(String(peak.team || ''))}</span>
+                    <span style="color:var(--text-muted)">·</span>
+                    <span>${escapeHtml(String(peak.minutes ?? ''))} min</span>
+                </div>`;
+            }
+            let phasesHtml = '';
+            if (phases.length > 0) {
+                const items = phases.map(p => {
+                    const name = phaseNames[p.phase] || p.phase;
+                    return `<span style="display:inline-block;padding:2px 8px;background:rgba(74,144,217,0.12);border-radius:10px;font-size:0.7rem;margin-right:4px;margin-bottom:2px">${escapeHtml(name)} · ${escapeHtml(String(p.season_start || ''))}–${escapeHtml(String(p.season_end || ''))}</span>`;
+                }).join('');
+                phasesHtml = `<div style="margin-bottom:0.3rem"><span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(phasesLabel)}:</span> ${items}</div>`;
+            }
+            let yoyHtml = '';
+            if (yoy.length > 0) {
+                const cells = yoy.map(d => {
+                    const change = d.score_change;
+                    const arrow = change === null || change === undefined ? '\u2014' : (change > 0 ? '\u2197' : change < 0 ? '\u2198' : '\u2192');
+                    const color = change === null || change === undefined ? 'var(--text-muted)' : (change > 0 ? '#4ade80' : change < 0 ? '#f87171' : 'var(--text-muted)');
+                    return `<div style="text-align:center;padding:4px 4px;background:rgba(255,255,255,0.03);border-radius:4px">
+                        <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(String(d.from_season || d.season_from || ''))}\u2192${escapeHtml(String(d.to_season || d.season_to || ''))}</div>
+                        <div style="font-size:0.85rem;font-weight:600;color:${color}">${arrow} ${change === null || change === undefined ? '\u2014' : (change > 0 ? '+' : '') + change}</div>
+                    </div>`;
+                }).join('');
+                yoyHtml = `<div style="margin-top:0.3rem"><span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(yoyLabel)}:</span><div style="display:grid;grid-template-columns:repeat(${Math.min(yoy.length, 6)},1fr);gap:4px;margin-top:0.2rem">${cells}</div></div>`;
+            }
+            let transitionHtml = '';
+            if (transitions.length > 0) {
+                const items = transitions.map(t => `<span style="display:inline-block;font-size:0.7rem;margin-right:6px;color:var(--text-muted)">${escapeHtml(String(t.from || ''))} \u2192 ${escapeHtml(String(t.to || ''))} <span style="opacity:0.7">(${escapeHtml(String(t.season || ''))})</span></span>`).join('');
+                transitionHtml = `<div style="margin-top:0.3rem"><span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(transitionLabel)}:</span> ${items}</div>`;
+            }
+            const metricsLine = [
+                metrics.n_seasons ? `${z ? '赛季数' : 'Seasons'}: ${metrics.n_seasons}` : '',
+                metrics.career_avg_score !== null && metrics.career_avg_score !== undefined ? `${z ? '均值' : 'Avg'}: ${metrics.career_avg_score}` : '',
+                metrics.peak_score !== null && metrics.peak_score !== undefined ? `${z ? '峰值' : 'Peak'}: ${metrics.peak_score}` : '',
+                metrics.score_consistency_std !== null && metrics.score_consistency_std !== undefined ? `${z ? '稳定度\u03C3' : 'Consistency \u03C3'}: ${metrics.score_consistency_std}` : '',
+                metrics.trajectory_slope !== null && metrics.trajectory_slope !== undefined ? `${z ? '斜率' : 'Slope'}: ${metrics.trajectory_slope}` : '',
+                metrics.career_minutes_total ? `${z ? '累计分钟' : 'Total min'}: ${metrics.career_minutes_total}` : '',
+            ].filter(Boolean).join(' · ');
+            const disclaimer = traj.disclaimer ? `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.4rem;font-style:italic">${escapeHtml(traj.disclaimer)}</div>` : '';
+            return `<div style="grid-column:1/-1;margin-top:0.4rem" id="career-trajectory-panel">
+                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(header)}</span>
+                <div id="career-trajectory-chart" style="width:100%;height:180px;margin-bottom:0.3rem"></div>
+                ${peakHtml}
+                ${phasesHtml}
+                ${yoyHtml}
+                ${transitionHtml}
+                ${metricsLine ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem">${escapeHtml(metricsLine)}</div>` : ''}
+                ${disclaimer}
+            </div>`;
+        })()}
+        ${/* Role fit scores */ (() => {
+            const fit = profile ? (profile.role_fit || null) : null;
+            if (!fit || fit.available === false || !fit.scores) return '';
+            const z = appState.lang === 'zh';
+            const header = z ? '位置适应性' : 'Role Fit Scores';
+            const scores = fit.scores || {};
+            const primary = fit.primary_fit;
+            const alt = fit.alternative_fits || [];
+            const stretch = fit.stretch_fits || [];
+            const positions = ['GK', 'CB', 'FB', 'DM', 'CM', 'AM', 'W', 'ST'];
+            const labels = {
+                GK: 'GK', CB: 'CB', FB: 'FB', DM: 'DM', CM: 'CM', AM: 'AM', W: 'W', ST: 'ST',
+            };
+            const bars = positions.map(pos => {
+                const v = scores[pos];
+                if (v === null || v === undefined) return '';
+                const isPrimary = primary && primary.position === pos;
+                const isAlt = alt.some(a => a.position === pos);
+                const isStretch = stretch.some(s => s.position === pos);
+                const color = isPrimary ? '#4ade80' : isAlt ? '#60a5fa' : isStretch ? '#fbbf24' : '#6b7280';
+                const tag = isPrimary ? (z ? '主' : 'P') : isAlt ? (z ? '备' : 'A') : isStretch ? (z ? '试' : 'S') : '';
+                return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:0.72rem">
+                    <span style="width:28px;color:var(--text-muted)">${escapeHtml(labels[pos])}</span>
+                    <div style="flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden">
+                        <div style="width:${Math.max(0, Math.min(100, v))}%;height:100%;background:${color}"></div>
+                    </div>
+                    <span style="width:32px;text-align:right;font-weight:600">${Math.round(v)}</span>
+                    ${tag ? `<span style="width:18px;text-align:center;font-size:0.65rem;color:${color};font-weight:600">${tag}</span>` : '<span style="width:18px"></span>'}
+                </div>`;
+            }).join('');
+            const legend = `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.3rem">${z ? '主=主位置 备=备选 试=尝试' : 'P=primary A=alternative S=stretch'}</div>`;
+            const disclaimer = fit.disclaimer ? `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.3rem;font-style:italic">${escapeHtml(fit.disclaimer)}</div>` : '';
+            return `<div style="grid-column:1/-1;margin-top:0.4rem">
+                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(header)}</span>
+                ${bars}
+                ${legend}
+                ${disclaimer}
+            </div>`;
+        })()}
+        ${/* Peer benchmark */ (() => {
+            const pb = profile ? (profile.peer_benchmark || null) : null;
+            if (!pb || pb.available === false || !pb.peer_group) return '';
+            const z = appState.lang === 'zh';
+            const header = z ? '同位置基准' : 'Peer Benchmark';
+            const group = pb.peer_group || {};
+            const summary = pb.summary || {};
+            const topPeers = pb.top_peers || [];
+            const metricsObj = pb.metrics || {};
+            const metricLabels = {
+                optimized_score: z ? '综合评分' : 'Overall',
+                npg_p90: 'npg/p90',
+                assists_p90: z ? '助攻/p90' : 'ast/p90',
+                defense_composite: z ? '防守' : 'Defense',
+                possession_composite: z ? '控球' : 'Possession',
+                minutes: z ? '分钟' : 'Minutes',
+            };
+            const metricsList = Object.entries(metricsObj).map(([k, v]) => ({
+                metric: k,
+                label: metricLabels[k] || k,
+                value: v.value,
+                percentile: v.percentile,
+                rank: v.rank,
+            })).slice(0, 6);
+            const groupLine = [
+                group.position_group ? `${z ? '位置' : 'Pos'}: ${escapeHtml(String(group.position_group))}` : '',
+                group.league_tier ? `${z ? '联赛层级' : 'Tier'}: ${escapeHtml(String(group.league_tier))}` : '',
+                group.minutes_band ? `${z ? '分钟带' : 'Min band'}: ${escapeHtml(String(group.minutes_band))}` : '',
+                group.size !== undefined ? `${z ? '样本' : 'N'}: ${group.size}` : '',
+            ].filter(Boolean).join(' · ');
+            const summaryLine = [
+                summary.overall_rank !== null && summary.overall_rank !== undefined ? `${z ? '综合排名' : 'Rank'}: ${summary.overall_rank}/${group.size || '?'}` : '',
+                summary.overall_percentile !== null && summary.overall_percentile !== undefined ? `${z ? '百分位' : 'Pct'}: ${summary.overall_percentile}` : '',
+            ].filter(Boolean).join(' · ');
+            let metricsHtml = '';
+            if (metricsList.length > 0) {
+                const rows = metricsList.map(m => {
+                    return `<tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.04))">
+                        <td style="padding:2px 4px;font-size:0.7rem">${escapeHtml(String(m.label || m.metric || ''))}</td>
+                        <td style="padding:2px 4px;font-size:0.7rem;text-align:right">${escapeHtml(String(m.value ?? '\u2014'))}</td>
+                        <td style="padding:2px 4px;font-size:0.7rem;text-align:right;color:#60a5fa">${escapeHtml(String(m.percentile ?? '\u2014'))}</td>
+                        <td style="padding:2px 4px;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(String(m.rank ?? '\u2014'))}</td>
+                    </tr>`;
+                }).join('');
+                metricsHtml = `<table style="width:100%;border-collapse:collapse;margin-top:0.2rem">
+                    <thead><tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.08))">
+                        <th style="padding:2px 4px;text-align:left;font-weight:500;color:var(--text-muted);font-size:0.65rem">${z ? '指标' : 'Metric'}</th>
+                        <th style="padding:2px 4px;text-align:right;font-weight:500;color:var(--text-muted);font-size:0.65rem">${z ? '值' : 'Value'}</th>
+                        <th style="padding:2px 4px;text-align:right;font-weight:500;color:var(--text-muted);font-size:0.65rem">%</th>
+                        <th style="padding:2px 4px;text-align:right;font-weight:500;color:var(--text-muted);font-size:0.65rem">${z ? '名次' : 'Rank'}</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+            }
+            let topPeersHtml = '';
+            if (topPeers.length > 0) {
+                const items = topPeers.map((p, i) => {
+                    return `<span style="display:inline-block;font-size:0.7rem;margin-right:6px;margin-bottom:2px;padding:2px 6px;background:rgba(255,255,255,0.04);border-radius:8px">
+                        ${i + 1}. ${escapeHtml(String(p.player || p.name || ''))} <span style="color:var(--text-muted)">${escapeHtml(String(p.optimized_score ?? ''))}</span>
+                    </span>`;
+                }).join('');
+                topPeersHtml = `<div style="margin-top:0.3rem"><span style="font-size:0.7rem;color:var(--text-muted)">${z ? 'Top 同侪' : 'Top peers'}:</span> ${items}</div>`;
+            }
+            const disclaimer = pb.disclaimer ? `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.3rem;font-style:italic">${escapeHtml(pb.disclaimer)}</div>` : '';
+            return `<div style="grid-column:1/-1;margin-top:0.4rem">
+                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(header)}</span>
+                ${groupLine ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.2rem">${groupLine}</div>` : ''}
+                ${summaryLine ? `<div style="font-size:0.78rem;font-weight:600;margin-bottom:0.3rem">${summaryLine}</div>` : ''}
+                ${metricsHtml}
+                ${topPeersHtml}
+                ${disclaimer}
+            </div>`;
+        })()}
         ${/* Similar players panel container */ (() => {
             const label = appState.lang === 'zh' ? '相似球员' : 'Similar Players';
             return `<div style="grid-column:1/-1;margin-top:0.5rem" id="similar-players-panel">
@@ -2981,6 +3195,11 @@ async function renderPlayerProfile() {
     // Use real radar data from profile API, or fallback to defaults
     const radar = (profile && profile.radar) ? profile.radar : player.radar;
     renderRadar({ ...player, radar });
+
+    // Career trajectory line chart (rendered after innerHTML is in DOM)
+    if (profile && profile.career_trajectory && profile.career_trajectory.seasons) {
+        _renderCareerTrajectoryChart(profile.career_trajectory);
+    }
 
     // Update confidence badge with profile data if available
     const confidence = profile ? (profile.confidence_level || player.confidence) : player.confidence;
@@ -3047,6 +3266,113 @@ async function renderPlayerProfile() {
 
 function _radarLabels() {
     return ["Attack", "Possession", "Defense", "Reliability", "Impact"];
+}
+
+function _renderCareerTrajectoryChart(trajectory) {
+    if (!trajectory || !trajectory.seasons || trajectory.seasons.length === 0) return;
+    const chart = getChart("career-trajectory-chart");
+    if (!chart) return;
+    const z = appState.lang === 'zh';
+    const seasons = trajectory.seasons;
+    const xData = seasons.map(s => String(s.season || ''));
+    const scoreData = seasons.map(s => s.optimized_score);
+    const minutesData = seasons.map(s => s.minutes);
+    const peak = trajectory.peak;
+    const markPoint = peak ? {
+        data: [{
+            name: z ? '峰值' : 'Peak',
+            coord: [String(peak.season || ''), peak.optimized_score],
+            symbolSize: 28,
+            itemStyle: { color: '#4ade80' },
+            label: { show: false },
+        }],
+    } : undefined;
+    const textColor = chartTextColor();
+    const gridColor = chartGridColor();
+    chart.setOption({
+        grid: { left: 36, right: 36, top: 18, bottom: 22 },
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(20,20,28,0.95)',
+            borderColor: 'rgba(255,255,255,0.08)',
+            textStyle: { color: textColor, fontSize: 11 },
+            formatter: (params) => {
+                if (!Array.isArray(params) || params.length === 0) return '';
+                const idx = params[0].dataIndex;
+                const s = seasons[idx];
+                if (!s) return '';
+                const lines = [
+                    `<div style="font-weight:600;margin-bottom:2px">${escapeHtml(String(s.season || ''))}</div>`,
+                    `<div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(String(s.team || ''))} · ${escapeHtml(String(s.league || ''))}</div>`,
+                    `<div style="margin-top:3px">Score: <strong>${escapeHtml(String(s.optimized_score ?? '\u2014'))}</strong></div>`,
+                    `<div>Min: ${escapeHtml(String(s.minutes ?? '\u2014'))}</div>`,
+                    s.npg_p90 !== null && s.npg_p90 !== undefined ? `<div style="font-size:0.7rem">npg/p90: ${escapeHtml(String(s.npg_p90))}</div>` : '',
+                    s.assists_p90 !== null && s.assists_p90 !== undefined ? `<div style="font-size:0.7rem">ast/p90: ${escapeHtml(String(s.assists_p90))}</div>` : '',
+                ];
+                return lines.filter(Boolean).join('');
+            },
+        },
+        xAxis: {
+            type: 'category',
+            data: xData,
+            axisLine: { lineStyle: { color: gridColor } },
+            axisLabel: { color: textColor, fontSize: 10 },
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: z ? '评分' : 'Score',
+                nameTextStyle: { color: textColor, fontSize: 10 },
+                axisLine: { show: false },
+                axisLabel: { color: textColor, fontSize: 10 },
+                splitLine: { lineStyle: { color: gridColor, type: 'dashed' } },
+            },
+            {
+                type: 'value',
+                name: z ? '分钟' : 'Min',
+                nameTextStyle: { color: textColor, fontSize: 10 },
+                axisLine: { show: false },
+                axisLabel: { color: textColor, fontSize: 10 },
+                splitLine: { show: false },
+            },
+        ],
+        series: [
+            {
+                name: z ? '评分' : 'Score',
+                type: 'line',
+                data: scoreData,
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 6,
+                lineStyle: { color: '#4a90d9', width: 2 },
+                itemStyle: { color: '#4a90d9' },
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(74,144,217,0.25)' },
+                            { offset: 1, color: 'rgba(74,144,217,0)' },
+                        ],
+                    },
+                },
+                markPoint: markPoint,
+            },
+            {
+                name: z ? '分钟' : 'Min',
+                type: 'line',
+                yAxisIndex: 1,
+                data: minutesData,
+                smooth: false,
+                symbol: 'diamond',
+                symbolSize: 4,
+                lineStyle: { color: '#9ca3af', width: 1, type: 'dashed' },
+                itemStyle: { color: '#9ca3af' },
+            },
+        ],
+    });
+    requestAnimationFrame(() => chart.resize());
+    requestAnimationFrame(() => chart.resize());
 }
 
 async function _fetchAndRenderSimilarPlayers(playerName, profile) {
@@ -4088,7 +4414,7 @@ async function fetchAndRenderPredictionAttribution(home, away) {
 
     const methodNote = `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:0.4rem">method: ${escapeHtml(data.method || "permutation-neutralize")} · model: ${escapeHtml(data.model_type || "dixon_coles")} · n_factors: ${escapeHtml(String(data.n_factors ?? factors.length))}</div>`;
 
-    body.innerHTML = `${baselineHtml}${factorsHtml}${methodNote}`;
+    body.innerHTML = [baselineHtml, factorsHtml, methodNote].join("");
     if (btn) btn.disabled = false;
 }
 
@@ -7128,6 +7454,147 @@ async function renderCompare() {
     if (exportJsonBtn && !exportJsonBtn.dataset.bound) {
         exportJsonBtn.dataset.bound = "1";
         exportJsonBtn.addEventListener("click", exportPlayerComparisonJSON);
+    }
+
+    // Wire multi-compare button
+    const multiBtn = document.getElementById("compare-multi-btn");
+    const multiInput = document.getElementById("compare-multi-input");
+    if (multiBtn && !multiBtn.dataset.bound) {
+        multiBtn.dataset.bound = "1";
+        multiBtn.addEventListener("click", async () => {
+            const raw = (multiInput?.value || "").trim();
+            if (!raw) return;
+            const names = raw.split(",").map(n => n.trim()).filter(Boolean);
+            const statusEl = document.getElementById("compare-multi-status");
+            if (names.length < 2) {
+                if (statusEl) statusEl.textContent = t("compare_multi_err_min");
+                return;
+            }
+            if (names.length > 5) {
+                if (statusEl) statusEl.textContent = t("compare_multi_err_max");
+                return;
+            }
+            multiBtn.disabled = true;
+            if (statusEl) statusEl.textContent = t("compare_multi_loading");
+            try {
+                await _renderMultiCompareResult(names);
+                if (statusEl) statusEl.textContent = "";
+            } catch (err) {
+                if (statusEl) statusEl.textContent = String(err?.message || err);
+            } finally {
+                multiBtn.disabled = false;
+            }
+        });
+        const multiHandler = (e) => { if (e.key === "Enter") multiBtn.click(); };
+        if (multiInput) multiInput.addEventListener("keydown", multiHandler);
+    }
+}
+
+async function _renderMultiCompareResult(names) {
+    const resultWrap = document.getElementById("compare-multi-result");
+    if (!resultWrap) return;
+    const z = appState.lang === 'zh';
+    const query = names.map(n => encodeURIComponent(n)).join(",");
+    const data = await fetchJson(`/players/compare-multi?names=${query}`);
+    if (data.error) {
+        let msg = data.error;
+        if (data.error === "need_at_least_two_players") msg = t("compare_multi_err_min");
+        else if (data.error === "too_many_players") msg = t("compare_multi_err_max");
+        else if (data.error === "player_not_found") {
+            const missing = (data.missing || []).join(", ");
+            msg = `${t("compare_multi_err_not_found")}: ${missing}`;
+        }
+        else if (data.error === "no_data") msg = t("compare_multi_err_no_data");
+        resultWrap.style.display = "none";
+        const statusEl = document.getElementById("compare-multi-status");
+        if (statusEl) statusEl.textContent = msg;
+        return;
+    }
+    resultWrap.style.display = "block";
+
+    // Players summary chips
+    const playersEl = document.getElementById("compare-multi-players");
+    if (playersEl) {
+        const chips = (data.players || []).map(p => {
+            return `<span style="display:inline-block;padding:4px 10px;background:rgba(74,144,217,0.12);border-radius:12px;font-size:0.78rem">
+                <strong>${escapeHtml(String(p.name || ''))}</strong>
+                <span style="color:var(--text-muted);margin-left:4px">${escapeHtml(String(p.position_group || ''))} · ${escapeHtml(String(p.team || ''))}</span>
+            </span>`;
+        }).join('');
+        playersEl.innerHTML = chips;
+    }
+
+    // Percentile matrix table
+    const pctThead = document.getElementById("compare-multi-pct-thead");
+    const pctTbody = document.getElementById("compare-multi-pct-tbody");
+    if (pctThead && pctTbody) {
+        const playerNames = (data.players || []).map(p => p.name);
+        const headerCells = [`<th>${z ? '维度' : 'Dimension'}</th>`]
+            .concat(playerNames.map(n => `<th>${escapeHtml(String(n))}</th>`))
+            .join('');
+        pctThead.innerHTML = ["<tr>", headerCells, "</tr>"].join("");
+        const rows = (data.percentile_matrix || []).map(row => {
+            const cells = [`<td style="padding:4px 8px;font-size:0.78rem">${escapeHtml(String(row.label || row.dimension || ''))}</td>`]
+                .concat((row.values || []).map(v => {
+                    if (v === null || v === undefined) {
+                        return `<td style="padding:4px 8px;font-size:0.78rem;color:var(--text-muted);text-align:right">—</td>`;
+                    }
+                    const color = v >= 80 ? '#4ade80' : v >= 50 ? '#60a5fa' : v >= 20 ? '#fbbf24' : '#f87171';
+                    return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;font-weight:600;color:${color}">${v}</td>`;
+                }))
+                .join('');
+            return `<tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.04))">${cells}</tr>`;
+        }).join('');
+        pctTbody.innerHTML = rows;
+    }
+
+    // Composite ranking
+    const rankingEl = document.getElementById("compare-multi-ranking");
+    if (rankingEl) {
+        const rankings = data.composite_ranking || [];
+        const items = rankings.map((r, i) => {
+            const medal = i === 0 ? '\uD83E\uDD47' : i === 1 ? '\uD83E\uDD48' : i === 2 ? '\uD83E\uDD49' : '';
+            return `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:3px">
+                <span>${medal} <strong>${escapeHtml(String(r.player || r.name || ''))}</strong> <span style="color:var(--text-muted);font-size:0.7rem">#${r.rank || (i + 1)}</span></span>
+                <span style="color:#60a5fa;font-weight:600">${escapeHtml(String(r.avg_percentile ?? ''))}</span>
+            </div>`;
+        }).join('');
+        rankingEl.innerHTML = items || '—';
+    }
+
+    // Pairwise similarity matrix (returned as {players, matrix})
+    const simThead = document.getElementById("compare-multi-sim-thead");
+    const simTbody = document.getElementById("compare-multi-sim-tbody");
+    if (simThead && simTbody) {
+        const simObj = data.pairwise_similarity || {};
+        const simPlayers = simObj.players || (data.players || []).map(p => p.name);
+        const simMatrix = simObj.matrix || [];
+        const headerCells = [`<th></th>`]
+            .concat(simPlayers.map(n => `<th>${escapeHtml(String(n))}</th>`))
+            .join('');
+        simThead.innerHTML = ["<tr>", headerCells, "</tr>"].join("");
+        const rows = simPlayers.map((rowName, i) => {
+            const matrixRow = simMatrix[i] || [];
+            const cells = [`<td style="padding:4px 8px;font-size:0.78rem;font-weight:600">${escapeHtml(String(rowName))}</td>`]
+                .concat(simPlayers.map((colName, j) => {
+                    const v = matrixRow[j];
+                    if (v === null || v === undefined) {
+                        return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">—</td>`;
+                    }
+                    const color = v >= 0.8 ? '#4ade80' : v >= 0.6 ? '#60a5fa' : v >= 0.4 ? '#fbbf24' : '#f87171';
+                    const display = (v * 100).toFixed(0);
+                    return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;color:${color}">${display}</td>`;
+                }))
+                .join('');
+            return `<tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.04))">${cells}</tr>`;
+        }).join('');
+        simTbody.innerHTML = rows;
+    }
+
+    // Disclaimer
+    const disclaimerEl = document.getElementById("compare-multi-disclaimer");
+    if (disclaimerEl) {
+        disclaimerEl.textContent = data.disclaimer || '';
     }
 }
 

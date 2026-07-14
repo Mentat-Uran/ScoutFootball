@@ -6621,6 +6621,37 @@ def get_player_profile(
         "low_confidence_reasons": _compute_low_confidence_reasons(row),
         "trend_3seasons": _compute_3season_trend(rows),
     })
+
+    # Embed career intelligence blocks. Each block is wrapped in a
+    # defensive try/except so a failure in one helper never breaks the
+    # base profile response (frontend degrades to "unavailable").
+    try:
+        from scoutfootball.player_intel import compute_career_trajectory
+        result["career_trajectory"] = _clean_json_value(
+            compute_career_trajectory(rows)
+        )
+    except Exception as exc:  # noqa: BLE001
+        result["career_trajectory"] = {
+            "available": False,
+            "error": str(exc),
+        }
+
+    try:
+        from scoutfootball.player_intel import compute_role_fit_scores
+        result["role_fit"] = _clean_json_value(
+            compute_role_fit_scores(row, df)
+        )
+    except Exception as exc:  # noqa: BLE001
+        result["role_fit"] = {"available": False, "error": str(exc)}
+
+    try:
+        from scoutfootball.player_intel import compute_peer_benchmark
+        result["peer_benchmark"] = _clean_json_value(
+            compute_peer_benchmark(row, df)
+        )
+    except Exception as exc:  # noqa: BLE001
+        result["peer_benchmark"] = {"available": False, "error": str(exc)}
+
     # CSV export
     if fmt == "csv":
         return _player_list_to_csv([result])
@@ -7053,6 +7084,193 @@ def _target_payload(target_row, target_player: str, target_season: str, target_p
         "season": target_season,
         "position_group": target_pos,
         "optimized_score": round(float(target_row.get("optimized_score", 0) or 0), 1),
+    })
+
+
+# ── Player career intelligence (trajectory / multi-compare / role-fit / peer) ──
+
+
+def _resolve_player_rows(
+    player_name: str,
+    season: str | None = None,
+    position_group: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series | None]:
+    """Resolve a player's rows from the ratings matrix.
+
+    Returns ``(full_df, player_rows, best_row)``. ``best_row`` is the
+    highest-scoring season for the resolved player (or ``None`` when the
+    player cannot be found). The full frame is returned so callers can pass
+    it to peer / similarity helpers without re-loading.
+    """
+    df = load_player_ratings()
+    if df.empty:
+        return df, df, None
+
+    if "sub_position" in df.columns and "position_group" not in df.columns:
+        df["position_group"] = df["sub_position"]
+
+    exact_mask = df["player"] == player_name
+    if exact_mask.any():
+        mask = exact_mask
+    else:
+        mask = df["player"].str.contains(player_name, case=False, na=False)
+    if position_group:
+        mask = mask & (df["position_group"] == position_group)
+    if season:
+        mask = mask & (df["season"] == season)
+    player_rows = df[mask]
+    if player_rows.empty:
+        return df, player_rows, None
+
+    try:
+        best_row = player_rows.loc[player_rows["optimized_score"].idxmax()]
+    except (ValueError, TypeError):
+        best_row = player_rows.iloc[0]
+    return df, player_rows, best_row
+
+
+def get_player_career_trajectory(
+    player_name: str,
+    season: str | None = None,
+    position_group: str | None = None,
+) -> dict:
+    """Return the full career trajectory for a player.
+
+    Wraps :func:`scoutfootball.player_intel.compute_career_trajectory` with
+    the standard data-loading and fuzzy-match layer used by other player
+    endpoints.
+    """
+    from scoutfootball.player_intel import compute_career_trajectory
+
+    _df, player_rows, _best = _resolve_player_rows(
+        player_name, season=season, position_group=position_group
+    )
+    if player_rows.empty:
+        return {"player": player_name, "found": False}
+    trajectory = compute_career_trajectory(player_rows)
+    return _clean_json_value({
+        "player": player_name,
+        "found": True,
+        **trajectory,
+    })
+
+
+def get_player_comparison_multi(
+    player_names: list[str],
+    season: str | None = None,
+) -> dict:
+    """Compare 2–5 players side-by-side with a percentile matrix.
+
+    Wraps :func:`scoutfootball.player_intel.compute_multi_player_comparison`.
+    Each player is resolved to its best season row (highest score), or to
+    ``season`` when supplied.
+    """
+    from scoutfootball.player_intel import compute_multi_player_comparison
+
+    if not isinstance(player_names, list) or len(player_names) < 2:
+        return {
+            "error": "need_at_least_two_players",
+            "n_players": len(player_names) if isinstance(player_names, list) else 0,
+            "min_required": 2,
+        }
+    if len(player_names) > 5:
+        return {
+            "error": "too_many_players",
+            "n_players": len(player_names),
+            "max_allowed": 5,
+        }
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"error": "no_data"}
+    if "sub_position" in df.columns and "position_group" not in df.columns:
+        df["position_group"] = df["sub_position"]
+
+    rows_by_name: dict[str, Any] = {}
+    missing: list[str] = []
+    for name in player_names:
+        exact_mask = df["player"] == name
+        if exact_mask.any():
+            mask = exact_mask
+        else:
+            mask = df["player"].str.contains(name, case=False, na=False)
+        if season:
+            mask = mask & (df["season"] == season)
+        player_rows = df[mask]
+        if player_rows.empty:
+            missing.append(name)
+            continue
+        try:
+            best_row = player_rows.loc[player_rows["optimized_score"].idxmax()]
+        except (ValueError, TypeError):
+            best_row = player_rows.iloc[0]
+        resolved_name = str(best_row.get("player", name))
+        rows_by_name[resolved_name] = best_row
+
+    if missing:
+        return {
+            "error": "player_not_found",
+            "missing": missing,
+            "resolved": list(rows_by_name.keys()),
+        }
+
+    result = compute_multi_player_comparison(rows_by_name, df)
+    return _clean_json_value(result)
+
+
+def get_player_role_fit(
+    player_name: str,
+    season: str | None = None,
+    position_group: str | None = None,
+) -> dict:
+    """Return multi-position role-fit scores for a player.
+
+    Wraps :func:`scoutfootball.player_intel.compute_role_fit_scores`.
+    """
+    from scoutfootball.player_intel import compute_role_fit_scores
+
+    df, player_rows, best_row = _resolve_player_rows(
+        player_name, season=season, position_group=position_group
+    )
+    if best_row is None:
+        return {"player": player_name, "found": False}
+    result = compute_role_fit_scores(best_row, df)
+    return _clean_json_value({
+        "player": str(best_row.get("player", player_name)),
+        "found": True,
+        "season": str(best_row.get("season", "")),
+        "position_group": str(best_row.get("position_group", "")),
+        "team": str(best_row.get("team", "")),
+        "league": str(best_row.get("league", "")),
+        **result,
+    })
+
+
+def get_player_peer_benchmark(
+    player_name: str,
+    season: str | None = None,
+    position_group: str | None = None,
+) -> dict:
+    """Return peer-group benchmark for a player.
+
+    Wraps :func:`scoutfootball.player_intel.compute_peer_benchmark`.
+    """
+    from scoutfootball.player_intel import compute_peer_benchmark
+
+    df, player_rows, best_row = _resolve_player_rows(
+        player_name, season=season, position_group=position_group
+    )
+    if best_row is None:
+        return {"player": player_name, "found": False}
+    result = compute_peer_benchmark(best_row, df)
+    return _clean_json_value({
+        "player": str(best_row.get("player", player_name)),
+        "found": True,
+        "season": str(best_row.get("season", "")),
+        "position_group": str(best_row.get("position_group", "")),
+        "team": str(best_row.get("team", "")),
+        "league": str(best_row.get("league", "")),
+        **result,
     })
 
 
