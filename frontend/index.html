@@ -535,6 +535,19 @@
                     <div id="momentum-chart" class="chart-box" style="height:280px"></div>
                 </article>
 
+                <article class="liquid-panel compact-panel" id="match-style-matchup-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <div>
+                            <p class="eyebrow" data-i18n="style_matchup_kicker">战术风格对决</p>
+                            <h3 data-i18n="style_matchup_title">风格碰撞诊断</h3>
+                        </div>
+                        <span class="status-pill status-medium" id="style-matchup-pill" style="font-size:0.65rem">–</span>
+                    </div>
+                    <div id="style-matchup-body" style="padding:0.5rem 0.8rem">
+                        <p style="color:var(--text-muted);font-size:0.85rem" data-i18n="style_matchup_loading">加载中...</p>
+                    </div>
+                </article>
+
                 <article class="liquid-panel compact" id="match-attribution-panel" style="margin-top:var(--space);display:none">
                     <div class="panel-head">
                         <div>
@@ -764,6 +777,23 @@
                             </table>
                         </div>
                         <div id="teams-style-recruits" style="display:none;margin-top:1rem"></div>
+                        <div id="teams-style-similarity" style="display:none;margin-top:1rem">
+                            <p class="eyebrow" data-i18n="cluster_similarity_title" style="margin:0.4rem 0 0.2rem">簇间相似度矩阵</p>
+                            <div id="teams-style-similarity-chart" style="width:100%;height:320px"></div>
+                            <div class="table-scroll" style="margin-top:0.4rem">
+                                <table class="data-table" id="teams-style-similarity-table">
+                                    <thead>
+                                        <tr>
+                                            <th data-i18n="cluster_sim_col_a">簇 A</th>
+                                            <th data-i18n="cluster_sim_col_b">簇 B</th>
+                                            <th data-i18n="cluster_sim_col_sim">相似度</th>
+                                            <th data-i18n="cluster_sim_col_clash">关系</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="teams-style-similarity-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </article>
             </section>

@@ -36,6 +36,7 @@ from scoutfootball.api import (
     get_ci_coverage,
     get_ci_width_analysis,
     get_cluster_recruits,
+    get_cluster_similarity_matrix,
     get_confidence_distribution,
     get_confidence_interval_plot,
     get_cumulative_trajectory,
@@ -87,6 +88,7 @@ from scoutfootball.api import (
     get_scenario_stress_test,
     get_scoreline_calibration,
     get_shortlist,
+    get_style_matchup,
     get_team_accuracy,
     get_team_calibration_drift,
     get_team_comparison,
@@ -914,6 +916,38 @@ def create_app() -> FastAPI:
             position_group=position_group,
             top_n=min(100, max(1, top_n)),
             exclude_cluster_teams=exclude_cluster_teams,
+        )
+
+    @app.get("/teams/style-clusters/similarity")
+    def team_style_clusters_similarity(
+        season: str | None = None,
+        league: str | None = None,
+        n_clusters: int = 4,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_cluster_similarity_matrix(
+            season=season,
+            league=league,
+            n_clusters=min(8, max(2, n_clusters)),
+            min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/teams/style-matchup")
+    def team_style_matchup(
+        home_team: str,
+        away_team: str,
+        season: str | None = None,
+        league: str | None = None,
+        n_clusters: int = 4,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_style_matchup(
+            home_team,
+            away_team,
+            season=season,
+            league=league,
+            n_clusters=min(8, max(2, n_clusters)),
+            min_minutes_total=min_minutes_total,
         )
 
     @app.get("/player/{player_name}/profile")

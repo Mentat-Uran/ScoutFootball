@@ -656,6 +656,14 @@ const i18n = {
         momentum_away_goals: "客队进球",
         momentum_minute: "当前分钟",
         momentum_update: "更新",
+        style_matchup_kicker: "战术风格对决",
+        style_matchup_title: "风格碰撞诊断",
+        style_matchup_loading: "加载中...",
+        cluster_similarity_title: "簇间相似度矩阵",
+        cluster_sim_col_a: "簇 A",
+        cluster_sim_col_b: "簇 B",
+        cluster_sim_col_sim: "相似度",
+        cluster_sim_col_clash: "关系",
         backtest_best_decay: "最优 Decay",
         backtest_selection_metric: "选择指标",
         backtest_half_life: "半衰期(天)",
@@ -1641,6 +1649,14 @@ const i18n = {
         momentum_away_goals: "Away Goals",
         momentum_minute: "Current Minute",
         momentum_update: "Update",
+        style_matchup_kicker: "Tactical Style Matchup",
+        style_matchup_title: "Style Clash Diagnostic",
+        style_matchup_loading: "Loading...",
+        cluster_similarity_title: "Inter-cluster Similarity Matrix",
+        cluster_sim_col_a: "Cluster A",
+        cluster_sim_col_b: "Cluster B",
+        cluster_sim_col_sim: "Similarity",
+        cluster_sim_col_clash: "Relationship",
         backtest_best_decay: "Best Decay",
         backtest_selection_metric: "Selection Metric",
         backtest_half_life: "Half-Life (days)",
@@ -2331,6 +2347,34 @@ async function fetchClusterRecruits(clusterId, opts) {
     } catch (err) {
         console.warn("Failed to fetch cluster recruits:", err);
         return { status: "fetch_failed", cluster_id: clusterId, recruits: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchClusterSimilarityMatrix(season, league, nClusters) {
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (league) params.set("league", league);
+    params.set("n_clusters", String(Math.max(2, Math.min(8, Number(nClusters) || 4))));
+    try {
+        const data = await fetchJson("/teams/style-clusters/similarity", { params });
+        return data || { status: "no_data", labels: [], matrix: [], pairs: [] };
+    } catch (err) {
+        console.warn("Failed to fetch cluster similarity matrix:", err);
+        return { status: "fetch_failed", labels: [], matrix: [], pairs: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchStyleMatchup(homeTeam, awayTeam, season, league) {
+    if (!homeTeam || !awayTeam) return { status: "no_teams" };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (league) params.set("league", league);
+    try {
+        const data = await fetchJson(`/teams/style-matchup?home_team=${encodeURIComponent(homeTeam)}&away_team=${encodeURIComponent(awayTeam)}`, { params });
+        return data || { status: "no_data", home_team: homeTeam, away_team: awayTeam };
+    } catch (err) {
+        console.warn("Failed to fetch style matchup:", err);
+        return { status: "fetch_failed", home_team: homeTeam, away_team: awayTeam, error: "fetch_failed" };
     }
 }
 
@@ -8692,6 +8736,13 @@ async function renderMatches() {
     renderHeadToHead(appState.home, appState.away).catch((e) => console.warn("H2H render failed:", e));
     renderMomentum(appState.home, appState.away).catch((e) => console.warn("Momentum render failed:", e));
 
+    // Tactical style matchup diagnostic (non-additive overlay; never modifies the probability model)
+    {
+        const _season = appState.season && appState.season !== "ALL" ? appState.season : "";
+        const _league = appState.league && appState.league !== "ALL" ? appState.league : "";
+        _renderStyleMatchup(appState.home, appState.away, _season, _league).catch((e) => console.warn("Style matchup render failed:", e));
+    }
+
     // Show attribution panel (on-demand via button) and reset its body for the new match
     const attributionPanel = document.getElementById("match-attribution-panel");
     const attributionBody = document.getElementById("match-attribution-body");
@@ -10201,6 +10252,251 @@ async function _renderTeamStyleClusters(season, league, nClusters) {
             series,
         });
     }
+
+    // Cluster similarity matrix (heatmap + pairs table) — non-fatal.
+    _renderClusterSimilarityMatrix(season, league, nClusters).catch((e) => console.warn("Cluster similarity render failed:", e));
+}
+
+async function _renderClusterSimilarityMatrix(season, league, nClusters) {
+    const wrap = document.getElementById("teams-style-similarity");
+    const chartEl = document.getElementById("teams-style-similarity-chart");
+    const tbody = document.getElementById("teams-style-similarity-body");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    const data = await fetchClusterSimilarityMatrix(season, league, nClusters);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.style.display = "none";
+        if (tbody) tbody.innerHTML = "";
+        return;
+    }
+    if (data.status !== "ok" || (data.labels || []).length === 0) {
+        wrap.style.display = "none";
+        if (tbody) tbody.innerHTML = "";
+        return;
+    }
+
+    wrap.style.display = "block";
+    const labels = data.labels || [];
+    const matrix = data.matrix || [];
+    const labelNames = labels.map(l => `${z ? "簇" : "C"} ${l.cluster_id} · ${escapeHtml(l.label || "")}`);
+
+    if (chartEl && typeof echarts !== "undefined") {
+        if (appState.charts.teamStyleSimilarity) appState.charts.teamStyleSimilarity.dispose();
+        const chart = echarts.init(chartEl);
+        appState.charts.teamStyleSimilarity = chart;
+        const heatData = [];
+        for (let i = 0; i < matrix.length; i++) {
+            for (let j = 0; j < (matrix[i] || []).length; j++) {
+                heatData.push([j, i, Number(matrix[i][j] || 0)]);
+            }
+        }
+        chart.setOption({
+            tooltip: {
+                position: "top",
+                formatter: (p) => `${escapeHtml(labelNames[p.value[1]] || "")} × ${escapeHtml(labelNames[p.value[0]] || "")}<br/>${z ? "相似度" : "similarity"}: <strong>${Number(p.value[2]).toFixed(3)}</strong>`,
+            },
+            grid: { left: 120, right: 30, top: 30, bottom: 90 },
+            xAxis: {
+                type: "category",
+                data: labelNames,
+                name: z ? "簇 B" : "Cluster B",
+                nameLocation: "middle",
+                nameGap: 50,
+                axisLabel: { color: chartTextColor(), fontSize: 10, rotate: 30 },
+                splitArea: { show: true },
+            },
+            yAxis: {
+                type: "category",
+                data: labelNames,
+                name: z ? "簇 A" : "Cluster A",
+                nameLocation: "middle",
+                nameGap: 105,
+                axisLabel: { color: chartTextColor(), fontSize: 10 },
+                splitArea: { show: true },
+            },
+            visualMap: {
+                min: -1,
+                max: 1,
+                calculable: true,
+                orient: "horizontal",
+                left: "center",
+                bottom: 5,
+                textStyle: { color: chartTextColor() },
+                inRange: { color: ["#e84c3d", "#f1c40f", "#26c281"] },
+            },
+            series: [{
+                name: z ? "相似度" : "Similarity",
+                type: "heatmap",
+                data: heatData,
+                label: {
+                    show: true,
+                    color: "#1d1d1f",
+                    fontSize: 10,
+                    formatter: (p) => Number(p.value[2]).toFixed(2),
+                },
+            }],
+        });
+        requestAnimationFrame(() => { chart.resize(); });
+    }
+
+    if (tbody) {
+        const pairs = data.pairs || [];
+        const clashLabel = (clash) => {
+            if (clash === "similar") return z ? "相似" : "Similar";
+            if (clash === "complementary") return z ? "互补" : "Complementary";
+            if (clash === "contrasting") return z ? "对立" : "Contrasting";
+            return escapeHtml(String(clash || ""));
+        };
+        const clashClass = (clash) => {
+            if (clash === "similar") return "status-high";
+            if (clash === "complementary") return "status-medium";
+            if (clash === "contrasting") return "status-low";
+            return "status-medium";
+        };
+        if (pairs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="color:var(--text-muted);text-align:center">${escapeHtml(z ? "无簇对数据" : "No pairs")}</td></tr>`;
+        } else {
+            tbody.innerHTML = pairs.map(p => {
+                const sim = Number(p.similarity ?? 0);
+                return `<tr>
+                    <td><span class="status-pill status-high">${escapeHtml(String(p.a ?? ""))}</span> <span style="color:var(--text-muted);font-size:0.72rem">${escapeHtml(p.label_a || "")}</span></td>
+                    <td><span class="status-pill status-high">${escapeHtml(String(p.b ?? ""))}</span> <span style="color:var(--text-muted);font-size:0.72rem">${escapeHtml(p.label_b || "")}</span></td>
+                    <td><strong>${sim.toFixed(3)}</strong></td>
+                    <td><span class="status-pill ${clashClass(p.clash)}">${clashLabel(p.clash)}</span></td>
+                </tr>`;
+            }).join("");
+        }
+    }
+}
+
+async function _renderStyleMatchup(homeTeam, awayTeam, season, league) {
+    const panel = document.getElementById("match-style-matchup-panel");
+    const pill = document.getElementById("style-matchup-pill");
+    const body = document.getElementById("style-matchup-body");
+    if (!panel || !body) return;
+    const z = appState.lang === "zh";
+
+    if (!homeTeam || !awayTeam) {
+        panel.style.display = "none";
+        return;
+    }
+
+    panel.style.display = "block";
+    body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算风格碰撞…" : "Computing style matchup…")}</p>`;
+    if (pill) {
+        pill.className = "status-pill status-medium";
+        pill.textContent = "…";
+    }
+
+    const data = await fetchStyleMatchup(homeTeam, awayTeam, season, league);
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = z ? "请求失败" : "fetch failed";
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请求失败" : "Fetch failed.")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        if (pill) pill.textContent = z ? "无数据" : "no data";
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "暂无足够风格数据。" : "Insufficient style data.")}</p>`;
+        return;
+    }
+    if (data.status === "team_not_found") {
+        const missing = (data.missing || []).map(escapeHtml).join(", ");
+        if (pill) pill.textContent = z ? "球队未找到" : "team not found";
+        body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "未找到风格画像: " : "No style profile for: ")}${missing}</p>`;
+        return;
+    }
+
+    const dims = data.dimensions || [];
+    const gameScript = data.game_script || "balanced";
+    const gameScriptLabel = data.game_script_label || gameScript;
+    const styleDistance = Number(data.style_distance ?? 0);
+    const homeProfile = data.home || {};
+    const awayProfile = data.away || {};
+
+    const scriptPillClass = {
+        asymmetric: "status-medium",
+        open_game: "status-high",
+        defensive_battle: "status-low",
+        possession_duel: "status-medium",
+        balanced: "status-medium",
+    }[gameScript] || "status-medium";
+    if (pill) {
+        pill.className = `status-pill ${scriptPillClass}`;
+        pill.textContent = escapeHtml(gameScriptLabel);
+    }
+
+    const advLabel = (adv) => {
+        if (adv === "home") return z ? "主队" : "Home";
+        if (adv === "away") return z ? "客队" : "Away";
+        return z ? "均衡" : "Even";
+    };
+    const advClass = (adv) => {
+        if (adv === "home") return "status-high";
+        if (adv === "away") return "status-low";
+        return "status-medium";
+    };
+    const dimRows = dims.map(d => {
+        const home = Number(d.home ?? 0);
+        const away = Number(d.away ?? 0);
+        const delta = Number(d.delta_std ?? 0);
+        return `<tr>
+            <td><strong>${escapeHtml(d.label || d.feature || "")}</strong></td>
+            <td>${home.toFixed(2)}</td>
+            <td>${away.toFixed(2)}</td>
+            <td style="color:${delta >= 0 ? "var(--text-strong, #1d1d1f)" : "var(--text-muted)"}">${delta >= 0 ? "+" : ""}${delta.toFixed(2)}</td>
+            <td><span class="status-pill ${advClass(d.advantage)}">${escapeHtml(advLabel(d.advantage))}</span></td>
+        </tr>`;
+    }).join("");
+
+    let clusterHtml = "";
+    const hc = data.home_cluster;
+    const ac = data.away_cluster;
+    if (hc || ac) {
+        const fmtCluster = (c) => c ? `${z ? "簇" : "C"} ${escapeHtml(String(c.cluster_id ?? ""))} · ${escapeHtml(c.label || "")}` : "—";
+        let clashText = "";
+        if (data.cluster_clash === "same_cluster") {
+            clashText = z ? "同簇" : "Same cluster";
+        } else if (typeof data.cluster_similarity === "number") {
+            const clashMap = {
+                similar: z ? "相似" : "Similar",
+                complementary: z ? "互补" : "Complementary",
+                contrasting: z ? "对立" : "Contrasting",
+            };
+            clashText = `${clashMap[data.cluster_clash] || data.cluster_clash || ""} (${Number(data.cluster_similarity).toFixed(2)})`;
+        }
+        clusterHtml = `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px;font-size:0.75rem">`
+            + `<p style="margin:0 0 0.3rem;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "簇上下文" : "Cluster context"}</p>`
+            + `<div style="display:grid;grid-template-columns:auto 1fr;gap:0.15rem 0.6rem">`
+            + `<div style="color:var(--text-muted)">${escapeHtml(homeTeam)}:</div><div>${fmtCluster(hc)}</div>`
+            + `<div style="color:var(--text-muted)">${escapeHtml(awayTeam)}:</div><div>${fmtCluster(ac)}</div>`
+            + (clashText ? `<div style="color:var(--text-muted)">${z ? "簇关系" : "Cluster clash"}:</div><div><strong>${escapeHtml(clashText)}</strong></div>` : "")
+            + `</div></div>`;
+    }
+
+    const profileRow = (p) => {
+        if (!p || !p.raw) return "";
+        const r = p.raw || {};
+        return `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0.2rem 0.6rem;font-size:0.72rem;margin-top:0.2rem">`
+            + `<div><span style="color:var(--text-muted)">${z ? "进攻" : "Atk"}:</span> <strong>${Number(r.npg_p90 ?? 0).toFixed(2)}</strong></div>`
+            + `<div><span style="color:var(--text-muted)">${z ? "创造" : "Cre"}:</span> <strong>${Number(r.assists_p90 ?? 0).toFixed(2)}</strong></div>`
+            + `<div><span style="color:var(--text-muted)">${z ? "防守" : "Def"}:</span> <strong>${Number(r.defense_composite ?? 0).toFixed(1)}</strong></div>`
+            + `<div><span style="color:var(--text-muted)">${z ? "控球" : "Pos"}:</span> <strong>${Number(r.possession_composite ?? 0).toFixed(1)}</strong></div>`
+            + `</div>`;
+    };
+
+    body.innerHTML = [
+        `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 0.8rem;margin-bottom:0.4rem;font-size:0.75rem">`,
+            `<div><strong>${escapeHtml(homeTeam)}</strong>${profileRow(homeProfile)}</div>`,
+            `<div><strong>${escapeHtml(awayTeam)}</strong>${profileRow(awayProfile)}</div>`,
+        `</div>`,
+        `<div style="margin:0.3rem 0;font-size:0.75rem"><span style="color:var(--text-muted)">${z ? "风格距离" : "Style distance"}:</span> <strong>${styleDistance.toFixed(3)}</strong> <span style="color:var(--text-muted);margin-left:0.4rem">${z ? "比赛剧本" : "Game script"}:</span> <strong>${escapeHtml(gameScriptLabel)}</strong></div>`,
+        `<div class="table-scroll" style="margin-top:0.4rem"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "维度" : "Dimension"}</th><th>${escapeHtml(homeTeam)}</th><th>${escapeHtml(awayTeam)}</th><th>Δσ</th><th>${z ? "优势" : "Advantage"}</th></tr></thead><tbody>${dimRows}</tbody></table></div>`,
+        clusterHtml,
+        `<p style="margin:0.5rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
 }
 
 async function _renderClusterRecruits(clusterId, season, league, nClusters) {

@@ -7403,6 +7403,76 @@ def get_cluster_recruits(
     return _clean_json_value(result)
 
 
+def get_cluster_similarity_matrix(
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    n_clusters: int = 4,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Compute an NxN similarity matrix between team-style clusters.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_cluster_similarity_matrix`.
+    """
+    from scoutfootball.features.team_style import (
+        compute_cluster_similarity_matrix,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "n_clusters": 0,
+            "labels": [],
+            "matrix": [],
+            "pairs": [],
+        }
+    result = compute_cluster_similarity_matrix(
+        df,
+        season=season,
+        league=league,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
+def get_style_matchup(
+    home_team: str,
+    away_team: str,
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    n_clusters: int = 4,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Diagnostic of how two teams' tactical styles clash.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_style_matchup`.
+    This is a non-additive interpretive overlay — it does not modify the
+    match-probability model.
+    """
+    from scoutfootball.features.team_style import compute_style_matchup
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "home_team": home_team,
+            "away_team": away_team,
+        }
+    result = compute_style_matchup(
+        df,
+        home_team,
+        away_team,
+        season=season,
+        league=league,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 

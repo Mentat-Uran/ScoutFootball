@@ -1235,6 +1235,90 @@ Side-by-side comparison of two teams with position group radar and diff table.
 
 Team matching is case-insensitive and supports partial name matches.
 
+### GET /teams/style-clusters/similarity
+
+NxN cosine similarity matrix between team-style cluster centroids. Reuses the
+clustering from `GET /teams/style-clusters` and computes pairwise cosine
+similarity between every pair of cluster centroids. Symmetric with 1.0 on the
+diagonal. An upper-triangle `pairs` list (sorted by similarity descending)
+carries a heuristic clash label.
+
+**Query params**: `season` (optional), `league` (optional, case-insensitive),
+`n_clusters` (default 4, clamped to 2–8), `min_minutes_total` (default 1800.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "n_clusters": 4,
+  "season": null,
+  "league": null,
+  "labels": [
+    { "cluster_id": 0, "label": "attacking", "n_teams": 2 }
+  ],
+  "matrix": [[1.0, 0.42], [0.42, 1.0]],
+  "pairs": [
+    { "a": 0, "b": 1, "label_a": "attacking", "label_b": "defensive",
+      "similarity": 0.42, "clash": "complementary" }
+  ],
+  "disclaimer": "Cluster similarities are cosine similarities between standardised cluster centroids..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `insufficient_teams` (<4 teams after filtering),
+`sklearn_unavailable`. The `clash` label maps: `similar` (≥0.75),
+`complementary` (≥0.25), `contrasting` (<0.25). This is a statistical
+affinity description, not a tactical relationship or match-outcome prediction.
+
+### GET /teams/style-matchup
+
+Diagnostic of how two teams' tactical styles clash. Computes each team's
+minutes-weighted style profile, standardises both against the league
+population, and reports per-dimension advantage, overall style distance, a
+heuristic game-script classification, and optional cluster context.
+
+**Query params**: `home_team` (required), `away_team` (required), `season`
+(optional), `league` (optional, case-insensitive), `n_clusters` (default 4,
+clamped to 2–8), `min_minutes_total` (default 1800.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "home_team": "Team A",
+  "away_team": "Team B",
+  "season": null,
+  "league": null,
+  "home": {
+    "team": "Team A", "league": "...", "season": "2526",
+    "n_players": 14, "total_minutes": 18000,
+    "raw": { "npg_p90": 0.55, "assists_p90": 0.28, "defense_composite": 12.0, "possession_composite": 33.0 },
+    "standardized": { "npg_p90": 1.2, "assists_p90": 0.8, "defense_composite": -1.1, "possession_composite": -0.5 }
+  },
+  "away": { "...": "..." },
+  "dimensions": [
+    { "feature": "npg_p90", "label": "attack", "home": 0.55, "away": 0.15,
+      "delta_std": 1.05, "advantage": "home" }
+  ],
+  "style_distance": 2.14,
+  "game_script": "asymmetric",
+  "game_script_label": "asymmetric",
+  "home_cluster": { "cluster_id": 0, "label": "attacking" },
+  "away_cluster": { "cluster_id": 1, "label": "defensive" },
+  "cluster_similarity": 0.42,
+  "cluster_clash": "complementary",
+  "disclaimer": "Style matchup is a non-additive interpretive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `team_not_found` (includes `missing` list). The
+`advantage` field uses a 0.15σ threshold: `home` (delta > 0.15), `away`
+(delta < -0.15), `even` (|delta| ≤ 0.15). `game_script` ∈ {asymmetric,
+open_game, defensive_battle, possession_duel, balanced}. `cluster_clash` ∈
+{same_cluster, similar, complementary, contrasting}. This is a strictly
+non-additive interpretive overlay — it does NOT modify the match-probability
+model; win/draw/loss probabilities remain the sole source of truth.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.
