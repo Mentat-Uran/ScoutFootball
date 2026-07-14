@@ -7640,6 +7640,85 @@ def get_style_drift_neighbors(
     return _clean_json_value(result)
 
 
+def get_position_style_evolution(
+    league: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Compute per-position-group style evolution across seasons.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_position_style_evolution`.
+    Descriptive population view — does not predict future style.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_style_evolution,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "position_groups": []}
+    result = compute_position_style_evolution(
+        df,
+        league=league,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_position_style_drift(
+    position_group: str,
+    league: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Compute a single position group's style drift across seasons.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_position_style_drift`.
+    Descriptive overlay — does not predict future style.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_style_drift,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "position_group": position_group}
+    result = compute_position_style_drift(
+        df,
+        position_group,
+        league=league,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_position_style_drift_neighbors(
+    position_group: str,
+    league: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Find position groups with similar style-drift patterns.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_position_style_drift_neighbors`.
+    Descriptive overlay — does not imply similar quality.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_style_drift_neighbors,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "position_group": position_group}
+    result = compute_position_style_drift_neighbors(
+        df,
+        position_group,
+        league=league,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 

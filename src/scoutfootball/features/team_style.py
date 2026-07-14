@@ -2047,3 +2047,512 @@ def compute_style_drift_neighbors(
             "trajectory. Teams with only 2 seasons have noisier slopes."
         ),
     }
+
+
+# ── Per-position-group style evolution (Round 76) ────────────────────────
+
+_POSITION_GROUPS = ("GK", "CB", "FB", "DM", "CM", "AM", "W", "ST")
+_MIN_PLAYER_MINUTES_DEFAULT = 500.0
+
+
+@dataclass(frozen=True)
+class PositionSeasonProfile:
+    """Single position-group's aggregated style signature for one season."""
+
+    position_group: str
+    season: str
+    n_players: int
+    total_minutes: float
+    attack: float
+    creation: float
+    defense: float
+    possession: float
+
+
+def _aggregate_position_season_profiles(
+    df: pd.DataFrame,
+    *,
+    league: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> list[PositionSeasonProfile]:
+    """Aggregate per-player style composites to position-group-season level.
+
+    Groups the rating matrix by ``(position_group, season)`` and computes
+    a minutes-weighted average of the four style features across all
+    players at that position group in that season. Players with fewer
+    than ``min_player_minutes`` are filtered out to reduce noise from
+    bench appearances.
+
+    Returns a list of :class:`PositionSeasonProfile` sorted by
+    ``(position_group, season)``.
+    """
+    if df.empty:
+        return []
+
+    work = df.copy()
+    if league is not None:
+        work = work[
+            work["league"].astype(str).str.lower()
+            == str(league).lower()
+        ]
+    # Normalize position_group column.
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return []
+    if work.empty:
+        return []
+
+    # Keep only standard position groups (case-insensitive, normalize to
+    # upper-case canonical form).
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if work.empty:
+        return []
+
+    profiles: list[PositionSeasonProfile] = []
+    for (pos, season), group in work.groupby(
+        ["position_group", "season"], sort=False
+    ):
+        minutes = group["minutes"].apply(
+            pd.to_numeric, errors="coerce"
+        ).fillna(0.0).to_numpy(dtype=float)
+        mask = minutes >= min_player_minutes
+        if not mask.any():
+            continue
+        minutes_f = minutes[mask]
+        total_minutes = float(minutes_f.sum())
+        if total_minutes <= 0:
+            continue
+        weights = minutes_f / total_minutes
+
+        vals: dict[str, float] = {}
+        for feat in _STYLE_FEATURES:
+            col = (
+                group[feat]
+                .apply(pd.to_numeric, errors="coerce")
+                .fillna(0.0)
+                .to_numpy(dtype=float)[mask]
+            )
+            vals[feat] = float(np.average(col, weights=weights))
+
+        profiles.append(
+            PositionSeasonProfile(
+                position_group=str(pos).upper(),
+                season=str(season),
+                n_players=int(mask.sum()),
+                total_minutes=round(total_minutes),
+                attack=round(vals["npg_p90"], 3),
+                creation=round(vals["assists_p90"], 3),
+                defense=round(vals["defense_composite"], 2),
+                possession=round(vals["possession_composite"], 2),
+            )
+        )
+    return profiles
+
+
+def _pos_feat_to_attr(feat: str) -> str:
+    """Map a feature column name to the PositionSeasonProfile attribute."""
+    return {
+        "npg_p90": "attack",
+        "assists_p90": "creation",
+        "defense_composite": "defense",
+        "possession_composite": "possession",
+    }[feat]
+
+
+def compute_position_style_evolution(
+    df: pd.DataFrame,
+    *,
+    league: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Compute per-position-group style evolution across seasons.
+
+    For each standard position group (GK/CB/FB/DM/CM/AM/W/ST) that has
+    at least 2 seasons of profiles, fits a least-squares slope across
+    seasons for each style dimension and reports the per-season values,
+    net delta, slope, R² consistency, and an evolution label
+    (rising/falling/stable using a 5% relative threshold).
+
+    Position groups with fewer than 2 seasons are listed in
+    ``skipped_positions`` with the season count.
+
+    This is a descriptive population view — it does not predict future
+    style or rank positions by quality.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = _aggregate_position_season_profiles(
+        df,
+        league=league,
+        min_player_minutes=min_player_minutes,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "disclaimer": (
+                "No position-group-season profiles meet the minimum "
+                f"player minutes threshold ({min_player_minutes:.0f} min)."
+            ),
+        }
+
+    # Group by position_group.
+    by_pos: dict[str, list[PositionSeasonProfile]] = {}
+    for p in profiles:
+        by_pos.setdefault(p.position_group, []).append(p)
+
+    all_seasons = sorted({p.season for p in profiles})
+    n_seasons_total = len(all_seasons)
+
+    position_groups: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for pos in sorted(by_pos.keys()):
+        pos_profiles = sorted(by_pos[pos], key=lambda p: p.season)
+        seasons = [p.season for p in pos_profiles]
+        n_seasons = len(seasons)
+        if n_seasons < 2:
+            skipped.append({
+                "position_group": pos,
+                "n_seasons": n_seasons,
+                "seasons": seasons,
+            })
+            continue
+
+        x = np.arange(n_seasons, dtype=float)
+        dimensions: list[dict[str, Any]] = []
+        for feat in _STYLE_FEATURES:
+            attr = _pos_feat_to_attr(feat)
+            vals = np.array(
+                [getattr(p, attr) for p in pos_profiles], dtype=float
+            )
+            slope, r2 = _linear_slope_and_r2(x, vals)
+            delta = float(vals[-1] - vals[0])
+            mean_val = float(vals.mean())
+            label = _drift_label(delta, mean_val)
+            dimensions.append({
+                "feature": feat,
+                "label": _DIM_LABELS[feat],
+                "slope": round(slope, 4),
+                "delta": round(delta, 3),
+                "r_squared": round(r2, 3),
+                "mean": round(mean_val, 3),
+                "evolution_label": label,
+                "per_season": [
+                    {
+                        "season": seasons[i],
+                        "value": round(float(vals[i]), 3),
+                        "n_players": pos_profiles[i].n_players,
+                    }
+                    for i in range(n_seasons)
+                ],
+            })
+
+        position_groups.append({
+            "position_group": pos,
+            "seasons": seasons,
+            "n_seasons": n_seasons,
+            "dimensions": dimensions,
+        })
+
+    if not position_groups:
+        return {
+            "status": "insufficient_seasons",
+            "league": league,
+            "seasons": all_seasons,
+            "n_seasons": n_seasons_total,
+            "skipped_positions": skipped,
+            "disclaimer": (
+                "Position style evolution requires at least 2 seasons; "
+                "no position group has enough seasons."
+            ),
+        }
+
+    return {
+        "status": "ok",
+        "league": league,
+        "seasons": all_seasons,
+        "n_seasons": n_seasons_total,
+        "position_groups": position_groups,
+        "skipped_positions": skipped,
+        "disclaimer": (
+            "Per-position-group style evolution is a descriptive "
+            "population view computed from minutes-weighted per-player "
+            "style composites. Slopes and deltas describe observed "
+            "changes — they do not predict future style or rank positions "
+            "by quality. Evolution labels use a 5% relative threshold and "
+            "are less reliable with only 2 seasons or uneven player "
+            "coverage."
+        ),
+    }
+
+
+def compute_position_style_drift(
+    df: pd.DataFrame,
+    position_group: str,
+    *,
+    league: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Compute a single position group's style drift across seasons.
+
+    For the target position group, fits a least-squares slope across
+    available seasons for each style dimension and reports the
+    per-season values, net delta, slope, R² consistency, and a drift
+    label (rising/falling/stable using a 5% relative threshold).
+
+    Requires at least 2 seasons of profiles for the target position
+    group. Returns ``status="insufficient_seasons"`` otherwise.
+
+    This is a descriptive overlay — it does not predict future style
+    or rank positions by quality.
+    """
+    if df.empty or not position_group:
+        return {
+            "status": "no_data",
+            "position_group": position_group,
+            "disclaimer": (
+                "Empty rating matrix or missing position group name."
+            ),
+        }
+
+    target_pos = str(position_group).strip().upper()
+    if target_pos not in _POSITION_GROUPS:
+        return {
+            "status": "invalid_position",
+            "position_group": position_group,
+            "valid_positions": list(_POSITION_GROUPS),
+            "disclaimer": (
+                f"Unknown position group '{position_group}'. "
+                f"Valid groups: {', '.join(_POSITION_GROUPS)}."
+            ),
+        }
+
+    profiles = _aggregate_position_season_profiles(
+        df,
+        league=league,
+        min_player_minutes=min_player_minutes,
+    )
+    pos_profiles = [
+        p for p in profiles if p.position_group == target_pos
+    ]
+    if not pos_profiles:
+        return {
+            "status": "position_not_found",
+            "position_group": target_pos,
+            "league": league,
+            "disclaimer": (
+                f"No profiles found for position group '{target_pos}'"
+                + (f" in league '{league}'." if league else ".")
+            ),
+        }
+
+    pos_profiles.sort(key=lambda p: p.season)
+    seasons = [p.season for p in pos_profiles]
+    n_seasons = len(seasons)
+    if n_seasons < 2:
+        return {
+            "status": "insufficient_seasons",
+            "position_group": target_pos,
+            "league": league,
+            "seasons": seasons,
+            "n_seasons": n_seasons,
+            "disclaimer": (
+                "Position style drift requires at least 2 seasons; "
+                f"only {n_seasons} found."
+            ),
+        }
+
+    x = np.arange(n_seasons, dtype=float)
+    dimensions: list[dict[str, Any]] = []
+    for feat in _STYLE_FEATURES:
+        attr = _pos_feat_to_attr(feat)
+        vals = np.array(
+            [getattr(p, attr) for p in pos_profiles], dtype=float
+        )
+        slope, r2 = _linear_slope_and_r2(x, vals)
+        delta = float(vals[-1] - vals[0])
+        mean_val = float(vals.mean())
+        label = _drift_label(delta, mean_val)
+        dimensions.append({
+            "feature": feat,
+            "label": _DIM_LABELS[feat],
+            "slope": round(slope, 4),
+            "delta": round(delta, 3),
+            "r_squared": round(r2, 3),
+            "mean": round(mean_val, 3),
+            "drift_label": label,
+            "per_season": [
+                {
+                    "season": seasons[i],
+                    "value": round(float(vals[i]), 3),
+                    "n_players": pos_profiles[i].n_players,
+                }
+                for i in range(n_seasons)
+            ],
+        })
+
+    return {
+        "status": "ok",
+        "position_group": target_pos,
+        "league": league,
+        "seasons": seasons,
+        "n_seasons": n_seasons,
+        "dimensions": dimensions,
+        "disclaimer": (
+            "Position style drift is a descriptive trajectory computed "
+            "from minutes-weighted per-player style composites across "
+            "seasons for one position group. Slopes and deltas describe "
+            "observed changes — they do not predict future style or rank "
+            "positions by quality. The drift label uses a 5% relative "
+            "threshold and is less reliable with only 2 seasons or low "
+            "sample sizes."
+        ),
+    }
+
+
+def compute_position_style_drift_neighbors(
+    df: pd.DataFrame,
+    position_group: str,
+    *,
+    league: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Find position groups with similar style-drift patterns.
+
+    For every position group with at least 2 seasons of profiles,
+    computes a 4-dimensional drift vector (least-squares slope per
+    style dimension). Ranks other position groups by cosine similarity
+    to the target's drift vector (descending), with Euclidean distance
+    on the raw slope vectors for reference.
+
+    There are at most 8 standard position groups (GK/CB/FB/DM/CM/AM/W/ST),
+    so the neighbors list is short by design — it shows which positions
+    are evolving in similar directions (e.g. FB and W both rising in
+    attack).
+
+    This is a descriptive overlay — similar drift does not imply similar
+    quality or future trajectory.
+    """
+    if df.empty or not position_group:
+        return {
+            "status": "no_data",
+            "position_group": position_group,
+            "disclaimer": (
+                "Empty rating matrix or missing position group name."
+            ),
+        }
+
+    target_pos = str(position_group).strip().upper()
+    if target_pos not in _POSITION_GROUPS:
+        return {
+            "status": "invalid_position",
+            "position_group": position_group,
+            "valid_positions": list(_POSITION_GROUPS),
+            "disclaimer": (
+                f"Unknown position group '{position_group}'. "
+                f"Valid groups: {', '.join(_POSITION_GROUPS)}."
+            ),
+        }
+
+    profiles = _aggregate_position_season_profiles(
+        df,
+        league=league,
+        min_player_minutes=min_player_minutes,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "position_group": target_pos,
+            "disclaimer": (
+                "No position-group-season profiles meet the minimum "
+                f"player minutes threshold ({min_player_minutes:.0f} min)."
+            ),
+        }
+
+    # Group by position_group.
+    by_pos: dict[str, list[PositionSeasonProfile]] = {}
+    for p in profiles:
+        by_pos.setdefault(p.position_group, []).append(p)
+
+    # Compute drift vectors for all positions with >= 2 seasons.
+    drift_vectors: dict[str, np.ndarray] = {}
+    pos_seasons: dict[str, list[str]] = {}
+    for pos_name, pos_profiles in by_pos.items():
+        pos_profiles.sort(key=lambda p: p.season)
+        if len(pos_profiles) < 2:
+            continue
+        x = np.arange(len(pos_profiles), dtype=float)
+        vec = np.zeros(len(_STYLE_FEATURES), dtype=float)
+        for i, feat in enumerate(_STYLE_FEATURES):
+            attr = _pos_feat_to_attr(feat)
+            vals = np.array(
+                [getattr(p, attr) for p in pos_profiles], dtype=float
+            )
+            slope, _ = _linear_slope_and_r2(x, vals)
+            vec[i] = slope
+        drift_vectors[pos_name] = vec
+        pos_seasons[pos_name] = [p.season for p in pos_profiles]
+
+    if target_pos not in drift_vectors:
+        return {
+            "status": "position_not_found",
+            "position_group": target_pos,
+            "league": league,
+            "disclaimer": (
+                f"Target position '{target_pos}' has fewer than 2 "
+                "seasons of profiles; cannot compute a drift vector."
+            ),
+        }
+
+    target_vec = drift_vectors[target_pos]
+    target_norm = np.linalg.norm(target_vec)
+
+    neighbors: list[dict[str, Any]] = []
+    for pos_name, vec in drift_vectors.items():
+        if pos_name == target_pos:
+            continue
+        vec_norm = np.linalg.norm(vec)
+        denom = target_norm * vec_norm
+        if denom > 1e-12:
+            cos_sim = float(np.dot(target_vec, vec) / denom)
+        else:
+            cos_sim = 0.0
+        dist = float(np.linalg.norm(target_vec - vec))
+        neighbors.append({
+            "position_group": pos_name,
+            "n_seasons": len(pos_seasons[pos_name]),
+            "seasons": pos_seasons[pos_name],
+            "cosine_similarity": round(cos_sim, 4),
+            "euclidean_distance": round(dist, 4),
+            "drift_vector": [round(float(v), 4) for v in vec],
+        })
+
+    neighbors.sort(key=lambda n: n["cosine_similarity"], reverse=True)
+
+    return {
+        "status": "ok",
+        "position_group": target_pos,
+        "league": league,
+        "seasons": pos_seasons[target_pos],
+        "n_seasons": len(pos_seasons[target_pos]),
+        "target_drift_vector": [round(float(v), 4) for v in target_vec],
+        "target_drift_vector_labels": list(_STYLE_FEATURES),
+        "n_candidates": len(drift_vectors) - 1,
+        "neighbors": neighbors,
+        "disclaimer": (
+            "Position style drift neighbors are a descriptive overlay "
+            "computed from least-squares style slopes across seasons. "
+            "Cosine similarity on drift vectors identifies position "
+            "groups whose styles are evolving in a similar direction — "
+            "it does not imply similar quality, identical tactical "
+            "roles, or future trajectory. There are at most 8 standard "
+            "position groups, so the neighbor list is short by design."
+        ),
+    }

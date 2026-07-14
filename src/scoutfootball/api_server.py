@@ -72,6 +72,9 @@ from scoutfootball.api import (
     get_player_ratings,
     get_player_role_fit,
     get_player_style_fit,
+    get_position_style_drift,
+    get_position_style_drift_neighbors,
+    get_position_style_evolution,
     get_prediction_anomalies,
     get_prediction_attribution,
     get_prediction_attribution_ci,
@@ -1038,6 +1041,40 @@ def create_app() -> FastAPI:
             top_n=min(50, max(1, top_n)),
             min_seasons=max(2, min_seasons),
             min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/positions/style-evolution")
+    def position_style_evolution(
+        league: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_position_style_evolution(
+            league=league,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/positions/{position_group}/style-drift")
+    def position_style_drift(
+        position_group: str,
+        league: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_position_style_drift(
+            position_group,
+            league=league,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/positions/{position_group}/style-drift-neighbors")
+    def position_style_drift_neighbors(
+        position_group: str,
+        league: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_position_style_drift_neighbors(
+            position_group,
+            league=league,
+            min_player_minutes=min_player_minutes,
         )
 
     @app.get("/player/{player_name}/profile")

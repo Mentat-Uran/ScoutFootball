@@ -850,6 +850,27 @@
                     <div id="style-evolution-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                     <div id="style-drift-neighbors-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                 </article>
+
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="position_style_title">位置组风格演化</h3>
+                        <span id="position-style-pill" class="status-pill status-medium">—</span>
+                    </div>
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:var(--space)">
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_team">位置组</label>
+                            <input type="text" id="position-style-pos" class="filter-input" placeholder="e.g. FB" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:2;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_league">联赛</label>
+                            <input type="text" id="position-style-league" class="filter-input" placeholder="e.g. Premier League" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="position-style-btn" class="cta-button" type="button" data-i18n="position_style_button">分析</button>
+                    </div>
+                    <div id="position-evolution-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="position-drift-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="position-drift-neighbors-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                </article>
             </section>
 
             <section class="view" id="view-scouting" aria-label="scouting">
