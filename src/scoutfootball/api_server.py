@@ -40,6 +40,7 @@ from scoutfootball.api import (
     get_cluster_similarity_matrix,
     get_confidence_distribution,
     get_confidence_interval_plot,
+    get_cross_league_action_comparison,
     get_cross_league_position_comparison,
     get_cumulative_trajectory,
     get_data_drift,
@@ -56,6 +57,8 @@ from scoutfootball.api import (
     get_form_weighted_prediction,
     get_h2h_bias_correction,
     get_head_to_head,
+    get_league_action_atlas,
+    get_league_action_evolution,
     get_league_action_percentiles,
     get_league_error_analysis,
     get_league_style_evolution,
@@ -1156,6 +1159,40 @@ def create_app() -> FastAPI:
     ):
         return get_team_action_profile(
             league=league,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/action-atlas")
+    def team_action_atlas(
+        season: str | None = None,
+        league: str | None = None,
+        n_bins: int = Query(8, ge=3, le=20),
+        min_player_minutes: float = 500.0,
+    ):
+        return get_league_action_atlas(
+            season=season,
+            league=league,
+            n_bins=n_bins,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/action-evolution")
+    def team_action_evolution(
+        league: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_league_action_evolution(
+            league=league,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/cross-league-action")
+    def team_cross_league_action(
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_cross_league_action_comparison(
             season=season,
             min_player_minutes=min_player_minutes,
         )

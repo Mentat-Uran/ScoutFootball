@@ -15,7 +15,10 @@ from scoutfootball.features.team_style import (
     compute_action_based_position_similarity,
     compute_cluster_recruits,
     compute_cluster_similarity_matrix,
+    compute_cross_league_action_comparison,
     compute_cross_league_position_comparison,
+    compute_league_action_atlas,
+    compute_league_action_evolution,
     compute_league_action_percentiles,
     compute_league_style_evolution,
     compute_league_style_percentiles,
@@ -3167,3 +3170,483 @@ def test_team_action_similarity_neighbor_fields(action_df):
         assert "euclidean_distance" in n
         assert "n_players" in n
         assert "total_minutes" in n
+
+
+# ── Round 80: league action atlas / evolution / cross-league ────────────
+
+
+def _build_multi_season_action_df() -> pd.DataFrame:
+    """Build a 3-season frame for league action evolution tests.
+
+    Adds two extra seasons (2425, 2324) on top of the 2526 layout so
+    compute_league_action_evolution has >= 2 seasons to fit slopes.
+    Tackles rise season-over-season to produce a 'rising' drift label;
+    fouls decline to produce a 'falling' label.
+    """
+    base = _build_action_df()
+    extra_rows: list[dict] = []
+
+    def add(
+        team: str,
+        league: str,
+        pos: str,
+        season: str,
+        n: int,
+        *,
+        tackles: float,
+        interceptions: float,
+        crosses: float,
+        fouls_drawn: float,
+        fouls: float,
+        g_a_volume: float,
+        npg_p90: float,
+    ) -> None:
+        for i in range(n):
+            extra_rows.append({
+                "player": f"{team} {pos} {season} P{i}",
+                "player_id": f"{team.replace(' ', '_')}_{pos}_{season}_{i}",
+                "team": team,
+                "league": league,
+                "season": season,
+                "position_group": pos,
+                "sub_position": pos,
+                "minutes": 1000.0 - i * 50,
+                "matches": 15,
+                "npg_p90": npg_p90 + i * 0.01,
+                "assists_p90": 0.1,
+                "g_a_volume": g_a_volume,
+                "tackles_p90": tackles + i * 0.05,
+                "interceptions_p90": interceptions + i * 0.02,
+                "crosses_p90": crosses,
+                "fouls_drawn_p90": fouls_drawn,
+                "fouls_p90": fouls,
+                "defense_composite": 50.0,
+                "possession_composite": 50.0,
+                "optimized_score": 70.0,
+                "npg_trend": 0.0,
+                "def_trend": 0.0,
+                "pos_trend": 0.0,
+                "confidence_level": "HIGH",
+                "low_appearance": False,
+            })
+
+    # Season 2425 — tackles lower, fouls higher than 2526
+    add("PL Team", "Premier League", "ST", "2425", 3,
+        tackles=0.1, interceptions=0.1, crosses=0.1,
+        fouls_drawn=0.5, fouls=0.8, g_a_volume=7.0, npg_p90=0.4)
+    add("PL Team", "Premier League", "CB", "2425", 3,
+        tackles=2.3, interceptions=1.8, crosses=0.05,
+        fouls_drawn=0.2, fouls=1.5, g_a_volume=1.0, npg_p90=0.05)
+    add("LL Team", "La Liga", "ST", "2425", 2,
+        tackles=0.2, interceptions=0.2, crosses=0.2,
+        fouls_drawn=0.6, fouls=0.9, g_a_volume=5.0, npg_p90=0.3)
+
+    # Season 2324 — tackles lowest, fouls highest
+    add("PL Team", "Premier League", "ST", "2324", 3,
+        tackles=0.05, interceptions=0.05, crosses=0.1,
+        fouls_drawn=0.5, fouls=1.2, g_a_volume=6.0, npg_p90=0.3)
+    add("PL Team", "Premier League", "CB", "2324", 3,
+        tackles=2.0, interceptions=1.6, crosses=0.05,
+        fouls_drawn=0.2, fouls=2.0, g_a_volume=1.0, npg_p90=0.05)
+    add("LL Team", "La Liga", "ST", "2324", 2,
+        tackles=0.1, interceptions=0.1, crosses=0.2,
+        fouls_drawn=0.6, fouls=1.4, g_a_volume=4.0, npg_p90=0.2)
+
+    return pd.concat([base, pd.DataFrame(extra_rows)], ignore_index=True)
+
+
+@pytest.fixture
+def multi_season_action_df() -> pd.DataFrame:
+    return _build_multi_season_action_df()
+
+
+# ── compute_league_action_atlas ──────────────────────────────────────────
+
+
+def test_league_action_atlas_empty():
+    """Empty input should return no_data."""
+    result = compute_league_action_atlas(pd.DataFrame())
+    assert result["status"] == "no_data"
+    assert "disclaimer" in result
+
+
+def test_league_action_atlas_basic(action_df):
+    """Should return ok with 7 dimensions and 2 teams in population."""
+    result = compute_league_action_atlas(action_df, season="2526")
+    assert result["status"] == "ok"
+    assert result["n_population"] == 2  # PL Team + LL Team
+    assert len(result["dimensions"]) == 7
+
+
+def test_league_action_atlas_action_features_list(action_df):
+    """action_features should list the 7 features in canonical order."""
+    result = compute_league_action_atlas(action_df, season="2526")
+    assert result["action_features"] == [
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    ]
+
+
+def test_league_action_atlas_dimension_fields(action_df):
+    """Each dimension should have histogram bins, quartiles, and outliers."""
+    result = compute_league_action_atlas(action_df, season="2526")
+    for d in result["dimensions"]:
+        assert "feature" in d
+        assert "label" in d
+        assert "min" in d
+        assert "max" in d
+        assert "mean" in d
+        assert "median" in d
+        assert "q1" in d
+        assert "q3" in d
+        assert "iqr" in d
+        assert isinstance(d["bins"], list)
+        assert len(d["bins"]) >= 1
+        for b in d["bins"]:
+            assert "low" in b
+            assert "high" in b
+            assert "count" in b
+        assert isinstance(d["outliers"], list)
+
+
+def test_league_action_atlas_n_bins(action_df):
+    """n_bins should produce that many bins when min != max."""
+    result = compute_league_action_atlas(action_df, season="2526", n_bins=5)
+    assert result["status"] == "ok"
+    # At least one dimension should have 5 bins (tackles_p90 has range)
+    tackles_dim = next(d for d in result["dimensions"] if d["feature"] == "tackles_p90")
+    # With only 2 teams, all values collapse to one bin if equal; otherwise n_bins
+    assert len(tackles_dim["bins"]) == 5 or len(tackles_dim["bins"]) == 1
+
+
+def test_league_action_atlas_n_bins_clamped(action_df):
+    """n_bins should be clamped to [3, 20]."""
+    result_low = compute_league_action_atlas(action_df, season="2526", n_bins=1)
+    result_high = compute_league_action_atlas(action_df, season="2526", n_bins=99)
+    assert result_low["status"] == "ok"
+    assert result_high["status"] == "ok"
+
+
+def test_league_action_atlas_league_filter(action_df):
+    """league filter should narrow population to 1 team."""
+    result = compute_league_action_atlas(
+        action_df, season="2526", league="Premier League"
+    )
+    assert result["status"] == "ok"
+    assert result["n_population"] == 1
+    assert result["league"] == "Premier League"
+
+
+def test_league_action_atlas_season_filter(action_df):
+    """season=2425 should return no_data since fixture only has 2526."""
+    result = compute_league_action_atlas(action_df, season="2425")
+    assert result["status"] == "no_data"
+
+
+def test_league_action_atlas_min_minutes_too_high(action_df):
+    """min_player_minutes higher than any player should return no_data."""
+    result = compute_league_action_atlas(
+        action_df, season="2526", min_player_minutes=5000.0
+    )
+    assert result["status"] == "no_data"
+
+
+def test_league_action_atlas_outlier_detection(action_df):
+    """Outliers should carry team, league, season, value, z_score, direction."""
+    result = compute_league_action_atlas(action_df, season="2526")
+    # With only 2 teams, std may be 0 for some features → no outliers
+    # Just verify outlier schema when present.
+    for d in result["dimensions"]:
+        for o in d["outliers"]:
+            assert "team" in o
+            assert "league" in o
+            assert "season" in o
+            assert "value" in o
+            assert "z_score" in o
+            assert "direction" in o
+            assert o["direction"] in {"high", "low"}
+            assert abs(o["z_score"]) >= 2.0
+
+
+def test_league_action_atlas_disclaimer_present(action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_league_action_atlas(action_df, season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_league_action_atlas_no_mutation(action_df):
+    """Original DataFrame should not be mutated."""
+    original = action_df.copy()
+    compute_league_action_atlas(action_df, season="2526")
+    pd.testing.assert_frame_equal(action_df, original)
+
+
+def test_league_action_atlas_single_team_collapses_bins(action_df):
+    """With one team, min==max for every feature → single bin with full count."""
+    result = compute_league_action_atlas(
+        action_df, season="2526", league="La Liga"
+    )
+    assert result["status"] == "ok"
+    assert result["n_population"] == 1
+    for d in result["dimensions"]:
+        # Single team → all bins collapse to one bin containing the only team
+        assert len(d["bins"]) == 1
+        assert d["bins"][0]["count"] == 1
+
+
+# ── compute_league_action_evolution ──────────────────────────────────────
+
+
+def test_league_action_evolution_empty():
+    """Empty input should return no_data."""
+    result = compute_league_action_evolution(pd.DataFrame())
+    assert result["status"] == "no_data"
+
+
+def test_league_action_evolution_insufficient_seasons(action_df):
+    """Single-season fixture should return insufficient_seasons."""
+    result = compute_league_action_evolution(action_df)
+    assert result["status"] == "insufficient_seasons"
+    assert result["n_seasons"] == 1
+
+
+def test_league_action_evolution_basic(multi_season_action_df):
+    """Multi-season fixture should return ok with 3 seasons."""
+    result = compute_league_action_evolution(multi_season_action_df)
+    assert result["status"] == "ok"
+    assert result["n_seasons"] == 3
+    assert result["seasons"] == ["2324", "2425", "2526"]
+
+
+def test_league_action_evolution_dimension_fields(multi_season_action_df):
+    """Each dimension should have slope, delta, r_squared, evolution_label."""
+    result = compute_league_action_evolution(multi_season_action_df)
+    assert result["status"] == "ok"
+    for d in result["dimensions"]:
+        assert "feature" in d
+        assert "label" in d
+        assert "median_slope" in d
+        assert "median_delta" in d
+        assert "median_r_squared" in d
+        assert "mean_slope" in d
+        assert "mean_delta" in d
+        assert "mean_r_squared" in d
+        assert "evolution_label" in d
+        assert d["evolution_label"] in {"rising", "falling", "stable"}
+
+
+def test_league_action_evolution_per_season_fields(multi_season_action_df):
+    """per_season entries should have season, n_teams, and 7 feature stats."""
+    result = compute_league_action_evolution(multi_season_action_df)
+    for ps in result["per_season"]:
+        assert "season" in ps
+        assert "n_teams" in ps
+        for feat in ["tackles_p90", "interceptions_p90", "crosses_p90",
+                      "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"]:
+            assert feat in ps
+            stats = ps[feat]
+            assert "median" in stats
+            assert "mean" in stats
+            assert "std" in stats
+            assert "min" in stats
+            assert "max" in stats
+
+
+def test_league_action_evolution_action_features_list(multi_season_action_df):
+    """action_features should list the 7 features."""
+    result = compute_league_action_evolution(multi_season_action_df)
+    assert result["action_features"] == [
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    ]
+
+
+def test_league_action_evolution_drift_label_rising(multi_season_action_df):
+    """tackles_p90 rises across seasons → evolution_label should be 'rising'."""
+    result = compute_league_action_evolution(multi_season_action_df)
+    tackles_dim = next(
+        d for d in result["dimensions"] if d["feature"] == "tackles_p90"
+    )
+    # Tackles were set to rise 2324 → 2425 → 2526
+    assert tackles_dim["median_delta"] > 0
+    assert tackles_dim["evolution_label"] == "rising"
+
+
+def test_league_action_evolution_drift_label_falling(multi_season_action_df):
+    """fouls_p90 falls across seasons → evolution_label should be 'falling'."""
+    result = compute_league_action_evolution(multi_season_action_df)
+    fouls_dim = next(
+        d for d in result["dimensions"] if d["feature"] == "fouls_p90"
+    )
+    assert fouls_dim["median_delta"] < 0
+    assert fouls_dim["evolution_label"] == "falling"
+
+
+def test_league_action_evolution_league_filter(multi_season_action_df):
+    """League filter should narrow population but keep multi-season structure."""
+    result = compute_league_action_evolution(
+        multi_season_action_df, league="Premier League"
+    )
+    assert result["status"] == "ok"
+    assert result["league"] == "Premier League"
+    assert result["n_seasons"] == 3
+
+
+def test_league_action_evolution_disclaimer_present(multi_season_action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_league_action_evolution(multi_season_action_df)
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_league_action_evolution_no_mutation(multi_season_action_df):
+    """Original DataFrame should not be mutated."""
+    original = multi_season_action_df.copy()
+    compute_league_action_evolution(multi_season_action_df)
+    pd.testing.assert_frame_equal(multi_season_action_df, original)
+
+
+def test_league_action_evolution_min_minutes_too_high(multi_season_action_df):
+    """min_player_minutes higher than any player should return no_data."""
+    result = compute_league_action_evolution(
+        multi_season_action_df, min_player_minutes=5000.0
+    )
+    assert result["status"] == "no_data"
+
+
+# ── compute_cross_league_action_comparison ───────────────────────────────
+
+
+def test_cross_league_action_empty():
+    """Empty input should return no_data."""
+    result = compute_cross_league_action_comparison(pd.DataFrame())
+    assert result["status"] == "no_data"
+
+
+def test_cross_league_action_basic(action_df):
+    """Should return ok with 2 leagues (Premier League, La Liga)."""
+    result = compute_cross_league_action_comparison(action_df, season="2526")
+    assert result["status"] == "ok"
+    assert result["n_leagues"] == 2
+
+
+def test_cross_league_action_leagues_list(action_df):
+    """leagues list should contain both league summaries."""
+    result = compute_cross_league_action_comparison(action_df, season="2526")
+    league_names = [lg["league"] for lg in result["leagues"]]
+    assert set(league_names) == {"Premier League", "La Liga"}
+
+
+def test_cross_league_action_league_fields(action_df):
+    """Each league summary should have n_teams, total_minutes, and 7 features."""
+    result = compute_cross_league_action_comparison(action_df, season="2526")
+    for lg in result["leagues"]:
+        assert "league" in lg
+        assert "n_teams" in lg
+        assert "total_minutes" in lg
+        for feat in ["tackles_p90", "interceptions_p90", "crosses_p90",
+                      "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"]:
+            assert feat in lg
+            stats = lg[feat]
+            assert "mean" in stats
+            assert "median" in stats
+            assert "std" in stats
+            assert "min" in stats
+            assert "max" in stats
+
+
+def test_cross_league_action_dimensions_rankings(action_df):
+    """Each dimension should have a rankings list with rank/league/mean/tier."""
+    result = compute_cross_league_action_comparison(action_df, season="2526")
+    assert len(result["dimensions"]) == 7
+    for d in result["dimensions"]:
+        assert "feature" in d
+        assert "label" in d
+        assert isinstance(d["rankings"], list)
+        assert len(d["rankings"]) == 2  # 2 leagues in fixture
+        for r in d["rankings"]:
+            assert "rank" in r
+            assert "league" in r
+            assert "mean" in r
+            assert "median" in r
+            assert "n_teams" in r
+            assert "quality_tier" in r
+            assert r["quality_tier"] in {"top", "bottom", "middle"}
+
+
+def test_cross_league_action_two_league_tier(action_df):
+    """With only 2 leagues, tiers should be top/bottom only (no middle)."""
+    result = compute_cross_league_action_comparison(action_df, season="2526")
+    for d in result["dimensions"]:
+        tiers = {r["quality_tier"] for r in d["rankings"]}
+        assert tiers.issubset({"top", "bottom"})
+
+
+def test_cross_league_action_ranking_sorted_desc(action_df):
+    """Rankings should be sorted by mean descending (rank 1 = highest)."""
+    result = compute_cross_league_action_comparison(action_df, season="2526")
+    for d in result["dimensions"]:
+        means = [r["mean"] for r in d["rankings"]]
+        assert means == sorted(means, reverse=True)
+        for i, r in enumerate(d["rankings"]):
+            assert r["rank"] == i + 1
+
+
+def test_cross_league_action_action_features_list(action_df):
+    """action_features should list the 7 features."""
+    result = compute_cross_league_action_comparison(action_df, season="2526")
+    assert result["action_features"] == [
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    ]
+
+
+def test_cross_league_action_season_filter(action_df):
+    """season=2425 should return no_data since fixture only has 2526."""
+    result = compute_cross_league_action_comparison(action_df, season="2425")
+    assert result["status"] == "no_data"
+
+
+def test_cross_league_action_min_minutes_too_high(action_df):
+    """min_player_minutes higher than any player should return no_data."""
+    result = compute_cross_league_action_comparison(
+        action_df, season="2526", min_player_minutes=5000.0
+    )
+    assert result["status"] == "no_data"
+
+
+def test_cross_league_action_disclaimer_present(action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_cross_league_action_comparison(action_df, season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_cross_league_action_no_mutation(action_df):
+    """Original DataFrame should not be mutated."""
+    original = action_df.copy()
+    compute_cross_league_action_comparison(action_df, season="2526")
+    pd.testing.assert_frame_equal(action_df, original)
+
+
+def test_cross_league_action_single_league():
+    """A single-league frame should still return ok with top tier only."""
+    rows = [{
+        "player": "P1", "team": "T1", "league": "Only League",
+        "season": "2526", "position_group": "ST", "sub_position": "ST",
+        "minutes": 1000.0, "matches": 15,
+        "npg_p90": 0.5, "assists_p90": 0.1, "g_a_volume": 8.0,
+        "tackles_p90": 0.3, "interceptions_p90": 0.2, "crosses_p90": 0.1,
+        "fouls_drawn_p90": 0.5, "fouls_p90": 0.4,
+        "defense_composite": 50.0, "possession_composite": 50.0,
+        "optimized_score": 70.0, "npg_trend": 0.0, "def_trend": 0.0,
+        "pos_trend": 0.0, "confidence_level": "HIGH", "low_appearance": False,
+    }]
+    df = pd.DataFrame(rows)
+    result = compute_cross_league_action_comparison(df, season="2526")
+    assert result["status"] == "ok"
+    assert result["n_leagues"] == 1
+    for d in result["dimensions"]:
+        for r in d["rankings"]:
+            assert r["quality_tier"] == "top"

@@ -3928,3 +3928,466 @@ def compute_team_action_similarity(
             "outcomes. Cosine similarity ranges from -1 to 1."
         ),
     }
+
+
+# --- Round 80: league-level action distribution layer -----------------------
+#
+# Lifts the team action profiles (Round 79) to the league level, mirroring
+# the style-atlas (Round 74) and style-evolution (Round 75) patterns with 7
+# action features instead of 4 style composites, and adds a cross-league
+# comparison dimension. All three functions are descriptive overlays.
+
+
+def _build_team_action_profiles_full(
+    df: pd.DataFrame,
+    *,
+    league: str | None,
+    season: str | None,
+    min_player_minutes: float,
+) -> list[dict[str, Any]]:
+    """Build per-team-per-season action profiles with league/season metadata.
+
+    Unlike ``_build_team_action_profiles`` (Round 79) which groups by team
+    only and discards season/league, this helper groups by ``(team, season,
+    league)`` so each profile retains its temporal and league context.
+    This is needed for evolution (group by season) and cross-league
+    comparison (group by league).
+    """
+    if df.empty:
+        return []
+
+    work = df.copy()
+    if league is not None:
+        work = work[
+            work["league"].astype(str).str.lower() == str(league).lower()
+        ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+
+    missing_cols = [c for c in _ACTION_FEATURES if c not in work.columns]
+    required = missing_cols + [
+        c for c in ("team", "league", "season") if c not in work.columns
+    ]
+    if required:
+        return []
+
+    profiles: list[dict[str, Any]] = []
+    for (team, ssn, lg), group in work.groupby(
+        ["team", "season", "league"], sort=False
+    ):
+        stats = _compute_position_action_stats(
+            group,
+            min_player_minutes=min_player_minutes,
+            features=_ACTION_FEATURES,
+        )
+        if stats is None:
+            continue
+        stats["team"] = str(team)
+        stats["season"] = str(ssn)
+        stats["league"] = str(lg)
+        profiles.append(stats)
+
+    return profiles
+
+
+def compute_league_action_atlas(
+    df: pd.DataFrame,
+    *,
+    season: str | None = None,
+    league: str | None = None,
+    n_bins: int = 8,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """League-wide distribution of team per-90 actions across all 7 features.
+
+    For each of the 7 action features (tackles_p90, interceptions_p90,
+    crosses_p90, fouls_drawn_p90, fouls_p90, g_a_volume, npg_p90), computes
+    a histogram (with ``n_bins`` bins between min and max), quartiles
+    (Q1/median/Q3/IQR), and the list of outlier teams (z-score magnitude
+    >= 2.0). Mirrors ``compute_style_atlas`` (Round 74) with action
+    features instead of style composites.
+
+    This is a descriptive population view — it does not rank teams by
+    quality or predict outcomes.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "season": season,
+            "league": league,
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = _build_team_action_profiles_full(
+        df,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "season": season,
+            "league": league,
+            "disclaimer": (
+                "No team action profiles meet the minimum player-minutes "
+                f"threshold ({min_player_minutes:.0f} min)."
+            ),
+        }
+
+    mat = np.array(
+        [[p[feat] for feat in _ACTION_FEATURES] for p in profiles],
+        dtype=float,
+    )
+    means = mat.mean(axis=0)
+    stds = mat.std(axis=0, ddof=0)
+    stds_safe = np.where(stds == 0, 1.0, stds)
+    standardized = (mat - means) / stds_safe
+
+    n_bins = max(3, min(20, int(n_bins)))
+    n_pop = len(profiles)
+
+    dimensions: list[dict[str, Any]] = []
+    for i, feat in enumerate(_ACTION_FEATURES):
+        col = mat[:, i]
+        col_min = float(col.min())
+        col_max = float(col.max())
+        col_mean = float(col.mean())
+        col_median = float(np.median(col))
+        q1 = float(np.percentile(col, 25))
+        q3 = float(np.percentile(col, 75))
+        iqr = q3 - q1
+
+        if col_max > col_min:
+            edges = np.linspace(col_min, col_max, n_bins + 1)
+            counts, _ = np.histogram(col, bins=edges)
+            bins = [
+                {
+                    "low": round(float(edges[b]), 3),
+                    "high": round(float(edges[b + 1]), 3),
+                    "count": int(counts[b]),
+                }
+                for b in range(n_bins)
+            ]
+        else:
+            bins = [
+                {
+                    "low": round(col_min, 3),
+                    "high": round(col_max, 3),
+                    "count": n_pop,
+                }
+            ]
+
+        std_col = standardized[:, i]
+        outliers: list[dict[str, Any]] = []
+        for j, p in enumerate(profiles):
+            z = float(std_col[j])
+            if abs(z) >= 2.0:
+                outliers.append(
+                    {
+                        "team": p["team"],
+                        "league": p["league"],
+                        "season": p["season"],
+                        "value": round(float(col[j]), 3),
+                        "z_score": round(z, 3),
+                        "direction": "high" if z > 0 else "low",
+                    }
+                )
+        outliers.sort(key=lambda o: abs(o["z_score"]), reverse=True)
+
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _ACTION_FEATURE_LABELS[feat],
+                "min": round(col_min, 3),
+                "max": round(col_max, 3),
+                "mean": round(col_mean, 3),
+                "median": round(col_median, 3),
+                "q1": round(q1, 3),
+                "q3": round(q3, 3),
+                "iqr": round(iqr, 3),
+                "bins": bins,
+                "outliers": outliers,
+            }
+        )
+
+    return {
+        "status": "ok",
+        "season": season,
+        "league": league,
+        "n_population": n_pop,
+        "dimensions": dimensions,
+        "action_features": list(_ACTION_FEATURES),
+        "disclaimer": (
+            "The league action atlas is a descriptive population view "
+            "computed from minutes-weighted per-player per-90 actions. "
+            "Histograms, quartiles and outliers describe how actions are "
+            "distributed across the filtered league population — they do "
+            "not rank teams by quality or predict match outcomes. "
+            "Outliers are teams with a z-score magnitude >= 2.0 on the "
+            "standardised dimension; a low sample size makes outlier "
+            "labels less meaningful."
+        ),
+    }
+
+
+def compute_league_action_evolution(
+    df: pd.DataFrame,
+    *,
+    league: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """League-wide action evolution across seasons.
+
+    Groups team-season action profiles by season and computes the median
+    and mean for each of the 7 action features per season. Then fits a
+    least-squares slope across seasons for each feature to show whether
+    the league average is rising, falling, or stable over time. Mirrors
+    ``compute_league_style_evolution`` (Round 75) with action features.
+
+    Requires at least 2 seasons of data. Returns
+    ``status="insufficient_seasons"`` otherwise.
+
+    This is a descriptive population view — it does not predict future
+    league actions or rank seasons by quality.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = _build_team_action_profiles_full(
+        df,
+        league=league,
+        season=None,
+        min_player_minutes=min_player_minutes,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "disclaimer": (
+                "No team action profiles meet the minimum player-minutes "
+                f"threshold ({min_player_minutes:.0f} min)."
+            ),
+        }
+
+    by_season: dict[str, list[dict[str, Any]]] = {}
+    for p in profiles:
+        by_season.setdefault(p["season"], []).append(p)
+    seasons_sorted = sorted(by_season.keys())
+    n_seasons = len(seasons_sorted)
+    if n_seasons < 2:
+        return {
+            "status": "insufficient_seasons",
+            "league": league,
+            "seasons": seasons_sorted,
+            "n_seasons": n_seasons,
+            "disclaimer": (
+                "League action evolution requires at least 2 seasons; "
+                f"only {n_seasons} found."
+            ),
+        }
+
+    x = np.arange(n_seasons, dtype=float)
+    per_season_summary: list[dict[str, Any]] = []
+    for s in seasons_sorted:
+        season_profiles = by_season[s]
+        entry: dict[str, Any] = {
+            "season": s,
+            "n_teams": len(season_profiles),
+        }
+        for feat in _ACTION_FEATURES:
+            vals = np.array(
+                [p[feat] for p in season_profiles], dtype=float
+            )
+            entry[feat] = {
+                "median": round(float(np.median(vals)), 3),
+                "mean": round(float(vals.mean()), 3),
+                "std": round(float(vals.std(ddof=0)), 3),
+                "min": round(float(vals.min()), 3),
+                "max": round(float(vals.max()), 3),
+            }
+        per_season_summary.append(entry)
+
+    dimensions: list[dict[str, Any]] = []
+    for feat in _ACTION_FEATURES:
+        medians = np.array(
+            [
+                float(np.median([p[feat] for p in by_season[s]]))
+                for s in seasons_sorted
+            ],
+            dtype=float,
+        )
+        means = np.array(
+            [
+                float(np.mean([p[feat] for p in by_season[s]]))
+                for s in seasons_sorted
+            ],
+            dtype=float,
+        )
+        slope_med, r2_med = _linear_slope_and_r2(x, medians)
+        slope_mean, r2_mean = _linear_slope_and_r2(x, means)
+        delta_med = float(medians[-1] - medians[0])
+        delta_mean = float(means[-1] - means[0])
+        label = _drift_label(delta_med, float(medians.mean()))
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _ACTION_FEATURE_LABELS[feat],
+                "median_slope": round(slope_med, 4),
+                "median_delta": round(delta_med, 3),
+                "median_r_squared": round(r2_med, 3),
+                "mean_slope": round(slope_mean, 4),
+                "mean_delta": round(delta_mean, 3),
+                "mean_r_squared": round(r2_mean, 3),
+                "evolution_label": label,
+            }
+        )
+
+    return {
+        "status": "ok",
+        "league": league,
+        "seasons": seasons_sorted,
+        "n_seasons": n_seasons,
+        "per_season": per_season_summary,
+        "dimensions": dimensions,
+        "action_features": list(_ACTION_FEATURES),
+        "disclaimer": (
+            "League action evolution is a descriptive population view "
+            "computed from minutes-weighted per-player per-90 actions "
+            "across seasons. Slopes and deltas describe observed changes "
+            "— they do not predict future league actions or rank seasons "
+            "by quality. The evolution label uses a 5% relative threshold "
+            "and is less reliable with only 2 seasons or low sample sizes."
+        ),
+    }
+
+
+def compute_cross_league_action_comparison(
+    df: pd.DataFrame,
+    *,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Compare per-90 action profiles across leagues.
+
+    Groups team-season action profiles by league and computes per-league
+    means and medians for each of the 7 action features. Leagues are
+    ranked by mean value per action (descending), and a quality_tier is
+    assigned (top/middle/bottom, or top/bottom when <= 2 leagues).
+
+    This is a descriptive comparison — it does not rank leagues by
+    overall quality or predict cross-league match outcomes.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "season": season,
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = _build_team_action_profiles_full(
+        df,
+        league=None,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "season": season,
+            "disclaimer": (
+                "No team action profiles meet the minimum player-minutes "
+                f"threshold ({min_player_minutes:.0f} min)."
+            ),
+        }
+
+    by_league: dict[str, list[dict[str, Any]]] = {}
+    for p in profiles:
+        by_league.setdefault(p["league"], []).append(p)
+    n_leagues = len(by_league)
+    if n_leagues == 0:
+        return {
+            "status": "no_data",
+            "season": season,
+            "disclaimer": "No league groupings found.",
+        }
+
+    # Build per-league summary with all 7 action features.
+    league_summaries: list[dict[str, Any]] = []
+    for lg, league_profiles in by_league.items():
+        entry: dict[str, Any] = {
+            "league": lg,
+            "n_teams": len(league_profiles),
+            "total_minutes": sum(
+                p["total_minutes"] for p in league_profiles
+            ),
+        }
+        for feat in _ACTION_FEATURES:
+            vals = np.array(
+                [p[feat] for p in league_profiles], dtype=float
+            )
+            entry[feat] = {
+                "mean": round(float(vals.mean()), 3),
+                "median": round(float(np.median(vals)), 3),
+                "std": round(float(vals.std(ddof=0)), 3),
+                "min": round(float(vals.min()), 3),
+                "max": round(float(vals.max()), 3),
+            }
+        league_summaries.append(entry)
+
+    # Per-feature ranking and quality_tier assignment.
+    dimensions: list[dict[str, Any]] = []
+    for feat in _ACTION_FEATURES:
+        # Sort leagues by mean value descending for this feature.
+        ranked = sorted(
+            league_summaries,
+            key=lambda e: e[feat]["mean"],
+            reverse=True,
+        )
+        ranks: list[dict[str, Any]] = []
+        for rank_idx, entry in enumerate(ranked):
+            if n_leagues <= 2:
+                tier = "top" if rank_idx == 0 else "bottom"
+            elif rank_idx == 0:
+                tier = "top"
+            elif rank_idx == n_leagues - 1:
+                tier = "bottom"
+            else:
+                tier = "middle"
+            ranks.append(
+                {
+                    "rank": rank_idx + 1,
+                    "league": entry["league"],
+                    "mean": entry[feat]["mean"],
+                    "median": entry[feat]["median"],
+                    "n_teams": entry["n_teams"],
+                    "quality_tier": tier,
+                }
+            )
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _ACTION_FEATURE_LABELS[feat],
+                "rankings": ranks,
+            }
+        )
+
+    return {
+        "status": "ok",
+        "season": season,
+        "n_leagues": n_leagues,
+        "leagues": league_summaries,
+        "dimensions": dimensions,
+        "action_features": list(_ACTION_FEATURES),
+        "disclaimer": (
+            "Cross-league action comparison is a descriptive view "
+            "computed from minutes-weighted per-player per-90 actions. "
+            "League rankings per action describe relative standing in "
+            "the filtered population — they do not rank leagues by "
+            "overall quality, tactical sophistication, or predict "
+            "cross-league match outcomes. Quality tiers are heuristic "
+            "and less meaningful with few leagues."
+        ),
+    }

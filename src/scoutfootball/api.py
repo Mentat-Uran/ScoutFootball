@@ -7973,6 +7973,85 @@ def get_team_action_similarity(
     return _clean_json_value(result)
 
 
+def get_league_action_atlas(
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    n_bins: int = 8,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """League-wide distribution of team per-90 actions across 7 features.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_league_action_atlas`.
+    Descriptive overlay — does not rank teams by quality.
+    """
+    from scoutfootball.features.team_style import (
+        compute_league_action_atlas,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "league": league, "season": season}
+    result = compute_league_action_atlas(
+        df,
+        season=season,
+        league=league,
+        n_bins=n_bins,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_league_action_evolution(
+    league: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """League-wide action evolution across seasons.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_league_action_evolution`.
+    Descriptive overlay — does not predict future league actions.
+    """
+    from scoutfootball.features.team_style import (
+        compute_league_action_evolution,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "league": league}
+    result = compute_league_action_evolution(
+        df,
+        league=league,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_cross_league_action_comparison(
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Compare per-90 action profiles across leagues.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_cross_league_action_comparison`.
+    Descriptive overlay — does not rank leagues by overall quality.
+    """
+    from scoutfootball.features.team_style import (
+        compute_cross_league_action_comparison,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "season": season}
+    result = compute_cross_league_action_comparison(
+        df,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 

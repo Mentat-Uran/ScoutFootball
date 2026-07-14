@@ -2091,6 +2091,157 @@ back to a similarity of 0.0. This is a descriptive overlay — similar action
 signatures do not imply similar quality, tactical systems, or match
 outcomes.
 
+### GET /teams/action-atlas
+
+League-wide distribution atlas of team-level action signatures. For each
+of the 7 action features (tackles/interceptions/crosses/fouls_drawn/fouls/
+g_a_volume/npg_p90), computes a histogram (default 8 bins over min–max range)
+with per-bin team counts and a summary header (min/Q1/median/Q3/max/IQR).
+Outlier teams (z-score magnitude ≥ 2.0 on the standardized dimension) are
+listed with their raw values. Teams are filtered by per-team
+`min_player_minutes` aggregated from player minutes.
+
+**Query params**: `season` (optional), `league` (optional, case-insensitive),
+`n_bins` (default 8, clamped to `max(3, min(int(n_bins), 20))`),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "season": "2526",
+  "league": "Premier League",
+  "n_bins": 8,
+  "min_player_minutes": 500.0,
+  "n_teams": 8,
+  "dimensions": [
+    {
+      "feature": "tackles_p90",
+      "label": "tackles",
+      "bin_edges": [2.1, 2.5, 2.9, 3.3, 3.7, 4.1, 4.5, 4.9, 5.3],
+      "bin_counts": [1, 0, 2, 1, 2, 1, 0, 1],
+      "summary": {
+        "min": 2.1, "q1": 2.9, "median": 3.6, "q3": 4.3,
+        "max": 5.3, "iqr": 1.4, "mean": 3.6, "std": 0.9
+      },
+      "outliers": [
+        { "team": "Leeds United", "value": 5.3, "z_score": 2.1 }
+      ]
+    }
+  ],
+  "action_features": ["tackles_p90", "interceptions_p90", "crosses_p90",
+    "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"],
+  "disclaimer": "The action atlas is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no team profiles above the
+minutes threshold). `bin_edges` has length `n_bins + 1`; `bin_counts` has
+length `n_bins`. When fewer than 2 distinct values exist, bins collapse to
+a single bucket. `outliers` may be empty. The atlas does not modify the
+prediction model — it is an interpretive layer over team action signatures.
+
+### GET /teams/action-evolution
+
+Multi-season drift trajectory of league-wide action signatures. For each
+action feature, fits a least-squares slope against season index and reports
+the slope, R² consistency, total Δ (last − first season median), and a drift
+label (`rising` / `falling` / `stable`, 5% relative threshold). A per-season
+median matrix is included for each dimension.
+
+**Query params**: `league` (optional, case-insensitive),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "min_player_minutes": 500.0,
+  "seasons": ["2324", "2425", "2526"],
+  "n_seasons": 3,
+  "dimensions": [
+    {
+      "feature": "tackles_p90",
+      "label": "tackles",
+      "slope": 0.18,
+      "r2": 0.87,
+      "delta": 0.36,
+      "drift_label": "rising",
+      "per_season_median": { "2324": 3.2, "2425": 3.5, "2526": 3.6 }
+    }
+  ],
+  "action_features": ["tackles_p90", "interceptions_p90", "crosses_p90",
+    "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"],
+  "disclaimer": "Action evolution is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input), `insufficient_seasons`
+(fewer than 2 distinct seasons available after filtering). `slope` is the
+fitted linear coefficient on the season index (0-based). `r2` ∈ [0, 1] —
+returns 0.0 when variance is zero or n < 2. `drift_label` uses a 5%
+relative threshold on `delta / abs(first_season_median)`; `stable` is
+returned when the relative change is below the threshold or the first-season
+median is zero. The overlay does not modify the prediction model.
+
+### GET /teams/cross-league-action
+
+Cross-league comparison of action signatures for a given season. For each
+action feature, ranks leagues by mean team value (descending) and assigns a
+quality tier (`top` / `middle` / `bottom`, or `top` / `bottom` when ≤ 2
+leagues). Each league entry includes mean, median, team count, and member
+teams.
+
+**Query params**: `season` (optional),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "season": "2526",
+  "min_player_minutes": 500.0,
+  "n_leagues": 3,
+  "leagues": ["Premier League", "La Liga", "Bundesliga"],
+  "dimensions": [
+    {
+      "feature": "tackles_p90",
+      "label": "tackles",
+      "rankings": [
+        {
+          "rank": 1,
+          "league": "La Liga",
+          "mean": 4.1,
+          "median": 4.0,
+          "n_teams": 8,
+          "teams": ["Real Madrid", "Barcelona", "..."],
+          "tier": "top"
+        },
+        {
+          "rank": 2,
+          "league": "Premier League",
+          "mean": 3.7,
+          "median": 3.6,
+          "n_teams": 8,
+          "teams": ["Arsenal", "Liverpool", "..."],
+          "tier": "middle"
+        }
+      ]
+    }
+  ],
+  "action_features": ["tackles_p90", "interceptions_p90", "crosses_p90",
+    "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"],
+  "disclaimer": "Cross-league comparison is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no leagues with profiles
+above the minutes threshold). Rankings are sorted descending by `mean`.
+When only one league is present, a single `top`-tier entry is returned.
+The comparison does not modify the prediction model — it is an interpretive
+layer over aggregated team action signatures.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.
