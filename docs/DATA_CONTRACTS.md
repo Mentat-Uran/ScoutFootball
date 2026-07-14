@@ -1958,6 +1958,139 @@ trend columns, or no players above the minutes threshold). `trend_label` ∈
 {improving, declining, stable}. This is a descriptive overlay — it does not
 predict future trends or rank positions by quality.
 
+### GET /teams/action-profile
+
+Granular per-90 action profile for each team. Decomposes the 4 composite
+style features (npg_p90/assists_p90/defense_composite/possession_composite)
+into 7 granular per-90 actions (tackles_p90/interceptions_p90/crosses_p90/
+fouls_drawn_p90/fouls_p90/g_a_volume/npg_p90) with minutes-weighted means
+per team. Teams are sorted by `total_minutes` descending for stable display.
+
+**Query params**: `league` (optional, case-insensitive), `season` (optional),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2526",
+  "n_teams": 8,
+  "teams": [
+    {
+      "team": "Arsenal",
+      "n_players": 18,
+      "total_minutes": 28800,
+      "tackles_p90": 4.2, "interceptions_p90": 3.1,
+      "crosses_p90": 1.8, "fouls_drawn_p90": 2.5,
+      "fouls_p90": 1.9, "g_a_volume": 12.3, "npg_p90": 0.42
+    }
+  ],
+  "action_features": ["tackles_p90", "interceptions_p90", "crosses_p90",
+    "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"],
+  "disclaimer": "Team action profile decomposes composite style scores..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input, missing action columns, or no
+team had players above the minutes threshold). This is a descriptive overlay
+— it does not predict future performance or rank teams by quality.
+
+### GET /teams/{team}/action-percentiles
+
+Per-action percentile rank of one team within its league population. For
+each of the 7 action features (tackles/interceptions/crosses/fouls_drawn/
+fouls/g_a_volume/npg_p90), computes the team's percentile (0–100, tie-handled
+average ranks) with quartile label and population statistics.
+
+**Path params**: `team` (case-insensitive team name)
+
+**Query params**: `league` (optional, case-insensitive), `season` (optional),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Arsenal",
+  "season": "2526",
+  "league": "Premier League",
+  "target": {
+    "team": "Arsenal",
+    "n_players": 18,
+    "total_minutes": 28800,
+    "action_values": {
+      "tackles_p90": 4.2, "interceptions_p90": 3.1,
+      "crosses_p90": 1.8, "fouls_drawn_p90": 2.5,
+      "fouls_p90": 1.9, "g_a_volume": 12.3, "npg_p90": 0.42
+    },
+    "population_means": { "tackles_p90": 3.8, "..." : "..." },
+    "population_stds": { "tackles_p90": 0.6, "..." : "..." }
+  },
+  "n_population": 8,
+  "dimensions": [
+    { "feature": "tackles_p90", "label": "tackles", "value": 4.2,
+      "percentile": 87.5, "quartile": "top",
+      "population_min": 2.1, "population_max": 4.5,
+      "population_mean": 3.8, "population_median": 3.9 }
+  ],
+  "disclaimer": "Action percentiles describe where a team sits..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no team profiles above the
+minutes threshold), `team_not_found` (when the target team is absent from
+the filtered data). `quartile` ∈ {top (≥75), upper_mid (≥50), lower_mid
+(≥25), bottom (<25)}. Percentile rank uses tie-handled average ranks
+(`rank = count_below + 0.5 * count_equal`, `pct = 100 * rank / n_pop`).
+Percentiles are relative, not absolute — a 90th-percentile cross volume in
+a low-cross league is not equivalent to 90th-percentile in a high-cross one.
+
+### GET /teams/{team}/action-similarity
+
+Rank teams by similarity to the target team's 7-dimensional per-90 action
+vector (tackles/interceptions/crosses/fouls_drawn/fouls/g_a_volume/npg_p90).
+Cosine similarity is the primary ranking key (descending); Euclidean
+distance on the raw vectors is provided for reference. Each neighbor
+includes `n_players` and `total_minutes` for context.
+
+**Path params**: `team` (case-insensitive team name)
+
+**Query params**: `league` (optional, case-insensitive), `season` (optional),
+`top_n` (default 10, clamped to `max(1, min(int(top_n), n_candidates))`),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Arsenal",
+  "league": "Premier League",
+  "season": "2526",
+  "n_candidates": 7,
+  "target_action_vector": [4.2, 3.1, 1.8, 2.5, 1.9, 12.3, 0.42],
+  "target_action_vector_labels": ["tackles_p90", "interceptions_p90",
+    "crosses_p90", "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90"],
+  "neighbors": [
+    {
+      "team": "Liverpool",
+      "cosine_similarity": 0.952,
+      "euclidean_distance": 1.234,
+      "n_players": 17,
+      "total_minutes": 27600
+    }
+  ],
+  "disclaimer": "Team action similarity is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no team profiles above the
+minutes threshold), `team_not_found` (when the target team is absent from
+the filtered data). `cosine_similarity` ∈ [-1, 1]; zero-norm vectors fall
+back to a similarity of 0.0. This is a descriptive overlay — similar action
+signatures do not imply similar quality, tactical systems, or match
+outcomes.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.
