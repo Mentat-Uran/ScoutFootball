@@ -17,6 +17,9 @@ from scoutfootball.features.team_style import (
     compute_league_style_evolution,
     compute_league_style_percentiles,
     compute_player_style_fit,
+    compute_position_style_drift,
+    compute_position_style_drift_neighbors,
+    compute_position_style_evolution,
     compute_style_atlas,
     compute_style_drift_neighbors,
     compute_style_matchup,
@@ -1435,3 +1438,442 @@ def test_drift_neighbors_no_mutation(multi_season_df):
     original = multi_season_df.copy()
     compute_style_drift_neighbors(multi_season_df, "Team Riser")
     pd.testing.assert_frame_equal(multi_season_df, original)
+
+
+# ── Multi-position multi-season fixture (Round 76) ───────────────────────
+
+
+def _build_multi_position_df() -> pd.DataFrame:
+    """Build a synthetic frame with 4 position groups across 3 seasons.
+
+    ST: rising attack (npg_p90 0.3 -> 0.5 -> 0.7)
+    CB: rising defense (defense_composite 40 -> 60 -> 80)
+    CM: stable (minimal change)
+    FB: only 1 season (for insufficient_seasons tests)
+    GK: rising attack as well (drift neighbor of ST)
+
+    Each position group has 3 players per season to test minutes-weighting.
+    All players have minutes >= 500 (the default min_player_minutes).
+    """
+    rows: list[dict] = []
+    templates = [
+        # ST: rising attack
+        ("ST", "Premier League", "2324", 0.30, 0.20, 30.0, 40.0),
+        ("ST", "Premier League", "2425", 0.50, 0.20, 30.0, 40.0),
+        ("ST", "Premier League", "2526", 0.70, 0.20, 30.0, 40.0),
+        # CB: rising defense
+        ("CB", "Premier League", "2324", 0.10, 0.05, 40.0, 45.0),
+        ("CB", "Premier League", "2425", 0.10, 0.05, 60.0, 45.0),
+        ("CB", "Premier League", "2526", 0.10, 0.05, 80.0, 45.0),
+        # CM: stable
+        ("CM", "La Liga", "2324", 0.20, 0.25, 50.0, 60.0),
+        ("CM", "La Liga", "2425", 0.21, 0.26, 50.5, 60.5),
+        ("CM", "La Liga", "2526", 0.20, 0.25, 50.0, 60.0),
+        # FB: only 1 season
+        ("FB", "La Liga", "2526", 0.15, 0.20, 45.0, 55.0),
+        # GK: rising attack (drift neighbor of ST)
+        ("GK", "Bundesliga", "2324", 0.05, 0.02, 70.0, 30.0),
+        ("GK", "Bundesliga", "2425", 0.15, 0.02, 70.0, 30.0),
+        ("GK", "Bundesliga", "2526", 0.25, 0.02, 70.0, 30.0),
+    ]
+    for pos, league, season, npg, ast, defc, poss in templates:
+        for i in range(3):
+            rows.append({
+                "player": f"{pos} {season} P{i}",
+                "player_id": f"{pos}_{season}_{i}",
+                "team": f"Team {pos}",
+                "league": league,
+                "season": season,
+                "position_group": pos,
+                "sub_position": pos,
+                "optimized_score": 60.0 + i * 3,
+                "minutes": 1500.0 - i * 100,
+                "matches": 20,
+                "npg_p90": npg + i * 0.01,
+                "assists_p90": ast + i * 0.005,
+                "defense_composite": defc + i * 0.5,
+                "possession_composite": poss + i * 0.3,
+                "confidence_level": "HIGH",
+                "low_appearance": False,
+            })
+    return pd.DataFrame(rows)
+
+
+@pytest.fixture
+def multi_position_df() -> pd.DataFrame:
+    return _build_multi_position_df()
+
+
+# ── compute_position_style_evolution ─────────────────────────────────────
+
+
+def test_pos_evolution_empty():
+    """Empty input should return no_data."""
+    result = compute_position_style_evolution(pd.DataFrame())
+    assert result["status"] == "no_data"
+
+
+def test_pos_evolution_no_position_column():
+    """Missing position_group and sub_position columns should return no_data."""
+    df = pd.DataFrame([{
+        "player": "P1", "team": "T1", "league": "L1", "season": "2526",
+        "minutes": 1000, "npg_p90": 0.3, "assists_p90": 0.2,
+        "defense_composite": 50.0, "possession_composite": 50.0,
+    }])
+    result = compute_position_style_evolution(df)
+    assert result["status"] == "no_data"
+
+
+def test_pos_evolution_basic(multi_position_df):
+    """Should return position groups with at least 2 seasons."""
+    result = compute_position_style_evolution(multi_position_df)
+    assert result["status"] == "ok"
+    groups = result["position_groups"]
+    group_names = {g["position_group"] for g in groups}
+    # FB has only 1 season so it should be in skipped, not in groups
+    assert "ST" in group_names
+    assert "CB" in group_names
+    assert "CM" in group_names
+    assert "GK" in group_names
+    assert "FB" not in group_names
+
+
+def test_pos_evolution_skipped_positions(multi_position_df):
+    """FB with only 1 season should appear in skipped_positions."""
+    result = compute_position_style_evolution(multi_position_df)
+    skipped = result.get("skipped_positions", [])
+    skipped_names = {s["position_group"] for s in skipped}
+    assert "FB" in skipped_names
+
+
+def test_pos_evolution_dimensions(multi_position_df):
+    """Each position group should have 4 style dimensions."""
+    result = compute_position_style_evolution(multi_position_df)
+    for g in result["position_groups"]:
+        assert len(g["dimensions"]) == 4
+        for d in g["dimensions"]:
+            assert "feature" in d
+            assert "label" in d
+            assert "slope" in d
+            assert "delta" in d
+            assert "r_squared" in d
+            assert "mean" in d
+            assert "evolution_label" in d
+            assert "per_season" in d
+
+
+def test_pos_evolution_per_season_n_players(multi_position_df):
+    """Per-season entries should include n_players."""
+    result = compute_position_style_evolution(multi_position_df)
+    for g in result["position_groups"]:
+        for d in g["dimensions"]:
+            for ps in d["per_season"]:
+                assert "n_players" in ps
+                assert ps["n_players"] > 0
+
+
+def test_pos_evolution_seasons_sorted(multi_position_df):
+    """Seasons should be sorted lexicographically."""
+    result = compute_position_style_evolution(multi_position_df)
+    for g in result["position_groups"]:
+        seasons = g["seasons"]
+        assert seasons == sorted(seasons)
+
+
+def test_pos_evolution_st_rising_label(multi_position_df):
+    """ST should have a rising evolution_label on npg_p90."""
+    result = compute_position_style_evolution(multi_position_df)
+    st_group = next(g for g in result["position_groups"] if g["position_group"] == "ST")
+    npg_dim = next(d for d in st_group["dimensions"] if d["feature"] == "npg_p90")
+    assert npg_dim["evolution_label"] == "rising"
+    assert npg_dim["delta"] > 0
+
+
+def test_pos_evolution_cb_rising_defense(multi_position_df):
+    """CB should have a rising evolution_label on defense_composite."""
+    result = compute_position_style_evolution(multi_position_df)
+    cb_group = next(g for g in result["position_groups"] if g["position_group"] == "CB")
+    def_dim = next(d for d in cb_group["dimensions"] if d["feature"] == "defense_composite")
+    assert def_dim["evolution_label"] == "rising"
+    assert def_dim["delta"] > 0
+
+
+def test_pos_evolution_cm_stable(multi_position_df):
+    """CM should have stable evolution_label on all dimensions."""
+    result = compute_position_style_evolution(multi_position_df)
+    cm_group = next(g for g in result["position_groups"] if g["position_group"] == "CM")
+    for d in cm_group["dimensions"]:
+        assert d["evolution_label"] == "stable"
+
+
+def test_pos_evolution_league_filter(multi_position_df):
+    """League filter should restrict the player pool."""
+    result_all = compute_position_style_evolution(multi_position_df)
+    result_pl = compute_position_style_evolution(multi_position_df, league="premier league")
+    # ST and CB are in Premier League; CM is in La Liga; GK is in Bundesliga
+    pl_names = {g["position_group"] for g in result_pl["position_groups"]}
+    assert "ST" in pl_names
+    assert "CB" in pl_names
+    assert "CM" not in pl_names
+    assert "GK" not in pl_names
+    # Full result should have more groups
+    assert len(result_all["position_groups"]) > len(result_pl["position_groups"])
+
+
+def test_pos_evolution_disclaimer_present(multi_position_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_position_style_evolution(multi_position_df)
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_pos_evolution_no_mutation(multi_position_df):
+    """Original DataFrame should not be mutated."""
+    original = multi_position_df.copy()
+    compute_position_style_evolution(multi_position_df)
+    pd.testing.assert_frame_equal(multi_position_df, original)
+
+
+# ── compute_position_style_drift ─────────────────────────────────────────
+
+
+def test_pos_drift_empty():
+    """Empty input should return no_data."""
+    result = compute_position_style_drift(pd.DataFrame(), "ST")
+    assert result["status"] == "no_data"
+
+
+def test_pos_drift_no_position():
+    """Empty position_group should return no_data."""
+    result = compute_position_style_drift(_build_multi_position_df(), "")
+    assert result["status"] == "no_data"
+
+
+def test_pos_drift_invalid_position(multi_position_df):
+    """Invalid position group should return invalid_position."""
+    result = compute_position_style_drift(multi_position_df, "XYZ")
+    assert result["status"] == "invalid_position"
+    assert "valid_positions" in result
+    assert "GK" in result["valid_positions"]
+
+
+def test_pos_drift_position_not_found(multi_position_df):
+    """Position with no data after filtering should return position_not_found."""
+    result = compute_position_style_drift(multi_position_df, "ST", league="la liga")
+    assert result["status"] == "position_not_found"
+
+
+def test_pos_drift_insufficient_seasons(multi_position_df):
+    """FB with only 1 season should return insufficient_seasons."""
+    result = compute_position_style_drift(multi_position_df, "FB")
+    assert result["status"] == "insufficient_seasons"
+    assert result["n_seasons"] == 1
+
+
+def test_pos_drift_basic(multi_position_df):
+    """Should return ok for ST with 3 seasons."""
+    result = compute_position_style_drift(multi_position_df, "ST")
+    assert result["status"] == "ok"
+    assert result["position_group"] == "ST"
+    assert result["n_seasons"] == 3
+    assert result["seasons"] == ["2324", "2425", "2526"]
+
+
+def test_pos_drift_dimensions(multi_position_df):
+    """Should return 4 style dimensions with all expected fields."""
+    result = compute_position_style_drift(multi_position_df, "ST")
+    assert len(result["dimensions"]) == 4
+    for d in result["dimensions"]:
+        assert "feature" in d
+        assert "label" in d
+        assert "slope" in d
+        assert "delta" in d
+        assert "r_squared" in d
+        assert "mean" in d
+        assert "drift_label" in d
+        assert "per_season" in d
+
+
+def test_pos_drift_per_season_sorted(multi_position_df):
+    """Per-season values should be sorted by season."""
+    result = compute_position_style_drift(multi_position_df, "ST")
+    for d in result["dimensions"]:
+        seasons = [ps["season"] for ps in d["per_season"]]
+        assert seasons == sorted(seasons)
+
+
+def test_pos_drift_rising_label(multi_position_df):
+    """ST should have a rising drift_label on npg_p90."""
+    result = compute_position_style_drift(multi_position_df, "ST")
+    npg_dim = next(d for d in result["dimensions"] if d["feature"] == "npg_p90")
+    assert npg_dim["drift_label"] == "rising"
+    assert npg_dim["delta"] > 0
+
+
+def test_pos_drift_falling_label(multi_position_df):
+    """CB defense_composite rises, so npg_p90 should be stable (no change)."""
+    result = compute_position_style_drift(multi_position_df, "CB")
+    def_dim = next(d for d in result["dimensions"] if d["feature"] == "defense_composite")
+    assert def_dim["drift_label"] == "rising"
+    assert def_dim["delta"] > 0
+
+
+def test_pos_drift_stable_label(multi_position_df):
+    """CM should have stable drift_label on all dimensions."""
+    result = compute_position_style_drift(multi_position_df, "CM")
+    for d in result["dimensions"]:
+        assert d["drift_label"] == "stable"
+
+
+def test_pos_drift_case_insensitive(multi_position_df):
+    """Position group should be case-insensitive."""
+    result_lower = compute_position_style_drift(multi_position_df, "st")
+    assert result_lower["status"] == "ok"
+    assert result_lower["position_group"] == "ST"
+
+
+def test_pos_drift_league_filter(multi_position_df):
+    """League filter should restrict the player pool."""
+    result = compute_position_style_drift(multi_position_df, "ST", league="premier league")
+    assert result["status"] == "ok"
+    result_other = compute_position_style_drift(multi_position_df, "ST", league="la liga")
+    assert result_other["status"] == "position_not_found"
+
+
+def test_pos_drift_per_season_n_players(multi_position_df):
+    """Per-season entries should include n_players."""
+    result = compute_position_style_drift(multi_position_df, "ST")
+    for d in result["dimensions"]:
+        for ps in d["per_season"]:
+            assert "n_players" in ps
+            assert ps["n_players"] > 0
+
+
+def test_pos_drift_disclaimer_present(multi_position_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_position_style_drift(multi_position_df, "ST")
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_pos_drift_no_mutation(multi_position_df):
+    """Original DataFrame should not be mutated."""
+    original = multi_position_df.copy()
+    compute_position_style_drift(multi_position_df, "ST")
+    pd.testing.assert_frame_equal(multi_position_df, original)
+
+
+# ── compute_position_style_drift_neighbors ───────────────────────────────
+
+
+def test_pos_drift_neighbors_empty():
+    """Empty input should return no_data."""
+    result = compute_position_style_drift_neighbors(pd.DataFrame(), "ST")
+    assert result["status"] == "no_data"
+
+
+def test_pos_drift_neighbors_no_position():
+    """Empty position_group should return no_data."""
+    result = compute_position_style_drift_neighbors(_build_multi_position_df(), "")
+    assert result["status"] == "no_data"
+
+
+def test_pos_drift_neighbors_invalid_position(multi_position_df):
+    """Invalid position group should return invalid_position."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "XYZ")
+    assert result["status"] == "invalid_position"
+
+
+def test_pos_drift_neighbors_position_not_found(multi_position_df):
+    """FB with only 1 season should return position_not_found."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "FB")
+    assert result["status"] == "position_not_found"
+
+
+def test_pos_drift_neighbors_basic(multi_position_df):
+    """Should return ok for ST with neighbors."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "ST")
+    assert result["status"] == "ok"
+    assert result["position_group"] == "ST"
+    assert "target_drift_vector" in result
+    assert "target_drift_vector_labels" in result
+    assert len(result["target_drift_vector"]) == 4
+    assert isinstance(result["neighbors"], list)
+
+
+def test_pos_drift_neighbors_similarity_descending(multi_position_df):
+    """Neighbors should be sorted by cosine similarity descending."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "ST")
+    sims = [n["cosine_similarity"] for n in result["neighbors"]]
+    assert sims == sorted(sims, reverse=True)
+
+
+def test_pos_drift_neighbors_excludes_self(multi_position_df):
+    """Target position should not appear in its own neighbors list."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "ST")
+    neighbor_names = {n["position_group"] for n in result["neighbors"]}
+    assert "ST" not in neighbor_names
+
+
+def test_pos_drift_neighbors_cosine_range(multi_position_df):
+    """All cosine similarities should be in [-1, 1]."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "ST")
+    for n in result["neighbors"]:
+        assert -1.0 <= n["cosine_similarity"] <= 1.0
+
+
+def test_pos_drift_neighbors_drift_vector(multi_position_df):
+    """Each neighbor should have a 4-dim drift vector."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "ST")
+    for n in result["neighbors"]:
+        assert len(n["drift_vector"]) == 4
+        assert "n_seasons" in n
+        assert "seasons" in n
+        assert "euclidean_distance" in n
+
+
+def test_pos_drift_neighbors_gk_close_to_st(multi_position_df):
+    """GK also has rising attack, so it should be a close drift neighbor of ST."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "ST")
+    if result["neighbors"]:
+        top_neighbor = result["neighbors"][0]
+        # GK should be the closest (both have rising npg_p90)
+        assert top_neighbor["position_group"] == "GK"
+
+
+def test_pos_drift_neighbors_n_candidates(multi_position_df):
+    """n_candidates should equal the number of other positions with >=2 seasons."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "ST")
+    # ST, CB, CM, GK have >= 2 seasons; FB has 1. So n_candidates = 3.
+    assert result["n_candidates"] == 3
+
+
+def test_pos_drift_neighbors_case_insensitive(multi_position_df):
+    """Position group should be case-insensitive."""
+    result_lower = compute_position_style_drift_neighbors(multi_position_df, "st")
+    assert result_lower["status"] == "ok"
+    assert result_lower["position_group"] == "ST"
+
+
+def test_pos_drift_neighbors_league_filter(multi_position_df):
+    """League filter should restrict the player pool."""
+    result = compute_position_style_drift_neighbors(
+        multi_position_df, "ST", league="premier league"
+    )
+    assert result["status"] == "ok"
+    # In Premier League: ST and CB have >= 2 seasons. So n_candidates = 1.
+    assert result["n_candidates"] == 1
+
+
+def test_pos_drift_neighbors_disclaimer_present(multi_position_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_position_style_drift_neighbors(multi_position_df, "ST")
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_pos_drift_neighbors_no_mutation(multi_position_df):
+    """Original DataFrame should not be mutated."""
+    original = multi_position_df.copy()
+    compute_position_style_drift_neighbors(multi_position_df, "ST")
+    pd.testing.assert_frame_equal(multi_position_df, original)
