@@ -13,7 +13,9 @@ import pytest
 
 from scoutfootball.features.team_style import (
     compute_cluster_recruits,
+    compute_cluster_similarity_matrix,
     compute_player_style_fit,
+    compute_style_matchup,
     compute_team_style_clusters,
     compute_team_style_profiles,
 )
@@ -504,4 +506,253 @@ def test_recruits_no_mutation(style_df):
     original = style_df.copy()
     cid = clusters["clusters"][0]["cluster_id"]
     compute_cluster_recruits(style_df, cid, n_clusters=4, top_n=5)
+    pd.testing.assert_frame_equal(style_df, original)
+
+
+# ── compute_cluster_similarity_matrix ────────────────────────────────────
+
+
+def test_similarity_empty():
+    """Empty DataFrame should return no_data."""
+    result = compute_cluster_similarity_matrix(pd.DataFrame())
+    assert result["status"] == "no_data"
+    assert result["matrix"] == []
+    assert result["pairs"] == []
+
+
+def test_similarity_basic(style_df):
+    """Should return an NxN matrix with matching labels."""
+    result = compute_cluster_similarity_matrix(style_df, n_clusters=4)
+    if result["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    n = result["n_clusters"]
+    assert n >= 2
+    assert len(result["matrix"]) == n
+    for row in result["matrix"]:
+        assert len(row) == n
+    assert len(result["labels"]) == n
+
+
+def test_similarity_diagonal_one(style_df):
+    """Diagonal entries should be 1.0 (self-similarity)."""
+    result = compute_cluster_similarity_matrix(style_df, n_clusters=4)
+    if result["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    for i in range(result["n_clusters"]):
+        assert result["matrix"][i][i] == 1.0
+
+
+def test_similarity_symmetric(style_df):
+    """Matrix should be symmetric."""
+    result = compute_cluster_similarity_matrix(style_df, n_clusters=4)
+    if result["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    n = result["n_clusters"]
+    for i in range(n):
+        for j in range(n):
+            assert result["matrix"][i][j] == result["matrix"][j][i]
+
+
+def test_similarity_range(style_df):
+    """All similarities should be in [-1, 1]."""
+    result = compute_cluster_similarity_matrix(style_df, n_clusters=4)
+    if result["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    for row in result["matrix"]:
+        for v in row:
+            assert -1.0 <= v <= 1.0
+
+
+def test_similarity_pairs_upper_triangle(style_df):
+    """pairs should cover the upper triangle only, sorted descending."""
+    result = compute_cluster_similarity_matrix(style_df, n_clusters=4)
+    if result["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    n = result["n_clusters"]
+    expected_pairs = n * (n - 1) // 2
+    assert len(result["pairs"]) == expected_pairs
+    sims = [p["similarity"] for p in result["pairs"]]
+    assert sims == sorted(sims, reverse=True)
+    for p in result["pairs"]:
+        assert p["clash"] in ("similar", "complementary", "contrasting")
+
+
+def test_similarity_pairs_fields(style_df):
+    """Each pair should carry cluster ids, labels, similarity, clash."""
+    result = compute_cluster_similarity_matrix(style_df, n_clusters=4)
+    if result["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    for p in result["pairs"]:
+        assert "a" in p and "b" in p
+        assert "label_a" in p and "label_b" in p
+        assert "similarity" in p and "clash" in p
+
+
+def test_similarity_insufficient_teams():
+    """Fewer than 4 teams should return insufficient_teams."""
+    df = pd.DataFrame([
+        {"player": "P1", "team": "A", "league": "L", "season": "S",
+         "minutes": 2000.0, "position_group": "ST",
+         "npg_p90": 0.3, "assists_p90": 0.1,
+         "defense_composite": 40.0, "possession_composite": 50.0},
+        {"player": "P2", "team": "B", "league": "L", "season": "S",
+         "minutes": 2000.0, "position_group": "ST",
+         "npg_p90": 0.2, "assists_p90": 0.2,
+         "defense_composite": 50.0, "possession_composite": 40.0},
+    ])
+    result = compute_cluster_similarity_matrix(df)
+    assert result["status"] == "insufficient_teams"
+
+
+def test_similarity_disclaimer_present(style_df):
+    """Result should include a disclaimer."""
+    result = compute_cluster_similarity_matrix(style_df, n_clusters=4)
+    assert "disclaimer" in result
+    assert len(result["disclaimer"]) > 0
+
+
+def test_similarity_no_mutation(style_df):
+    """Original DataFrame should not be mutated."""
+    original = style_df.copy()
+    compute_cluster_similarity_matrix(style_df, n_clusters=4)
+    pd.testing.assert_frame_equal(style_df, original)
+
+
+# ── compute_style_matchup ────────────────────────────────────────────────
+
+
+def test_matchup_empty():
+    """Empty DataFrame should return no_data."""
+    result = compute_style_matchup(pd.DataFrame(), "Team A", "Team B")
+    assert result["status"] == "no_data"
+
+
+def test_matchup_team_not_found(style_df):
+    """Missing team should return team_not_found."""
+    result = compute_style_matchup(style_df, "Team A", "Nonexistent")
+    assert result["status"] == "team_not_found"
+    assert "Nonexistent" in result["missing"]
+
+
+def test_matchup_basic(style_df):
+    """Should return a full matchup diagnostic for two valid teams."""
+    result = compute_style_matchup(style_df, "Team A", "Team C")
+    assert result["status"] == "ok"
+    assert result["home_team"] == "Team A"
+    assert result["away_team"] == "Team C"
+    assert "home" in result and "away" in result
+    assert "dimensions" in result
+    assert "style_distance" in result
+    assert "game_script" in result
+    assert "game_script_label" in result
+
+
+def test_matchup_dimensions_fields(style_df):
+    """Each dimension should carry feature, label, home, away, delta, advantage."""
+    result = compute_style_matchup(style_df, "Team A", "Team C")
+    assert result["status"] == "ok"
+    assert len(result["dimensions"]) == 4
+    for d in result["dimensions"]:
+        assert "feature" in d and "label" in d
+        assert "home" in d and "away" in d
+        assert "delta_std" in d and "advantage" in d
+        assert d["advantage"] in ("home", "away", "even")
+
+
+def test_matchup_case_insensitive(style_df):
+    """Team name matching should be case-insensitive."""
+    result = compute_style_matchup(style_df, "team a", "TEAM C")
+    assert result["status"] == "ok"
+
+
+def test_matchup_attack_vs_defense_advantage(style_df):
+    """Team A (attacking) vs Team C (defensive) — attack dim favors home."""
+    result = compute_style_matchup(style_df, "Team A", "Team C")
+    assert result["status"] == "ok"
+    atk = next(d for d in result["dimensions"] if d["feature"] == "npg_p90")
+    # Team A has higher npg_p90 than Team C
+    assert atk["home"] > atk["away"]
+    assert atk["advantage"] == "home"
+    # defense_composite: Team C higher -> away advantage
+    defense = next(
+        d for d in result["dimensions"] if d["feature"] == "defense_composite"
+    )
+    assert defense["away"] > defense["home"]
+    assert defense["advantage"] == "away"
+
+
+def test_matchup_style_distance_nonnegative(style_df):
+    """Style distance should be non-negative."""
+    result = compute_style_matchup(style_df, "Team A", "Team B")
+    assert result["status"] == "ok"
+    assert result["style_distance"] >= 0.0
+
+
+def test_matchup_game_script_value(style_df):
+    """game_script should be a known classification key."""
+    result = compute_style_matchup(style_df, "Team A", "Team C")
+    assert result["status"] == "ok"
+    valid = {
+        "asymmetric", "open_game", "defensive_battle",
+        "possession_duel", "balanced",
+    }
+    assert result["game_script"] in valid
+
+
+def test_matchup_profile_has_raw_and_standardized(style_df):
+    """Each team profile should carry raw and standardized style values."""
+    result = compute_style_matchup(style_df, "Team A", "Team C")
+    assert result["status"] == "ok"
+    for side in ("home", "away"):
+        prof = result[side]
+        assert "raw" in prof and "standardized" in prof
+        for feat in ("npg_p90", "assists_p90", "defense_composite", "possession_composite"):
+            assert feat in prof["raw"]
+            assert feat in prof["standardized"]
+
+
+def test_matchup_cluster_context(style_df):
+    """When clustering succeeds, cluster assignment should be present."""
+    result = compute_style_matchup(style_df, "Team A", "Team C", n_clusters=4)
+    if result["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    # cluster fields are optional but when present must be dicts
+    if "home_cluster" in result:
+        assert isinstance(result["home_cluster"], dict)
+    if "away_cluster" in result:
+        assert isinstance(result["away_cluster"], dict)
+
+
+def test_matchup_same_cluster_similarity(style_df):
+    """Two teams in the same cluster should yield cluster_similarity 1.0."""
+    clusters = compute_team_style_clusters(style_df, n_clusters=4)
+    if clusters["status"] != "ok":
+        pytest.skip("Clustering not available in test env")
+    # Find two teams in the same cluster.
+    same_pair = None
+    for c in clusters["clusters"]:
+        if len(c["teams"]) >= 2:
+            same_pair = (c["teams"][0], c["teams"][1])
+            break
+    if same_pair is None:
+        pytest.skip("No cluster with 2+ teams")
+    result = compute_style_matchup(
+        style_df, same_pair[0], same_pair[1], n_clusters=4
+    )
+    assert result["status"] == "ok"
+    assert result.get("cluster_clash") == "same_cluster"
+    assert result.get("cluster_similarity") == 1.0
+
+
+def test_matchup_disclaimer_present(style_df):
+    """Result should include a non-additive disclaimer."""
+    result = compute_style_matchup(style_df, "Team A", "Team C")
+    assert "disclaimer" in result
+    assert len(result["disclaimer"]) > 0
+
+
+def test_matchup_no_mutation(style_df):
+    """Original DataFrame should not be mutated."""
+    original = style_df.copy()
+    compute_style_matchup(style_df, "Team A", "Team C", n_clusters=4)
     pd.testing.assert_frame_equal(style_df, original)

@@ -732,3 +732,446 @@ def compute_cluster_recruits(
             "scouting recommendation."
         ),
     }
+
+
+# ── Cluster-to-cluster similarity matrix ─────────────────────────────────
+
+
+def _clash_label(similarity: float) -> str:
+    """Heuristic label for how two style clusters relate."""
+    if similarity >= 0.75:
+        return "similar"
+    if similarity >= 0.25:
+        return "complementary"
+    return "contrasting"
+
+
+def compute_cluster_similarity_matrix(
+    df: pd.DataFrame,
+    *,
+    season: str | None = None,
+    league: str | None = None,
+    n_clusters: int = _DEFAULT_N_CLUSTERS,
+    min_minutes_total: float = _MIN_MINUTES_TOTAL,
+    random_state: int = 42,
+) -> dict[str, Any]:
+    """Compute an NxN similarity matrix between team-style clusters.
+
+    Reuses :func:`compute_team_style_clusters` to obtain the cluster
+    centroids, then computes pairwise cosine similarity between every
+    pair of cluster centroids. The result describes how tactically
+    similar two clusters are — useful for understanding style clashes
+    across the league population.
+
+    The matrix is symmetric with 1.0 on the diagonal. An interpretable
+    upper-triangle ``pairs`` list carries a heuristic clash label
+    (``similar`` / ``complementary`` / ``contrasting``).
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "n_clusters": 0,
+            "labels": [],
+            "matrix": [],
+            "pairs": [],
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    clusters_result = compute_team_style_clusters(
+        df,
+        season=season,
+        league=league,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+        random_state=random_state,
+    )
+
+    if clusters_result["status"] != "ok":
+        return {
+            "status": clusters_result["status"],
+            "n_clusters": 0,
+            "labels": [],
+            "matrix": [],
+            "pairs": [],
+            "disclaimer": clusters_result.get("disclaimer", ""),
+        }
+
+    clusters = clusters_result["clusters"]
+    centroids = [
+        np.array([c["centroid"][f] for f in _STYLE_FEATURES], dtype=float)
+        for c in clusters
+    ]
+    norms = [float(np.linalg.norm(v)) for v in centroids]
+
+    n = len(clusters)
+    labels = [
+        {
+            "cluster_id": c["cluster_id"],
+            "label": c["label"],
+            "n_teams": c["n_teams"],
+        }
+        for c in clusters
+    ]
+
+    matrix: list[list[float]] = []
+    for i in range(n):
+        row: list[float] = []
+        for j in range(n):
+            if i == j:
+                row.append(1.0)
+            elif norms[i] == 0 or norms[j] == 0:
+                row.append(0.0)
+            else:
+                sim = float(np.dot(centroids[i], centroids[j])) / (
+                    norms[i] * norms[j]
+                )
+                row.append(round(sim, 3))
+        matrix.append(row)
+
+    pairs: list[dict[str, Any]] = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            sim = matrix[i][j]
+            pairs.append(
+                {
+                    "a": clusters[i]["cluster_id"],
+                    "b": clusters[j]["cluster_id"],
+                    "label_a": clusters[i]["label"],
+                    "label_b": clusters[j]["label"],
+                    "similarity": sim,
+                    "clash": _clash_label(sim),
+                }
+            )
+
+    pairs.sort(key=lambda p: p["similarity"], reverse=True)
+
+    return {
+        "status": "ok",
+        "n_clusters": n,
+        "season": season,
+        "league": league,
+        "labels": labels,
+        "matrix": matrix,
+        "pairs": pairs,
+        "disclaimer": (
+            "Cluster similarities are cosine similarities between "
+            "standardised cluster centroids. They describe statistical "
+            "affinity between groupings of teams, not confirmed tactical "
+            "relationships. A 'similar' rating does not mean two clusters "
+            "play identically, and a 'contrasting' rating does not "
+            "predict a match outcome."
+        ),
+    }
+
+
+# ── Head-to-head style matchup diagnostic ────────────────────────────────
+
+
+# Human-readable labels for each style dimension, keyed by feature column.
+_DIM_LABELS = {
+    "npg_p90": "attack",
+    "assists_p90": "creation",
+    "defense_composite": "defense",
+    "possession_composite": "possession",
+}
+
+
+def _game_script(
+    home_std: np.ndarray, away_std: np.ndarray
+) -> tuple[str, str]:
+    """Classify the expected game script from standardised profiles.
+
+    Returns ``(script_key, script_label)``. This is a non-additive
+    interpretive overlay — it never changes a probability model.
+    """
+    h_atk, h_cre, h_def, h_pos = home_std
+    a_atk, a_cre, a_def, a_pos = away_std
+
+    avg_atk = (h_atk + a_atk) / 2.0
+    avg_def = (h_def + a_def) / 2.0
+    avg_pos = (h_pos + a_pos) / 2.0
+    atk_gap = h_atk - a_atk
+    def_gap = h_def - a_def
+
+    # Asymmetric: one side clearly attacks, the other clearly defends.
+    if (h_atk > 0.4 and a_def > 0.4) or (a_atk > 0.4 and h_def > 0.4):
+        if abs(atk_gap) > 0.6 or abs(def_gap) > 0.6:
+            return (
+                "asymmetric",
+                "Attack-versus-defense: one side presses high while the "
+                "other sits deep.",
+            )
+
+    # Open game: both attack above population, defenses leaky (below pop).
+    if avg_atk > 0.4 and avg_def < -0.4:
+        return (
+            "open_game",
+            "Open, high-scoring game expected — both teams attack and "
+            "concede chances.",
+        )
+
+    # Defensive battle: both defend above population, attack muted.
+    if avg_atk < -0.4 and avg_def > 0.4:
+        return (
+            "defensive_battle",
+            "Defensive battle expected — both sides prioritise structure "
+            "over creation.",
+        )
+
+    # Possession duel: both possession-heavy.
+    if avg_pos > 0.4:
+        return (
+            "possession_duel",
+            "Possession duel — both teams look to control the ball.",
+        )
+
+    return (
+        "balanced",
+        "Balanced matchup — no single style dimension dominates either "
+        "side.",
+    )
+
+
+def _team_profile_dict(
+    profile: TeamStyleProfile,
+    means: np.ndarray,
+    stds: np.ndarray,
+) -> dict[str, Any]:
+    """Build a display dict with raw + standardised style values."""
+    raw = [
+        profile.attack,
+        profile.creation,
+        profile.defense,
+        profile.possession,
+    ]
+    stds_safe = np.where(stds == 0, 1.0, stds)
+    standardized = (np.array(raw, dtype=float) - means) / stds_safe
+    return {
+        "team": profile.team,
+        "league": profile.league,
+        "season": profile.season,
+        "n_players": profile.n_players,
+        "total_minutes": profile.total_minutes,
+        "raw": {
+            _STYLE_FEATURES[i]: round(float(raw[i]), 3)
+            for i in range(len(_STYLE_FEATURES))
+        },
+        "standardized": {
+            _STYLE_FEATURES[i]: round(float(standardized[i]), 3)
+            for i in range(len(_STYLE_FEATURES))
+        },
+    }
+
+
+def compute_style_matchup(
+    df: pd.DataFrame,
+    home_team: str,
+    away_team: str,
+    *,
+    season: str | None = None,
+    league: str | None = None,
+    n_clusters: int = _DEFAULT_N_CLUSTERS,
+    min_minutes_total: float = _MIN_MINUTES_TOTAL,
+    random_state: int = 42,
+) -> dict[str, Any]:
+    """Diagnostic of how two teams' tactical styles clash.
+
+    Computes each team's minutes-weighted style profile, standardises
+    both against the league population, and reports per-dimension
+    advantage, an overall style distance, and a heuristic game-script
+    classification. When clustering succeeds, each team's cluster
+    assignment and the inter-cluster similarity are included.
+
+    This is an interpretive overlay. It does **not** modify or replace
+    the Dixon-Coles / Poisson match-probability model — probabilities
+    remain the sole source of truth for win/draw/loss estimates.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "home_team": home_team,
+            "away_team": away_team,
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = compute_team_style_profiles(
+        df,
+        season=season,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+
+    if not profiles:
+        return {
+            "status": "no_data",
+            "home_team": home_team,
+            "away_team": away_team,
+            "disclaimer": (
+                "No team-season profiles meet the minimum minutes "
+                f"threshold ({min_minutes_total:.0f} min)."
+            ),
+        }
+
+    # Pick the matching profile for each team. If a season filter is
+    # applied there should be at most one match per team; otherwise pick
+    # the most recent season available for that team.
+    def _pick(team_name: str) -> TeamStyleProfile | None:
+        matches = [p for p in profiles if p.team.lower() == team_name.lower()]
+        if not matches:
+            return None
+        if len(matches) == 1:
+            return matches[0]
+        matches.sort(key=lambda p: str(p.season), reverse=True)
+        return matches[0]
+
+    home_profile = _pick(home_team)
+    away_profile = _pick(away_team)
+
+    missing = []
+    if home_profile is None:
+        missing.append(home_team)
+    if away_profile is None:
+        missing.append(away_team)
+    if missing:
+        return {
+            "status": "team_not_found",
+            "home_team": home_team,
+            "away_team": away_team,
+            "missing": missing,
+            "disclaimer": (
+                f"No style profile found for: {', '.join(missing)}."
+                + (f" Season={season}." if season else "")
+                + (f" League={league}." if league else "")
+                + " Check the team name spelling or broaden the filters."
+            ),
+        }
+
+    # Population standardisation stats from the full profile set so the
+    # per-dimension deltas are comparable across scales.
+    mat = np.array(
+        [
+            [
+                getattr(p, _feat_to_attr(c))
+                for c in _STYLE_FEATURES
+            ]
+            for p in profiles
+        ],
+        dtype=float,
+    )
+    means = mat.mean(axis=0)
+    stds = mat.std(axis=0, ddof=0)
+    stds_safe = np.where(stds == 0, 1.0, stds)
+
+    home_raw = np.array(
+        [getattr(home_profile, _feat_to_attr(c)) for c in _STYLE_FEATURES],
+        dtype=float,
+    )
+    away_raw = np.array(
+        [getattr(away_profile, _feat_to_attr(c)) for c in _STYLE_FEATURES],
+        dtype=float,
+    )
+    home_std = (home_raw - means) / stds_safe
+    away_std = (away_raw - means) / stds_safe
+
+    # Per-dimension comparison.
+    dimensions: list[dict[str, Any]] = []
+    for i, feat in enumerate(_STYLE_FEATURES):
+        delta_std = float(home_std[i] - away_std[i])
+        if abs(delta_std) < 0.15:
+            advantage = "even"
+        elif delta_std > 0:
+            advantage = "home"
+        else:
+            advantage = "away"
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _DIM_LABELS[feat],
+                "home": round(float(home_raw[i]), 3),
+                "away": round(float(away_raw[i]), 3),
+                "delta_std": round(delta_std, 3),
+                "advantage": advantage,
+            }
+        )
+
+    # Overall style distance (Euclidean on standardised vectors).
+    style_distance = float(np.linalg.norm(home_std - away_std))
+
+    script_key, script_label = _game_script(home_std, away_std)
+
+    result: dict[str, Any] = {
+        "status": "ok",
+        "home_team": home_team,
+        "away_team": away_team,
+        "season": season,
+        "league": league,
+        "home": _team_profile_dict(home_profile, means, stds_safe),
+        "away": _team_profile_dict(away_profile, means, stds_safe),
+        "dimensions": dimensions,
+        "style_distance": round(style_distance, 3),
+        "game_script": script_key,
+        "game_script_label": script_label,
+        "disclaimer": (
+            "Style matchup is a non-additive interpretive overlay computed "
+            "from minutes-weighted per-player style composites. It "
+            "describes statistical tendencies, not a confirmed tactical "
+            "plan. It does NOT modify the match-probability model — "
+            "win/draw/loss probabilities remain the sole source of truth."
+        ),
+    }
+
+    # Optional cluster context (only when clustering succeeds).
+    clusters_result = compute_team_style_clusters(
+        df,
+        season=season,
+        league=league,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+        random_state=random_state,
+    )
+    if clusters_result["status"] == "ok":
+        team_profiles = clusters_result["team_profiles"]
+        cluster_map: dict[str, dict[str, Any]] = {}
+        for tp in team_profiles:
+            cluster_map.setdefault(tp["team"], {
+                "cluster_id": int(tp["cluster_id"]),
+                "label": "",
+            })["cluster_id"] = int(tp["cluster_id"])
+
+        # Attach cluster labels.
+        for c in clusters_result["clusters"]:
+            for team in c["teams"]:
+                if team in cluster_map:
+                    cluster_map[team]["label"] = c["label"]
+
+        home_cluster = cluster_map.get(home_team)
+        away_cluster = cluster_map.get(away_team)
+        result["home_cluster"] = home_cluster
+        result["away_cluster"] = away_cluster
+
+        if (
+            home_cluster is not None
+            and away_cluster is not None
+            and home_cluster["cluster_id"] == away_cluster["cluster_id"]
+        ):
+            result["cluster_similarity"] = 1.0
+            result["cluster_clash"] = "same_cluster"
+        elif home_cluster is not None and away_cluster is not None:
+            centroids = {
+                c["cluster_id"]: np.array(
+                    [c["centroid"][f] for f in _STYLE_FEATURES],
+                    dtype=float,
+                )
+                for c in clusters_result["clusters"]
+            }
+            hc = centroids.get(home_cluster["cluster_id"])
+            ac = centroids.get(away_cluster["cluster_id"])
+            if hc is not None and ac is not None:
+                nh = float(np.linalg.norm(hc))
+                na = float(np.linalg.norm(ac))
+                if nh > 0 and na > 0:
+                    sim = float(np.dot(hc, ac)) / (nh * na)
+                    result["cluster_similarity"] = round(sim, 3)
+                    result["cluster_clash"] = _clash_label(sim)
+
+    return result
