@@ -678,6 +678,8 @@ const i18n = {
         position_action_button: "分析",
         team_action_title: "球队动作画像与百分位",
         team_action_button: "分析",
+        league_action_title: "联赛动作分布与跨联赛对比",
+        league_action_button: "分析",
         backtest_best_decay: "最优 Decay",
         backtest_selection_metric: "选择指标",
         backtest_half_life: "半衰期(天)",
@@ -1685,6 +1687,8 @@ const i18n = {
         position_action_button: "Analyze",
         team_action_title: "Team Action Profile & Percentiles",
         team_action_button: "Analyze",
+        league_action_title: "League Action Distribution & Cross-League",
+        league_action_button: "Analyze",
         backtest_best_decay: "Best Decay",
         backtest_selection_metric: "Selection Metric",
         backtest_half_life: "Half-Life (days)",
@@ -2644,6 +2648,44 @@ async function fetchTeamActionSimilarity(team, league, season) {
     } catch (err) {
         console.warn("Failed to fetch team action similarity:", err);
         return { status: "fetch_failed", team, neighbors: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchLeagueActionAtlas(season, league, nBins) {
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (league) params.set("league", league);
+    params.set("n_bins", String(Math.max(3, Math.min(20, Number(nBins) || 8))));
+    try {
+        const data = await fetchJson("/teams/action-atlas", { params });
+        return data || { status: "no_data", dimensions: [] };
+    } catch (err) {
+        console.warn("Failed to fetch league action atlas:", err);
+        return { status: "fetch_failed", dimensions: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchLeagueActionEvolution(league) {
+    const params = new URLSearchParams();
+    if (league) params.set("league", league);
+    try {
+        const data = await fetchJson("/teams/action-evolution", { params });
+        return data || { status: "no_data", dimensions: [] };
+    } catch (err) {
+        console.warn("Failed to fetch league action evolution:", err);
+        return { status: "fetch_failed", dimensions: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchCrossLeagueActionComparison(season) {
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    try {
+        const data = await fetchJson("/teams/cross-league-action", { params });
+        return data || { status: "no_data", leagues: [] };
+    } catch (err) {
+        console.warn("Failed to fetch cross-league action comparison:", err);
+        return { status: "fetch_failed", leagues: [], error: "fetch_failed" };
     }
 }
 
@@ -10121,6 +10163,7 @@ async function renderTeams() {
     initPositionDepthControls();
     initPositionActionControls();
     initTeamActionControls();
+    initLeagueActionControls();
 }
 
 function renderTeamDetail(team) {
@@ -12243,6 +12286,239 @@ async function _renderTeamActionSimilarity(team, league, season) {
         neighborRows
             ? `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>#</th><th>${z ? "球队" : "Team"}</th><th>${z ? "余弦相似度" : "Cosine"}</th><th>${z ? "欧氏距离" : "Distance"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "分钟" : "Minutes"}</th></tr></thead><tbody>${neighborRows}</tbody></table></div>`
             : `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无近邻数据。" : "No neighbors found.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+function initLeagueActionControls() {
+    const btn = document.getElementById("league-action-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+
+    const doScan = async () => {
+        const leagueInput = document.getElementById("league-action-league");
+        const seasonInput = document.getElementById("league-action-season");
+        const league = leagueInput ? leagueInput.value.trim() : "";
+        const season = seasonInput ? seasonInput.value.trim() : "";
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+            await Promise.all([
+                _renderLeagueActionAtlas(season, league),
+                _renderLeagueActionEvolution(league),
+                _renderCrossLeagueActionComparison(season),
+            ]);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = t("league_action_button");
+        }
+    };
+
+    btn.addEventListener("click", doScan);
+    const handler = (e) => { if (e.key === "Enter") doScan(); };
+    const ids = ["league-action-league", "league-action-season"];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("keydown", handler);
+    }
+}
+
+
+async function _renderLeagueActionAtlas(season, league) {
+    const wrap = document.getElementById("league-action-atlas-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在构建联赛动作分布图集…" : "Building league action atlas…")}</p>`;
+
+    const data = await fetchLeagueActionAtlas(season, league, 8);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(data.disclaimer || (z ? "暂无足够动作数据。" : "Insufficient action data."))}</p>`;
+        return;
+    }
+
+    const dims = data.dimensions || [];
+    const nPop = Number(data.n_population ?? 0);
+
+    const dimBlocks = dims.map(d => {
+        const bins = d.bins || [];
+        const maxCount = Math.max(1, ...bins.map(b => Number(b.count ?? 0)));
+        const bars = bins.map(b => {
+            const h = Math.max(1, (Number(b.count ?? 0) / maxCount) * 100);
+            const range = `${Number(b.low ?? 0).toFixed(2)}–${Number(b.high ?? 0).toFixed(2)}`;
+            return `<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.65rem">
+                <div style="width:80px;text-align:right;color:var(--text-muted)">${escapeHtml(range)}</div>
+                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:2px;overflow:hidden">
+                    <div style="width:${h}%;height:100%;background:#5b8def"></div>
+                </div>
+                <div style="width:24px;text-align:right;font-weight:600">${Number(b.count ?? 0)}</div>
+            </div>`;
+        }).join("");
+
+        const outliers = d.outliers || [];
+        const outlierHtml = outliers.length === 0
+            ? `<span style="font-size:0.68rem;color:var(--text-muted)">${z ? "无离群值" : "No outliers"}</span>`
+            : outliers.slice(0, 5).map(o => {
+                const dirClass = o.direction === "high" ? "status-high" : "status-low";
+                const dirLabel = o.direction === "high" ? (z ? "高" : "hi") : (z ? "低" : "lo");
+                return `<span class="status-pill ${dirClass}" style="font-size:0.62rem;padding:0.08rem 0.35rem;margin:0.1rem 0.2rem 0.1rem 0">${escapeHtml(o.team)} (${Number(o.z_score ?? 0).toFixed(2)}σ, ${dirLabel})</span>`;
+            }).join("") + (outliers.length > 5 ? `<span style="font-size:0.65rem;color:var(--text-muted)">+${outliers.length - 5}</span>` : "");
+
+        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
+                <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
+                <span style="font-size:0.68rem;color:var(--text-muted)">min ${Number(d.min ?? 0).toFixed(2)} · Q1 ${Number(d.q1 ?? 0).toFixed(2)} · ${z ? "中位" : "med"} ${Number(d.median ?? 0).toFixed(2)} · Q3 ${Number(d.q3 ?? 0).toFixed(2)} · max ${Number(d.max ?? 0).toFixed(2)} · IQR ${Number(d.iqr ?? 0).toFixed(2)}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.15rem;margin-bottom:0.3rem">${bars}</div>
+            <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:0.15rem">${z ? "离群值 (|z|≥2)" : "Outliers (|z|≥2)"}:</div>
+            <div>${outlierHtml}</div>
+        </div>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "联赛动作分布图集" : "League Action Atlas")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${z ? "样本量" : "N"}: ${nPop}${season ? " · " + escapeHtml(season) : ""}${league ? " · " + escapeHtml(league) : ""}</div>`,
+        `</div>`,
+        dimBlocks || `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无维度数据。" : "No dimension data.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+async function _renderLeagueActionEvolution(league) {
+    const wrap = document.getElementById("league-action-evolution-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算联赛动作演化…" : "Computing league action evolution…")}</p>`;
+
+    const data = await fetchLeagueActionEvolution(league);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(data.disclaimer || (z ? "暂无足够数据。" : "Insufficient data."))}</p>`;
+        return;
+    }
+    if (data.status === "insufficient_seasons") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "动作演化需要至少 2 个赛季数据，当前仅 " + (data.n_seasons ?? 0) + " 个。" : "Action evolution requires >= 2 seasons; only " + (data.n_seasons ?? 0) + " found.")}</p>`;
+        return;
+    }
+
+    const dims = data.dimensions || [];
+    const perSeason = data.per_season || [];
+    const seasons = data.seasons || [];
+    const nSeasons = Number(data.n_seasons ?? 0);
+
+    const evoLabelMap = (lbl) => {
+        const m = { rising: z ? "上升" : "Rising", falling: z ? "下降" : "Falling", stable: z ? "稳定" : "Stable" };
+        return m[lbl] || lbl;
+    };
+    const evoLabelClass = (lbl) => {
+        const m = { rising: "status-high", falling: "status-low", stable: "status-medium" };
+        return m[lbl] || "status-medium";
+    };
+
+    const dimRows = dims.map(d => {
+        return `<tr>
+            <td><strong>${escapeHtml(d.label || d.feature || "")}</strong></td>
+            <td>${Number(d.median_slope ?? 0).toFixed(4)}</td>
+            <td>${Number(d.median_delta ?? 0).toFixed(3)}</td>
+            <td>${Number(d.median_r_squared ?? 0).toFixed(3)}</td>
+            <td>${Number(d.mean_slope ?? 0).toFixed(4)}</td>
+            <td>${Number(d.mean_delta ?? 0).toFixed(3)}</td>
+            <td><span class="status-pill ${evoLabelClass(d.evolution_label)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(evoLabelMap(d.evolution_label))}</span></td>
+        </tr>`;
+    }).join("");
+
+    const seasonCols = seasons.map(s => `<th style="font-size:0.65rem">${escapeHtml(s)}</th>`).join("");
+    const seasonRows = dims.map(d => {
+        const cells = perSeason.map(ps => {
+            const stat = ps[d.feature] || {};
+            return `<td style="font-size:0.65rem">${Number(stat.median ?? 0).toFixed(2)}</td>`;
+        }).join("");
+        return `<tr><td style="font-size:0.7rem"><strong>${escapeHtml(d.label || d.feature || "")}</strong></td>${cells}</tr>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "联赛动作演化" : "League Action Evolution")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${z ? "赛季数" : "Seasons"}: ${nSeasons}${league ? " · " + escapeHtml(league) : ""}</div>`,
+        `</div>`,
+        `<div class="table-scroll" style="margin-bottom:0.6rem"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "维度" : "Dimension"}</th><th>${z ? "中位斜率" : "Med Slope"}</th><th>${z ? "中位Δ" : "Med Δ"}</th><th>Med R²</th><th>${z ? "均值斜率" : "Mean Slope"}</th><th>${z ? "均值Δ" : "Mean Δ"}</th><th>${z ? "趋势" : "Trend"}</th></tr></thead><tbody>${dimRows}</tbody></table></div>`,
+        `<p class="eyebrow" style="margin:0.4rem 0 0.2rem">${escapeHtml(z ? "逐赛季中位值" : "Per-Season Medians")}</p>`,
+        `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "维度" : "Dimension"}</th>${seasonCols}</tr></thead><tbody>${seasonRows}</tbody></table></div>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+
+async function _renderCrossLeagueActionComparison(season) {
+    const wrap = document.getElementById("league-action-cross-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算跨联赛动作对比…" : "Computing cross-league action comparison…")}</p>`;
+
+    const data = await fetchCrossLeagueActionComparison(season);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-danger);font-size:0.85rem">${escapeHtml(z ? "获取失败" : "Fetch failed")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(data.disclaimer || (z ? "暂无足够数据。" : "Insufficient data."))}</p>`;
+        return;
+    }
+
+    const tierMap = (tier) => {
+        const m = { top: z ? "上层" : "Top", middle: z ? "中层" : "Middle", bottom: z ? "下层" : "Bottom" };
+        return m[tier] || tier;
+    };
+    const tierClass = (tier) => {
+        const m = { top: "status-high", middle: "status-medium", bottom: "status-low" };
+        return m[tier] || "status-medium";
+    };
+
+    const dims = data.dimensions || [];
+    const dimBlocks = dims.map(d => {
+        const rankings = d.rankings || [];
+        const rows = rankings.map(r => {
+            return `<tr>
+                <td>${r.rank}</td>
+                <td><strong>${escapeHtml(r.league || "")}</strong></td>
+                <td>${Number(r.mean ?? 0).toFixed(3)}</td>
+                <td>${Number(r.median ?? 0).toFixed(3)}</td>
+                <td>${r.n_teams ?? 0}</td>
+                <td><span class="status-pill ${tierClass(r.quality_tier)}" style="font-size:0.62rem;padding:0.08rem 0.35rem">${escapeHtml(tierMap(r.quality_tier))}</span></td>
+            </tr>`;
+        }).join("");
+        return `<div style="margin-bottom:0.5rem">
+            <p class="eyebrow" style="margin:0 0 0.2rem;font-size:0.75rem">${escapeHtml(d.label || d.feature || "")}</p>
+            ${rows
+                ? `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.7rem"><thead><tr><th>#</th><th>${z ? "联赛" : "League"}</th><th>${z ? "均值" : "Mean"}</th><th>${z ? "中位" : "Median"}</th><th>${z ? "球队数" : "Teams"}</th><th>${z ? "层级" : "Tier"}</th></tr></thead><tbody>${rows}</tbody></table></div>`
+                : `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无排名数据。" : "No rankings.")}</p>`}
+        </div>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "跨联赛动作对比" : "Cross-League Action Comparison")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${z ? "联赛数" : "Leagues"}: ${data.n_leagues ?? 0}${season ? " · " + escapeHtml(season) : ""}</div>`,
+        `</div>`,
+        dimBlocks || `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无维度数据。" : "No dimension data.")}</p>`,
         `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
     ].join("");
 }
