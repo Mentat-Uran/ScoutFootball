@@ -81,6 +81,7 @@ from scoutfootball.api import (
     get_ratings_meta,
     get_reliability_diagram,
     get_review_queue,
+    get_riser_decliner_watchlist,
     get_scenario_stress_test,
     get_scoreline_calibration,
     get_shortlist,
@@ -89,6 +90,7 @@ from scoutfootball.api import (
     get_team_comparison,
     get_team_performance_profile,
     get_team_strength,
+    get_team_style_clusters,
     get_temporal_validation,
     get_transfermarkt_identity_report,
     get_truth_label_supervision,
@@ -838,6 +840,38 @@ def create_app() -> FastAPI:
     ):
         return get_player_peer_benchmark(
             player_name, season=season, position_group=position_group
+        )
+
+    @app.get("/scouting/risers-decliners")
+    def risers_decliners(
+        season: str | None = None,
+        min_seasons: int = 2,
+        min_minutes_latest: float = 300.0,
+        top_n: int = 20,
+        riser_threshold: float = 1.0,
+        decliner_threshold: float = -1.0,
+    ):
+        return get_riser_decliner_watchlist(
+            season=season,
+            min_seasons=min_seasons,
+            min_minutes_latest=min_minutes_latest,
+            top_n=min(50, max(1, top_n)),
+            riser_threshold=riser_threshold,
+            decliner_threshold=decliner_threshold,
+        )
+
+    @app.get("/teams/style-clusters")
+    def team_style_clusters(
+        season: str | None = None,
+        league: str | None = None,
+        n_clusters: int = 4,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_team_style_clusters(
+            season=season,
+            league=league,
+            n_clusters=min(8, max(2, n_clusters)),
+            min_minutes_total=min_minutes_total,
         )
 
     @app.get("/player/{player_name}/profile")

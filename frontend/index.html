@@ -726,6 +726,44 @@
                         </article>
                     </div>
                 </div>
+
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="teams_style_title">球队风格聚类</h3>
+                        <span id="teams-style-pill" class="status-pill status-medium">—</span>
+                    </div>
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:var(--space)">
+                        <div style="flex:1;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_season">赛季</label>
+                            <input type="text" id="teams-style-season" class="filter-input" placeholder="e.g. 2526" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_league">联赛</label>
+                            <input type="text" id="teams-style-league" class="filter-input" placeholder="e.g. Premier League" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:80px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_k">聚类数</label>
+                            <input type="number" id="teams-style-k" class="filter-input" value="4" min="2" max="8" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="teams-style-btn" class="cta-button" type="button" data-i18n="teams_style_button">聚类</button>
+                    </div>
+                    <div id="teams-style-result" style="display:none;padding:0 var(--space) var(--space)">
+                        <div id="teams-style-chart" style="width:100%;height:350px"></div>
+                        <div class="table-scroll" style="margin-top:0.5rem">
+                            <table class="data-table" id="teams-style-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="teams_style_col_cluster">簇</th>
+                                        <th data-i18n="teams_style_col_label">风格</th>
+                                        <th data-i18n="teams_style_col_n">球队数</th>
+                                        <th data-i18n="teams_style_col_teams">球队</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="teams-style-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </article>
             </section>
 
             <section class="view" id="view-scouting" aria-label="scouting">
@@ -789,6 +827,63 @@
                         <div id="player-tactical-role" style="padding:0.4rem 0.8rem"></div>
                     </article>
                 </div>
+
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="risers_decliners_title">上升/下滑球员观察</h3>
+                        <span id="risers-decliners-pill" class="status-pill status-medium">—</span>
+                    </div>
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:var(--space)">
+                        <div style="flex:1;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="risers_season">赛季</label>
+                            <input type="text" id="risers-season" class="filter-input" placeholder="e.g. 2526" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:80px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="risers_top_n">前 N</label>
+                            <input type="number" id="risers-top-n" class="filter-input" value="20" min="1" max="50" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="risers-btn" class="cta-button" type="button" data-i18n="risers_button">扫描</button>
+                    </div>
+                    <div id="risers-decliners-result" style="display:none;padding:0 var(--space) var(--space)">
+                        <div class="layout-2">
+                            <div>
+                                <h4 style="padding:0.5rem 0;color:var(--success)" data-i18n="risers_title">↑ 上升球员</h4>
+                                <div class="table-scroll">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th data-i18n="risers_col_player">球员</th>
+                                                <th data-i18n="risers_col_team">球队</th>
+                                                <th data-i18n="risers_col_pos">位置</th>
+                                                <th data-i18n="risers_col_score">评分</th>
+                                                <th>Δ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="risers-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 style="padding:0.5rem 0;color:var(--danger)" data-i18n="decliners_title">↓ 下滑球员</h4>
+                                <div class="table-scroll">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th data-i18n="decliners_col_player">球员</th>
+                                                <th data-i18n="decliners_col_team">球队</th>
+                                                <th data-i18n="decliners_col_pos">位置</th>
+                                                <th data-i18n="decliners_col_score">评分</th>
+                                                <th>Δ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="decliners-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
                 <dialog class="workspace-dialog" id="scout-workspace-dialog" aria-labelledby="scout-workspace-dialog-title">
                     <div class="workspace-dialog-shell">
                         <div class="workspace-dialog-head">

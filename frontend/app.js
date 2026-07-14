@@ -89,6 +89,29 @@ const i18n = {
         teams_compare_radar: "位置组雷达",
         teams_compare_pos: "位置组对比",
         teams_compare_col_group: "组",
+        teams_style_title: "球队风格聚类",
+        teams_style_season: "赛季",
+        teams_style_league: "联赛",
+        teams_style_k: "聚类数",
+        teams_style_button: "聚类",
+        teams_style_col_cluster: "簇",
+        teams_style_col_label: "风格",
+        teams_style_col_n: "球队数",
+        teams_style_col_teams: "球队",
+        risers_decliners_title: "上升/下滑球员观察",
+        risers_season: "赛季",
+        risers_top_n: "前 N",
+        risers_button: "扫描",
+        risers_title: "↑ 上升球员",
+        decliners_title: "↓ 下滑球员",
+        risers_col_player: "球员",
+        risers_col_team: "球队",
+        risers_col_pos: "位置",
+        risers_col_score: "评分",
+        decliners_col_player: "球员",
+        decliners_col_team: "球队",
+        decliners_col_pos: "位置",
+        decliners_col_score: "评分",
         scouting_metric_review: "待复核",
         scouting_metric_short: "候选",
         scouting_search: "搜索球员、球队或原因",
@@ -1047,6 +1070,29 @@ const i18n = {
         teams_compare_radar: "Position Group Radar",
         teams_compare_pos: "Position Group Comparison",
         teams_compare_col_group: "Group",
+        teams_style_title: "Team Style Clusters",
+        teams_style_season: "Season",
+        teams_style_league: "League",
+        teams_style_k: "Clusters (k)",
+        teams_style_button: "Cluster",
+        teams_style_col_cluster: "Cluster",
+        teams_style_col_label: "Style",
+        teams_style_col_n: "Teams",
+        teams_style_col_teams: "Teams",
+        risers_decliners_title: "Risers / Decliners Watch",
+        risers_season: "Season",
+        risers_top_n: "Top N",
+        risers_button: "Scan",
+        risers_title: "↑ Risers",
+        decliners_title: "↓ Decliners",
+        risers_col_player: "Player",
+        risers_col_team: "Team",
+        risers_col_pos: "Pos",
+        risers_col_score: "Score",
+        decliners_col_player: "Player",
+        decliners_col_team: "Team",
+        decliners_col_pos: "Pos",
+        decliners_col_score: "Score",
         scouting_metric_review: "To review",
         scouting_metric_short: "Shortlist",
         scouting_search: "Search player, team, or reason",
@@ -2214,6 +2260,34 @@ async function fetchTeamStrength(league) {
     } catch (err) {
         console.warn("Failed to fetch team strength:", err);
         return { count: 0, teams: [] };
+    }
+}
+
+async function fetchRisersDecliners(season, topN) {
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (topN) params.set("top_n", String(Math.max(1, Math.min(50, Number(topN) || 20))));
+    try {
+        const data = await fetchJson("/scouting/risers-decliners", { params });
+        return data || { risers: [], decliners: [], n_scanned: 0 };
+    } catch (err) {
+        console.warn("Failed to fetch risers/decliners:", err);
+        return { risers: [], decliners: [], n_scanned: 0, error: "fetch_failed" };
+    }
+}
+
+async function fetchTeamStyleClusters(season, league, nClusters) {
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (league) params.set("league", league);
+    const k = Math.max(2, Math.min(8, Number(nClusters) || 4));
+    params.set("n_clusters", String(k));
+    try {
+        const data = await fetchJson("/teams/style-clusters", { params });
+        return data || { status: "no_data", clusters: [], team_profiles: [] };
+    } catch (err) {
+        console.warn("Failed to fetch team style clusters:", err);
+        return { status: "fetch_failed", clusters: [], team_profiles: [], error: "fetch_failed" };
     }
 }
 
@@ -3610,6 +3684,7 @@ function _buildScoutingReport(player, profile, detail) {
         watchlist_note: watchlistNotes[player.name] || "",
         shortlist_note: shortlistDossier.rationale,
         shortlist_dossier: shortlistDossier,
+        career_trajectory: (profile && profile.career_trajectory) ? profile.career_trajectory : null,
         exported_at: new Date().toISOString(),
         app_version: APP_VERSION,
     };
@@ -3715,6 +3790,31 @@ function exportPlayerScoutingReportCSV(player, profile, detail) {
         lines.push(["season", "team", "league", "position_group", "score", "minutes"]);
         for (const s of report.seasons_history) {
             lines.push([s.season, s.team, s.league, s.position_group, s.score ?? "", s.minutes ?? ""]);
+        }
+        lines.push([]);
+    }
+
+    // Section 9: Career trajectory
+    if (report.career_trajectory && report.career_trajectory.seasons && report.career_trajectory.seasons.length > 0) {
+        const traj = report.career_trajectory;
+        lines.push(["# Career Trajectory"]);
+        lines.push(["field", "value"]);
+        const metrics = traj.metrics || {};
+        lines.push(["n_seasons", metrics.n_seasons ?? ""]);
+        lines.push(["career_avg_score", metrics.career_avg_score ?? ""]);
+        lines.push(["peak_score", metrics.peak_score ?? ""]);
+        lines.push(["trajectory_slope", metrics.trajectory_slope ?? ""]);
+        lines.push(["score_consistency_std", metrics.score_consistency_std ?? ""]);
+        lines.push(["career_minutes_total", metrics.career_minutes_total ?? ""]);
+        if (traj.peak) {
+            lines.push(["peak_season", traj.peak.season || ""]);
+            lines.push(["peak_team", traj.peak.team || ""]);
+        }
+        lines.push([]);
+        // Per-season arc
+        lines.push(["season", "team", "league", "position_group", "score", "minutes", "npg_p90", "assists_p90"]);
+        for (const s of traj.seasons) {
+            lines.push([s.season || "", s.team || "", s.league || "", s.position_group || "", s.optimized_score ?? "", s.minutes ?? "", s.npg_p90 ?? "", s.assists_p90 ?? ""]);
         }
         lines.push([]);
     }
@@ -8929,6 +9029,7 @@ function renderScouting() {
 
     updateSnapshotStatus();
     renderScoutingWorkspaceStatus();
+    initRisersDeclinersControls();
 }
 
 function queueStatusKey(player) {
@@ -9649,6 +9750,7 @@ async function renderTeams() {
     // Render chart
     renderTeamsChart(filtered);
     initTeamCompareControls();
+    initTeamStyleClustersControls();
 }
 
 function renderTeamDetail(team) {
@@ -9897,6 +9999,238 @@ async function _renderTeamCompareResult(a, b) {
                     <tbody>${rows}</tbody>
                 </table>`;
         }
+    }
+}
+
+// ── Team-style clustering (k-means on minutes-weighted player composites) ─
+
+function initTeamStyleClustersControls() {
+    const btn = document.getElementById("teams-style-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+
+    const doScan = async () => {
+        const seasonInput = document.getElementById("teams-style-season");
+        const leagueInput = document.getElementById("teams-style-league");
+        const kInput = document.getElementById("teams-style-k");
+        const season = seasonInput ? seasonInput.value.trim() : "";
+        const league = leagueInput ? leagueInput.value.trim() : "";
+        const k = kInput ? Number(kInput.value) : 4;
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+            await _renderTeamStyleClusters(season, league, k);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = t("teams_style_button");
+        }
+    };
+
+    btn.addEventListener("click", doScan);
+    const handler = (e) => { if (e.key === "Enter") doScan(); };
+    const seasonInput = document.getElementById("teams-style-season");
+    const leagueInput = document.getElementById("teams-style-league");
+    const kInput = document.getElementById("teams-style-k");
+    if (seasonInput) seasonInput.addEventListener("keydown", handler);
+    if (leagueInput) leagueInput.addEventListener("keydown", handler);
+    if (kInput) kInput.addEventListener("keydown", handler);
+}
+
+async function _renderTeamStyleClusters(season, league, nClusters) {
+    const data = await fetchTeamStyleClusters(season, league, nClusters);
+    const wrap = document.getElementById("teams-style-result");
+    const pill = document.getElementById("teams-style-pill");
+    const body = document.getElementById("teams-style-body");
+    const z = appState.lang === "zh";
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = z ? "请求失败" : "fetch failed";
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+    if (data.status === "no_data" || (data.clusters || []).length === 0) {
+        if (pill) pill.textContent = z ? "无数据" : "no data";
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+    if (data.status === "insufficient_teams") {
+        if (pill) pill.textContent = z ? "球队不足" : "insufficient teams";
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+    if (data.status === "sklearn_unavailable") {
+        if (pill) pill.textContent = z ? "sklearn 不可用" : "sklearn unavailable";
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+
+    if (wrap) wrap.style.display = "block";
+    const clusters = data.clusters || [];
+    if (pill) {
+        const nTeams = clusters.reduce((acc, c) => acc + (c.n_teams || 0), 0);
+        pill.textContent = `${clusters.length} ${z ? "簇" : "clusters"} · ${nTeams} ${z ? "队" : "teams"}`;
+    }
+
+    // Table body: one row per cluster.
+    if (body) {
+        body.innerHTML = clusters.map(c => {
+            const teams = (c.teams || []).slice(0, 12).map(escapeHtml).join(", ");
+            const more = (c.teams || []).length > 12
+                ? ` <span style="color:var(--text-muted)">+${(c.teams || []).length - 12}</span>`
+                : "";
+            return `<tr>
+                <td><span class="status-pill status-high">${escapeHtml(c.cluster_id ?? "")}</span></td>
+                <td><strong>${escapeHtml(c.label || (z ? "未命名" : "unlabeled"))}</strong></td>
+                <td>${escapeHtml(String(c.n_teams ?? 0))}</td>
+                <td style="font-size:0.78rem">${teams}${more}</td>
+            </tr>`;
+        }).join("");
+    }
+
+    // Scatter chart: project team_profiles onto first two principal composites
+    // (npg_p90 vs defense_composite) — simple, interpretable 2D scatter.
+    const chartEl = document.getElementById("teams-style-chart");
+    const profiles = data.team_profiles || [];
+    if (chartEl && typeof echarts !== "undefined") {
+        if (appState.charts.teamStyle) appState.charts.teamStyle.dispose();
+        const chart = echarts.init(chartEl);
+        appState.charts.teamStyle = chart;
+
+        // Group points by cluster_id so each cluster gets its own color.
+        const palette = ["#4a90d9", "#ff9f43", "#26c281", "#e84c3d", "#9b59b6", "#34495e", "#16a085", "#f1c40f"];
+        const seriesByCluster = new Map();
+        for (const p of profiles) {
+            const cid = String(p.cluster_id ?? "?");
+            if (!seriesByCluster.has(cid)) {
+                const clusterMeta = clusters.find(c => String(c.cluster_id) === cid);
+                const lbl = clusterMeta ? (clusterMeta.label || cid) : cid;
+                const color = palette[Number(cid) % palette.length] || palette[0];
+                seriesByCluster.set(cid, { name: lbl, color, data: [] });
+            }
+            seriesByCluster.get(cid).data.push([
+                Number(p.npg_p90 ?? 0),
+                Number(p.defense_composite ?? 0),
+                p.team || "",
+            ]);
+        }
+        const series = Array.from(seriesByCluster.values()).map(s => ({
+            name: s.name,
+            type: "scatter",
+            symbolSize: 14,
+            data: s.data,
+            itemStyle: { color: s.color },
+        }));
+
+        chart.setOption({
+            tooltip: {
+                trigger: "item",
+                formatter: (params) => {
+                    const v = params.value || [];
+                    return `${escapeHtml(v[2] || "")}<br/>${z ? "非点球进球/90" : "npg p90"}: ${Number(v[0]).toFixed(2)}<br/>${z ? "防守综合" : "defense"}: ${Number(v[1]).toFixed(1)}`;
+                },
+            },
+            legend: { bottom: 0, type: "scroll" },
+            grid: { left: 50, right: 20, top: 20, bottom: 50 },
+            xAxis: {
+                name: z ? "非点球进球/90" : "npg p90",
+                nameLocation: "middle",
+                nameGap: 30,
+                splitLine: { lineStyle: { type: "dashed" } },
+            },
+            yAxis: {
+                name: z ? "防守综合" : "defense composite",
+                nameLocation: "middle",
+                nameGap: 40,
+                splitLine: { lineStyle: { type: "dashed" } },
+            },
+            series,
+        });
+    }
+}
+
+// ── Risers / Decliners watchlist (career trajectory slope scan) ────────────
+
+function initRisersDeclinersControls() {
+    const btn = document.getElementById("risers-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+
+    const doScan = async () => {
+        const seasonInput = document.getElementById("risers-season");
+        const topNInput = document.getElementById("risers-top-n");
+        const season = seasonInput ? seasonInput.value.trim() : "";
+        const topN = topNInput ? Number(topNInput.value) : 20;
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+            await _renderRisersDecliners(season, topN);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = t("risers_button");
+        }
+    };
+
+    btn.addEventListener("click", doScan);
+    const handler = (e) => { if (e.key === "Enter") doScan(); };
+    const seasonInput = document.getElementById("risers-season");
+    const topNInput = document.getElementById("risers-top-n");
+    if (seasonInput) seasonInput.addEventListener("keydown", handler);
+    if (topNInput) topNInput.addEventListener("keydown", handler);
+}
+
+async function _renderRisersDecliners(season, topN) {
+    const data = await fetchRisersDecliners(season, topN);
+    const wrap = document.getElementById("risers-decliners-result");
+    const pill = document.getElementById("risers-decliners-pill");
+    const risersBody = document.getElementById("risers-body");
+    const declinersBody = document.getElementById("decliners-body");
+    const z = appState.lang === "zh";
+
+    if (data.error === "fetch_failed") {
+        if (pill) pill.textContent = z ? "请求失败" : "fetch failed";
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+    if (data.status === "no_data" || data.n_scanned === 0) {
+        if (pill) pill.textContent = z ? "无数据" : "no data";
+        if (wrap) wrap.style.display = "none";
+        return;
+    }
+
+    if (wrap) wrap.style.display = "block";
+    const risers = data.risers || [];
+    const decliners = data.decliners || [];
+    if (pill) {
+        pill.textContent = z
+            ? `扫描 ${data.n_scanned} 人 · ↑${risers.length} ↓${decliners.length}`
+            : `scanned ${data.n_scanned} · ↑${risers.length} ↓${decliners.length}`;
+    }
+
+    const renderRow = (entry) => {
+        const score = entry.current_score != null ? Number(entry.current_score).toFixed(1) : "—";
+        const slope = entry.trajectory_slope != null ? Number(entry.trajectory_slope) : null;
+        const slopeText = slope != null
+            ? (slope > 0 ? `+${slope.toFixed(2)}` : slope.toFixed(2))
+            : "—";
+        const cls = slope != null && slope > 0 ? "status-high" : slope != null && slope < 0 ? "status-low" : "";
+        return `<tr>
+            <td>${escapeHtml(entry.player || "")}</td>
+            <td>${escapeHtml(entry.team || "")}</td>
+            <td>${escapeHtml(entry.position_group || "")}</td>
+            <td><strong>${score}</strong></td>
+            <td><span class="status-pill ${cls}">${slopeText}</span></td>
+        </tr>`;
+    };
+
+    if (risersBody) {
+        risersBody.innerHTML = risers.length > 0
+            ? risers.map(renderRow).join("")
+            : `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:0.6rem">${z ? "暂无显著上升球员" : "No risers found"}</td></tr>`;
+    }
+    if (declinersBody) {
+        declinersBody.innerHTML = decliners.length > 0
+            ? decliners.map(renderRow).join("")
+            : `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:0.6rem">${z ? "暂无显著下滑球员" : "No decliners found"}</td></tr>`;
     }
 }
 

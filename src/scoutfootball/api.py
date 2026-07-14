@@ -7274,6 +7274,63 @@ def get_player_peer_benchmark(
     })
 
 
+def get_riser_decliner_watchlist(
+    season: str | None = None,
+    *,
+    min_seasons: int = 2,
+    min_minutes_latest: float = 300.0,
+    top_n: int = 20,
+    riser_threshold: float = 1.0,
+    decliner_threshold: float = -1.0,
+) -> dict:
+    """Return players on the steepest upward or downward career trajectories.
+
+    Wraps :func:`scoutfootball.player_intel.compute_riser_decliner_watchlist`.
+    """
+    from scoutfootball.player_intel import compute_riser_decliner_watchlist
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "risers": [], "decliners": [], "n_scanned": 0}
+    if season:
+        df = df[df["season"].astype(str) == str(season)]
+    result = compute_riser_decliner_watchlist(
+        df,
+        min_seasons=min_seasons,
+        min_minutes_latest=min_minutes_latest,
+        top_n=top_n,
+        riser_threshold=riser_threshold,
+        decliner_threshold=decliner_threshold,
+    )
+    return _clean_json_value(result)
+
+
+def get_team_style_clusters(
+    season: str | None = None,
+    league: str | None = None,
+    *,
+    n_clusters: int = 4,
+    min_minutes_total: float = 1800.0,
+) -> dict:
+    """Cluster teams into tactical-style groups via k-means.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_team_style_clusters`.
+    """
+    from scoutfootball.features.team_style import compute_team_style_clusters
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "clusters": [], "team_profiles": []}
+    result = compute_team_style_clusters(
+        df,
+        season=season,
+        league=league,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 
