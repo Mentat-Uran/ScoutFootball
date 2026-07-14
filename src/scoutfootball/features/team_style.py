@@ -3522,3 +3522,409 @@ def compute_position_trend_overlay(
             "trends or rank positions by quality."
         ),
     }
+
+
+# --- Round 79: team-level action signature layer ---------------------------
+#
+# Lifts the per-90 action decomposition (Round 78) from position-group
+# level to team level, and clones the league-percentile template (Round
+# 74) with 7 action features instead of 4 style composites. All three
+# functions are descriptive overlays and do not modify the prediction
+# model.
+
+_ACTION_FEATURE_LABELS = {
+    "tackles_p90": "tackles",
+    "interceptions_p90": "interceptions",
+    "crosses_p90": "crosses",
+    "fouls_drawn_p90": "fouls_drawn",
+    "fouls_p90": "fouls_committed",
+    "g_a_volume": "goal_contribution_volume",
+    "npg_p90": "non_penalty_goals",
+}
+
+
+def _build_team_action_profiles(
+    df: pd.DataFrame,
+    *,
+    league: str | None,
+    season: str | None,
+    min_player_minutes: float,
+) -> list[dict[str, Any]]:
+    """Build minutes-weighted action profiles for each team.
+
+    Returns a list of dicts, each containing ``team``, ``n_players``,
+    ``total_minutes``, and the 7 ``_ACTION_FEATURES`` values. Reuses
+    ``_compute_position_action_stats`` (which is generic — it operates
+    on any group DataFrame, not just position groups).
+    """
+    if df.empty:
+        return []
+
+    work = df.copy()
+    if league is not None:
+        work = work[
+            work["league"].astype(str).str.lower() == str(league).lower()
+        ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+
+    missing_cols = [c for c in _ACTION_FEATURES if c not in work.columns]
+    if missing_cols or "team" not in work.columns:
+        return []
+
+    profiles: list[dict[str, Any]] = []
+    for team, group in work.groupby("team", sort=False):
+        stats = _compute_position_action_stats(
+            group,
+            min_player_minutes=min_player_minutes,
+            features=_ACTION_FEATURES,
+        )
+        if stats is None:
+            continue
+        stats["team"] = str(team)
+        profiles.append(stats)
+
+    return profiles
+
+
+def _pick_team_action_profile(
+    profiles: list[dict[str, Any]], team_name: str
+) -> dict[str, Any] | None:
+    """Pick a team's action profile from a list (case-insensitive)."""
+    matches = [
+        p for p in profiles if str(p.get("team", "")).lower() == team_name.lower()
+    ]
+    if not matches:
+        return None
+    return matches[0]
+
+
+def compute_team_action_profile(
+    df: pd.DataFrame,
+    *,
+    league: str | None = None,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Granular per-90 action profile for each team.
+
+    Decomposes the 4 composite style features into 7 granular per-90
+    actions (tackles, interceptions, crosses, fouls_drawn, fouls,
+    g_a_volume, npg_p90) with minutes-weighted means per team.
+
+    This is a descriptive overlay — it does not modify the prediction
+    model or rank teams by quality.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "teams": [],
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    missing_cols = [c for c in _ACTION_FEATURES if c not in df.columns]
+    if missing_cols:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "teams": [],
+            "disclaimer": (
+                f"Missing action columns: {', '.join(missing_cols)}."
+            ),
+        }
+
+    profiles = _build_team_action_profiles(
+        df,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "teams": [],
+            "disclaimer": "No team had players above the minutes threshold.",
+        }
+
+    # Sort by total minutes descending for stable display.
+    profiles.sort(key=lambda p: p.get("total_minutes", 0), reverse=True)
+
+    return {
+        "status": "ok",
+        "league": league,
+        "season": season,
+        "n_teams": len(profiles),
+        "teams": profiles,
+        "action_features": list(_ACTION_FEATURES),
+        "disclaimer": (
+            "Team action profile decomposes composite style scores into "
+            "granular per-90 actions. Values are minutes-weighted means "
+            "of players above the minutes threshold. This is a "
+            "descriptive overlay — it does not predict future performance "
+            "or rank teams by quality."
+        ),
+    }
+
+
+def compute_league_action_percentiles(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    season: str | None = None,
+    league: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Per-action percentile rank of one team within its league population.
+
+    For each of the 7 action features (tackles_p90, interceptions_p90,
+    crosses_p90, fouls_drawn_p90, fouls_p90, g_a_volume, npg_p90),
+    computes the team's percentile rank (0–100) within the filtered
+    league population using tie-handled average ranks. A percentile of
+    90 means the team is in the top 10% for that action.
+
+    This is a descriptive overlay — percentiles describe relative
+    standing, not absolute quality or tactical correctness.
+    """
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": "Empty rating matrix or missing team name.",
+        }
+
+    profiles = _build_team_action_profiles(
+        df,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": (
+                "No team action profiles meet the minimum player-minutes "
+                f"threshold ({min_player_minutes:.0f} min)."
+            ),
+        }
+
+    target = _pick_team_action_profile(profiles, team)
+    if target is None:
+        return {
+            "status": "team_not_found",
+            "team": team,
+            "disclaimer": (
+                f"No action profile found for '{team}'."
+                + (f" Season={season}." if season else "")
+                + (f" League={league}." if league else "")
+                + " Check the team name spelling or broaden the filters."
+            ),
+        }
+
+    # Build feature matrix: rows = teams, cols = 7 action features.
+    mat = np.array(
+        [
+            [p[feat] for feat in _ACTION_FEATURES]
+            for p in profiles
+        ],
+        dtype=float,
+    )
+    n_pop = len(profiles)
+    target_idx = profiles.index(target)
+    target_raw = mat[target_idx]
+
+    dimensions: list[dict[str, Any]] = []
+    for i, feat in enumerate(_ACTION_FEATURES):
+        col = mat[:, i]
+        val = float(target_raw[i])
+        # Percentile rank with tie-handling (average rank).
+        if n_pop <= 1:
+            pct = 50.0
+        else:
+            rank = float((col < val).sum()) + 0.5 * float(
+                (col == val).sum()
+            )
+            pct = round(100.0 * rank / n_pop, 1) if n_pop > 0 else 50.0
+        # Quartile label.
+        if pct >= 75:
+            quartile = "top"
+        elif pct >= 50:
+            quartile = "upper_mid"
+        elif pct >= 25:
+            quartile = "lower_mid"
+        else:
+            quartile = "bottom"
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _ACTION_FEATURE_LABELS[feat],
+                "value": round(val, 3),
+                "percentile": pct,
+                "quartile": quartile,
+                "population_min": round(float(col.min()), 3),
+                "population_max": round(float(col.max()), 3),
+                "population_mean": round(float(col.mean()), 3),
+                "population_median": round(float(np.median(col)), 3),
+            }
+        )
+
+    # Population stats for the target summary.
+    pop_means = mat.mean(axis=0)
+    pop_stds = mat.std(axis=0, ddof=0)
+
+    return {
+        "status": "ok",
+        "team": target["team"],
+        "season": season,
+        "league": league,
+        "target": {
+            "team": target["team"],
+            "n_players": target["n_players"],
+            "total_minutes": target["total_minutes"],
+            "action_values": {
+                feat: round(float(target_raw[i]), 3)
+                for i, feat in enumerate(_ACTION_FEATURES)
+            },
+            "population_means": {
+                feat: round(float(pop_means[i]), 3)
+                for i, feat in enumerate(_ACTION_FEATURES)
+            },
+            "population_stds": {
+                feat: round(float(pop_stds[i]), 3)
+                for i, feat in enumerate(_ACTION_FEATURES)
+            },
+        },
+        "n_population": n_pop,
+        "dimensions": dimensions,
+        "disclaimer": (
+            "Action percentiles describe where a team sits within the "
+            "filtered league population on each granular per-90 action. "
+            "They are relative, not absolute — a 90th-percentile cross "
+            "volume in a low-cross league is not equivalent to 90th-"
+            "percentile in a high-cross one. Percentiles do not predict "
+            "match outcomes."
+        ),
+    }
+
+
+def compute_team_action_similarity(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    league: str | None = None,
+    season: str | None = None,
+    top_n: int = 10,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Find teams with similar per-90 action signatures.
+
+    Computes a 7-dimensional action vector (tackles/interceptions/
+    crosses/fouls_drawn/fouls/g_a_volume/npg_p90) for each team, then
+    ranks others by cosine similarity to the target team's action
+    vector. Euclidean distance is included as a reference.
+
+    This is a descriptive overlay — similar action signatures do not
+    imply similar quality, tactical systems, or match outcomes.
+    """
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": "Empty rating matrix or missing team name.",
+        }
+
+    profiles = _build_team_action_profiles(
+        df,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": (
+                "No team action profiles meet the minimum player-minutes "
+                f"threshold ({min_player_minutes:.0f} min)."
+            ),
+        }
+
+    target = _pick_team_action_profile(profiles, team)
+    if target is None:
+        return {
+            "status": "team_not_found",
+            "team": team,
+            "disclaimer": (
+                f"No action profile found for '{team}'."
+                + (f" Season={season}." if season else "")
+                + (f" League={league}." if league else "")
+                + " Check the team name spelling or broaden the filters."
+            ),
+        }
+
+    # Build action vectors for each team.
+    action_vectors: dict[str, np.ndarray] = {}
+    for p in profiles:
+        vec = np.array(
+            [p[feat] for feat in _ACTION_FEATURES], dtype=float
+        )
+        action_vectors[p["team"]] = vec
+
+    target_vec = action_vectors[target["team"]]
+    target_norm = float(np.linalg.norm(target_vec))
+
+    neighbors: list[dict[str, Any]] = []
+    for t_name, vec in action_vectors.items():
+        if t_name == target["team"]:
+            continue
+        vec_norm = float(np.linalg.norm(vec))
+        if target_norm == 0 or vec_norm == 0:
+            cos_sim = 0.0
+        else:
+            cos_sim = float(np.dot(target_vec, vec)) / (
+                target_norm * vec_norm
+            )
+        euclidean = float(np.linalg.norm(target_vec - vec))
+        # Attach n_players for context.
+        neighbor_profile = next(
+            (p for p in profiles if p["team"] == t_name), None
+        )
+        neighbors.append({
+            "team": t_name,
+            "cosine_similarity": round(cos_sim, 3),
+            "euclidean_distance": round(euclidean, 3),
+            "n_players": (
+                neighbor_profile["n_players"] if neighbor_profile else 0
+            ),
+            "total_minutes": (
+                neighbor_profile["total_minutes"] if neighbor_profile else 0
+            ),
+        })
+
+    neighbors.sort(key=lambda n: n["cosine_similarity"], reverse=True)
+
+    # Apply top_n limit.
+    top_n = max(1, min(int(top_n), len(neighbors))) if neighbors else 0
+    neighbors = neighbors[:top_n]
+
+    return {
+        "status": "ok",
+        "team": target["team"],
+        "league": league,
+        "season": season,
+        "n_candidates": len(neighbors),
+        "target_action_vector": [round(float(v), 3) for v in target_vec],
+        "target_action_vector_labels": list(_ACTION_FEATURES),
+        "neighbors": neighbors,
+        "disclaimer": (
+            "Team action similarity is a descriptive overlay based on "
+            "granular per-90 action signatures. Similar action profiles "
+            "do not imply similar tactical systems, quality, or match "
+            "outcomes. Cosine similarity ranges from -1 to 1."
+        ),
+    }

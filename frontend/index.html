@@ -921,6 +921,29 @@
                     <div id="position-similarity-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                     <div id="position-trend-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                 </article>
+                <article class="liquid-panel" style="margin-top:var(--space)">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="team_action_title">球队动作画像与百分位</p>
+                    </div>
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space)">
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_league">联赛</label>
+                            <input type="text" id="team-action-league" class="filter-input" placeholder="e.g. Premier League" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_season">赛季</label>
+                            <input type="text" id="team-action-season" class="filter-input" placeholder="e.g. 2526" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_team">球队</label>
+                            <input type="text" id="team-action-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="team-action-btn" class="cta-button" type="button" data-i18n="team_action_button">分析</button>
+                    </div>
+                    <div id="team-action-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="team-percentiles-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="team-similarity-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                </article>
             </section>
 
             <section class="view" id="view-scouting" aria-label="scouting">
