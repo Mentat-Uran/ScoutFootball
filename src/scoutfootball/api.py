@@ -7800,6 +7800,90 @@ def get_position_gap_report(
     return _clean_json_value(result)
 
 
+def get_position_action_profile(
+    league: str | None = None,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Granular per-90 action profile for each standard position group.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_position_action_profile`.
+    Descriptive overlay — does not rank positions by quality.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_action_profile,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "position_groups": []}
+    result = compute_position_action_profile(
+        df,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_action_based_position_similarity(
+    position_group: str,
+    league: str | None = None,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Find position groups with similar per-90 action signatures.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_action_based_position_similarity`.
+    Descriptive overlay — similar action signatures do not imply similar
+    quality or tactical roles.
+    """
+    from scoutfootball.features.team_style import (
+        compute_action_based_position_similarity,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "position_group": position_group}
+    result = compute_action_based_position_similarity(
+        df,
+        position_group,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_position_trend_overlay(
+    league: str | None = None,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Collective improvement/decline trends for each position group.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_position_trend_overlay`.
+    Descriptive overlay — does not predict future trends.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_trend_overlay,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "position_groups": []}
+    result = compute_position_trend_overlay(
+        df,
+        league=league,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 

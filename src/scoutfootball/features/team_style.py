@@ -3072,3 +3072,453 @@ def compute_position_gap_report(
             "computed from rated players in the team's league and season."
         ),
     }
+
+
+# ── Round 78: Per-position-group action profile & granular decomposition ──
+
+_ACTION_FEATURES = (
+    "tackles_p90",
+    "interceptions_p90",
+    "crosses_p90",
+    "fouls_drawn_p90",
+    "fouls_p90",
+    "g_a_volume",
+    "npg_p90",
+)
+
+_TREND_FEATURES = (
+    "npg_trend",
+    "def_trend",
+    "pos_trend",
+)
+
+_TREND_LABEL_THRESHOLD = 0.05  # 5% relative threshold for trend labels
+
+
+def _compute_position_action_stats(
+    group: pd.DataFrame,
+    *,
+    min_player_minutes: float,
+    features: tuple[str, ...],
+) -> dict[str, Any] | None:
+    """Compute minutes-weighted means of per-90 actions for one position-group slice.
+
+    Returns ``None`` when no player passes the minutes threshold.
+    """
+    minutes = (
+        group["minutes"]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0.0)
+        .to_numpy(dtype=float)
+    )
+    mask = minutes >= min_player_minutes
+    if not mask.any():
+        return None
+    minutes_f = minutes[mask]
+    total_minutes = float(minutes_f.sum())
+    if total_minutes <= 0:
+        return None
+    weights = minutes_f / total_minutes
+
+    n_players = int(mask.sum())
+    vals: dict[str, float] = {}
+    for feat in features:
+        col = (
+            group[feat]
+            .apply(pd.to_numeric, errors="coerce")
+            .fillna(0.0)
+            .to_numpy(dtype=float)[mask]
+        )
+        vals[feat] = float(np.average(col, weights=weights))
+
+    return {
+        "n_players": n_players,
+        "total_minutes": round(total_minutes),
+        **{feat: round(vals[feat], 3) for feat in features},
+    }
+
+
+def compute_position_action_profile(
+    df: pd.DataFrame,
+    *,
+    league: str | None = None,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Granular per-90 action profile for each standard position group.
+
+    Decomposes the 4 composite style features (npg_p90, assists_p90,
+    defense_composite, possession_composite) into 7 granular per-90
+    actions (tackles, interceptions, crosses, fouls_drawn, fouls,
+    g_a_volume, npg_p90) with minutes-weighted means.
+
+    This is a descriptive overlay — it does not modify the prediction
+    model or rank positions by quality.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    work = df.copy()
+    if league is not None:
+        work = work[
+            work["league"].astype(str).str.lower() == str(league).lower()
+        ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "position_groups": [],
+                "missing_positions": list(_POSITION_GROUPS),
+                "disclaimer": "No position_group column in rating matrix.",
+            }
+    # Check all required action columns exist
+    missing_cols = [c for c in _ACTION_FEATURES if c not in work.columns]
+    if missing_cols:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": (
+                f"Missing action columns: {', '.join(missing_cols)}."
+            ),
+        }
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if work.empty:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "No players in standard position groups after filtering.",
+        }
+
+    position_groups: list[dict[str, Any]] = []
+    missing: list[str] = []
+    for pos in _POSITION_GROUPS:
+        sub = work[work["position_group"].astype(str).str.upper() == pos]
+        if sub.empty:
+            missing.append(pos)
+            continue
+        stats = _compute_position_action_stats(
+            sub, min_player_minutes=min_player_minutes, features=_ACTION_FEATURES
+        )
+        if stats is None:
+            missing.append(pos)
+            continue
+        stats["position_group"] = pos
+        position_groups.append(stats)
+
+    if not position_groups:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "No position group had players above the minutes threshold.",
+        }
+
+    return {
+        "status": "ok",
+        "league": league,
+        "season": season,
+        "n_positions": len(position_groups),
+        "position_groups": position_groups,
+        "missing_positions": missing,
+        "action_features": list(_ACTION_FEATURES),
+        "disclaimer": (
+            "Position action profile decomposes composite style scores "
+            "into granular per-90 actions. Values are minutes-weighted "
+            "means of players above the minutes threshold. This is a "
+            "descriptive overlay — it does not predict future performance "
+            "or rank positions by quality."
+        ),
+    }
+
+
+def compute_action_based_position_similarity(
+    df: pd.DataFrame,
+    position_group: str,
+    *,
+    league: str | None = None,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Find position groups with similar per-90 action signatures.
+
+    Computes a 7-dimensional action vector (tackles/interceptions/crosses/
+    fouls_drawn/fouls/g_a_volume/npg_p90) for each position group, then
+    ranks others by cosine similarity to the target position group's
+    action vector.
+
+    This is a descriptive overlay — similar action signatures do not
+    imply similar quality or tactical roles.
+    """
+    if df.empty or not position_group:
+        return {
+            "status": "no_data",
+            "position_group": position_group,
+            "disclaimer": "Empty rating matrix or missing position group.",
+        }
+
+    target_pos = str(position_group).strip().upper()
+    if target_pos not in _POSITION_GROUPS:
+        return {
+            "status": "invalid_position",
+            "position_group": position_group,
+            "valid_positions": list(_POSITION_GROUPS),
+            "disclaimer": "Position group must be one of the 8 standard groups.",
+        }
+
+    work = df.copy()
+    if league is not None:
+        work = work[
+            work["league"].astype(str).str.lower() == str(league).lower()
+        ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "position_group": target_pos,
+                "disclaimer": "No position_group column in rating matrix.",
+            }
+    missing_cols = [c for c in _ACTION_FEATURES if c not in work.columns]
+    if missing_cols:
+        return {
+            "status": "no_data",
+            "position_group": target_pos,
+            "disclaimer": (
+                f"Missing action columns: {', '.join(missing_cols)}."
+            ),
+        }
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if work.empty:
+        return {
+            "status": "position_not_found",
+            "position_group": target_pos,
+            "disclaimer": "No players in standard position groups after filtering.",
+        }
+
+    # Compute action vectors for each position group
+    action_vectors: dict[str, np.ndarray] = {}
+    for pos in _POSITION_GROUPS:
+        sub = work[work["position_group"].astype(str).str.upper() == pos]
+        if sub.empty:
+            continue
+        stats = _compute_position_action_stats(
+            sub, min_player_minutes=min_player_minutes, features=_ACTION_FEATURES
+        )
+        if stats is None:
+            continue
+        vec = np.array(
+            [stats[feat] for feat in _ACTION_FEATURES], dtype=float
+        )
+        action_vectors[pos] = vec
+
+    if target_pos not in action_vectors:
+        return {
+            "status": "position_not_found",
+            "position_group": target_pos,
+            "disclaimer": (
+                "Target position group has no players above the minutes "
+                "threshold."
+            ),
+        }
+
+    target_vec = action_vectors[target_pos]
+    target_norm = float(np.linalg.norm(target_vec))
+
+    neighbors: list[dict[str, Any]] = []
+    for pos, vec in action_vectors.items():
+        if pos == target_pos:
+            continue
+        vec_norm = float(np.linalg.norm(vec))
+        if target_norm == 0 or vec_norm == 0:
+            cos_sim = 0.0
+        else:
+            cos_sim = float(np.dot(target_vec, vec)) / (
+                target_norm * vec_norm
+            )
+        euclidean = float(np.linalg.norm(target_vec - vec))
+        neighbors.append({
+            "position_group": pos,
+            "cosine_similarity": round(cos_sim, 3),
+            "euclidean_distance": round(euclidean, 3),
+        })
+
+    neighbors.sort(key=lambda n: n["cosine_similarity"], reverse=True)
+
+    return {
+        "status": "ok",
+        "position_group": target_pos,
+        "league": league,
+        "season": season,
+        "n_candidates": len(neighbors),
+        "target_action_vector": [round(float(v), 3) for v in target_vec],
+        "target_action_vector_labels": list(_ACTION_FEATURES),
+        "neighbors": neighbors,
+        "disclaimer": (
+            "Action-based position similarity is a descriptive overlay "
+            "based on granular per-90 action signatures. Similar action "
+            "profiles do not imply similar tactical roles, quality, or "
+            "future trajectories. Cosine similarity ranges from -1 to 1."
+        ),
+    }
+
+
+def compute_position_trend_overlay(
+    df: pd.DataFrame,
+    *,
+    league: str | None = None,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Collective improvement/decline trends for each position group.
+
+    For each standard position group, computes the minutes-weighted mean
+    of npg_trend / def_trend / pos_trend (cross-season improvement
+    metrics from the rating pipeline) and assigns a trend_label
+    (imving / declining / stable) per dimension using a 5% relative
+    threshold.
+
+    This is a descriptive overlay — it does not predict future trends
+    or rank positions by quality.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    work = df.copy()
+    if league is not None:
+        work = work[
+            work["league"].astype(str).str.lower() == str(league).lower()
+        ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "position_groups": [],
+                "missing_positions": list(_POSITION_GROUPS),
+                "disclaimer": "No position_group column in rating matrix.",
+            }
+    missing_cols = [c for c in _TREND_FEATURES if c not in work.columns]
+    if missing_cols:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": (
+                f"Missing trend columns: {', '.join(missing_cols)}."
+            ),
+        }
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if work.empty:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "No players in standard position groups after filtering.",
+        }
+
+    def _trend_label(val: float) -> str:
+        if abs(val) < _TREND_LABEL_THRESHOLD:
+            return "stable"
+        return "improving" if val > 0 else "declining"
+
+    position_groups: list[dict[str, Any]] = []
+    missing: list[str] = []
+    for pos in _POSITION_GROUPS:
+        sub = work[work["position_group"].astype(str).str.upper() == pos]
+        if sub.empty:
+            missing.append(pos)
+            continue
+        stats = _compute_position_action_stats(
+            sub, min_player_minutes=min_player_minutes, features=_TREND_FEATURES
+        )
+        if stats is None:
+            missing.append(pos)
+            continue
+        dimensions = []
+        for feat in _TREND_FEATURES:
+            val = stats[feat]
+            dimensions.append({
+                "feature": feat,
+                "value": val,
+                "trend_label": _trend_label(val),
+            })
+        position_groups.append({
+            "position_group": pos,
+            "n_players": stats["n_players"],
+            "total_minutes": stats["total_minutes"],
+            "dimensions": dimensions,
+        })
+
+    if not position_groups:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "position_groups": [],
+            "missing_positions": list(_POSITION_GROUPS),
+            "disclaimer": "No position group had players above the minutes threshold.",
+        }
+
+    return {
+        "status": "ok",
+        "league": league,
+        "season": season,
+        "n_positions": len(position_groups),
+        "position_groups": position_groups,
+        "missing_positions": missing,
+        "trend_features": list(_TREND_FEATURES),
+        "disclaimer": (
+            "Position trend overlay aggregates per-player cross-season "
+            "improvement metrics (npg_trend / def_trend / pos_trend) "
+            "into minutes-weighted position-group means. Trend labels "
+            "(improving/declining/stable) use a 5% relative threshold. "
+            "This is a descriptive overlay — it does not predict future "
+            "trends or rank positions by quality."
+        ),
+    }

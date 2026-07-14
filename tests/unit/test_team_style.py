@@ -12,17 +12,20 @@ import pandas as pd
 import pytest
 
 from scoutfootball.features.team_style import (
+    compute_action_based_position_similarity,
     compute_cluster_recruits,
     compute_cluster_similarity_matrix,
     compute_cross_league_position_comparison,
     compute_league_style_evolution,
     compute_league_style_percentiles,
     compute_player_style_fit,
+    compute_position_action_profile,
     compute_position_depth_profile,
     compute_position_gap_report,
     compute_position_style_drift,
     compute_position_style_drift_neighbors,
     compute_position_style_evolution,
+    compute_position_trend_overlay,
     compute_style_atlas,
     compute_style_drift_neighbors,
     compute_style_matchup,
@@ -2400,3 +2403,444 @@ def test_gap_report_no_mutation(depth_df):
     original = depth_df.copy()
     compute_position_gap_report(depth_df, "Gap Team", season="2526")
     pd.testing.assert_frame_equal(depth_df, original)
+
+
+# ── Round 78: action profile / similarity / trend overlay ────────────────
+
+
+def _build_action_df() -> pd.DataFrame:
+    """Build a synthetic frame with action + trend columns for Round 78 tests.
+
+    Layout (season "2526", all minutes >= 500):
+
+    Premier League:
+      ST: 3 players — high npg_p90 (0.5+), low tackles (0.3), crosses 0.1,
+          fouls_drawn 0.5, fouls 0.4, g_a_volume 8
+          trends: npg_trend=0.10 (improving), def_trend=0.02 (stable),
+                  pos_trend=-0.10 (declining)
+      CB: 3 players — low npg_p90 (0.05), high tackles (2.5), crosses 0.05,
+          fouls_drawn 0.2, fouls 1.0, g_a_volume 1
+          trends: npg_trend=0.01 (stable), def_trend=0.15 (improving),
+                  pos_trend=0.03 (stable)
+      CM: 3 players — medium npg_p90 (0.2), medium tackles (1.5), crosses 0.5,
+          fouls_drawn 1.0, fouls 0.8, g_a_volume 4
+          trends: npg_trend=-0.08 (declining), def_trend=-0.02 (stable),
+                  pos_trend=0.10 (improving)
+      FB: 2 players — low npg_p90 (0.05), medium tackles (1.8), crosses 2.0,
+          fouls_drawn 0.6, fouls 0.7, g_a_volume 2
+          trends: npg_trend=0.0 (stable), def_trend=0.0 (stable),
+                  pos_trend=0.0 (stable)
+
+    La Liga:
+      ST: 2 players — distinct actions from PL ST
+
+    This lets us exercise:
+    - action profile with 4 PL positions and missing (GK/DM/AM/W)
+    - action similarity (CB vs FB vs CM vs ST ranking by cosine)
+    - trend labels improving/declining/stable for all 3 dimensions
+    - league filter (PL only vs La Liga only)
+    - season filter
+    """
+    rows: list[dict] = []
+
+    def add(
+        team: str,
+        league: str,
+        pos: str,
+        n: int,
+        *,
+        tackles: float,
+        interceptions: float,
+        crosses: float,
+        fouls_drawn: float,
+        fouls: float,
+        g_a_volume: float,
+        npg_p90: float,
+        npg_trend: float,
+        def_trend: float,
+        pos_trend: float,
+    ) -> None:
+        for i in range(n):
+            rows.append({
+                "player": f"{team} {pos} P{i}",
+                "player_id": f"{team.replace(' ', '_')}_{pos}_{i}",
+                "team": team,
+                "league": league,
+                "season": "2526",
+                "position_group": pos,
+                "sub_position": pos,
+                "minutes": 1000.0 - i * 50,
+                "matches": 15,
+                "npg_p90": npg_p90 + i * 0.01,
+                "assists_p90": 0.1,
+                "g_a_volume": g_a_volume,
+                "tackles_p90": tackles + i * 0.05,
+                "interceptions_p90": interceptions + i * 0.02,
+                "crosses_p90": crosses,
+                "fouls_drawn_p90": fouls_drawn,
+                "fouls_p90": fouls,
+                "defense_composite": 50.0,
+                "possession_composite": 50.0,
+                "optimized_score": 70.0,
+                "npg_trend": npg_trend,
+                "def_trend": def_trend,
+                "pos_trend": pos_trend,
+                "confidence_level": "HIGH",
+                "low_appearance": False,
+            })
+
+    # Premier League
+    add("PL Team", "Premier League", "ST", 3,
+        tackles=0.3, interceptions=0.2, crosses=0.1,
+        fouls_drawn=0.5, fouls=0.4, g_a_volume=8.0,
+        npg_p90=0.5, npg_trend=0.10, def_trend=0.02, pos_trend=-0.10)
+    add("PL Team", "Premier League", "CB", 3,
+        tackles=2.5, interceptions=2.0, crosses=0.05,
+        fouls_drawn=0.2, fouls=1.0, g_a_volume=1.0,
+        npg_p90=0.05, npg_trend=0.01, def_trend=0.15, pos_trend=0.03)
+    add("PL Team", "Premier League", "CM", 3,
+        tackles=1.5, interceptions=1.2, crosses=0.5,
+        fouls_drawn=1.0, fouls=0.8, g_a_volume=4.0,
+        npg_p90=0.2, npg_trend=-0.08, def_trend=-0.02, pos_trend=0.10)
+    add("PL Team", "Premier League", "FB", 2,
+        tackles=1.8, interceptions=1.5, crosses=2.0,
+        fouls_drawn=0.6, fouls=0.7, g_a_volume=2.0,
+        npg_p90=0.05, npg_trend=0.0, def_trend=0.0, pos_trend=0.0)
+    # La Liga — ST only (for league filter test)
+    add("LL Team", "La Liga", "ST", 2,
+        tackles=0.4, interceptions=0.3, crosses=0.2,
+        fouls_drawn=0.6, fouls=0.5, g_a_volume=6.0,
+        npg_p90=0.4, npg_trend=0.05, def_trend=0.0, pos_trend=0.0)
+
+    return pd.DataFrame(rows)
+
+
+@pytest.fixture
+def action_df() -> pd.DataFrame:
+    return _build_action_df()
+
+
+# ── compute_position_action_profile ──────────────────────────────────────
+
+
+def test_action_profile_empty():
+    """Empty input should return no_data with all positions missing."""
+    result = compute_position_action_profile(pd.DataFrame())
+    assert result["status"] == "no_data"
+    assert result["position_groups"] == []
+    assert set(result["missing_positions"]) == {
+        "GK", "CB", "FB", "DM", "CM", "AM", "W", "ST",
+    }
+
+
+def test_action_profile_basic(action_df):
+    """Should return ok with 4 position groups (CB/CM/FB/ST)."""
+    result = compute_position_action_profile(action_df, season="2526")
+    assert result["status"] == "ok"
+    positions = [g["position_group"] for g in result["position_groups"]]
+    assert set(positions) == {"CB", "CM", "FB", "ST"}
+    assert result["n_positions"] == 4
+
+
+def test_action_profile_fields(action_df):
+    """Each position group should have n_players, total_minutes, and all action features."""
+    result = compute_position_action_profile(action_df, season="2526")
+    expected_features = {
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    }
+    for g in result["position_groups"]:
+        assert "n_players" in g
+        assert "total_minutes" in g
+        assert "position_group" in g
+        assert expected_features.issubset(set(g.keys()))
+
+
+def test_action_profile_action_features_list(action_df):
+    """action_features list should match the 7 standard action features in order."""
+    result = compute_position_action_profile(action_df, season="2526")
+    assert result["action_features"] == [
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    ]
+
+
+def test_action_profile_missing_positions(action_df):
+    """GK/DM/AM/W should be in missing_positions since fixture has no data for them."""
+    result = compute_position_action_profile(action_df, season="2526")
+    assert set(result["missing_positions"]) == {"GK", "DM", "AM", "W"}
+
+
+def test_action_profile_league_filter(action_df):
+    """league=Premier League should exclude La Liga rows."""
+    result = compute_position_action_profile(
+        action_df, league="Premier League", season="2526"
+    )
+    assert result["status"] == "ok"
+    assert result["league"] == "Premier League"
+
+
+def test_action_profile_season_filter(action_df):
+    """season=2425 should return no_data since fixture only has 2526."""
+    result = compute_position_action_profile(action_df, season="2425")
+    assert result["status"] == "no_data"
+
+
+def test_action_profile_case_insensitive_league(action_df):
+    """league filter should be case-insensitive."""
+    result_lower = compute_position_action_profile(
+        action_df, league="premier league", season="2526"
+    )
+    result_upper = compute_position_action_profile(
+        action_df, league="PREMIER LEAGUE", season="2526"
+    )
+    assert result_lower["status"] == "ok"
+    assert result_upper["status"] == "ok"
+    assert result_lower["n_positions"] == result_upper["n_positions"]
+
+
+def test_action_profile_no_action_columns():
+    """Frame without action columns should return no_data with descriptive disclaimer."""
+    df = pd.DataFrame([{
+        "player": "P1", "team": "T1", "league": "L1", "season": "2526",
+        "position_group": "ST", "minutes": 1000.0,
+    }])
+    result = compute_position_action_profile(df)
+    assert result["status"] == "no_data"
+    assert "Missing action columns" in result["disclaimer"]
+
+
+def test_action_profile_disclaimer_present(action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_position_action_profile(action_df, season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_action_profile_no_mutation(action_df):
+    """Original DataFrame should not be mutated."""
+    original = action_df.copy()
+    compute_position_action_profile(action_df, season="2526")
+    pd.testing.assert_frame_equal(action_df, original)
+
+
+def test_action_profile_min_minutes_too_high(action_df):
+    """min_player_minutes higher than any player's minutes should return no_data."""
+    result = compute_position_action_profile(
+        action_df, season="2526", min_player_minutes=2000.0
+    )
+    assert result["status"] == "no_data"
+
+
+# ── compute_action_based_position_similarity ─────────────────────────────
+
+
+def test_action_similarity_empty():
+    """Empty input should return no_data."""
+    result = compute_action_based_position_similarity(pd.DataFrame(), "ST")
+    assert result["status"] == "no_data"
+
+
+def test_action_similarity_invalid_position(action_df):
+    """Invalid position group should return invalid_position with valid_positions list."""
+    result = compute_action_based_position_similarity(action_df, "XX")
+    assert result["status"] == "invalid_position"
+    assert set(result["valid_positions"]) == {
+        "GK", "CB", "FB", "DM", "CM", "AM", "W", "ST",
+    }
+
+
+def test_action_similarity_position_not_found(action_df):
+    """GK is not in fixture, should return position_not_found."""
+    result = compute_action_based_position_similarity(action_df, "GK", season="2526")
+    assert result["status"] == "position_not_found"
+
+
+def test_action_similarity_basic(action_df):
+    """Should return ok with target position group and neighbors list."""
+    result = compute_action_based_position_similarity(action_df, "ST", season="2526")
+    assert result["status"] == "ok"
+    assert result["position_group"] == "ST"
+    assert isinstance(result["neighbors"], list)
+    assert len(result["neighbors"]) == 3  # CB, CM, FB (excluding ST)
+
+
+def test_action_similarity_target_vector(action_df):
+    """target_action_vector should have 7 dimensions matching action features."""
+    result = compute_action_based_position_similarity(action_df, "ST", season="2526")
+    assert len(result["target_action_vector"]) == 7
+    assert result["target_action_vector_labels"] == [
+        "tackles_p90", "interceptions_p90", "crosses_p90",
+        "fouls_drawn_p90", "fouls_p90", "g_a_volume", "npg_p90",
+    ]
+
+
+def test_action_similarity_sorted_by_cosine_desc(action_df):
+    """Neighbors should be sorted by cosine_similarity descending."""
+    result = compute_action_based_position_similarity(action_df, "ST", season="2526")
+    sims = [n["cosine_similarity"] for n in result["neighbors"]]
+    assert sims == sorted(sims, reverse=True)
+
+
+def test_action_similarity_excludes_target(action_df):
+    """Target position group should not appear in its own neighbors list."""
+    result = compute_action_based_position_similarity(action_df, "ST", season="2526")
+    positions = [n["position_group"] for n in result["neighbors"]]
+    assert "ST" not in positions
+
+
+def test_action_similarity_neighbor_fields(action_df):
+    """Each neighbor should have position_group, cosine_similarity, euclidean_distance."""
+    result = compute_action_based_position_similarity(action_df, "CB", season="2526")
+    for n in result["neighbors"]:
+        assert "position_group" in n
+        assert "cosine_similarity" in n
+        assert "euclidean_distance" in n
+        assert -1.0 <= n["cosine_similarity"] <= 1.0
+        assert n["euclidean_distance"] >= 0.0
+
+
+def test_action_similarity_case_insensitive_position(action_df):
+    """Position group should be case-insensitive."""
+    result_lower = compute_action_based_position_similarity(action_df, "st", season="2526")
+    result_upper = compute_action_based_position_similarity(action_df, "ST", season="2526")
+    assert result_lower["status"] == "ok"
+    assert result_upper["status"] == "ok"
+    assert result_lower["position_group"] == "ST"
+
+
+def test_action_similarity_league_filter(action_df):
+    """league=Premier League should filter out La Liga rows."""
+    result = compute_action_based_position_similarity(
+        action_df, "ST", league="Premier League", season="2526"
+    )
+    assert result["status"] == "ok"
+    assert result["league"] == "Premier League"
+
+
+def test_action_similarity_season_filter(action_df):
+    """season=2425 should return position_not_found since fixture only has 2526."""
+    result = compute_action_based_position_similarity(action_df, "ST", season="2425")
+    assert result["status"] == "position_not_found"
+
+
+def test_action_similarity_disclaimer_present(action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_action_based_position_similarity(action_df, "ST", season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_action_similarity_no_mutation(action_df):
+    """Original DataFrame should not be mutated."""
+    original = action_df.copy()
+    compute_action_based_position_similarity(action_df, "ST", season="2526")
+    pd.testing.assert_frame_equal(action_df, original)
+
+
+# ── compute_position_trend_overlay ───────────────────────────────────────
+
+
+def test_trend_overlay_empty():
+    """Empty input should return no_data with all positions missing."""
+    result = compute_position_trend_overlay(pd.DataFrame())
+    assert result["status"] == "no_data"
+    assert result["position_groups"] == []
+    assert set(result["missing_positions"]) == {
+        "GK", "CB", "FB", "DM", "CM", "AM", "W", "ST",
+    }
+
+
+def test_trend_overlay_basic(action_df):
+    """Should return ok with 4 position groups (CB/CM/FB/ST)."""
+    result = compute_position_trend_overlay(action_df, season="2526")
+    assert result["status"] == "ok"
+    positions = [g["position_group"] for g in result["position_groups"]]
+    assert set(positions) == {"CB", "CM", "FB", "ST"}
+    assert result["n_positions"] == 4
+
+
+def test_trend_overlay_trend_labels_improving(action_df):
+    """ST npg_trend=0.10 should be labeled 'improving' (>0.05)."""
+    result = compute_position_trend_overlay(action_df, season="2526")
+    st_group = next(g for g in result["position_groups"] if g["position_group"] == "ST")
+    npg_dim = next(d for d in st_group["dimensions"] if d["feature"] == "npg_trend")
+    assert npg_dim["trend_label"] == "improving"
+    assert npg_dim["value"] > 0.05
+
+
+def test_trend_overlay_trend_labels_declining(action_df):
+    """ST pos_trend=-0.10 should be labeled 'declining' (<-0.05)."""
+    result = compute_position_trend_overlay(action_df, season="2526")
+    st_group = next(g for g in result["position_groups"] if g["position_group"] == "ST")
+    pos_dim = next(d for d in st_group["dimensions"] if d["feature"] == "pos_trend")
+    assert pos_dim["trend_label"] == "declining"
+    assert pos_dim["value"] < -0.05
+
+
+def test_trend_overlay_trend_labels_stable(action_df):
+    """ST def_trend=0.02 should be labeled 'stable' (|val|<0.05)."""
+    result = compute_position_trend_overlay(action_df, season="2526")
+    st_group = next(g for g in result["position_groups"] if g["position_group"] == "ST")
+    def_dim = next(d for d in st_group["dimensions"] if d["feature"] == "def_trend")
+    assert def_dim["trend_label"] == "stable"
+    assert abs(def_dim["value"]) < 0.05
+
+
+def test_trend_overlay_dimensions_structure(action_df):
+    """Each position group should have 3 dimensions (npg/def/pos trend)."""
+    result = compute_position_trend_overlay(action_df, season="2526")
+    for g in result["position_groups"]:
+        assert len(g["dimensions"]) == 3
+        features = [d["feature"] for d in g["dimensions"]]
+        assert set(features) == {"npg_trend", "def_trend", "pos_trend"}
+        for d in g["dimensions"]:
+            assert "value" in d
+            assert "trend_label" in d
+            assert d["trend_label"] in {"improving", "declining", "stable"}
+
+
+def test_trend_overlay_missing_positions(action_df):
+    """GK/DM/AM/W should be in missing_positions."""
+    result = compute_position_trend_overlay(action_df, season="2526")
+    assert set(result["missing_positions"]) == {"GK", "DM", "AM", "W"}
+
+
+def test_trend_overlay_league_filter(action_df):
+    """league=Premier League should exclude La Liga rows."""
+    result = compute_position_trend_overlay(
+        action_df, league="Premier League", season="2526"
+    )
+    assert result["status"] == "ok"
+    assert result["league"] == "Premier League"
+
+
+def test_trend_overlay_season_filter(action_df):
+    """season=2425 should return no_data since fixture only has 2526."""
+    result = compute_position_trend_overlay(action_df, season="2425")
+    assert result["status"] == "no_data"
+
+
+def test_trend_overlay_no_trend_columns():
+    """Frame without trend columns should return no_data with descriptive disclaimer."""
+    df = pd.DataFrame([{
+        "player": "P1", "team": "T1", "league": "L1", "season": "2526",
+        "position_group": "ST", "minutes": 1000.0,
+    }])
+    result = compute_position_trend_overlay(df)
+    assert result["status"] == "no_data"
+    assert "Missing trend columns" in result["disclaimer"]
+
+
+def test_trend_overlay_disclaimer_present(action_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_position_trend_overlay(action_df, season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_trend_overlay_no_mutation(action_df):
+    """Original DataFrame should not be mutated."""
+    original = action_df.copy()
+    compute_position_trend_overlay(action_df, season="2526")
+    pd.testing.assert_frame_equal(action_df, original)
