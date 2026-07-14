@@ -1554,6 +1554,135 @@ than `min_seasons` profiles). `cosine_similarity` ∈ [-1, 1]. This is a
 descriptive overlay — similar drift does not imply similar quality or future
 trajectory.
 
+### GET /positions/style-evolution
+
+Per-position-group style evolution across seasons. For each standard position
+group (GK/CB/FB/DM/CM/AM/W/ST) with ≥2 seasons of minutes-weighted aggregates
+(filtering players below `min_player_minutes`), fits a least-squares slope
+across seasons for each of the 4 style dimensions.
+
+**Query params**: `league` (optional, case-insensitive), `min_player_minutes`
+(default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": null,
+  "seasons": ["2324", "2425", "2526"],
+  "n_seasons": 3,
+  "position_groups": [
+    {
+      "position_group": "ST",
+      "seasons": ["2324", "2425", "2526"],
+      "n_seasons": 3,
+      "dimensions": [
+        {
+          "feature": "npg_p90", "label": "attack",
+          "slope": 0.05, "delta": 0.1, "r_squared": 0.85,
+          "mean": 0.45, "evolution_label": "rising",
+          "per_season": [
+            { "season": "2324", "value": 0.4, "n_players": 12 },
+            { "season": "2425", "value": 0.45, "n_players": 14 },
+            { "season": "2526", "value": 0.5, "n_players": 13 }
+          ]
+        }
+      ]
+    }
+  ],
+  "skipped_positions": [
+    { "position_group": "FB", "reason": "insufficient_seasons", "n_seasons": 1 }
+  ],
+  "disclaimer": "Per-position-group style evolution is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `insufficient_seasons` (when no position group
+has ≥2 seasons). `evolution_label` ∈ {rising, falling, stable} using a 5%
+relative threshold on the delta. This is a descriptive population view — it
+does not predict future position-group style or rank positions by quality.
+
+### GET /positions/{position_group}/style-drift
+
+Single position group's style trajectory across seasons. Validates position
+against the 8 canonical groups (GK/CB/FB/DM/CM/AM/W/ST).
+
+**Path params**: `position_group` (case-insensitive, one of GK/CB/FB/DM/CM/AM/W/ST)
+
+**Query params**: `league` (optional, case-insensitive), `min_player_minutes`
+(default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "position_group": "ST",
+  "league": "Premier League",
+  "seasons": ["2324", "2425", "2526"],
+  "n_seasons": 3,
+  "dimensions": [
+    {
+      "feature": "npg_p90", "label": "attack",
+      "slope": 0.05, "delta": 0.1, "r_squared": 0.85,
+      "mean": 0.45, "drift_label": "rising",
+      "per_season": [
+        { "season": "2324", "value": 0.4, "n_players": 12 },
+        { "season": "2425", "value": 0.45, "n_players": 14 },
+        { "season": "2526", "value": 0.5, "n_players": 13 }
+      ]
+    }
+  ],
+  "disclaimer": "Per-position-group style drift is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `invalid_position` (when position_group is not
+one of the 8 canonical groups), `position_not_found` (when the target position
+group is absent from the data after filtering), `insufficient_seasons` (when
+the position group has <2 seasons of profiles). `drift_label` ∈ {rising,
+falling, stable} using a 5% relative threshold. This is a descriptive overlay
+— it does not predict future position-group style or rank positions by quality.
+
+### GET /positions/{position_group}/style-drift-neighbors
+
+Position groups with similar style-drift patterns. Computes a 4-dimensional
+drift vector (least-squares slope per dimension) for each position group with
+≥2 seasons of profiles, then ranks others by cosine similarity to the target
+position group's drift vector.
+
+**Path params**: `position_group` (case-insensitive, one of GK/CB/FB/DM/CM/AM/W/ST)
+
+**Query params**: `league` (optional, case-insensitive), `min_player_minutes`
+(default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "position_group": "ST",
+  "league": "Premier League",
+  "seasons": ["2324", "2425", "2526"],
+  "n_seasons": 3,
+  "target_drift_vector": [0.05, 0.01, -2.0, 1.5],
+  "target_drift_vector_labels": ["npg_p90", "assists_p90", "defense_composite", "possession_composite"],
+  "n_candidates": 5,
+  "neighbors": [
+    {
+      "position_group": "GK",
+      "n_seasons": 3, "seasons": ["2324", "2425", "2526"],
+      "cosine_similarity": 0.88, "euclidean_distance": 0.15,
+      "drift_vector": [0.04, 0.02, -1.8, 1.3]
+    }
+  ],
+  "disclaimer": "Per-position-group style drift neighbors are a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `invalid_position`, `position_not_found` (when
+the target position group has <2 seasons of profiles and cannot form a drift
+vector). `cosine_similarity` ∈ [-1, 1]. This is a descriptive overlay —
+similar drift does not imply similar quality or future trajectory.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.
