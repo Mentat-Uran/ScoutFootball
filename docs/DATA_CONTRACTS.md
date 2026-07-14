@@ -1683,6 +1683,158 @@ the target position group has <2 seasons of profiles and cannot form a drift
 vector). `cosine_similarity` ∈ [-1, 1]. This is a descriptive overlay —
 similar drift does not imply similar quality or future trajectory.
 
+### GET /positions/depth-profile
+
+Per-position-group squad depth profile. For each standard position group
+(GK/CB/FB/DM/CM/AM/W/ST) after filtering players below `min_player_minutes`,
+computes player count, total minutes, score distribution (min/median/max/
+mean/std/p25/p75), minutes distribution, minutes-weighted style means, and
+a depth_label (shallow <2 / adequate 2-3 / deep ≥4). Position groups with
+zero qualifying players are listed in `missing_positions`.
+
+**Query params**: `league` (optional, case-insensitive), `season` (optional),
+`min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2526",
+  "n_positions": 4,
+  "position_groups": [
+    {
+      "position_group": "ST",
+      "n_players": 8,
+      "total_minutes": 11200,
+      "score_min": 55.0, "score_median": 70.0, "score_max": 85.0,
+      "score_mean": 70.0, "score_std": 10.0,
+      "score_p25": 62.5, "score_p75": 77.5,
+      "minutes_median": 1450, "minutes_mean": 1400,
+      "attack": 0.25, "creation": 0.12,
+      "defense": 30.5, "possession": 40.3,
+      "depth_label": "deep"
+    }
+  ],
+  "missing_positions": ["GK", "DM", "AM", "W"],
+  "disclaimer": "Position depth profile is a descriptive snapshot..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input, no position_group column, or no
+players above the minutes threshold). `depth_label` ∈ {shallow, adequate,
+deep}. This is a descriptive overlay — depth labels do not account for
+injuries, tactical flexibility, or upcoming transfers.
+
+### GET /positions/{position_group}/cross-league
+
+Cross-league quality comparison for one position group. Groups players by
+league, computes per-league depth stats, sorts by mean score descending,
+and assigns a quality_tier (top/middle/bottom).
+
+**Path params**: `position_group` (case-insensitive, one of GK/CB/FB/DM/CM/AM/W/ST)
+
+**Query params**: `season` (optional), `min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "position_group": "ST",
+  "season": "2526",
+  "n_leagues": 2,
+  "leagues": [
+    {
+      "league": "Premier League",
+      "n_players": 8, "score_mean": 70.0, "score_median": 70.0,
+      "attack": 0.25, "defense": 30.5,
+      "depth_label": "deep", "quality_tier": "top"
+    },
+    {
+      "league": "La Liga",
+      "n_players": 5, "score_mean": 70.0, "score_median": 70.0,
+      "attack": 0.22, "defense": 28.0,
+      "depth_label": "adequate", "quality_tier": "bottom"
+    }
+  ],
+  "best_league": "Premier League",
+  "worst_league": "La Liga",
+  "score_spread": 0.0,
+  "disclaimer": "Cross-league position comparison is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no position_group column),
+`invalid_position` (when position_group is not one of the 8 canonical groups),
+`position_not_found` (when the target position group is absent from the data
+after filtering). `quality_tier` ∈ {top, middle, bottom}; when ≤2 leagues,
+only top/bottom are assigned. This is a descriptive overlay — quality tiers
+are relative rankings within the available leagues and do not account for
+differences in league difficulty or sample size.
+
+### GET /teams/{team}/position-gap-report
+
+Position-group gap and strength report for one team. Computes per-position-
+group depth stats for the target team and compares against league-wide p40/p60
+percentiles to identify gaps (shallow/low_quality/missing) and strengths
+(deep + high quality).
+
+**Path params**: `team` (case-insensitive team name)
+
+**Query params**: `season` (optional), `min_player_minutes` (default 500.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Gap Team",
+  "league": "Premier League",
+  "season": "2526",
+  "n_positions": 4,
+  "position_groups": [
+    {
+      "position_group": "CM",
+      "n_players": 5, "score_mean": 78.4,
+      "depth_label": "deep",
+      "league_p40": 65.0, "league_p60": 76.2, "league_n_players": 12
+    }
+  ],
+  "missing_positions": ["GK", "DM", "AM", "W"],
+  "gaps": [
+    {
+      "position_group": "ST", "gap_type": "shallow",
+      "n_players": 1, "mean_score": 70.0,
+      "reason": "Only 1 qualifying player(s) — depth below shallow threshold (2)."
+    },
+    {
+      "position_group": "CB", "gap_type": "low_quality",
+      "n_players": 3, "mean_score": 52.0, "league_p40": 54.6,
+      "reason": "Mean score 52.0 below league 40th percentile (54.6)."
+    },
+    {
+      "position_group": "GK", "gap_type": "missing",
+      "n_players": 0, "reason": "No players in this position group."
+    }
+  ],
+  "n_gaps": 7,
+  "strengths": [
+    {
+      "position_group": "CM", "n_players": 5, "mean_score": 78.4,
+      "league_p60": 76.2,
+      "reason": "Deep roster (5 players) with mean score 78.4 >= league 60th percentile (76.2)."
+    }
+  ],
+  "n_strengths": 1,
+  "disclaimer": "Position gap report is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no position_group column),
+`team_not_found` (when the target team is absent from the data after filtering).
+`gap_type` ∈ {shallow, low_quality, missing}. This is a descriptive overlay —
+gap types and strength labels are heuristic thresholds, not transfer
+recommendations or tactical advice.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.
