@@ -898,6 +898,29 @@
                     <div id="position-cross-league-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                     <div id="position-gap-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                 </article>
+                <article class="liquid-panel" style="margin-top:var(--space)">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="position_action_title">位置组动作画像与趋势</p>
+                    </div>
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space)">
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_league">联赛</label>
+                            <input type="text" id="position-action-league" class="filter-input" placeholder="e.g. Premier League" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_season">赛季</label>
+                            <input type="text" id="position-action-season" class="filter-input" placeholder="e.g. 2526" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_team">位置组</label>
+                            <input type="text" id="position-action-pos" class="filter-input" placeholder="e.g. ST" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="position-action-btn" class="cta-button" type="button" data-i18n="position_action_button">分析</button>
+                    </div>
+                    <div id="position-action-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="position-similarity-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="position-trend-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                </article>
             </section>
 
             <section class="view" id="view-scouting" aria-label="scouting">

@@ -21,6 +21,7 @@ from scoutfootball.api import (
     clear_wc_tournament_result,
     export_wc_tournament_state,
     generate_wc_knockout_bracket,
+    get_action_based_position_similarity,
     get_action_value_evidence,
     get_action_value_evidence_index,
     get_action_value_player_context,
@@ -73,11 +74,13 @@ from scoutfootball.api import (
     get_player_ratings,
     get_player_role_fit,
     get_player_style_fit,
+    get_position_action_profile,
     get_position_depth_profile,
     get_position_gap_report,
     get_position_style_drift,
     get_position_style_drift_neighbors,
     get_position_style_evolution,
+    get_position_trend_overlay,
     get_prediction_anomalies,
     get_prediction_attribution,
     get_prediction_attribution_ci,
@@ -1068,6 +1071,30 @@ def create_app() -> FastAPI:
             min_player_minutes=min_player_minutes,
         )
 
+    @app.get("/positions/action-profile")
+    def position_action_profile(
+        league: str | None = None,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_position_action_profile(
+            league=league,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/positions/trend-overlay")
+    def position_trend_overlay(
+        league: str | None = None,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_position_trend_overlay(
+            league=league,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
     @app.get("/positions/{position_group}/style-drift")
     def position_style_drift(
         position_group: str,
@@ -1100,6 +1127,20 @@ def create_app() -> FastAPI:
     ):
         return get_cross_league_position_comparison(
             position_group,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/positions/{position_group}/action-similarity")
+    def action_based_position_similarity(
+        position_group: str,
+        league: str | None = None,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_action_based_position_similarity(
+            position_group,
+            league=league,
             season=season,
             min_player_minutes=min_player_minutes,
         )
