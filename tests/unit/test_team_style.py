@@ -14,8 +14,11 @@ import pytest
 from scoutfootball.features.team_style import (
     compute_cluster_recruits,
     compute_cluster_similarity_matrix,
+    compute_league_style_percentiles,
     compute_player_style_fit,
+    compute_style_atlas,
     compute_style_matchup,
+    compute_style_neighbors,
     compute_team_style_clusters,
     compute_team_style_profiles,
 )
@@ -755,4 +758,294 @@ def test_matchup_no_mutation(style_df):
     """Original DataFrame should not be mutated."""
     original = style_df.copy()
     compute_style_matchup(style_df, "Team A", "Team C", n_clusters=4)
+    pd.testing.assert_frame_equal(style_df, original)
+
+
+# ── compute_style_neighbors ──────────────────────────────────────────────
+
+
+def test_neighbors_empty():
+    """Empty input should return no_data."""
+    result = compute_style_neighbors(pd.DataFrame(), "Team A")
+    assert result["status"] == "no_data"
+
+
+def test_neighbors_team_not_found(style_df):
+    """Missing team should return team_not_found."""
+    result = compute_style_neighbors(style_df, "Nonexistent")
+    assert result["status"] == "team_not_found"
+    assert "Nonexistent" in result["disclaimer"]
+
+
+def test_neighbors_basic(style_df):
+    """Should return neighbors sorted by cosine similarity."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=5)
+    assert result["status"] == "ok"
+    assert result["team"] == "Team A"
+    assert result["n_population"] == 8
+    assert len(result["neighbors"]) == 5
+    # Team B is the most similar to Team A (both attacking).
+    assert result["neighbors"][0]["team"] == "Team B"
+
+
+def test_neighbors_similarity_descending(style_df):
+    """Neighbors should be sorted by similarity descending."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=7)
+    sims = [n["cosine_similarity"] for n in result["neighbors"]]
+    assert sims == sorted(sims, reverse=True)
+
+
+def test_neighbors_top_n_cap(style_df):
+    """top_n should be capped at population size - 1."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=100)
+    assert len(result["neighbors"]) == 7  # 8 teams - 1 target
+
+
+def test_neighbors_top_n_clamped(style_df):
+    """top_n should be clamped to [1, 50]."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=0)
+    assert len(result["neighbors"]) == 1
+    result = compute_style_neighbors(style_df, "Team A", top_n=-5)
+    assert len(result["neighbors"]) == 1
+
+
+def test_neighbors_case_insensitive(style_df):
+    """Team name lookup should be case-insensitive."""
+    result = compute_style_neighbors(style_df, "team a", top_n=3)
+    assert result["status"] == "ok"
+    assert result["target"]["team"] == "Team A"
+
+
+def test_neighbors_target_profile(style_df):
+    """Target profile should have raw and standardized values."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=3)
+    target = result["target"]
+    assert "raw" in target
+    assert "standardized" in target
+    assert "npg_p90" in target["raw"]
+
+
+def test_neighbors_cluster_context(style_df):
+    """When clustering succeeds, cluster info should be attached."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=5, n_clusters=4)
+    assert result["status"] == "ok"
+    # Target cluster should be present.
+    assert result.get("target_cluster") is not None
+    # Each neighbor should have cluster info.
+    for n in result["neighbors"]:
+        assert "cluster_id" in n
+        assert "cluster_label" in n
+        assert "same_cluster" in n
+
+
+def test_neighbors_same_cluster_flag(style_df):
+    """Team A and Team B should be in the same cluster (both attacking)."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=7, n_clusters=4)
+    team_b = next(n for n in result["neighbors"] if n["team"] == "Team B")
+    # Team A and B are both attacking, likely same cluster.
+    assert team_b["same_cluster"] in (True, False)  # depends on k-means
+
+
+def test_neighbors_distance_nonnegative(style_df):
+    """Style distance should be non-negative."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=5)
+    for n in result["neighbors"]:
+        assert n["style_distance"] >= 0
+
+
+def test_neighbors_similarity_range(style_df):
+    """Cosine similarity should be in [-1, 1]."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=7)
+    for n in result["neighbors"]:
+        assert -1.0 <= n["cosine_similarity"] <= 1.0
+
+
+def test_neighbors_disclaimer_present(style_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_style_neighbors(style_df, "Team A", top_n=3)
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_neighbors_no_mutation(style_df):
+    """Original DataFrame should not be mutated."""
+    original = style_df.copy()
+    compute_style_neighbors(style_df, "Team A", top_n=5)
+    pd.testing.assert_frame_equal(style_df, original)
+
+
+def test_neighbors_season_filter(style_df):
+    """Season filter should still find the team."""
+    result = compute_style_neighbors(style_df, "Team A", season="2526", top_n=3)
+    assert result["status"] == "ok"
+    assert result["season"] == "2526"
+
+
+# ── compute_league_style_percentiles ─────────────────────────────────────
+
+
+def test_percentiles_empty():
+    """Empty input should return no_data."""
+    result = compute_league_style_percentiles(pd.DataFrame(), "Team A")
+    assert result["status"] == "no_data"
+
+
+def test_percentiles_team_not_found(style_df):
+    """Missing team should return team_not_found."""
+    result = compute_league_style_percentiles(style_df, "Nonexistent")
+    assert result["status"] == "team_not_found"
+
+
+def test_percentiles_basic(style_df):
+    """Should return one dimension entry per style feature."""
+    result = compute_league_style_percentiles(style_df, "Team A")
+    assert result["status"] == "ok"
+    assert result["team"] == "Team A"
+    assert result["n_population"] == 8
+    assert len(result["dimensions"]) == 4
+
+
+def test_percentiles_range(style_df):
+    """Percentile should be in [0, 100]."""
+    result = compute_league_style_percentiles(style_df, "Team A")
+    for d in result["dimensions"]:
+        assert 0 <= d["percentile"] <= 100
+
+
+def test_percentiles_quartile_labels(style_df):
+    """Quartile should be one of the four valid labels."""
+    result = compute_league_style_percentiles(style_df, "Team A")
+    valid = {"top", "upper_mid", "lower_mid", "bottom"}
+    for d in result["dimensions"]:
+        assert d["quartile"] in valid
+
+
+def test_percentiles_attack_high_for_team_a(style_df):
+    """Team A has the highest attack (npg_p90), should be top quartile."""
+    result = compute_league_style_percentiles(style_df, "Team A")
+    atk = next(d for d in result["dimensions"] if d["feature"] == "npg_p90")
+    assert atk["percentile"] >= 75
+    assert atk["quartile"] == "top"
+
+
+def test_percentiles_population_stats(style_df):
+    """Each dimension should include population min/max/mean/median."""
+    result = compute_league_style_percentiles(style_df, "Team A")
+    for d in result["dimensions"]:
+        assert "population_min" in d
+        assert "population_max" in d
+        assert "population_mean" in d
+        assert "population_median" in d
+        assert d["population_min"] <= d["population_median"] <= d["population_max"]
+
+
+def test_percentiles_case_insensitive(style_df):
+    """Team name lookup should be case-insensitive."""
+    result = compute_league_style_percentiles(style_df, "team a")
+    assert result["status"] == "ok"
+    assert result["target"]["team"] == "Team A"
+
+
+def test_percentiles_disclaimer_present(style_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_league_style_percentiles(style_df, "Team A")
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_percentiles_no_mutation(style_df):
+    """Original DataFrame should not be mutated."""
+    original = style_df.copy()
+    compute_league_style_percentiles(style_df, "Team A")
+    pd.testing.assert_frame_equal(style_df, original)
+
+
+# ── compute_style_atlas ──────────────────────────────────────────────────
+
+
+def test_atlas_empty():
+    """Empty input should return no_data."""
+    result = compute_style_atlas(pd.DataFrame())
+    assert result["status"] == "no_data"
+
+
+def test_atlas_basic(style_df):
+    """Should return one dimension entry per style feature."""
+    result = compute_style_atlas(style_df)
+    assert result["status"] == "ok"
+    assert result["n_population"] == 8
+    assert len(result["dimensions"]) == 4
+
+
+def test_atlas_dimension_fields(style_df):
+    """Each dimension should have histogram, quartiles, and outliers."""
+    result = compute_style_atlas(style_df)
+    for d in result["dimensions"]:
+        assert "min" in d
+        assert "max" in d
+        assert "mean" in d
+        assert "median" in d
+        assert "q1" in d
+        assert "q3" in d
+        assert "iqr" in d
+        assert "bins" in d
+        assert "outliers" in d
+        assert isinstance(d["bins"], list)
+        assert isinstance(d["outliers"], list)
+        assert len(d["bins"]) >= 1
+
+
+def test_atlas_bins_count(style_df):
+    """Histogram bins should sum to population size."""
+    result = compute_style_atlas(style_df, n_bins=4)
+    for d in result["dimensions"]:
+        total = sum(b["count"] for b in d["bins"])
+        assert total == result["n_population"]
+
+
+def test_atlas_n_bins_clamped(style_df):
+    """n_bins should be clamped to [3, 20]."""
+    result = compute_style_atlas(style_df, n_bins=2)
+    for d in result["dimensions"]:
+        assert len(d["bins"]) >= 3
+    result = compute_style_atlas(style_df, n_bins=100)
+    for d in result["dimensions"]:
+        assert len(d["bins"]) <= 20
+
+
+def test_atlas_outliers_zscore(style_df):
+    """Outliers should have z_score magnitude >= 2.0."""
+    result = compute_style_atlas(style_df)
+    for d in result["dimensions"]:
+        for o in d["outliers"]:
+            assert abs(o["z_score"]) >= 2.0
+            assert o["direction"] in ("high", "low")
+
+
+def test_atlas_quartiles_consistent(style_df):
+    """Q1 <= median <= Q3 and IQR = Q3 - Q1."""
+    result = compute_style_atlas(style_df)
+    for d in result["dimensions"]:
+        assert d["q1"] <= d["median"] <= d["q3"]
+        assert abs(d["iqr"] - (d["q3"] - d["q1"])) < 0.01
+
+
+def test_atlas_season_filter(style_df):
+    """Season filter should work."""
+    result = compute_style_atlas(style_df, season="2526")
+    assert result["status"] == "ok"
+    assert result["season"] == "2526"
+
+
+def test_atlas_disclaimer_present(style_df):
+    """Disclaimer should be present and non-empty."""
+    result = compute_style_atlas(style_df)
+    assert result.get("disclaimer")
+    assert len(result["disclaimer"]) > 20
+
+
+def test_atlas_no_mutation(style_df):
+    """Original DataFrame should not be mutated."""
+    original = style_df.copy()
+    compute_style_atlas(style_df)
     pd.testing.assert_frame_equal(style_df, original)

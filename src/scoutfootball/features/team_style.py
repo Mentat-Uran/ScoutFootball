@@ -1175,3 +1175,439 @@ def compute_style_matchup(
                     result["cluster_clash"] = _clash_label(sim)
 
     return result
+
+
+# ── Style Atlas: neighbors, percentiles, distribution ───────────────────
+
+
+def _pick_profile(
+    profiles: list[TeamStyleProfile], team_name: str
+) -> TeamStyleProfile | None:
+    """Pick a team's profile; if multiple, choose the most recent season."""
+    matches = [p for p in profiles if p.team.lower() == team_name.lower()]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    matches.sort(key=lambda p: str(p.season), reverse=True)
+    return matches[0]
+
+
+def compute_style_neighbors(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    season: str | None = None,
+    league: str | None = None,
+    top_n: int = 10,
+    min_minutes_total: float = _MIN_MINUTES_TOTAL,
+    n_clusters: int = _DEFAULT_N_CLUSTERS,
+    random_state: int = 42,
+) -> dict[str, Any]:
+    """Find the nearest tactical-style neighbors for a given team.
+
+    Computes each team's minutes-weighted style profile, standardises
+    all profiles against the league population, then ranks every other
+    team by cosine similarity and Euclidean distance on the standardised
+    style vector. When clustering succeeds, each neighbor's cluster
+    assignment is included so the user can see whether a neighbor is in
+    the same cluster or a different one.
+
+    This is an interpretive overlay — it does not predict match outcomes
+    or rank teams by quality.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = compute_team_style_profiles(
+        df,
+        season=season,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": (
+                "No team-season profiles meet the minimum minutes "
+                f"threshold ({min_minutes_total:.0f} min)."
+            ),
+        }
+
+    target = _pick_profile(profiles, team)
+    if target is None:
+        return {
+            "status": "team_not_found",
+            "team": team,
+            "disclaimer": (
+                f"No style profile found for '{team}'."
+                + (f" Season={season}." if season else "")
+                + (f" League={league}." if league else "")
+                + " Check the team name spelling or broaden the filters."
+            ),
+        }
+
+    mat = np.array(
+        [
+            [getattr(p, _feat_to_attr(c)) for c in _STYLE_FEATURES]
+            for p in profiles
+        ],
+        dtype=float,
+    )
+    means = mat.mean(axis=0)
+    stds = mat.std(axis=0, ddof=0)
+    stds_safe = np.where(stds == 0, 1.0, stds)
+    standardized = (mat - means) / stds_safe
+
+    target_idx = profiles.index(target)
+    target_std = standardized[target_idx]
+    target_norm = float(np.linalg.norm(target_std))
+
+    neighbors: list[dict[str, Any]] = []
+    for i, p in enumerate(profiles):
+        if i == target_idx:
+            continue
+        other_std = standardized[i]
+        other_norm = float(np.linalg.norm(other_std))
+        if target_norm == 0 or other_norm == 0:
+            cos_sim = 0.0
+        else:
+            cos_sim = float(np.dot(target_std, other_std)) / (
+                target_norm * other_norm
+            )
+        dist = float(np.linalg.norm(target_std - other_std))
+        neighbors.append(
+            {
+                "team": p.team,
+                "league": p.league,
+                "season": p.season,
+                "cosine_similarity": round(cos_sim, 3),
+                "style_distance": round(dist, 3),
+            }
+        )
+
+    # Sort by cosine similarity descending (equivalently, distance ascending).
+    neighbors.sort(
+        key=lambda n: (n["cosine_similarity"], -n["style_distance"]),
+        reverse=True,
+    )
+    top_n = max(1, min(50, int(top_n)))
+    n_returned = min(top_n, len(neighbors))
+    top_neighbors = neighbors[:top_n]
+
+    result: dict[str, Any] = {
+        "status": "ok",
+        "team": team,
+        "season": season,
+        "league": league,
+        "target": _team_profile_dict(target, means, stds_safe),
+        "n_population": len(profiles),
+        "n_returned": n_returned,
+        "neighbors": top_neighbors,
+        "disclaimer": (
+            "Style neighbors are ranked by cosine similarity between "
+            "standardised minutes-weighted style composites. They "
+            "describe statistical affinity, not confirmed tactical "
+            "similarity or competitive level. A high similarity score "
+            "does not predict a match outcome or transfer fit."
+        ),
+    }
+
+    # Optional cluster context.
+    clusters_result = compute_team_style_clusters(
+        df,
+        season=season,
+        league=league,
+        n_clusters=n_clusters,
+        min_minutes_total=min_minutes_total,
+        random_state=random_state,
+    )
+    if clusters_result["status"] == "ok":
+        cluster_map: dict[str, dict[str, Any]] = {}
+        for tp in clusters_result["team_profiles"]:
+            cluster_map.setdefault(tp["team"], {
+                "cluster_id": int(tp["cluster_id"]),
+                "label": "",
+            })["cluster_id"] = int(tp["cluster_id"])
+        for c in clusters_result["clusters"]:
+            for t in c["teams"]:
+                if t in cluster_map:
+                    cluster_map[t]["label"] = c["label"]
+
+        target_cluster = cluster_map.get(target.team)
+        result["target_cluster"] = target_cluster
+        for n in top_neighbors:
+            nc = cluster_map.get(n["team"])
+            if nc is not None:
+                n["cluster_id"] = nc["cluster_id"]
+                n["cluster_label"] = nc["label"]
+                if target_cluster is not None:
+                    n["same_cluster"] = (
+                        nc["cluster_id"] == target_cluster["cluster_id"]
+                    )
+
+    return result
+
+
+def compute_league_style_percentiles(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    season: str | None = None,
+    league: str | None = None,
+    min_minutes_total: float = _MIN_MINUTES_TOTAL,
+) -> dict[str, Any]:
+    """Per-dimension percentile rank of one team within its league population.
+
+    For each of the four style dimensions (attack, creation, defense,
+    possession), computes the team's percentile rank (0–100) within
+    the filtered league population. A percentile of 90 means the team
+    is in the top 10% for that dimension.
+
+    This is a descriptive overlay — percentiles describe relative
+    standing, not absolute quality or tactical correctness.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = compute_team_style_profiles(
+        df,
+        season=season,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": (
+                "No team-season profiles meet the minimum minutes "
+                f"threshold ({min_minutes_total:.0f} min)."
+            ),
+        }
+
+    target = _pick_profile(profiles, team)
+    if target is None:
+        return {
+            "status": "team_not_found",
+            "team": team,
+            "disclaimer": (
+                f"No style profile found for '{team}'."
+                + (f" Season={season}." if season else "")
+                + (f" League={league}." if league else "")
+                + " Check the team name spelling or broaden the filters."
+            ),
+        }
+
+    mat = np.array(
+        [
+            [getattr(p, _feat_to_attr(c)) for c in _STYLE_FEATURES]
+            for p in profiles
+        ],
+        dtype=float,
+    )
+    n_pop = len(profiles)
+    target_idx = profiles.index(target)
+    target_raw = mat[target_idx]
+
+    dimensions: list[dict[str, Any]] = []
+    for i, feat in enumerate(_STYLE_FEATURES):
+        col = mat[:, i]
+        val = float(target_raw[i])
+        # Percentile rank: fraction of population at or below this value.
+        if n_pop <= 1:
+            pct = 50.0
+        else:
+            # Use average rank to handle ties deterministically.
+            # percentile = 100 * (count_below + 0.5 * count_equal) / n
+            rank = float((col < val).sum()) + 0.5 * float(
+                (col == val).sum()
+            )
+            pct = round(100.0 * rank / n_pop, 1) if n_pop > 0 else 50.0
+        # Quartile label.
+        if pct >= 75:
+            quartile = "top"
+        elif pct >= 50:
+            quartile = "upper_mid"
+        elif pct >= 25:
+            quartile = "lower_mid"
+        else:
+            quartile = "bottom"
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _DIM_LABELS[feat],
+                "value": round(val, 3),
+                "percentile": pct,
+                "quartile": quartile,
+                "population_min": round(float(col.min()), 3),
+                "population_max": round(float(col.max()), 3),
+                "population_mean": round(float(col.mean()), 3),
+                "population_median": round(float(np.median(col)), 3),
+            }
+        )
+
+    return {
+        "status": "ok",
+        "team": team,
+        "season": season,
+        "league": league,
+        "target": _team_profile_dict(target, mat.mean(axis=0), mat.std(axis=0, ddof=0)),
+        "n_population": n_pop,
+        "dimensions": dimensions,
+        "disclaimer": (
+            "Percentile ranks describe where a team sits within the "
+            "filtered league population on each style dimension. They "
+            "are relative, not absolute — a 90th-percentile attack in a "
+            "weak league is not equivalent to 90th-percentile in a "
+            "strong one. Percentiles do not predict match outcomes."
+        ),
+    }
+
+
+def compute_style_atlas(
+    df: pd.DataFrame,
+    *,
+    season: str | None = None,
+    league: str | None = None,
+    n_bins: int = 8,
+    min_minutes_total: float = _MIN_MINUTES_TOTAL,
+) -> dict[str, Any]:
+    """League-wide distribution of team styles across all dimensions.
+
+    For each of the four style dimensions, computes a histogram (with
+    ``n_bins`` bins between min and max), quartiles (Q1/median/Q3/IQR),
+    and the list of outlier teams (z-score magnitude >= 2.0). The result
+    is a league-wide "atlas" showing how styles are distributed.
+
+    This is a descriptive population view — it does not rank teams by
+    quality or predict outcomes.
+    """
+    if df.empty:
+        return {
+            "status": "no_data",
+            "disclaimer": "Empty rating matrix.",
+        }
+
+    profiles = compute_team_style_profiles(
+        df,
+        season=season,
+        league=league,
+        min_minutes_total=min_minutes_total,
+    )
+    if not profiles:
+        return {
+            "status": "no_data",
+            "disclaimer": (
+                "No team-season profiles meet the minimum minutes "
+                f"threshold ({min_minutes_total:.0f} min)."
+            ),
+        }
+
+    mat = np.array(
+        [
+            [getattr(p, _feat_to_attr(c)) for c in _STYLE_FEATURES]
+            for p in profiles
+        ],
+        dtype=float,
+    )
+    means = mat.mean(axis=0)
+    stds = mat.std(axis=0, ddof=0)
+    stds_safe = np.where(stds == 0, 1.0, stds)
+    standardized = (mat - means) / stds_safe
+
+    n_bins = max(3, min(20, int(n_bins)))
+    n_pop = len(profiles)
+
+    dimensions: list[dict[str, Any]] = []
+    for i, feat in enumerate(_STYLE_FEATURES):
+        col = mat[:, i]
+        col_min = float(col.min())
+        col_max = float(col.max())
+        col_mean = float(col.mean())
+        col_median = float(np.median(col))
+        q1 = float(np.percentile(col, 25))
+        q3 = float(np.percentile(col, 75))
+        iqr = q3 - q1
+
+        # Histogram with explicit bin edges.
+        if col_max > col_min:
+            edges = np.linspace(col_min, col_max, n_bins + 1)
+            counts, _ = np.histogram(col, bins=edges)
+            bins = [
+                {
+                    "low": round(float(edges[b]), 3),
+                    "high": round(float(edges[b + 1]), 3),
+                    "count": int(counts[b]),
+                }
+                for b in range(n_bins)
+            ]
+        else:
+            bins = [
+                {
+                    "low": round(col_min, 3),
+                    "high": round(col_max, 3),
+                    "count": n_pop,
+                }
+            ]
+
+        # Outliers: z-score magnitude >= 2.0 on the standardised dimension.
+        std_col = standardized[:, i]
+        outliers: list[dict[str, Any]] = []
+        for j, p in enumerate(profiles):
+            z = float(std_col[j])
+            if abs(z) >= 2.0:
+                outliers.append(
+                    {
+                        "team": p.team,
+                        "league": p.league,
+                        "season": p.season,
+                        "value": round(float(col[j]), 3),
+                        "z_score": round(z, 3),
+                        "direction": "high" if z > 0 else "low",
+                    }
+                )
+        outliers.sort(key=lambda o: abs(o["z_score"]), reverse=True)
+
+        dimensions.append(
+            {
+                "feature": feat,
+                "label": _DIM_LABELS[feat],
+                "min": round(col_min, 3),
+                "max": round(col_max, 3),
+                "mean": round(col_mean, 3),
+                "median": round(col_median, 3),
+                "q1": round(q1, 3),
+                "q3": round(q3, 3),
+                "iqr": round(iqr, 3),
+                "bins": bins,
+                "outliers": outliers,
+            }
+        )
+
+    return {
+        "status": "ok",
+        "season": season,
+        "league": league,
+        "n_population": n_pop,
+        "dimensions": dimensions,
+        "disclaimer": (
+            "The style atlas is a descriptive population view computed "
+            "from minutes-weighted per-player style composites. "
+            "Histograms, quartiles and outliers describe how styles are "
+            "distributed across the filtered league population — they do "
+            "not rank teams by quality or predict match outcomes. "
+            "Outliers are teams with a z-score magnitude >= 2.0 on the "
+            "standardised dimension; a low sample size makes outlier "
+            "labels less meaningful."
+        ),
+    }

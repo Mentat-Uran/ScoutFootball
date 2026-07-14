@@ -55,6 +55,7 @@ from scoutfootball.api import (
     get_h2h_bias_correction,
     get_head_to_head,
     get_league_error_analysis,
+    get_league_style_percentiles,
     get_match_momentum,
     get_match_prediction,
     get_match_prediction_dc,
@@ -88,7 +89,9 @@ from scoutfootball.api import (
     get_scenario_stress_test,
     get_scoreline_calibration,
     get_shortlist,
+    get_style_atlas,
     get_style_matchup,
+    get_style_neighbors,
     get_team_accuracy,
     get_team_calibration_drift,
     get_team_comparison,
@@ -947,6 +950,52 @@ def create_app() -> FastAPI:
             season=season,
             league=league,
             n_clusters=min(8, max(2, n_clusters)),
+            min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/teams/{team}/style-neighbors")
+    def team_style_neighbors(
+        team: str,
+        season: str | None = None,
+        league: str | None = None,
+        top_n: int = 10,
+        n_clusters: int = 4,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_style_neighbors(
+            team,
+            season=season,
+            league=league,
+            top_n=min(50, max(1, top_n)),
+            n_clusters=min(8, max(2, n_clusters)),
+            min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/teams/{team}/style-percentiles")
+    def team_style_percentiles(
+        team: str,
+        season: str | None = None,
+        league: str | None = None,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_league_style_percentiles(
+            team,
+            season=season,
+            league=league,
+            min_minutes_total=min_minutes_total,
+        )
+
+    @app.get("/teams/style-atlas")
+    def team_style_atlas(
+        season: str | None = None,
+        league: str | None = None,
+        n_bins: int = 8,
+        min_minutes_total: float = 1800.0,
+    ):
+        return get_style_atlas(
+            season=season,
+            league=league,
+            n_bins=min(20, max(3, n_bins)),
             min_minutes_total=min_minutes_total,
         )
 

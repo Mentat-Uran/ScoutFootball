@@ -1319,6 +1319,120 @@ open_game, defensive_battle, possession_duel, balanced}. `cluster_clash` ∈
 non-additive interpretive overlay — it does NOT modify the match-probability
 model; win/draw/loss probabilities remain the sole source of truth.
 
+### GET /teams/{team}/style-neighbors
+
+Finds the nearest tactical-style neighbors for a given team. Standardises all
+team style profiles against the league population, then ranks every other team
+by cosine similarity (descending) on the standardised 4-dim vector. When
+clustering succeeds, each neighbor carries cluster context.
+
+**Query params**: `team` (path, required), `season` (optional), `league`
+(optional, case-insensitive), `top_n` (default 10, clamped to 1–50),
+`n_clusters` (default 4, clamped to 2–8), `min_minutes_total` (default 1800.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Team A",
+  "season": null,
+  "league": null,
+  "target": {
+    "team": "Team A", "league": "...", "season": "2526",
+    "n_players": 14, "total_minutes": 18000,
+    "raw": { "npg_p90": 0.55, "assists_p90": 0.28, "defense_composite": 12.0, "possession_composite": 33.0 },
+    "standardized": { "npg_p90": 1.2, "assists_p90": 0.8, "defense_composite": -1.1, "possession_composite": -0.5 }
+  },
+  "target_cluster": { "cluster_id": 0, "label": "attacking" },
+  "n_population": 8,
+  "n_returned": 7,
+  "neighbors": [
+    { "team": "Team B", "league": "...", "season": "2526",
+      "cosine_similarity": 0.97, "style_distance": 0.32,
+      "cluster_id": 0, "cluster_label": "attacking", "same_cluster": true }
+  ],
+  "disclaimer": "Style neighbors are ranked by cosine similarity..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `team_not_found`. `cosine_similarity` ∈ [-1, 1].
+`style_distance` is Euclidean on standardised vectors (≥0). `same_cluster` only
+present when clustering succeeds. This is an interpretive overlay — it does not
+predict match outcomes or rank teams by quality.
+
+### GET /teams/{team}/style-percentiles
+
+Per-dimension percentile rank of one team within its league population. For
+each of the 4 style dimensions, computes the team's percentile (0–100, average
+rank for ties) with quartile label and population statistics.
+
+**Query params**: `team` (path, required), `season` (optional), `league`
+(optional, case-insensitive), `min_minutes_total` (default 1800.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Team A",
+  "season": null,
+  "league": null,
+  "target": { "team": "Team A", "raw": {...}, "standardized": {...} },
+  "n_population": 8,
+  "dimensions": [
+    { "feature": "npg_p90", "label": "attack", "value": 0.55,
+      "percentile": 100.0, "quartile": "top",
+      "population_min": 0.15, "population_max": 0.55,
+      "population_mean": 0.33, "population_median": 0.30 }
+  ],
+  "disclaimer": "Percentile ranks describe where a team sits..."
+}
+```
+
+Non-`ok` statuses: `no_data`, `team_not_found`. `quartile` ∈ {top (≥75),
+upper_mid (≥50), lower_mid (≥25), bottom (<25)}. Percentiles are relative, not
+absolute — a 90th-percentile attack in a weak league is not equivalent to
+90th-percentile in a strong one.
+
+### GET /teams/style-atlas
+
+League-wide distribution of team styles across all dimensions. For each of the
+4 style dimensions, computes a histogram (with explicit bin edges), quartiles
+(Q1/median/Q3/IQR), and outlier teams (|z| ≥ 2.0).
+
+**Query params**: `season` (optional), `league` (optional, case-insensitive),
+`n_bins` (default 8, clamped to 3–20), `min_minutes_total` (default 1800.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "season": null,
+  "league": null,
+  "n_population": 8,
+  "dimensions": [
+    {
+      "feature": "npg_p90", "label": "attack",
+      "min": 0.15, "max": 0.55, "mean": 0.33, "median": 0.30,
+      "q1": 0.18, "q3": 0.40, "iqr": 0.22,
+      "bins": [
+        { "low": 0.15, "high": 0.21, "count": 3 },
+        { "low": 0.21, "high": 0.27, "count": 1 }
+      ],
+      "outliers": [
+        { "team": "Team A", "league": "...", "season": "2526",
+          "value": 0.55, "z_score": 2.13, "direction": "high" }
+      ]
+    }
+  ],
+  "disclaimer": "The style atlas is a descriptive population view..."
+}
+```
+
+Non-`ok` statuses: `no_data`. Bin counts sum to `n_population`. Outliers are
+teams with |z_score| ≥ 2.0 on the standardised dimension; `direction` ∈ {high,
+low}. This is a descriptive population view — it does not rank teams by quality
+or predict outcomes.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.

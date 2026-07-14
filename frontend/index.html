@@ -796,6 +796,35 @@
                         </div>
                     </div>
                 </article>
+
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="style_atlas_title">联赛风格图集</h3>
+                        <span id="style-atlas-pill" class="status-pill status-medium">—</span>
+                    </div>
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:var(--space)">
+                        <div style="flex:2;min-width:140px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_team">球队</label>
+                            <input type="text" id="style-atlas-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_season">赛季</label>
+                            <input type="text" id="style-atlas-season" class="filter-input" placeholder="e.g. 2526" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_style_league">联赛</label>
+                            <input type="text" id="style-atlas-league" class="filter-input" placeholder="e.g. Premier League" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:80px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_topn">近邻数</label>
+                            <input type="number" id="style-atlas-topn" class="filter-input" value="10" min="1" max="50" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="style-atlas-btn" class="cta-button" type="button" data-i18n="style_atlas_button">分析</button>
+                    </div>
+                    <div id="style-atlas-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="style-neighbors-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="style-percentiles-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                </article>
             </section>
 
             <section class="view" id="view-scouting" aria-label="scouting">

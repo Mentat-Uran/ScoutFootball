@@ -664,6 +664,10 @@ const i18n = {
         cluster_sim_col_b: "簇 B",
         cluster_sim_col_sim: "相似度",
         cluster_sim_col_clash: "关系",
+        style_atlas_title: "联赛风格图集",
+        style_atlas_team: "球队",
+        style_atlas_topn: "近邻数",
+        style_atlas_button: "分析",
         backtest_best_decay: "最优 Decay",
         backtest_selection_metric: "选择指标",
         backtest_half_life: "半衰期(天)",
@@ -1657,6 +1661,10 @@ const i18n = {
         cluster_sim_col_b: "Cluster B",
         cluster_sim_col_sim: "Similarity",
         cluster_sim_col_clash: "Relationship",
+        style_atlas_title: "League Style Atlas",
+        style_atlas_team: "Team",
+        style_atlas_topn: "Neighbors",
+        style_atlas_button: "Analyze",
         backtest_best_decay: "Best Decay",
         backtest_selection_metric: "Selection Metric",
         backtest_half_life: "Half-Life (days)",
@@ -2375,6 +2383,49 @@ async function fetchStyleMatchup(homeTeam, awayTeam, season, league) {
     } catch (err) {
         console.warn("Failed to fetch style matchup:", err);
         return { status: "fetch_failed", home_team: homeTeam, away_team: awayTeam, error: "fetch_failed" };
+    }
+}
+
+async function fetchStyleNeighbors(team, season, league, topN) {
+    if (!team) return { status: "no_team" };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (league) params.set("league", league);
+    params.set("top_n", String(Math.max(1, Math.min(50, Number(topN) || 10))));
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/style-neighbors`, { params });
+        return data || { status: "no_data", team, neighbors: [] };
+    } catch (err) {
+        console.warn("Failed to fetch style neighbors:", err);
+        return { status: "fetch_failed", team, neighbors: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchLeagueStylePercentiles(team, season, league) {
+    if (!team) return { status: "no_team" };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (league) params.set("league", league);
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/style-percentiles`, { params });
+        return data || { status: "no_data", team, dimensions: [] };
+    } catch (err) {
+        console.warn("Failed to fetch league style percentiles:", err);
+        return { status: "fetch_failed", team, dimensions: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchStyleAtlas(season, league, nBins) {
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (league) params.set("league", league);
+    params.set("n_bins", String(Math.max(3, Math.min(20, Number(nBins) || 8))));
+    try {
+        const data = await fetchJson("/teams/style-atlas", { params });
+        return data || { status: "no_data", dimensions: [] };
+    } catch (err) {
+        console.warn("Failed to fetch style atlas:", err);
+        return { status: "fetch_failed", dimensions: [], error: "fetch_failed" };
     }
 }
 
@@ -9846,6 +9897,7 @@ async function renderTeams() {
     renderTeamsChart(filtered);
     initTeamCompareControls();
     initTeamStyleClustersControls();
+    initStyleAtlasControls();
 }
 
 function renderTeamDetail(team) {
@@ -10496,6 +10548,271 @@ async function _renderStyleMatchup(homeTeam, awayTeam, season, league) {
         `<div class="table-scroll" style="margin-top:0.4rem"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "维度" : "Dimension"}</th><th>${escapeHtml(homeTeam)}</th><th>${escapeHtml(awayTeam)}</th><th>Δσ</th><th>${z ? "优势" : "Advantage"}</th></tr></thead><tbody>${dimRows}</tbody></table></div>`,
         clusterHtml,
         `<p style="margin:0.5rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+// ── Style Atlas: neighbors, percentiles, league-wide distribution ────────
+
+function initStyleAtlasControls() {
+    const btn = document.getElementById("style-atlas-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+
+    const doScan = async () => {
+        const teamInput = document.getElementById("style-atlas-team");
+        const seasonInput = document.getElementById("style-atlas-season");
+        const leagueInput = document.getElementById("style-atlas-league");
+        const topNInput = document.getElementById("style-atlas-topn");
+        const team = teamInput ? teamInput.value.trim() : "";
+        const season = seasonInput ? seasonInput.value.trim() : "";
+        const league = leagueInput ? leagueInput.value.trim() : "";
+        const topN = topNInput ? Number(topNInput.value) : 10;
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+            await Promise.all([
+                _renderStyleNeighbors(team, season, league, topN),
+                _renderLeagueStylePercentiles(team, season, league),
+                _renderStyleAtlas(season, league),
+            ]);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = t("style_atlas_button");
+        }
+    };
+
+    btn.addEventListener("click", doScan);
+    const handler = (e) => { if (e.key === "Enter") doScan(); };
+    const ids = ["style-atlas-team", "style-atlas-season", "style-atlas-league", "style-atlas-topn"];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("keydown", handler);
+    }
+}
+
+async function _renderStyleNeighbors(team, season, league, topN) {
+    const wrap = document.getElementById("style-neighbors-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    if (!team) {
+        wrap.style.display = "none";
+        return;
+    }
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在检索风格近邻…" : "Fetching style neighbors…")}</p>`;
+
+    const data = await fetchStyleNeighbors(team, season, league, topN);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请求失败" : "Fetch failed.")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "暂无足够风格数据。" : "Insufficient style data.")}</p>`;
+        return;
+    }
+    if (data.status === "team_not_found") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "未找到球队风格画像: " + team : "No style profile for: " + team)}</p>`;
+        return;
+    }
+
+    const neighbors = data.neighbors || [];
+    const nPop = Number(data.n_population ?? 0);
+    const target = data.target || {};
+    const targetCluster = data.target_cluster;
+
+    const targetClusterHtml = targetCluster
+        ? `<span style="margin-left:0.4rem;font-size:0.7rem;color:var(--text-muted)">${z ? "簇" : "C"} ${escapeHtml(String(targetCluster.cluster_id ?? ""))} · ${escapeHtml(targetCluster.label || "")}</span>`
+        : "";
+
+    const rows = neighbors.map((n, idx) => {
+        const sim = Number(n.cosine_similarity ?? 0);
+        const dist = Number(n.style_distance ?? 0);
+        const simPct = (sim * 100).toFixed(1);
+        const sameCluster = n.same_cluster === true;
+        const clusterBadge = n.cluster_label
+            ? `<span class="status-pill ${sameCluster ? "status-high" : "status-medium"}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(n.cluster_label)}${sameCluster ? (z ? " · 同簇" : " · same") : ""}</span>`
+            : "";
+        return `<tr>
+            <td>${idx + 1}</td>
+            <td><strong>${escapeHtml(n.team || "")}</strong></td>
+            <td>${simPct}%</td>
+            <td>${dist.toFixed(3)}</td>
+            <td>${escapeHtml(n.league || "")} ${escapeHtml(n.season || "")}</td>
+            <td>${clusterBadge}</td>
+        </tr>`;
+    }).join("");
+
+    const profileRow = target && target.raw
+        ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0.2rem 0.6rem;font-size:0.72rem;margin-top:0.2rem">`
+          + `<div><span style="color:var(--text-muted)">${z ? "进攻" : "Atk"}:</span> <strong>${Number(target.raw.npg_p90 ?? 0).toFixed(2)}</strong></div>`
+          + `<div><span style="color:var(--text-muted)">${z ? "创造" : "Cre"}:</span> <strong>${Number(target.raw.assists_p90 ?? 0).toFixed(2)}</strong></div>`
+          + `<div><span style="color:var(--text-muted)">${z ? "防守" : "Def"}:</span> <strong>${Number(target.raw.defense_composite ?? 0).toFixed(1)}</strong></div>`
+          + `<div><span style="color:var(--text-muted)">${z ? "控球" : "Pos"}:</span> <strong>${Number(target.raw.possession_composite ?? 0).toFixed(1)}</strong></div>`
+          + `</div>`
+        : "";
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "风格近邻" : "Style Neighbors")}</p>`,
+            `<div style="font-size:0.8rem"><strong>${escapeHtml(team)}</strong>${targetClusterHtml} <span style="color:var(--text-muted);margin-left:0.4rem;font-size:0.72rem">${z ? "样本量" : "N"}: ${nPop}</span></div>`,
+            profileRow,
+        `</div>`,
+        neighbors.length === 0
+            ? `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无近邻数据。" : "No neighbors found.")}</p>`
+            : `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>#</th><th>${z ? "球队" : "Team"}</th><th>${z ? "相似度" : "Similarity"}</th><th>${z ? "距离" : "Distance"}</th><th>${z ? "联赛/赛季" : "League/Season"}</th><th>${z ? "簇" : "Cluster"}</th></tr></thead><tbody>${rows}</tbody></table></div>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+async function _renderLeagueStylePercentiles(team, season, league) {
+    const wrap = document.getElementById("style-percentiles-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    if (!team) {
+        wrap.style.display = "none";
+        return;
+    }
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在计算百分位…" : "Computing percentiles…")}</p>`;
+
+    const data = await fetchLeagueStylePercentiles(team, season, league);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请求失败" : "Fetch failed.")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "暂无足够风格数据。" : "Insufficient style data.")}</p>`;
+        return;
+    }
+    if (data.status === "team_not_found") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "未找到球队风格画像: " + team : "No style profile for: " + team)}</p>`;
+        return;
+    }
+
+    const dims = data.dimensions || [];
+    const nPop = Number(data.n_population ?? 0);
+
+    const quartileLabel = (q) => {
+        const m = {
+            top: z ? "上四分位" : "Top",
+            upper_mid: z ? "中上" : "Upper-mid",
+            lower_mid: z ? "中下" : "Lower-mid",
+            bottom: z ? "下四分位" : "Bottom",
+        };
+        return m[q] || q;
+    };
+    const quartileClass = (q) => {
+        const m = {
+            top: "status-high",
+            upper_mid: "status-medium",
+            lower_mid: "status-medium",
+            bottom: "status-low",
+        };
+        return m[q] || "status-medium";
+    };
+
+    const rows = dims.map(d => {
+        const pct = Number(d.percentile ?? 0);
+        const barWidth = Math.max(2, Math.min(100, pct));
+        const val = Number(d.value ?? 0);
+        return `<tr>
+            <td><strong>${escapeHtml(d.label || d.feature || "")}</strong></td>
+            <td>${val.toFixed(2)}</td>
+            <td>
+                <div style="display:flex;align-items:center;gap:0.4rem">
+                    <div style="flex:1;min-width:60px;height:6px;background:rgba(120,120,120,0.15);border-radius:3px;overflow:hidden">
+                        <div style="width:${barWidth}%;height:100%;background:linear-gradient(90deg,#5b8def,#3eb87f)"></div>
+                    </div>
+                    <strong style="font-size:0.75rem">${pct.toFixed(1)}%</strong>
+                </div>
+            </td>
+            <td><span class="status-pill ${quartileClass(d.quartile)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(quartileLabel(d.quartile))}</span></td>
+            <td style="font-size:0.7rem;color:var(--text-muted)">${Number(d.population_min ?? 0).toFixed(2)} / ${Number(d.population_median ?? 0).toFixed(2)} / ${Number(d.population_max ?? 0).toFixed(2)}</td>
+        </tr>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "联赛百分位" : "League Percentiles")}</p>`,
+            `<div style="font-size:0.8rem"><strong>${escapeHtml(team)}</strong> <span style="color:var(--text-muted);margin-left:0.4rem;font-size:0.72rem">${z ? "样本量" : "N"}: ${nPop}</span></div>`,
+        `</div>`,
+        rows.length === 0
+            ? `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无百分位数据。" : "No percentile data.")}</p>`
+            : `<div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "维度" : "Dimension"}</th><th>${z ? "数值" : "Value"}</th><th>${z ? "百分位" : "Percentile"}</th><th>${z ? "四分位" : "Quartile"}</th><th>${z ? "min / 中位 / max" : "min / med / max"}</th></tr></thead><tbody>${rows}</tbody></table></div>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
+    ].join("");
+}
+
+async function _renderStyleAtlas(season, league) {
+    const wrap = document.getElementById("style-atlas-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "正在构建分布图集…" : "Building style atlas…")}</p>`;
+
+    const data = await fetchStyleAtlas(season, league, 8);
+
+    if (data.error || data.status === "fetch_failed") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "请求失败" : "Fetch failed.")}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "暂无足够风格数据。" : "Insufficient style data.")}</p>`;
+        return;
+    }
+
+    const dims = data.dimensions || [];
+    const nPop = Number(data.n_population ?? 0);
+
+    const dimBlocks = dims.map(d => {
+        const bins = d.bins || [];
+        const maxCount = Math.max(1, ...bins.map(b => Number(b.count ?? 0)));
+        const bars = bins.map(b => {
+            const h = Math.max(1, (Number(b.count ?? 0) / maxCount) * 100);
+            const range = `${Number(b.low ?? 0).toFixed(1)}–${Number(b.high ?? 0).toFixed(1)}`;
+            return `<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.65rem">
+                <div style="width:70px;text-align:right;color:var(--text-muted)">${escapeHtml(range)}</div>
+                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:2px;overflow:hidden">
+                    <div style="width:${h}%;height:100%;background:#5b8def"></div>
+                </div>
+                <div style="width:24px;text-align:right;font-weight:600">${Number(b.count ?? 0)}</div>
+            </div>`;
+        }).join("");
+
+        const outliers = d.outliers || [];
+        const outlierHtml = outliers.length === 0
+            ? `<span style="font-size:0.68rem;color:var(--text-muted)">${z ? "无离群值" : "No outliers"}</span>`
+            : outliers.slice(0, 5).map(o => {
+                const dirClass = o.direction === "high" ? "status-high" : "status-low";
+                const dirLabel = o.direction === "high" ? (z ? "高" : "hi") : (z ? "低" : "lo");
+                return `<span class="status-pill ${dirClass}" style="font-size:0.62rem;padding:0.08rem 0.35rem;margin:0.1rem 0.2rem 0.1rem 0">${escapeHtml(o.team)} (${Number(o.z_score ?? 0).toFixed(2)}σ, ${dirLabel})</span>`;
+            }).join("") + (outliers.length > 5 ? `<span style="font-size:0.65rem;color:var(--text-muted)">+${outliers.length - 5}</span>` : "");
+
+        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
+                <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
+                <span style="font-size:0.68rem;color:var(--text-muted)">${z ? "min" : "min"} ${Number(d.min ?? 0).toFixed(2)} · Q1 ${Number(d.q1 ?? 0).toFixed(2)} · ${z ? "中位" : "med"} ${Number(d.median ?? 0).toFixed(2)} · Q3 ${Number(d.q3 ?? 0).toFixed(2)} · ${z ? "最大" : "max"} ${Number(d.max ?? 0).toFixed(2)} · IQR ${Number(d.iqr ?? 0).toFixed(2)}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.15rem;margin-bottom:0.3rem">${bars}</div>
+            <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:0.15rem">${z ? "离群值 (|z|≥2)" : "Outliers (|z|≥2)"}:</div>
+            <div>${outlierHtml}</div>
+        </div>`;
+    }).join("");
+
+    wrap.innerHTML = [
+        `<div style="margin-bottom:0.4rem">`,
+            `<p class="eyebrow" style="margin:0 0 0.2rem">${escapeHtml(z ? "联赛风格图集" : "League Style Atlas")}</p>`,
+            `<div style="font-size:0.72rem;color:var(--text-muted)">${z ? "样本量" : "N"}: ${nPop}${season ? " · " + escapeHtml(season) : ""}${league ? " · " + escapeHtml(league) : ""}</div>`,
+        `</div>`,
+        dimBlocks || `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(z ? "无维度数据。" : "No dimension data.")}</p>`,
+        `<p style="margin:0.4rem 0 0;font-size:0.68rem;color:var(--text-muted);line-height:1.4">${escapeHtml(data.disclaimer || "")}</p>`,
     ].join("");
 }
 
