@@ -168,6 +168,39 @@ const i18n = {
         style_fit_title: "球员风格适配球队簇",
         style_fit_player: "球员姓名",
         style_fit_button: "计算",
+        cross_scouting_title: "跨联赛球探分析",
+        cross_scouting_boundary: "基于评分矩阵的描述性叠加：按位置深度对比、按缺口推荐候选、按风格相似度匹配。非转会建议。",
+        cross_scouting_season: "赛季",
+        cross_scouting_min_minutes: "最低分钟",
+        cross_scouting_team_a: "球队 A",
+        cross_scouting_team_b: "球队 B",
+        cross_scouting_depth_btn: "对比深度",
+        cross_scouting_targets_btn: "推荐目标",
+        cross_scouting_style_btn: "风格匹配",
+        cross_scouting_exclude_same_league: "排除同联赛",
+        cross_scouting_col_pos: "位置组",
+        cross_scouting_col_a: "球队 A",
+        cross_scouting_col_b: "球队 B",
+        cross_scouting_col_n: "人数",
+        cross_scouting_col_mean: "均分",
+        cross_scouting_col_depth: "深度",
+        cross_scouting_col_advantage: "优势",
+        cross_scouting_complementary: "互补位置",
+        cross_scouting_col_player: "球员",
+        cross_scouting_col_team: "球队",
+        cross_scouting_col_league: "联赛",
+        cross_scouting_col_score: "评分",
+        cross_scouting_col_minutes: "分钟",
+        cross_scouting_col_pct: "联赛百分位",
+        cross_scouting_col_gap: "缺口类型",
+        cross_scouting_col_sim: "风格相似度",
+        cross_scouting_target_player: "目标球员",
+        cross_scouting_no_data: "无数据",
+        cross_scouting_no_candidates: "无符合条件的候选",
+        cross_scouting_status_ok: "正常",
+        cross_scouting_status_no_data: "无数据",
+        cross_scouting_status_not_found: "未找到球队",
+        cross_scouting_status_invalid_pos: "无效位置组",
         scouting_metric_review: "待复核",
         scouting_metric_short: "候选",
         scouting_search: "搜索球员、球队或原因",
@@ -1229,6 +1262,39 @@ const i18n = {
         style_fit_title: "Player Style-Fit to Team Clusters",
         style_fit_player: "Player name",
         style_fit_button: "Compute",
+        cross_scouting_title: "Cross-League Scouting",
+        cross_scouting_boundary: "Descriptive overlay on the rating matrix: per-position depth comparison, gap-based candidate recommendation, and style-similarity matching. NOT a transfer recommendation.",
+        cross_scouting_season: "Season",
+        cross_scouting_min_minutes: "Min minutes",
+        cross_scouting_team_a: "Team A",
+        cross_scouting_team_b: "Team B",
+        cross_scouting_depth_btn: "Compare depth",
+        cross_scouting_targets_btn: "Recommend targets",
+        cross_scouting_style_btn: "Style match",
+        cross_scouting_exclude_same_league: "Exclude same league",
+        cross_scouting_col_pos: "Position",
+        cross_scouting_col_a: "Team A",
+        cross_scouting_col_b: "Team B",
+        cross_scouting_col_n: "Players",
+        cross_scouting_col_mean: "Mean",
+        cross_scouting_col_depth: "Depth",
+        cross_scouting_col_advantage: "Edge",
+        cross_scouting_complementary: "Complementary positions",
+        cross_scouting_col_player: "Player",
+        cross_scouting_col_team: "Team",
+        cross_scouting_col_league: "League",
+        cross_scouting_col_score: "Score",
+        cross_scouting_col_minutes: "Minutes",
+        cross_scouting_col_pct: "League pct",
+        cross_scouting_col_gap: "Gap type",
+        cross_scouting_col_sim: "Style similarity",
+        cross_scouting_target_player: "Target player",
+        cross_scouting_no_data: "No data",
+        cross_scouting_no_candidates: "No qualifying candidates",
+        cross_scouting_status_ok: "OK",
+        cross_scouting_status_no_data: "No data",
+        cross_scouting_status_not_found: "Team not found",
+        cross_scouting_status_invalid_pos: "Invalid position group",
         scouting_metric_review: "To review",
         scouting_metric_short: "Shortlist",
         scouting_search: "Search player, team, or reason",
@@ -2671,6 +2737,64 @@ async function fetchPositionGapReport(team, season) {
     } catch (err) {
         console.warn("Failed to fetch position gap report:", err);
         return { status: "fetch_failed", team, gaps: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchCrossLeagueTeamDepth(teamA, teamB, season, minMinutes) {
+    if (!teamA || !teamB) return { status: "no_data", team_a: teamA, team_b: teamB };
+    const params = new URLSearchParams();
+    params.set("team_a", teamA);
+    params.set("team_b", teamB);
+    if (season) params.set("season", season);
+    if (minMinutes !== undefined && minMinutes !== null && !Number.isNaN(Number(minMinutes))) {
+        params.set("min_player_minutes", String(minMinutes));
+    }
+    try {
+        const data = await fetchJson("/teams/cross-league-depth", { params });
+        return data || { status: "no_data", team_a: teamA, team_b: teamB };
+    } catch (err) {
+        console.warn("Failed to fetch cross-league team depth:", err);
+        return { status: "fetch_failed", team_a: teamA, team_b: teamB, error: "fetch_failed" };
+    }
+}
+
+async function fetchScoutingTargets(team, season, minMinutes, topN, excludeSameLeague) {
+    if (!team) return { status: "no_data", team };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (minMinutes !== undefined && minMinutes !== null && !Number.isNaN(Number(minMinutes))) {
+        params.set("min_player_minutes", String(minMinutes));
+    }
+    if (topN !== undefined && topN !== null && !Number.isNaN(Number(topN))) {
+        params.set("top_n", String(topN));
+    }
+    params.set("exclude_same_league", excludeSameLeague ? "true" : "false");
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/scouting-targets`, { params });
+        return data || { status: "no_data", team, gap_targets: [] };
+    } catch (err) {
+        console.warn("Failed to fetch scouting targets:", err);
+        return { status: "fetch_failed", team, gap_targets: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague) {
+    if (!team || !positionGroup) return { status: "no_data", team, position_group: positionGroup };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (minMinutes !== undefined && minMinutes !== null && !Number.isNaN(Number(minMinutes))) {
+        params.set("min_player_minutes", String(minMinutes));
+    }
+    if (topN !== undefined && topN !== null && !Number.isNaN(Number(topN))) {
+        params.set("top_n", String(topN));
+    }
+    params.set("exclude_same_league", excludeSameLeague ? "true" : "false");
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/scouting-style-match/${encodeURIComponent(positionGroup)}`, { params });
+        return data || { status: "no_data", team, position_group: positionGroup, candidates: [] };
+    } catch (err) {
+        console.warn("Failed to fetch scouting style match:", err);
+        return { status: "fetch_failed", team, position_group: positionGroup, candidates: [], error: "fetch_failed" };
     }
 }
 
@@ -9540,6 +9664,7 @@ function renderScouting() {
     renderScoutingWorkspaceStatus();
     initRisersDeclinersControls();
     initStyleFitControls();
+    initCrossScoutingControls();
 }
 
 function queueStatusKey(player) {
@@ -13109,6 +13234,317 @@ async function _renderPlayerStyleFit(playerName, season, league) {
             `<tbody>${rows}</tbody>`,
             `</table>`,
             `</div>`,
+        ].join("");
+    }
+}
+
+// ── Cross-league scouting (Round 82): depth / targets / style-match ──────
+
+function initCrossScoutingControls() {
+    const depthBtn = document.getElementById("cross-scouting-depth-btn");
+    const targetsBtn = document.getElementById("cross-scouting-targets-btn");
+    const styleBtn = document.getElementById("cross-scouting-style-btn");
+    if (depthBtn && !depthBtn.dataset.bound) {
+        depthBtn.dataset.bound = "1";
+        const handler = () => {
+            const a = (document.getElementById("cross-scouting-team-a")?.value || "").trim();
+            const b = (document.getElementById("cross-scouting-team-b")?.value || "").trim();
+            const season = (document.getElementById("cross-scouting-season")?.value || "").trim();
+            const minMinutes = Number(document.getElementById("cross-scouting-min-minutes")?.value || 500);
+            if (!a || !b) return;
+            depthBtn.disabled = true;
+            depthBtn.textContent = "...";
+            _renderCrossLeagueDepth(a, b, season, minMinutes).finally(() => {
+                depthBtn.disabled = false;
+                depthBtn.textContent = t("cross_scouting_depth_btn");
+            });
+        };
+        depthBtn.addEventListener("click", handler);
+        const aInput = document.getElementById("cross-scouting-team-a");
+        const bInput = document.getElementById("cross-scouting-team-b");
+        if (aInput) aInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+        if (bInput) bInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    }
+    if (targetsBtn && !targetsBtn.dataset.bound) {
+        targetsBtn.dataset.bound = "1";
+        const handler = () => {
+            const team = (document.getElementById("cross-scouting-targets-team")?.value || "").trim();
+            const season = (document.getElementById("cross-scouting-season")?.value || "").trim();
+            const minMinutes = Number(document.getElementById("cross-scouting-min-minutes")?.value || 500);
+            const topN = Number(document.getElementById("cross-scouting-top-n")?.value || 10);
+            const exclude = document.getElementById("cross-scouting-exclude-same-league")?.checked ?? true;
+            if (!team) return;
+            targetsBtn.disabled = true;
+            targetsBtn.textContent = "...";
+            _renderScoutingTargets(team, season, minMinutes, topN, exclude).finally(() => {
+                targetsBtn.disabled = false;
+                targetsBtn.textContent = t("cross_scouting_targets_btn");
+            });
+        };
+        targetsBtn.addEventListener("click", handler);
+        const teamInput = document.getElementById("cross-scouting-targets-team");
+        if (teamInput) teamInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    }
+    if (styleBtn && !styleBtn.dataset.bound) {
+        styleBtn.dataset.bound = "1";
+        const handler = () => {
+            const team = (document.getElementById("cross-scouting-style-team")?.value || "").trim();
+            const pos = (document.getElementById("cross-scouting-style-pos")?.value || "CM").trim();
+            const season = (document.getElementById("cross-scouting-season")?.value || "").trim();
+            const minMinutes = Number(document.getElementById("cross-scouting-min-minutes")?.value || 500);
+            const topN = Number(document.getElementById("cross-scouting-top-n")?.value || 10);
+            const exclude = document.getElementById("cross-scouting-style-exclude")?.checked ?? true;
+            if (!team) return;
+            styleBtn.disabled = true;
+            styleBtn.textContent = "...";
+            _renderScoutingStyleMatch(team, pos, season, minMinutes, topN, exclude).finally(() => {
+                styleBtn.disabled = false;
+                styleBtn.textContent = t("cross_scouting_style_btn");
+            });
+        };
+        styleBtn.addEventListener("click", handler);
+        const teamInput = document.getElementById("cross-scouting-style-team");
+        if (teamInput) teamInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    }
+}
+
+function _crossScoutingStatusText(status, z) {
+    const map = {
+        ok: z ? "正常" : "OK",
+        no_data: z ? "无数据" : "No data",
+        team_a_not_found: z ? "球队 A 未找到" : "Team A not found",
+        team_b_not_found: z ? "球队 B 未找到" : "Team B not found",
+        team_not_found: z ? "球队未找到" : "Team not found",
+        invalid_position: z ? "无效位置组" : "Invalid position",
+        team_position_not_found: z ? "该位置无球员" : "No player at position",
+        fetch_failed: z ? "请求失败" : "Fetch failed",
+    };
+    return map[status] || status || "—";
+}
+
+async function _renderCrossLeagueDepth(teamA, teamB, season, minMinutes) {
+    const wrap = document.getElementById("cross-scouting-depth-result");
+    const pill = document.getElementById("cross-scouting-pill");
+    const z = appState.lang === "zh";
+    if (wrap) { wrap.style.display = "block"; wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在加载…" : "Loading…")}</p>`; }
+    if (pill) pill.textContent = "…";
+
+    const data = await fetchCrossLeagueTeamDepth(teamA, teamB, season, minMinutes);
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(_crossScoutingStatusText("fetch_failed", z))}</p>`;
+        return;
+    }
+    if (data.status !== "ok") {
+        if (pill) pill.textContent = _crossScoutingStatusText(data.status, z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data.disclaimer || _crossScoutingStatusText(data.status, z))}</p>`;
+        return;
+    }
+
+    const comparisons = data.position_comparison || [];
+    const complementary = data.complementary_positions || [];
+    if (pill) pill.textContent = `${comparisons.length} ${z ? "位置" : "pos"} · ${complementary.length} ${z ? "互补" : "comp"}`;
+
+    const advantageLabel = (a) => a === "a" ? (z ? "A" : "A") : a === "b" ? (z ? "B" : "B") : (z ? "持平" : "tie");
+    const advantageClass = (a) => a === "a" ? "status-high" : a === "b" ? "status-low" : "status-medium";
+
+    const rows = comparisons.map((c) => {
+        const aMean = c.team_a?.mean_score != null ? Number(c.team_a.mean_score).toFixed(2) : "—";
+        const bMean = c.team_b?.mean_score != null ? Number(c.team_b.mean_score).toFixed(2) : "—";
+        return `<tr>
+            <td><strong>${escapeHtml(c.position_group || "")}</strong></td>
+            <td>${escapeHtml(String(c.team_a?.n_players ?? 0))}</td>
+            <td>${escapeHtml(aMean)}</td>
+            <td>${escapeHtml(c.team_a?.depth_label || "—")}</td>
+            <td>${escapeHtml(String(c.team_b?.n_players ?? 0))}</td>
+            <td>${escapeHtml(bMean)}</td>
+            <td>${escapeHtml(c.team_b?.depth_label || "—")}</td>
+            <td><span class="status-pill ${advantageClass(c.advantage)}">${escapeHtml(advantageLabel(c.advantage))}</span></td>
+        </tr>`;
+    }).join("");
+
+    const compRows = complementary.map((c) => `<tr>
+        <td><strong>${escapeHtml(c.position_group || "")}</strong></td>
+        <td>${escapeHtml(c.deep_team === "a" ? (z ? "球队 A" : "Team A") : (z ? "球队 B" : "Team B"))}</td>
+        <td>${escapeHtml(c.shallow_team === "a" ? (z ? "球队 A" : "Team A") : (z ? "球队 B" : "Team B"))}</td>
+        <td style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(c.reason || "")}</td>
+    </tr>`).join("");
+
+    const teamAName = data.team_a?.name || teamA;
+    const teamBName = data.team_b?.name || teamB;
+    const teamALeague = data.team_a?.league || "—";
+    const teamBLeague = data.team_b?.league || "—";
+    const sameLeagueNote = data.same_league
+        ? `<p style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(z ? "两支球队在同一联赛" : "Both teams are in the same league")}</p>`
+        : "";
+
+    if (wrap) {
+        wrap.innerHTML = [
+            `<div style="padding:0.3rem 0 0.5rem;font-size:0.82rem">`,
+            `<strong>${escapeHtml(teamAName)}</strong> <span style="color:var(--text-muted)">(${escapeHtml(teamALeague)})</span> vs `,
+            `<strong>${escapeHtml(teamBName)}</strong> <span style="color:var(--text-muted)">(${escapeHtml(teamBLeague)})</span>`,
+            `</div>`,
+            sameLeagueNote,
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>${escapeHtml(t("cross_scouting_col_pos"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_a"))} · ${escapeHtml(t("cross_scouting_col_n"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_a"))} · ${escapeHtml(t("cross_scouting_col_mean"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_a"))} · ${escapeHtml(t("cross_scouting_col_depth"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_b"))} · ${escapeHtml(t("cross_scouting_col_n"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_b"))} · ${escapeHtml(t("cross_scouting_col_mean"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_b"))} · ${escapeHtml(t("cross_scouting_col_depth"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_advantage"))}</th>`,
+            `</tr></thead><tbody>${rows}</tbody></table></div>`,
+            complementary.length > 0
+                ? `<h4 style="padding:0.5rem 0 0.3rem">${escapeHtml(t("cross_scouting_complementary"))}</h4>
+                   <div class="table-scroll"><table class="data-table"><thead><tr>
+                   <th>${escapeHtml(t("cross_scouting_col_pos"))}</th>
+                   <th>${escapeHtml(z ? "深度方" : "Deep")}</th>
+                   <th>${escapeHtml(z ? "薄弱方" : "Shallow")}</th>
+                   <th>${escapeHtml(z ? "说明" : "Reason")}</th>
+                   </tr></thead><tbody>${compRows}</tbody></table></div>`
+                : "",
+            data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
+        ].join("");
+    }
+}
+
+async function _renderScoutingTargets(team, season, minMinutes, topN, excludeSameLeague) {
+    const wrap = document.getElementById("cross-scouting-targets-result");
+    const pill = document.getElementById("cross-scouting-pill");
+    const z = appState.lang === "zh";
+    if (wrap) { wrap.style.display = "block"; wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在加载…" : "Loading…")}</p>`; }
+    if (pill) pill.textContent = "…";
+
+    const data = await fetchScoutingTargets(team, season, minMinutes, topN, excludeSameLeague);
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(_crossScoutingStatusText("fetch_failed", z))}</p>`;
+        return;
+    }
+    if (data.status !== "ok") {
+        if (pill) pill.textContent = _crossScoutingStatusText(data.status, z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data.disclaimer || _crossScoutingStatusText(data.status, z))}</p>`;
+        return;
+    }
+
+    const gaps = data.gap_targets || [];
+    if (pill) pill.textContent = `${data.n_gaps ?? gaps.length} ${z ? "缺口" : "gaps"}`;
+
+    if (gaps.length === 0) {
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "未发现位置缺口。" : "No position gaps found.")}</p>`;
+        return;
+    }
+
+    const blocks = gaps.map((g) => {
+        const candidates = g.candidates || [];
+        const candRows = candidates.map((c) => `<tr>
+            <td><strong>${escapeHtml(c.player_name || "")}</strong></td>
+            <td>${escapeHtml(c.team || "")}</td>
+            <td>${escapeHtml(c.league || "")}</td>
+            <td>${escapeHtml(String(c.optimized_score ?? "—"))}</td>
+            <td>${escapeHtml(String(c.minutes ?? "—"))}</td>
+            <td>${escapeHtml(c.percentile_in_league != null ? Number(c.percentile_in_league).toFixed(1) + "%" : "—")}</td>
+        </tr>`).join("");
+        const thresholdStr = g.threshold != null ? Number(g.threshold).toFixed(2) : "—";
+        return `<div style="margin-bottom:0.8rem">
+            <h4 style="padding:0.3rem 0">${escapeHtml(g.position_group || "")}
+                <span class="status-pill status-medium" style="margin-left:0.5rem">${escapeHtml(g.gap_type || "")}</span>
+                <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem">${escapeHtml(z ? "阈值" : "threshold")}: ${thresholdStr}</span>
+            </h4>
+            ${candidates.length === 0
+                ? `<p style="color:var(--text-muted)">${escapeHtml(t("cross_scouting_no_candidates"))}</p>`
+                : `<div class="table-scroll"><table class="data-table"><thead><tr>
+                    <th>${escapeHtml(t("cross_scouting_col_player"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_team"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_league"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_score"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_minutes"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_pct"))}</th>
+                   </tr></thead><tbody>${candRows}</tbody></table></div>`}
+        </div>`;
+    }).join("");
+
+    if (wrap) {
+        wrap.innerHTML = [
+            `<div style="padding:0.3rem 0 0.5rem;font-size:0.82rem">`,
+            `<strong>${escapeHtml(team)}</strong>`,
+            data.league ? ` <span style="color:var(--text-muted)">(${escapeHtml(data.league)})</span>` : "",
+            ` · ${data.n_gaps ?? gaps.length} ${escapeHtml(z ? "个缺口" : "gaps")}`,
+            `</div>`,
+            blocks,
+            data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
+        ].join("");
+    }
+}
+
+async function _renderScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague) {
+    const wrap = document.getElementById("cross-scouting-style-result");
+    const pill = document.getElementById("cross-scouting-pill");
+    const z = appState.lang === "zh";
+    if (wrap) { wrap.style.display = "block"; wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在加载…" : "Loading…")}</p>`; }
+    if (pill) pill.textContent = "…";
+
+    const data = await fetchScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague);
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(_crossScoutingStatusText("fetch_failed", z))}</p>`;
+        return;
+    }
+    if (data.status !== "ok") {
+        if (pill) pill.textContent = _crossScoutingStatusText(data.status, z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data.disclaimer || _crossScoutingStatusText(data.status, z))}</p>`;
+        return;
+    }
+
+    const candidates = data.candidates || [];
+    const target = data.target_player || {};
+    if (pill) pill.textContent = `${candidates.length} ${z ? "候选" : "cand"}`;
+
+    const styleVec = target.style_vector || {};
+    const styleRow = Object.entries(styleVec).map(([k, v]) => {
+        const label = z
+            ? ({ npg_p90: "非点球进球/90", assists_p90: "助攻/90", defense_composite: "防守综合", possession_composite: "控球综合" }[k] || k)
+            : k;
+        return `<span style="display:inline-block;margin-right:0.75rem;font-size:0.78rem;color:var(--text-muted)">${escapeHtml(label)}: <strong>${Number(v).toFixed(2)}</strong></span>`;
+    }).join("");
+
+    const candRows = candidates.map((c) => {
+        const sim = c.style_similarity != null ? Number(c.style_similarity).toFixed(4) : "—";
+        const cls = Number(c.style_similarity) >= 0.9 ? "status-high" : Number(c.style_similarity) >= 0.7 ? "status-medium" : "status-low";
+        return `<tr>
+            <td><strong>${escapeHtml(c.player_name || "")}</strong></td>
+            <td>${escapeHtml(c.team || "")}</td>
+            <td>${escapeHtml(c.league || "")}</td>
+            <td>${escapeHtml(String(c.optimized_score ?? "—"))}</td>
+            <td>${escapeHtml(String(c.minutes ?? "—"))}</td>
+            <td><span class="status-pill ${cls}">${escapeHtml(sim)}</span></td>
+        </tr>`;
+    }).join("");
+
+    if (wrap) {
+        wrap.innerHTML = [
+            `<div style="padding:0.3rem 0 0.5rem;font-size:0.82rem">`,
+            `<strong>${escapeHtml(t("cross_scouting_target_player"))}:</strong> ${escapeHtml(target.name || "")}`,
+            target.team ? ` <span style="color:var(--text-muted)">(${escapeHtml(target.team)})</span>` : "",
+            target.league ? ` <span style="color:var(--text-muted)">· ${escapeHtml(target.league)}</span>` : "",
+            target.optimized_score != null ? ` · ${escapeHtml(String(Number(target.optimized_score).toFixed(2)))}` : "",
+            `</div>`,
+            styleRow ? `<div style="padding:0.2rem 0 0.4rem">${styleRow}</div>` : "",
+            candidates.length === 0
+                ? `<p style="color:var(--text-muted)">${escapeHtml(t("cross_scouting_no_candidates"))}</p>`
+                : `<div class="table-scroll"><table class="data-table"><thead><tr>
+                    <th>${escapeHtml(t("cross_scouting_col_player"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_team"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_league"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_score"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_minutes"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_sim"))}</th>
+                   </tr></thead><tbody>${candRows}</tbody></table></div>`,
+            data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
         ].join("");
     }
 }

@@ -42,6 +42,7 @@ from scoutfootball.api import (
     get_confidence_interval_plot,
     get_cross_league_action_comparison,
     get_cross_league_position_comparison,
+    get_cross_league_team_depth,
     get_cumulative_trajectory,
     get_data_drift,
     get_decay_tuning,
@@ -104,6 +105,8 @@ from scoutfootball.api import (
     get_riser_decliner_watchlist,
     get_scenario_stress_test,
     get_scoreline_calibration,
+    get_scouting_target_style_match,
+    get_scouting_targets,
     get_season_projection,
     get_shortlist,
     get_style_atlas,
@@ -1245,6 +1248,54 @@ def create_app() -> FastAPI:
         return get_cross_league_action_comparison(
             season=season,
             min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/cross-league-depth")
+    def team_cross_league_depth(
+        team_a: str = Query(..., min_length=1),
+        team_b: str = Query(..., min_length=1),
+        season: str | None = None,
+        min_player_minutes: float = Query(500.0, ge=0.0),
+    ):
+        return get_cross_league_team_depth(
+            team_a,
+            team_b,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/{team}/scouting-targets")
+    def team_scouting_targets(
+        team: str,
+        season: str | None = None,
+        min_player_minutes: float = Query(500.0, ge=0.0),
+        top_n: int = Query(10, ge=1, le=50),
+        exclude_same_league: bool = True,
+    ):
+        return get_scouting_targets(
+            team,
+            season=season,
+            min_player_minutes=min_player_minutes,
+            top_n=top_n,
+            exclude_same_league=exclude_same_league,
+        )
+
+    @app.get("/teams/{team}/scouting-style-match/{position_group}")
+    def team_scouting_style_match(
+        team: str,
+        position_group: str,
+        season: str | None = None,
+        min_player_minutes: float = Query(500.0, ge=0.0),
+        top_n: int = Query(10, ge=1, le=50),
+        exclude_same_league: bool = True,
+    ):
+        return get_scouting_target_style_match(
+            team,
+            position_group,
+            season=season,
+            min_player_minutes=min_player_minutes,
+            top_n=top_n,
+            exclude_same_league=exclude_same_league,
         )
 
     @app.get("/teams/{team}/action-percentiles")

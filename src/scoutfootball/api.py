@@ -8053,6 +8053,114 @@ def get_cross_league_action_comparison(
     return _clean_json_value(result)
 
 
+def get_cross_league_team_depth(
+    team_a: str,
+    team_b: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Compare two teams' per-position depth profiles side-by-side.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_cross_league_team_depth`.
+    Descriptive overlay — does not predict match outcomes or recommend
+    transfers. The advantage flag uses a 0.5-point mean-score threshold.
+    """
+    from scoutfootball.features.team_style import (
+        compute_cross_league_team_depth,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "team_a": team_a,
+            "team_b": team_b,
+            "season": season,
+        }
+    result = compute_cross_league_team_depth(
+        df,
+        team_a,
+        team_b,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_scouting_targets(
+    team: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+    top_n: int = 10,
+    exclude_same_league: bool = True,
+) -> dict:
+    """Find players from other leagues who could fill a team's position gaps.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_scouting_targets`.
+    Descriptive overlay — NOT a transfer recommendation. Candidates are
+    filtered by minutes, score threshold, and top-quartile (p75) rank in
+    their own league at the gap position.
+    """
+    from scoutfootball.features.team_style import (
+        compute_scouting_targets,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team, "season": season}
+    result = compute_scouting_targets(
+        df,
+        team,
+        season=season,
+        min_player_minutes=min_player_minutes,
+        top_n=top_n,
+        exclude_same_league=exclude_same_league,
+    )
+    return _clean_json_value(result)
+
+
+def get_scouting_target_style_match(
+    team: str,
+    position_group: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+    top_n: int = 10,
+    exclude_same_league: bool = True,
+) -> dict:
+    """Find players from other leagues with similar style to a team's top player.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_scouting_target_style_match`.
+    Builds a 4-dim style vector for the team's highest-scored player at
+    ``position_group`` and finds the most similar players in other leagues
+    by cosine similarity. Descriptive overlay — NOT a transfer recommendation.
+    """
+    from scoutfootball.features.team_style import (
+        compute_scouting_target_style_match,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "position_group": position_group,
+            "season": season,
+        }
+    result = compute_scouting_target_style_match(
+        df,
+        team,
+        position_group,
+        season=season,
+        min_player_minutes=min_player_minutes,
+        top_n=top_n,
+        exclude_same_league=exclude_same_league,
+    )
+    return _clean_json_value(result)
+
+
 # ── League season projection & form analysis ──────────────────────────────
 
 
