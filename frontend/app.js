@@ -7,6 +7,7 @@ const i18n = {
         nav_value: "身价",
         nav_matches: "预测",
         nav_teams: "球队",
+        nav_league: "联赛",
         nav_scouting: "球探",
         nav_actions: "动作价值",
         nav_reports: "报告",
@@ -98,6 +99,57 @@ const i18n = {
         teams_style_col_label: "风格",
         teams_style_col_n: "球队数",
         teams_style_col_teams: "球队",
+        league_kicker: "联赛赛季分析",
+        league_title: "表单、赛程难度与赛季投影",
+        league_note: "基于 Football-Data 赛果的描述性叠加层：近 N 场表单、Bradley-Terry 赛程难度、蒙特卡洛赛季投影。不使用 Dixon-Coles 模型或赔率数据。",
+        league_metric_teams: "球队数",
+        league_metric_top_ppg: "最高 PPG",
+        league_metric_title_prob: "头名概率",
+        league_filter_title: "联赛与赛季选择",
+        league_filter_season: "赛季",
+        league_filter_league: "联赛",
+        league_filter_last_n: "近 N 场",
+        league_refresh: "刷新",
+        league_form_title: "近 N 场表单表",
+        league_form_col_team: "球队",
+        league_form_col_ppg: "PPG",
+        league_form_col_rating: "表单评分",
+        league_form_col_trend: "趋势",
+        league_form_col_home: "主场 PPG",
+        league_form_col_away: "客场 PPG",
+        league_form_col_string: "近 N 场",
+        league_loading: "加载中...",
+        league_difficulty_title: "赛程难度评估",
+        league_difficulty_btn: "查询",
+        league_difficulty_placeholder: "输入球队名查询最近 10 场赛程难度，留空查看全联赛。",
+        league_difficulty_col_team: "球队",
+        league_difficulty_col_date: "日期",
+        league_difficulty_col_opp: "对手",
+        league_difficulty_col_venue: "主客",
+        league_difficulty_col_xpts: "期望积分",
+        league_difficulty_col_score: "难度",
+        league_difficulty_col_label: "等级",
+        league_difficulty_col_actual: "实际",
+        league_projection_title: "赛季蒙特卡洛投影",
+        league_projection_sims: "模拟次数",
+        league_projection_btn: "投影",
+        league_projection_placeholder: "点击\"投影\"按钮运行模拟",
+        league_proj_col_team: "球队",
+        league_proj_col_points: "平均积分",
+        league_proj_col_position: "平均排名",
+        league_proj_col_title: "夺冠概率",
+        league_proj_col_topn: "前 4 概率",
+        league_proj_col_relegation: "降级概率",
+        league_trend_rising: "上升",
+        league_trend_declining: "下滑",
+        league_trend_stable: "稳定",
+        league_trend_insufficient: "样本不足",
+        league_trend_no_data: "无数据",
+        league_diff_very_hard: "极难",
+        league_diff_hard: "困难",
+        league_diff_moderate: "中等",
+        league_diff_easy: "容易",
+        league_diff_very_easy: "极易",
         risers_decliners_title: "上升/下滑球员观察",
         risers_season: "赛季",
         risers_top_n: "前 N",
@@ -1016,6 +1068,7 @@ const i18n = {
         nav_value: "Value",
         nav_matches: "Prediction",
         nav_teams: "Teams",
+        nav_league: "League",
         nav_scouting: "Scouting",
         nav_actions: "Action Value",
         nav_reports: "Reports",
@@ -1107,6 +1160,57 @@ const i18n = {
         teams_style_col_label: "Style",
         teams_style_col_n: "Teams",
         teams_style_col_teams: "Teams",
+        league_kicker: "League Season Analysis",
+        league_title: "Form, Fixture Difficulty & Season Projection",
+        league_note: "Descriptive overlay on Football-Data results: last-N form, Bradley-Terry fixture difficulty, Monte Carlo season projection. Does not use the Dixon-Coles model or odds data.",
+        league_metric_teams: "Teams",
+        league_metric_top_ppg: "Top PPG",
+        league_metric_title_prob: "Title Prob",
+        league_filter_title: "League & Season Selection",
+        league_filter_season: "Season",
+        league_filter_league: "League",
+        league_filter_last_n: "Last N",
+        league_refresh: "Refresh",
+        league_form_title: "Last-N Form Table",
+        league_form_col_team: "Team",
+        league_form_col_ppg: "PPG",
+        league_form_col_rating: "Form Rating",
+        league_form_col_trend: "Trend",
+        league_form_col_home: "Home PPG",
+        league_form_col_away: "Away PPG",
+        league_form_col_string: "Last N",
+        league_loading: "Loading...",
+        league_difficulty_title: "Fixture Difficulty",
+        league_difficulty_btn: "Query",
+        league_difficulty_placeholder: "Enter a team name for last-10 fixture difficulty, or leave blank for full league.",
+        league_difficulty_col_team: "Team",
+        league_difficulty_col_date: "Date",
+        league_difficulty_col_opp: "Opponent",
+        league_difficulty_col_venue: "Venue",
+        league_difficulty_col_xpts: "Exp Pts",
+        league_difficulty_col_score: "Difficulty",
+        league_difficulty_col_label: "Level",
+        league_difficulty_col_actual: "Actual",
+        league_projection_title: "Season Monte Carlo Projection",
+        league_projection_sims: "Simulations",
+        league_projection_btn: "Project",
+        league_projection_placeholder: "Click \"Project\" to run simulation",
+        league_proj_col_team: "Team",
+        league_proj_col_points: "Avg Points",
+        league_proj_col_position: "Avg Position",
+        league_proj_col_title: "Title Prob",
+        league_proj_col_topn: "Top-4 Prob",
+        league_proj_col_relegation: "Relegation Prob",
+        league_trend_rising: "Rising",
+        league_trend_declining: "Declining",
+        league_trend_stable: "Stable",
+        league_trend_insufficient: "Insufficient",
+        league_trend_no_data: "No Data",
+        league_diff_very_hard: "Very Hard",
+        league_diff_hard: "Hard",
+        league_diff_moderate: "Moderate",
+        league_diff_easy: "Easy",
+        league_diff_very_easy: "Very Easy",
         risers_decliners_title: "Risers / Decliners Watch",
         risers_season: "Season",
         risers_top_n: "Top N",
@@ -10209,6 +10313,282 @@ function renderTeamDetail(team) {
     if (pill) pill.textContent = (team.overall_rating || 0).toFixed(1);
 }
 
+// ── League season projection & form analysis ─────────────────────────────
+const leagueState = {
+    wired: false,
+    formLoaded: false,
+};
+
+function leagueTrendLabel(label) {
+    const z = appState.lang === "zh";
+    const map = {
+        rising: z ? "上升" : "Rising",
+        declining: z ? "下滑" : "Declining",
+        stable: z ? "稳定" : "Stable",
+        insufficient: z ? "样本不足" : "Insufficient",
+        no_data: z ? "无数据" : "No Data",
+    };
+    return map[label] || label || "—";
+}
+
+function leagueTrendClass(label) {
+    if (label === "rising") return "status-pill status-high";
+    if (label === "declining") return "status-pill status-low";
+    if (label === "stable") return "status-pill status-medium";
+    return "status-pill status-medium";
+}
+
+function leagueDiffLabel(label) {
+    const z = appState.lang === "zh";
+    const map = {
+        very_hard: z ? "极难" : "Very Hard",
+        hard: z ? "困难" : "Hard",
+        moderate: z ? "中等" : "Moderate",
+        easy: z ? "容易" : "Easy",
+        very_easy: z ? "极易" : "Very Easy",
+    };
+    return map[label] || label || "—";
+}
+
+function leagueDiffClass(label) {
+    if (label === "very_hard") return "status-pill status-low";
+    if (label === "hard") return "status-pill status-low";
+    if (label === "moderate") return "status-pill status-medium";
+    if (label === "easy") return "status-pill status-high";
+    if (label === "very_easy") return "status-pill status-high";
+    return "status-pill status-medium";
+}
+
+function leagueFormString(formString) {
+    if (!formString) return "—";
+    // form_string is a string like "WWDLW" from the API
+    const chars = String(formString).split("");
+    if (chars.length === 0) return "—";
+    const colorMap = { W: "color:#16a34a;font-weight:600", D: "color:#ca8a04;font-weight:600", L: "color:#dc2626;font-weight:600" };
+    return chars.map((r) => `<span style="${colorMap[r] || ""}">${escapeHtml(r)}</span>`).join(" ");
+}
+
+function leagueParams() {
+    const seasonEl = document.getElementById("league-season-filter");
+    const leagueEl = document.getElementById("league-league-filter");
+    const lastNEl = document.getElementById("league-last-n-filter");
+    return {
+        season: seasonEl ? seasonEl.value : "2425",
+        league: leagueEl ? leagueEl.value : "",
+        last_n: lastNEl ? parseInt(lastNEl.value, 10) : 6,
+    };
+}
+
+function leagueQuery(params) {
+    const parts = [];
+    if (params.season) parts.push(`season=${encodeURIComponent(params.season)}`);
+    if (params.league) parts.push(`league=${encodeURIComponent(params.league)}`);
+    if (params.last_n) parts.push(`last_n=${encodeURIComponent(params.last_n)}`);
+    if (params.upcoming_n) parts.push(`upcoming_n=${encodeURIComponent(params.upcoming_n)}`);
+    if (params.team) parts.push(`team=${encodeURIComponent(params.team)}`);
+    if (params.num_simulations) parts.push(`num_simulations=${encodeURIComponent(params.num_simulations)}`);
+    if (params.random_seed != null) parts.push(`random_seed=${encodeURIComponent(params.random_seed)}`);
+    if (params.top_n) parts.push(`top_n=${encodeURIComponent(params.top_n)}`);
+    if (params.relegation_slots != null) parts.push(`relegation_slots=${encodeURIComponent(params.relegation_slots)}`);
+    return parts.length > 0 ? `?${parts.join("&")}` : "";
+}
+
+async function loadLeagueForm() {
+    const tbody = document.getElementById("league-form-table-body");
+    const statusPill = document.getElementById("league-form-status");
+    const countEl = document.getElementById("league-form-teams-count");
+    const topPpgEl = document.getElementById("league-form-top-ppg");
+    if (!tbody) return;
+    const z = appState.lang === "zh";
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">${escapeHtml(z ? "加载中..." : "Loading...")}</td></tr>`;
+    if (statusPill) { statusPill.textContent = z ? "加载中" : "Loading"; statusPill.className = "status-pill status-medium"; }
+    try {
+        const params = leagueParams();
+        const data = await fetchJson(`/league/form-table${leagueQuery(params)}`);
+        const teams = data.teams || [];
+        if (data.status !== "ok" || teams.length === 0) {
+            const msg = data.disclaimer || (z ? "无数据" : "No data");
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">${escapeHtml(msg)}</td></tr>`;
+            if (statusPill) { statusPill.textContent = data.status || "no_data"; statusPill.className = "status-pill status-low"; }
+            if (countEl) countEl.textContent = "0";
+            if (topPpgEl) topPpgEl.textContent = "0.0";
+            return;
+        }
+        tbody.innerHTML = teams.map((t, i) => {
+            const ppg = Number(t.ppg || 0).toFixed(2);
+            const rating = Number(t.form_rating || 0).toFixed(1);
+            const homePpg = Number(t.home_ppg || 0).toFixed(2);
+            const awayPpg = Number(t.away_ppg || 0).toFixed(2);
+            const trendLabel = leagueTrendLabel(t.trend_label);
+            const trendClass = leagueTrendClass(t.trend_label);
+            return `<tr>
+                <td>${i + 1}</td>
+                <td>${escapeHtml(t.team || "")}</td>
+                <td>${ppg}</td>
+                <td>${rating}</td>
+                <td><span class="${trendClass}">${escapeHtml(trendLabel)}</span></td>
+                <td>${homePpg}</td>
+                <td>${awayPpg}</td>
+                <td>${leagueFormString(t.form_string)}</td>
+            </tr>`;
+        }).join("");
+        if (statusPill) { statusPill.textContent = `${teams.length} ${z ? "支球队" : "teams"}`; statusPill.className = "status-pill status-high"; }
+        if (countEl) countEl.textContent = teams.length;
+        const topPpg = Math.max(...teams.map((t) => Number(t.ppg || 0)));
+        if (topPpgEl) topPpgEl.textContent = topPpg.toFixed(2);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">${z ? "加载失败" : "Load failed"}: ${escapeHtml(err.message || "")}</td></tr>`;
+        if (statusPill) { statusPill.textContent = z ? "错误" : "Error"; statusPill.className = "status-pill status-low"; }
+    }
+}
+
+async function loadLeagueDifficulty() {
+    const content = document.getElementById("league-difficulty-content");
+    if (!content) return;
+    const z = appState.lang === "zh";
+    const teamInput = document.getElementById("league-difficulty-team");
+    const team = teamInput ? teamInput.value.trim() : "";
+    content.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "加载中..." : "Loading...")}</p>`;
+    try {
+        const params = leagueParams();
+        params.team = team || null;
+        params.upcoming_n = 10;
+        // Remove last_n from difficulty query (not a valid param)
+        const diffParams = { season: params.season, league: params.league, upcoming_n: params.upcoming_n };
+        if (team) diffParams.team = team;
+        const data = await fetchJson(`/league/fixture-difficulty${leagueQuery(diffParams)}`);
+        const teamsData = data.teams || [];
+        if (data.status !== "ok" || teamsData.length === 0) {
+            const msg = data.disclaimer || (z ? "无数据" : "No data");
+            content.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(msg)}</p>`;
+            return;
+        }
+        const sections = teamsData.map((td) => {
+            const fixtures = td.fixtures || [];
+            if (fixtures.length === 0) return "";
+            const rows = fixtures.map((f) => {
+                const xpts = Number(f.expected_points || 0).toFixed(2);
+                const diffScore = Number(f.difficulty_score || 0).toFixed(0);
+                const diffLabel = leagueDiffLabel(f.difficulty_label);
+                const diffClass = leagueDiffClass(f.difficulty_label);
+                const actual = f.actual_result ? `<span style="color:${f.actual_result === "W" ? "#16a34a" : f.actual_result === "L" ? "#dc2626" : "#ca8a04"};font-weight:600">${escapeHtml(f.actual_result)}</span>` : "—";
+                return `<tr>
+                    <td>${escapeHtml(f.date || "—")}</td>
+                    <td>${escapeHtml(f.opponent || "")}</td>
+                    <td>${escapeHtml(f.venue === "H" ? (z ? "主" : "H") : (z ? "客" : "A"))}</td>
+                    <td>${xpts}</td>
+                    <td>${diffScore}</td>
+                    <td><span class="${diffClass}">${escapeHtml(diffLabel)}</span></td>
+                    <td>${actual}</td>
+                </tr>`;
+            }).join("");
+            return `<div style="margin-bottom:var(--space)">
+                <h4 style="margin:0 0 0.5rem;font-size:0.9rem">${escapeHtml(td.team || "")}</h4>
+                <div class="table-scroll">
+                    <table class="data-table" style="font-size:0.8rem">
+                        <thead><tr>
+                            <th>${z ? "日期" : "Date"}</th>
+                            <th>${z ? "对手" : "Opponent"}</th>
+                            <th>${z ? "主客" : "Venue"}</th>
+                            <th>${z ? "期望积分" : "Exp Pts"}</th>
+                            <th>${z ? "难度" : "Difficulty"}</th>
+                            <th>${z ? "等级" : "Level"}</th>
+                            <th>${z ? "实际" : "Actual"}</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            </div>`;
+        }).join("");
+        content.innerHTML = sections || `<p style="color:var(--text-muted)">${escapeHtml(z ? "无赛程数据" : "No fixture data")}</p>`;
+    } catch (err) {
+        content.innerHTML = `<p style="color:var(--text-muted)">${z ? "加载失败" : "Load failed"}: ${escapeHtml(err.message || "")}</p>`;
+    }
+}
+
+async function loadLeagueProjection() {
+    const tbody = document.getElementById("league-projection-table-body");
+    const disclaimerEl = document.getElementById("league-projection-disclaimer");
+    const titleProbEl = document.getElementById("league-projection-title-prob");
+    if (!tbody) return;
+    const z = appState.lang === "zh";
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">${escapeHtml(z ? "模拟中..." : "Simulating...")}</td></tr>`;
+    try {
+        const params = leagueParams();
+        const simCountEl = document.getElementById("league-sim-count");
+        const numSimulations = simCountEl ? parseInt(simCountEl.value, 10) : 1000;
+        const projParams = {
+            season: params.season,
+            league: params.league,
+            num_simulations: numSimulations,
+            random_seed: 42,
+            top_n: 4,
+            relegation_slots: 3,
+        };
+        const data = await fetchJson(`/league/season-projection${leagueQuery(projParams)}`);
+        const teams = data.teams || [];
+        if (data.status !== "ok" || teams.length === 0) {
+            const msg = data.disclaimer || (z ? "无数据" : "No data");
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">${escapeHtml(msg)}</td></tr>`;
+            if (disclaimerEl) disclaimerEl.textContent = "";
+            if (titleProbEl) titleProbEl.textContent = "0%";
+            return;
+        }
+        tbody.innerHTML = teams.map((t, i) => {
+            const avgPts = Number(t.avg_final_points || 0).toFixed(1);
+            const avgPos = Number(t.avg_position || 0).toFixed(2);
+            const titleProb = Number(t.title_probability || 0);
+            const topNProb = Number(t.top_n_probability || 0);
+            const relProb = Number(t.relegation_probability || 0);
+            const titlePct = (titleProb * 100).toFixed(1) + "%";
+            const topNPct = (topNProb * 100).toFixed(1) + "%";
+            const relPct = (relProb * 100).toFixed(1) + "%";
+            const titleClass = titleProb >= 0.5 ? "status-pill status-high" : titleProb >= 0.1 ? "status-pill status-medium" : "status-pill status-low";
+            const relClass = relProb >= 0.5 ? "status-pill status-low" : relProb >= 0.1 ? "status-pill status-medium" : "status-pill status-high";
+            return `<tr>
+                <td>${i + 1}</td>
+                <td>${escapeHtml(t.team || "")}</td>
+                <td>${avgPts}</td>
+                <td>${avgPos}</td>
+                <td><span class="${titleClass}">${titlePct}</span></td>
+                <td>${topNPct}</td>
+                <td><span class="${relClass}">${relPct}</span></td>
+            </tr>`;
+        }).join("");
+        if (disclaimerEl) disclaimerEl.textContent = data.disclaimer || "";
+        const topTeam = teams[0];
+        const topTitleProb = topTeam ? Number(topTeam.title_probability || 0) : 0;
+        if (titleProbEl) titleProbEl.textContent = (topTitleProb * 100).toFixed(0) + "%";
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">${z ? "加载失败" : "Load failed"}: ${escapeHtml(err.message || "")}</td></tr>`;
+        if (disclaimerEl) disclaimerEl.textContent = "";
+    }
+}
+
+async function renderLeague() {
+    // Wire up event listeners once
+    if (!leagueState.wired) {
+        leagueState.wired = true;
+        const refreshBtn = document.getElementById("league-refresh-btn");
+        const difficultyBtn = document.getElementById("league-difficulty-btn");
+        const projectionBtn = document.getElementById("league-projection-btn");
+        const seasonFilter = document.getElementById("league-season-filter");
+        const leagueFilter = document.getElementById("league-league-filter");
+        const lastNFilter = document.getElementById("league-last-n-filter");
+        if (refreshBtn) refreshBtn.addEventListener("click", () => { loadLeagueForm(); });
+        if (difficultyBtn) difficultyBtn.addEventListener("click", () => { loadLeagueDifficulty(); });
+        if (projectionBtn) projectionBtn.addEventListener("click", () => { loadLeagueProjection(); });
+        if (seasonFilter) seasonFilter.addEventListener("change", () => { loadLeagueForm(); });
+        if (leagueFilter) leagueFilter.addEventListener("change", () => { loadLeagueForm(); });
+        if (lastNFilter) lastNFilter.addEventListener("change", () => { loadLeagueForm(); });
+    }
+    // Initial load of form table if not yet loaded
+    if (!leagueState.formLoaded) {
+        leagueState.formLoaded = true;
+        await loadLeagueForm();
+    }
+}
+
 function renderTeamsChart(teams) {
     const chartEl = document.getElementById("teams-chart");
     if (!chartEl || typeof echarts === "undefined") return;
@@ -13883,6 +14263,7 @@ async function renderActiveView() {
     if (appState.view === "value") renderValue();
     if (appState.view === "matches") await renderMatches();
     if (appState.view === "teams") await renderTeams();
+    if (appState.view === "league") await renderLeague();
     if (appState.view === "scouting") renderScouting();
     if (appState.view === "actions") renderActions();
     if (appState.view === "reports") renderReports();

@@ -35,6 +35,7 @@ from scoutfootball.app.data_loader import (
 )
 from scoutfootball.evaluation.scouting_queue import build_scouting_queues
 from scoutfootball.head_to_head import get_head_to_head as _compute_head_to_head
+from scoutfootball.head_to_head import load_match_results as _load_match_results
 from scoutfootball.worldcup.data import (
     BIG5_LEAGUES,
     GROUPS,
@@ -8050,6 +8051,181 @@ def get_cross_league_action_comparison(
         min_player_minutes=min_player_minutes,
     )
     return _clean_json_value(result)
+
+
+# ── League season projection & form analysis ──────────────────────────────
+
+
+def get_league_form_table(
+    league: str | None = None,
+    season: str | None = None,
+    last_n: int = 6,
+) -> dict:
+    """Last-N form table for every team in a league-season.
+
+    Wraps :func:`scoutfootball.features.season_projection.compute_league_form_table`
+    using Football-Data ``combined_results.parquet``. Descriptive overlay —
+    does not use the Dixon-Coles model or rating matrix.
+    """
+    from scoutfootball.features.season_projection import (
+        compute_league_form_table,
+    )
+
+    if not season:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "last_n": last_n,
+            "teams": [],
+            "disclaimer": "Season parameter is required.",
+        }
+    try:
+        df = _load_match_results()
+        if df.empty:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "last_n": last_n,
+                "teams": [],
+                "disclaimer": "Match results data unavailable.",
+            }
+        result = compute_league_form_table(
+            df, league=league, season=season, last_n=last_n
+        )
+        return _clean_json_value(result)
+    except Exception as exc:
+        logger.warning("get_league_form_table failed: %s", exc, exc_info=True)
+        return {
+            "status": "error",
+            "league": league,
+            "season": season,
+            "last_n": last_n,
+            "teams": [],
+            "error": str(exc),
+        }
+
+
+def get_fixture_difficulty(
+    league: str | None = None,
+    season: str | None = None,
+    team: str | None = None,
+    upcoming_n: int = 10,
+) -> dict:
+    """Fixture difficulty rating for each team's most recent N matches.
+
+    Wraps :func:`scoutfootball.features.season_projection.compute_fixture_difficulty`
+    using Football-Data ``combined_results.parquet``. Descriptive overlay —
+    uses a Bradley-Terry strength estimate from in-season PPG, not the
+    Dixon-Coles model.
+    """
+    from scoutfootball.features.season_projection import (
+        compute_fixture_difficulty,
+    )
+
+    if not season:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "team": team,
+            "upcoming_n": upcoming_n,
+            "teams": [],
+            "disclaimer": "Season parameter is required.",
+        }
+    try:
+        df = _load_match_results()
+        if df.empty:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "team": team,
+                "upcoming_n": upcoming_n,
+                "teams": [],
+                "disclaimer": "Match results data unavailable.",
+            }
+        result = compute_fixture_difficulty(
+            df,
+            league=league,
+            season=season,
+            team=team,
+            upcoming_n=upcoming_n,
+        )
+        return _clean_json_value(result)
+    except Exception as exc:
+        logger.warning("get_fixture_difficulty failed: %s", exc, exc_info=True)
+        return {
+            "status": "error",
+            "league": league,
+            "season": season,
+            "team": team,
+            "upcoming_n": upcoming_n,
+            "teams": [],
+            "error": str(exc),
+        }
+
+
+def get_season_projection(
+    league: str | None = None,
+    season: str | None = None,
+    num_simulations: int = 1000,
+    random_seed: int = 42,
+    top_n: int = 4,
+    relegation_slots: int = 3,
+) -> dict:
+    """Monte Carlo projection of final league standings.
+
+    Wraps :func:`scoutfootball.features.season_projection.compute_season_projection`
+    using Football-Data ``combined_results.parquet``. Descriptive overlay —
+    uses a Bradley-Terry strength estimate from in-season PPG and a
+    reproducible random seed, not the Dixon-Coles model.
+    """
+    from scoutfootball.features.season_projection import (
+        compute_season_projection,
+    )
+
+    if not season:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "num_simulations": num_simulations,
+            "teams": [],
+            "disclaimer": "Season parameter is required.",
+        }
+    try:
+        df = _load_match_results()
+        if df.empty:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "num_simulations": num_simulations,
+                "teams": [],
+                "disclaimer": "Match results data unavailable.",
+            }
+        result = compute_season_projection(
+            df,
+            league=league,
+            season=season,
+            num_simulations=num_simulations,
+            random_seed=random_seed,
+            top_n=top_n,
+            relegation_slots=relegation_slots,
+        )
+        return _clean_json_value(result)
+    except Exception as exc:
+        logger.warning("get_season_projection failed: %s", exc, exc_info=True)
+        return {
+            "status": "error",
+            "league": league,
+            "season": season,
+            "num_simulations": num_simulations,
+            "teams": [],
+            "error": str(exc),
+        }
 
 
 # ── World Cup endpoints ──────────────────────────────────────────────────
