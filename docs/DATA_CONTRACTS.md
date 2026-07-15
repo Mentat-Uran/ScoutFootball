@@ -2242,6 +2242,174 @@ When only one league is present, a single `top`-tier entry is returned.
 The comparison does not modify the prediction model — it is an interpretive
 layer over aggregated team action signatures.
 
+### GET /teams/cross-league-depth
+
+Per-position-group depth comparison between two teams in a given season.
+For each of the 8 standard position groups (GK/CB/FB/DM/CM/AM/W/ST),
+returns n_players, total_minutes, score stats (min/median/max/mean/std),
+and a depth_label (`shallow` <2 players / `adequate` 2-3 / `deep` ≥4).
+Each position carries an `advantage` flag (`team_a` / `team_b` / `even`)
+using a 0.5-point mean-score threshold, and `complementary_positions`
+lists positions where the weaker side still has adequate depth (≥2
+players). All stats are non-additive interpretive overlays and do not
+modify the prediction model or imply transfer recommendations.
+
+**Query params**: `team_a` (required, min_length=1), `team_b` (required,
+min_length=1), `season` (optional), `min_player_minutes` (default 500.0,
+ge=0.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team_a": "Arsenal",
+  "team_b": "Barcelona",
+  "season": "2425",
+  "min_player_minutes": 500.0,
+  "position_comparison": [
+    {
+      "position_group": "CB",
+      "team_a": {"n_players": 4, "total_minutes": 8500, "mean": 78.2,
+        "median": 79.0, "min": 71.5, "max": 83.1, "std": 4.8,
+        "depth_label": "deep"},
+      "team_b": {"n_players": 2, "total_minutes": 5200, "mean": 75.4,
+        "median": 75.8, "min": 70.2, "max": 80.1, "std": 5.6,
+        "depth_label": "adequate"},
+      "advantage": "team_a"
+    }
+  ],
+  "complementary_positions": ["FB", "CM"],
+  "disclaimer": "Cross-league depth comparison is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `team_a_not_found`, `team_b_not_found` (returned
+instead of `no_data` when a requested team is absent from the filtered
+frame), `no_data` (empty input or no `position_group` column).
+
+### GET /teams/{team}/scouting-targets
+
+Recommends players from other leagues to fill the target team's position
+gaps. Reuses `compute_position_gap_report` to identify gaps
+(`shallow` <2 players / `low_quality` mean < p40 / `missing` no players),
+then for each gap position scans candidates from other leagues who:
+(a) play the gap position_group, (b) meet `min_player_minutes`, (c) score
+≥ the gap threshold (p60 of the candidate's own league at that position
+for shallow/missing gaps, team mean for low_quality gaps), (d) sit in the
+top quartile (p75) of their own league at that position. Candidates are
+sorted by score descending and capped at `top_n`. All recommendations are
+non-additive interpretive overlays and do not constitute transfer
+directives or scouting verdicts.
+
+**Query params**: `season` (optional), `min_player_minutes` (default
+500.0, ge=0.0), `top_n` (int, default 10, clamped to 1–50),
+`exclude_same_league` (bool, default true)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Arsenal",
+  "season": "2425",
+  "min_player_minutes": 500.0,
+  "top_n": 10,
+  "exclude_same_league": true,
+  "target_league": "Premier League",
+  "gaps": [
+    {
+      "position_group": "ST",
+      "gap_type": "shallow",
+      "team_score": 72.3,
+      "threshold": 74.0,
+      "candidates": [
+        {
+          "player": "Erling Haaland",
+          "team": "Manchester City",
+          "league": "Premier League",
+          "position_group": "ST",
+          "score": 88.6,
+          "minutes": 3100,
+          "npg_p90": 0.92,
+          "assists_p90": 0.18,
+          "defense_composite": 0.08,
+          "possession_composite": 0.42
+        }
+      ]
+    }
+  ],
+  "disclaimer": "Scouting target recommendation is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `team_not_found` (target team absent from filtered
+frame), `no_data` (empty input or no `position_group` column). When
+`exclude_same_league` is true, candidates from the target team's league
+are filtered out. When no candidates meet the threshold for a gap, the
+`candidates` list is empty (the gap is still reported).
+
+### GET /teams/{team}/scouting-style-match/{position_group}
+
+Finds players from other leagues whose 4-dim style vector (npg_p90 /
+assists_p90 / defense_composite / possession_composite) is most similar
+to the target team's aggregate style at the given position group, using
+cosine similarity. Returns the team's `target_player` (top player at that
+position by minutes), the team's `target_style_vector`, and a ranked
+`candidates` list with per-player `similarity` (0–1), `style_vector`, and
+`minutes`. Validates `position_group` against the 8 canonical groups
+(GK/CB/FB/DM/CM/AM/W/ST). All matches are non-additive interpretive
+overlays and do not constitute transfer directives.
+
+**Path params**: `team` (player name), `position_group` (one of
+GK/CB/FB/DM/CM/AM/W/ST)
+
+**Query params**: `season` (optional), `min_player_minutes` (default
+500.0, ge=0.0), `top_n` (int, default 10, clamped to 1–50),
+`exclude_same_league` (bool, default true)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Arsenal",
+  "position_group": "ST",
+  "season": "2425",
+  "min_player_minutes": 500.0,
+  "top_n": 10,
+  "exclude_same_league": true,
+  "target_player": {
+    "player": "Bukayo Saka",
+    "team": "Arsenal",
+    "league": "Premier League",
+    "position_group": "ST",
+    "minutes": 2950,
+    "score": 82.4
+  },
+  "target_style_vector": {"npg_p90": 0.45, "assists_p90": 0.38,
+    "defense_composite": 0.18, "possession_composite": 0.62},
+  "candidates": [
+    {
+      "player": "Ousmane Dembélé",
+      "team": "Paris Saint-Germain",
+      "league": "Ligue 1",
+      "position_group": "W",
+      "minutes": 2400,
+      "score": 80.1,
+      "similarity": 0.94,
+      "style_vector": {"npg_p90": 0.42, "assists_p90": 0.41,
+        "defense_composite": 0.15, "possession_composite": 0.65}
+    }
+  ],
+  "disclaimer": "Style-match scouting is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `invalid_position` (position_group not in the 8
+canonical groups), `team_not_found` (target team absent), `no_data`
+(empty input), `team_position_not_found` (target team has no players at
+the given position meeting the minutes threshold). Candidates are sorted
+by `similarity` descending. When `exclude_same_league` is true, players
+from the target team's league are filtered out.
+
 ### GET /league/form-table
 
 Last-N recent-form table for every team in a league-season. For each team

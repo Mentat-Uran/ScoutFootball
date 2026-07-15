@@ -1236,6 +1236,81 @@
                     <div id="style-fit-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                 </article>
 
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="cross_scouting_title">跨联赛球探分析</h3>
+                        <span id="cross-scouting-pill" class="status-pill status-medium">—</span>
+                    </div>
+                    <p class="feature-note" style="padding:0 var(--space)" data-i18n="cross_scouting_boundary">基于评分矩阵的描述性叠加：按位置深度对比、按缺口推荐候选、按风格相似度匹配。非转会建议。</p>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:var(--space)">
+                        <div style="flex:1;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_season">赛季</label>
+                            <input type="text" id="cross-scouting-season" class="filter-input" placeholder="e.g. 2526" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_min_minutes">最低分钟</label>
+                            <input type="number" id="cross-scouting-min-minutes" class="filter-input" value="500" min="0" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:80px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="risers_top_n">前 N</label>
+                            <input type="number" id="cross-scouting-top-n" class="filter-input" value="10" min="1" max="50" style="width:100%;margin-top:0.3rem">
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space)">
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_team_a">球队 A</label>
+                            <input type="text" id="cross-scouting-team-a" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_team_b">球队 B</label>
+                            <input type="text" id="cross-scouting-team-b" class="filter-input" placeholder="e.g. Barcelona" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="cross-scouting-depth-btn" class="cta-button" type="button" data-i18n="cross_scouting_depth_btn">对比深度</button>
+                    </div>
+                    <div id="cross-scouting-depth-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space);border-top:1px solid var(--border)">
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_compare_team">球队</label>
+                            <input type="text" id="cross-scouting-targets-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <label class="glass-control" style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem">
+                            <input type="checkbox" id="cross-scouting-exclude-same-league" checked>
+                            <span data-i18n="cross_scouting_exclude_same_league">排除同联赛</span>
+                        </label>
+                        <button id="cross-scouting-targets-btn" class="cta-button" type="button" data-i18n="cross_scouting_targets_btn">推荐目标</button>
+                    </div>
+                    <div id="cross-scouting-targets-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space);border-top:1px solid var(--border)">
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_compare_team">球队</label>
+                            <input type="text" id="cross-scouting-style-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_team">位置组</label>
+                            <select id="cross-scouting-style-pos" class="filter-input" style="width:100%;margin-top:0.3rem">
+                                <option value="GK">GK</option>
+                                <option value="CB">CB</option>
+                                <option value="FB">FB</option>
+                                <option value="DM">DM</option>
+                                <option value="CM" selected>CM</option>
+                                <option value="AM">AM</option>
+                                <option value="W">W</option>
+                                <option value="ST">ST</option>
+                            </select>
+                        </div>
+                        <label class="glass-control" style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem">
+                            <input type="checkbox" id="cross-scouting-style-exclude" checked>
+                            <span data-i18n="cross_scouting_exclude_same_league">排除同联赛</span>
+                        </label>
+                        <button id="cross-scouting-style-btn" class="cta-button" type="button" data-i18n="cross_scouting_style_btn">风格匹配</button>
+                    </div>
+                    <div id="cross-scouting-style-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                </article>
+
                 <dialog class="workspace-dialog" id="scout-workspace-dialog" aria-labelledby="scout-workspace-dialog-title">
                     <div class="workspace-dialog-shell">
                         <div class="workspace-dialog-head">
