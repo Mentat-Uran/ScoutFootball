@@ -23352,8 +23352,38 @@ function _renderReasonCodePills(entry, listType) {
 // Module-level filter state — arrays of reason-code strings. When non-empty,
 // only entries with at least one matching code are shown. Clicking a chip
 // toggles the code in the array; "All" clears it.
-let _shortlistSourceFilter = [];
-let _watchlistSourceFilter = [];
+// Round 90: both filter arrays persist to localStorage so the user's
+// filter choice survives page reloads.
+const SHORTLIST_SOURCE_FILTER_KEY = "sf-shortlist-source-filter";
+const WATCHLIST_SOURCE_FILTER_KEY = "sf-watchlist-source-filter";
+const SHORTLIST_COMPARE_SELECTION_KEY = "sf-shortlist-compare-selection";
+
+function _loadStringArray(key) {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(key));
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((v) => typeof v === "string").slice(0, 100);
+    } catch {
+        return [];
+    }
+}
+
+function _saveStringArray(key, arr) {
+    try {
+        localStorage.setItem(key, JSON.stringify(arr));
+    } catch {}
+}
+
+let _shortlistSourceFilter = _loadStringArray(SHORTLIST_SOURCE_FILTER_KEY);
+let _watchlistSourceFilter = _loadStringArray(WATCHLIST_SOURCE_FILTER_KEY);
+
+function _persistShortlistSourceFilter() {
+    _saveStringArray(SHORTLIST_SOURCE_FILTER_KEY, _shortlistSourceFilter);
+}
+
+function _persistWatchlistSourceFilter() {
+    _saveStringArray(WATCHLIST_SOURCE_FILTER_KEY, _watchlistSourceFilter);
+}
 
 function _computeSourceCounts(entries) {
     const counts = {};
@@ -23406,6 +23436,9 @@ function _wireSourceSummary(rootEl, listType) {
                     filterArr.push(code);
                 }
             }
+            // Round 90: persist filter state to localStorage.
+            if (listType === "shortlist") _persistShortlistSourceFilter();
+            else _persistWatchlistSourceFilter();
             renderScouting();
         });
     });
@@ -23434,8 +23467,14 @@ function _wireReasonPillRemovals(rootEl, listType) {
 // Multi-select checkboxes on shortlist entries connect to the existing
 // /players/compare-multi API (max 6 players). Selection persists across
 // re-renders; stale entries (player removed from shortlist) are pruned.
-let _shortlistCompareSelection = [];
+// Round 90: the selection persists to localStorage so checked players
+// survive page reloads (stale keys are pruned on the first render).
+let _shortlistCompareSelection = _loadStringArray(SHORTLIST_COMPARE_SELECTION_KEY);
 const _SHORTLIST_COMPARE_MAX = 6;
+
+function _persistShortlistCompareSelection() {
+    _saveStringArray(SHORTLIST_COMPARE_SELECTION_KEY, _shortlistCompareSelection);
+}
 
 function _toggleShortlistCompareSelect(playerKey) {
     const key = String(playerKey || "").trim();
@@ -23447,15 +23486,21 @@ function _toggleShortlistCompareSelect(playerKey) {
         if (_shortlistCompareSelection.length >= _SHORTLIST_COMPARE_MAX) return;
         _shortlistCompareSelection.push(key);
     }
+    _persistShortlistCompareSelection();
 }
 
 function _clearShortlistCompareSelection() {
     _shortlistCompareSelection = [];
+    _persistShortlistCompareSelection();
 }
 
 function _pruneShortlistCompareSelection(validKeys) {
     const set = new Set(validKeys.map((k) => String(k || "").trim()).filter(Boolean));
-    _shortlistCompareSelection = _shortlistCompareSelection.filter((k) => set.has(k));
+    const next = _shortlistCompareSelection.filter((k) => set.has(k));
+    if (next.length !== _shortlistCompareSelection.length) {
+        _shortlistCompareSelection = next;
+        _persistShortlistCompareSelection();
+    }
 }
 
 function _renderShortlistCompareBar() {
