@@ -8168,6 +8168,55 @@ def get_scouting_target_style_match(
     return _clean_json_value(result)
 
 
+def get_scouting_dashboard(
+    team: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+    top_n: int = 10,
+    exclude_same_league: bool = True,
+    max_positions: int = 3,
+    use_position_weights: bool = False,
+) -> dict:
+    """Aggregate scouting dashboard: gap targets + multi-position style match.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_scouting_dashboard`.
+    Returns a single report card combining:
+
+    * ``gap_targets`` — top N position gaps for ``team`` (reuses
+      :func:`compute_scouting_targets`), each with cross-league candidates.
+    * ``position_style_matches`` — for each of the top ``max_positions`` gap
+      positions, a style-match list of cross-league players similar to the
+      team's current starter at that position.
+
+    When ``use_position_weights=True``, the per-position weights from
+    ``_POSITION_STYLE_WEIGHTS`` are applied to both target and candidate
+    style vectors before cosine similarity.
+
+    Descriptive overlay — NOT a transfer recommendation.
+    """
+    from scoutfootball.features.team_style import compute_scouting_dashboard
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "season": season,
+        }
+    result = compute_scouting_dashboard(
+        df,
+        team,
+        season=season,
+        min_player_minutes=min_player_minutes,
+        top_n=top_n,
+        exclude_same_league=exclude_same_league,
+        max_positions=max_positions,
+        use_position_weights=use_position_weights,
+    )
+    return _clean_json_value(result)
+
+
 # ── League season projection & form analysis ──────────────────────────────
 
 

@@ -31,6 +31,7 @@ from scoutfootball.features.team_style import (
     compute_position_style_drift_neighbors,
     compute_position_style_evolution,
     compute_position_trend_overlay,
+    compute_scouting_dashboard,
     compute_scouting_target_style_match,
     compute_scouting_targets,
     compute_style_atlas,
@@ -4142,3 +4143,138 @@ def test_scouting_style_weighted_invalid_position(depth_df):
         depth_df, "Gap Team", "XX", season="2526", use_position_weights=True
     )
     assert result["status"] == "invalid_position"
+
+
+# ── compute_scouting_dashboard ────────────────────────────────────────────
+
+
+def test_scouting_dashboard_empty():
+    """Empty DataFrame should return no_data."""
+    result = compute_scouting_dashboard(pd.DataFrame(), "Gap Team")
+    assert result["status"] == "no_data"
+
+
+def test_scouting_dashboard_team_not_found(depth_df):
+    """Unknown team should inherit team_not_found from targets."""
+    result = compute_scouting_dashboard(depth_df, "Nobody FC", season="2526")
+    assert result["status"] == "team_not_found"
+
+
+def test_scouting_dashboard_basic(depth_df):
+    """Dashboard should return ok with both gap_targets and style matches."""
+    result = compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    assert result["status"] == "ok"
+    assert result["team"] == "Gap Team"
+    assert isinstance(result["gap_targets"], list)
+    assert result["n_gaps"] == len(result["gap_targets"])
+    assert result["n_gaps"] > 0
+    assert isinstance(result["position_style_matches"], list)
+    assert result["n_positions_matched"] == len(result["position_style_matches"])
+    # max_positions defaults to 3, so we never fan out beyond that.
+    assert result["n_positions_matched"] <= result["max_positions"]
+    assert result["max_positions"] == 3
+    assert result["use_position_weights"] is False
+
+
+def test_scouting_dashboard_max_positions_clamped(depth_df):
+    """max_positions should be clamped to 1-8 range."""
+    result_low = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", max_positions=0
+    )
+    assert result_low["status"] == "ok"
+    assert result_low["max_positions"] == 1
+    assert result_low["n_positions_matched"] <= 1
+
+    result_high = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", max_positions=999
+    )
+    assert result_high["status"] == "ok"
+    assert result_high["max_positions"] == 8
+
+
+def test_scouting_dashboard_style_matches_have_position(depth_df):
+    """Each style match entry should carry a valid position_group."""
+    result = compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    assert result["status"] == "ok"
+    valid_positions = {"GK", "CB", "FB", "DM", "CM", "AM", "W", "ST"}
+    for m in result["position_style_matches"]:
+        assert m["position_group"] in valid_positions
+        # Each match should be a full style_match dict: either ok with
+        # candidates, or a status explaining why no match was possible.
+        assert "status" in m
+        if m["status"] == "ok":
+            assert isinstance(m["candidates"], list)
+            assert m["position_group"] == m.get("position_group")
+
+
+def test_scouting_dashboard_positions_match_gaps(depth_df):
+    """The matched positions should be a subset of the gap positions."""
+    result = compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    assert result["status"] == "ok"
+    gap_positions = [g["position_group"] for g in result["gap_targets"]]
+    matched_positions = [m["position_group"] for m in result["position_style_matches"]]
+    # Every matched position must come from the gap list (the dashboard
+    # only fans out style matches for the top N gap positions).
+    for pos in matched_positions:
+        assert pos in gap_positions
+
+
+def test_scouting_dashboard_use_position_weights_flag(depth_df):
+    """use_position_weights=True should be reflected in the output."""
+    result = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", use_position_weights=True
+    )
+    assert result["status"] == "ok"
+    assert result["use_position_weights"] is True
+    # Each successful style match should also carry the weighted flag.
+    for m in result["position_style_matches"]:
+        if m["status"] == "ok":
+            assert m["weighted"] is True
+
+
+def test_scouting_dashboard_disclaimer(depth_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_scouting_dashboard_no_mutation(depth_df):
+    """Original DataFrame should not be mutated."""
+    original = depth_df.copy()
+    compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    pd.testing.assert_frame_equal(depth_df, original)
+
+
+def test_scouting_dashboard_top_n_propagates(depth_df):
+    """top_n should limit the number of candidates in both gap_targets and
+    style matches."""
+    result = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", top_n=1
+    )
+    assert result["status"] == "ok"
+    for gap in result["gap_targets"]:
+        assert len(gap["candidates"]) <= 1
+    for m in result["position_style_matches"]:
+        if m["status"] == "ok":
+            assert len(m["candidates"]) <= 1
+
+
+def test_scouting_dashboard_empty_team():
+    """Empty team string should return no_data."""
+    result = compute_scouting_dashboard(pd.DataFrame(), "")
+    assert result["status"] == "no_data"
+
+
+def test_scouting_dashboard_exclude_same_league_flag(depth_df):
+    """exclude_same_league should propagate and still produce ok results."""
+    result = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", exclude_same_league=False
+    )
+    assert result["status"] == "ok"
+    # Gap Team is in Premier League; with exclude_same_league=False,
+    # PL candidates may appear in the gap targets.
+    for gap in result["gap_targets"]:
+        for cand in gap["candidates"]:
+            # No assertion on league content — just structural sanity.
+            assert "league" in cand

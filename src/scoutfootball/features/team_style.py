@@ -5220,3 +5220,100 @@ def compute_scouting_target_style_match(
         "position_weights": weight_dict_out,
         "disclaimer": _SCOUTING_DISCLAIMER,
     }
+
+
+def compute_scouting_dashboard(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+    top_n: int = _DEFAULT_SCOUTING_TOP_N,
+    exclude_same_league: bool = True,
+    max_positions: int = 3,
+    use_position_weights: bool = False,
+) -> dict[str, Any]:
+    """Aggregate scouting targets + multi-position style match in one call.
+
+    For the target team, identifies position gaps (reusing
+    :func:`compute_scouting_targets`) and computes a style-match candidate
+    list for each of the top ``max_positions`` gap positions. Returns a
+    unified report card combining gap context + per-position style
+    candidates, suitable for a single-call dashboard view.
+
+    The style match for each gap position answers "if we lose our current
+    starter at the gap position, who plays like them in other leagues?".
+    When ``use_position_weights`` is True, the per-position weights from
+    ``_POSITION_STYLE_WEIGHTS`` are applied to both target and candidate
+    style vectors before cosine similarity (see
+    :func:`compute_scouting_target_style_match`).
+
+    Descriptive overlay — NOT a transfer recommendation.
+    """
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    # Clamp max_positions to 1-8 (the 8 canonical position groups).
+    max_positions = max(
+        1, min(int(max_positions), len(_POSITION_GROUPS))
+    )
+    top_n = max(1, min(int(top_n), _MAX_SCOUTING_TOP_N))
+
+    # 1) Gap targets (reuses compute_position_gap_report internally).
+    targets = compute_scouting_targets(
+        df,
+        team,
+        season=season,
+        min_player_minutes=min_player_minutes,
+        top_n=top_n,
+        exclude_same_league=exclude_same_league,
+    )
+    if targets["status"] != "ok":
+        return {
+            "status": targets["status"],
+            "team": team,
+            "season": season,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    gap_targets = targets.get("gap_targets", [])
+    n_gaps = len(gap_targets)
+
+    # 2) For each of the top max_positions gap positions, compute a style
+    # match against the team's current starter at that position. This
+    # answers "if we lose our current starter at the gap position, who
+    # plays like them in other leagues?".
+    position_style_matches: list[dict[str, Any]] = []
+    for gap in gap_targets[:max_positions]:
+        pos = gap.get("position_group", "")
+        if not pos or str(pos).upper() not in _POSITION_GROUPS:
+            continue
+        style_match = compute_scouting_target_style_match(
+            df,
+            team,
+            pos,
+            season=season,
+            min_player_minutes=min_player_minutes,
+            top_n=top_n,
+            exclude_same_league=exclude_same_league,
+            use_position_weights=use_position_weights,
+        )
+        position_style_matches.append(style_match)
+
+    return {
+        "status": "ok",
+        "team": team,
+        "league": targets.get("league"),
+        "season": season,
+        "n_gaps": n_gaps,
+        "n_positions_matched": len(position_style_matches),
+        "max_positions": max_positions,
+        "use_position_weights": use_position_weights,
+        "gap_targets": gap_targets,
+        "position_style_matches": position_style_matches,
+        "disclaimer": _SCOUTING_DISCLAIMER,
+    }

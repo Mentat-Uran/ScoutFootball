@@ -217,6 +217,11 @@ const i18n = {
         cross_scouting_dashboard_depth: "阵容深度",
         cross_scouting_dashboard_targets: "缺口目标",
         cross_scouting_dashboard_style: "风格匹配",
+        cross_scouting_dashboard_max_positions: "最大位置数",
+        cross_scouting_dashboard_weighted: "位置加权",
+        cross_scouting_dashboard_n_gaps: "缺口数",
+        cross_scouting_dashboard_n_matched: "已匹配位置",
+        cross_scouting_dashboard_export: "导出仪表盘",
         cross_scouting_export_csv: "导出 CSV",
         cross_scouting_export_json: "导出 JSON",
         cross_scouting_export_no_data: "无可导出数据",
@@ -1330,6 +1335,11 @@ const i18n = {
         cross_scouting_dashboard_depth: "Depth",
         cross_scouting_dashboard_targets: "Gap targets",
         cross_scouting_dashboard_style: "Style match",
+        cross_scouting_dashboard_max_positions: "Max positions",
+        cross_scouting_dashboard_weighted: "Position weighted",
+        cross_scouting_dashboard_n_gaps: "Gaps",
+        cross_scouting_dashboard_n_matched: "Matched positions",
+        cross_scouting_dashboard_export: "Export dashboard",
         cross_scouting_export_csv: "Export CSV",
         cross_scouting_export_json: "Export JSON",
         cross_scouting_export_no_data: "No data to export",
@@ -2834,6 +2844,30 @@ async function fetchScoutingStyleMatch(team, positionGroup, season, minMinutes, 
     } catch (err) {
         console.warn("Failed to fetch scouting style match:", err);
         return { status: "fetch_failed", team, position_group: positionGroup, candidates: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchScoutingDashboard(team, season, minMinutes, topN, excludeSameLeague, maxPositions, usePositionWeights) {
+    if (!team) return { status: "no_data", team };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (minMinutes !== undefined && minMinutes !== null && !Number.isNaN(Number(minMinutes))) {
+        params.set("min_player_minutes", String(minMinutes));
+    }
+    if (topN !== undefined && topN !== null && !Number.isNaN(Number(topN))) {
+        params.set("top_n", String(topN));
+    }
+    params.set("exclude_same_league", excludeSameLeague ? "true" : "false");
+    if (maxPositions !== undefined && maxPositions !== null && !Number.isNaN(Number(maxPositions))) {
+        params.set("max_positions", String(maxPositions));
+    }
+    if (usePositionWeights) params.set("use_position_weights", "true");
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/scouting-dashboard`, { params });
+        return data || { status: "no_data", team, gap_targets: [], position_style_matches: [] };
+    } catch (err) {
+        console.warn("Failed to fetch scouting dashboard:", err);
+        return { status: "fetch_failed", team, gap_targets: [], position_style_matches: [], error: "fetch_failed" };
     }
 }
 
@@ -13370,10 +13404,12 @@ function initCrossScoutingControls() {
             const season = (document.getElementById("cross-scouting-season")?.value || "").trim();
             const minMinutes = Number(document.getElementById("cross-scouting-min-minutes")?.value || 500);
             const topN = Number(document.getElementById("cross-scouting-top-n")?.value || 10);
+            const maxPositions = Number(document.getElementById("cross-scouting-dashboard-max-positions")?.value || 3);
+            const usePositionWeights = document.getElementById("cross-scouting-dashboard-weighted")?.checked ?? false;
             if (!team) return;
             dashboardBtn.disabled = true;
             dashboardBtn.textContent = "...";
-            _renderCrossScoutingDashboard(team, season, minMinutes, topN).finally(() => {
+            _renderCrossScoutingDashboard(team, season, minMinutes, topN, maxPositions, usePositionWeights).finally(() => {
                 dashboardBtn.disabled = false;
                 dashboardBtn.textContent = t("cross_scouting_dashboard_btn");
             });
@@ -13399,7 +13435,7 @@ function _crossScoutingStatusText(status, z) {
 }
 
 // Module-level cache for cross-scouting results (used by export buttons).
-const _lastCrossScoutingData = { depth: null, targets: null, style: null };
+const _lastCrossScoutingData = { depth: null, targets: null, style: null, dashboard: null };
 
 // Compare tray for cross-scouting candidate comparison (max 6 players,
 // raised from 2 in Round 84 to leverage the /players/compare-multi API).
@@ -13407,15 +13443,30 @@ const _CROSS_SCOUTING_COMPARE_MAX = 6;
 let _crossScoutingCompareTray = [];
 
 function _csFindCandidateByKey(key, type) {
-    const data = type === "targets" ? _lastCrossScoutingData.targets : _lastCrossScoutingData.style;
-    if (!data || data.status !== "ok") return null;
+    let data;
     if (type === "targets") {
+        data = _lastCrossScoutingData.targets;
+    } else if (type === "dashboard") {
+        data = _lastCrossScoutingData.dashboard;
+    } else {
+        data = _lastCrossScoutingData.style;
+    }
+    if (!data || data.status !== "ok") return null;
+    if (type === "targets" || type === "dashboard") {
         for (const g of data.gap_targets || []) {
             for (const c of g.candidates || []) {
                 if (String(c.player_name || "") === key) return c;
             }
         }
-    } else {
+    }
+    if (type === "dashboard") {
+        for (const m of data.position_style_matches || []) {
+            for (const c of m.candidates || []) {
+                if (String(c.player_name || "") === key) return c;
+            }
+        }
+    }
+    if (type === "style") {
         for (const c of data.candidates || []) {
             if (String(c.player_name || "") === key) return c;
         }
@@ -13709,6 +13760,57 @@ function _exportCrossScoutingCSV(type) {
                 c.style_similarity != null ? String(c.style_similarity) : "",
             ]);
         }
+    } else if (type === "dashboard") {
+        // Gap targets section
+        lines.push(["# Gap targets"]);
+        lines.push(["position_group", "gap_type", "threshold", "depth_gap", "player_name", "team", "league", "optimized_score", "minutes", "percentile_in_league"]);
+        for (const g of data.gap_targets || []) {
+            for (const c of g.candidates || []) {
+                lines.push([
+                    g.position_group || "",
+                    g.gap_type || "",
+                    g.threshold != null ? String(g.threshold) : "",
+                    g.depth_gap != null ? Number(g.depth_gap).toFixed(4) : "",
+                    c.player_name || "",
+                    c.team || "",
+                    c.league || "",
+                    c.optimized_score != null ? String(c.optimized_score) : "",
+                    c.minutes != null ? String(c.minutes) : "",
+                    c.percentile_in_league != null ? String(c.percentile_in_league) : "",
+                ]);
+            }
+            if (!(g.candidates || []).length) {
+                lines.push([
+                    g.position_group || "",
+                    g.gap_type || "",
+                    g.threshold != null ? String(g.threshold) : "",
+                    g.depth_gap != null ? Number(g.depth_gap).toFixed(4) : "",
+                    "", "", "", "", "", "",
+                ]);
+            }
+        }
+        lines.push([]);
+        // Per-position style match section
+        lines.push(["# Per-position style matches"]);
+        lines.push(["position_group", "target_player", "target_team", "player_name", "team", "league", "optimized_score", "minutes", "style_similarity"]);
+        for (const m of data.position_style_matches || []) {
+            const pos = m.position_group || "";
+            const targetName = m.target_player?.player_name || m.target_player?.name || "";
+            const targetTeam = m.target_player?.team || "";
+            for (const c of m.candidates || []) {
+                lines.push([
+                    pos,
+                    targetName,
+                    targetTeam,
+                    c.player_name || "",
+                    c.team || "",
+                    c.league || "",
+                    c.optimized_score != null ? String(c.optimized_score) : "",
+                    c.minutes != null ? String(c.minutes) : "",
+                    c.style_similarity != null ? Number(c.style_similarity).toFixed(4) : "",
+                ]);
+            }
+        }
     }
 
     lines.push([]);
@@ -13979,14 +14081,14 @@ async function _renderScoutingStyleMatch(team, positionGroup, season, minMinutes
     }
 }
 
-// ── Scouting dashboard: parallel aggregation of targets + style match ────
+// ── Scouting dashboard: unified multi-position aggregation ──────────────
 //
-// Round 84 frontend-only feature. Calls fetchScoutingTargets and
-// fetchScoutingStyleMatch(team, "CM", ...) in parallel and renders a
-// unified summary card. CM is used as the default style-match position
-// because it is the most universally staffed position group; users who
-// want other positions should use the dedicated style-match panel above.
-async function _renderCrossScoutingDashboard(team, season, minMinutes, topN) {
+// Round 85 backend-backed feature. Calls the unified
+// /teams/{team}/scouting-dashboard endpoint, which fans out gap-target
+// detection + per-position style match across the team's top gap
+// positions in a single request (replacing the Round 84 frontend-only
+// parallel fetch of targets + a single CM style match).
+async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, maxPositions, usePositionWeights) {
     const wrap = document.getElementById("cross-scouting-dashboard-result");
     if (!wrap) return;
     const z = appState.lang === "zh";
@@ -13994,25 +14096,23 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN) {
     wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("cross_scouting_dashboard_loading"))}</p>`;
 
     const excludeSameLeague = true;
-    const defaultPos = "CM";
+    const data = await fetchScoutingDashboard(
+        team, season, minMinutes, topN, excludeSameLeague, maxPositions, usePositionWeights,
+    );
+    _lastCrossScoutingData.dashboard = data;
 
-    const [targetsData, styleData] = await Promise.all([
-        fetchScoutingTargets(team, season, minMinutes, topN, excludeSameLeague),
-        fetchScoutingStyleMatch(team, defaultPos, season, minMinutes, topN, excludeSameLeague, false),
-    ]);
-
-    _lastCrossScoutingData.targets = targetsData;
-    _lastCrossScoutingData.style = styleData;
-
-    const targetsOk = targetsData && targetsData.status === "ok";
-    const styleOk = styleData && styleData.status === "ok";
-    if (!targetsOk && !styleOk) {
-        wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("cross_scouting_dashboard_no_data"))}</p>`;
+    if (!data || data.status !== "ok") {
+        wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data?.disclaimer || t("cross_scouting_dashboard_no_data"))}</p>`;
         return;
     }
 
+    const gapTargets = data.gap_targets || [];
+    const positionMatches = data.position_style_matches || [];
+    const nGaps = data.n_gaps ?? gapTargets.length;
+    const nMatched = data.n_positions_matched ?? positionMatches.length;
+    const weighted = data.use_position_weights === true;
+
     // ── Targets summary: top 3 gap positions with their top candidate ──
-    const gapTargets = (targetsData && targetsData.gap_targets) || [];
     const targetRows = gapTargets.slice(0, 3).map((g) => {
         const pos = escapeHtml(g.position_group || "—");
         const gap = g.depth_gap != null ? Number(g.depth_gap).toFixed(2) : "—";
@@ -14028,23 +14128,44 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN) {
         </tr>`;
     }).join("");
 
-    // ── Style summary: top 3 CM candidates by style similarity ──
-    const styleCandidates = (styleData && styleData.candidates) || [];
-    const styleRows = styleCandidates.slice(0, 3).map((c) => {
-        const sim = c.style_similarity != null ? Number(c.style_similarity).toFixed(4) : "—";
-        const cls = Number(c.style_similarity) >= 0.9 ? "status-high" : Number(c.style_similarity) >= 0.7 ? "status-medium" : "status-low";
-        const name = escapeHtml(c.player_name || "—");
-        const team = escapeHtml(c.team || "");
-        const league = escapeHtml(c.league || "");
-        return `<tr>
-            <td><strong>${name}</strong></td>
-            <td>${team}</td>
-            <td>${league}</td>
-            <td><span class="status-pill ${cls}">${escapeHtml(sim)}</span></td>
-        </tr>`;
+    // ── Per-position style match sections (top 3 candidates each) ──
+    const styleSections = positionMatches.map((m) => {
+        const pos = escapeHtml(m.position_group || "—");
+        const target = m.target_player || {};
+        const targetName = escapeHtml(target.name || target.player_name || "—");
+        const targetTeam = escapeHtml(target.team || "");
+        const candidates = (m.candidates || []).slice(0, 3);
+        const rows = candidates.map((c) => {
+            const sim = c.style_similarity != null ? Number(c.style_similarity).toFixed(4) : "—";
+            const cls = Number(c.style_similarity) >= 0.9 ? "status-high" : Number(c.style_similarity) >= 0.7 ? "status-medium" : "status-low";
+            const name = escapeHtml(c.player_name || "—");
+            const cTeam = escapeHtml(c.team || "");
+            const cLeague = escapeHtml(c.league || "");
+            return `<tr>
+                <td><strong>${name}</strong></td>
+                <td>${cTeam}</td>
+                <td>${cLeague}</td>
+                <td><span class="status-pill ${cls}">${escapeHtml(sim)}</span></td>
+            </tr>`;
+        }).join("");
+        const targetLine = `${escapeHtml(t("cross_scouting_dashboard_style"))} · ${pos}`
+            + ` <span style="color:var(--text-muted);font-size:0.75rem">(${escapeHtml(z ? "参照" : "ref")}: ${targetName}${targetTeam ? ` · ${targetTeam}` : ""})</span>`;
+        return [
+            `<div style="flex:1;min-width:240px">`,
+            `<h4 style="margin:0 0 0.3rem;font-size:0.88rem">${targetLine}</h4>`,
+            rows
+                ? `<div class="table-scroll"><table class="data-table"><thead><tr>
+                    <th>${escapeHtml(t("cross_scouting_col_player"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_team"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_league"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_sim"))}</th>
+                   </tr></thead><tbody>${rows}</tbody></table></div>`
+                : `<p style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("cross_scouting_no_candidates"))}</p>`,
+            `</div>`,
+        ].join("");
     }).join("");
 
-    const targetsSection = targetsOk ? [
+    const targetsSection = gapTargets.length ? [
         `<div style="flex:1;min-width:240px">`,
         `<h4 style="margin:0 0 0.3rem;font-size:0.88rem">${escapeHtml(t("cross_scouting_dashboard_targets"))}</h4>`,
         targetRows
@@ -14058,30 +14179,32 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN) {
         `</div>`,
     ].join("") : "";
 
-    const styleSection = styleOk ? [
-        `<div style="flex:1;min-width:240px">`,
-        `<h4 style="margin:0 0 0.3rem;font-size:0.88rem">${escapeHtml(t("cross_scouting_dashboard_style"))} · ${escapeHtml(defaultPos)}</h4>`,
-        styleRows
-            ? `<div class="table-scroll"><table class="data-table"><thead><tr>
-                <th>${escapeHtml(t("cross_scouting_col_player"))}</th>
-                <th>${escapeHtml(t("cross_scouting_col_team"))}</th>
-                <th>${escapeHtml(t("cross_scouting_col_league"))}</th>
-                <th>${escapeHtml(t("cross_scouting_col_sim"))}</th>
-               </tr></thead><tbody>${styleRows}</tbody></table></div>`
-            : `<p style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("cross_scouting_no_candidates"))}</p>`,
-        `</div>`,
-    ].join("") : "";
+    const badgeStyle = "display:inline-block;padding:0.1rem 0.4rem;border-radius:0.3rem;font-size:0.72rem;background:var(--surface-alt);color:var(--text-muted);margin-left:0.4rem";
+    const badges = [
+        `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_n_gaps"))}: ${escapeHtml(String(nGaps))}</span>`,
+        `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_n_matched"))}: ${escapeHtml(String(nMatched))}</span>`,
+        weighted ? `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_weighted"))}</span>` : "",
+    ].join("");
 
     wrap.innerHTML = [
-        `<div style="padding:0.3rem 0 0.5rem">`,
+        `<div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.3rem 0 0.5rem;flex-wrap:wrap">`,
+        `<div>`,
         `<h3 style="margin:0;font-size:0.95rem">${escapeHtml(t("cross_scouting_dashboard_title"))}: ${escapeHtml(team)}</h3>`,
+        `<div style="margin-top:0.2rem">${badges}</div>`,
+        `</div>`,
+        `<div style="display:flex;gap:0.3rem">`,
+        `<button class="text-button" data-cs-export="dashboard-csv" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
+        `<button class="text-button" data-cs-export="dashboard-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
+        `</div>`,
         `</div>`,
         `<div style="display:flex;gap:var(--space);flex-wrap:wrap;padding:0 0 0.4rem">`,
         targetsSection,
-        styleSection,
+        styleSections,
         `</div>`,
         `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.3rem">${escapeHtml(z ? "仪表盘为聚合视图，完整数据请使用上方专属面板；不构成转会建议。" : "Dashboard is an aggregate view; use the dedicated panels above for full data. Not a transfer recommendation.")}</p>`,
     ].join("");
+
+    _wireCrossScoutingExportButtons(wrap);
 }
 
 // ── Risers / Decliners watchlist (career trajectory slope scan) ────────────

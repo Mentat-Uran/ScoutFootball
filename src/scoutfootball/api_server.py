@@ -105,6 +105,7 @@ from scoutfootball.api import (
     get_riser_decliner_watchlist,
     get_scenario_stress_test,
     get_scoreline_calibration,
+    get_scouting_dashboard,
     get_scouting_target_style_match,
     get_scouting_targets,
     get_season_projection,
@@ -1297,6 +1298,26 @@ def create_app() -> FastAPI:
             min_player_minutes=min_player_minutes,
             top_n=top_n,
             exclude_same_league=exclude_same_league,
+            use_position_weights=use_position_weights,
+        )
+
+    @app.get("/teams/{team}/scouting-dashboard")
+    def team_scouting_dashboard(
+        team: str,
+        season: str | None = None,
+        min_player_minutes: float = Query(500.0, ge=0.0),
+        top_n: int = Query(10, ge=1, le=50),
+        exclude_same_league: bool = True,
+        max_positions: int = Query(3, ge=1, le=8),
+        use_position_weights: bool = False,
+    ):
+        return get_scouting_dashboard(
+            team,
+            season=season,
+            min_player_minutes=min_player_minutes,
+            top_n=top_n,
+            exclude_same_league=exclude_same_league,
+            max_positions=max_positions,
             use_position_weights=use_position_weights,
         )
 
