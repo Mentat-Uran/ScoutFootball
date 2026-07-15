@@ -574,7 +574,7 @@ class TestShortlistProvenanceSecurity:
         js = _read_app_js()
         idx = js.find("function _renderReasonCodePills(")
         assert idx > 0, "_renderReasonCodePills function not found"
-        func_body = js[idx : idx + 500]
+        func_body = js[idx : idx + 900]
         assert "escapeHtml" in func_body, (
             "reason code pills must escape each code with escapeHtml"
         )
@@ -644,6 +644,170 @@ class TestShortlistProvenanceSecurity:
         )
         assert ".join(\"|\")" in js or ".join('|')" in js, (
             "reason_codes must be pipe-joined for CSV export"
+        )
+
+
+# ===== 14b. Round 88: shortlist provenance management security ==============
+class TestShortlistProvenanceManagement:
+    """Verify per-source removal, source summary strip, and filter wiring
+    use proper escaping and safe event handlers."""
+
+    def test_render_reason_code_pills_accepts_list_type(self):
+        """_renderReasonCodePills must accept a listType parameter."""
+        js = _read_app_js()
+        assert "function _renderReasonCodePills(entry, listType)" in js, (
+            "_renderReasonCodePills must accept a listType parameter"
+        )
+
+    def test_pill_x_button_uses_escape_attr(self):
+        """The × button attributes must use escapeAttr for dynamic values."""
+        js = _read_app_js()
+        idx = js.find("function _renderReasonCodePills(")
+        assert idx > 0
+        func_body = js[idx : idx + 900]
+        assert 'data-reason-code="${escapeAttr(code)}"' in func_body, (
+            "× button data-reason-code must use escapeAttr"
+        )
+        assert 'data-reason-player="${escapeAttr(playerKey)}"' in func_body, (
+            "× button data-reason-player must use escapeAttr"
+        )
+        assert 'data-reason-list="${escapeAttr(listType)}"' in func_body, (
+            "× button data-reason-list must use escapeAttr"
+        )
+
+    def test_pill_x_button_title_uses_escape_attr(self):
+        """The × button title must use escapeAttr for the i18n string."""
+        js = _read_app_js()
+        idx = js.find("function _renderReasonCodePills(")
+        assert idx > 0
+        func_body = js[idx : idx + 900]
+        assert 'title="${escapeAttr(t("remove_source"))}"' in func_body, (
+            "× button title must use escapeAttr for i18n string"
+        )
+
+    def test_pill_code_text_uses_escape_html(self):
+        """The pill code text must use escapeHtml (not escapeAttr)."""
+        js = _read_app_js()
+        idx = js.find("function _renderReasonCodePills(")
+        assert idx > 0
+        func_body = js[idx : idx + 900]
+        assert "${escapeHtml(code)}" in func_body, (
+            "pill code text must use escapeHtml"
+        )
+
+    def test_source_summary_strip_uses_escape_html(self):
+        """_renderSourceSummary must escape code text with escapeHtml."""
+        js = _read_app_js()
+        idx = js.find("function _renderSourceSummary(")
+        assert idx > 0, "_renderSourceSummary function not found"
+        func_body = js[idx : idx + 1200]
+        assert "escapeHtml" in func_body, (
+            "source summary must escape code text with escapeHtml"
+        )
+        assert "escapeAttr" in func_body, (
+            "source summary must escape data-source-filter with escapeAttr"
+        )
+
+    def test_source_summary_uses_escape_attr_for_filter(self):
+        """data-source-filter attribute must use escapeAttr."""
+        js = _read_app_js()
+        idx = js.find("function _renderSourceSummary(")
+        assert idx > 0
+        func_body = js[idx : idx + 1200]
+        assert 'data-source-filter="${escapeAttr(code)}"' in func_body, (
+            "data-source-filter must use escapeAttr"
+        )
+        assert 'data-source-list="${escapeAttr(listType)}"' in func_body, (
+            "data-source-list must use escapeAttr"
+        )
+
+    def test_wire_reason_pill_removals_calls_toggle(self):
+        """_wireReasonPillRemovals must call toggle functions."""
+        js = _read_app_js()
+        idx = js.find("function _wireReasonPillRemovals(")
+        assert idx > 0, "_wireReasonPillRemovals function not found"
+        func_body = js[idx : idx + 800]
+        assert "togglePlayerShortlist" in func_body, (
+            "_wireReasonPillRemovals must call togglePlayerShortlist"
+        )
+        assert "togglePlayerWatchlist" in func_body, (
+            "_wireReasonPillRemovals must call togglePlayerWatchlist"
+        )
+
+    def test_wire_reason_pill_removals_no_eval(self):
+        """_wireReasonPillRemovals must not use eval or innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function _wireReasonPillRemovals(")
+        assert idx > 0
+        func_body = js[idx : idx + 800]
+        assert "eval(" not in func_body, (
+            "_wireReasonPillRemovals must not use eval"
+        )
+        assert ".innerHTML" not in func_body, (
+            "_wireReasonPillRemovals must not use innerHTML"
+        )
+
+    def test_wire_source_summary_no_eval(self):
+        """_wireSourceSummary must not use eval or innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function _wireSourceSummary(")
+        assert idx > 0
+        func_body = js[idx : idx + 800]
+        assert "eval(" not in func_body, (
+            "_wireSourceSummary must not use eval"
+        )
+        assert ".innerHTML" not in func_body, (
+            "_wireSourceSummary must not use innerHTML"
+        )
+
+    def test_filter_by_source_function_defined(self):
+        """_filterBySource helper must be defined."""
+        js = _read_app_js()
+        assert "function _filterBySource(" in js, (
+            "_filterBySource helper must be defined"
+        )
+
+    def test_compute_source_counts_function_defined(self):
+        """_computeSourceCounts helper must be defined."""
+        js = _read_app_js()
+        assert "function _computeSourceCounts(" in js, (
+            "_computeSourceCounts helper must be defined"
+        )
+
+    def test_source_filter_state_variables_defined(self):
+        """Module-level filter state arrays must be defined."""
+        js = _read_app_js()
+        assert "let _shortlistSourceFilter" in js, (
+            "_shortlistSourceFilter state must be defined"
+        )
+        assert "let _watchlistSourceFilter" in js, (
+            "_watchlistSourceFilter state must be defined"
+        )
+
+    def test_renderscout_calls_wire_functions(self):
+        """renderScouting must call _wireSourceSummary and _wireReasonPillRemovals."""
+        js = _read_app_js()
+        assert '_wireSourceSummary(document.getElementById("watchlist")' in js, (
+            "renderScouting must wire source summary for watchlist"
+        )
+        assert '_wireSourceSummary(document.getElementById("shortlist")' in js, (
+            "renderScouting must wire source summary for shortlist"
+        )
+        assert '_wireReasonPillRemovals(document.getElementById("watchlist")' in js, (
+            "renderScouting must wire pill removals for watchlist"
+        )
+        assert '_wireReasonPillRemovals(document.getElementById("shortlist")' in js, (
+            "renderScouting must wire pill removals for shortlist"
+        )
+
+    def test_renderscout_passes_list_type_to_pills(self):
+        """renderScouting must pass listType to _renderReasonCodePills."""
+        js = _read_app_js()
+        assert '_renderReasonCodePills(player, "watchlist")' in js, (
+            "watchlist render must pass 'watchlist' listType to pills"
+        )
+        assert '_renderReasonCodePills(player, "shortlist")' in js, (
+            "shortlist render must pass 'shortlist' listType to pills"
         )
 
 

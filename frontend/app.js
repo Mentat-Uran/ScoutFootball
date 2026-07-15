@@ -225,6 +225,10 @@ const i18n = {
         cross_scouting_dashboard_batch_add: "批量加入短名单",
         cross_scouting_dashboard_batch_added: "已加入 {n} 名候选",
         cross_scouting_dashboard_batch_none: "无可加入的新候选",
+        all_sources: "全部来源",
+        remove_source: "移除此来源",
+        source_filter_hint: "点击来源筛选",
+        no_source_filter: "无来源筛选",
         cross_scouting_export_csv: "导出 CSV",
         cross_scouting_export_json: "导出 JSON",
         cross_scouting_export_no_data: "无可导出数据",
@@ -1346,6 +1350,10 @@ const i18n = {
         cross_scouting_dashboard_batch_add: "Batch add to shortlist",
         cross_scouting_dashboard_batch_added: "Added {n} candidates",
         cross_scouting_dashboard_batch_none: "No new candidates to add",
+        all_sources: "All sources",
+        remove_source: "Remove this source",
+        source_filter_hint: "Click a source to filter",
+        no_source_filter: "No source filter",
         cross_scouting_export_csv: "Export CSV",
         cross_scouting_export_json: "Export JSON",
         cross_scouting_export_no_data: "No data to export",
@@ -9693,67 +9701,81 @@ function renderScouting() {
         }
     }
 
-    document.getElementById("watchlist").innerHTML = combinedWatchlist.length > 0 ? combinedWatchlist.map((player) => {
-        const pName = player.player_name || player.name || "";
-        const conf = (player.confidence_level || player.confidence || "LOW").toUpperCase();
-        const wlNote = watchlistNotes[pName] || "";
-        return `
-        <div class="watch-card">
-            <div>
-                <strong>${escapeHtml(pName)}</strong>
-                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player)}
-            </div>
-            <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
-            <div class="watch-card-extra">
-                ${wlNote ? `<div class="scout-note-display">\u25B8 ${escapeHtml(wlNote)}</div>` : ""}
-                <textarea class="scout-note-textarea" data-wl-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(wlNote)}</textarea>
-            </div>
-        </div>`;
-    }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
+    document.getElementById("watchlist").innerHTML = (() => {
+        const summary = _renderSourceSummary(combinedWatchlist, _watchlistSourceFilter, "watchlist");
+        const filtered = _filterBySource(combinedWatchlist, _watchlistSourceFilter);
+        const body = filtered.length > 0 ? filtered.map((player) => {
+            const pName = player.player_name || player.name || "";
+            const conf = (player.confidence_level || player.confidence || "LOW").toUpperCase();
+            const wlNote = watchlistNotes[pName] || "";
+            return `
+            <div class="watch-card">
+                <div>
+                    <strong>${escapeHtml(pName)}</strong>
+                    <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player, "watchlist")}
+                </div>
+                <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
+                <div class="watch-card-extra">
+                    ${wlNote ? `<div class="scout-note-display">\u25B8 ${escapeHtml(wlNote)}</div>` : ""}
+                    <textarea class="scout-note-textarea" data-wl-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(wlNote)}</textarea>
+                </div>
+            </div>`;
+        }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
+        return summary + body;
+    })();
+    _wireSourceSummary(document.getElementById("watchlist"), "watchlist");
+    _wireReasonPillRemovals(document.getElementById("watchlist"), "watchlist");
 
     // Shortlist dossiers: local-only decision context with a stable player key.
     document.getElementById("shortlist-count").textContent = String(combinedShortlist.length);
-    document.getElementById("shortlist").innerHTML = combinedShortlist.length > 0 ? combinedShortlist.map((player) => {
-        const pName = player.player_name || player.name || "";
-        const conf = (player.confidence_level || player.confidence || "HIGH").toUpperCase();
-        const dossierKey = scoutingPlayerKey(player);
-        const dossier = getShortlistDossier(player);
-        const note = dossier.rationale;
-        const zh = appState.lang === "zh";
-        return `
-        <div class="watch-card">
-            <div>
-                <strong>${escapeHtml(pName)}</strong>
-                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player)}
-            </div>
-            <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
-            <div class="watch-card-extra">
-                <div class="scout-dossier-grid" data-shortlist-dossier="${escapeAttr(dossierKey)}">
-                    <label><span>${escapeHtml(zh ? "优先级" : "Priority")}</span>
-                        <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="priority">
-                            <option value="urgent"${dossier.priority === "urgent" ? " selected" : ""}>${escapeHtml(zh ? "紧急" : "Urgent")}</option>
-                            <option value="standard"${dossier.priority === "standard" ? " selected" : ""}>${escapeHtml(zh ? "标准" : "Standard")}</option>
-                            <option value="monitor"${dossier.priority === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "持续观察" : "Monitor")}</option>
-                        </select>
-                    </label>
-                    <label><span>${escapeHtml(zh ? "建议" : "Recommendation")}</span>
-                        <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="recommendation">
-                            <option value="target"${dossier.recommendation === "target" ? " selected" : ""}>${escapeHtml(zh ? "重点引进" : "Target")}</option>
-                            <option value="monitor"${dossier.recommendation === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "继续观察" : "Monitor")}</option>
-                            <option value="decline"${dossier.recommendation === "decline" ? " selected" : ""}>${escapeHtml(zh ? "暂不推进" : "Decline")}</option>
-                        </select>
-                    </label>
-                    <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "目标角色" : "Target role")}</span>
-                        <input class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="target_role" maxlength="120" value="${escapeAttr(dossier.target_role)}" placeholder="${escapeAttr(zh ? "例如：高压体系的右侧中卫" : "e.g. right-sided centre-back in a high press")}">
-                    </label>
-                    <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "理由与风险" : "Rationale and risks")}</span>
-                        <textarea class="scout-note-textarea scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="rationale" maxlength="2000" rows="3" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(note)}</textarea>
-                    </label>
+    document.getElementById("shortlist").innerHTML = (() => {
+        const summary = _renderSourceSummary(combinedShortlist, _shortlistSourceFilter, "shortlist");
+        const filtered = _filterBySource(combinedShortlist, _shortlistSourceFilter);
+        const body = filtered.length > 0 ? filtered.map((player) => {
+            const pName = player.player_name || player.name || "";
+            const conf = (player.confidence_level || player.confidence || "HIGH").toUpperCase();
+            const dossierKey = scoutingPlayerKey(player);
+            const dossier = getShortlistDossier(player);
+            const note = dossier.rationale;
+            const zh = appState.lang === "zh";
+            return `
+            <div class="watch-card">
+                <div>
+                    <strong>${escapeHtml(pName)}</strong>
+                    <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player, "shortlist")}
                 </div>
-                <button class="text-button scout-tactical-role-btn" data-tactical-role="${escapeAttr(pName)}" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem;margin-top:0.2rem">\u25C6 ${escapeHtml(t("generate_tactical_role"))}</button>
-            </div>
-        </div>`;
-    }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
+                <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
+                <div class="watch-card-extra">
+                    <div class="scout-dossier-grid" data-shortlist-dossier="${escapeAttr(dossierKey)}">
+                        <label><span>${escapeHtml(zh ? "优先级" : "Priority")}</span>
+                            <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="priority">
+                                <option value="urgent"${dossier.priority === "urgent" ? " selected" : ""}>${escapeHtml(zh ? "紧急" : "Urgent")}</option>
+                                <option value="standard"${dossier.priority === "standard" ? " selected" : ""}>${escapeHtml(zh ? "标准" : "Standard")}</option>
+                                <option value="monitor"${dossier.priority === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "持续观察" : "Monitor")}</option>
+                            </select>
+                        </label>
+                        <label><span>${escapeHtml(zh ? "建议" : "Recommendation")}</span>
+                            <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="recommendation">
+                                <option value="target"${dossier.recommendation === "target" ? " selected" : ""}>${escapeHtml(zh ? "重点引进" : "Target")}</option>
+                                <option value="monitor"${dossier.recommendation === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "继续观察" : "Monitor")}</option>
+                                <option value="decline"${dossier.recommendation === "decline" ? " selected" : ""}>${escapeHtml(zh ? "暂不推进" : "Decline")}</option>
+                            </select>
+                        </label>
+                        <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "目标角色" : "Target role")}</span>
+                            <input class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="target_role" maxlength="120" value="${escapeAttr(dossier.target_role)}" placeholder="${escapeAttr(zh ? "例如：高压体系的右侧中卫" : "e.g. right-sided centre-back in a high press")}">
+                        </label>
+                        <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "理由与风险" : "Rationale and risks")}</span>
+                            <textarea class="scout-note-textarea scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="rationale" maxlength="2000" rows="3" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(note)}</textarea>
+                        </label>
+                    </div>
+                    <button class="text-button scout-tactical-role-btn" data-tactical-role="${escapeAttr(pName)}" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem;margin-top:0.2rem">\u25C6 ${escapeHtml(t("generate_tactical_role"))}</button>
+                </div>
+            </div>`;
+        }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
+        return summary + body;
+    })();
+    _wireSourceSummary(document.getElementById("shortlist"), "shortlist");
+    _wireReasonPillRemovals(document.getElementById("shortlist"), "shortlist");
 
     updateSnapshotStatus();
     renderScoutingWorkspaceStatus();
@@ -23285,12 +23307,104 @@ function _normalizeEntryReasonCodes(entry) {
 // Round 87: render reason codes as small pills so the user can see at a
 // glance which sources recommended a player. Each code is escaped; codes
 // are deduped and sorted by first-seen order (the order in the array).
-function _renderReasonCodePills(entry) {
+//
+// Round 88: when `listType` ("shortlist"|"watchlist") is provided, each pill
+// gets a × button that removes just that source from the entry (calling the
+// toggle function with the specific reason code). Entries with only one
+// source are removed entirely when their sole × is clicked.
+function _renderReasonCodePills(entry, listType) {
     const codes = _entryReasonCodes(entry);
     if (codes.length === 0) return "";
-    return codes.map((code) =>
-        `<span class="status-pill status-low" style="margin-left:0.25rem;font-size:0.65rem">${escapeHtml(code)}</span>`
-    ).join("");
+    const playerKey = entry.key || entry.player_name || entry.name || "";
+    return codes.map((code) => {
+        const close = listType
+            ? `<button class="reason-pill-x" data-reason-remove="1" data-reason-code="${escapeAttr(code)}" data-reason-list="${escapeAttr(listType)}" data-reason-player="${escapeAttr(playerKey)}" type="button" title="${escapeAttr(t("remove_source"))}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 0.15rem;font-size:0.7rem;line-height:1">&times;</button>`
+            : "";
+        return `<span class="status-pill status-low reason-pill" style="margin-left:0.25rem;font-size:0.65rem;display:inline-flex;align-items:center;gap:0.1rem">${escapeHtml(code)}${close}</span>`;
+    }).join("");
+}
+
+// Round 88: source summary strip + click-to-filter for shortlist/watchlist.
+//
+// Module-level filter state — arrays of reason-code strings. When non-empty,
+// only entries with at least one matching code are shown. Clicking a chip
+// toggles the code in the array; "All" clears it.
+let _shortlistSourceFilter = [];
+let _watchlistSourceFilter = [];
+
+function _computeSourceCounts(entries) {
+    const counts = {};
+    for (const entry of entries) {
+        const codes = _entryReasonCodes(entry);
+        for (const code of codes) {
+            counts[code] = (counts[code] || 0) + 1;
+        }
+    }
+    return counts;
+}
+
+function _filterBySource(entries, filterArr) {
+    if (!filterArr || filterArr.length === 0) return entries;
+    return entries.filter((entry) => {
+        const codes = _entryReasonCodes(entry);
+        return codes.some((c) => filterArr.includes(c));
+    });
+}
+
+function _renderSourceSummary(entries, filterArr, listType) {
+    const counts = _computeSourceCounts(entries);
+    const codes = Object.keys(counts).sort();
+    if (codes.length === 0) return "";
+    const allActive = filterArr.length === 0;
+    let html = '<div class="source-summary-strip" style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-bottom:0.5rem;align-items:center">';
+    html += `<button class="status-pill ${allActive ? "status-clickable active" : "status-clickable"}" data-source-filter="__all__" data-source-list="${escapeAttr(listType)}" type="button" style="font-size:0.65rem">${escapeHtml(t("all_sources"))} (${entries.length})</button>`;
+    for (const code of codes) {
+        const active = filterArr.includes(code);
+        html += `<button class="status-pill ${active ? "status-clickable active" : "status-clickable"}" data-source-filter="${escapeAttr(code)}" data-source-list="${escapeAttr(listType)}" type="button" style="font-size:0.65rem">${escapeHtml(code)} (${counts[code]})</button>`;
+    }
+    html += "</div>";
+    return html;
+}
+
+function _wireSourceSummary(rootEl, listType) {
+    const btns = rootEl.querySelectorAll(`button[data-source-filter][data-source-list="${listType}"]`);
+    btns.forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const code = btn.getAttribute("data-source-filter") || "";
+            const filterArr = listType === "shortlist" ? _shortlistSourceFilter : _watchlistSourceFilter;
+            if (code === "__all__") {
+                filterArr.length = 0;
+            } else {
+                const idx = filterArr.indexOf(code);
+                if (idx >= 0) {
+                    filterArr.splice(idx, 1);
+                } else {
+                    filterArr.push(code);
+                }
+            }
+            renderScouting();
+        });
+    });
+}
+
+function _wireReasonPillRemovals(rootEl, listType) {
+    const btns = rootEl.querySelectorAll(`button[data-reason-remove="1"][data-reason-list="${listType}"]`);
+    btns.forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const code = btn.getAttribute("data-reason-code") || "";
+            const playerKey = btn.getAttribute("data-reason-player") || "";
+            const player = { key: playerKey, reason_code: code };
+            if (listType === "shortlist") {
+                togglePlayerShortlist(player);
+            } else if (listType === "watchlist") {
+                togglePlayerWatchlist(player);
+            }
+            renderScouting();
+        });
+    });
 }
 
 function togglePlayerWatchlist(player) {
