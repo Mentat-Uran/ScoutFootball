@@ -236,6 +236,19 @@ const i18n = {
         shortlist_compare_loading: "正在对比…",
         shortlist_compare_unavailable: "对比数据不可用",
         shortlist_compare_failed: "对比请求失败",
+        shortlist_provenance_log_title: "来源审计日志",
+        shortlist_provenance_empty: "暂无来源事件",
+        shortlist_provenance_count: "{n} 条来源事件",
+        shortlist_provenance_col_time: "时间",
+        shortlist_provenance_col_player: "球员",
+        shortlist_provenance_col_action: "操作",
+        shortlist_provenance_col_code: "来源码",
+        shortlist_provenance_col_result: "结果来源码",
+        shortlist_provenance_action_merged: "合并",
+        shortlist_provenance_action_removed: "移除",
+        shortlist_provenance_clear: "清空日志",
+        shortlist_reset_ui_state: "重置界面状态",
+        shortlist_reset_ui_state_title: "清除筛选与对比选择",
         cross_scouting_export_csv: "导出 CSV",
         cross_scouting_export_json: "导出 JSON",
         cross_scouting_export_no_data: "无可导出数据",
@@ -1368,6 +1381,19 @@ const i18n = {
         shortlist_compare_loading: "Comparing…",
         shortlist_compare_unavailable: "Comparison unavailable",
         shortlist_compare_failed: "Comparison fetch failed",
+        shortlist_provenance_log_title: "Provenance Log",
+        shortlist_provenance_empty: "No provenance events recorded",
+        shortlist_provenance_count: "{n} provenance events",
+        shortlist_provenance_col_time: "Time",
+        shortlist_provenance_col_player: "Player",
+        shortlist_provenance_col_action: "Action",
+        shortlist_provenance_col_code: "Code",
+        shortlist_provenance_col_result: "Resulting codes",
+        shortlist_provenance_action_merged: "Merged",
+        shortlist_provenance_action_removed: "Removed",
+        shortlist_provenance_clear: "Clear log",
+        shortlist_reset_ui_state: "Reset UI state",
+        shortlist_reset_ui_state_title: "Clear filters and compare selection",
         cross_scouting_export_csv: "Export CSV",
         cross_scouting_export_json: "Export JSON",
         cross_scouting_export_no_data: "No data to export",
@@ -9799,6 +9825,10 @@ function renderScouting() {
     _wireShortlistCompareCheckboxes(document.getElementById("shortlist"));
     _renderShortlistCompareBar();
     _wireShortlistCompareBar();
+    // Round 91: render provenance audit log + wire reset UI state button.
+    _renderProvenanceLog();
+    _wireProvenanceLog();
+    _wireResetShortlistUiState();
 
     updateSnapshotStatus();
     renderScoutingWorkspaceStatus();
@@ -23503,6 +23533,136 @@ function _pruneShortlistCompareSelection(validKeys) {
     }
 }
 
+// ===== Round 91: Shortlist Provenance Audit Log + Reset UI State =====
+// Records browser-local audit entries when togglePlayerShortlist merges a
+// new reason code into an existing entry or removes a code from an entry
+// (the subtle "provenance change" events that are otherwise invisible).
+// Also provides a reset control that clears all 3 persisted UI-state arrays
+// (source filters + compare selection) so the user can return to a clean
+// shortlist view without clearing the shortlist itself.
+const SHORTLIST_PROVENANCE_LOG_KEY = "sf-shortlist-provenance-log";
+const _PROVENANCE_LOG_MAX = 200;
+
+function _loadProvenanceLog() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(SHORTLIST_PROVENANCE_LOG_KEY));
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .filter((v) => v !== null && typeof v === "object" && !Array.isArray(v))
+            .slice(0, _PROVENANCE_LOG_MAX);
+    } catch {
+        return [];
+    }
+}
+
+function _persistShortlistProvenanceLog() {
+    try {
+        localStorage.setItem(
+            SHORTLIST_PROVENANCE_LOG_KEY,
+            JSON.stringify(_shortlistProvenanceLog),
+        );
+    } catch {}
+}
+
+let _shortlistProvenanceLog = _loadProvenanceLog();
+
+function _recordShortlistProvenance(player, action, reasonCode, resultingCodes) {
+    const entry = {
+        timestamp: new Date().toISOString(),
+        player_key: String((player && player.key) || "").slice(0, 180),
+        player_name: String((player && player.name) || "").slice(0, 180),
+        action: action === "merged" ? "merged" : "removed",
+        reason_code: String(reasonCode || "").slice(0, 64),
+        resulting_codes: Array.isArray(resultingCodes)
+            ? resultingCodes.map((c) => String(c || "").slice(0, 64)).slice(0, 20)
+            : [],
+    };
+    _shortlistProvenanceLog.unshift(entry);
+    if (_shortlistProvenanceLog.length > _PROVENANCE_LOG_MAX) {
+        _shortlistProvenanceLog.length = _PROVENANCE_LOG_MAX;
+    }
+    _persistShortlistProvenanceLog();
+}
+
+function _clearShortlistProvenanceLog() {
+    _shortlistProvenanceLog = [];
+    _persistShortlistProvenanceLog();
+}
+
+function _renderProvenanceLog() {
+    const container = document.getElementById("shortlist-provenance-log");
+    if (!container) return;
+    const n = _shortlistProvenanceLog.length;
+    const headerText = t("shortlist_provenance_log_title");
+    let html = '<details class="provenance-log-details" style="margin-top:0.4rem">';
+    html += `<summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted);padding:0.25rem 0">${escapeHtml(headerText)} (${escapeHtml(String(n))})</summary>`;
+    if (n === 0) {
+        html += `<p style="font-size:0.72rem;color:var(--text-muted);padding:0.4rem 0;margin:0">${escapeHtml(t("shortlist_provenance_empty"))}</p>`;
+    } else {
+        html += `<div style="margin-top:0.4rem;max-height:280px;overflow-y:auto;font-size:0.7rem">`;
+        html += `<table class="provenance-log-table" style="width:100%;border-collapse:collapse">`;
+        html += `<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color, #ccc)">`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_time"))}</th>`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_player"))}</th>`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_action"))}</th>`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_code"))}</th>`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_result"))}</th>`;
+        html += `</tr></thead><tbody>`;
+        for (const logEntry of _shortlistProvenanceLog) {
+            const actionLabel = logEntry.action === "merged"
+                ? t("shortlist_provenance_action_merged")
+                : t("shortlist_provenance_action_removed");
+            const resultCodes = (logEntry.resulting_codes || []).join(", ") || "—";
+            html += `<tr style="border-bottom:1px solid var(--border-color, #eee)">`;
+            html += `<td style="padding:0.2rem;white-space:nowrap">${escapeHtml(logEntry.timestamp || "")}</td>`;
+            html += `<td style="padding:0.2rem">${escapeHtml(logEntry.player_name || logEntry.player_key || "")}</td>`;
+            html += `<td style="padding:0.2rem">${escapeHtml(actionLabel)}</td>`;
+            html += `<td style="padding:0.2rem">${escapeHtml(logEntry.reason_code || "")}</td>`;
+            html += `<td style="padding:0.2rem">${escapeHtml(resultCodes)}</td>`;
+            html += `</tr>`;
+        }
+        html += `</tbody></table></div>`;
+        html += `<button class="provenance-log-clear" type="button" style="margin-top:0.4rem;font-size:0.68rem;cursor:pointer;background:none;border:1px solid var(--border-color, #ccc);padding:0.2rem 0.5rem;color:var(--text-muted)">${escapeHtml(t("shortlist_provenance_clear"))}</button>`;
+    }
+    html += '</details>';
+    container.innerHTML = html;
+}
+
+function _wireProvenanceLog() {
+    const container = document.getElementById("shortlist-provenance-log");
+    if (!container) return;
+    const clearBtn = container.querySelector(".provenance-log-clear");
+    if (clearBtn) {
+        clearBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            _clearShortlistProvenanceLog();
+            _renderProvenanceLog();
+            _wireProvenanceLog();
+        });
+    }
+}
+
+function _resetShortlistUiState() {
+    _shortlistSourceFilter = [];
+    _watchlistSourceFilter = [];
+    _shortlistCompareSelection = [];
+    _persistShortlistSourceFilter();
+    _persistWatchlistSourceFilter();
+    _persistShortlistCompareSelection();
+}
+
+function _wireResetShortlistUiState() {
+    const btn = document.getElementById("shortlist-reset-ui-state");
+    if (!btn) return;
+    if (btn.dataset.round91Wired === "1") return;
+    btn.dataset.round91Wired = "1";
+    btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        _resetShortlistUiState();
+        renderScouting();
+    });
+}
+
 function _renderShortlistCompareBar() {
     const bar = document.getElementById("shortlist-compare-bar");
     if (!bar) return;
@@ -23716,6 +23876,7 @@ function togglePlayerShortlist(player) {
             entry.reason_codes = codes;
             entry.reason_code = codes[0] || "";
             savePlayerShortlist(list);
+            _recordShortlistProvenance(entry, "removed", newCode, codes);
             return { added: false, reason_codes: codes, source_change: "removed" };
         }
         if (newCode && codeIdx < 0) {
@@ -23723,6 +23884,7 @@ function togglePlayerShortlist(player) {
             entry.reason_codes = codes;
             entry.reason_code = codes[0] || "";
             savePlayerShortlist(list);
+            _recordShortlistProvenance(entry, "merged", newCode, codes);
             return { added: true, reason_codes: codes, source_change: "merged" };
         }
         list.splice(idx, 1);

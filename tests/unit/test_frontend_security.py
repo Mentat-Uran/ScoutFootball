@@ -1399,3 +1399,423 @@ class TestShortlistUiStatePersistence:
         func_body = js[idx : idx + 500]
         assert "try" in func_body
         assert "catch" in func_body
+
+
+# ===== Round 91: Shortlist Provenance Audit Log + Reset UI State =============
+
+
+class TestShortlistProvenanceLogReset:
+    """Round 91: provenance audit log + reset UI state controls."""
+
+    # --- constants ---
+
+    def test_provenance_log_key_constant(self):
+        """SHORTLIST_PROVENANCE_LOG_KEY uses sf- prefix."""
+        js = _read_app_js()
+        assert 'SHORTLIST_PROVENANCE_LOG_KEY = "sf-shortlist-provenance-log"' in js
+
+    def test_provenance_log_max_constant(self):
+        """_PROVENANCE_LOG_MAX caps the log size."""
+        js = _read_app_js()
+        assert "_PROVENANCE_LOG_MAX = 200" in js
+
+    # --- _loadProvenanceLog ---
+
+    def test_load_provenance_log_function_defined(self):
+        js = _read_app_js()
+        assert "function _loadProvenanceLog" in js
+
+    def test_load_provenance_log_validates_array(self):
+        """_loadProvenanceLog must filter to objects and slice to max."""
+        js = _read_app_js()
+        idx = js.find("function _loadProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "Array.isArray(parsed)" in func_body
+        assert "typeof v === \"object\"" in func_body
+        assert "_PROVENANCE_LOG_MAX" in func_body
+
+    def test_load_provenance_log_wraps_in_try_catch(self):
+        js = _read_app_js()
+        idx = js.find("function _loadProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "try" in func_body
+        assert "catch" in func_body
+
+    # --- _persistShortlistProvenanceLog ---
+
+    def test_persist_provenance_log_function_defined(self):
+        js = _read_app_js()
+        assert "function _persistShortlistProvenanceLog" in js
+
+    def test_persist_provenance_log_wraps_in_try_catch(self):
+        js = _read_app_js()
+        idx = js.find("function _persistShortlistProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 400]
+        assert "try" in func_body
+        assert "catch" in func_body
+
+    def test_persist_provenance_log_uses_json_stringify(self):
+        js = _read_app_js()
+        idx = js.find("function _persistShortlistProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 400]
+        assert "JSON.stringify" in func_body
+        assert "SHORTLIST_PROVENANCE_LOG_KEY" in func_body
+
+    # --- state var ---
+
+    def test_provenance_log_state_var_initialized_via_loader(self):
+        """_shortlistProvenanceLog must initialize via _loadProvenanceLog()."""
+        js = _read_app_js()
+        assert "let _shortlistProvenanceLog = _loadProvenanceLog()" in js
+
+    # --- _recordShortlistProvenance ---
+
+    def test_record_provenance_function_defined(self):
+        js = _read_app_js()
+        assert "function _recordShortlistProvenance" in js
+
+    def test_record_provenance_builds_entry_fields(self):
+        """Entry must have all required audit fields."""
+        js = _read_app_js()
+        idx = js.find("function _recordShortlistProvenance")
+        assert idx > 0
+        func_body = js[idx : idx + 800]
+        fields = (
+            "timestamp", "player_key", "player_name",
+            "action", "reason_code", "resulting_codes",
+        )
+        for field in fields:
+            assert field in func_body, f"Missing field: {field}"
+
+    def test_record_provenance_uses_iso_timestamp(self):
+        js = _read_app_js()
+        idx = js.find("function _recordShortlistProvenance")
+        assert idx > 0
+        func_body = js[idx : idx + 800]
+        assert "new Date().toISOString()" in func_body
+
+    def test_record_provenance_unshift_newest_first(self):
+        """unshift puts newest entries at index 0."""
+        js = _read_app_js()
+        idx = js.find("function _recordShortlistProvenance")
+        assert idx > 0
+        func_body = js[idx : idx + 800]
+        assert "unshift" in func_body
+
+    def test_record_provenance_caps_at_max(self):
+        """Log must be truncated to _PROVENANCE_LOG_MAX."""
+        js = _read_app_js()
+        idx = js.find("function _recordShortlistProvenance")
+        assert idx > 0
+        func_body = js[idx : idx + 900]
+        assert "_PROVENANCE_LOG_MAX" in func_body
+        assert ".length =" in func_body
+
+    def test_record_provenance_calls_persist(self):
+        js = _read_app_js()
+        idx = js.find("function _recordShortlistProvenance")
+        assert idx > 0
+        func_body = js[idx : idx + 900]
+        assert "_persistShortlistProvenanceLog" in func_body
+
+    def test_record_provenance_slices_long_strings(self):
+        """player_key sliced to 180, reason_code to 64."""
+        js = _read_app_js()
+        idx = js.find("function _recordShortlistProvenance")
+        assert idx > 0
+        func_body = js[idx : idx + 900]
+        assert ".slice(0, 180)" in func_body
+        assert ".slice(0, 64)" in func_body
+
+    def test_record_provenance_validates_action(self):
+        """action must be normalized to 'merged' or 'removed'."""
+        js = _read_app_js()
+        idx = js.find("function _recordShortlistProvenance")
+        assert idx > 0
+        func_body = js[idx : idx + 900]
+        assert '"merged"' in func_body
+        assert '"removed"' in func_body
+
+    # --- _clearShortlistProvenanceLog ---
+
+    def test_clear_provenance_log_function_defined(self):
+        js = _read_app_js()
+        assert "function _clearShortlistProvenanceLog" in js
+
+    def test_clear_provenance_log_empties_then_persists(self):
+        js = _read_app_js()
+        idx = js.find("function _clearShortlistProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 300]
+        assert "[]" in func_body
+        assert "_persistShortlistProvenanceLog" in func_body
+
+    # --- togglePlayerShortlist integration ---
+
+    def test_toggle_shortlist_records_merged(self):
+        """togglePlayerShortlist must call _recordShortlistProvenance with 'merged'."""
+        js = _read_app_js()
+        idx = js.find("function togglePlayerShortlist")
+        assert idx > 0
+        func_body = js[idx : idx + 2000]
+        assert '_recordShortlistProvenance(entry, "merged"' in func_body
+
+    def test_toggle_shortlist_records_removed(self):
+        """togglePlayerShortlist records 'removed' for code-removal branch."""
+        js = _read_app_js()
+        idx = js.find("function togglePlayerShortlist")
+        assert idx > 0
+        func_body = js[idx : idx + 2000]
+        assert '_recordShortlistProvenance(entry, "removed"' in func_body
+
+    def test_toggle_shortlist_no_record_on_added(self):
+        """The 'added' branch (new entry) must NOT call _recordShortlistProvenance."""
+        js = _read_app_js()
+        idx = js.find("function togglePlayerShortlist")
+        assert idx > 0
+        added_idx = js.find("source_change: \"added\"", idx)
+        assert added_idx > idx
+        # Check the 300 chars before added branch don't contain record call
+        snippet_before = js[added_idx - 300 : added_idx]
+        assert "_recordShortlistProvenance" not in snippet_before
+
+    def test_toggle_shortlist_no_record_on_full_removal(self):
+        """The full-removal branch (codes empty) must NOT call _recordShortlistProvenance."""
+        js = _read_app_js()
+        idx = js.find("function togglePlayerShortlist")
+        assert idx > 0
+        # Find the full-removal branch: codes.length === 0
+        empty_idx = js.find("codes.length === 0", idx)
+        assert empty_idx > idx
+        # The next 200 chars should contain the return but NOT _recordShortlistProvenance
+        snippet = js[empty_idx : empty_idx + 200]
+        assert "_recordShortlistProvenance" not in snippet
+
+    # --- _renderProvenanceLog ---
+
+    def test_render_provenance_log_function_defined(self):
+        js = _read_app_js()
+        assert "function _renderProvenanceLog" in js
+
+    def test_render_provenance_log_uses_escape_html_for_count(self):
+        """The count in summary must use escapeHtml."""
+        js = _read_app_js()
+        idx = js.find("function _renderProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "escapeHtml(String(n))" in func_body
+
+    def test_render_provenance_log_uses_escape_html_for_header(self):
+        js = _read_app_js()
+        idx = js.find("function _renderProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "escapeHtml(headerText)" in func_body
+
+    def test_render_provenance_log_uses_details_summary(self):
+        """Uses <details>/<summary> for collapsible section."""
+        js = _read_app_js()
+        idx = js.find("function _renderProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 1000]
+        assert "<details" in func_body
+        assert "<summary" in func_body
+
+    def test_render_provenance_log_renders_clear_button(self):
+        js = _read_app_js()
+        idx = js.find("function _renderProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 3000]
+        assert "provenance-log-clear" in func_body
+        assert "escapeHtml" in func_body
+
+    def test_render_provenance_log_uses_escape_html_on_all_dynamic(self):
+        """All dynamic fields in the table must use escapeHtml."""
+        js = _read_app_js()
+        idx = js.find("function _renderProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 2500]
+        # timestamp, player_name, actionLabel, reason_code, resultCodes
+        assert "escapeHtml(logEntry.timestamp" in func_body
+        assert "escapeHtml(logEntry.player_name" in func_body
+        assert "escapeHtml(actionLabel)" in func_body
+        assert "escapeHtml(logEntry.reason_code" in func_body
+        assert "escapeHtml(resultCodes)" in func_body
+
+    def test_render_provenance_log_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function _renderProvenanceLog")
+        assert idx > 0
+        end_idx = js.find("function _wireProvenanceLog", idx)
+        assert end_idx > idx
+        snippet = js[idx:end_idx]
+        assert "eval(" not in snippet
+
+    # --- _wireProvenanceLog ---
+
+    def test_wire_provenance_log_function_defined(self):
+        js = _read_app_js()
+        assert "function _wireProvenanceLog" in js
+
+    def test_wire_provenance_log_wires_clear_button(self):
+        js = _read_app_js()
+        idx = js.find("function _wireProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 800]
+        assert "provenance-log-clear" in func_body
+        assert "addEventListener" in func_body
+
+    def test_wire_provenance_log_clear_calls_clear_function(self):
+        js = _read_app_js()
+        idx = js.find("function _wireProvenanceLog")
+        assert idx > 0
+        func_body = js[idx : idx + 800]
+        assert "_clearShortlistProvenanceLog" in func_body
+        assert "_renderProvenanceLog" in func_body
+
+    # --- _resetShortlistUiState ---
+
+    def test_reset_ui_state_function_defined(self):
+        js = _read_app_js()
+        assert "function _resetShortlistUiState" in js
+
+    def test_reset_ui_state_clears_all_three_arrays(self):
+        js = _read_app_js()
+        idx = js.find("function _resetShortlistUiState")
+        assert idx > 0
+        func_body = js[idx : idx + 500]
+        assert "_shortlistSourceFilter = []" in func_body
+        assert "_watchlistSourceFilter = []" in func_body
+        assert "_shortlistCompareSelection = []" in func_body
+
+    def test_reset_ui_state_persists_all_three(self):
+        js = _read_app_js()
+        idx = js.find("function _resetShortlistUiState")
+        assert idx > 0
+        func_body = js[idx : idx + 500]
+        assert "_persistShortlistSourceFilter" in func_body
+        assert "_persistWatchlistSourceFilter" in func_body
+        assert "_persistShortlistCompareSelection" in func_body
+
+    def test_reset_ui_state_does_not_clear_shortlist_data(self):
+        """Reset must NOT clear the shortlist itself, only UI state."""
+        js = _read_app_js()
+        idx = js.find("function _resetShortlistUiState")
+        assert idx > 0
+        end_idx = js.find("function _wireResetShortlistUiState", idx)
+        assert end_idx > idx
+        snippet = js[idx:end_idx]
+        assert "savePlayerShortlist" not in snippet
+        assert "savePlayerWatchlist" not in snippet
+        assert "getPlayerShortlist" not in snippet
+
+    # --- _wireResetShortlistUiState ---
+
+    def test_wire_reset_ui_state_function_defined(self):
+        js = _read_app_js()
+        assert "function _wireResetShortlistUiState" in js
+
+    def test_wire_reset_ui_state_wires_button(self):
+        js = _read_app_js()
+        idx = js.find("function _wireResetShortlistUiState")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "shortlist-reset-ui-state" in func_body
+        assert "addEventListener" in func_body
+
+    def test_wire_reset_ui_state_calls_reset_and_render(self):
+        js = _read_app_js()
+        idx = js.find("function _wireResetShortlistUiState")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "_resetShortlistUiState" in func_body
+        assert "renderScouting" in func_body
+
+    def test_wire_reset_ui_state_idempotent(self):
+        """Uses dataset guard to avoid double-wiring on re-render."""
+        js = _read_app_js()
+        idx = js.find("function _wireResetShortlistUiState")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "round91Wired" in func_body
+        assert "dataset" in func_body
+
+    # --- renderScouting integration ---
+
+    def test_renderscout_calls_provenance_render(self):
+        js = _read_app_js()
+        idx = js.find("function renderScouting")
+        assert idx > 0
+        func_body = js[idx : idx + 18000]
+        assert "_renderProvenanceLog()" in func_body
+
+    def test_renderscout_calls_provenance_wire(self):
+        js = _read_app_js()
+        idx = js.find("function renderScouting")
+        assert idx > 0
+        func_body = js[idx : idx + 18000]
+        assert "_wireProvenanceLog()" in func_body
+
+    def test_renderscout_calls_reset_wire(self):
+        js = _read_app_js()
+        idx = js.find("function renderScouting")
+        assert idx > 0
+        func_body = js[idx : idx + 18000]
+        assert "_wireResetShortlistUiState()" in func_body
+
+    # --- index.html containers ---
+
+    def test_index_html_has_provenance_container(self):
+        content = _read_index()
+        assert 'id="shortlist-provenance-log"' in content
+
+    def test_index_html_has_reset_button(self):
+        content = _read_index()
+        assert 'id="shortlist-reset-ui-state"' in content
+
+    def test_index_html_reset_button_has_i18n_attr(self):
+        content = _read_index()
+        idx = content.find('id="shortlist-reset-ui-state"')
+        assert idx > 0
+        snippet = content[max(0, idx - 200) : idx + 400]
+        assert "data-i18n=" in snippet
+        assert "data-i18n-title=" in snippet
+
+    # --- i18n keys ---
+
+    _PROVENANCE_I18N_KEYS = (
+        "shortlist_provenance_log_title",
+        "shortlist_provenance_empty",
+        "shortlist_provenance_count",
+        "shortlist_provenance_col_time",
+        "shortlist_provenance_col_player",
+        "shortlist_provenance_col_action",
+        "shortlist_provenance_col_code",
+        "shortlist_provenance_col_result",
+        "shortlist_provenance_action_merged",
+        "shortlist_provenance_action_removed",
+        "shortlist_provenance_clear",
+        "shortlist_reset_ui_state",
+        "shortlist_reset_ui_state_title",
+    )
+
+    def test_i18n_keys_present_zh(self):
+        js = _read_app_js()
+        # zh section is before en section; find the zh block
+        zh_end = js.find("shortlist_compare_failed: \"Comparison fetch failed\"")
+        assert zh_end > 0
+        zh_block = js[:zh_end]
+        for key in self._PROVENANCE_I18N_KEYS:
+            assert key + ":" in zh_block, f"Missing zh i18n key: {key}"
+
+    def test_i18n_keys_present_en(self):
+        js = _read_app_js()
+        en_start = js.find("shortlist_compare_failed: \"Comparison fetch failed\"")
+        assert en_start > 0
+        en_block = js[en_start : en_start + 5000]
+        for key in self._PROVENANCE_I18N_KEYS:
+            assert key + ":" in en_block, f"Missing en i18n key: {key}"
