@@ -53,6 +53,7 @@ from scoutfootball.api import (
     get_error_analysis,
     get_error_clustering,
     get_feature_importance,
+    get_fixture_difficulty,
     get_fold_comparison,
     get_form_weighted_prediction,
     get_h2h_bias_correction,
@@ -61,6 +62,7 @@ from scoutfootball.api import (
     get_league_action_evolution,
     get_league_action_percentiles,
     get_league_error_analysis,
+    get_league_form_table,
     get_league_style_evolution,
     get_league_style_percentiles,
     get_match_momentum,
@@ -102,6 +104,7 @@ from scoutfootball.api import (
     get_riser_decliner_watchlist,
     get_scenario_stress_test,
     get_scoreline_calibration,
+    get_season_projection,
     get_shortlist,
     get_style_atlas,
     get_style_drift_neighbors,
@@ -1185,6 +1188,53 @@ def create_app() -> FastAPI:
         return get_league_action_evolution(
             league=league,
             min_player_minutes=min_player_minutes,
+        )
+
+    # ── League season projection & form analysis ──
+    # Static routes registered before any /teams/{team} parameterized routes
+    # to avoid path conflicts.
+    @app.get("/league/form-table")
+    def league_form_table(
+        league: str | None = None,
+        season: str | None = None,
+        last_n: int = Query(6, ge=1, le=30),
+    ):
+        return get_league_form_table(
+            league=league,
+            season=season,
+            last_n=last_n,
+        )
+
+    @app.get("/league/fixture-difficulty")
+    def league_fixture_difficulty(
+        league: str | None = None,
+        season: str | None = None,
+        team: str | None = None,
+        upcoming_n: int = Query(10, ge=1, le=30),
+    ):
+        return get_fixture_difficulty(
+            league=league,
+            season=season,
+            team=team,
+            upcoming_n=upcoming_n,
+        )
+
+    @app.get("/league/season-projection")
+    def league_season_projection(
+        league: str | None = None,
+        season: str | None = None,
+        num_simulations: int = Query(1000, ge=100, le=10000),
+        random_seed: int = Query(42, ge=0, le=2_000_000_000),
+        top_n: int = Query(4, ge=1, le=20),
+        relegation_slots: int = Query(3, ge=0, le=10),
+    ):
+        return get_season_projection(
+            league=league,
+            season=season,
+            num_simulations=num_simulations,
+            random_seed=random_seed,
+            top_n=top_n,
+            relegation_slots=relegation_slots,
         )
 
     @app.get("/teams/cross-league-action")

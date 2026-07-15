@@ -40,6 +40,9 @@ data/soccerdata/**
 dist/
 scoutlab-gpu-server.zip
 *.zip
+
+# Local optimizer/quick-run logs (never track)
+*.log
 desktop/build/
 desktop/dist/
 desktop/backend-dist/

@@ -2242,6 +2242,157 @@ When only one league is present, a single `top`-tier entry is returned.
 The comparison does not modify the prediction model — it is an interpretive
 layer over aggregated team action signatures.
 
+### GET /league/form-table
+
+Last-N recent-form table for every team in a league-season. For each team
+returns W/D/L counts, points, PPG, 0–100 form rating, chronological form
+string (e.g. `"WWDLW"`), trend label (rising/declining/stable), home/away
+PPG split, and goals for/against. Teams are sorted by PPG descending.
+
+**Query params**: `league` (optional), `season` (required),
+`last_n` (int, default 6, clamped to 1–30)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2425",
+  "last_n": 6,
+  "teams": [
+    {
+      "team": "Arsenal",
+      "played": 6,
+      "wins": 5,
+      "draws": 1,
+      "losses": 0,
+      "points": 16,
+      "ppg": 2.67,
+      "form_rating": 88.9,
+      "form_string": "WWWDW",
+      "trend_label": "rising",
+      "recent_ppg": 3.0,
+      "older_ppg": 2.0,
+      "home_ppg": 3.0,
+      "away_ppg": 2.5,
+      "goals_for": 14,
+      "goals_against": 3
+    }
+  ],
+  "disclaimer": "Descriptive season overlay based on in-season results only; does not use the Dixon-Coles prediction model..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input, missing required columns, or
+no matches in the requested league-season). The form string is a string
+(not a list) of W/D/L characters in chronological order (oldest → newest
+within the last-N window). The function is a non-additive interpretive
+overlay — it does not modify the prediction model or predict future form.
+
+### GET /league/fixture-difficulty
+
+Retrospective fixture difficulty rating for each team's most recent N
+matches in a league-season, using a Bradley-Terry expected-points model
+derived from in-season points-per-game. When `team` is omitted, returns
+difficulty ratings for every team in the league-season.
+
+**Query params**: `league` (optional), `season` (required),
+`team` (optional, case-insensitive), `upcoming_n` (int, default 10,
+clamped to 1–30)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2425",
+  "team": "Arsenal",
+  "upcoming_n": 10,
+  "fixtures": [
+    {
+      "date": "2025-04-12T00:00:00",
+      "opponent": "Liverpool",
+      "venue": "H",
+      "goals_for": 2,
+      "goals_against": 1,
+      "result": "W",
+      "expected_points": 1.42,
+      "actual_points": 3,
+      "difficulty_label": "very_hard"
+    }
+  ],
+  "summary": {
+    "n_matches": 10,
+    "avg_expected_points": 1.61,
+    "avg_actual_points": 2.10,
+    "avg_difficulty": 0.55,
+    "difficulty_label": "hard"
+  },
+  "disclaimer": "Descriptive season overlay based on in-season results only..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no matches in the requested
+league-season), `team_not_found` (the requested `team` is absent from the
+filtered frame — distinct from `no_data`). `difficulty_label` per fixture
+is one of `very_hard` / `hard` / `moderate` / `easy` / `very_easy`.
+Bradley-Terry strength uses `log1p(ppg)` plus a 0.25 home-advantage
+logit; draw intensity is `exp(-|delta|) * 0.28`. The function is a
+non-additive interpretive overlay — it does not modify the prediction
+model or predict future difficulty.
+
+### GET /league/season-projection
+
+Monte Carlo simulation of the remaining league season, producing
+per-team final-position distributions and title / top-N / relegation
+probabilities. Assumes a standard double round-robin fixture list
+(each pair meets twice, home and away); remaining fixtures are inferred
+as the complement of already-played pairs. Reproducible via `random_seed`
+(uses `np.random.default_rng`).
+
+**Query params**: `league` (optional), `season` (required),
+`num_simulations` (int, default 1000, clamped to 100–10000),
+`random_seed` (int, default 42, range 0–2,000,000,000),
+`top_n` (int, default 4, clamped to 1–20),
+`relegation_slots` (int, default 3, clamped to 0–10)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2425",
+  "num_simulations": 1000,
+  "random_seed": 42,
+  "top_n": 4,
+  "relegation_slots": 3,
+  "teams": [
+    {
+      "team": "Arsenal",
+      "current_points": 78,
+      "games_played": 32,
+      "avg_final_points": 86.4,
+      "avg_position": 1.2,
+      "position_distribution": { "1": 760, "2": 210, "3": 30 },
+      "title_probability": 0.76,
+      "top_n_probability": 1.0,
+      "relegation_probability": 0.0
+    }
+  ],
+  "disclaimer": "Descriptive season overlay based on in-season results only..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no matches in the requested
+league-season). Teams are sorted by `(avg_position, avg_final_points,
+team)` ascending. `position_distribution` only includes positions that
+actually occurred in the simulation (may be fewer than the total number
+of teams). Per-team probabilities sum to 1.0 across all teams for each
+of title / top-N / relegation. The function is a non-additive
+interpretive overlay — it does not use the Dixon-Coles prediction model,
+rating matrix, or any external odds feed. Projections assume a standard
+double round-robin fixture list and a Bradley-Terry strength estimate.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.
