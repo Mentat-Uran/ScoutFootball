@@ -1056,7 +1056,8 @@ class TestShortlistQuickCompare:
 
     def test_selection_state_variable_defined(self):
         js = _read_app_js()
-        assert "let _shortlistCompareSelection = []" in js
+        # Round 90: initialized from localStorage via _loadStringArray.
+        assert "let _shortlistCompareSelection = _loadStringArray" in js
 
     def test_max_constant_defined(self):
         js = _read_app_js()
@@ -1229,3 +1230,172 @@ class TestShortlistQuickCompare:
         assert "fetchPlayerComparisonMulti" in func_body
         # Should not construct a raw fetch URL
         assert "/players/compare-multi" not in func_body
+
+
+# ===== 25. Round 90: Shortlist UI state persistence ==========================
+class TestShortlistUiStatePersistence:
+    """Verify the localStorage persistence of shortlist UI state."""
+
+    def test_shortlist_source_filter_key_defined(self):
+        js = _read_app_js()
+        assert 'SHORTLIST_SOURCE_FILTER_KEY = "sf-shortlist-source-filter"' in js
+
+    def test_watchlist_source_filter_key_defined(self):
+        js = _read_app_js()
+        assert 'WATCHLIST_SOURCE_FILTER_KEY = "sf-watchlist-source-filter"' in js
+
+    def test_compare_selection_key_defined(self):
+        js = _read_app_js()
+        assert 'SHORTLIST_COMPARE_SELECTION_KEY = "sf-shortlist-compare-selection"' in js
+
+    def test_load_string_array_function_defined(self):
+        js = _read_app_js()
+        assert "function _loadStringArray" in js
+
+    def test_save_string_array_function_defined(self):
+        js = _read_app_js()
+        assert "function _saveStringArray" in js
+
+    def test_load_string_array_validates_array(self):
+        """_loadStringArray must reject non-array JSON and non-string items."""
+        js = _read_app_js()
+        idx = js.find("function _loadStringArray")
+        assert idx > 0
+        func_body = js[idx : idx + 500]
+        assert "Array.isArray" in func_body
+        assert "typeof v === \"string\"" in func_body
+
+    def test_load_string_array_caps_length(self):
+        """_loadStringArray must cap the result to prevent unbounded growth."""
+        js = _read_app_js()
+        idx = js.find("function _loadStringArray")
+        assert idx > 0
+        func_body = js[idx : idx + 500]
+        assert "slice(0, 100)" in func_body
+
+    def test_save_string_array_uses_json_stringify(self):
+        """_saveStringArray must use JSON.stringify (no raw concatenation)."""
+        js = _read_app_js()
+        idx = js.find("function _saveStringArray")
+        assert idx > 0
+        func_body = js[idx : idx + 300]
+        assert "JSON.stringify" in func_body
+
+    def test_shortlist_source_filter_loads_from_local_storage(self):
+        """_shortlistSourceFilter must initialize via _loadStringArray."""
+        js = _read_app_js()
+        assert "let _shortlistSourceFilter = _loadStringArray" in js
+
+    def test_watchlist_source_filter_loads_from_local_storage(self):
+        """_watchlistSourceFilter must initialize via _loadStringArray."""
+        js = _read_app_js()
+        assert "let _watchlistSourceFilter = _loadStringArray" in js
+
+    def test_compare_selection_loads_from_local_storage(self):
+        """_shortlistCompareSelection must initialize via _loadStringArray."""
+        js = _read_app_js()
+        assert "let _shortlistCompareSelection = _loadStringArray" in js
+
+    def test_persist_shortlist_source_filter_function_defined(self):
+        js = _read_app_js()
+        assert "function _persistShortlistSourceFilter" in js
+
+    def test_persist_watchlist_source_filter_function_defined(self):
+        js = _read_app_js()
+        assert "function _persistWatchlistSourceFilter" in js
+
+    def test_persist_compare_selection_function_defined(self):
+        js = _read_app_js()
+        assert "function _persistShortlistCompareSelection" in js
+
+    def test_persist_shortlist_source_filter_calls_save(self):
+        js = _read_app_js()
+        idx = js.find("function _persistShortlistSourceFilter")
+        assert idx > 0
+        func_body = js[idx : idx + 300]
+        assert "_saveStringArray" in func_body
+        assert "SHORTLIST_SOURCE_FILTER_KEY" in func_body
+
+    def test_persist_watchlist_source_filter_calls_save(self):
+        js = _read_app_js()
+        idx = js.find("function _persistWatchlistSourceFilter")
+        assert idx > 0
+        func_body = js[idx : idx + 300]
+        assert "_saveStringArray" in func_body
+        assert "WATCHLIST_SOURCE_FILTER_KEY" in func_body
+
+    def test_persist_compare_selection_calls_save(self):
+        js = _read_app_js()
+        idx = js.find("function _persistShortlistCompareSelection")
+        assert idx > 0
+        func_body = js[idx : idx + 300]
+        assert "_saveStringArray" in func_body
+        assert "SHORTLIST_COMPARE_SELECTION_KEY" in func_body
+
+    def test_toggle_compare_select_persists(self):
+        """_toggleShortlistCompareSelect must call _persistShortlistCompareSelection."""
+        js = _read_app_js()
+        idx = js.find("function _toggleShortlistCompareSelect")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "_persistShortlistCompareSelection" in func_body
+
+    def test_clear_compare_select_persists(self):
+        """_clearShortlistCompareSelection must call _persistShortlistCompareSelection."""
+        js = _read_app_js()
+        idx = js.find("function _clearShortlistCompareSelection")
+        assert idx > 0
+        func_body = js[idx : idx + 300]
+        assert "_persistShortlistCompareSelection" in func_body
+
+    def test_prune_compare_select_persists_on_change(self):
+        """_pruneShortlistCompareSelection must persist when keys are pruned."""
+        js = _read_app_js()
+        idx = js.find("function _pruneShortlistCompareSelection")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "_persistShortlistCompareSelection" in func_body
+
+    def test_wire_source_summary_persists_shortlist(self):
+        """_wireSourceSummary must call _persistShortlistSourceFilter for shortlist."""
+        js = _read_app_js()
+        idx = js.find("function _wireSourceSummary")
+        assert idx > 0
+        func_body = js[idx : idx + 1200]
+        assert "_persistShortlistSourceFilter" in func_body
+
+    def test_wire_source_summary_persists_watchlist(self):
+        """_wireSourceSummary must call _persistWatchlistSourceFilter for watchlist."""
+        js = _read_app_js()
+        idx = js.find("function _wireSourceSummary")
+        assert idx > 0
+        func_body = js[idx : idx + 1200]
+        assert "_persistWatchlistSourceFilter" in func_body
+
+    def test_no_eval_in_persistence_code(self):
+        """No eval() in the persistence helpers."""
+        js = _read_app_js()
+        idx = js.find("function _loadStringArray")
+        assert idx > 0
+        end_idx = js.find("function _computeSourceCounts", idx)
+        assert end_idx > idx
+        snippet = js[idx:end_idx]
+        assert "eval(" not in snippet
+
+    def test_save_string_array_wraps_in_try_catch(self):
+        """_saveStringArray must be wrapped in try/catch (localStorage can throw)."""
+        js = _read_app_js()
+        idx = js.find("function _saveStringArray")
+        assert idx > 0
+        func_body = js[idx : idx + 300]
+        assert "try" in func_body
+        assert "catch" in func_body
+
+    def test_load_string_array_wraps_in_try_catch(self):
+        """_loadStringArray must be wrapped in try/catch."""
+        js = _read_app_js()
+        idx = js.find("function _loadStringArray")
+        assert idx > 0
+        func_body = js[idx : idx + 500]
+        assert "try" in func_body
+        assert "catch" in func_body
