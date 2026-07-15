@@ -547,6 +547,106 @@ class TestScoutingDashboardHandoffSecurity:
         )
 
 
+# ===== 13c. Shortlist / watchlist source provenance (Round 87) =============
+class TestShortlistProvenanceSecurity:
+    """Verify the Round 87 shortlist/watchlist source provenance wiring.
+
+    The toggle functions now accumulate reason codes in a `reason_codes`
+    array instead of silently overwriting or removing entries when a
+    different source adds the same player. These tests lock in the
+    static invariants: the helper exists, pills are escaped, and the
+    legacy `reason_code` field is kept in sync for backward compat.
+    """
+
+    def test_entry_reason_codes_helper_defined(self):
+        js = _read_app_js()
+        assert "function _entryReasonCodes(" in js, (
+            "_entryReasonCodes helper must be defined for provenance migration"
+        )
+
+    def test_normalize_entry_reason_codes_helper_defined(self):
+        js = _read_app_js()
+        assert "function _normalizeEntryReasonCodes(" in js, (
+            "_normalizeEntryReasonCodes helper must be defined"
+        )
+
+    def test_render_reason_code_pills_uses_escape_html(self):
+        js = _read_app_js()
+        idx = js.find("function _renderReasonCodePills(")
+        assert idx > 0, "_renderReasonCodePills function not found"
+        func_body = js[idx : idx + 500]
+        assert "escapeHtml" in func_body, (
+            "reason code pills must escape each code with escapeHtml"
+        )
+
+    def test_toggle_shortlist_returns_source_change(self):
+        js = _read_app_js()
+        idx = js.find("function togglePlayerShortlist(")
+        assert idx > 0
+        func_body = js[idx : idx + 1800]
+        assert "source_change" in func_body, (
+            "togglePlayerShortlist must return a source_change field"
+        )
+        assert '"merged"' in func_body or "'merged'" in func_body, (
+            "togglePlayerShortlist must surface a 'merged' source_change "
+            "when a new reason code is accumulated"
+        )
+
+    def test_toggle_watchlist_returns_source_change(self):
+        js = _read_app_js()
+        idx = js.find("function togglePlayerWatchlist(")
+        assert idx > 0
+        func_body = js[idx : idx + 1800]
+        assert "source_change" in func_body, (
+            "togglePlayerWatchlist must return a source_change field"
+        )
+
+    def test_toggle_functions_accumulate_reason_codes_array(self):
+        """Both toggle functions must push to a reason_codes array on merge."""
+        js = _read_app_js()
+        for func_name in ("togglePlayerShortlist", "togglePlayerWatchlist"):
+            idx = js.find(f"function {func_name}(")
+            assert idx > 0
+            func_body = js[idx : idx + 1800]
+            assert "reason_codes" in func_body, (
+                f"{func_name} must reference reason_codes array"
+            )
+            assert "codes.push(" in func_body, (
+                f"{func_name} must push new codes onto the array (accumulate)"
+            )
+
+    def test_watchlist_render_uses_pills_not_single_code(self):
+        """Watchlist rendering must use _renderReasonCodePills, not a single
+        inline reason_code string, so all accumulated sources are visible."""
+        js = _read_app_js()
+        idx = js.find('document.getElementById("watchlist").innerHTML')
+        assert idx > 0
+        nearby = js[idx : idx + 1200]
+        assert "_renderReasonCodePills" in nearby, (
+            "watchlist rendering must call _renderReasonCodePills"
+        )
+
+    def test_shortlist_render_uses_pills_not_single_code(self):
+        """Shortlist rendering must use _renderReasonCodePills."""
+        js = _read_app_js()
+        idx = js.find('document.getElementById("shortlist").innerHTML')
+        assert idx > 0
+        nearby = js[idx : idx + 1200]
+        assert "_renderReasonCodePills" in nearby, (
+            "shortlist rendering must call _renderReasonCodePills"
+        )
+
+    def test_csv_export_includes_reason_codes_column(self):
+        """CSV exports must include a reason_codes column (pipe-joined)."""
+        js = _read_app_js()
+        assert '"reason_codes"' in js or "'reason_codes'" in js, (
+            "CSV export header must include a reason_codes column"
+        )
+        assert ".join(\"|\")" in js or ".join('|')" in js, (
+            "reason_codes must be pipe-joined for CSV export"
+        )
+
+
 # ===== 14. Tactical board regression: malicious project title ================
 class TestMaliciousTitleRegression:
     """Verify that XSS payloads in project titles are sanitized."""
