@@ -229,6 +229,13 @@ const i18n = {
         remove_source: "移除此来源",
         source_filter_hint: "点击来源筛选",
         no_source_filter: "无来源筛选",
+        shortlist_compare_btn: "对比选中 ({n})",
+        shortlist_compare_clear: "清除选择",
+        shortlist_compare_min: "至少选择 2 名球员",
+        shortlist_compare_max: "最多选择 6 名球员",
+        shortlist_compare_loading: "正在对比…",
+        shortlist_compare_unavailable: "对比数据不可用",
+        shortlist_compare_failed: "对比请求失败",
         cross_scouting_export_csv: "导出 CSV",
         cross_scouting_export_json: "导出 JSON",
         cross_scouting_export_no_data: "无可导出数据",
@@ -1354,6 +1361,13 @@ const i18n = {
         remove_source: "Remove this source",
         source_filter_hint: "Click a source to filter",
         no_source_filter: "No source filter",
+        shortlist_compare_btn: "Compare selected ({n})",
+        shortlist_compare_clear: "Clear selection",
+        shortlist_compare_min: "Select at least 2 players",
+        shortlist_compare_max: "Select at most 6 players",
+        shortlist_compare_loading: "Comparing…",
+        shortlist_compare_unavailable: "Comparison unavailable",
+        shortlist_compare_failed: "Comparison fetch failed",
         cross_scouting_export_csv: "Export CSV",
         cross_scouting_export_json: "Export JSON",
         cross_scouting_export_no_data: "No data to export",
@@ -9728,6 +9742,9 @@ function renderScouting() {
 
     // Shortlist dossiers: local-only decision context with a stable player key.
     document.getElementById("shortlist-count").textContent = String(combinedShortlist.length);
+    // Round 89: prune compare selection against current shortlist keys so
+    // removed players don't linger in the quick-compare selection.
+    _pruneShortlistCompareSelection(combinedShortlist.map(scoutingPlayerKey));
     document.getElementById("shortlist").innerHTML = (() => {
         const summary = _renderSourceSummary(combinedShortlist, _shortlistSourceFilter, "shortlist");
         const filtered = _filterBySource(combinedShortlist, _shortlistSourceFilter);
@@ -9738,9 +9755,11 @@ function renderScouting() {
             const dossier = getShortlistDossier(player);
             const note = dossier.rationale;
             const zh = appState.lang === "zh";
+            const cmpChecked = _shortlistCompareSelection.includes(dossierKey) ? "checked" : "";
             return `
             <div class="watch-card">
                 <div>
+                    <label style="display:inline-flex;align-items:center;gap:0.15rem;margin-right:0.4rem;font-size:0.7rem;color:var(--text-muted);cursor:pointer;vertical-align:middle"><input type="checkbox" data-shortlist-compare-key="${escapeAttr(dossierKey)}" data-shortlist-compare-name="${escapeAttr(pName)}" ${cmpChecked}>${escapeHtml(zh ? "对比" : "Cmp")}</label>
                     <strong>${escapeHtml(pName)}</strong>
                     <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player, "shortlist")}
                 </div>
@@ -9776,6 +9795,10 @@ function renderScouting() {
     })();
     _wireSourceSummary(document.getElementById("shortlist"), "shortlist");
     _wireReasonPillRemovals(document.getElementById("shortlist"), "shortlist");
+    // Round 89: wire quick-compare checkboxes and action bar.
+    _wireShortlistCompareCheckboxes(document.getElementById("shortlist"));
+    _renderShortlistCompareBar();
+    _wireShortlistCompareBar();
 
     updateSnapshotStatus();
     renderScoutingWorkspaceStatus();
@@ -23405,6 +23428,183 @@ function _wireReasonPillRemovals(rootEl, listType) {
             renderScouting();
         });
     });
+}
+
+// ===== Round 89: Shortlist Quick-Compare =====
+// Multi-select checkboxes on shortlist entries connect to the existing
+// /players/compare-multi API (max 6 players). Selection persists across
+// re-renders; stale entries (player removed from shortlist) are pruned.
+let _shortlistCompareSelection = [];
+const _SHORTLIST_COMPARE_MAX = 6;
+
+function _toggleShortlistCompareSelect(playerKey) {
+    const key = String(playerKey || "").trim();
+    if (!key) return;
+    const idx = _shortlistCompareSelection.indexOf(key);
+    if (idx >= 0) {
+        _shortlistCompareSelection.splice(idx, 1);
+    } else {
+        if (_shortlistCompareSelection.length >= _SHORTLIST_COMPARE_MAX) return;
+        _shortlistCompareSelection.push(key);
+    }
+}
+
+function _clearShortlistCompareSelection() {
+    _shortlistCompareSelection = [];
+}
+
+function _pruneShortlistCompareSelection(validKeys) {
+    const set = new Set(validKeys.map((k) => String(k || "").trim()).filter(Boolean));
+    _shortlistCompareSelection = _shortlistCompareSelection.filter((k) => set.has(k));
+}
+
+function _renderShortlistCompareBar() {
+    const bar = document.getElementById("shortlist-compare-bar");
+    if (!bar) return;
+    const n = _shortlistCompareSelection.length;
+    const canCompare = n >= 2 && n <= _SHORTLIST_COMPARE_MAX;
+    const hint = n < 2 ? t("shortlist_compare_min") : (n > _SHORTLIST_COMPARE_MAX ? t("shortlist_compare_max") : "");
+    let html = '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">';
+    html += `<button class="glass-control" data-shortlist-compare-run="1" type="button" ${canCompare ? "" : "disabled"} style="font-size:0.72rem;padding:0.2rem 0.5rem">${escapeHtml(t("shortlist_compare_btn").replace("{n}", String(n)))}</button>`;
+    if (n > 0) {
+        html += `<button class="text-button" data-shortlist-compare-clear="1" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem">${escapeHtml(t("shortlist_compare_clear"))}</button>`;
+    }
+    if (hint) {
+        html += `<span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(hint)}</span>`;
+    }
+    html += '</div>';
+    bar.innerHTML = html;
+}
+
+function _wireShortlistCompareBar() {
+    const bar = document.getElementById("shortlist-compare-bar");
+    if (!bar) return;
+    const runBtn = bar.querySelector('button[data-shortlist-compare-run="1"]');
+    if (runBtn) {
+        runBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            if (_shortlistCompareSelection.length < 2) return;
+            const names = _resolveShortlistCompareNames();
+            if (names.length < 2) return;
+            _renderShortlistCompareResult(names);
+        });
+    }
+    const clearBtn = bar.querySelector('button[data-shortlist-compare-clear="1"]');
+    if (clearBtn) {
+        clearBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            _clearShortlistCompareSelection();
+            const result = document.getElementById("shortlist-compare-result");
+            if (result) result.innerHTML = "";
+            renderScouting();
+        });
+    }
+}
+
+function _wireShortlistCompareCheckboxes(rootEl) {
+    const boxes = rootEl.querySelectorAll('input[data-shortlist-compare-key]');
+    boxes.forEach((box) => {
+        box.addEventListener("change", () => {
+            const key = box.getAttribute("data-shortlist-compare-key") || "";
+            _toggleShortlistCompareSelect(key);
+            // Re-sync visual state: if max was reached and user tried to
+            // check an extra box, the toggle would have no-op'd, so we
+            // restore the checkbox to the actual selection state.
+            box.checked = _shortlistCompareSelection.includes(key);
+            _renderShortlistCompareBar();
+            _wireShortlistCompareBar();
+        });
+    });
+}
+
+function _resolveShortlistCompareNames() {
+    const shortlistEl = document.getElementById("shortlist");
+    if (!shortlistEl) return [];
+    const nameByKey = {};
+    shortlistEl.querySelectorAll('input[data-shortlist-compare-key]').forEach((box) => {
+        const key = box.getAttribute("data-shortlist-compare-key") || "";
+        const name = box.getAttribute("data-shortlist-compare-name") || "";
+        if (key && name) nameByKey[key] = name;
+    });
+    return _shortlistCompareSelection.map((k) => nameByKey[k]).filter(Boolean);
+}
+
+async function _renderShortlistCompareResult(names) {
+    const result = document.getElementById("shortlist-compare-result");
+    if (!result) return;
+    result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("shortlist_compare_loading"))}</p>`;
+    try {
+        const data = await fetchPlayerComparisonMulti(names);
+        if (data.error || !data.players) {
+            result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("shortlist_compare_unavailable"))}</p>`;
+            return;
+        }
+        const players = data.players || [];
+        const percentileMatrix = data.percentile_matrix || [];
+        const metricRankings = data.metric_rankings || [];
+        const composite = data.composite_ranking || [];
+        const pairwise = data.pairwise_similarity || { players: [], matrix: [] };
+        const z = appState.lang === "zh";
+
+        const headerCells = players.map((p) =>
+            `<th>${escapeHtml(p.name || "")}<br><span style="font-weight:normal;font-size:0.72rem;color:var(--text-muted)">${escapeHtml(p.team || "")}</span></th>`
+        ).join("");
+
+        const percentileRows = percentileMatrix.map((row) => {
+            const vals = (row.values || []).map((v) => {
+                const num = Number(v);
+                const cls = num >= 75 ? "status-high" : num >= 50 ? "status-medium" : "status-low";
+                return `<td><span class="status-pill ${cls}">${escapeHtml(Number.isFinite(num) ? num.toFixed(1) : "—")}</span></td>`;
+            }).join("");
+            return `<tr><td>${escapeHtml(row.label || row.dimension || "")}</td>${vals}</tr>`;
+        }).join("");
+
+        const compositeRows = composite.map((c, i) => {
+            const avg = Number(c.avg_percentile);
+            const cls = avg >= 75 ? "status-high" : avg >= 50 ? "status-medium" : "status-low";
+            return `<tr>
+                <td>${escapeHtml(String(c.rank || (i + 1)))}</td>
+                <td><strong>${escapeHtml(c.name || "")}</strong></td>
+                <td><span class="status-pill ${cls}">${escapeHtml(Number.isFinite(avg) ? avg.toFixed(1) : "—")}</span></td>
+            </tr>`;
+        }).join("");
+
+        const pairwiseHeader = (pairwise.players || []).map((n) => `<th>${escapeHtml(n || "")}</th>`).join("");
+        const pairwiseRows = (pairwise.players || []).map((rowName, i) => {
+            const row = (pairwise.matrix || [])[i] || [];
+            const cells = row.map((v) => {
+                const num = Number(v);
+                return `<td>${escapeHtml(Number.isFinite(num) ? num.toFixed(3) : "—")}</td>`;
+            }).join("");
+            return `<tr><td><strong>${escapeHtml(rowName || "")}</strong></td>${cells}</tr>`;
+        }).join("");
+
+        const metricRows = metricRankings.map((mr) => {
+            const ranked = (mr.ranked || []).map((r) =>
+                `<td>${escapeHtml(String(r.value ?? "—"))}</td>`
+            ).join("");
+            return `<tr><td>${escapeHtml(mr.label || mr.dimension || "")}</td>${ranked}</tr>`;
+        }).join("");
+
+        result.innerHTML = [
+            `<h4 style="margin:0.3rem 0;font-size:0.9rem">${escapeHtml(z ? "百分位矩阵" : "Percentile Matrix")}</h4>`,
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>${escapeHtml(z ? "维度" : "Dimension")}</th>`,
+            headerCells,
+            `</tr></thead><tbody>${percentileRows}</tbody></table></div>`,
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "综合排名" : "Composite Ranking")}</h4>`,
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>#</th><th>${escapeHtml(z ? "球员" : "Player")}</th><th>${escapeHtml(z ? "平均百分位" : "Avg Percentile")}</th>`,
+            `</tr></thead><tbody>${compositeRows}</tbody></table></div>`,
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "指标排名" : "Metric Rankings")}</h4>`,
+            metricRows ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>${escapeHtml(z ? "指标" : "Metric")}</th>${headerCells}</tr></thead><tbody>${metricRows}</tbody></table></div>` : "",
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "两两相似度矩阵" : "Pairwise Similarity Matrix")}</h4>`,
+            pairwiseRows ? `<div class="table-scroll"><table class="data-table"><thead><tr><th></th>${pairwiseHeader}</tr></thead><tbody>${pairwiseRows}</tbody></table></div>` : "",
+            `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.3rem">${escapeHtml(z ? "对比数据来自球员对比 API，不构成转会建议。" : "Comparison from player comparison API; not a transfer recommendation.")}</p>`,
+        ].join("");
+    } catch {
+        result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("shortlist_compare_failed"))}</p>`;
+    }
 }
 
 function togglePlayerWatchlist(player) {
