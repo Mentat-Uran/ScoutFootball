@@ -484,6 +484,69 @@ class TestWatchlistNotesSecurity:
         assert "wl-note-player" in js or "wlNotePlayer" in js
 
 
+# ===== 13b. Scouting dashboard handoff wiring (Round 86) ====================
+class TestScoutingDashboardHandoffSecurity:
+    """Verify the Round 86 dashboard △ / ◇ handoff buttons escape player keys.
+
+    The dashboard renders candidate rows with data-cs-dash-short and
+    data-cs-dash-compare attributes carrying the player name as the lookup
+    key. These MUST go through escapeAttr() so a malicious or malformed
+    player name cannot break out of the attribute and inject markup.
+    """
+
+    def test_dashboard_short_button_uses_escape_attr(self):
+        js = _read_app_js()
+        idx = js.find("data-cs-dash-short=")
+        assert idx > 0, "dashboard shortlist button attribute not found"
+        nearby = js[max(0, idx - 200) : idx + 200]
+        assert "escapeAttr" in nearby, (
+            "data-cs-dash-short must use escapeAttr for the player key"
+        )
+
+    def test_dashboard_compare_button_uses_escape_attr(self):
+        js = _read_app_js()
+        idx = js.find("data-cs-dash-compare=")
+        assert idx > 0, "dashboard compare button attribute not found"
+        nearby = js[max(0, idx - 200) : idx + 200]
+        assert "escapeAttr" in nearby, (
+            "data-cs-dash-compare must use escapeAttr for the player key"
+        )
+
+    def test_dashboard_batch_button_label_escaped(self):
+        js = _read_app_js()
+        idx = js.find("cs-dash-batch-add")
+        assert idx > 0, "dashboard batch button id not found"
+        nearby = js[max(0, idx - 300) : idx + 300]
+        assert "escapeHtml" in nearby, (
+            "batch button label must be escaped with escapeHtml"
+        )
+
+    def test_dashboard_batch_reason_code_present(self):
+        js = _read_app_js()
+        assert "cross_scouting_dashboard_batch" in js, (
+            "batch reason code cross_scouting_dashboard_batch not wired"
+        )
+
+    def test_dashboard_single_reason_code_present(self):
+        js = _read_app_js()
+        assert "cross_scouting_dashboard" in js, (
+            "single-candidate reason code cross_scouting_dashboard not wired"
+        )
+
+    def test_dashboard_batch_handler_no_alert(self):
+        """Batch handler should surface status via textContent, not alert()."""
+        js = _read_app_js()
+        idx = js.find("function _wireCrossScoutingDashboardBatch")
+        assert idx > 0, "batch handler function definition not found"
+        func_body = js[idx : idx + 1400]
+        assert "alert(" not in func_body, (
+            "batch handler must not use alert() for status updates"
+        )
+        assert "textContent" in func_body, (
+            "batch handler should set status via textContent"
+        )
+
+
 # ===== 14. Tactical board regression: malicious project title ================
 class TestMaliciousTitleRegression:
     """Verify that XSS payloads in project titles are sanitized."""
