@@ -222,6 +222,9 @@ const i18n = {
         cross_scouting_dashboard_n_gaps: "缺口数",
         cross_scouting_dashboard_n_matched: "已匹配位置",
         cross_scouting_dashboard_export: "导出仪表盘",
+        cross_scouting_dashboard_batch_add: "批量加入短名单",
+        cross_scouting_dashboard_batch_added: "已加入 {n} 名候选",
+        cross_scouting_dashboard_batch_none: "无可加入的新候选",
         cross_scouting_export_csv: "导出 CSV",
         cross_scouting_export_json: "导出 JSON",
         cross_scouting_export_no_data: "无可导出数据",
@@ -1340,6 +1343,9 @@ const i18n = {
         cross_scouting_dashboard_n_gaps: "Gaps",
         cross_scouting_dashboard_n_matched: "Matched positions",
         cross_scouting_dashboard_export: "Export dashboard",
+        cross_scouting_dashboard_batch_add: "Batch add to shortlist",
+        cross_scouting_dashboard_batch_added: "Added {n} candidates",
+        cross_scouting_dashboard_batch_none: "No new candidates to add",
         cross_scouting_export_csv: "Export CSV",
         cross_scouting_export_json: "Export JSON",
         cross_scouting_export_no_data: "No data to export",
@@ -13617,15 +13623,40 @@ async function _renderCompareTrayResult(names) {
     }
 }
 
-function _wireCrossScoutingActionButtons(wrap, type, team, season, minMinutes, topN, excludeSameLeague, positionGroup) {
-    const shortAttr = type === "targets" ? "data-cs-tgt-short" : "data-cs-style-short";
-    const compareAttr = type === "targets" ? "data-cs-tgt-compare" : "data-cs-style-compare";
-    const reasonCode = type === "targets" ? "cross_scouting_gap_target" : "cross_scouting_style_match";
+function _wireCrossScoutingActionButtons(wrap, type, team, season, minMinutes, topN, excludeSameLeague, positionGroup, maxPositions, usePositionWeights) {
+    // Round 86: extended to handle three types — targets, style, dashboard.
+    // dashboard re-renders via _renderCrossScoutingDashboard (no per-position
+    // panel re-render) and uses its own reason code + dataset attributes.
+    const shortAttr = type === "targets"
+        ? "data-cs-tgt-short"
+        : type === "dashboard"
+            ? "data-cs-dash-short"
+            : "data-cs-style-short";
+    const compareAttr = type === "targets"
+        ? "data-cs-tgt-compare"
+        : type === "dashboard"
+            ? "data-cs-dash-compare"
+            : "data-cs-style-compare";
+    const reasonCode = type === "targets"
+        ? "cross_scouting_gap_target"
+        : type === "dashboard"
+            ? "cross_scouting_dashboard"
+            : "cross_scouting_style_match";
+    const shortDatasetKey = type === "targets"
+        ? "csTgtShort"
+        : type === "dashboard"
+            ? "csDashShort"
+            : "csStyleShort";
+    const compareDatasetKey = type === "targets"
+        ? "csTgtCompare"
+        : type === "dashboard"
+            ? "csDashCompare"
+            : "csStyleCompare";
 
     wrap.querySelectorAll(`[${shortAttr}]`).forEach((btn) => {
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const key = btn.dataset[type === "targets" ? "csTgtShort" : "csStyleShort"];
+            const key = btn.dataset[shortDatasetKey];
             const c = _csFindCandidateByKey(key, type);
             if (!c) return;
             togglePlayerShortlist({
@@ -13636,12 +13667,7 @@ function _wireCrossScoutingActionButtons(wrap, type, team, season, minMinutes, t
                 rating: c.optimized_score ?? 0,
                 reason_code: reasonCode,
             });
-            if (type === "targets") {
-                _renderScoutingTargets(team, season, minMinutes, topN, excludeSameLeague);
-            } else {
-                const weighted = document.getElementById("cross-scouting-style-weighted")?.checked ?? false;
-                _renderScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague, weighted);
-            }
+            _reRenderCrossScoutingSection(type, team, season, minMinutes, topN, excludeSameLeague, positionGroup, maxPositions, usePositionWeights);
             renderScouting();
         });
     });
@@ -13649,7 +13675,7 @@ function _wireCrossScoutingActionButtons(wrap, type, team, season, minMinutes, t
     wrap.querySelectorAll(`[${compareAttr}]`).forEach((btn) => {
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const key = btn.dataset[type === "targets" ? "csTgtCompare" : "csStyleCompare"];
+            const key = btn.dataset[compareDatasetKey];
             const c = _csFindCandidateByKey(key, type);
             if (!c) return;
             if (_crossScoutingCompareTray.length >= _CROSS_SCOUTING_COMPARE_MAX && !_crossScoutingCompareTray.some((p) => p.key === key)) return;
@@ -13664,6 +13690,22 @@ function _wireCrossScoutingActionButtons(wrap, type, team, season, minMinutes, t
     });
 
     _wireCrossScoutingExportButtons(wrap);
+}
+
+// Round 86: helper to re-render the appropriate cross-scouting section after
+// a shortlist toggle. Keeps _wireCrossScoutingActionButtons readable and
+// avoids duplicating the ternary chain in two places.
+function _reRenderCrossScoutingSection(type, team, season, minMinutes, topN, excludeSameLeague, positionGroup, maxPositions, usePositionWeights) {
+    if (type === "targets") {
+        _renderScoutingTargets(team, season, minMinutes, topN, excludeSameLeague);
+    } else if (type === "dashboard") {
+        _renderCrossScoutingDashboard(team, season, minMinutes, topN, maxPositions, usePositionWeights);
+    } else {
+        const weighted = usePositionWeights !== undefined
+            ? Boolean(usePositionWeights)
+            : document.getElementById("cross-scouting-style-weighted")?.checked ?? false;
+        _renderScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague, weighted);
+    }
 }
 
 function _wireCrossScoutingExportButtons(wrap) {
@@ -14113,6 +14155,9 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, max
     const weighted = data.use_position_weights === true;
 
     // ── Targets summary: top 3 gap positions with their top candidate ──
+    // Round 86: added △ shortlist + ◇ compare action column so the dashboard
+    // hands off directly to the shortlist / compare tray without forcing the
+    // user to open the dedicated gap-targets panel.
     const targetRows = gapTargets.slice(0, 3).map((g) => {
         const pos = escapeHtml(g.position_group || "—");
         const gap = g.depth_gap != null ? Number(g.depth_gap).toFixed(2) : "—";
@@ -14120,15 +14165,26 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, max
         const topName = escapeHtml(top.player_name || "—");
         const topTeam = escapeHtml(top.team || "");
         const topScore = top.optimized_score != null ? Number(top.optimized_score).toFixed(1) : "—";
+        const pKey = String(top.player_name || "");
+        const inShort = pKey ? isInPlayerShortlist(pKey) : false;
+        const shortBtn = pKey
+            ? `<button class="action-btn${inShort ? ' active' : ''}" data-cs-dash-short="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_shortlist'))}" type="button">\u25B3</button>`
+            : "";
+        const compareBtn = pKey
+            ? `<button class="action-btn" data-cs-dash-compare="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_compare'))}" type="button">\u25C7</button>`
+            : "";
         return `<tr>
             <td><strong>${pos}</strong></td>
             <td><span class="status-pill status-low">${escapeHtml(gap)}</span></td>
             <td>${topName}${topTeam ? ` <span style="color:var(--text-muted)">(${topTeam})</span>` : ""}</td>
             <td>${escapeHtml(topScore)}</td>
+            <td class="actions-cell">${shortBtn}${compareBtn}</td>
         </tr>`;
     }).join("");
 
     // ── Per-position style match sections (top 3 candidates each) ──
+    // Round 86: each candidate row now carries △ / ◇ buttons wired through
+    // _wireCrossScoutingActionButtons(wrap, "dashboard", ...).
     const styleSections = positionMatches.map((m) => {
         const pos = escapeHtml(m.position_group || "—");
         const target = m.target_player || {};
@@ -14141,11 +14197,20 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, max
             const name = escapeHtml(c.player_name || "—");
             const cTeam = escapeHtml(c.team || "");
             const cLeague = escapeHtml(c.league || "");
+            const pKey = String(c.player_name || "");
+            const inShort = pKey ? isInPlayerShortlist(pKey) : false;
+            const shortBtn = pKey
+                ? `<button class="action-btn${inShort ? ' active' : ''}" data-cs-dash-short="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_shortlist'))}" type="button">\u25B3</button>`
+                : "";
+            const compareBtn = pKey
+                ? `<button class="action-btn" data-cs-dash-compare="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_compare'))}" type="button">\u25C7</button>`
+                : "";
             return `<tr>
                 <td><strong>${name}</strong></td>
                 <td>${cTeam}</td>
                 <td>${cLeague}</td>
                 <td><span class="status-pill ${cls}">${escapeHtml(sim)}</span></td>
+                <td class="actions-cell">${shortBtn}${compareBtn}</td>
             </tr>`;
         }).join("");
         const targetLine = `${escapeHtml(t("cross_scouting_dashboard_style"))} · ${pos}`
@@ -14159,6 +14224,7 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, max
                     <th>${escapeHtml(t("cross_scouting_col_team"))}</th>
                     <th>${escapeHtml(t("cross_scouting_col_league"))}</th>
                     <th>${escapeHtml(t("cross_scouting_col_sim"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_actions"))}</th>
                    </tr></thead><tbody>${rows}</tbody></table></div>`
                 : `<p style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("cross_scouting_no_candidates"))}</p>`,
             `</div>`,
@@ -14174,6 +14240,7 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, max
                 <th>${escapeHtml(z ? "深度缺口" : "Gap")}</th>
                 <th>${escapeHtml(z ? "头号候选" : "Top candidate")}</th>
                 <th>${escapeHtml(z ? "评分" : "Score")}</th>
+                <th>${escapeHtml(t("cross_scouting_col_actions"))}</th>
                </tr></thead><tbody>${targetRows}</tbody></table></div>`
             : `<p style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(z ? "无缺口目标" : "No gap targets")}</p>`,
         `</div>`,
@@ -14186,17 +14253,33 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, max
         weighted ? `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_weighted"))}</span>` : "",
     ].join("");
 
+    // Round 86: batch "Add all gap-target candidates to shortlist" button.
+    // Adds the top candidate of each gap position to the shortlist with a
+    // distinct cross_scouting_dashboard_batch reason code. Skips players
+    // already in the shortlist. Shows a brief inline status line below the
+    // header instead of an alert() (matches the codebase convention of
+    // avoiding blocking dialogs for routine status updates).
+    const hasBatchCandidates = gapTargets.some((g) => {
+        const top = (g.candidates || [])[0];
+        return top && top.player_name && !isInPlayerShortlist(String(top.player_name));
+    });
+    const batchBtn = hasBatchCandidates
+        ? `<button class="text-button" id="cs-dash-batch-add" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_dashboard_batch_add"))}</button>`
+        : "";
+
     wrap.innerHTML = [
         `<div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.3rem 0 0.5rem;flex-wrap:wrap">`,
         `<div>`,
         `<h3 style="margin:0;font-size:0.95rem">${escapeHtml(t("cross_scouting_dashboard_title"))}: ${escapeHtml(team)}</h3>`,
         `<div style="margin-top:0.2rem">${badges}</div>`,
         `</div>`,
-        `<div style="display:flex;gap:0.3rem">`,
+        `<div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">`,
+        batchBtn,
         `<button class="text-button" data-cs-export="dashboard-csv" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
         `<button class="text-button" data-cs-export="dashboard-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
         `</div>`,
         `</div>`,
+        `<div id="cs-dash-batch-status" style="font-size:0.75rem;color:var(--text-muted);padding-bottom:0.3rem"></div>`,
         `<div style="display:flex;gap:var(--space);flex-wrap:wrap;padding:0 0 0.4rem">`,
         targetsSection,
         styleSections,
@@ -14204,7 +14287,48 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, max
         `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.3rem">${escapeHtml(z ? "仪表盘为聚合视图，完整数据请使用上方专属面板；不构成转会建议。" : "Dashboard is an aggregate view; use the dedicated panels above for full data. Not a transfer recommendation.")}</p>`,
     ].join("");
 
-    _wireCrossScoutingExportButtons(wrap);
+    _wireCrossScoutingActionButtons(
+        wrap, "dashboard", team, season, minMinutes, topN, excludeSameLeague, "",
+        maxPositions, usePositionWeights,
+    );
+    _wireCrossScoutingDashboardBatch(wrap, team, season, minMinutes, topN, maxPositions, usePositionWeights);
+}
+
+// Round 86: batch "Add all gap-target candidates to shortlist" handler.
+// Operates on the cached _lastCrossScoutingData.dashboard to avoid an extra
+// API round-trip. Re-renders the dashboard so △ buttons reflect the new
+// shortlist state, and surfaces a brief status line.
+function _wireCrossScoutingDashboardBatch(wrap, team, season, minMinutes, topN, maxPositions, usePositionWeights) {
+    const btn = wrap.querySelector("#cs-dash-batch-add");
+    const status = wrap.querySelector("#cs-dash-batch-status");
+    if (!btn || !status) return;
+    btn.addEventListener("click", () => {
+        const data = _lastCrossScoutingData.dashboard;
+        if (!data || data.status !== "ok") return;
+        const gaps = data.gap_targets || [];
+        let added = 0;
+        for (const g of gaps) {
+            const top = (g.candidates || [])[0];
+            if (!top || !top.player_name) continue;
+            const key = String(top.player_name);
+            if (isInPlayerShortlist(key)) continue;
+            togglePlayerShortlist({
+                key,
+                name: top.player_name || "",
+                team: top.team || "",
+                position: top.position_group || g.position_group || "",
+                rating: top.optimized_score ?? 0,
+                reason_code: "cross_scouting_dashboard_batch",
+            });
+            added += 1;
+        }
+        status.textContent = added > 0
+            ? t("cross_scouting_dashboard_batch_added").replace("{n}", String(added))
+            : t("cross_scouting_dashboard_batch_none");
+        // Re-render so △ active state refreshes.
+        _renderCrossScoutingDashboard(team, season, minMinutes, topN, maxPositions, usePositionWeights);
+        renderScouting();
+    });
 }
 
 // ── Risers / Decliners watchlist (career trajectory slope scan) ────────────
