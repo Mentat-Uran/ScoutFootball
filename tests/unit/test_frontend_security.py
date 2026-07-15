@@ -631,7 +631,7 @@ class TestShortlistProvenanceSecurity:
         js = _read_app_js()
         idx = js.find('document.getElementById("shortlist").innerHTML')
         assert idx > 0
-        nearby = js[idx : idx + 1200]
+        nearby = js[idx : idx + 1600]
         assert "_renderReasonCodePills" in nearby, (
             "shortlist rendering must call _renderReasonCodePills"
         )
@@ -1048,3 +1048,184 @@ class TestSimplifyButtonHtml:
         """Show on Tactical Board button should be in actions page."""
         content = _read_index()
         assert 'id="btn-xt-heatmap-tactical"' in content
+
+
+# ===== 24. Round 89: Shortlist Quick-Compare security ========================
+class TestShortlistQuickCompare:
+    """Verify the shortlist quick-compare feature follows security rules."""
+
+    def test_selection_state_variable_defined(self):
+        js = _read_app_js()
+        assert "let _shortlistCompareSelection = []" in js
+
+    def test_max_constant_defined(self):
+        js = _read_app_js()
+        assert "_SHORTLIST_COMPARE_MAX = 6" in js
+
+    def test_toggle_function_defined(self):
+        js = _read_app_js()
+        assert "function _toggleShortlistCompareSelect" in js
+
+    def test_clear_function_defined(self):
+        js = _read_app_js()
+        assert "function _clearShortlistCompareSelection" in js
+
+    def test_prune_function_defined(self):
+        js = _read_app_js()
+        assert "function _pruneShortlistCompareSelection" in js
+
+    def test_render_bar_function_defined(self):
+        js = _read_app_js()
+        assert "function _renderShortlistCompareBar" in js
+
+    def test_wire_bar_function_defined(self):
+        js = _read_app_js()
+        assert "function _wireShortlistCompareBar" in js
+
+    def test_wire_checkboxes_function_defined(self):
+        js = _read_app_js()
+        assert "function _wireShortlistCompareCheckboxes" in js
+
+    def test_resolve_names_function_defined(self):
+        js = _read_app_js()
+        assert "function _resolveShortlistCompareNames" in js
+
+    def test_render_result_function_defined(self):
+        js = _read_app_js()
+        assert "async function _renderShortlistCompareResult" in js
+
+    def test_checkbox_uses_escape_attr_for_key(self):
+        """The checkbox data-shortlist-compare-key must use escapeAttr."""
+        js = _read_app_js()
+        idx = js.find("data-shortlist-compare-key=")
+        assert idx > 0
+        snippet = js[max(0, idx - 200) : idx + 100]
+        assert "escapeAttr(dossierKey)" in snippet
+
+    def test_checkbox_uses_escape_attr_for_name(self):
+        """The checkbox data-shortlist-compare-name must use escapeAttr."""
+        js = _read_app_js()
+        idx = js.find("data-shortlist-compare-name=")
+        assert idx > 0
+        snippet = js[max(0, idx - 200) : idx + 100]
+        assert "escapeAttr(pName)" in snippet
+
+    def test_bar_button_label_uses_escape_html(self):
+        """The compare button label must use escapeHtml."""
+        js = _read_app_js()
+        idx = js.find("function _renderShortlistCompareBar")
+        assert idx > 0
+        func_body = js[idx : idx + 900]
+        assert "escapeHtml" in func_body
+
+    def test_bar_hint_uses_escape_html(self):
+        """The hint text in the bar must use escapeHtml."""
+        js = _read_app_js()
+        idx = js.find("function _renderShortlistCompareBar")
+        assert idx > 0
+        func_body = js[idx : idx + 1300]
+        assert "escapeHtml(hint)" in func_body
+
+    def test_result_renderer_uses_escape_html(self):
+        """The result renderer must escape all dynamic content."""
+        js = _read_app_js()
+        idx = js.find("async function _renderShortlistCompareResult")
+        assert idx > 0
+        func_body = js[idx : idx + 3000]
+        # Player names, teams, dimension labels must all be escaped
+        assert func_body.count("escapeHtml") >= 10
+
+    def test_result_renderer_uses_escape_html_for_loading(self):
+        """The loading message must use escapeHtml."""
+        js = _read_app_js()
+        idx = js.find("async function _renderShortlistCompareResult")
+        assert idx > 0
+        func_body = js[idx : idx + 600]
+        assert "escapeHtml(t(" in func_body
+
+    def test_no_eval_in_compare_code(self):
+        """No eval() in the quick-compare helpers."""
+        js = _read_app_js()
+        idx = js.find("===== Round 89")
+        assert idx > 0
+        end_idx = js.find("function togglePlayerWatchlist", idx)
+        assert end_idx > idx
+        snippet = js[idx:end_idx]
+        assert "eval(" not in snippet
+
+    def test_no_innerhtml_without_escape_in_compare_bar(self):
+        """The bar innerHTML must use escapeHtml for dynamic content."""
+        js = _read_app_js()
+        idx = js.find("function _renderShortlistCompareBar")
+        assert idx > 0
+        func_body = js[idx : idx + 1300]
+        # The only innerHTML assignment should contain escapeHtml calls
+        assert "innerHTML" in func_body
+        assert "escapeHtml" in func_body
+
+    def test_renderscout_calls_wire_functions(self):
+        """renderScouting must call the new wiring functions."""
+        js = _read_app_js()
+        idx = js.find("function renderScouting")
+        assert idx > 0
+        func_body = js[idx : idx + 16000]
+        assert "_wireShortlistCompareCheckboxes" in func_body
+        assert "_renderShortlistCompareBar" in func_body
+        assert "_wireShortlistCompareBar" in func_body
+
+    def test_renderscout_prunes_selection(self):
+        """renderScouting must prune stale compare selections."""
+        js = _read_app_js()
+        idx = js.find("function renderScouting")
+        assert idx > 0
+        func_body = js[idx : idx + 16000]
+        assert "_pruneShortlistCompareSelection" in func_body
+
+    def test_checkbox_label_uses_escape_html_for_text(self):
+        """The checkbox label text ('对比'/'Cmp') must use escapeHtml."""
+        js = _read_app_js()
+        idx = js.find("data-shortlist-compare-key=")
+        assert idx > 0
+        snippet = js[idx : idx + 300]
+        assert "escapeHtml" in snippet
+
+    def test_compare_result_container_in_html(self):
+        """The shortlist-compare-result div must exist in index.html."""
+        content = _read_index()
+        assert 'id="shortlist-compare-result"' in content
+
+    def test_compare_bar_container_in_html(self):
+        """The shortlist-compare-bar div must exist in index.html."""
+        content = _read_index()
+        assert 'id="shortlist-compare-bar"' in content
+
+    def test_i18n_keys_present_zh(self):
+        """All 7 new i18n keys must be present (zh)."""
+        js = _read_app_js()
+        for key in [
+            "shortlist_compare_btn",
+            "shortlist_compare_clear",
+            "shortlist_compare_min",
+            "shortlist_compare_max",
+            "shortlist_compare_loading",
+            "shortlist_compare_unavailable",
+            "shortlist_compare_failed",
+        ]:
+            assert f"{key}:" in js, f"Missing i18n key: {key}"
+
+    def test_i18n_keys_present_en(self):
+        """All 7 new i18n keys must be present (en section)."""
+        js = _read_app_js()
+        # Find the en section and verify keys exist there too
+        en_idx = js.find("Compare selected")
+        assert en_idx > 0
+
+    def test_fetch_uses_existing_api_helper(self):
+        """The result renderer should call fetchPlayerComparisonMulti, not a raw URL."""
+        js = _read_app_js()
+        idx = js.find("async function _renderShortlistCompareResult")
+        assert idx > 0
+        func_body = js[idx : idx + 3000]
+        assert "fetchPlayerComparisonMulti" in func_body
+        # Should not construct a raw fetch URL
+        assert "/players/compare-multi" not in func_body
