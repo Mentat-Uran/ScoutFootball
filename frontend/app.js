@@ -201,6 +201,17 @@ const i18n = {
         cross_scouting_status_no_data: "无数据",
         cross_scouting_status_not_found: "未找到球队",
         cross_scouting_status_invalid_pos: "无效位置组",
+        cross_scouting_col_actions: "操作",
+        cross_scouting_add_shortlist: "加入短名单",
+        cross_scouting_add_compare: "加入对比",
+        cross_scouting_compare_tray: "对比栏",
+        cross_scouting_compare_clear: "清空",
+        cross_scouting_compare_run: "对比",
+        cross_scouting_compare_need_two: "需要选择 2 名球员",
+        cross_scouting_compare_max: "最多选择 2 名球员",
+        cross_scouting_export_csv: "导出 CSV",
+        cross_scouting_export_json: "导出 JSON",
+        cross_scouting_export_no_data: "无可导出数据",
         scouting_metric_review: "待复核",
         scouting_metric_short: "候选",
         scouting_search: "搜索球员、球队或原因",
@@ -1295,6 +1306,17 @@ const i18n = {
         cross_scouting_status_no_data: "No data",
         cross_scouting_status_not_found: "Team not found",
         cross_scouting_status_invalid_pos: "Invalid position group",
+        cross_scouting_col_actions: "Actions",
+        cross_scouting_add_shortlist: "Add to shortlist",
+        cross_scouting_add_compare: "Add to compare",
+        cross_scouting_compare_tray: "Compare tray",
+        cross_scouting_compare_clear: "Clear",
+        cross_scouting_compare_run: "Compare",
+        cross_scouting_compare_need_two: "Select 2 players to compare",
+        cross_scouting_compare_max: "Max 2 players",
+        cross_scouting_export_csv: "Export CSV",
+        cross_scouting_export_json: "Export JSON",
+        cross_scouting_export_no_data: "No data to export",
         scouting_metric_review: "To review",
         scouting_metric_short: "Shortlist",
         scouting_search: "Search player, team, or reason",
@@ -13322,6 +13344,277 @@ function _crossScoutingStatusText(status, z) {
     return map[status] || status || "—";
 }
 
+// Module-level cache for cross-scouting results (used by export buttons).
+const _lastCrossScoutingData = { depth: null, targets: null, style: null };
+
+// Compare tray for cross-scouting candidate comparison (max 2 players).
+let _crossScoutingCompareTray = [];
+
+function _csFindCandidateByKey(key, type) {
+    const data = type === "targets" ? _lastCrossScoutingData.targets : _lastCrossScoutingData.style;
+    if (!data || data.status !== "ok") return null;
+    if (type === "targets") {
+        for (const g of data.gap_targets || []) {
+            for (const c of g.candidates || []) {
+                if (String(c.player_name || "") === key) return c;
+            }
+        }
+    } else {
+        for (const c of data.candidates || []) {
+            if (String(c.player_name || "") === key) return c;
+        }
+    }
+    return null;
+}
+
+function _addToCompareTray(player) {
+    if (!player || !player.name) return;
+    if (_crossScoutingCompareTray.some((p) => p.key === player.key)) return;
+    if (_crossScoutingCompareTray.length >= 2) return;
+    _crossScoutingCompareTray.push(player);
+    _renderCompareTray();
+}
+
+function _clearCompareTray() {
+    _crossScoutingCompareTray = [];
+    _renderCompareTray();
+}
+
+function _renderCompareTray() {
+    const tray = document.getElementById("cross-scouting-compare-tray");
+    if (!tray) return;
+    const z = appState.lang === "zh";
+    const trayItems = _crossScoutingCompareTray;
+    if (trayItems.length === 0) {
+        tray.style.display = "none";
+        tray.innerHTML = "";
+        return;
+    }
+    tray.style.display = "block";
+    const itemHtml = trayItems.map((p, i) =>
+        `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;background:var(--surface-alt);border-radius:0.3rem;font-size:0.8rem">
+            <strong>${escapeHtml(p.name)}</strong>
+            <span style="color:var(--text-muted)">${escapeHtml(p.team)}</span>
+            <button class="text-button" data-cs-compare-remove="${i}" type="button" style="font-size:0.75rem;padding:0 0.2rem">×</button>
+        </span>`
+    ).join("");
+    const canCompare = trayItems.length === 2;
+    tray.innerHTML = [
+        `<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:0.3rem var(--space)">`,
+        `<span style="font-size:0.8rem;color:var(--text-muted)">${escapeHtml(t("cross_scouting_compare_tray"))}:</span>`,
+        itemHtml,
+        `<button class="cta-button" data-cs-compare-run type="button" style="font-size:0.75rem;padding:0.2rem 0.6rem"${canCompare ? "" : " disabled"}>${escapeHtml(t("cross_scouting_compare_run"))}</button>`,
+        `<button class="text-button" data-cs-compare-clear type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_compare_clear"))}</button>`,
+        canCompare ? "" : `<span style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(t("cross_scouting_compare_need_two"))}</span>`,
+        `</div>`,
+        `<div id="cross-scouting-compare-result" style="padding:0 var(--space) var(--space)"></div>`,
+    ].join("");
+    tray.querySelectorAll("[data-cs-compare-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const idx = Number(btn.dataset.csCompareRemove);
+            _crossScoutingCompareTray.splice(idx, 1);
+            _renderCompareTray();
+        });
+    });
+    const runBtn = tray.querySelector("[data-cs-compare-run]");
+    if (runBtn && canCompare) {
+        runBtn.addEventListener("click", async () => {
+            await _renderCompareTrayResult(trayItems[0].name, trayItems[1].name);
+        });
+    }
+    const clearBtn = tray.querySelector("[data-cs-compare-clear]");
+    if (clearBtn) clearBtn.addEventListener("click", _clearCompareTray);
+}
+
+async function _renderCompareTrayResult(nameA, nameB) {
+    const result = document.getElementById("cross-scouting-compare-result");
+    if (!result) return;
+    const z = appState.lang === "zh";
+    result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在对比…" : "Comparing…")}</p>`;
+    try {
+        const data = await fetchPlayerComparison(nameA, nameB);
+        if (data.error || data.status === "fetch_failed" || !data.player_a) {
+            result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "对比数据不可用" : "Comparison unavailable")}</p>`;
+            return;
+        }
+        const pa = data.player_a || {};
+        const pb = data.player_b || {};
+        const metrics = data.metrics || {};
+        const metricRows = Object.entries(metrics).map(([k, v]) => `<tr>
+            <td>${escapeHtml(k)}</td>
+            <td>${escapeHtml(String(pa[k] ?? v?.player_a ?? "—"))}</td>
+            <td>${escapeHtml(String(pb[k] ?? v?.player_b ?? "—"))}</td>
+        </tr>`).join("");
+        result.innerHTML = [
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>${escapeHtml(z ? "指标" : "Metric")}</th>`,
+            `<th>${escapeHtml(pa.name || nameA)}</th>`,
+            `<th>${escapeHtml(pb.name || nameB)}</th>`,
+            `</tr></thead><tbody>${metricRows}</tbody></table></div>`,
+            `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.3rem">${escapeHtml(z ? "对比数据来自球员对比 API，不构成转会建议。" : "Comparison from player comparison API; not a transfer recommendation.")}</p>`,
+        ].join("");
+    } catch {
+        result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "对比请求失败" : "Comparison fetch failed")}</p>`;
+    }
+}
+
+function _wireCrossScoutingActionButtons(wrap, type, team, season, minMinutes, topN, excludeSameLeague, positionGroup) {
+    const shortAttr = type === "targets" ? "data-cs-tgt-short" : "data-cs-style-short";
+    const compareAttr = type === "targets" ? "data-cs-tgt-compare" : "data-cs-style-compare";
+    const reasonCode = type === "targets" ? "cross_scouting_gap_target" : "cross_scouting_style_match";
+
+    wrap.querySelectorAll(`[${shortAttr}]`).forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const key = btn.dataset[type === "targets" ? "csTgtShort" : "csStyleShort"];
+            const c = _csFindCandidateByKey(key, type);
+            if (!c) return;
+            togglePlayerShortlist({
+                key,
+                name: c.player_name || "",
+                team: c.team || "",
+                position: c.position_group || "",
+                rating: c.optimized_score ?? 0,
+                reason_code: reasonCode,
+            });
+            if (type === "targets") {
+                _renderScoutingTargets(team, season, minMinutes, topN, excludeSameLeague);
+            } else {
+                _renderScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague);
+            }
+            renderScouting();
+        });
+    });
+
+    wrap.querySelectorAll(`[${compareAttr}]`).forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const key = btn.dataset[type === "targets" ? "csTgtCompare" : "csStyleCompare"];
+            const c = _csFindCandidateByKey(key, type);
+            if (!c) return;
+            if (_crossScoutingCompareTray.length >= 2 && !_crossScoutingCompareTray.some((p) => p.key === key)) return;
+            _addToCompareTray({
+                key,
+                name: c.player_name || "",
+                team: c.team || "",
+                position: c.position_group || "",
+                rating: c.optimized_score ?? 0,
+            });
+        });
+    });
+
+    _wireCrossScoutingExportButtons(wrap);
+}
+
+function _wireCrossScoutingExportButtons(wrap) {
+    wrap.querySelectorAll("[data-cs-export]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const type = btn.dataset.csExport;
+            if (type.endsWith("-csv")) _exportCrossScoutingCSV(type.replace("-csv", ""));
+            else if (type.endsWith("-json")) _exportCrossScoutingJSON(type.replace("-json", ""));
+        });
+    });
+}
+
+function _downloadCrossScoutingFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function _exportCrossScoutingJSON(type) {
+    const data = _lastCrossScoutingData[type];
+    if (!data || data.status !== "ok") return;
+    const payload = {
+        schema: `scoutfootball.cross-scouting-${type}`,
+        version: "1.0.0",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        source: data,
+        limitations: [
+            "Cross-scouting results are non-additive interpretive overlays.",
+            "Does not constitute a transfer directive or scouting verdict.",
+            "Browser-local download; not server-side audit or cross-device sync.",
+        ],
+    };
+    _downloadCrossScoutingFile(
+        JSON.stringify(payload, null, 2),
+        `scoutfootball-cross-scouting-${type}-${Date.now()}.json`,
+        "application/json;charset=utf-8",
+    );
+}
+
+function _exportCrossScoutingCSV(type) {
+    const data = _lastCrossScoutingData[type];
+    if (!data || data.status !== "ok") return;
+    const lines = [];
+    lines.push([`# ScoutFootball Cross-Scouting ${type} export`]);
+    lines.push(["storage_scope", "browser-local-download"]);
+    lines.push(["exported_at", new Date().toISOString()]);
+    lines.push([]);
+
+    if (type === "depth") {
+        lines.push(["position_group", "team_a_n", "team_a_mean", "team_a_depth", "team_b_n", "team_b_mean", "team_b_depth", "advantage"]);
+        for (const c of data.position_comparison || []) {
+            lines.push([
+                c.position_group || "",
+                String(c.team_a?.n_players ?? 0),
+                c.team_a?.mean_score != null ? Number(c.team_a.mean_score).toFixed(2) : "",
+                c.team_a?.depth_label || "",
+                String(c.team_b?.n_players ?? 0),
+                c.team_b?.mean_score != null ? Number(c.team_b.mean_score).toFixed(2) : "",
+                c.team_b?.depth_label || "",
+                c.advantage || "",
+            ]);
+        }
+    } else if (type === "targets") {
+        lines.push(["position_group", "gap_type", "threshold", "player_name", "team", "league", "optimized_score", "minutes", "percentile_in_league"]);
+        for (const g of data.gap_targets || []) {
+            for (const c of g.candidates || []) {
+                lines.push([
+                    g.position_group || "",
+                    g.gap_type || "",
+                    g.threshold != null ? String(g.threshold) : "",
+                    c.player_name || "",
+                    c.team || "",
+                    c.league || "",
+                    c.optimized_score != null ? String(c.optimized_score) : "",
+                    c.minutes != null ? String(c.minutes) : "",
+                    c.percentile_in_league != null ? String(c.percentile_in_league) : "",
+                ]);
+            }
+        }
+    } else if (type === "style") {
+        lines.push(["player_name", "team", "league", "optimized_score", "minutes", "style_similarity"]);
+        for (const c of data.candidates || []) {
+            lines.push([
+                c.player_name || "",
+                c.team || "",
+                c.league || "",
+                c.optimized_score != null ? String(c.optimized_score) : "",
+                c.minutes != null ? String(c.minutes) : "",
+                c.style_similarity != null ? String(c.style_similarity) : "",
+            ]);
+        }
+    }
+
+    lines.push([]);
+    lines.push(["# Limitations"]);
+    lines.push(["Cross-scouting results are non-additive interpretive overlays."]);
+    lines.push(["Does not constitute a transfer directive or scouting verdict."]);
+    lines.push(["Browser-local download; not server-side audit or cross-device sync."]);
+
+    _downloadCrossScoutingFile(
+        `\uFEFF${lines.map((row) => row.map(csvCell).join(",")).join("\n")}`,
+        `scoutfootball-cross-scouting-${type}-${Date.now()}.csv`,
+        "text/csv;charset=utf-8",
+    );
+}
+
 async function _renderCrossLeagueDepth(teamA, teamB, season, minMinutes) {
     const wrap = document.getElementById("cross-scouting-depth-result");
     const pill = document.getElementById("cross-scouting-pill");
@@ -13330,6 +13623,7 @@ async function _renderCrossLeagueDepth(teamA, teamB, season, minMinutes) {
     if (pill) pill.textContent = "…";
 
     const data = await fetchCrossLeagueTeamDepth(teamA, teamB, season, minMinutes);
+    _lastCrossScoutingData.depth = data;
 
     if (data.error || data.status === "fetch_failed") {
         if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
@@ -13384,6 +13678,8 @@ async function _renderCrossLeagueDepth(teamA, teamB, season, minMinutes) {
             `<div style="padding:0.3rem 0 0.5rem;font-size:0.82rem">`,
             `<strong>${escapeHtml(teamAName)}</strong> <span style="color:var(--text-muted)">(${escapeHtml(teamALeague)})</span> vs `,
             `<strong>${escapeHtml(teamBName)}</strong> <span style="color:var(--text-muted)">(${escapeHtml(teamBLeague)})</span>`,
+            ` <button class="text-button" data-cs-export="depth-csv" type="button" style="margin-left:0.5rem;font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
+            ` <button class="text-button" data-cs-export="depth-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
             `</div>`,
             sameLeagueNote,
             `<div class="table-scroll"><table class="data-table"><thead><tr>`,
@@ -13407,6 +13703,7 @@ async function _renderCrossLeagueDepth(teamA, teamB, season, minMinutes) {
                 : "",
             data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
         ].join("");
+        _wireCrossScoutingExportButtons(wrap);
     }
 }
 
@@ -13418,6 +13715,7 @@ async function _renderScoutingTargets(team, season, minMinutes, topN, excludeSam
     if (pill) pill.textContent = "…";
 
     const data = await fetchScoutingTargets(team, season, minMinutes, topN, excludeSameLeague);
+    _lastCrossScoutingData.targets = data;
 
     if (data.error || data.status === "fetch_failed") {
         if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
@@ -13440,14 +13738,22 @@ async function _renderScoutingTargets(team, season, minMinutes, topN, excludeSam
 
     const blocks = gaps.map((g) => {
         const candidates = g.candidates || [];
-        const candRows = candidates.map((c) => `<tr>
-            <td><strong>${escapeHtml(c.player_name || "")}</strong></td>
-            <td>${escapeHtml(c.team || "")}</td>
-            <td>${escapeHtml(c.league || "")}</td>
-            <td>${escapeHtml(String(c.optimized_score ?? "—"))}</td>
-            <td>${escapeHtml(String(c.minutes ?? "—"))}</td>
-            <td>${escapeHtml(c.percentile_in_league != null ? Number(c.percentile_in_league).toFixed(1) + "%" : "—")}</td>
-        </tr>`).join("");
+        const candRows = candidates.map((c) => {
+            const pKey = String(c.player_name || "");
+            const inShort = isInPlayerShortlist(pKey);
+            return `<tr>
+                <td><strong>${escapeHtml(c.player_name || "")}</strong></td>
+                <td>${escapeHtml(c.team || "")}</td>
+                <td>${escapeHtml(c.league || "")}</td>
+                <td>${escapeHtml(String(c.optimized_score ?? "—"))}</td>
+                <td>${escapeHtml(String(c.minutes ?? "—"))}</td>
+                <td>${escapeHtml(c.percentile_in_league != null ? Number(c.percentile_in_league).toFixed(1) + "%" : "—")}</td>
+                <td class="actions-cell">
+                    <button class="action-btn${inShort ? ' active' : ''}" data-cs-tgt-short="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_shortlist'))}" type="button">\u25B3</button>
+                    <button class="action-btn" data-cs-tgt-compare="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_compare'))}" type="button">\u25C7</button>
+                </td>
+            </tr>`;
+        }).join("");
         const thresholdStr = g.threshold != null ? Number(g.threshold).toFixed(2) : "—";
         return `<div style="margin-bottom:0.8rem">
             <h4 style="padding:0.3rem 0">${escapeHtml(g.position_group || "")}
@@ -13463,6 +13769,7 @@ async function _renderScoutingTargets(team, season, minMinutes, topN, excludeSam
                     <th>${escapeHtml(t("cross_scouting_col_score"))}</th>
                     <th>${escapeHtml(t("cross_scouting_col_minutes"))}</th>
                     <th>${escapeHtml(t("cross_scouting_col_pct"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_actions"))}</th>
                    </tr></thead><tbody>${candRows}</tbody></table></div>`}
         </div>`;
     }).join("");
@@ -13473,10 +13780,13 @@ async function _renderScoutingTargets(team, season, minMinutes, topN, excludeSam
             `<strong>${escapeHtml(team)}</strong>`,
             data.league ? ` <span style="color:var(--text-muted)">(${escapeHtml(data.league)})</span>` : "",
             ` · ${data.n_gaps ?? gaps.length} ${escapeHtml(z ? "个缺口" : "gaps")}`,
+            ` <button class="text-button" data-cs-export="targets-csv" type="button" style="margin-left:0.5rem;font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
+            ` <button class="text-button" data-cs-export="targets-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
             `</div>`,
             blocks,
             data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
         ].join("");
+        _wireCrossScoutingActionButtons(wrap, "targets", team, season, minMinutes, topN, excludeSameLeague);
     }
 }
 
@@ -13488,6 +13798,7 @@ async function _renderScoutingStyleMatch(team, positionGroup, season, minMinutes
     if (pill) pill.textContent = "…";
 
     const data = await fetchScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague);
+    _lastCrossScoutingData.style = data;
 
     if (data.error || data.status === "fetch_failed") {
         if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
@@ -13515,6 +13826,8 @@ async function _renderScoutingStyleMatch(team, positionGroup, season, minMinutes
     const candRows = candidates.map((c) => {
         const sim = c.style_similarity != null ? Number(c.style_similarity).toFixed(4) : "—";
         const cls = Number(c.style_similarity) >= 0.9 ? "status-high" : Number(c.style_similarity) >= 0.7 ? "status-medium" : "status-low";
+        const pKey = String(c.player_name || "");
+        const inShort = isInPlayerShortlist(pKey);
         return `<tr>
             <td><strong>${escapeHtml(c.player_name || "")}</strong></td>
             <td>${escapeHtml(c.team || "")}</td>
@@ -13522,6 +13835,10 @@ async function _renderScoutingStyleMatch(team, positionGroup, season, minMinutes
             <td>${escapeHtml(String(c.optimized_score ?? "—"))}</td>
             <td>${escapeHtml(String(c.minutes ?? "—"))}</td>
             <td><span class="status-pill ${cls}">${escapeHtml(sim)}</span></td>
+            <td class="actions-cell">
+                <button class="action-btn${inShort ? ' active' : ''}" data-cs-style-short="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_shortlist'))}" type="button">\u25B3</button>
+                <button class="action-btn" data-cs-style-compare="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_compare'))}" type="button">\u25C7</button>
+            </td>
         </tr>`;
     }).join("");
 
@@ -13532,6 +13849,8 @@ async function _renderScoutingStyleMatch(team, positionGroup, season, minMinutes
             target.team ? ` <span style="color:var(--text-muted)">(${escapeHtml(target.team)})</span>` : "",
             target.league ? ` <span style="color:var(--text-muted)">· ${escapeHtml(target.league)}</span>` : "",
             target.optimized_score != null ? ` · ${escapeHtml(String(Number(target.optimized_score).toFixed(2)))}` : "",
+            ` <button class="text-button" data-cs-export="style-csv" type="button" style="margin-left:0.5rem;font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
+            ` <button class="text-button" data-cs-export="style-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
             `</div>`,
             styleRow ? `<div style="padding:0.2rem 0 0.4rem">${styleRow}</div>` : "",
             candidates.length === 0
@@ -13543,9 +13862,11 @@ async function _renderScoutingStyleMatch(team, positionGroup, season, minMinutes
                     <th>${escapeHtml(t("cross_scouting_col_score"))}</th>
                     <th>${escapeHtml(t("cross_scouting_col_minutes"))}</th>
                     <th>${escapeHtml(t("cross_scouting_col_sim"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_actions"))}</th>
                    </tr></thead><tbody>${candRows}</tbody></table></div>`,
             data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
         ].join("");
+        _wireCrossScoutingActionButtons(wrap, "style", team, season, minMinutes, topN, excludeSameLeague, positionGroup);
     }
 }
 
