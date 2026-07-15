@@ -1320,6 +1320,23 @@
                             <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_compare_team">球队</label>
                             <input type="text" id="cross-scouting-dashboard-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
                         </div>
+                        <div class="glass-control" style="min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_dashboard_max_positions">最大位置数</label>
+                            <select id="cross-scouting-dashboard-max-positions" class="filter-input" style="width:100%;margin-top:0.3rem">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                            </select>
+                        </div>
+                        <label class="glass-control" style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem;padding-bottom:0.4rem">
+                            <input type="checkbox" id="cross-scouting-dashboard-weighted">
+                            <span data-i18n="cross_scouting_dashboard_weighted">位置加权</span>
+                        </label>
                         <button id="cross-scouting-dashboard-btn" class="cta-button" type="button" data-i18n="cross_scouting_dashboard_btn">仪表盘</button>
                     </div>
                     <div id="cross-scouting-dashboard-result" style="display:none;padding:0 var(--space) var(--space)"></div>
