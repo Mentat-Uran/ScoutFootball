@@ -712,14 +712,14 @@ def compute_pairwise_similarity(
 
 
 _MULTI_COMPARE_MIN = 2
-_MULTI_COMPARE_MAX = 5
+_MULTI_COMPARE_MAX = 6
 
 
 def compute_multi_player_comparison(
     player_rows_by_name: dict[str, pd.Series],
     df: pd.DataFrame,
 ) -> dict[str, Any]:
-    """Compare 2–5 players side-by-side with a percentile matrix.
+    """Compare 2–6 players side-by-side with a percentile matrix.
 
     Parameters
     ----------
