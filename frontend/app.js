@@ -9645,7 +9645,7 @@ function renderScouting() {
             const statusClass = "status-" + status;
             const icon = STATUS_ICONS[status] || "\u25CB";
             const conf = (p.confidence_level || p.confidence || "LOW").toUpperCase();
-            const meta = [p.team, p.position_group || p.position, `${p.minutes || 0}min`, p.reason_code, p.as_of_date]
+            const meta = [p.team, p.position_group || p.position, `${p.minutes || 0}min`, _entryReasonCodes(p).join(", ") || p.reason_code, p.as_of_date]
                 .filter(Boolean).join(" \u00B7 ");
             reviewHtml += `
                 <div class="rank-item" data-review-state="${escapeAttr(status)}">
@@ -9701,7 +9701,7 @@ function renderScouting() {
         <div class="watch-card">
             <div>
                 <strong>${escapeHtml(pName)}</strong>
-                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
+                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player)}
             </div>
             <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
             <div class="watch-card-extra">
@@ -9724,7 +9724,7 @@ function renderScouting() {
         <div class="watch-card">
             <div>
                 <strong>${escapeHtml(pName)}</strong>
-                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
+                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player)}
             </div>
             <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
             <div class="watch-card-extra">
@@ -9816,7 +9816,7 @@ function filterReviewQueue(queue) {
     const query = appState.scoutingQuery.trim().toLowerCase();
     return queue.filter((player) => {
         const statusMatch = appState.scoutingStatus === "ALL" || getQueueStatus(player) === appState.scoutingStatus;
-        const haystack = [player.player_name, player.name, player.team, player.league, player.position_group, player.reason_code]
+        const haystack = [player.player_name, player.name, player.team, player.league, player.position_group, player.reason_code, _entryReasonCodes(player).join(" ")]
             .join(" ").toLowerCase();
         return statusMatch && (!query || haystack.includes(query));
     });
@@ -13211,11 +13211,11 @@ async function _renderClusterRecruits(clusterId, season, league, nClusters) {
             const pos = row?.querySelector("td:nth-child(4)")?.textContent || "";
             const ratingText = row?.querySelector("td:nth-child(6)")?.textContent || "";
             const rating = parseFloat(ratingText) || null;
-            const added = togglePlayerWatchlist({
+            const result = togglePlayerWatchlist({
                 key, name, team, position: pos, rating,
                 reason_code: "cluster_recruit_fit",
             });
-            btn.classList.toggle("active", added);
+            btn.classList.toggle("active", result.added);
         });
     });
     wrap.querySelectorAll("[data-rec-short]").forEach(btn => {
@@ -13227,11 +13227,11 @@ async function _renderClusterRecruits(clusterId, season, league, nClusters) {
             const pos = row?.querySelector("td:nth-child(4)")?.textContent || "";
             const ratingText = row?.querySelector("td:nth-child(6)")?.textContent || "";
             const rating = parseFloat(ratingText) || null;
-            const added = togglePlayerShortlist({
+            const result = togglePlayerShortlist({
                 key, name, team, position: pos, rating,
                 reason_code: "cluster_recruit_fit",
             });
-            btn.classList.toggle("active", added);
+            btn.classList.toggle("active", result.added);
         });
     });
 }
@@ -23247,31 +23247,140 @@ function isInPlayerWatchlist(playerKey) {
 function isInPlayerShortlist(playerKey) {
     return getPlayerShortlist().some((p) => p.key === playerKey);
 }
+
+// Round 87: shortlist / watchlist source provenance.
+//
+// Both toggle functions previously used a binary add-or-remove keyed on
+// player.key alone. Once a player was in the list, any △ click from a
+// different source (e.g. gap-target panel vs dashboard) would REMOVE them
+// entirely, silently discarding the original source attribution.
+//
+// The new behaviour accumulates reason codes in a `reason_codes` array:
+//  - player NOT in list → add entry with reason_codes: [code]
+//  - player IN list, toggling with a NEW code → append code to reason_codes
+//  - player IN list, toggling with an EXISTING code → remove that code;
+//    if reason_codes becomes empty, remove the entry (preserves toggle-off)
+//
+// Legacy entries that only have a `reason_code` string are migrated on read
+// via _entryReasonCodes(). The `reason_code` field is kept in sync (set to
+// the first code) for backward-compat with existing render/export code that
+// reads player.reason_code directly.
+//
+// Returns { added: bool, reason_codes: string[], source_change: "added"|"merged"|"removed"|"noop" }
+// so callers can surface an appropriate status line.
+function _entryReasonCodes(entry) {
+    if (!entry) return [];
+    if (Array.isArray(entry.reason_codes)) return entry.reason_codes.slice();
+    if (entry.reason_code) return [entry.reason_code];
+    return [];
+}
+
+function _normalizeEntryReasonCodes(entry) {
+    const codes = _entryReasonCodes(entry);
+    entry.reason_codes = codes;
+    entry.reason_code = codes[0] || "";
+    return entry;
+}
+
+// Round 87: render reason codes as small pills so the user can see at a
+// glance which sources recommended a player. Each code is escaped; codes
+// are deduped and sorted by first-seen order (the order in the array).
+function _renderReasonCodePills(entry) {
+    const codes = _entryReasonCodes(entry);
+    if (codes.length === 0) return "";
+    return codes.map((code) =>
+        `<span class="status-pill status-low" style="margin-left:0.25rem;font-size:0.65rem">${escapeHtml(code)}</span>`
+    ).join("");
+}
+
 function togglePlayerWatchlist(player) {
     const list = getPlayerWatchlist();
     const idx = list.findIndex((p) => p.key === player.key);
+    const newCode = player.reason_code || "";
     if (idx >= 0) {
+        const entry = _normalizeEntryReasonCodes(list[idx]);
+        const codes = entry.reason_codes;
+        const codeIdx = newCode ? codes.indexOf(newCode) : -1;
+        if (newCode && codeIdx >= 0) {
+            // toggle off this specific source
+            codes.splice(codeIdx, 1);
+            if (codes.length === 0) {
+                list.splice(idx, 1);
+                savePlayerWatchlist(list);
+                return { added: false, reason_codes: [], source_change: "removed" };
+            }
+            entry.reason_codes = codes;
+            entry.reason_code = codes[0] || "";
+            savePlayerWatchlist(list);
+            return { added: false, reason_codes: codes, source_change: "removed" };
+        }
+        if (newCode && codeIdx < 0) {
+            // accumulate a new source
+            codes.push(newCode);
+            entry.reason_codes = codes;
+            entry.reason_code = codes[0] || "";
+            savePlayerWatchlist(list);
+            return { added: true, reason_codes: codes, source_change: "merged" };
+        }
+        // no reason_code supplied → toggle off entirely (legacy behaviour)
         list.splice(idx, 1);
-    } else {
-        const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
-        if (player.reason_code) entry.reason_code = player.reason_code;
-        list.push(entry);
+        savePlayerWatchlist(list);
+        return { added: false, reason_codes: [], source_change: "removed" };
     }
+    const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
+    if (newCode) {
+        entry.reason_codes = [newCode];
+        entry.reason_code = newCode;
+    } else {
+        entry.reason_codes = [];
+        entry.reason_code = "";
+    }
+    list.push(entry);
     savePlayerWatchlist(list);
-    return idx < 0; // true if added
+    return { added: true, reason_codes: entry.reason_codes, source_change: "added" };
 }
 function togglePlayerShortlist(player) {
     const list = getPlayerShortlist();
     const idx = list.findIndex((p) => p.key === player.key);
+    const newCode = player.reason_code || "";
     if (idx >= 0) {
+        const entry = _normalizeEntryReasonCodes(list[idx]);
+        const codes = entry.reason_codes;
+        const codeIdx = newCode ? codes.indexOf(newCode) : -1;
+        if (newCode && codeIdx >= 0) {
+            codes.splice(codeIdx, 1);
+            if (codes.length === 0) {
+                list.splice(idx, 1);
+                savePlayerShortlist(list);
+                return { added: false, reason_codes: [], source_change: "removed" };
+            }
+            entry.reason_codes = codes;
+            entry.reason_code = codes[0] || "";
+            savePlayerShortlist(list);
+            return { added: false, reason_codes: codes, source_change: "removed" };
+        }
+        if (newCode && codeIdx < 0) {
+            codes.push(newCode);
+            entry.reason_codes = codes;
+            entry.reason_code = codes[0] || "";
+            savePlayerShortlist(list);
+            return { added: true, reason_codes: codes, source_change: "merged" };
+        }
         list.splice(idx, 1);
-    } else {
-        const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
-        if (player.reason_code) entry.reason_code = player.reason_code;
-        list.push(entry);
+        savePlayerShortlist(list);
+        return { added: false, reason_codes: [], source_change: "removed" };
     }
+    const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
+    if (newCode) {
+        entry.reason_codes = [newCode];
+        entry.reason_code = newCode;
+    } else {
+        entry.reason_codes = [];
+        entry.reason_code = "";
+    }
+    list.push(entry);
     savePlayerShortlist(list);
-    return idx < 0;
+    return { added: true, reason_codes: entry.reason_codes, source_change: "added" };
 }
 function sendToTacticalBoard(player) {
     if (!tacticalProject) {
@@ -23452,7 +23561,7 @@ function updateSnapshotStatus() {
 
 function exportReviewQueueCSV() {
     const rows = sortReviewQueue(filterReviewQueue(reviewQueue), scoutSortMode);
-    const header = ["player_id", "player_name", "team", "league", "season", "position_group", "optimized_score", "minutes", "confidence_level", "reason_code", "review_status", "reviewer_note", "as_of_date"];
+    const header = ["player_id", "player_name", "team", "league", "season", "position_group", "optimized_score", "minutes", "confidence_level", "reason_code", "reason_codes", "review_status", "reviewer_note", "as_of_date"];
     const data = rows.map((player) => [
         player.player_id || "",
         player.player_name || player.name || "",
@@ -23464,6 +23573,7 @@ function exportReviewQueueCSV() {
         player.minutes || 0,
         player.confidence_level || player.confidence || "",
         player.reason_code || "",
+        _entryReasonCodes(player).join("|"),
         getQueueStatus(player),
         player.reviewer_note || "",
         player.as_of_date || "",
@@ -23491,6 +23601,7 @@ function buildShortlistDecisionPack() {
                 rating: player.optimized_score ?? player.rating ?? null,
                 confidence: player.confidence_level || player.confidence || "",
                 reason_code: player.reason_code || "",
+                reason_codes: _entryReasonCodes(player),
                 priority: dossier.priority,
                 recommendation: dossier.recommendation,
                 target_role: dossier.target_role,
@@ -23544,10 +23655,11 @@ function exportShortlistDecisionPackCSV() {
         ["storage_scope", pack.storage_scope],
         ["player_count", pack.player_count],
         [],
-        ["player_id", "player", "team", "position", "rating", "confidence", "reason_code", "priority", "recommendation", "target_role", "rationale_and_risks"],
+        ["player_id", "player", "team", "position", "rating", "confidence", "reason_code", "reason_codes", "priority", "recommendation", "target_role", "rationale_and_risks"],
         ...pack.players.map((player) => [
             player.player_id, player.player, player.team, player.position,
             player.rating ?? "", player.confidence, player.reason_code,
+            (player.reason_codes || []).join("|"),
             player.priority, player.recommendation, player.target_role,
             player.rationale_and_risks,
         ]),
