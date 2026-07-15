@@ -813,7 +813,7 @@ def create_app() -> FastAPI:
         names: str,
         season: str | None = None,
     ):
-        """Compare 2-5 players side-by-side.
+        """Compare 2-6 players side-by-side.
 
         ``names`` is a comma-separated list (e.g. ``?names=Alice,Bob,Carol``).
         Whitespace around each name is trimmed. The endpoint resolves each
@@ -1288,6 +1288,7 @@ def create_app() -> FastAPI:
         min_player_minutes: float = Query(500.0, ge=0.0),
         top_n: int = Query(10, ge=1, le=50),
         exclude_same_league: bool = True,
+        use_position_weights: bool = False,
     ):
         return get_scouting_target_style_match(
             team,
@@ -1296,6 +1297,7 @@ def create_app() -> FastAPI:
             min_player_minutes=min_player_minutes,
             top_n=top_n,
             exclude_same_league=exclude_same_league,
+            use_position_weights=use_position_weights,
         )
 
     @app.get("/teams/{team}/action-percentiles")

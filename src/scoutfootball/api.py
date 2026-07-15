@@ -7160,7 +7160,7 @@ def get_player_comparison_multi(
     player_names: list[str],
     season: str | None = None,
 ) -> dict:
-    """Compare 2–5 players side-by-side with a percentile matrix.
+    """Compare 2–6 players side-by-side with a percentile matrix.
 
     Wraps :func:`scoutfootball.player_intel.compute_multi_player_comparison`.
     Each player is resolved to its best season row (highest score), or to
@@ -7174,11 +7174,11 @@ def get_player_comparison_multi(
             "n_players": len(player_names) if isinstance(player_names, list) else 0,
             "min_required": 2,
         }
-    if len(player_names) > 5:
+    if len(player_names) > 6:
         return {
             "error": "too_many_players",
             "n_players": len(player_names),
-            "max_allowed": 5,
+            "max_allowed": 6,
         }
 
     df = load_player_ratings()
@@ -8129,6 +8129,7 @@ def get_scouting_target_style_match(
     min_player_minutes: float = 500.0,
     top_n: int = 10,
     exclude_same_league: bool = True,
+    use_position_weights: bool = False,
 ) -> dict:
     """Find players from other leagues with similar style to a team's top player.
 
@@ -8136,6 +8137,11 @@ def get_scouting_target_style_match(
     Builds a 4-dim style vector for the team's highest-scored player at
     ``position_group`` and finds the most similar players in other leagues
     by cosine similarity. Descriptive overlay — NOT a transfer recommendation.
+
+    When ``use_position_weights=True``, the 4 style dimensions are weighted
+    per position (e.g. defense_composite emphasized for CB, npg_p90 for ST)
+    before cosine similarity is computed. Weights are sourced from
+    ``_POSITION_STYLE_WEIGHTS`` in ``features/team_style.py``.
     """
     from scoutfootball.features.team_style import (
         compute_scouting_target_style_match,
@@ -8157,6 +8163,7 @@ def get_scouting_target_style_match(
         min_player_minutes=min_player_minutes,
         top_n=top_n,
         exclude_same_league=exclude_same_league,
+        use_position_weights=use_position_weights,
     )
     return _clean_json_value(result)
 

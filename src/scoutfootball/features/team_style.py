@@ -38,6 +38,51 @@ _STYLE_FEATURES = (
     "possession_composite",
 )
 
+# Per-position weights over _STYLE_FEATURES, used by
+# compute_scouting_target_style_match when use_position_weights=True. Each
+# row sums to 1.0. Designed to emphasize the dimensions that matter most
+# for evaluating similarity at that position (e.g. defense_composite
+# dominates for CB, npg_p90 for ST). Cosine similarity is scale-invariant
+# but not rotation-invariant, so applying different weights per dimension
+# rotates both the target and candidate vectors toward the weighted axes
+# and surfaces players whose style profile aligns on the position-critical
+# dimensions. Non-additive interpretive overlay — does not modify the
+# rating model.
+_POSITION_STYLE_WEIGHTS: dict[str, dict[str, float]] = {
+    "GK": {
+        "npg_p90": 0.10, "assists_p90": 0.10,
+        "defense_composite": 0.40, "possession_composite": 0.40,
+    },
+    "CB": {
+        "npg_p90": 0.10, "assists_p90": 0.10,
+        "defense_composite": 0.50, "possession_composite": 0.30,
+    },
+    "FB": {
+        "npg_p90": 0.10, "assists_p90": 0.20,
+        "defense_composite": 0.35, "possession_composite": 0.35,
+    },
+    "DM": {
+        "npg_p90": 0.05, "assists_p90": 0.15,
+        "defense_composite": 0.45, "possession_composite": 0.35,
+    },
+    "CM": {
+        "npg_p90": 0.10, "assists_p90": 0.25,
+        "defense_composite": 0.25, "possession_composite": 0.40,
+    },
+    "AM": {
+        "npg_p90": 0.30, "assists_p90": 0.35,
+        "defense_composite": 0.10, "possession_composite": 0.25,
+    },
+    "W": {
+        "npg_p90": 0.30, "assists_p90": 0.35,
+        "defense_composite": 0.10, "possession_composite": 0.25,
+    },
+    "ST": {
+        "npg_p90": 0.50, "assists_p90": 0.25,
+        "defense_composite": 0.10, "possession_composite": 0.15,
+    },
+}
+
 _MIN_TEAMS_FOR_CLUSTERS = 4
 _DEFAULT_N_CLUSTERS = 4
 _MAX_N_CLUSTERS = 8
@@ -4907,6 +4952,7 @@ def compute_scouting_target_style_match(
     min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
     top_n: int = _DEFAULT_SCOUTING_TOP_N,
     exclude_same_league: bool = True,
+    use_position_weights: bool = False,
 ) -> dict[str, Any]:
     """Find players from other leagues with similar style to the team's top player.
 
@@ -4939,6 +4985,23 @@ def compute_scouting_target_style_match(
         }
 
     top_n = max(1, min(int(top_n), _MAX_SCOUTING_TOP_N))
+
+    # Resolve optional per-position weights. When use_position_weights=True,
+    # look up the position's weight dict from _POSITION_STYLE_WEIGHTS and
+    # build a 4-dim weight vector aligned with _STYLE_FEATURES. If the
+    # position is missing from the table (defensive — should not happen
+    # since pos_upper was validated above), fall back to None (equal
+    # weights, identical to legacy behavior).
+    weight_vec: np.ndarray | None = None
+    weight_dict_out: dict[str, float] | None = None
+    if use_position_weights:
+        weight_dict = _POSITION_STYLE_WEIGHTS.get(pos_upper)
+        if weight_dict is not None:
+            weight_vec = np.array(
+                [float(weight_dict.get(f, 1.0)) for f in _STYLE_FEATURES],
+                dtype=float,
+            )
+            weight_dict_out = dict(weight_dict)
 
     work = df.copy()
     if "position_group" not in work.columns:
@@ -5016,6 +5079,11 @@ def compute_scouting_target_style_match(
         ],
         dtype=float,
     )
+    # Apply per-position weights to rotate the vector toward position-critical
+    # dimensions. Cosine similarity is scale-invariant but not rotation-
+    # invariant, so weighting changes which candidates surface as "similar".
+    if weight_vec is not None:
+        target_vec = target_vec * weight_vec
     target_norm = np.linalg.norm(target_vec)
     if target_norm == 0:
         return {
@@ -5069,6 +5137,8 @@ def compute_scouting_target_style_match(
             },
             "n_candidates": 0,
             "candidates": [],
+            "weighted": weight_vec is not None,
+            "position_weights": weight_dict_out,
             "disclaimer": _SCOUTING_DISCLAIMER,
         }
 
@@ -5082,6 +5152,10 @@ def compute_scouting_target_style_match(
             ],
             dtype=float,
         )
+        # Apply the same per-position weights used for the target vector so
+        # both vectors are rotated into the same weighted space before cosine.
+        if weight_vec is not None:
+            cand_vec = cand_vec * weight_vec
         cand_norm = np.linalg.norm(cand_vec)
         if cand_norm == 0:
             continue
@@ -5099,6 +5173,35 @@ def compute_scouting_target_style_match(
     matches.sort(key=lambda m: m["style_similarity"], reverse=True)
     matches = matches[:top_n]
 
+    # Report the raw (unweighted) style vector for the target player so
+    # consumers can render radar charts without inverting the weight mask.
+    target_sv = {
+        "npg_p90": round(
+            float(pd.to_numeric(top_row.get("npg_p90", 0.0), errors="coerce") or 0.0),
+            3,
+        ),
+        "assists_p90": round(
+            float(pd.to_numeric(top_row.get("assists_p90", 0.0), errors="coerce") or 0.0),
+            3,
+        ),
+        "defense_composite": round(
+            float(
+                pd.to_numeric(top_row.get("defense_composite", 0.0), errors="coerce")
+                or 0.0
+            ),
+            2,
+        ),
+        "possession_composite": round(
+            float(
+                pd.to_numeric(
+                    top_row.get("possession_composite", 0.0), errors="coerce"
+                )
+                or 0.0
+            ),
+            2,
+        ),
+    }
+
     return {
         "status": "ok",
         "team": team,
@@ -5109,14 +5212,11 @@ def compute_scouting_target_style_match(
             "team": target_team,
             "league": team_league,
             "optimized_score": round(float(top_row["score_num"]), 2),
-            "style_vector": {
-                "npg_p90": round(float(target_vec[0]), 3),
-                "assists_p90": round(float(target_vec[1]), 3),
-                "defense_composite": round(float(target_vec[2]), 2),
-                "possession_composite": round(float(target_vec[3]), 2),
-            },
+            "style_vector": target_sv,
         },
         "n_candidates": len(matches),
         "candidates": matches,
+        "weighted": weight_vec is not None,
+        "position_weights": weight_dict_out,
         "disclaimer": _SCOUTING_DISCLAIMER,
     }
