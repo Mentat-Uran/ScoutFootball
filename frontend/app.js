@@ -385,6 +385,22 @@ const i18n = {
         wc_avg_rating: "均分",
         wc_no_data: "无数据",
         wc_low_coverage: "评分覆盖率低于50%，结论置信度较低",
+        wc_scouting_need_col: "球探需求",
+        wc_scouting_need_title: "球探需求概览",
+        wc_scouting_need_loading: "正在加载球探需求...",
+        wc_scouting_need_no_data: "暂无球探需求数据",
+        wc_scouting_need_fetch_fail: "球探需求加载失败",
+        wc_scouting_need_summary: "共 {n} 名球员存在位置缺口（{shallow} 人手不足，{low_q} 质量偏低，{missing} 完全缺失）",
+        wc_scouting_need_summary_empty: "所有位置均无显著缺口",
+        wc_scouting_need_team_not_found: "俱乐部未纳入评分矩阵",
+        wc_scouting_need_open_dashboard: "在球探面板中查看 {team}",
+        wc_scouting_need_pill_shallow: "人手不足",
+        wc_scouting_need_pill_low_quality: "质量偏低",
+        wc_scouting_need_pill_missing: "完全缺失",
+        wc_scouting_need_reason_label: "原因",
+        wc_scouting_need_players_label: "人数",
+        wc_scouting_need_mean_score_label: "均分",
+        wc_scouting_need_disclaimer: "球探需求胶囊反映球员所在俱乐部在其位置的阵容深度，仅为描述性叠加层，不构成转会建议。非五大联赛球员可能不在评分矩阵中，因此不显示胶囊。",
         sort_priority: "优先级",
         sort_date: "日期",
         sort_name: "姓名",
@@ -1568,6 +1584,22 @@ const i18n = {
         wc_avg_rating: "Avg",
         wc_no_data: "No data",
         wc_low_coverage: "Rating coverage below 50%, low confidence",
+        wc_scouting_need_col: "Scouting",
+        wc_scouting_need_title: "Scouting Need Overview",
+        wc_scouting_need_loading: "Loading scouting needs...",
+        wc_scouting_need_no_data: "No scouting need data",
+        wc_scouting_need_fetch_fail: "Scouting needs fetch failed",
+        wc_scouting_need_summary: "{n} players have a position gap ({shallow} shallow, {low_q} low quality, {missing} missing)",
+        wc_scouting_need_summary_empty: "No significant position gaps",
+        wc_scouting_need_team_not_found: "Club not in rating matrix",
+        wc_scouting_need_open_dashboard: "View {team} in scouting panel",
+        wc_scouting_need_pill_shallow: "Shallow",
+        wc_scouting_need_pill_low_quality: "Low Quality",
+        wc_scouting_need_pill_missing: "Missing",
+        wc_scouting_need_reason_label: "Reason",
+        wc_scouting_need_players_label: "Players",
+        wc_scouting_need_mean_score_label: "Mean Score",
+        wc_scouting_need_disclaimer: "Scouting-need pills reflect the player's club team depth at their position; they are descriptive overlays and do not constitute transfer recommendations. Players at non-Big5 clubs may have no rating-matrix coverage and show no pill.",
         sort_priority: "Priority",
         sort_date: "Date",
         sort_name: "Name",
@@ -16031,7 +16063,15 @@ async function renderActiveView() {
     if (appState.view === "reports") renderReports();
     if (appState.view === "tactical") renderTactical();
     if (appState.view === "wc_schedule") renderWcSchedule();
-    if (appState.view === "wc_squads") renderWcSquads();
+    if (appState.view === "wc_squads") {
+        renderWcSquads();
+        renderWcSquadScoutingNeeds();
+        // Lazy-load scouting needs data if not yet cached for this team
+        const _team = appState.wcSquadTeam;
+        if (_team && !wcApiData.squadScoutingNeedsCache[_team] && !wcApiData.squadScoutingNeedsLoading.has(_team)) {
+            fetchWcSquadScoutingNeeds(_team);
+        }
+    }
     if (appState.view === "wc_compare") renderWcCompare();
     if (appState.view === "wc_probability") renderWcProbability();
     if (appState.view === "wc_knockout") renderWcKnockout();
@@ -18097,8 +18137,14 @@ function bindEvents() {
     document.getElementById("wc-matchday-filter").addEventListener("change", () => renderWcSchedule());
     document.getElementById("wc-squad-team").addEventListener("change", async (e) => {
         appState.wcSquadTeam = e.target.value;
-        await fetchWcSquad(e.target.value);
         renderWcSquads();
+        renderWcSquadScoutingNeeds();
+        await Promise.all([
+            fetchWcSquad(e.target.value),
+            fetchWcSquadScoutingNeeds(e.target.value),
+        ]);
+        renderWcSquads();
+        renderWcSquadScoutingNeeds();
     });
     document.getElementById("wc-compare-a").addEventListener("change", async (e) => {
         appState.wcCompareA = e.target.value;
@@ -19569,6 +19615,7 @@ let wcApiData = {
     groups: null,       // from /world-cup/groups
     schedule: null,     // from /world-cup/schedule
     squadCache: {},     // team -> from /world-cup/squads/{team}
+    squadScoutingNeedsCache: {}, // team -> from /world-cup/squads/{team}/scouting-needs
     squadBalanceComparisonCache: {}, // ordered team pair -> role-depth comparison
     predictions: null,  // from /world-cup/predictions
     knockout: null,     // from /world-cup/knockout
@@ -19578,6 +19625,7 @@ let wcApiData = {
     teams: null,        // from /worldcup/teams
     apiOnline: false,
     squadLoading: new Set(),
+    squadScoutingNeedsLoading: new Set(),
     outlookLoading: new Set(),
     tournament: null,       // from /world-cup/tournament/summary
     tournamentMatches: null, // from /world-cup/tournament/matches
@@ -19649,6 +19697,24 @@ async function fetchWcSquad(team) {
         wcApiData.squadLoading.delete(team);
         if (appState.view === "wc_squads" && appState.wcSquadTeam === team) {
             renderWcSquads();
+        }
+    }
+}
+
+async function fetchWcSquadScoutingNeeds(team) {
+    if (wcApiData.squadScoutingNeedsCache[team]) return wcApiData.squadScoutingNeedsCache[team];
+    wcApiData.squadScoutingNeedsLoading.add(team);
+    try {
+        const data = await fetchJson(`/world-cup/squads/${encodeURIComponent(team)}/scouting-needs`, { fetchOpts: { signal: AbortSignal.timeout(60000) } });
+        wcApiData.squadScoutingNeedsCache[team] = data;
+        return data;
+    } catch (e) {
+        console.warn("[WC] fetchWcSquadScoutingNeeds failed:", e.message);
+        return null;
+    } finally {
+        wcApiData.squadScoutingNeedsLoading.delete(team);
+        if (appState.view === "wc_squads" && appState.wcSquadTeam === team) {
+            renderWcSquadScoutingNeeds();
         }
     }
 }
@@ -22065,7 +22131,7 @@ function renderWcSquads() {
             summary.innerHTML = `<div class="wc-metric"><span class="metric-value">${loading ? "…" : "—"}</span><span>${escapeHtml(message)}</span></div>`;
         }
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">${escapeHtml(message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">${escapeHtml(message)}</td></tr>`;
         }
         const chart = getChart("wc-squad-chart");
         if (chart) chart.clear();
@@ -22117,12 +22183,16 @@ function renderWcSquads() {
         const confText = p.hasRating ? p.confidence : (appState.lang === "zh" ? "\u65E0\u6570\u636E" : "N/A");
         const ratingText = p.hasRating ? p.rating.toFixed(2) : "\u2014";
         const posText = p.position || "\u2014";
+        const needPill = _wcScoutingNeedPill(team, p);
         return `<tr>
             <td>${escapeHtml(p.name)}</td><td>${escapeHtml(posText)}</td><td>${escapeHtml(p.club)}</td><td>${escapeHtml(p.league)}</td>
             <td>${escapeHtml(ratingText)}</td>
             <td><span class="status-pill ${confClass}">${escapeHtml(confText)}</span></td>
+            <td>${needPill}</td>
         </tr>`;
     }).join("");
+
+    _wireWcScoutingNeedPills();
 
     // Rating distribution chart
     const chart = getChart("wc-squad-chart");
@@ -22140,6 +22210,185 @@ function renderWcSquads() {
     if (squad.length > 0 && rated.length / squad.length < 0.5) {
         document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">\u25B2 ${escapeHtml(t("wc_low_coverage"))}</div>`;
     }
+}
+
+/**
+ * Build the scouting-need pill HTML for a WC squad player.
+ *
+ * Looks up the cached scouting-needs payload for `team` and finds the
+ * player entry matching `player.name` (and `player.position` as a tiebreaker).
+ * Returns one of:
+ *   - A clickable <button> pill with the gap type label (shallow/low_quality/missing)
+ *     carrying data-wc-scout-club / data-wc-scout-position attributes for the
+ *     click handler to navigate to the scouting dashboard.
+ *   - A muted "team not found" pill if the player's club is not in the rating matrix.
+ *   - An empty "<span>—</span>" placeholder when no gap exists, no data is
+ *     cached, or data is still loading.
+ *
+ * All dynamic content goes through escapeHtml / escapeAttr.
+ */
+function _wcScoutingNeedPill(team, player) {
+    const data = wcApiData.squadScoutingNeedsCache[team];
+    if (!data || data.status !== "ok" || !Array.isArray(data.players)) {
+        // Loading or unavailable — emit a muted placeholder rather than a pill
+        return `<span style="color:var(--text-muted)">—</span>`;
+    }
+    // Find the matching player entry. Use name + position + club to disambiguate.
+    const entry = data.players.find((pp) =>
+        pp && pp.name === player.name
+        && (pp.position || "") === (player.position || "")
+        && (pp.club || "") === (player.club || "")
+    );
+    if (!entry) {
+        return `<span style="color:var(--text-muted)">—</span>`;
+    }
+    const gap = entry.scouting_need;
+    if (!gap) {
+        // No gap at this position — emit a muted "ok" dot
+        return `<span style="color:var(--text-muted)" aria-label="${escapeAttr(t("wc_scouting_need_summary_empty"))}">·</span>`;
+    }
+    const labelMap = {
+        shallow: t("wc_scouting_need_pill_shallow"),
+        low_quality: t("wc_scouting_need_pill_low_quality"),
+        missing: t("wc_scouting_need_pill_missing"),
+    };
+    const label = labelMap[gap.gap_type] || gap.gap_type || "—";
+    const title = t("wc_scouting_need_open_dashboard").replace("{team}", player.club || "");
+    return `<button type="button" class="status-pill status-low" `
+        + `data-wc-scout-club="${escapeAttr(player.club || "")}" `
+        + `data-wc-scout-position="${escapeAttr(player.position || "")}" `
+        + `title="${escapeAttr(title)}" `
+        + `style="cursor:pointer;font-size:0.65rem;padding:0.1rem 0.4rem;text-decoration:none">`
+        + `${escapeHtml(label)}`
+        + `</button>`;
+}
+
+/**
+ * Wire click handlers on scouting-need pills rendered by `_wcScoutingNeedPill`.
+ *
+ * Clicking a pill navigates the user to the scouting view and pre-fills the
+ * cross-scouting dashboard team input with the player's club team, so the
+ * user can immediately see the gap report for that club.
+ */
+function _wireWcScoutingNeedPills() {
+    const pills = document.querySelectorAll("#wc-squad-table button[data-wc-scout-club]");
+    pills.forEach((btn) => {
+        if (btn.dataset.wcScoutingWired === "1") return;
+        btn.dataset.wcScoutingWired = "1";
+        btn.addEventListener("click", () => {
+            const club = btn.dataset.wcScoutClub || "";
+            if (!club) return;
+            // Pre-fill the scouting dashboard team input and switch view
+            const teamInput = document.getElementById("cross-scouting-dashboard-team");
+            if (teamInput) teamInput.value = club;
+            setView("scouting");
+            // Surface a small confirmation via the dashboard button title
+            const dashBtn = document.getElementById("cross-scouting-dashboard-btn");
+            if (dashBtn) {
+                const hint = t("wc_scouting_need_open_dashboard").replace("{team}", club);
+                dashBtn.setAttribute("title", hint);
+            }
+        });
+    });
+}
+
+/**
+ * Render the WC squad scouting-needs overview panel below the squad table.
+ *
+ * Shows a summary line counting players with each gap type, and a table
+ * of players who have a scouting need (filtered from the full squad).
+ * The panel degrades gracefully when data is loading, unavailable, or
+ * when the squad has no gaps at all.
+ */
+function renderWcSquadScoutingNeeds() {
+    const team = appState.wcSquadTeam;
+    const wrap = document.getElementById("wc-scouting-needs-panel");
+    if (!wrap) return;
+    const statusEl = document.getElementById("wc-scouting-needs-status");
+    const data = wcApiData.squadScoutingNeedsCache[team];
+    const loading = wcApiData.squadScoutingNeedsLoading.has(team);
+
+    if (!data) {
+        const msg = loading ? t("wc_scouting_need_loading") : t("wc_scouting_need_no_data");
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(msg)}</p>`;
+        if (statusEl) statusEl.textContent = loading ? "…" : "—";
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("wc_scouting_need_no_data"))}</p>`;
+        if (statusEl) statusEl.textContent = "—";
+        return;
+    }
+    if (data.status !== "ok" || !Array.isArray(data.players)) {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("wc_scouting_need_fetch_fail"))}</p>`;
+        if (statusEl) statusEl.textContent = "!";
+        return;
+    }
+
+    const playersWithNeed = data.players.filter((p) => p && p.scouting_need);
+    const counts = { shallow: 0, low_quality: 0, missing: 0 };
+    for (const p of playersWithNeed) {
+        const gt = p.scouting_need.gap_type;
+        if (counts[gt] !== undefined) counts[gt] += 1;
+    }
+    const totalGaps = playersWithNeed.length;
+
+    let summaryLine;
+    if (totalGaps === 0) {
+        summaryLine = t("wc_scouting_need_summary_empty");
+    } else {
+        summaryLine = t("wc_scouting_need_summary")
+            .replace("{n}", String(totalGaps))
+            .replace("{shallow}", String(counts.shallow))
+            .replace("{low_q}", String(counts.low_quality))
+            .replace("{missing}", String(counts.missing));
+    }
+    if (statusEl) statusEl.textContent = totalGaps > 0 ? String(totalGaps) : "0";
+
+    const labelMap = {
+        shallow: t("wc_scouting_need_pill_shallow"),
+        low_quality: t("wc_scouting_need_pill_low_quality"),
+        missing: t("wc_scouting_need_pill_missing"),
+    };
+    const rows = playersWithNeed.map((p) => {
+        const gap = p.scouting_need;
+        const label = labelMap[gap.gap_type] || gap.gap_type;
+        const reason = gap.reason || "";
+        const meanScore = (gap.mean_score !== undefined && gap.mean_score !== null)
+            ? Number(gap.mean_score).toFixed(1)
+            : "—";
+        const nPlayers = (gap.n_players !== undefined && gap.n_players !== null)
+            ? String(gap.n_players)
+            : "—";
+        return `<tr>
+            <td>${escapeHtml(p.name || "")}</td>
+            <td>${escapeHtml(p.position || "")}</td>
+            <td>${escapeHtml(p.club || "")}</td>
+            <td><span class="status-pill status-low" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(label)}</span></td>
+            <td>${escapeHtml(nPlayers)}</td>
+            <td>${escapeHtml(meanScore)}</td>
+            <td style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(reason)}</td>
+        </tr>`;
+    }).join("");
+
+    const tableHtml = totalGaps === 0
+        ? `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(summaryLine)}</p>`
+        : `<p style="font-size:0.82rem;margin:0 0 0.5rem">${escapeHtml(summaryLine)}</p>`
+          + `<div class="table-scroll"><table>`
+          + `<thead><tr>`
+          + `<th data-i18n="th_player">${escapeHtml(t("th_player"))}</th>`
+          + `<th data-i18n="th_pos">${escapeHtml(t("th_pos"))}</th>`
+          + `<th data-i18n="wc_club">${escapeHtml(t("wc_club"))}</th>`
+          + `<th data-i18n="wc_scouting_need_col">${escapeHtml(t("wc_scouting_need_col"))}</th>`
+          + `<th data-i18n="wc_scouting_need_players_label">${escapeHtml(t("wc_scouting_need_players_label"))}</th>`
+          + `<th data-i18n="wc_scouting_need_mean_score_label">${escapeHtml(t("wc_scouting_need_mean_score_label"))}</th>`
+          + `<th data-i18n="wc_scouting_need_reason_label">${escapeHtml(t("wc_scouting_need_reason_label"))}</th>`
+          + `</tr></thead>`
+          + `<tbody>${rows}</tbody>`
+          + `</table></div>`;
+
+    wrap.innerHTML = tableHtml
+        + `<p style="font-size:0.68rem;color:var(--text-muted);margin-top:0.5rem">${escapeHtml(t("wc_scouting_need_disclaimer"))}</p>`;
 }
 
 function renderWcCompare() {
@@ -22554,6 +22803,7 @@ async function initWorldCup() {
     await Promise.all([
         fetchWcSquad("Argentina"),
         fetchWcSquad("France"),
+        fetchWcSquadScoutingNeeds(appState.wcSquadTeam || "Argentina"),
         fetchWcSquadBalanceComparison("Argentina", "France"),
         fetchWcMatchPrediction("Argentina", "France"),
         fetchWcTeamOutlook("Argentina"),
@@ -22562,6 +22812,7 @@ async function initWorldCup() {
     // Re-render all WC views with API data
     renderWcSchedule();
     renderWcSquads();
+    renderWcSquadScoutingNeeds();
     renderWcCompare();
     renderWcProbability();
     renderWcKnockout();

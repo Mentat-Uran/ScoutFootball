@@ -5043,3 +5043,516 @@ class TestLeagueDifficultyChartsI18n:
         count = js.count(self._DIST_AVG + ":")
         assert count >= 2
 
+
+# ===========================================================================
+# Round 99 — WC Squad Scouting Need Pill
+# ===========================================================================
+
+
+class TestWcScoutingNeedPillFunction:
+    """Tests for the `_wcScoutingNeedPill` frontend helper."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "function _wcScoutingNeedPill(" in js
+
+    def test_uses_squadScoutingNeedsCache(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "squadScoutingNeedsCache" in body
+
+    def test_handles_missing_data(self):
+        """Must return a muted placeholder when no data is cached."""
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "var(--text-muted)" in body
+
+    def test_returns_placeholder_when_no_entry_match(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        # Must call .find() on data.players to locate matching entry
+        assert "data.players.find" in body
+
+    def test_returns_dot_when_no_gap(self):
+        """When scouting_need is null, return a muted dot."""
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        # The no-gap branch emits a "·" character
+        assert "·" in body
+
+    def test_renders_button_when_gap_exists(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "<button" in body
+        assert "status-pill" in body
+
+    def test_button_has_data_wc_scout_club_attr(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "data-wc-scout-club" in body
+
+    def test_button_has_data_wc_scout_position_attr(self):
+        js = _read_app_js()
+        idx = js.find("function _wcSccoutNeedPill(")  # ensure unique
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "data-wc-scout-position" in body
+
+    def test_button_club_uses_escape_attr(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "escapeAttr(player.club" in body
+
+    def test_button_position_uses_escape_attr(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "escapeAttr(player.position" in body
+
+    def test_button_title_uses_escape_attr(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "escapeAttr(title)" in body
+
+    def test_button_label_uses_escape_html(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "escapeHtml(label)" in body
+
+    def test_label_map_covers_three_gap_types(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "shallow:" in body
+        assert "low_quality:" in body
+        assert "missing:" in body
+
+    def test_no_eval_in_pill_function(self):
+        js = _read_app_js()
+        idx = js.find("function _wcScoutingNeedPill(")
+        assert idx > 0
+        # Read until the next function definition
+        end_idx = js.find("function ", idx + 30)
+        body = js[idx:end_idx] if end_idx > 0 else js[idx : idx + 3000]
+        assert "eval(" not in body
+        assert "new Function(" not in body
+
+
+class TestWcScoutingNeedPillWiring:
+    """Tests for `_wireWcScoutingNeedPills` click handler."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "function _wireWcScoutingNeedPills(" in js
+
+    def test_targets_squad_table_buttons(self):
+        js = _read_app_js()
+        idx = js.find("function _wireWcScoutingNeedPills(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "#wc-squad-table button[data-wc-scout-club]" in body
+
+    def test_uses_dataset_guard_for_idempotency(self):
+        js = _read_app_js()
+        idx = js.find("function _wireWcScoutingNeedPills(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "wcScoutingWired" in body
+
+    def test_click_handler_reads_club_attr(self):
+        js = _read_app_js()
+        idx = js.find("function _wireWcScoutingNeedPills(")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "dataset.wcScoutClub" in body
+
+    def test_click_handler_calls_set_view(self):
+        js = _read_app_js()
+        idx = js.find("function _wireWcScoutingNeedPills(")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 'setView("scouting")' in body
+
+    def test_click_handler_sets_dashboard_team_input(self):
+        js = _read_app_js()
+        idx = js.find("function _wireWcScoutingNeedPills(")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "cross-scouting-dashboard-team" in body
+        assert ".value = club" in body
+
+    def test_no_innerhtml_in_wiring(self):
+        js = _read_app_js()
+        idx = js.find("function _wireWcScoutingNeedPills(")
+        assert idx > 0
+        end_idx = js.find("function ", idx + 30)
+        body = js[idx:end_idx] if end_idx > 0 else js[idx : idx + 3000]
+        assert ".innerHTML" not in body
+
+    def test_no_eval_in_wiring(self):
+        js = _read_app_js()
+        idx = js.find("function _wireWcScoutingNeedPills(")
+        assert idx > 0
+        end_idx = js.find("function ", idx + 30)
+        body = js[idx:end_idx] if end_idx > 0 else js[idx : idx + 3000]
+        assert "eval(" not in body
+        assert "new Function(" not in body
+
+
+class TestRenderWcSquadScoutingNeeds:
+    """Tests for the `renderWcSquadScoutingNeeds` overview panel renderer."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "function renderWcSquadScoutingNeeds(" in js
+
+    def test_targets_panel_container(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert 'getElementById("wc-scouting-needs-panel")' in body
+
+    def test_targets_status_element(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert 'getElementById("wc-scouting-needs-status")' in body
+
+    def test_uses_textContent_for_status(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "statusEl.textContent" in body
+
+    def test_handles_loading_state(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "squadScoutingNeedsLoading" in body
+
+    def test_handles_no_data_state(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert 'data.status === "no_data"' in body
+
+    def test_handles_fetch_fail_state(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert 'data.status !== "ok"' in body
+
+    def test_filters_players_with_need(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "scouting_need" in body
+        assert ".filter" in body
+
+    def test_counts_gap_types(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "shallow" in body
+        assert "low_quality" in body
+        assert "missing" in body
+
+    def test_summary_uses_replace_for_placeholders(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert ".replace(\"{n}\"" in body
+        assert ".replace(\"{shallow}\"" in body
+        assert ".replace(\"{low_q}\"" in body
+        assert ".replace(\"{missing}\"" in body
+
+    def test_table_rows_use_escape_html_for_name(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 5000]
+        assert "escapeHtml(p.name" in body
+
+    def test_table_rows_use_escape_html_for_reason(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 5000]
+        assert "escapeHtml(reason)" in body
+
+    def test_table_rows_use_escape_html_for_label(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 5000]
+        assert "escapeHtml(label)" in body
+
+    def test_renders_disclaimer(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 5000]
+        assert "wc_scouting_need_disclaimer" in body
+
+    def test_no_eval_in_render(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquadScoutingNeeds(")
+        assert idx > 0
+        end_idx = js.find("function ", idx + 30)
+        body = js[idx:end_idx] if end_idx > 0 else js[idx : idx + 5000]
+        assert "eval(" not in body
+        assert "new Function(" not in body
+
+
+class TestFetchWcSquadScoutingNeeds:
+    """Tests for the `fetchWcSquadScoutingNeeds` async fetch helper."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "async function fetchWcSquadScoutingNeeds(" in js
+
+    def test_uses_squadScoutingNeedsCache(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "squadScoutingNeedsCache" in body
+
+    def test_uses_squadScoutingNeedsLoading_set(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "squadScoutingNeedsLoading" in body
+
+    def test_fetches_correct_endpoint(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "/world-cup/squads/" in body
+        assert "/scouting-needs" in body
+
+    def test_uses_encode_uri_component_for_team(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "encodeURIComponent(team)" in body
+
+    def test_returns_null_on_error(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "return null" in body
+
+    def test_calls_render_on_finally_when_in_view(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcSquadScoutingNeeds(")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "renderWcSquadScoutingNeeds()" in body
+        assert 'appState.view === "wc_squads"' in body
+
+    def test_no_eval_in_fetch(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcSquadScoutingNeeds(")
+        assert idx > 0
+        end_idx = js.find("async function", idx + 30)
+        body = js[idx:end_idx] if end_idx > 0 else js[idx : idx + 3000]
+        assert "eval(" not in body
+        assert "new Function(" not in body
+
+
+class TestWcScoutingNeedHtml:
+    """HTML container tests for the WC scouting-need feature."""
+
+    def test_scouting_column_header_present(self):
+        html = _read_index()
+        assert 'data-i18n="wc_scouting_need_col"' in html
+
+    def test_scouting_needs_panel_present(self):
+        html = _read_index()
+        assert 'id="wc-scouting-needs-panel"' in html
+
+    def test_scouting_needs_status_present(self):
+        html = _read_index()
+        assert 'id="wc-scouting-needs-status"' in html
+
+    def test_scouting_needs_title_has_i18n_attr(self):
+        html = _read_index()
+        assert 'data-i18n="wc_scouting_need_title"' in html
+
+    def test_scouting_needs_panel_has_chart_box_class(self):
+        html = _read_index()
+        idx = html.find('id="wc-scouting-needs-panel"')
+        assert idx > 0
+        snippet = html[max(0, idx - 100) : idx + 200]
+        assert "chart-box" in snippet
+
+    def test_scouting_needs_panel_has_min_height(self):
+        html = _read_index()
+        idx = html.find('id="wc-scouting-needs-panel"')
+        assert idx > 0
+        snippet = html[max(0, idx - 100) : idx + 200]
+        assert "min-height" in snippet
+
+    def test_scouting_needs_panel_in_article(self):
+        html = _read_index()
+        idx = html.find('id="wc-scouting-needs-panel"')
+        assert idx > 0
+        snippet = html[max(0, idx - 600) : idx]
+        assert "<article" in snippet
+
+    def test_squad_table_has_7_columns(self):
+        """The squad table header must now have 7 <th> elements."""
+        html = _read_index()
+        idx = html.find('id="wc-squad-table"')
+        assert idx > 0
+        # Walk backwards to find the thead
+        thead_idx = html.rfind("<thead>", 0, idx)
+        assert thead_idx > 0
+        thead_end = html.find("</thead>", thead_idx)
+        thead = html[thead_idx:thead_end]
+        assert thead.count("<th ") == 7 or thead.count("<th>") == 7 or (
+            thead.count("<th ") + thead.count("<th>")
+        ) == 7
+
+
+class TestWcScoutingNeedI18n:
+    """i18n key tests for the WC scouting-need feature."""
+
+    _KEYS = [
+        "wc_scouting_need_col",
+        "wc_scouting_need_title",
+        "wc_scouting_need_loading",
+        "wc_scouting_need_no_data",
+        "wc_scouting_need_fetch_fail",
+        "wc_scouting_need_summary",
+        "wc_scouting_need_summary_empty",
+        "wc_scouting_need_team_not_found",
+        "wc_scouting_need_open_dashboard",
+        "wc_scouting_need_pill_shallow",
+        "wc_scouting_need_pill_low_quality",
+        "wc_scouting_need_pill_missing",
+        "wc_scouting_need_reason_label",
+        "wc_scouting_need_players_label",
+        "wc_scouting_need_mean_score_label",
+        "wc_scouting_need_disclaimer",
+    ]
+
+    def test_all_keys_present_in_zh(self):
+        js = _read_app_js()
+        for key in self._KEYS:
+            assert f"{key}:" in js, f"Missing zh i18n key: {key}"
+
+    def test_all_keys_present_in_en(self):
+        # All keys appear at least twice (once in zh, once in en)
+        js = _read_app_js()
+        for key in self._KEYS:
+            count = js.count(f"{key}:")
+            assert count >= 2, f"Key {key} only appears {count} time(s) (expected >=2 for zh+en)"
+
+    def test_summary_key_has_placeholders(self):
+        js = _read_app_js()
+        idx = js.find("wc_scouting_need_summary:")
+        assert idx > 0
+        snippet = js[idx : idx + 300]
+        assert "{n}" in snippet
+        assert "{shallow}" in snippet
+        assert "{low_q}" in snippet
+        assert "{missing}" in snippet
+
+    def test_open_dashboard_key_has_team_placeholder(self):
+        js = _read_app_js()
+        idx = js.find("wc_scouting_need_open_dashboard:")
+        assert idx > 0
+        snippet = js[idx : idx + 200]
+        assert "{team}" in snippet
+
+
+class TestWcScoutingNeedRenderWcSquadsIntegration:
+    """Integration tests verifying renderWcSquads wires in the pill + panel."""
+
+    def test_render_wc_squads_calls_pill_helper(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquads(")
+        assert idx > 0
+        body = js[idx : idx + 5000]
+        assert "_wcScoutingNeedPill(" in body
+
+    def test_render_wc_squads_calls_wire_pills(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquads(")
+        assert idx > 0
+        body = js[idx : idx + 5000]
+        assert "_wireWcScoutingNeedPills()" in body
+
+    def test_render_wc_squads_empty_uses_colspan_7(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcSquads(")
+        assert idx > 0
+        body = js[idx : idx + 5000]
+        assert 'colspan="7"' in body
+
+    def test_render_active_view_calls_render_scouting_needs(self):
+        js = _read_app_js()
+        idx = js.find("if (appState.view === \"wc_squads\")")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "renderWcSquadScoutingNeeds()" in body
+
+    def test_render_active_view_triggers_fetch(self):
+        js = _read_app_js()
+        idx = js.find("if (appState.view === \"wc_squads\")")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "fetchWcSquadScoutingNeeds(" in body
+
+    def test_wc_squad_team_change_triggers_fetch(self):
+        js = _read_app_js()
+        idx = js.find('getElementById("wc-squad-team").addEventListener')
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "fetchWcSquadScoutingNeeds(" in body
+
+    def test_init_pre_fetches_scouting_needs(self):
+        js = _read_app_js()
+        # Look for the init pre-fetch block
+        idx = js.find('fetchWcSquad("Argentina")')
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "fetchWcSquadScoutingNeeds(" in body
+
+
