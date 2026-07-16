@@ -9328,6 +9328,181 @@ def get_wc_tournament_match_predictions(group: str | None = None) -> dict:
     })
 
 
+def get_wc_tournament_match_impact(
+    group: str | None = None,
+    num_simulations: int = 1000,
+    top_n: int = 10,
+) -> dict:
+    """Rank remaining group-stage matches by their impact on advancement odds.
+
+    For each pending match, simulates three outcomes (home win / draw / away
+    win) and measures how much each team's advancement probability shifts
+    across the three scenarios. Matches are ranked by total impact (sum of
+    absolute probability swings across all teams in the group).
+
+    Parameters
+    ----------
+    group:
+        Optional group letter filter (A-L). All groups when omitted.
+    num_simulations:
+        Monte Carlo iterations per outcome scenario (default 1000).
+    top_n:
+        Maximum number of matches to return (default 10).
+    """
+    import copy
+
+    from scoutfootball.worldcup.data import simulate_group_stage
+    from scoutfootball.worldcup.tournament import (
+        GROUPS,
+        _match_completed,
+    )
+
+    state = _wc_tournament_state()
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads or not strengths:
+        return _clean_json_value({
+            "status": "no_data",
+            "matches": [],
+            "num_simulations": 0,
+            "disclaimer": (
+                "World Cup squad data unavailable; match impact estimates "
+                "cannot be computed."
+            ),
+        })
+
+    if group:
+        group_upper = group.upper()
+        if group_upper not in GROUPS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "unknown_group",
+                "message": f"Unknown group '{group}'. Valid: A-L",
+            })
+        groups_to_check = [group_upper]
+    else:
+        groups_to_check = list(GROUPS.keys())
+
+    pending_matches = []
+    for m in state.matches:
+        m_group = m.get("group")
+        if not m_group or m_group in ("r32", "r16", "qf", "sf", "final"):
+            continue
+        if m_group not in groups_to_check:
+            continue
+        result = state.results.get(m["match_id"])
+        if _match_completed(result):
+            continue
+        pending_matches.append(m)
+
+    if not pending_matches:
+        return _clean_json_value({
+            "status": "ok",
+            "matches": [],
+            "num_simulations": num_simulations,
+            "mode": "strength",
+            "source_attribution": _STATSBOMB_ATTRIBUTION,
+            "disclaimer": "No remaining group-stage matches to analyze.",
+        })
+
+    def _sim_with_result(match_id, home_goals, away_goals):
+        modified = copy.deepcopy(state)
+        modified.results[match_id] = {
+            "status": "completed",
+            "home_goals": home_goals,
+            "away_goals": away_goals,
+            "winner": (
+                "home" if home_goals > away_goals
+                else "away" if away_goals > home_goals
+                else "draw"
+            ),
+            "decided_by": "regular",
+        }
+        sim = simulate_group_stage(
+            modified,
+            team_strengths=strengths,
+            num_simulations=num_simulations,
+            mode="strength",
+            seed=42,
+        )
+        prob_map = {}
+        for entry in sim.get("advancement_probability", []):
+            prob_map[entry["team"]] = entry
+        return prob_map
+
+    impact_matches = []
+    for m in pending_matches:
+        mid = m["match_id"]
+        home = m.get("home_team", "")
+        away = m.get("away_team", "")
+        m_group = m.get("group", "")
+
+        home_win_probs = _sim_with_result(mid, 2, 1)
+        draw_probs = _sim_with_result(mid, 1, 1)
+        away_win_probs = _sim_with_result(mid, 1, 2)
+
+        all_teams = set(home_win_probs.keys()) | set(draw_probs.keys()) | set(away_win_probs.keys())
+
+        total_impact = 0.0
+        max_swing = 0.0
+        max_swing_team = ""
+        per_team_impact = []
+
+        for team in sorted(all_teams):
+            hw = home_win_probs.get(team, {}).get("advance_prob", 0.0)
+            dr = draw_probs.get(team, {}).get("advance_prob", 0.0)
+            aw = away_win_probs.get(team, {}).get("advance_prob", 0.0)
+            team_max = max(hw, dr, aw)
+            team_min = min(hw, dr, aw)
+            swing = team_max - team_min
+            total_impact += swing
+            if swing > max_swing:
+                max_swing = swing
+                max_swing_team = team
+            per_team_impact.append({
+                "team": team,
+                "home_win_prob": hw,
+                "draw_prob": dr,
+                "away_win_prob": aw,
+                "swing": swing,
+            })
+
+        per_team_impact.sort(key=lambda t: -t["swing"])
+
+        impact_matches.append({
+            "match_id": mid,
+            "home": home,
+            "away": away,
+            "group": m_group,
+            "matchday": m.get("matchday"),
+            "date": m.get("date"),
+            "venue": m.get("venue"),
+            "city": m.get("city"),
+            "total_impact": total_impact,
+            "max_swing": max_swing,
+            "max_swing_team": max_swing_team,
+            "per_team": per_team_impact,
+        })
+
+    impact_matches.sort(key=lambda m: -m["total_impact"])
+    top_matches = impact_matches[:top_n]
+
+    return _clean_json_value({
+        "status": "ok",
+        "matches": top_matches,
+        "total_pending": len(pending_matches),
+        "num_simulations": num_simulations,
+        "mode": "strength",
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": (
+            "Match impact uses strength-weighted Monte Carlo simulation of "
+            "remaining group matches. Impact = sum of advancement probability "
+            "swings across all teams in the group when the match outcome "
+            "varies. Illustrative only."
+        ),
+    })
+
+
 def get_wc_tournament_scenarios(team: str, max_scenarios: int = 30) -> dict:
     """Return qualification scenarios for a single team."""
     from dataclasses import asdict

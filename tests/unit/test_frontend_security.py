@@ -6386,3 +6386,261 @@ class TestWcOverallLeaderboardI18n:
         count = js.count("wc_overall_title:")
         assert count >= 2
 
+
+class TestFetchWcTournamentMatchImpact:
+    """Verifies the fetchWcTournamentMatchImpact function."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "async function fetchWcTournamentMatchImpact" in js
+
+    def test_uses_fetch_json(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "fetchJson" in body
+
+    def test_fetches_match_impact_endpoint(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "/world-cup/tournament/match-impact" in body
+
+    def test_caches_in_tournament_match_impact(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "wcApiData.tournamentMatchImpact" in body
+
+    def test_accepts_ok_and_no_data(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'status === "ok"' in body
+        assert 'status === "no_data"' in body
+
+    def test_sets_null_on_error(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "wcApiData.tournamentMatchImpact = null" in body
+
+    def test_uses_timeout(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "timeout" in body
+
+    def test_uses_console_warn_on_error(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "console.warn" in body
+
+    def test_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "eval(" not in body
+
+
+class TestWcMatchImpactRender:
+    """Verifies the match impact panel rendering in renderWcTournament."""
+
+    def test_panel_title_uses_escape_html(self):
+        js = _read_app_js()
+        pattern = 'escapeHtml(t("wc_impact_title"))'
+        assert pattern in js
+
+    def test_panel_subtitle_uses_escape_html(self):
+        js = _read_app_js()
+        pattern = 'escapeHtml(t("wc_impact_subtitle"))'
+        assert pattern in js
+
+    def test_uses_tournament_match_impact_data(self):
+        js = _read_app_js()
+        idx = js.find("wcApiData.tournamentMatchImpact")
+        assert idx > 0
+        # Should be referenced in render context (not just the fetch function)
+        render_idx = js.find("function renderWcTournament")
+        assert render_idx > 0
+        render_body = js[render_idx:]
+        assert "wcApiData.tournamentMatchImpact" in render_body
+
+    def test_disclaimer_uses_escape_html(self):
+        js = _read_app_js()
+        pattern = 'escapeHtml(t("wc_impact_disclaimer"))'
+        assert pattern in js
+
+    def test_no_data_uses_escape_html(self):
+        js = _read_app_js()
+        idx = js.find("wc_impact_no_data")
+        assert idx > 0
+
+    def test_no_matches_uses_escape_html(self):
+        js = _read_app_js()
+        pattern = 'escapeHtml(t("wc_impact_no_matches"))'
+        assert pattern in js
+
+    def test_loading_uses_escape_html(self):
+        js = _read_app_js()
+        pattern = 'escapeHtml(t("wc_impact_loading"))'
+        assert pattern in js
+
+    def test_match_home_uses_escape_html(self):
+        js = _read_app_js()
+        idx = js.find("wc_impact_title")
+        assert idx > 0
+        # Search in render body for escapeHtml on match home
+        render_idx = js.find("function renderWcTournament")
+        render_body = js[render_idx:]
+        assert "escapeHtml(m.home)" in render_body
+        assert "escapeHtml(m.away)" in render_body
+
+    def test_per_team_uses_escape_html(self):
+        js = _read_app_js()
+        render_idx = js.find("function renderWcTournament")
+        render_body = js[render_idx:]
+        assert "escapeHtml(pt.team)" in render_body
+
+    def test_no_innerhtml_with_user_data(self):
+        js = _read_app_js()
+        idx = js.find("wc_impact_title")
+        assert idx > 0
+        # The panel should use escapeHtml, not raw innerHTML with user data
+        render_idx = js.find("function renderWcTournament")
+        render_body = js[render_idx:]
+        # Check that team names are escaped
+        assert "escapeHtml(pt.team)" in render_body
+
+    def test_no_eval_in_render(self):
+        js = _read_app_js()
+        idx = js.find("wc_impact_title")
+        assert idx > 0
+        panel_body = js[idx : idx + 5000]
+        assert "eval(" not in panel_body
+
+
+class TestWcMatchImpactWiring:
+    """Verifies event handler wiring for match impact."""
+
+    def test_called_in_load_and_render(self):
+        js = _read_app_js()
+        idx = js.find("function loadAndRenderWcTournament")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "fetchWcTournamentMatchImpact" in body
+
+    def test_called_in_reset_handler(self):
+        js = _read_app_js()
+        # Find the reset button event handler (second occurrence is in the handler)
+        reset_idx = js.find('wc-tournament-reset')
+        assert reset_idx > 0
+        # Search from the handler binding area
+        handler_idx = js.find('wc-tournament-reset', reset_idx + 20)
+        assert handler_idx > 0
+        body = js[handler_idx : handler_idx + 3000]
+        assert "fetchWcTournamentMatchImpact" in body
+
+    def test_called_in_apply_result_handler(self):
+        js = _read_app_js()
+        # Find the apply result handler (second occurrence is in the handler)
+        apply_idx = js.find("wc-tournament-apply")
+        assert apply_idx > 0
+        handler_idx = js.find("wc-tournament-apply", apply_idx + 20)
+        assert handler_idx > 0
+        body = js[handler_idx : handler_idx + 5000]
+        assert "fetchWcTournamentMatchImpact" in body
+
+    def test_called_in_clear_result_handler(self):
+        js = _read_app_js()
+        # Find the clear result handler (second occurrence is in the handler)
+        clear_idx = js.find("wc-tournament-clear")
+        assert clear_idx > 0
+        handler_idx = js.find("wc-tournament-clear", clear_idx + 20)
+        assert handler_idx > 0
+        body = js[handler_idx : handler_idx + 5000]
+        assert "fetchWcTournamentMatchImpact" in body
+
+    def test_cache_slot_initialized(self):
+        js = _read_app_js()
+        assert "tournamentMatchImpact: null" in js
+
+    def test_no_eval_in_wiring(self):
+        js = _read_app_js()
+        idx = js.find("fetchWcTournamentMatchImpact")
+        assert idx > 0
+        body = js[idx : idx + 200]
+        assert "eval(" not in body
+
+
+class TestWcMatchImpactI18n:
+    """Verifies the i18n key set for match impact."""
+
+    REQUIRED_KEYS = (
+        "wc_impact_title",
+        "wc_impact_subtitle",
+        "wc_impact_match",
+        "wc_impact_group",
+        "wc_impact_total_impact",
+        "wc_impact_max_swing",
+        "wc_impact_team",
+        "wc_impact_home_win",
+        "wc_impact_draw",
+        "wc_impact_away_win",
+        "wc_impact_swing",
+        "wc_impact_no_data",
+        "wc_impact_loading",
+        "wc_impact_no_matches",
+        "wc_impact_disclaimer",
+    )
+
+    def test_all_keys_present_in_app_js(self):
+        js = _read_app_js()
+        for key in self.REQUIRED_KEYS:
+            assert f"{key}:" in js, f"Missing i18n key: {key}"
+
+    def test_all_keys_present_twice(self):
+        js = _read_app_js()
+        for key in self.REQUIRED_KEYS:
+            count = js.count(f"{key}:")
+            assert count >= 2, (
+                f"i18n key {key} appears {count} times (expected >= 2 for zh+en)"
+            )
+
+    def test_disclaimer_no_raw_html(self):
+        js = _read_app_js()
+        idx = js.find("wc_impact_disclaimer:")
+        assert idx > 0
+        body = js[idx : idx + 600]
+        assert "<script" not in body.lower()
+        assert "onerror=" not in body.lower()
+
+    def test_title_key_present(self):
+        js = _read_app_js()
+        count = js.count("wc_impact_title:")
+        assert count >= 2
+
+    def test_no_data_key_present(self):
+        js = _read_app_js()
+        count = js.count("wc_impact_no_data:")
+        assert count >= 2
+
+    def test_loading_key_present(self):
+        js = _read_app_js()
+        count = js.count("wc_impact_loading:")
+        assert count >= 2
+
+    def test_no_matches_key_present(self):
+        js = _read_app_js()
+        count = js.count("wc_impact_no_matches:")
+        assert count >= 2
+
