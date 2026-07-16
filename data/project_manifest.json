@@ -1,0 +1,1777 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-16T19:41:42.150534+00:00",
+  "package_version": "1.0.3",
+  "architecture": {
+    "package_name": "scoutfootball",
+    "status": "Phase 10 pipeline and API layer initialized; CLI ingest/build-features/train/validate/serve commands, data validation gates, probability calibration, FastAPI read-only endpoints, and Streamlit multi-page app all operational.",
+    "module_boundaries": [
+      {
+        "name": "adapters",
+        "purpose": "External data ingestion and manual import boundaries.",
+        "planned_components": [
+          "statsbomb_open",
+          "football_data",
+          "clubelo",
+          "understat",
+          "fbref",
+          "transfermarkt_manual"
+        ]
+      },
+      {
+        "name": "entities",
+        "purpose": "Canonical team/player identity resolution and bridge tables.",
+        "planned_components": [
+          "normalization",
+          "matching",
+          "bridge_tables"
+        ]
+      },
+      {
+        "name": "storage",
+        "purpose": "DuckDB, Parquet and filesystem layout utilities.",
+        "planned_components": [
+          "duckdb_io",
+          "parquet_io",
+          "metadata_logging"
+        ]
+      },
+      {
+        "name": "features",
+        "purpose": "Feature table generation without future leakage.",
+        "planned_components": [
+          "team_match",
+          "player_match",
+          "rolling_features"
+        ]
+      },
+      {
+        "name": "models",
+        "purpose": "Interpretable modeling tasks and artifact boundaries.",
+        "planned_components": [
+          "market_value",
+          "match_prediction",
+          "style_embedding"
+        ]
+      },
+      {
+        "name": "evaluation",
+        "purpose": "Time-series backtests, calibration and model reports.",
+        "planned_components": [
+          "backtests",
+          "calibration",
+          "reporting"
+        ]
+      },
+      {
+        "name": "viz",
+        "purpose": "Plotly chart definitions for research outputs.",
+        "planned_components": [
+          "player_compare",
+          "trend_charts",
+          "probability_matrix"
+        ]
+      },
+      {
+        "name": "app",
+        "purpose": "Streamlit views that only read local artifacts.",
+        "planned_components": [
+          "player_compare_page",
+          "market_value_page",
+          "match_page"
+        ]
+      }
+    ],
+    "data_directories": [
+      {
+        "layer": "raw",
+        "relative_path": "raw/statsbomb_open",
+        "purpose": "Immutable official open-data JSON snapshots.",
+        "source_name": "statsbomb_open",
+        "license_name": "StatsBomb Open Data User Protocol",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "raw",
+        "relative_path": "raw/football_data",
+        "purpose": "Downloaded CSV baselines for fixtures, results and odds.",
+        "source_name": "football_data",
+        "license_name": "Football-Data.co.uk non-commercial",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "raw",
+        "relative_path": "raw/clubelo",
+        "purpose": "Team Elo snapshots before silver normalization.",
+        "source_name": "clubelo",
+        "license_name": "ClubElo public data",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "raw",
+        "relative_path": "raw/understat",
+        "purpose": "Cached supplemental attacking metrics.",
+        "source_name": "understat",
+        "license_name": "Understat public data",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "raw",
+        "relative_path": "raw/fbref",
+        "purpose": "Low-frequency cached standard-table extracts.",
+        "source_name": "fbref",
+        "license_name": "FBref personal research only; no redistribution",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "raw",
+        "relative_path": "raw/transfermarkt_manual",
+        "purpose": "Manually provided market and contract snapshots.",
+        "source_name": "transfermarkt_manual",
+        "license_name": "Transfermarkt manual import only",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "silver",
+        "relative_path": "silver/dimensions",
+        "purpose": "Normalized competitions, teams, players and seasons.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "silver",
+        "relative_path": "silver/facts",
+        "purpose": "Normalized matches, lineups, events and market snapshots.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "silver",
+        "relative_path": "silver/bridge",
+        "purpose": "Cross-source identity bridge tables and review logs.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "gold",
+        "relative_path": "gold/marts",
+        "purpose": "Analytical marts for research and reporting.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "gold",
+        "relative_path": "gold/feature_store",
+        "purpose": "Reusable feature tables keyed by entity and cutoff date.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "models",
+        "relative_path": "models/training_sets",
+        "purpose": "Frozen training datasets with version metadata.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "models",
+        "relative_path": "models/artifacts",
+        "purpose": "Serialized models, configs and feature manifests.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "models",
+        "relative_path": "models/oof_predictions",
+        "purpose": "Out-of-fold predictions for validation and calibration.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "reports",
+        "relative_path": "reports/html",
+        "purpose": "Rendered local HTML research reports.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "reports",
+        "relative_path": "reports/pdf",
+        "purpose": "Exported PDF reports when later enabled.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "logs",
+        "relative_path": "logs/ingestion",
+        "purpose": "Source request logs, hashes and ingest manifests.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "layer": "logs",
+        "relative_path": "logs/validation",
+        "purpose": "Schema checks, data-quality reports and drift warnings.",
+        "source_name": "",
+        "license_name": "",
+        "recorded": true,
+        "recorded_note": ""
+      }
+    ],
+    "supported_commands": [
+      "uv sync",
+      "uv run pytest",
+      "uv run ruff check .",
+      "uv run python -m scoutfootball info",
+      "uv run python -m scoutfootball capabilities",
+      "uv run python -m scoutfootball ingest",
+      "uv run python -m scoutfootball build-features",
+      "uv run python -m scoutfootball train",
+      "uv run python -m scoutfootball train-rating-nn",
+      "uv run python -m scoutfootball validate",
+      "uv run python -m scoutfootball preflight",
+      "uv run python -m scoutfootball optimizer-preflight",
+      "uv run python -m scoutfootball action-value",
+      "uv run python -m scoutfootball action-value-matches",
+      "uv run python -m scoutfootball export-ratings",
+      "uv run python -m scoutfootball import-truth-labels",
+      "uv run python -m scoutfootball import-transfermarkt-truth-labels",
+      "uv run python -m scoutfootball audit-truth-labels",
+      "uv run python -m scoutfootball backtest",
+      "uv run python -m scoutfootball tune-predictions",
+      "uv run python -m scoutfootball optimize-ensemble",
+      "uv run python -m scoutfootball serve",
+      "uv run python -m scoutfootball tournament",
+      "uv run streamlit run src/scoutfootball/app/streamlit_app.py"
+    ]
+  },
+  "capabilities": {
+    "generated_at": "2026-07-16T19:41:42.149494+00:00",
+    "package_version": "1.0.3",
+    "domains": [
+      "action_value",
+      "data_pipeline",
+      "infrastructure",
+      "match_predictions",
+      "player_analysis",
+      "player_ratings",
+      "scouting",
+      "team_analysis",
+      "world_cup"
+    ],
+    "capabilities": [
+      {
+        "id": "pipeline.ingest",
+        "name": "数据接入",
+        "description": "从 StatsBomb、Football-Data、ClubElo 等数据源拉取原始数据并落地到本地 Parquet。",
+        "domain": "data_pipeline",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "ingest"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [
+          "raw/statsbomb_open",
+          "raw/football_data",
+          "raw/clubelo",
+          "raw/understat",
+          "raw/fbref",
+          "raw/transfermarkt_manual"
+        ],
+        "notes": ""
+      },
+      {
+        "id": "pipeline.build_features",
+        "name": "特征工程",
+        "description": "从原始数据构建球队级、球员级特征表，含时间窗口滚动特征，无未来泄露。",
+        "domain": "data_pipeline",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "build-features"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [
+          "gold/feature_store"
+        ],
+        "notes": ""
+      },
+      {
+        "id": "pipeline.validate",
+        "name": "数据验证门禁",
+        "description": "训练前的数据质量校验：schema、行数、非空率、唯一性、时间连续性、来源覆盖度。",
+        "domain": "data_pipeline",
+        "status": "delivered",
+        "api_paths": [
+          "/health",
+          "/artifacts"
+        ],
+        "cli_commands": [
+          "validate",
+          "preflight",
+          "optimizer-preflight"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.training",
+        "name": "球员评分训练",
+        "description": "多模型球员评分训练：市场价值、阵容评分、神经网络候选。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "train",
+          "train-rating-nn"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [
+          "models/artifacts",
+          "models/training_sets",
+          "models/oof_predictions"
+        ],
+        "notes": ""
+      },
+      {
+        "id": "ratings.export",
+        "name": "评分导出",
+        "description": "将优化后的球员评分导出为 DuckDB 数据库，供前端和 API 使用。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [
+          "/ratings",
+          "/ratings/meta",
+          "/ratings/snapshots"
+        ],
+        "cli_commands": [
+          "export-ratings"
+        ],
+        "frontend_views": [
+          "players",
+          "value"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.truth_labels",
+        "name": "真值标签管理",
+        "description": "导入球探评审和 Transfermarkt 快照作为真值标签，审计监督合规性。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [
+          "/reports/truth-labels",
+          "/reports/transfermarkt-identities"
+        ],
+        "cli_commands": [
+          "import-truth-labels",
+          "import-transfermarkt-truth-labels",
+          "audit-truth-labels"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "predictions.match",
+        "name": "比赛结果预测",
+        "description": "Poisson、Dixon-Coles、集成模型等多种比赛结果预测，含概率校准。",
+        "domain": "match_predictions",
+        "status": "delivered",
+        "api_paths": [
+          "/predictions/{home}/{away}",
+          "/predictions/meta",
+          "/predictions/ensemble/weights",
+          "/predictions/{home}/{away}/attribution",
+          "/predictions/{home}/{away}/diagnostics"
+        ],
+        "cli_commands": [
+          "backtest",
+          "tune-predictions",
+          "optimize-ensemble"
+        ],
+        "frontend_views": [
+          "matches"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "predictions.calibration",
+        "name": "概率校准与回测",
+        "description": "时间序列回测、保序回归校准、RPS/Brier/Log Loss 指标、置信区间。",
+        "domain": "match_predictions",
+        "status": "delivered",
+        "api_paths": [
+          "/predictions/calibration",
+          "/predictions/backtest",
+          "/predictions/tuning",
+          "/predictions/drift",
+          "/predictions/calibration/reliability",
+          "/predictions/calibration/scoreline"
+        ],
+        "cli_commands": [
+          "backtest",
+          "tune-predictions"
+        ],
+        "frontend_views": [
+          "matches",
+          "calibration",
+          "backtest"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "predictions.value_bet",
+        "name": "价值投注分析",
+        "description": "对比模型概率与市场赔率，识别价值投注机会。",
+        "domain": "match_predictions",
+        "status": "delivered",
+        "api_paths": [
+          "/predictions/{home}/{away}/value"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "matches"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "team.analysis",
+        "name": "球队分析",
+        "description": "球队实力对比、风格聚类、风格演变、战术画像、赛程难度。",
+        "domain": "team_analysis",
+        "status": "delivered",
+        "api_paths": [
+          "/teams/compare",
+          "/teams/strength",
+          "/teams/style-clusters",
+          "/teams/style-atlas",
+          "/teams/style-matchup",
+          "/teams/{team}/style-neighbors",
+          "/teams/{team}/style-drift",
+          "/teams/style-evolution"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "teams",
+          "league"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "team.action_profile",
+        "name": "球队动作画像",
+        "description": "基于事件数据的球队动作风格画像和跨联赛对比。",
+        "domain": "team_analysis",
+        "status": "delivered",
+        "api_paths": [
+          "/teams/action-profile",
+          "/teams/action-atlas",
+          "/teams/action-evolution",
+          "/teams/{team}/action-percentiles",
+          "/teams/{team}/action-similarity",
+          "/teams/cross-league-action"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "actions"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "league.season_projection",
+        "name": "联赛赛季预测",
+        "description": "蒙特卡洛模拟联赛最终排名、夺冠/降级概率、赛程难度分析。",
+        "domain": "team_analysis",
+        "status": "delivered",
+        "api_paths": [
+          "/league/season-projection",
+          "/league/form-table",
+          "/league/fixture-difficulty"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "league"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "player.comparison",
+        "name": "球员对比",
+        "description": "多球员并排对比，百分位矩阵、指标排名、风格相似度。",
+        "domain": "player_analysis",
+        "status": "delivered",
+        "api_paths": [
+          "/players/compare",
+          "/players/compare-multi",
+          "/players/{player}/similar",
+          "/players/{player}/career-trajectory"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "compare",
+          "players"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "player.style_fit",
+        "name": "球员风格适配",
+        "description": "球员与球队风格匹配度、位置角色适配、风格邻居。",
+        "domain": "player_analysis",
+        "status": "delivered",
+        "api_paths": [
+          "/players/{player}/style-fit",
+          "/players/{player}/role-fit",
+          "/players/{player}/peer-benchmark",
+          "/style-neighbors",
+          "/style-drift-neighbors"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "players"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "position.analysis",
+        "name": "位置分析",
+        "description": "位置深度画像、位置风格演变、跨联赛位置对比、位置动作画像。",
+        "domain": "player_analysis",
+        "status": "delivered",
+        "api_paths": [
+          "/positions/depth-profile",
+          "/positions/style-evolution",
+          "/positions/action-profile",
+          "/positions/trend-overlay",
+          "/positions/{position}/style-drift",
+          "/positions/{position}/cross-league",
+          "/positions/{position}/action-similarity"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "players"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "action_value.core",
+        "name": "动作价值计算",
+        "description": "基于 SPADL 的事件-动作转换，xT 期望值计算，球员动作价值聚合。",
+        "domain": "action_value",
+        "status": "delivered",
+        "api_paths": [
+          "/action-values",
+          "/action-values/evidence",
+          "/action-values/evidence/{player}",
+          "/action-values/players/{player}/context",
+          "/action-values/players/{player}/rating-links",
+          "/action-values/matches"
+        ],
+        "cli_commands": [
+          "action-value",
+          "action-value-matches"
+        ],
+        "frontend_views": [
+          "actions"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "action_value.position_similarity",
+        "name": "动作位置相似度",
+        "description": "基于动作分布的位置相似度分析，跨联赛动作对比。",
+        "domain": "action_value",
+        "status": "delivered",
+        "api_paths": [
+          "/positions/{position}/action-similarity",
+          "/teams/cross-league-action",
+          "/cross-league-action-comparison"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "actions"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "scouting.targets",
+        "name": "球探目标推荐",
+        "description": "基于球队需求的引援目标推荐，风格匹配度、位置缺口分析。",
+        "domain": "scouting",
+        "status": "delivered",
+        "api_paths": [
+          "/teams/{team}/scouting-targets",
+          "/teams/{team}/scouting-style-match/{position}",
+          "/teams/{team}/scouting-dashboard",
+          "/teams/{team}/position-gap-report",
+          "/teams/style-clusters/recruits"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "scouting"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "scouting.watchlist",
+        "name": "观察名单与短名单",
+        "description": "上升/下滑球员观察名单、球探短名单、评审队列管理。",
+        "domain": "scouting",
+        "status": "delivered",
+        "api_paths": [
+          "/scouting/risers-decliners",
+          "/watchlist",
+          "/shortlist",
+          "/review-queue"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "scouting"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "scouting.workspace",
+        "name": "球探工作区",
+        "description": "本地球探评审工作区，支持多工作区版本管理和并发控制。",
+        "domain": "scouting",
+        "status": "delivered",
+        "api_paths": [
+          "/scouting-workspaces",
+          "/scouting-workspaces/capabilities",
+          "/scouting-workspaces/latest",
+          "/scouting-workspaces/{id}",
+          "/scouting-workspaces/{id} (PUT)"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "scouting"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "worldcup.tournament",
+        "name": "世界杯锦标赛管理",
+        "description": "2026 世界杯 48 队锦标赛状态管理：积分榜、晋级计算、淘汰赛生成。",
+        "domain": "world_cup",
+        "status": "delivered",
+        "api_paths": [
+          "/world-cup/groups",
+          "/world-cup/schedule",
+          "/world-cup/teams",
+          "/world-cup/tournament-summary",
+          "/world-cup/tournament-standings",
+          "/world-cup/tournament-matches",
+          "/world-cup/tournament-scenarios"
+        ],
+        "cli_commands": [
+          "tournament",
+          "tournament show",
+          "tournament standings",
+          "tournament apply",
+          "tournament matches",
+          "tournament scenarios"
+        ],
+        "frontend_views": [
+          "wc_schedule",
+          "wc_knockout",
+          "wc_tournament"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "worldcup.knockout",
+        "name": "世界杯淘汰赛",
+        "description": "淘汰赛对阵生成、结果录入、晋级路径、概率模拟。",
+        "domain": "world_cup",
+        "status": "delivered",
+        "api_paths": [
+          "/world-cup/knockout",
+          "/world-cup/knockout-bracket",
+          "/world-cup/knockout-probabilities",
+          "/world-cup/knockout-scenarios"
+        ],
+        "cli_commands": [
+          "tournament knockout",
+          "tournament knockout generate",
+          "tournament knockout show",
+          "tournament knockout apply"
+        ],
+        "frontend_views": [
+          "wc_knockout",
+          "wc_tournament"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "worldcup.predictions",
+        "name": "世界杯预测",
+        "description": "世界杯小组赛预测、出线概率、淘汰赛概率、比赛预测。",
+        "domain": "world_cup",
+        "status": "delivered",
+        "api_paths": [
+          "/world-cup/predictions",
+          "/world-cup/standings-probabilities",
+          "/world-cup/qualification-impact",
+          "/world-cup/tournament-match-predictions",
+          "/world-cup/match-prediction"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "wc_probability",
+          "wc_compare"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "worldcup.squads",
+        "name": "世界杯名单分析",
+        "description": "各队大名单、阵容平衡对比、球探需求分析。",
+        "domain": "world_cup",
+        "status": "delivered",
+        "api_paths": [
+          "/world-cup/squads/{team}",
+          "/world-cup/squad-balance-comparison/{a}/{b}",
+          "/world-cup/squads/{team}/scouting-needs"
+        ],
+        "cli_commands": [],
+        "frontend_views": [
+          "wc_squads",
+          "wc_compare"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "api.server",
+        "name": "API 服务",
+        "description": "FastAPI 只读 API 服务，支持 CORS、静态文件托管、工作区写操作。",
+        "domain": "infrastructure",
+        "status": "delivered",
+        "api_paths": [
+          "/health",
+          "/license"
+        ],
+        "cli_commands": [
+          "serve"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "frontend.analyst_console",
+        "name": "分析师工作台",
+        "description": "单页前端应用，包含球员、球队、预测、球探、动作价值、世界杯等多个分析视图。",
+        "domain": "infrastructure",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [],
+        "frontend_views": [
+          "overview",
+          "players",
+          "compare",
+          "value",
+          "matches",
+          "teams",
+          "league",
+          "scouting",
+          "actions",
+          "reports",
+          "tactical",
+          "wc_schedule",
+          "wc_squads",
+          "wc_compare",
+          "wc_probability",
+          "wc_knockout",
+          "wc_tournament",
+          "license",
+          "data",
+          "calibration",
+          "backtest",
+          "help"
+        ],
+        "data_artifacts": [
+          "frontend/data/"
+        ],
+        "notes": ""
+      },
+      {
+        "id": "data.artifacts",
+        "name": "数据产物清单",
+        "description": "所有数据产物的元数据清单、版本信息、来源归属。",
+        "domain": "infrastructure",
+        "status": "delivered",
+        "api_paths": [
+          "/artifacts",
+          "/model-runs",
+          "/reports/model-runs",
+          "/reports/model-runs/{run_id}"
+        ],
+        "cli_commands": [
+          "info",
+          "capabilities",
+          "data-contracts"
+        ],
+        "frontend_views": [
+          "data"
+        ],
+        "data_artifacts": [],
+        "notes": ""
+      }
+    ]
+  },
+  "data_contracts": {
+    "generated_at": "2026-07-16T19:41:42.150534+00:00",
+    "package_version": "1.0.3",
+    "layers": [
+      "gold",
+      "logs",
+      "models",
+      "raw",
+      "reports",
+      "silver"
+    ],
+    "contracts": [
+      {
+        "artifact_id": "raw/statsbomb_open",
+        "layer": "raw",
+        "purpose": "Immutable official open-data JSON snapshots.",
+        "status": "delivered",
+        "license": {
+          "source_name": "statsbomb_open",
+          "license_name": "StatsBomb Open Data User Protocol",
+          "attribution_required": true,
+          "redistribution_allowed": false,
+          "commercial_use_allowed": false,
+          "retention_policy_days": null,
+          "deletion_strategy": "",
+          "source_url": "https://github.com/statsbomb/open-data",
+          "notes": "Free for research; attribution required."
+        },
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "raw/football_data",
+        "layer": "raw",
+        "purpose": "Downloaded CSV baselines for fixtures, results and odds.",
+        "status": "delivered",
+        "license": {
+          "source_name": "football_data",
+          "license_name": "Football-Data.co.uk non-commercial",
+          "attribution_required": true,
+          "redistribution_allowed": false,
+          "commercial_use_allowed": false,
+          "retention_policy_days": null,
+          "deletion_strategy": "",
+          "source_url": "https://www.football-data.co.uk/",
+          "notes": "Free for non-commercial use; attribution suggested."
+        },
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "raw/clubelo",
+        "layer": "raw",
+        "purpose": "Team Elo snapshots before silver normalization.",
+        "status": "delivered",
+        "license": {
+          "source_name": "clubelo",
+          "license_name": "ClubElo public data",
+          "attribution_required": true,
+          "redistribution_allowed": false,
+          "commercial_use_allowed": false,
+          "retention_policy_days": null,
+          "deletion_strategy": "",
+          "source_url": "http://api.clubelo.com/",
+          "notes": "Public data; attribution suggested."
+        },
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "raw/understat",
+        "layer": "raw",
+        "purpose": "Cached supplemental attacking metrics.",
+        "status": "delivered",
+        "license": {
+          "source_name": "understat",
+          "license_name": "Understat public data",
+          "attribution_required": true,
+          "redistribution_allowed": false,
+          "commercial_use_allowed": false,
+          "retention_policy_days": null,
+          "deletion_strategy": "",
+          "source_url": "https://understat.com/",
+          "notes": "Public data; scrape respects robots.txt and ToS."
+        },
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "raw/fbref",
+        "layer": "raw",
+        "purpose": "Low-frequency cached standard-table extracts.",
+        "status": "delivered",
+        "license": {
+          "source_name": "fbref",
+          "license_name": "FBref personal research only",
+          "attribution_required": true,
+          "redistribution_allowed": false,
+          "commercial_use_allowed": false,
+          "retention_policy_days": null,
+          "deletion_strategy": "",
+          "source_url": "https://fbref.com/",
+          "notes": "Personal research only; no redistribution of raw data."
+        },
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "raw/transfermarkt_manual",
+        "layer": "raw",
+        "purpose": "Manually provided market and contract snapshots.",
+        "status": "delivered",
+        "license": {
+          "source_name": "transfermarkt_manual",
+          "license_name": "Transfermarkt manual import only",
+          "attribution_required": true,
+          "redistribution_allowed": false,
+          "commercial_use_allowed": false,
+          "retention_policy_days": null,
+          "deletion_strategy": "",
+          "source_url": "https://www.transfermarkt.com/",
+          "notes": "Manual import only; no automated scraping."
+        },
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "competition",
+        "layer": "silver",
+        "purpose": "Canonical competition dimension shared across sources.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "competition_id"
+        ],
+        "columns": [
+          {
+            "name": "competition_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "competition_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "country_name",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "competition_gender",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "source_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "season",
+        "layer": "silver",
+        "purpose": "Canonical season dimension keyed independently from source IDs.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "season_id"
+        ],
+        "columns": [
+          {
+            "name": "season_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "competition_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "season_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "start_date",
+            "dtype": "date",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "end_date",
+            "dtype": "date",
+            "nullable": true,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "team",
+        "layer": "silver",
+        "purpose": "Canonical team dimension for cross-source joins.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "team_id"
+        ],
+        "columns": [
+          {
+            "name": "team_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "team_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "normalized_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "country_name",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "gender",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "player",
+        "layer": "silver",
+        "purpose": "Canonical player dimension for cross-source joins.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "player_id"
+        ],
+        "columns": [
+          {
+            "name": "player_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "player_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "normalized_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "date_of_birth",
+            "dtype": "date",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "nationality",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "primary_position_group",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "match",
+        "layer": "silver",
+        "purpose": "Canonical match fact without source-specific primary keys.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "match_id"
+        ],
+        "columns": [
+          {
+            "name": "match_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "competition_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "season_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "match_date",
+            "dtype": "timestamp",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "home_team_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "away_team_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "home_goals",
+            "dtype": "integer",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "away_goals",
+            "dtype": "integer",
+            "nullable": true,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "team_match",
+        "layer": "silver",
+        "purpose": "Team-level match facts used for rolling features and probability models.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "match_id",
+          "team_id"
+        ],
+        "columns": [
+          {
+            "name": "match_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "team_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "opponent_team_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "is_home",
+            "dtype": "boolean",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "goals_for",
+            "dtype": "integer",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "goals_against",
+            "dtype": "integer",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "result_points",
+            "dtype": "integer",
+            "nullable": true,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "player_match",
+        "layer": "silver",
+        "purpose": "Player-level appearance facts used for rolling features.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "match_id",
+          "player_id"
+        ],
+        "columns": [
+          {
+            "name": "match_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "player_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "team_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "minutes_played",
+            "dtype": "integer",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "goals",
+            "dtype": "integer",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "assists",
+            "dtype": "integer",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "position_group",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "event",
+        "layer": "silver",
+        "purpose": "Event-level actions primarily sourced from StatsBomb Open Data.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "match_id",
+          "event_id"
+        ],
+        "columns": [
+          {
+            "name": "match_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "event_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "period",
+            "dtype": "integer",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "minute",
+            "dtype": "integer",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "second",
+            "dtype": "integer",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "team_id",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "player_id",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "event_type",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "bridge_source_team",
+        "layer": "silver",
+        "purpose": "Cross-source team identifier bridge with review metadata.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "source_name",
+          "source_team_id"
+        ],
+        "columns": [
+          {
+            "name": "source_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "source_team_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "team_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "method",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "score",
+            "dtype": "double",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "approved_by",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "approved_at",
+            "dtype": "timestamp",
+            "nullable": true,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "bridge_source_player",
+        "layer": "silver",
+        "purpose": "Cross-source player identifier bridge with review metadata.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "source_name",
+          "source_player_id"
+        ],
+        "columns": [
+          {
+            "name": "source_name",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "source_player_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "player_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "method",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "score",
+            "dtype": "double",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "approved_by",
+            "dtype": "string",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "approved_at",
+            "dtype": "timestamp",
+            "nullable": true,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "market_snapshot",
+        "layer": "silver",
+        "purpose": "Manually imported or authorized market-value and contract snapshots.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [
+          "player_id",
+          "snapshot_date"
+        ],
+        "columns": [
+          {
+            "name": "player_id",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "snapshot_date",
+            "dtype": "date",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "market_value",
+            "dtype": "double",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "contract_end",
+            "dtype": "date",
+            "nullable": true,
+            "description": ""
+          },
+          {
+            "name": "data_source",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          },
+          {
+            "name": "import_method",
+            "dtype": "string",
+            "nullable": false,
+            "description": ""
+          }
+        ],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "gold/marts",
+        "layer": "gold",
+        "purpose": "Analytical marts for research and reporting.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "gold/feature_store",
+        "layer": "gold",
+        "purpose": "Reusable feature tables keyed by entity and cutoff date.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "models/training_sets",
+        "layer": "models",
+        "purpose": "Frozen training datasets with version metadata.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "models/artifacts",
+        "layer": "models",
+        "purpose": "Serialized models, configs and feature manifests.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "models/oof_predictions",
+        "layer": "models",
+        "purpose": "Out-of-fold predictions for validation and calibration.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "reports/html",
+        "layer": "reports",
+        "purpose": "Rendered local HTML research reports.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "reports/pdf",
+        "layer": "reports",
+        "purpose": "Exported PDF reports when later enabled.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "logs/ingestion",
+        "layer": "logs",
+        "purpose": "Source request logs, hashes and ingest manifests.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "logs/validation",
+        "layer": "logs",
+        "purpose": "Schema checks, data-quality reports and drift warnings.",
+        "status": "delivered",
+        "license": null,
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      }
+    ]
+  },
+  "content_sha256": "46c8822b211e860f2dfda536eb6c594f2c3b1178e70e8d0d6955ffbf1d4dfe6f"
+}
