@@ -137,6 +137,18 @@ const i18n = {
         league_difficulty_col_score: "难度",
         league_difficulty_col_label: "等级",
         league_difficulty_col_actual: "实际",
+        league_difficulty_heatmap_title: "赛程难度热力图",
+        league_difficulty_heatmap_no_data: "暂无热力图数据",
+        league_difficulty_heatmap_match_n: "第 {n} 场",
+        league_difficulty_heatmap_opponent: "对手",
+        league_difficulty_heatmap_venue: "主客",
+        league_difficulty_heatmap_date: "日期",
+        league_difficulty_heatmap_score: "难度",
+        league_difficulty_heatmap_xpts: "期望积分",
+        league_difficulty_heatmap_level: "等级",
+        league_difficulty_distribution_title: "球队难度分布",
+        league_difficulty_distribution_no_data: "暂无分布数据",
+        league_difficulty_distribution_avg: "平均难度",
         league_projection_title: "赛季蒙特卡洛投影",
         league_projection_sims: "模拟次数",
         league_projection_btn: "投影",
@@ -1308,6 +1320,18 @@ const i18n = {
         league_difficulty_col_score: "Difficulty",
         league_difficulty_col_label: "Level",
         league_difficulty_col_actual: "Actual",
+        league_difficulty_heatmap_title: "Fixture Difficulty Heatmap",
+        league_difficulty_heatmap_no_data: "No heatmap data",
+        league_difficulty_heatmap_match_n: "Match {n}",
+        league_difficulty_heatmap_opponent: "Opponent",
+        league_difficulty_heatmap_venue: "Venue",
+        league_difficulty_heatmap_date: "Date",
+        league_difficulty_heatmap_score: "Difficulty",
+        league_difficulty_heatmap_xpts: "Exp Pts",
+        league_difficulty_heatmap_level: "Level",
+        league_difficulty_distribution_title: "Team Difficulty Distribution",
+        league_difficulty_distribution_no_data: "No distribution data",
+        league_difficulty_distribution_avg: "Avg Difficulty",
         league_projection_title: "Season Monte Carlo Projection",
         league_projection_sims: "Simulations",
         league_projection_btn: "Project",
@@ -10935,6 +10959,247 @@ function renderLeagueFormHeatmap(data) {
     }
 }
 
+function renderLeagueDifficultyHeatmap(data) {
+    const container = document.getElementById("league-difficulty-heatmap");
+    const statusEl = document.getElementById("league-difficulty-heatmap-status");
+    if (!container) return;
+    const z = appState.lang === "zh";
+    const teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+    const upcomingN = (data && Number(data.upcoming_n)) || 10;
+
+    if (teams.length === 0) {
+        const chart = getChart("league-difficulty-heatmap");
+        if (chart) chart.clear();
+        container.innerHTML = "";
+        if (statusEl) {
+            statusEl.textContent = t("league_difficulty_heatmap_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const chart = getChart("league-difficulty-heatmap");
+    if (!chart) {
+        if (statusEl) {
+            statusEl.textContent = t("league_difficulty_heatmap_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const xLabels = [];
+    for (let i = 1; i <= upcomingN; i++) {
+        xLabels.push(t("league_difficulty_heatmap_match_n").replace("{n}", String(i)));
+    }
+
+    const yLabels = teams.map((tm) => String(tm.team || ""));
+
+    const heatData = [];
+    const tooltipCells = [];
+    for (let yi = 0; yi < teams.length; yi++) {
+        const fixtures = Array.isArray(teams[yi].fixtures) ? teams[yi].fixtures : [];
+        for (let xi = 0; xi < upcomingN; xi++) {
+            const f = fixtures[xi];
+            if (!f) continue;
+            const diffScore = Number(f.difficulty_score != null ? f.difficulty_score : 0);
+            heatData.push([xi, yi, diffScore]);
+            tooltipCells.push({
+                xi: xi,
+                yi: yi,
+                team: String(teams[yi].team || ""),
+                match_n: xi + 1,
+                opponent: String(f.opponent || ""),
+                venue: String(f.venue || ""),
+                date: f.date ? String(f.date) : "",
+                difficulty_score: diffScore,
+                difficulty_label: String(f.difficulty_label || ""),
+                expected_points: Number(f.expected_points != null ? f.expected_points : 0),
+            });
+        }
+    }
+
+    const textColor = chartTextColor();
+    const gridColor = chartGridColor();
+
+    chart.setOption({
+        tooltip: {
+            trigger: "item",
+            formatter: function (params) {
+                const cell = tooltipCells.find(function (c) {
+                    return c.xi === params.value[0] && c.yi === params.value[1];
+                });
+                if (!cell) return "";
+                const venueLabel = cell.venue === "H" ? (z ? "主" : "Home")
+                    : cell.venue === "A" ? (z ? "客" : "Away")
+                    : cell.venue;
+                const levelLabel = leagueDiffLabel(cell.difficulty_label);
+                const dateStr = cell.date ? cell.date.slice(0, 10) : "—";
+                return '<div style="font-weight:600">' + escapeHtml(cell.team)
+                    + ' <span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_match_n").replace("{n}", String(cell.match_n))) + '</span></div>'
+                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_opponent")) + ':</span> ' + escapeHtml(cell.opponent)
+                    + ' <span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_venue")) + ':</span> ' + escapeHtml(venueLabel) + '</div>'
+                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_date")) + ':</span> ' + escapeHtml(dateStr) + '</div>'
+                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_score")) + ':</span> ' + cell.difficulty_score
+                    + ' <span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_xpts")) + ':</span> ' + cell.expected_points.toFixed(2) + '</div>'
+                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_level")) + ':</span> ' + escapeHtml(levelLabel) + '</div>';
+            },
+        },
+        grid: { left: 130, right: 30, top: 20, bottom: 70 },
+        xAxis: {
+            type: "category",
+            data: xLabels,
+            splitArea: { show: true },
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        yAxis: {
+            type: "category",
+            data: yLabels,
+            splitArea: { show: true },
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        visualMap: {
+            type: "continuous",
+            min: 0,
+            max: 100,
+            calculable: true,
+            inRange: {
+                color: ["#16a34a", "#ca8a04", "#dc2626"],
+            },
+            left: "center",
+            bottom: 5,
+            textStyle: { color: textColor },
+        },
+        series: [{
+            name: z ? "赛程难度" : "Difficulty",
+            type: "heatmap",
+            data: heatData,
+            label: {
+                show: true,
+                color: "#fff",
+                fontSize: 10,
+                fontWeight: 600,
+                formatter: function (params) {
+                    return String(params.value[2]);
+                },
+            },
+            emphasis: {
+                itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.5)" },
+            },
+        }],
+    }, true);
+
+    requestAnimationFrame(function () { chart.resize(); });
+
+    if (statusEl) {
+        statusEl.textContent = teams.length + " " + (z ? "支球队" : "teams");
+        statusEl.className = "status-pill status-high";
+    }
+}
+
+function renderLeagueDifficultyDistribution(data) {
+    const container = document.getElementById("league-difficulty-distribution");
+    const statusEl = document.getElementById("league-difficulty-distribution-status");
+    if (!container) return;
+    const z = appState.lang === "zh";
+    const teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+
+    if (teams.length === 0) {
+        const chart = getChart("league-difficulty-distribution");
+        if (chart) chart.clear();
+        container.innerHTML = "";
+        if (statusEl) {
+            statusEl.textContent = t("league_difficulty_distribution_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const chart = getChart("league-difficulty-distribution");
+    if (!chart) {
+        if (statusEl) {
+            statusEl.textContent = t("league_difficulty_distribution_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const sorted = teams.slice().sort(function (a, b) {
+        const avgA = Number(a.avg_difficulty != null ? a.avg_difficulty : 0);
+        const avgB = Number(b.avg_difficulty != null ? b.avg_difficulty : 0);
+        return avgB - avgA;
+    });
+
+    const yLabels = sorted.map((tm) => String(tm.team || ""));
+    const values = sorted.map((tm) => Number(tm.avg_difficulty != null ? tm.avg_difficulty : 0));
+    const fixtureCounts = sorted.map((tm) => Number(tm.n_fixtures != null ? tm.n_fixtures : 0));
+    const barColors = sorted.map((tm) => {
+        const avg = Number(tm.avg_difficulty != null ? tm.avg_difficulty : 0);
+        if (avg >= 70) return "#dc2626";
+        if (avg >= 50) return "#ca8a04";
+        return "#16a34a";
+    });
+
+    const textColor = chartTextColor();
+    const gridColor = chartGridColor();
+
+    chart.setOption({
+        tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            formatter: function (params) {
+                const idx = params[0].dataIndex;
+                const team = yLabels[idx];
+                const avg = values[idx];
+                const nFix = fixtureCounts[idx];
+                return '<div style="font-weight:600">' + escapeHtml(team) + '</div>'
+                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_distribution_avg")) + ':</span> ' + avg.toFixed(1) + '</div>'
+                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_score")) + ':</span> 0-100</div>'
+                    + '<div><span style="color:#888">' + escapeHtml(z ? "场次数" : "Fixtures") + ':</span> ' + nFix + '</div>';
+            },
+        },
+        grid: { left: 130, right: 30, top: 20, bottom: 30 },
+        xAxis: {
+            type: "value",
+            min: 0,
+            max: 100,
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+            splitLine: { lineStyle: { color: gridColor } },
+        },
+        yAxis: {
+            type: "category",
+            data: yLabels,
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        series: [{
+            name: t("league_difficulty_distribution_avg"),
+            type: "bar",
+            data: values.map(function (v, i) {
+                return { value: v, itemStyle: { color: barColors[i] } };
+            }),
+            label: {
+                show: true,
+                position: "right",
+                color: textColor,
+                fontSize: 11,
+                formatter: function (params) {
+                    return params.value.toFixed(1);
+                },
+            },
+        }],
+    }, true);
+
+    requestAnimationFrame(function () { chart.resize(); });
+
+    if (statusEl) {
+        statusEl.textContent = teams.length + " " + (z ? "支球队" : "teams");
+        statusEl.className = "status-pill status-high";
+    }
+}
+
 async function loadLeagueDifficulty() {
     const content = document.getElementById("league-difficulty-content");
     if (!content) return;
@@ -10954,6 +11219,8 @@ async function loadLeagueDifficulty() {
         if (data.status !== "ok" || teamsData.length === 0) {
             const msg = data.disclaimer || (z ? "无数据" : "No data");
             content.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(msg)}</p>`;
+            renderLeagueDifficultyHeatmap({ teams: [] });
+            renderLeagueDifficultyDistribution({ teams: [] });
             return;
         }
         const sections = teamsData.map((td) => {
@@ -10994,8 +11261,12 @@ async function loadLeagueDifficulty() {
             </div>`;
         }).join("");
         content.innerHTML = sections || `<p style="color:var(--text-muted)">${escapeHtml(z ? "无赛程数据" : "No fixture data")}</p>`;
+        renderLeagueDifficultyHeatmap(data);
+        renderLeagueDifficultyDistribution(data);
     } catch (err) {
         content.innerHTML = `<p style="color:var(--text-muted)">${z ? "加载失败" : "Load failed"}: ${escapeHtml(err.message || "")}</p>`;
+        renderLeagueDifficultyHeatmap({ teams: [] });
+        renderLeagueDifficultyDistribution({ teams: [] });
     }
 }
 
