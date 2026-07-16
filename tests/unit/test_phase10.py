@@ -234,6 +234,17 @@ class TestAPI:
         assert "artifacts" in result
         assert isinstance(result["artifacts"], list)
 
+    def test_artifacts_license_attribution_covers_registered_sources(self):
+        """license_attribution must cover all 6 architecture-registered sources."""
+        from scoutfootball.api import get_artifacts_summary
+
+        result = get_artifacts_summary()
+        attribution = result.get("license_attribution", {})
+        # The 6 sources registered in architecture.py planned_components
+        required = {"statsbomb", "fbref", "football_data", "understat", "clubelo", "transfermarkt"}
+        missing = required - set(attribution.keys())
+        assert not missing, f"license_attribution missing registered sources: {missing}"
+
     def test_get_prediction_summary(self):
         from scoutfootball.api import get_prediction_summary
 
