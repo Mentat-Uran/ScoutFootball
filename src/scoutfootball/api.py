@@ -6312,6 +6312,7 @@ def get_artifacts_summary() -> dict:
             "fbref": "FBref via soccerdata — personal research use only",
             "football_data": "Football-Data.co.uk — free for non-commercial use",
             "understat": "Understat — public data, attribution appreciated",
+            "clubelo": "ClubElo — public data, attribution appreciated",
             "transfermarkt": "Transfermarkt — manual import only, no automated scraping",
         },
     })
