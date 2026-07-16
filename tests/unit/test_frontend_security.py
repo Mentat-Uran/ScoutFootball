@@ -1832,7 +1832,8 @@ class TestShortlistProvenanceExportAndTraySync:
         idx = js.find("function buildShortlistDecisionPack")
         assert idx > 0
         body = js[idx : idx + 2500]
-        assert 'version: "1.1.0"' in body
+        # Round 95: bumped from 1.1.0 to 1.2.0 for watchlist support.
+        assert 'version: "1.2.0"' in body
 
     def test_decision_pack_includes_provenance_log(self):
         js = _read_app_js()
@@ -1846,7 +1847,7 @@ class TestShortlistProvenanceExportAndTraySync:
         js = _read_app_js()
         idx = js.find("function buildShortlistDecisionPack")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         for field in ("timestamp", "player_key", "player_name",
                       "action", "reason_code", "resulting_codes"):
             assert field + ":" in body, f"Missing provenance field: {field}"
@@ -1864,7 +1865,7 @@ class TestShortlistProvenanceExportAndTraySync:
         js = _read_app_js()
         idx = js.find("function buildShortlistDecisionPack")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert "Array.isArray(entry.resulting_codes)" in body
         assert ".map((c) => String(c || \"\"))" in body
 
@@ -1873,7 +1874,7 @@ class TestShortlistProvenanceExportAndTraySync:
         js = _read_app_js()
         idx = js.find("function buildShortlistDecisionPack")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         prov_start = body.find("provenance_log:")
         prov_end = body.find("limitations:")
         prov = body[prov_start:prov_end]
@@ -1886,16 +1887,16 @@ class TestShortlistProvenanceExportAndTraySync:
         js = _read_app_js()
         idx = js.find("function buildShortlistDecisionPack")
         assert idx > 0
-        body = js[idx : idx + 3000]
+        body = js[idx : idx + 4500]
         assert "Provenance log is a browser-local audit trail" in body
         assert "not a server-side audit record" in body
 
     def test_decision_pack_limitations_count_is_four(self):
-        """Limitations array now has 4 entries (was 3 before Round 92)."""
+        """Limitations array now has 5 entries (4 before Round 95 + 1 watchlist)."""
         js = _read_app_js()
         idx = js.find("function buildShortlistDecisionPack")
         assert idx > 0
-        body = js[idx : idx + 3000]
+        body = js[idx : idx + 4500]
         lim_start = body.find("limitations: [")
         lim_end = body.find("],", lim_start)
         lim_block = body[lim_start:lim_end]
@@ -1903,6 +1904,8 @@ class TestShortlistProvenanceExportAndTraySync:
         assert lim_block.count('"This export is not') == 1
         assert lim_block.count('"Ratings and confidence') == 1
         assert lim_block.count('"Provenance log is') == 1
+        # Round 95: watchlist limitation added.
+        assert lim_block.count('"Watchlist entries are') == 1
 
     # --- Decision pack: provenance log in CSV ---
 
@@ -2237,7 +2240,7 @@ class TestShortlistDecisionPackImport:
         js = _read_app_js()
         idx = js.find("function _validateShortlistDecisionPack")
         assert idx > 0
-        body = js[idx : idx + 800]
+        body = js[idx : idx + 1200]
         assert "return { ok: true }" in body
 
     # --- Normalize player function ---
@@ -2403,7 +2406,7 @@ class TestShortlistDecisionPackImport:
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
-        body = js[idx : idx + 2000]
+        body = js[idx : idx + 3500]
         assert "added: addedCount" in body
         assert "merged: mergedCount" in body
         assert "total: pack.players.length" in body
@@ -2538,7 +2541,9 @@ class TestShortlistDecisionPackImport:
         assert idx > 0
         body = js[idx : idx + 2500]
         assert 't("shortlist_decision_pack_import_ok")' in body
-        assert ".replace(\"{n}\", String(result.added + result.merged))" in body
+        # Round 95: {n} now uses totalShortlist (added + merged) for the
+        # shortlist section; watchlist counts surface via a separate suffix.
+        assert ".replace(\"{n}\", String(totalShortlist))" in body
         assert ".replace(\"{merged}\", String(result.merged))" in body
         assert ".replace(\"{added}\", String(result.added))" in body
 
@@ -2664,6 +2669,7 @@ class TestShortlistDecisionPackImport:
         "shortlist_decision_pack_import_invalid",
         "shortlist_decision_pack_import_read_fail",
         "shortlist_decision_pack_import_provenance",
+        "shortlist_decision_pack_import_watchlist",
     )
 
     def test_import_i18n_keys_present_zh(self):
@@ -2905,4 +2911,372 @@ class TestShortlistProvenanceLogImportMerge:
         """The i18n key must contain the {provenance} placeholder."""
         js = _read_app_js()
         assert "{provenance}" in js
+
+
+# ===== Round 95: Watchlist Decision Pack Export/Import ======================
+
+class TestShortlistDecisionPackWatchlistImport:
+    """Round 95: verify watchlist merge logic in decision pack import."""
+
+    _WATCHLIST_I18N_KEY = "shortlist_decision_pack_import_watchlist"
+
+    # --- _mergeDecisionPackWatchlistPlayer function ---
+
+    def test_merge_watchlist_function_defined(self):
+        js = _read_app_js()
+        assert "function _mergeDecisionPackWatchlistPlayer" in js
+
+    def test_merge_watchlist_dedup_by_key(self):
+        """When player.key already exists in list, merge reason codes."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackWatchlistPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "list.findIndex((p) => p.key === player.key)" in body
+
+    def test_merge_watchlist_uses_normalize_entry_reason_codes(self):
+        """Must call _normalizeEntryReasonCodes on the existing entry."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackWatchlistPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "_normalizeEntryReasonCodes(list[idx])" in body
+
+    def test_merge_watchlist_skips_duplicate_codes(self):
+        """Only push codes not already in entry.reason_codes."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackWatchlistPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "entry.reason_codes.includes(code)" in body
+
+    def test_merge_watchlist_keeps_existing_team_position_rating(self):
+        """Existing entry's team/position/rating must NOT be overwritten."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackWatchlistPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "if (player.team && !entry.team)" in body
+        assert "if (player.position && !entry.position)" in body
+        assert "if (player.rating != null && entry.rating == null)" in body
+
+    def test_merge_watchlist_added_branch_pushes_new_entry(self):
+        """When no existing entry, push a new entry with reason_codes slice."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackWatchlistPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "list.push(entry)" in body
+        assert "reason_codes: player.reason_codes.slice()" in body
+        assert 'kind: "added"' in body
+
+    def test_merge_watchlist_returns_kind_and_merged_count(self):
+        """Return object must have kind + mergedCount."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackWatchlistPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 'kind: "merged"' in body
+        assert "mergedCount" in body
+        assert 'kind: "added", entry, mergedCount: 0' in body
+
+    def test_merge_watchlist_no_dossier_fields(self):
+        """The watchlist merge helper must NOT touch dossier fields
+        (priority/recommendation/target_role/rationale)."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackWatchlistPlayer")
+        assert idx > 0
+        # Find the next function boundary to scope the search.
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 2500
+        body = js[idx:end_idx]
+        for dossier_field in ("priority", "recommendation", "target_role", "rationale"):
+            assert dossier_field not in body, (
+                f"Watchlist merge helper should not reference dossier field: {dossier_field}"
+            )
+
+    def test_merge_watchlist_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackWatchlistPlayer")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 2500
+        body = js[idx:end_idx]
+        assert "eval(" not in body
+
+    # --- _validateShortlistDecisionPack watchlist_players validation ---
+
+    def test_validate_rejects_non_array_watchlist_players(self):
+        """When watchlist_players is present but not an array, reject."""
+        js = _read_app_js()
+        idx = js.find("function _validateShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "pack.watchlist_players !== undefined" in body
+        assert "!Array.isArray(pack.watchlist_players)" in body
+        assert 'reason: "watchlist_players_not_array"' in body
+
+    # --- importShortlistDecisionPackJSON watchlist integration ---
+
+    def test_import_calls_merge_watchlist_helper(self):
+        """Import must call _mergeDecisionPackWatchlistPlayer for each
+        watchlist entry."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "_mergeDecisionPackWatchlistPlayer(watchlist, player)" in body
+
+    def test_import_gets_existing_watchlist(self):
+        """Must read the existing watchlist via getPlayerWatchlist (not overwrite)."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "getPlayerWatchlist()" in body
+
+    def test_import_saves_watchlist_after_merge(self):
+        """Must persist the merged watchlist via savePlayerWatchlist."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "savePlayerWatchlist(watchlist)" in body
+
+    def test_import_returns_watchlist_counts(self):
+        """Success return must have watchlist_added, watchlist_merged, watchlist_total."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "watchlist_added: watchlistAdded" in body
+        assert "watchlist_merged: watchlistMerged" in body
+        assert "watchlist_total: watchlistRaw.length" in body
+
+    def test_import_empty_check_considers_watchlist(self):
+        """The empty-state guard must check both players AND watchlist_players."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "pack.players.length === 0 && watchlistRaw.length === 0" in body
+
+    def test_import_uses_normalize_decision_pack_player_for_watchlist(self):
+        """Watchlist entries must be normalized via _normalizeDecisionPackPlayer
+        (reuses the same field-read logic)."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        # The watchlist loop must call _normalizeDecisionPackPlayer
+        assert "_normalizeDecisionPackPlayer(raw)" in body
+
+    def test_import_watchlist_merge_guards_nonempty(self):
+        """The watchlist merge loop must be guarded by watchlistRaw.length > 0
+        so v1.0.0/v1.1.0 packs (no watchlist_players) skip the watchlist
+        code path entirely."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "if (watchlistRaw.length > 0)" in body
+
+    def test_import_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 3500
+        body = js[idx:end_idx]
+        assert "eval(" not in body
+
+    # --- _handleDecisionPackFileLoad watchlist status ---
+
+    def test_file_load_computes_total_watchlist(self):
+        """File load handler must compute totalWatchlist for the empty check."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "totalWatchlist" in body
+        assert "result.watchlist_added + result.watchlist_merged" in body
+
+    def test_file_load_empty_check_uses_both_totals(self):
+        """Empty status must fire only when both shortlist and watchlist totals are 0."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "totalShortlist === 0 && totalWatchlist === 0" in body
+
+    def test_file_load_surfaces_watchlist_status(self):
+        """When totalWatchlist > 0, the watchlist i18n suffix must be appended."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "if (totalWatchlist > 0)" in body
+        assert 't("shortlist_decision_pack_import_watchlist")' in body
+        assert '.replace("{n}", String(totalWatchlist))' in body
+        assert '.replace("{added}", String(result.watchlist_added))' in body
+        assert '.replace("{merged}", String(result.watchlist_merged))' in body
+
+    def test_file_load_uses_let_msg(self):
+        """msg must be declared with let so it can be appended to."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "let msg =" in body
+
+    def test_file_load_no_innerhtml(self):
+        """Status must use textContent, never innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "innerHTML" not in body
+
+    def test_file_load_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "eval(" not in body
+
+    # --- buildShortlistDecisionPack watchlist export ---
+
+    def test_build_pack_includes_watchlist_players(self):
+        """buildShortlistDecisionPack must include watchlist_players array."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "watchlist_players: watchlistPlayers" in body
+        assert "watchlist_player_count: watchlistPlayers.length" in body
+
+    def test_build_pack_reads_get_player_watchlist(self):
+        """buildShortlistDecisionPack must read via getPlayerWatchlist()."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "getPlayerWatchlist().map" in body
+
+    def test_build_pack_watchlist_entry_fields(self):
+        """Each watchlist entry must carry player_id, player, team, position,
+        rating, reason_code, reason_codes."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        for field in ("player_id: entry.key", "player: entry.name",
+                      "team: entry.team", "position: entry.position",
+                      "rating: entry.rating", "reason_codes: codes"):
+            assert field in body, f"Missing watchlist entry field: {field}"
+
+    def test_build_pack_version_is_1_2_0(self):
+        """Schema version must be bumped to 1.2.0 for watchlist support."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert 'version: "1.2.0"' in body
+
+    def test_build_pack_status_considers_watchlist(self):
+        """status must be 'ok' when either players or watchlistPlayers is non-empty."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "players.length || watchlistPlayers.length" in body
+
+    def test_build_pack_watchlist_limitation_present(self):
+        """A limitation entry must mention the watchlist's browser-local nature."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 4500]
+        assert "Watchlist entries are browser-local tracking state" in body
+
+    # --- exportShortlistDecisionPackCSV watchlist section ---
+
+    def test_csv_export_has_watchlist_section(self):
+        """CSV export must include a # Watchlist section header."""
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert '["# Watchlist"]' in body
+
+    def test_csv_export_has_watchlist_count_row(self):
+        """CSV export must include a watchlist_player_count row."""
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert '["watchlist_player_count", pack.watchlist_player_count || 0]' in body
+
+    def test_csv_export_has_watchlist_column_header(self):
+        """CSV export must include a column header row for watchlist players."""
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        expected = ('"player_id", "player", "team", "position", "rating", '
+                    '"reason_code", "reason_codes"')
+        assert expected in body
+
+    def test_csv_export_maps_watchlist_players(self):
+        """CSV export must map each watchlist player to a row."""
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "pack.watchlist_players || []" in body
+
+    # --- _DECISION_PACK_SUPPORTED_VERSIONS includes 1.2.0 ---
+
+    def test_supported_versions_includes_1_2_0(self):
+        js = _read_app_js()
+        assert '"1.2.0"' in js
+        # The constant must include all three versions.
+        idx = js.find("_DECISION_PACK_SUPPORTED_VERSIONS")
+        assert idx > 0
+        const_body = js[idx : idx + 200]
+        assert '"1.0.0"' in const_body
+        assert '"1.1.0"' in const_body
+        assert '"1.2.0"' in const_body
+
+    # --- i18n key ---
+
+    def test_watchlist_i18n_key_present_zh(self):
+        js = _read_app_js()
+        zh_idx = js.find('shortlist_decision_pack_import_provenance: "（合并')
+        assert zh_idx > 0
+        zh_block = js[zh_idx : zh_idx + 400]
+        assert self._WATCHLIST_I18N_KEY + ":" in zh_block
+
+    def test_watchlist_i18n_key_present_en(self):
+        js = _read_app_js()
+        en_idx = js.find('shortlist_decision_pack_import_provenance: "(')
+        assert en_idx > 0
+        en_block = js[en_idx : en_idx + 400]
+        assert self._WATCHLIST_I18N_KEY + ":" in en_block
+
+    def test_watchlist_i18n_key_has_placeholders(self):
+        """The i18n key must contain {n}, {added}, {merged} placeholders."""
+        js = _read_app_js()
+        idx = js.find(self._WATCHLIST_I18N_KEY + ":")
+        assert idx > 0
+        # Grab the full line (up to the next comma + newline).
+        line_end = js.find(",\n", idx)
+        assert line_end > 0
+        line = js[idx : line_end]
+        assert "{n}" in line
+        assert "{added}" in line
+        assert "{merged}" in line
 
