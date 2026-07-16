@@ -189,6 +189,135 @@ class TestComputeLeagueFormTable:
         assert len(result["disclaimer"]) > 0
 
 
+class TestFormMatches:
+    """compute_league_form_table exposes per-match details via form_matches."""
+
+    def test_form_matches_present_in_team_dict(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        for team in result["teams"]:
+            assert "form_matches" in team
+            assert isinstance(team["form_matches"], list)
+
+    def test_form_matches_length_matches_played(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        for team in result["teams"]:
+            assert len(team["form_matches"]) == team["played"]
+
+    def test_form_matches_entry_has_required_keys(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        required = {"result", "opponent", "venue", "goals_for", "goals_against", "date", "points"}
+        for team in result["teams"]:
+            for m in team["form_matches"]:
+                assert required.issubset(m.keys())
+
+    def test_form_matches_most_recent_first(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        alpha = next(t for t in result["teams"] if t["team"] == "Alpha")
+        # Alpha's most recent match is 2025-09-14 vs Delta
+        assert alpha["form_matches"][0]["opponent"] == "Delta"
+        assert alpha["form_matches"][0]["date"] is not None
+        assert str(alpha["form_matches"][0]["date"]).startswith("2025-09-14")
+
+    def test_form_matches_result_matches_form_string(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        for team in result["teams"]:
+            joined = "".join(m["result"] for m in team["form_matches"])
+            assert joined == team["form_string"]
+
+    def test_form_matches_alpha_all_wins(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        alpha = next(t for t in result["teams"] if t["team"] == "Alpha")
+        assert len(alpha["form_matches"]) == 3
+        for m in alpha["form_matches"]:
+            assert m["result"] == "W"
+            assert m["points"] == 3
+        opponents = [m["opponent"] for m in alpha["form_matches"]]
+        assert "Beta" in opponents
+        assert "Gamma" in opponents
+        assert "Delta" in opponents
+
+    def test_form_matches_venue_correct(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        alpha = next(t for t in result["teams"] if t["team"] == "Alpha")
+        # All Alpha's matches in the synthetic data are at home
+        for m in alpha["form_matches"]:
+            assert m["venue"] == "H"
+
+    def test_form_matches_venue_away_for_away_team(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        beta = next(t for t in result["teams"] if t["team"] == "Beta")
+        # Beta vs Alpha (2025-08-10) was away
+        alpha_match = next(m for m in beta["form_matches"] if m["opponent"] == "Alpha")
+        assert alpha_match["venue"] == "A"
+        assert alpha_match["result"] == "L"
+        assert alpha_match["points"] == 0
+
+    def test_form_matches_goals_correct(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        alpha = next(t for t in result["teams"] if t["team"] == "Alpha")
+        # Alpha 3-0 Beta, 2-1 Gamma, 4-0 Delta
+        beta_match = next(m for m in alpha["form_matches"] if m["opponent"] == "Beta")
+        assert beta_match["goals_for"] == 3
+        assert beta_match["goals_against"] == 0
+        gamma_match = next(m for m in alpha["form_matches"] if m["opponent"] == "Gamma")
+        assert gamma_match["goals_for"] == 2
+        assert gamma_match["goals_against"] == 1
+        delta_match = next(m for m in alpha["form_matches"] if m["opponent"] == "Delta")
+        assert delta_match["goals_for"] == 4
+        assert delta_match["goals_against"] == 0
+
+    def test_form_matches_draw_has_correct_points(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        # Beta 0-0 Gamma was a draw
+        beta = next(t for t in result["teams"] if t["team"] == "Beta")
+        gamma_match = next(m for m in beta["form_matches"] if m["opponent"] == "Gamma")
+        assert gamma_match["result"] == "D"
+        assert gamma_match["points"] == 1
+        assert gamma_match["goals_for"] == 0
+        assert gamma_match["goals_against"] == 0
+
+    def test_form_matches_date_is_string_or_none(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        for team in result["teams"]:
+            for m in team["form_matches"]:
+                assert m["date"] is None or isinstance(m["date"], str)
+
+    def test_form_matches_respects_last_n(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=2)
+        for team in result["teams"]:
+            assert len(team["form_matches"]) <= 2
+            assert team["played"] <= 2
+
+    def test_form_matches_no_data_status_empty(self) -> None:
+        result = compute_league_form_table(pd.DataFrame(), league="Test League", season="2526")
+        assert result["status"] == "no_data"
+        assert result["teams"] == []
+
+    def test_form_matches_entry_types(self) -> None:
+        df = _build_synthetic_results()
+        result = compute_league_form_table(df, league="Test League", season="2526", last_n=6)
+        for team in result["teams"]:
+            for m in team["form_matches"]:
+                assert isinstance(m["result"], str)
+                assert isinstance(m["opponent"], str)
+                assert isinstance(m["venue"], str)
+                assert isinstance(m["goals_for"], int)
+                assert isinstance(m["goals_against"], int)
+                assert isinstance(m["points"], int)
+
+
 # ---------------------------------------------------------------------------
 # compute_fixture_difficulty
 # ---------------------------------------------------------------------------

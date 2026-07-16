@@ -119,6 +119,13 @@ const i18n = {
         league_form_col_away: "客场 PPG",
         league_form_col_string: "近 N 场",
         league_loading: "加载中...",
+        league_form_heatmap_title: "近 N 场表单热力图",
+        league_form_heatmap_no_data: "暂无热力图数据",
+        league_form_heatmap_match_n: "第 {n} 场",
+        league_form_heatmap_opponent: "对手",
+        league_form_heatmap_score: "比分",
+        league_form_heatmap_venue: "主客",
+        league_form_heatmap_date: "日期",
         league_difficulty_title: "赛程难度评估",
         league_difficulty_btn: "查询",
         league_difficulty_placeholder: "输入球队名查询最近 10 场赛程难度，留空查看全联赛。",
@@ -1283,6 +1290,13 @@ const i18n = {
         league_form_col_away: "Away PPG",
         league_form_col_string: "Last N",
         league_loading: "Loading...",
+        league_form_heatmap_title: "Last-N Form Heatmap",
+        league_form_heatmap_no_data: "No heatmap data",
+        league_form_heatmap_match_n: "Match {n}",
+        league_form_heatmap_opponent: "Opponent",
+        league_form_heatmap_score: "Score",
+        league_form_heatmap_venue: "Venue",
+        league_form_heatmap_date: "Date",
         league_difficulty_title: "Fixture Difficulty",
         league_difficulty_btn: "Query",
         league_difficulty_placeholder: "Enter a team name for last-10 fixture difficulty, or leave blank for full league.",
@@ -10745,6 +10759,7 @@ async function loadLeagueForm() {
             if (statusPill) { statusPill.textContent = data.status || "no_data"; statusPill.className = "status-pill status-low"; }
             if (countEl) countEl.textContent = "0";
             if (topPpgEl) topPpgEl.textContent = "0.0";
+            renderLeagueFormHeatmap(data);
             return;
         }
         tbody.innerHTML = teams.map((t, i) => {
@@ -10769,9 +10784,154 @@ async function loadLeagueForm() {
         if (countEl) countEl.textContent = teams.length;
         const topPpg = Math.max(...teams.map((t) => Number(t.ppg || 0)));
         if (topPpgEl) topPpgEl.textContent = topPpg.toFixed(2);
+        renderLeagueFormHeatmap(data);
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">${z ? "加载失败" : "Load failed"}: ${escapeHtml(err.message || "")}</td></tr>`;
         if (statusPill) { statusPill.textContent = z ? "错误" : "Error"; statusPill.className = "status-pill status-low"; }
+        renderLeagueFormHeatmap({ teams: [] });
+    }
+}
+
+function renderLeagueFormHeatmap(data) {
+    const container = document.getElementById("league-form-heatmap");
+    const statusEl = document.getElementById("league-form-heatmap-status");
+    if (!container) return;
+    const z = appState.lang === "zh";
+    const teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+    const lastN = (data && Number(data.last_n)) || 6;
+
+    if (teams.length === 0) {
+        const chart = getChart("league-form-heatmap");
+        if (chart) chart.clear();
+        container.innerHTML = "";
+        if (statusEl) {
+            statusEl.textContent = t("league_form_heatmap_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const chart = getChart("league-form-heatmap");
+    if (!chart) {
+        if (statusEl) {
+            statusEl.textContent = t("league_form_heatmap_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const xLabels = [];
+    for (let i = 1; i <= lastN; i++) {
+        xLabels.push(t("league_form_heatmap_match_n").replace("{n}", String(i)));
+    }
+
+    const yLabels = teams.map((tm) => String(tm.team || ""));
+
+    const heatData = [];
+    const tooltipCells = [];
+    for (let yi = 0; yi < teams.length; yi++) {
+        const matches = Array.isArray(teams[yi].form_matches) ? teams[yi].form_matches : [];
+        for (let xi = 0; xi < lastN; xi++) {
+            const m = matches[xi];
+            if (!m) continue;
+            const points = Number(m.points != null ? m.points : 0);
+            heatData.push([xi, yi, points]);
+            tooltipCells.push({
+                xi: xi,
+                yi: yi,
+                team: String(teams[yi].team || ""),
+                match_n: xi + 1,
+                result: String(m.result || ""),
+                opponent: String(m.opponent || ""),
+                venue: String(m.venue || ""),
+                gf: m.goals_for != null ? m.goals_for : 0,
+                ga: m.goals_against != null ? m.goals_against : 0,
+                date: m.date ? String(m.date) : "",
+            });
+        }
+    }
+
+    const textColor = chartTextColor();
+    const gridColor = chartGridColor();
+
+    chart.setOption({
+        tooltip: {
+            trigger: "item",
+            formatter: function (params) {
+                const cell = tooltipCells.find(function (c) {
+                    return c.xi === params.value[0] && c.yi === params.value[1];
+                });
+                if (!cell) return "";
+                const resultLabel = cell.result === "W" ? (z ? "胜" : "Win")
+                    : cell.result === "D" ? (z ? "平" : "Draw")
+                    : cell.result === "L" ? (z ? "负" : "Loss")
+                    : cell.result;
+                const venueLabel = cell.venue === "H" ? (z ? "主" : "Home")
+                    : cell.venue === "A" ? (z ? "客" : "Away")
+                    : cell.venue;
+                const dateStr = cell.date ? cell.date.slice(0, 10) : "—";
+                return '<div style="font-weight:600">' + escapeHtml(cell.team)
+                    + ' <span style="color:#888">' + escapeHtml(t("league_form_heatmap_match_n").replace("{n}", String(cell.match_n))) + '</span></div>'
+                    + '<div>' + escapeHtml(resultLabel) + ' <span style="color:#888">' + escapeHtml(t("league_form_heatmap_opponent")) + ':</span> ' + escapeHtml(cell.opponent) + '</div>'
+                    + '<div><span style="color:#888">' + escapeHtml(t("league_form_heatmap_score")) + ':</span> ' + cell.gf + '-' + cell.ga
+                    + ' <span style="color:#888">' + escapeHtml(t("league_form_heatmap_venue")) + ':</span> ' + escapeHtml(venueLabel) + '</div>'
+                    + '<div><span style="color:#888">' + escapeHtml(t("league_form_heatmap_date")) + ':</span> ' + escapeHtml(dateStr) + '</div>';
+            },
+        },
+        grid: { left: 130, right: 30, top: 20, bottom: 70 },
+        xAxis: {
+            type: "category",
+            data: xLabels,
+            splitArea: { show: true },
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        yAxis: {
+            type: "category",
+            data: yLabels,
+            splitArea: { show: true },
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        visualMap: {
+            type: "piecewise",
+            pieces: [
+                { value: 3, label: "W", color: "#16a34a" },
+                { value: 1, label: "D", color: "#ca8a04" },
+                { value: 0, label: "L", color: "#dc2626" },
+            ],
+            left: "center",
+            bottom: 5,
+            textStyle: { color: textColor },
+        },
+        series: [{
+            name: z ? "表单" : "Form",
+            type: "heatmap",
+            data: heatData,
+            label: {
+                show: true,
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 600,
+                formatter: function (params) {
+                    const val = params.value[2];
+                    if (val === 3) return "W";
+                    if (val === 1) return "D";
+                    if (val === 0) return "L";
+                    return "";
+                },
+            },
+            emphasis: {
+                itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.5)" },
+            },
+        }],
+    }, true);
+
+    requestAnimationFrame(function () { chart.resize(); });
+
+    if (statusEl) {
+        statusEl.textContent = teams.length + " " + (z ? "支球队" : "teams");
+        statusEl.className = "status-pill status-high";
     }
 }
 

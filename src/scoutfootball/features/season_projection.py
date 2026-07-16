@@ -297,6 +297,7 @@ class FormTableEntry:
     away_ppg: float
     goals_for: int
     goals_against: int
+    form_matches: list[dict[str, Any]]
 
 
 def compute_league_form_table(
@@ -390,6 +391,18 @@ def compute_league_form_table(
         )
         goals_for = sum(m["goals_for"] for m in recent)
         goals_against = sum(m["goals_against"] for m in recent)
+        form_matches = [
+            {
+                "result": m["result"],
+                "opponent": m["opponent"],
+                "venue": m["venue"],
+                "goals_for": m["goals_for"],
+                "goals_against": m["goals_against"],
+                "date": m["date"],
+                "points": m["points"],
+            }
+            for m in recent
+        ]
         teams.append({
             "team": team,
             "played": played,
@@ -407,6 +420,7 @@ def compute_league_form_table(
             "away_ppg": round(away_ppg, 4),
             "goals_for": goals_for,
             "goals_against": goals_against,
+            "form_matches": form_matches,
         })
 
     teams.sort(
