@@ -1831,7 +1831,7 @@ class TestShortlistProvenanceExportAndTraySync:
         js = _read_app_js()
         idx = js.find("function buildShortlistDecisionPack")
         assert idx > 0
-        body = js[idx : idx + 1500]
+        body = js[idx : idx + 2500]
         assert 'version: "1.1.0"' in body
 
     def test_decision_pack_includes_provenance_log(self):
@@ -2175,4 +2175,508 @@ class TestShortlistProvenanceExportAndTraySync:
         assert en_start > 0
         en_block = js[en_start : en_start + 1500]
         for key in self._SYNC_I18N_KEYS:
+            assert key + ":" in en_block, f"Missing en i18n key: {key}"
+
+
+# ===== 29. Round 93: Decision pack import ===================================
+class TestShortlistDecisionPackImport:
+    """Round 93: decision pack import — schema validation + merge semantics."""
+
+    # --- Constants ---
+
+    def test_supported_versions_constant_defined(self):
+        js = _read_app_js()
+        assert "_DECISION_PACK_SUPPORTED_VERSIONS" in js
+        assert '"1.0.0"' in js
+        assert '"1.1.0"' in js
+
+    def test_schema_constant_defined(self):
+        js = _read_app_js()
+        assert '_DECISION_PACK_SCHEMA = "scoutfootball.shortlist-decision-pack"' in js
+
+    # --- Validation function ---
+
+    def test_validate_function_defined(self):
+        js = _read_app_js()
+        assert "function _validateShortlistDecisionPack" in js
+
+    def test_validate_rejects_non_object(self):
+        js = _read_app_js()
+        idx = js.find("function _validateShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "typeof pack !== \"object\"" in body
+        assert "Array.isArray(pack)" in body
+        assert 'reason: "not_object"' in body
+
+    def test_validate_rejects_schema_mismatch(self):
+        js = _read_app_js()
+        idx = js.find("function _validateShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "pack.schema !== _DECISION_PACK_SCHEMA" in body
+        assert 'reason: "schema_mismatch"' in body
+
+    def test_validate_rejects_unsupported_version(self):
+        js = _read_app_js()
+        idx = js.find("function _validateShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "_DECISION_PACK_SUPPORTED_VERSIONS.includes(pack.version)" in body
+        assert 'reason: "unsupported_version"' in body
+
+    def test_validate_rejects_players_not_array(self):
+        js = _read_app_js()
+        idx = js.find("function _validateShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "Array.isArray(pack.players)" in body
+        assert 'reason: "players_not_array"' in body
+
+    def test_validate_returns_ok_on_success(self):
+        js = _read_app_js()
+        idx = js.find("function _validateShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "return { ok: true }" in body
+
+    # --- Normalize player function ---
+
+    def test_normalize_player_function_defined(self):
+        js = _read_app_js()
+        assert "function _normalizeDecisionPackPlayer" in js
+
+    def test_normalize_player_rejects_non_object(self):
+        js = _read_app_js()
+        idx = js.find("function _normalizeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "typeof player !== \"object\"" in body
+        assert "return null" in body
+
+    def test_normalize_player_requires_name(self):
+        """If no name can be derived, return null."""
+        js = _read_app_js()
+        idx = js.find("function _normalizeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "if (!name) return null" in body
+
+    def test_normalize_player_reads_all_fields(self):
+        """Must read name, key, team, position, rating, reason_codes, priority,
+        recommendation, target_role, rationale."""
+        js = _read_app_js()
+        idx = js.find("function _normalizeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        for field in ("player.player || player.player_name || player.name",
+                      "player.player_id || player.player_key || player.key",
+                      "player.team", "player.position", "player.rating",
+                      "player.reason_codes", "player.priority",
+                      "player.recommendation", "player.target_role",
+                      "player.rationale_and_risks || player.rationale"):
+            assert field in body, f"Missing field read: {field}"
+
+    def test_normalize_player_reason_codes_fallback_to_legacy(self):
+        """If reason_codes is not an array, fall back to reason_code string."""
+        js = _read_app_js()
+        idx = js.find("function _normalizeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "Array.isArray(player.reason_codes)" in body
+        assert "player.reason_code ? [String(player.reason_code)" in body
+
+    def test_normalize_player_trims_strings(self):
+        """name, key, reason codes must be trimmed."""
+        js = _read_app_js()
+        idx = js.find("function _normalizeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert ".trim()" in body
+
+    # --- Merge player function ---
+
+    def test_merge_player_function_defined(self):
+        js = _read_app_js()
+        assert "function _mergeDecisionPackPlayer" in js
+
+    def test_merge_player_dedup_by_key(self):
+        """When player.key already exists in list, merge reason codes."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "list.findIndex((p) => p.key === player.key)" in body
+
+    def test_merge_player_uses_normalize_entry_reason_codes(self):
+        """Must call _normalizeEntryReasonCodes on the existing entry."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "_normalizeEntryReasonCodes(list[idx])" in body
+
+    def test_merge_player_skips_duplicate_codes(self):
+        """Only push codes not already in entry.reason_codes."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "entry.reason_codes.includes(code)" in body
+
+    def test_merge_player_keeps_existing_team_position_rating(self):
+        """Existing entry's team/position/rating must NOT be overwritten."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "if (player.team && !entry.team)" in body
+        assert "if (player.position && !entry.position)" in body
+        assert "if (player.rating != null && entry.rating == null)" in body
+
+    def test_merge_player_added_branch_pushes_new_entry(self):
+        """When no existing entry, push a new entry with reason_codes slice."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "list.push(entry)" in body
+        assert "reason_codes: player.reason_codes.slice()" in body
+        assert 'kind: "added"' in body
+
+    def test_merge_player_returns_kind_and_merged_count(self):
+        """Return object must have kind + mergedCount."""
+        js = _read_app_js()
+        idx = js.find("function _mergeDecisionPackPlayer")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 'kind: "merged"' in body
+        assert "mergedCount" in body
+        assert 'kind: "added", entry, mergedCount: 0' in body
+
+    # --- Import function ---
+
+    def test_import_function_defined(self):
+        js = _read_app_js()
+        assert "function importShortlistDecisionPackJSON" in js
+
+    def test_import_calls_validate_first(self):
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 400]
+        assert "_validateShortlistDecisionPack(pack)" in body
+
+    def test_import_returns_invalid_on_validation_fail(self):
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'return { ok: false, error: "invalid", reason: validation.reason }' in body
+
+    def test_import_returns_empty_on_zero_players(self):
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "pack.players.length === 0" in body
+        assert 'return { ok: false, error: "empty" }' in body
+
+    def test_import_gets_existing_shortlist(self):
+        """Must read the existing shortlist via getPlayerShortlist (not overwrite)."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "getPlayerShortlist()" in body
+
+    def test_import_saves_shortlist_after_merge(self):
+        """Must persist the merged list via savePlayerShortlist."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "savePlayerShortlist(list)" in body
+
+    def test_import_returns_added_merged_total(self):
+        """Success return must have added, merged, total counts."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "added: addedCount" in body
+        assert "merged: mergedCount" in body
+        assert "total: pack.players.length" in body
+
+    def test_import_uses_update_shortlist_dossier(self):
+        """Dossier fields must be restored via updateShortlistDossier."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "updateShortlistDossier(player.key, player.name, " in body
+        # All 4 dossier fields
+        assert '"priority"' in body
+        assert '"recommendation"' in body
+        assert '"target_role"' in body
+        assert '"rationale"' in body
+
+    def test_import_validates_dossier_priority_whitelist(self):
+        """priority must be validated against the whitelist before calling update."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert '["urgent", "standard", "monitor"].includes(player.priority)' in body
+
+    def test_import_validates_dossier_recommendation_whitelist(self):
+        """recommendation must be validated against the whitelist."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert '["target", "monitor", "decline"].includes(player.recommendation)' in body
+
+    def test_import_only_restores_nonempty_target_role(self):
+        """target_role must only be restored if non-empty."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "if (player.target_role)" in body
+
+    def test_import_only_restores_nonempty_rationale(self):
+        """rationale must only be restored if non-empty."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "if (player.rationale)" in body
+
+    # --- Status + file load handlers ---
+
+    def test_set_status_function_defined(self):
+        js = _read_app_js()
+        assert "function _setDecisionPackImportStatus" in js
+
+    def test_set_status_uses_textcontent(self):
+        """Status must use textContent, never innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function _setDecisionPackImportStatus")
+        assert idx > 0
+        body = js[idx : idx + 400]
+        assert "textContent" in body
+        assert "innerHTML" not in body
+
+    def test_set_status_targets_correct_element(self):
+        js = _read_app_js()
+        idx = js.find("function _setDecisionPackImportStatus")
+        assert idx > 0
+        body = js[idx : idx + 400]
+        assert 'getElementById("scout-decision-pack-import-status")' in body
+
+    def test_handle_file_load_function_defined(self):
+        js = _read_app_js()
+        assert "function _handleDecisionPackFileLoad" in js
+
+    def test_handle_file_load_resets_input_value(self):
+        """Input value must be reset so the same file can be re-selected."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "event.target.value = \"\"" in body
+
+    def test_handle_file_load_uses_filereader(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "new FileReader()" in body
+        assert "reader.readAsText(file)" in body
+
+    def test_handle_file_load_catches_json_parse_error(self):
+        """JSON parse errors must be caught and surfaced as invalid."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "JSON.parse(reader.result)" in body
+        assert "json_parse_error" in body
+
+    def test_handle_file_load_calls_import_function(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "importShortlistDecisionPackJSON(pack)" in body
+
+    def test_handle_file_load_renders_scouting_on_success(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "renderScouting()" in body
+
+    def test_handle_file_load_surfaces_empty_status(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 't("shortlist_decision_pack_import_empty")' in body
+
+    def test_handle_file_load_surfaces_invalid_status(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 't("shortlist_decision_pack_import_invalid")' in body
+
+    def test_handle_file_load_surfaces_ok_status(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 't("shortlist_decision_pack_import_ok")' in body
+        assert ".replace(\"{n}\", String(result.added + result.merged))" in body
+        assert ".replace(\"{merged}\", String(result.merged))" in body
+        assert ".replace(\"{added}\", String(result.added))" in body
+
+    def test_handle_file_load_handles_reader_error(self):
+        """reader.onerror must surface the read_fail status."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "reader.onerror" in body
+        assert 't("shortlist_decision_pack_import_read_fail")' in body
+
+    # --- Wire button ---
+
+    def test_wire_button_function_defined(self):
+        js = _read_app_js()
+        assert "function _wireDecisionPackImportButton" in js
+
+    def test_wire_button_targets_correct_elements(self):
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackImportButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'getElementById("scout-import-decision-pack")' in body
+        assert 'getElementById("scout-decision-pack-file")' in body
+
+    def test_wire_button_idempotent_via_dataset(self):
+        """Wiring must be idempotent via dataset guard."""
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackImportButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'btn.dataset.round93Wired === "1"' in body
+        assert 'btn.dataset.round93Wired = "1"' in body
+
+    def test_wire_button_sets_title_via_t(self):
+        """Button title must be set via t() for i18n."""
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackImportButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 't("shortlist_decision_pack_import_title")' in body
+
+    def test_wire_button_triggers_file_input_click(self):
+        """Button click must trigger file input click."""
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackImportButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "fileInput.click()" in body
+
+    def test_wire_button_wires_change_listener(self):
+        """File input change must call _handleDecisionPackFileLoad."""
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackImportButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'addEventListener("change", _handleDecisionPackFileLoad)' in body
+
+    def test_wire_button_called_in_init(self):
+        """_wireDecisionPackImportButton must be called near the other decision pack wiring."""
+        js = _read_app_js()
+        # Find the init block that wires scout-export-decision-pack-csv
+        idx = js.find('getElementById("scout-export-decision-pack-csv")')
+        assert idx > 0
+        snippet = js[idx : idx + 400]
+        assert "_wireDecisionPackImportButton()" in snippet
+
+    # --- No eval ---
+
+    def test_no_eval_in_import_code(self):
+        """No eval() in the import helpers."""
+        js = _read_app_js()
+        for fname in ("_validateShortlistDecisionPack",
+                      "_normalizeDecisionPackPlayer",
+                      "_mergeDecisionPackPlayer",
+                      "importShortlistDecisionPackJSON",
+                      "_handleDecisionPackFileLoad",
+                      "_wireDecisionPackImportButton"):
+            idx = js.find("function " + fname)
+            assert idx > 0
+            end_idx = js.find("\nfunction ", idx + 1)
+            if end_idx < 0:
+                end_idx = idx + 2500
+            snippet = js[idx:end_idx]
+            assert "eval(" not in snippet, f"eval found in {fname}"
+
+    # --- index.html elements ---
+
+    def test_index_html_has_import_button(self):
+        content = _read_index()
+        assert 'id="scout-import-decision-pack"' in content
+
+    def test_index_html_has_file_input(self):
+        content = _read_index()
+        assert 'id="scout-decision-pack-file"' in content
+
+    def test_index_html_has_status_span(self):
+        content = _read_index()
+        assert 'id="scout-decision-pack-import-status"' in content
+
+    def test_index_html_file_input_accepts_json(self):
+        content = _read_index()
+        idx = content.find('id="scout-decision-pack-file"')
+        assert idx > 0
+        snippet = content[idx : idx + 200]
+        assert 'accept="application/json,.json"' in snippet
+
+    def test_index_html_import_button_has_i18n_attr(self):
+        content = _read_index()
+        idx = content.find('id="scout-import-decision-pack"')
+        assert idx > 0
+        snippet = content[idx : idx + 200]
+        assert "data-i18n=" in snippet
+
+    # --- i18n keys ---
+
+    _IMPORT_I18N_KEYS = (
+        "shortlist_decision_pack_import",
+        "shortlist_decision_pack_import_title",
+        "shortlist_decision_pack_import_ok",
+        "shortlist_decision_pack_import_empty",
+        "shortlist_decision_pack_import_invalid",
+        "shortlist_decision_pack_import_read_fail",
+    )
+
+    def test_import_i18n_keys_present_zh(self):
+        js = _read_app_js()
+        zh_end = js.find('shortlist_compare_sync_empty: "未选择可同步的球员"')
+        assert zh_end > 0
+        zh_block = js[:zh_end + 600]
+        for key in self._IMPORT_I18N_KEYS:
+            assert key + ":" in zh_block, f"Missing zh i18n key: {key}"
+
+    def test_import_i18n_keys_present_en(self):
+        js = _read_app_js()
+        en_start = js.find('shortlist_compare_sync_empty: "No players selected to sync"')
+        assert en_start > 0
+        en_block = js[en_start : en_start + 1200]
+        for key in self._IMPORT_I18N_KEYS:
             assert key + ":" in en_block, f"Missing en i18n key: {key}"
