@@ -2663,6 +2663,7 @@ class TestShortlistDecisionPackImport:
         "shortlist_decision_pack_import_empty",
         "shortlist_decision_pack_import_invalid",
         "shortlist_decision_pack_import_read_fail",
+        "shortlist_decision_pack_import_provenance",
     )
 
     def test_import_i18n_keys_present_zh(self):
@@ -2680,3 +2681,228 @@ class TestShortlistDecisionPackImport:
         en_block = js[en_start : en_start + 1200]
         for key in self._IMPORT_I18N_KEYS:
             assert key + ":" in en_block, f"Missing en i18n key: {key}"
+
+
+# ===== Round 94: Provenance Log Import Merge ================================
+
+class TestShortlistProvenanceLogImportMerge:
+    """Verify the provenance log merge logic added in Round 94."""
+
+    _PROVENANCE_I18N_KEY = "shortlist_decision_pack_import_provenance"
+
+    # --- _mergeProvenanceLogEntries function ---
+
+    def test_merge_provenance_function_defined(self):
+        js = _read_app_js()
+        assert "function _mergeProvenanceLogEntries" in js
+
+    def test_merge_provenance_rejects_non_array(self):
+        """Non-array input must return 0 without touching the log."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "!Array.isArray(importedLog)" in body
+        assert "return 0" in body
+
+    def test_merge_provenance_builds_dedup_key_set(self):
+        """Must build a Set of timestamp|player_key|action keys from existing log."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "new Set(" in body
+        assert "e.timestamp" in body
+        assert "e.player_key" in body
+        assert "e.action" in body
+
+    def test_merge_provenance_rejects_non_object_entries(self):
+        """Each imported entry must be validated as a non-null object."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 'typeof raw !== "object"' in body
+        assert "Array.isArray(raw)" in body
+
+    def test_merge_provenance_requires_timestamp_and_player_key(self):
+        """Entries without timestamp or player_key must be skipped."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "!timestamp || !playerKey" in body
+        assert "continue" in body
+
+    def test_merge_provenance_normalizes_action(self):
+        """Action must be normalized to merged or removed."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 'raw.action === "merged" ? "merged" : "removed"' in body
+
+    def test_merge_provenance_slices_fields(self):
+        """All string fields must be sliced to prevent overflow."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "slice(0, 40)" in body  # timestamp
+        assert "slice(0, 180)" in body  # player_key + player_name
+        assert "slice(0, 64)" in body  # reason_code
+
+    def test_merge_provenance_resulting_codes_guarded(self):
+        """resulting_codes must be Array.isArray-guarded and sliced to 20."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "Array.isArray(raw.resulting_codes)" in body
+        assert "slice(0, 20)" in body
+
+    def test_merge_provenance_uses_unshift(self):
+        """New entries must be unshifted (newest first)."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "_shortlistProvenanceLog.unshift(" in body
+
+    def test_merge_provenance_respects_max_cap(self):
+        """Must truncate to _PROVENANCE_LOG_MAX after merging."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "_PROVENANCE_LOG_MAX" in body
+        assert "_shortlistProvenanceLog.length =" in body
+
+    def test_merge_provenance_persists_only_when_added(self):
+        """Must call _persistShortlistProvenanceLog only when added > 0."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "if (added > 0) _persistShortlistProvenanceLog()" in body
+
+    def test_merge_provenance_returns_count(self):
+        """Must return the added count."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "return added" in body
+
+    def test_merge_provenance_dedup_check(self):
+        """Must check existingKeys.has(dedupKey) and skip."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "existingKeys.has(dedupKey)" in body
+        assert "continue" in body
+
+    def test_merge_provenance_adds_to_dedup_set(self):
+        """Must add new dedup keys to the set so intra-import dups are caught."""
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "existingKeys.add(dedupKey)" in body
+
+    def test_merge_provenance_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function _mergeProvenanceLogEntries")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "eval(" not in body
+
+    # --- importShortlistDecisionPackJSON provenance integration ---
+
+    def test_import_calls_merge_provenance(self):
+        """importShortlistDecisionPackJSON must call _mergeProvenanceLogEntries."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "_mergeProvenanceLogEntries(" in body
+        assert "pack.provenance_log || []" in body
+
+    def test_import_returns_provenance_merged(self):
+        """Return object must include provenance_merged count."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "provenance_merged" in body
+        assert "provenanceMerged" in body
+
+    def test_import_provenance_merged_after_dossier_restore(self):
+        """Provenance merge must happen AFTER dossier restore (so shortlist is saved first)."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        dossier_idx = body.find("updateShortlistDossier(player.key, player.name, \"rationale\"")
+        provenance_idx = body.find("_mergeProvenanceLogEntries(")
+        assert dossier_idx > 0
+        assert provenance_idx > 0
+        assert provenance_idx > dossier_idx
+
+    # --- _handleDecisionPackFileLoad provenance status ---
+
+    def test_file_load_surfaces_provenance_status(self):
+        """ok status must append provenance suffix when provenance_merged > 0."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "result.provenance_merged > 0" in body
+        assert 't("shortlist_decision_pack_import_provenance")' in body
+        assert '.replace("{provenance}"' in body
+
+    def test_file_load_provenance_uses_let_msg(self):
+        """Must use a mutable let msg variable so the suffix can be appended."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "let msg = " in body
+
+    def test_file_load_provenance_no_innerhtml(self):
+        """Provenance status must use textContent, not innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "innerHTML" not in body
+
+    def test_file_load_provenance_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "eval(" not in body
+
+    # --- i18n key ---
+
+    def test_provenance_i18n_key_present_zh(self):
+        js = _read_app_js()
+        zh_idx = js.find('shortlist_decision_pack_import_read_fail: "读取文件失败"')
+        assert zh_idx > 0
+        zh_block = js[zh_idx : zh_idx + 300]
+        assert self._PROVENANCE_I18N_KEY + ":" in zh_block
+
+    def test_provenance_i18n_key_present_en(self):
+        js = _read_app_js()
+        en_idx = js.find('shortlist_decision_pack_import_read_fail: "Failed to read file"')
+        assert en_idx > 0
+        en_block = js[en_idx : en_idx + 300]
+        assert self._PROVENANCE_I18N_KEY + ":" in en_block
+
+    def test_provenance_i18n_key_has_placeholder(self):
+        """The i18n key must contain the {provenance} placeholder."""
+        js = _read_app_js()
+        assert "{provenance}" in js
+

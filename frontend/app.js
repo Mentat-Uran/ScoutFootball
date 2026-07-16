@@ -248,6 +248,7 @@ const i18n = {
         shortlist_decision_pack_import_empty: "决策包中没有球员可导入",
         shortlist_decision_pack_import_invalid: "决策包格式无效：{reason}",
         shortlist_decision_pack_import_read_fail: "读取文件失败",
+        shortlist_decision_pack_import_provenance: "（合并 {provenance} 条来源日志）",
         shortlist_provenance_log_title: "来源审计日志",
         shortlist_provenance_empty: "暂无来源事件",
         shortlist_provenance_count: "{n} 条来源事件",
@@ -1405,6 +1406,7 @@ const i18n = {
         shortlist_decision_pack_import_empty: "No players in decision pack to import",
         shortlist_decision_pack_import_invalid: "Invalid decision pack format: {reason}",
         shortlist_decision_pack_import_read_fail: "Failed to read file",
+        shortlist_decision_pack_import_provenance: "({provenance} provenance log entries merged)",
         shortlist_provenance_log_title: "Provenance Log",
         shortlist_provenance_empty: "No provenance events recorded",
         shortlist_provenance_count: "{n} provenance events",
@@ -24357,6 +24359,47 @@ function _normalizeDecisionPackPlayer(player) {
     };
 }
 
+function _mergeProvenanceLogEntries(importedLog) {
+    if (!Array.isArray(importedLog)) return 0;
+    const existingKeys = new Set(
+        _shortlistProvenanceLog.map((e) =>
+            String((e && e.timestamp) || "") + "|" +
+            String((e && e.player_key) || "") + "|" +
+            String((e && e.action) || ""),
+        ),
+    );
+    let added = 0;
+    for (const raw of importedLog) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const timestamp = String(raw.timestamp || "").slice(0, 40);
+        const playerKey = String(raw.player_key || "").slice(0, 180);
+        const playerName = String(raw.player_name || "").slice(0, 180);
+        const action = raw.action === "merged" ? "merged" : "removed";
+        const reasonCode = String(raw.reason_code || "").slice(0, 64);
+        const resultingCodes = Array.isArray(raw.resulting_codes)
+            ? raw.resulting_codes.map((c) => String(c || "").slice(0, 64)).slice(0, 20)
+            : [];
+        if (!timestamp || !playerKey) continue;
+        const dedupKey = timestamp + "|" + playerKey + "|" + action;
+        if (existingKeys.has(dedupKey)) continue;
+        existingKeys.add(dedupKey);
+        _shortlistProvenanceLog.unshift({
+            timestamp,
+            player_key: playerKey,
+            player_name: playerName,
+            action,
+            reason_code: reasonCode,
+            resulting_codes: resultingCodes,
+        });
+        added++;
+    }
+    if (_shortlistProvenanceLog.length > _PROVENANCE_LOG_MAX) {
+        _shortlistProvenanceLog.length = _PROVENANCE_LOG_MAX;
+    }
+    if (added > 0) _persistShortlistProvenanceLog();
+    return added;
+}
+
 function _mergeDecisionPackPlayer(list, player) {
     const idx = list.findIndex((p) => p.key === player.key);
     if (idx >= 0) {
@@ -24423,7 +24466,14 @@ function importShortlistDecisionPackJSON(pack) {
             updateShortlistDossier(player.key, player.name, "rationale", player.rationale);
         }
     }
-    return { ok: true, added: addedCount, merged: mergedCount, total: pack.players.length };
+    const provenanceMerged = _mergeProvenanceLogEntries(pack.provenance_log || []);
+    return {
+        ok: true,
+        added: addedCount,
+        merged: mergedCount,
+        total: pack.players.length,
+        provenance_merged: provenanceMerged,
+    };
 }
 
 function _setDecisionPackImportStatus(message) {
@@ -24452,12 +24502,15 @@ function _handleDecisionPackFileLoad(event) {
             if (result.total === 0 || (result.added === 0 && result.merged === 0)) {
                 _setDecisionPackImportStatus(t("shortlist_decision_pack_import_empty"));
             } else {
-                _setDecisionPackImportStatus(
-                    t("shortlist_decision_pack_import_ok")
-                        .replace("{n}", String(result.added + result.merged))
-                        .replace("{merged}", String(result.merged))
-                        .replace("{added}", String(result.added)),
-                );
+                let msg = t("shortlist_decision_pack_import_ok")
+                    .replace("{n}", String(result.added + result.merged))
+                    .replace("{merged}", String(result.merged))
+                    .replace("{added}", String(result.added));
+                if (result.provenance_merged > 0) {
+                    msg += " " + t("shortlist_decision_pack_import_provenance")
+                        .replace("{provenance}", String(result.provenance_merged));
+                }
+                _setDecisionPackImportStatus(msg);
             }
             renderScouting();
         } else if (result.error === "empty") {
