@@ -34,7 +34,7 @@
 
 ## 下一解锁节点
 
-### G1：黄金流程与契约基线 — `blocked by G0-A + G0-B`
+### G1：黄金流程与契约基线 — `ready`（G0-A + G0-B 已验证）
 
 - 建立机器可读 capability registry，从 OpenAPI、CLI、前端导航、静态映射和模型登记生成清单。
 - 统一来源、许可、`as_of`、快照、lineage、覆盖和 `recorded/not_recorded` 数据契约。
