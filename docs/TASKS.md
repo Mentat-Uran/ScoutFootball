@@ -78,6 +78,7 @@ ScoutFootball 的长期形态是本地优先的足球数据研究平台，而不
 - [x] **预计名单双队位置对照**：世界杯对比页新增逐位置人数、目标、评分覆盖和两队差值表，并由只读 API 提供同一版本化契约；它只对照本地预计征召快照，不判定位置优劣或给出首发建议。
 - [x] **预计名单比较本地导出**：双队位置深度对照现可导出浏览器本地 JSON 或带公式注入防护的 CSV，保留快照边界与限制说明，不写入服务器状态。
 - [x] **全部球队出线概率总榜**：世界杯锦标赛页新增跨小组的全部 48 支球队总榜，可按出线概率、小组头名概率、积分、净胜球、进球数排序；基于强度加权蒙特卡洛模拟，明确标注为说明性估算而非官方数据。
+- [x] **小组赛关键战役分析**：世界杯锦标赛页新增关键战役面板，按对出线概率影响指数排序剩余比赛；每场比赛模拟三种结果（主胜/平/客胜），计算各队出线概率变动幅度，展示最受影响的球队及其概率变化。
 - **前端 API 联调不完整**：球员页还缺搜索、分页、完整 player profile 指标、报告导出；身价页还缺 value-fairness OOF report 细分；比赛预测页还缺统一 prediction service、模型版本、Brier/log loss/RPS 和校准状态。
 - **报告页信息不足**：model-run registry 列表端点展示基础指标、依赖版本、输入 hash、误差案例和复现命令；详情端点提供 feature_importance parquet 级数据、params_summary min/max 和 data_attribution；前端展开时异步加载详情端点。数据归属面板展示 /license 端点的归属信息，模型运行对比视图支持选择两个 run 对比 holdout 指标。
 - **动作价值仍是样本能力**：`player_value_metrics.parquet` 只代表 StatsBomb 事件价值样本；P2 产物尚未完成全量 internal actions/xT/VAEP 管线、socceraction 依赖评估和公开图表 attribution。
