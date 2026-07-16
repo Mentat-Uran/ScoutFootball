@@ -3982,3 +3982,398 @@ class TestShortlistDecisionPackMigrationI18n:
         count = js.count(self._PREVIEW_EMPTY_KEY + ":")
         assert count >= 2
 
+
+# ===== Round 97: League Form Heatmap =====================================
+
+
+class TestLeagueFormHeatmapFunction:
+    """Round 97: verify renderLeagueFormHeatmap function."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "function renderLeagueFormHeatmap(data)" in js
+
+    def test_targets_correct_container(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 300]
+        assert 'getElementById("league-form-heatmap")' in body
+
+    def test_targets_status_element(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 500]
+        assert 'getElementById("league-form-heatmap-status")' in body
+
+    def test_uses_get_chart(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert 'getChart("league-form-heatmap")' in body
+
+    def test_handles_empty_teams(self):
+        """When teams is empty, must clear chart and show no_data status."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "teams.length === 0" in body
+        assert "chart.clear()" in body
+        assert 't("league_form_heatmap_no_data")' in body
+
+    def test_reads_form_matches_from_teams(self):
+        """Must read form_matches array from each team."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "form_matches" in body
+        assert "Array.isArray(teams[yi].form_matches)" in body
+
+    def test_builds_heat_data_array(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "heatData.push" in body
+        assert "heatData" in body
+
+    def test_builds_tooltip_cells_array(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "tooltipCells.push" in body
+        assert "tooltipCells" in body
+
+    def test_uses_piecewise_visual_map(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'type: "piecewise"' in body
+        assert "#16a34a" in body  # W green
+        assert "#ca8a04" in body  # D amber
+        assert "#dc2626" in body  # L red
+
+    def test_uses_heatmap_series_type(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'type: "heatmap"' in body
+
+    def test_uses_set_option_with_not_merge(self):
+        """Must call setOption with true (notMerge) to clear stale state."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chart.setOption(" in body
+        assert ", true)" in body
+
+    def test_uses_request_animation_frame_for_resize(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "requestAnimationFrame" in body
+        assert "chart.resize()" in body
+
+    def test_uses_chart_text_color(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chartTextColor()" in body
+
+    def test_uses_chart_grid_color(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chartGridColor()" in body
+
+    def test_uses_t_for_match_n_label(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 't("league_form_heatmap_match_n")' in body
+
+    def test_tooltip_uses_escape_html_for_team(self):
+        """Tooltip must escape team name."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(cell.team)" in body
+
+    def test_tooltip_uses_escape_html_for_opponent(self):
+        """Tooltip must escape opponent name."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(cell.opponent)" in body
+
+    def test_tooltip_uses_escape_html_for_venue_label(self):
+        """Tooltip must escape venue label."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(venueLabel)" in body
+
+    def test_tooltip_uses_escape_html_for_date(self):
+        """Tooltip must escape date string."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(dateStr)" in body
+
+    def test_tooltip_uses_escape_html_for_result_label(self):
+        """Tooltip must escape result label."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(resultLabel)" in body
+
+    def test_tooltip_uses_escape_html_for_i18n_labels(self):
+        """Tooltip must escape i18n label strings."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'escapeHtml(t("league_form_heatmap_opponent"))' in body
+        assert 'escapeHtml(t("league_form_heatmap_score"))' in body
+        assert 'escapeHtml(t("league_form_heatmap_venue"))' in body
+        assert 'escapeHtml(t("league_form_heatmap_date"))' in body
+
+    def test_status_uses_text_content(self):
+        """Status element must use textContent, not innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "statusEl.textContent" in body
+        # No innerHTML on statusEl
+        assert "statusEl.innerHTML" not in body
+
+    def test_no_eval_in_function(self):
+        """No eval() calls in the heatmap function."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "eval(" not in body
+
+    def test_xaxis_is_category(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'xAxis' in body
+        assert 'type: "category"' in body
+
+    def test_yaxis_is_category(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'yAxis' in body
+
+    def test_cell_label_shows_wdl(self):
+        """Cell label formatter must show W/D/L based on points value."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "val === 3" in body
+        assert 'return "W"' in body
+        assert "val === 1" in body
+        assert 'return "D"' in body
+        assert "val === 0" in body
+        assert 'return "L"' in body
+
+    def test_builds_x_labels_from_last_n(self):
+        """X-axis labels must be built from last_n using i18n match_n template."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "xLabels.push" in body
+        assert "t(" in body
+        assert "{n}" in body
+
+    def test_y_labels_from_team_names(self):
+        """Y-axis labels must be team names."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "yLabels" in body
+        assert "teams.map" in body
+
+    def test_skips_missing_matches(self):
+        """Must skip cells when a team has fewer matches than lastN."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "if (!m) continue" in body
+
+    def test_updates_status_on_success(self):
+        """Must update status element text on success."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueFormHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "statusEl.textContent" in body
+        assert "status-pill status-high" in body
+
+
+class TestLeagueFormHeatmapIntegration:
+    """Round 97: verify loadLeagueForm calls renderLeagueFormHeatmap."""
+
+    def test_load_league_form_calls_heatmap_on_success(self):
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueForm")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "renderLeagueFormHeatmap(data)" in body
+
+    def test_load_league_form_calls_heatmap_on_empty(self):
+        """Must call renderLeagueFormHeatmap(data) in the no_data/empty path."""
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueForm")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        # The empty path has renderLeagueFormHeatmap(data) before return
+        assert body.count("renderLeagueFormHeatmap(data)") >= 1
+
+    def test_load_league_form_calls_heatmap_on_error(self):
+        """Must call renderLeagueFormHeatmap with empty teams in catch block."""
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueForm")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert 'renderLeagueFormHeatmap({ teams: [] })' in body
+
+    def test_load_league_form_heatmap_call_after_top_ppg(self):
+        """Success-path heatmap call must be after topPpgEl is set."""
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueForm")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        top_idx = body.find("topPpgEl.textContent")
+        heat_idx = body.find("renderLeagueFormHeatmap(data)")
+        assert top_idx > 0
+        assert heat_idx > 0
+        assert heat_idx > top_idx
+
+
+class TestLeagueFormHeatmapHtml:
+    """Round 97: verify heatmap HTML container in index.html."""
+
+    def test_heatmap_container_present(self):
+        html = _read_index()
+        assert 'id="league-form-heatmap"' in html
+
+    def test_heatmap_container_has_chart_box_class(self):
+        html = _read_index()
+        idx = html.find('id="league-form-heatmap"')
+        assert idx > 0
+        # Check the surrounding element for chart-box class
+        snippet = html[max(0, idx - 100) : idx + 50]
+        assert "chart-box" in snippet
+
+    def test_heatmap_status_present(self):
+        html = _read_index()
+        assert 'id="league-form-heatmap-status"' in html
+
+    def test_heatmap_title_has_i18n_attr(self):
+        html = _read_index()
+        assert 'data-i18n="league_form_heatmap_title"' in html
+
+    def test_heatmap_container_has_height(self):
+        """Container must have an inline height style."""
+        html = _read_index()
+        idx = html.find('id="league-form-heatmap"')
+        assert idx > 0
+        snippet = html[max(0, idx - 50) : idx + 100]
+        assert "height:" in snippet
+
+    def test_heatmap_panel_has_chart_panel_class(self):
+        """Panel wrapper should use chart-panel class."""
+        html = _read_index()
+        idx = html.find('id="league-form-heatmap"')
+        assert idx > 0
+        # Search backwards for the panel wrapper
+        before = html[:idx]
+        panel_idx = before.rfind("liquid-panel")
+        assert panel_idx > 0
+        snippet = html[panel_idx : panel_idx + 50]
+        assert "chart-panel" in snippet
+
+
+class TestLeagueFormHeatmapI18n:
+    """Round 97: verify heatmap i18n keys."""
+
+    _TITLE_KEY = "league_form_heatmap_title"
+    _NO_DATA_KEY = "league_form_heatmap_no_data"
+    _MATCH_N_KEY = "league_form_heatmap_match_n"
+    _OPPONENT_KEY = "league_form_heatmap_opponent"
+    _SCORE_KEY = "league_form_heatmap_score"
+    _VENUE_KEY = "league_form_heatmap_venue"
+    _DATE_KEY = "league_form_heatmap_date"
+
+    def test_title_key_present_zh(self):
+        js = _read_app_js()
+        count = js.count(self._TITLE_KEY + ":")
+        assert count >= 2
+
+    def test_no_data_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._NO_DATA_KEY + ":")
+        assert count >= 2
+
+    def test_match_n_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._MATCH_N_KEY + ":")
+        assert count >= 2
+
+    def test_match_n_key_has_placeholder(self):
+        js = _read_app_js()
+        idx = js.find(self._MATCH_N_KEY + ":")
+        assert idx > 0
+        line_end = js.find(",\n", idx)
+        assert line_end > 0
+        line = js[idx : line_end]
+        assert "{n}" in line
+
+    def test_opponent_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._OPPONENT_KEY + ":")
+        assert count >= 2
+
+    def test_score_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._SCORE_KEY + ":")
+        assert count >= 2
+
+    def test_venue_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._VENUE_KEY + ":")
+        assert count >= 2
+
+    def test_date_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._DATE_KEY + ":")
+        assert count >= 2
+
