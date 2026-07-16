@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from scoutfootball.architecture import build_default_architecture
+from scoutfootball.architecture import (
+    build_capability_registry,
+    build_default_architecture,
+)
 
 
 def _cmd_info(_args: argparse.Namespace) -> None:
@@ -24,6 +27,53 @@ def _cmd_info(_args: argparse.Namespace) -> None:
     )
     lines.append("commands:")
     lines.extend(f"  - {command}" for command in architecture.supported_commands)
+    print("\n".join(lines))
+
+
+def _cmd_capabilities(args: argparse.Namespace) -> None:
+    registry = build_capability_registry()
+
+    if args.json:
+        print(json.dumps(registry.model_dump(mode="json"), indent=2, ensure_ascii=False))
+        return
+
+    lines = [
+        f"ScoutFootball capability registry (v{registry.package_version})",
+        f"Generated: {registry.generated_at}",
+        f"Total capabilities: {len(registry.capabilities)}",
+        f"Domains ({len(registry.domains)}): {', '.join(registry.domains)}",
+        "",
+    ]
+
+    if args.domain:
+        caps = registry.by_domain(args.domain)
+        if not caps:
+            print(f"No capabilities found for domain: {args.domain}")
+            sys.exit(1)
+        lines.append(f"Domain: {args.domain} ({len(caps)} capabilities)")
+    else:
+        caps = registry.capabilities
+
+    for cap in caps:
+        lines.append(f"  [{cap.domain}] {cap.id} — {cap.name}")
+        lines.append(f"      {cap.description}")
+        lines.append(f"      status: {cap.status}")
+        if cap.cli_commands:
+            lines.append(f"      cli: {', '.join(cap.cli_commands)}")
+        if cap.api_paths:
+            lines.append(f"      api: {len(cap.api_paths)} paths")
+        if cap.frontend_views:
+            lines.append(f"      frontend: {', '.join(cap.frontend_views)}")
+        if cap.data_artifacts:
+            lines.append(f"      data: {len(cap.data_artifacts)} artifacts")
+        lines.append("")
+
+    if args.counts:
+        status_counts = registry.count_by_status()
+        lines.append("Status summary:")
+        for status, count in sorted(status_counts.items()):
+            lines.append(f"  {status}: {count}")
+
     print("\n".join(lines))
 
 
@@ -1535,6 +1585,16 @@ def main() -> None:
 
     sub.add_parser("info", help="Show project info and module status")
 
+    caps_p = sub.add_parser(
+        "capabilities",
+        help="List all project capabilities with CLI/API/frontend entry points",
+    )
+    caps_p.add_argument("--domain", type=str, default=None, help="Filter by domain")
+    caps_p.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of human-readable text"
+    )
+    caps_p.add_argument("--counts", action="store_true", help="Show status counts summary")
+
     ingest_p = sub.add_parser("ingest", help="Run daily data ingestion")
     ingest_p.add_argument(
         "--sources",
@@ -1849,6 +1909,7 @@ def main() -> None:
 
     handlers = {
         "info": _cmd_info,
+        "capabilities": _cmd_capabilities,
         "ingest": _cmd_ingest,
         "build-features": _cmd_build_features,
         "train": _cmd_train,

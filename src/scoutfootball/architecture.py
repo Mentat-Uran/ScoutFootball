@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from .schemas import DataDirectorySpec, ModuleBoundary, ProjectArchitecture
+import datetime as _dt
+
+from . import __version__
+from .schemas import (
+    Capability,
+    CapabilityRegistry,
+    DataDirectorySpec,
+    ModuleBoundary,
+    ProjectArchitecture,
+)
 
 
 def build_default_architecture() -> ProjectArchitecture:
@@ -160,6 +169,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run pytest",
             "uv run ruff check .",
             "uv run python -m scoutfootball info",
+            "uv run python -m scoutfootball capabilities",
             "uv run python -m scoutfootball ingest",
             "uv run python -m scoutfootball build-features",
             "uv run python -m scoutfootball train",
@@ -180,4 +190,421 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball tournament",
             "uv run streamlit run src/scoutfootball/app/streamlit_app.py",
         ),
+    )
+
+
+def build_capability_registry() -> CapabilityRegistry:
+    """Build the canonical capability registry from static definitions.
+
+    Capabilities are grouped by domain and include cross-references to
+    CLI commands, API paths, and frontend views where applicable. This
+    registry is the single source of truth for "what can ScoutFootball do"
+    and is consumed by the ``capabilities`` CLI command, tests, and docs.
+    """
+    caps = (
+        Capability(
+            id="pipeline.ingest",
+            name="数据接入",
+            description=(
+                "从 StatsBomb、Football-Data、ClubElo 等数据源"
+                "拉取原始数据并落地到本地 Parquet。"
+            ),
+            domain="data_pipeline",
+            cli_commands=("ingest",),
+            data_artifacts=(
+                "raw/statsbomb_open",
+                "raw/football_data",
+                "raw/clubelo",
+                "raw/understat",
+                "raw/fbref",
+                "raw/transfermarkt_manual",
+            ),
+        ),
+        Capability(
+            id="pipeline.build_features",
+            name="特征工程",
+            description=(
+                "从原始数据构建球队级、球员级特征表，"
+                "含时间窗口滚动特征，无未来泄露。"
+            ),
+            domain="data_pipeline",
+            cli_commands=("build-features",),
+            data_artifacts=("gold/feature_store",),
+        ),
+        Capability(
+            id="pipeline.validate",
+            name="数据验证门禁",
+            description=(
+                "训练前的数据质量校验：schema、行数、非空率、"
+                "唯一性、时间连续性、来源覆盖度。"
+            ),
+            domain="data_pipeline",
+            cli_commands=("validate", "preflight", "optimizer-preflight"),
+            api_paths=("/health", "/artifacts"),
+        ),
+        Capability(
+            id="ratings.training",
+            name="球员评分训练",
+            description="多模型球员评分训练：市场价值、阵容评分、神经网络候选。",
+            domain="player_ratings",
+            cli_commands=("train", "train-rating-nn"),
+            data_artifacts=(
+                "models/artifacts",
+                "models/training_sets",
+                "models/oof_predictions",
+            ),
+        ),
+        Capability(
+            id="ratings.export",
+            name="评分导出",
+            description="将优化后的球员评分导出为 DuckDB 数据库，供前端和 API 使用。",
+            domain="player_ratings",
+            cli_commands=("export-ratings",),
+            api_paths=("/ratings", "/ratings/meta", "/ratings/snapshots"),
+            frontend_views=("players", "value"),
+        ),
+        Capability(
+            id="ratings.truth_labels",
+            name="真值标签管理",
+            description="导入球探评审和 Transfermarkt 快照作为真值标签，审计监督合规性。",
+            domain="player_ratings",
+            cli_commands=(
+                "import-truth-labels",
+                "import-transfermarkt-truth-labels",
+                "audit-truth-labels",
+            ),
+            api_paths=(
+                "/reports/truth-labels",
+                "/reports/transfermarkt-identities",
+            ),
+        ),
+        Capability(
+            id="predictions.match",
+            name="比赛结果预测",
+            description="Poisson、Dixon-Coles、集成模型等多种比赛结果预测，含概率校准。",
+            domain="match_predictions",
+            cli_commands=("backtest", "tune-predictions", "optimize-ensemble"),
+            api_paths=(
+                "/predictions/{home}/{away}",
+                "/predictions/meta",
+                "/predictions/ensemble/weights",
+                "/predictions/{home}/{away}/attribution",
+                "/predictions/{home}/{away}/diagnostics",
+            ),
+            frontend_views=("matches",),
+        ),
+        Capability(
+            id="predictions.calibration",
+            name="概率校准与回测",
+            description="时间序列回测、保序回归校准、RPS/Brier/Log Loss 指标、置信区间。",
+            domain="match_predictions",
+            cli_commands=("backtest", "tune-predictions"),
+            api_paths=(
+                "/predictions/calibration",
+                "/predictions/backtest",
+                "/predictions/tuning",
+                "/predictions/drift",
+                "/predictions/calibration/reliability",
+                "/predictions/calibration/scoreline",
+            ),
+            frontend_views=("matches", "calibration", "backtest"),
+        ),
+        Capability(
+            id="predictions.value_bet",
+            name="价值投注分析",
+            description="对比模型概率与市场赔率，识别价值投注机会。",
+            domain="match_predictions",
+            api_paths=("/predictions/{home}/{away}/value",),
+            frontend_views=("matches",),
+        ),
+        Capability(
+            id="team.analysis",
+            name="球队分析",
+            description="球队实力对比、风格聚类、风格演变、战术画像、赛程难度。",
+            domain="team_analysis",
+            api_paths=(
+                "/teams/compare",
+                "/teams/strength",
+                "/teams/style-clusters",
+                "/teams/style-atlas",
+                "/teams/style-matchup",
+                "/teams/{team}/style-neighbors",
+                "/teams/{team}/style-drift",
+                "/teams/style-evolution",
+            ),
+            frontend_views=("teams", "league"),
+        ),
+        Capability(
+            id="team.action_profile",
+            name="球队动作画像",
+            description="基于事件数据的球队动作风格画像和跨联赛对比。",
+            domain="team_analysis",
+            api_paths=(
+                "/teams/action-profile",
+                "/teams/action-atlas",
+                "/teams/action-evolution",
+                "/teams/{team}/action-percentiles",
+                "/teams/{team}/action-similarity",
+                "/teams/cross-league-action",
+            ),
+            frontend_views=("actions",),
+        ),
+        Capability(
+            id="league.season_projection",
+            name="联赛赛季预测",
+            description="蒙特卡洛模拟联赛最终排名、夺冠/降级概率、赛程难度分析。",
+            domain="team_analysis",
+            api_paths=(
+                "/league/season-projection",
+                "/league/form-table",
+                "/league/fixture-difficulty",
+            ),
+            frontend_views=("league",),
+        ),
+        Capability(
+            id="player.comparison",
+            name="球员对比",
+            description="多球员并排对比，百分位矩阵、指标排名、风格相似度。",
+            domain="player_analysis",
+            api_paths=(
+                "/players/compare",
+                "/players/compare-multi",
+                "/players/{player}/similar",
+                "/players/{player}/career-trajectory",
+            ),
+            frontend_views=("compare", "players"),
+        ),
+        Capability(
+            id="player.style_fit",
+            name="球员风格适配",
+            description="球员与球队风格匹配度、位置角色适配、风格邻居。",
+            domain="player_analysis",
+            api_paths=(
+                "/players/{player}/style-fit",
+                "/players/{player}/role-fit",
+                "/players/{player}/peer-benchmark",
+                "/style-neighbors",
+                "/style-drift-neighbors",
+            ),
+            frontend_views=("players",),
+        ),
+        Capability(
+            id="position.analysis",
+            name="位置分析",
+            description="位置深度画像、位置风格演变、跨联赛位置对比、位置动作画像。",
+            domain="player_analysis",
+            api_paths=(
+                "/positions/depth-profile",
+                "/positions/style-evolution",
+                "/positions/action-profile",
+                "/positions/trend-overlay",
+                "/positions/{position}/style-drift",
+                "/positions/{position}/cross-league",
+                "/positions/{position}/action-similarity",
+            ),
+            frontend_views=("players",),
+        ),
+        Capability(
+            id="action_value.core",
+            name="动作价值计算",
+            description="基于 SPADL 的事件-动作转换，xT 期望值计算，球员动作价值聚合。",
+            domain="action_value",
+            cli_commands=("action-value", "action-value-matches"),
+            api_paths=(
+                "/action-values",
+                "/action-values/evidence",
+                "/action-values/evidence/{player}",
+                "/action-values/players/{player}/context",
+                "/action-values/players/{player}/rating-links",
+                "/action-values/matches",
+            ),
+            frontend_views=("actions",),
+        ),
+        Capability(
+            id="action_value.position_similarity",
+            name="动作位置相似度",
+            description="基于动作分布的位置相似度分析，跨联赛动作对比。",
+            domain="action_value",
+            api_paths=(
+                "/positions/{position}/action-similarity",
+                "/teams/cross-league-action",
+                "/cross-league-action-comparison",
+            ),
+            frontend_views=("actions",),
+        ),
+        Capability(
+            id="scouting.targets",
+            name="球探目标推荐",
+            description="基于球队需求的引援目标推荐，风格匹配度、位置缺口分析。",
+            domain="scouting",
+            api_paths=(
+                "/teams/{team}/scouting-targets",
+                "/teams/{team}/scouting-style-match/{position}",
+                "/teams/{team}/scouting-dashboard",
+                "/teams/{team}/position-gap-report",
+                "/teams/style-clusters/recruits",
+            ),
+            frontend_views=("scouting",),
+        ),
+        Capability(
+            id="scouting.watchlist",
+            name="观察名单与短名单",
+            description="上升/下滑球员观察名单、球探短名单、评审队列管理。",
+            domain="scouting",
+            api_paths=(
+                "/scouting/risers-decliners",
+                "/watchlist",
+                "/shortlist",
+                "/review-queue",
+            ),
+            frontend_views=("scouting",),
+        ),
+        Capability(
+            id="scouting.workspace",
+            name="球探工作区",
+            description="本地球探评审工作区，支持多工作区版本管理和并发控制。",
+            domain="scouting",
+            api_paths=(
+                "/scouting-workspaces",
+                "/scouting-workspaces/capabilities",
+                "/scouting-workspaces/latest",
+                "/scouting-workspaces/{id}",
+                "/scouting-workspaces/{id} (PUT)",
+            ),
+            frontend_views=("scouting",),
+        ),
+        Capability(
+            id="worldcup.tournament",
+            name="世界杯锦标赛管理",
+            description="2026 世界杯 48 队锦标赛状态管理：积分榜、晋级计算、淘汰赛生成。",
+            domain="world_cup",
+            cli_commands=(
+                "tournament",
+                "tournament show",
+                "tournament standings",
+                "tournament apply",
+                "tournament matches",
+                "tournament scenarios",
+            ),
+            api_paths=(
+                "/world-cup/groups",
+                "/world-cup/schedule",
+                "/world-cup/teams",
+                "/world-cup/tournament-summary",
+                "/world-cup/tournament-standings",
+                "/world-cup/tournament-matches",
+                "/world-cup/tournament-scenarios",
+            ),
+            frontend_views=("wc_schedule", "wc_knockout", "wc_tournament"),
+        ),
+        Capability(
+            id="worldcup.knockout",
+            name="世界杯淘汰赛",
+            description="淘汰赛对阵生成、结果录入、晋级路径、概率模拟。",
+            domain="world_cup",
+            cli_commands=(
+                "tournament knockout",
+                "tournament knockout generate",
+                "tournament knockout show",
+                "tournament knockout apply",
+            ),
+            api_paths=(
+                "/world-cup/knockout",
+                "/world-cup/knockout-bracket",
+                "/world-cup/knockout-probabilities",
+                "/world-cup/knockout-scenarios",
+            ),
+            frontend_views=("wc_knockout", "wc_tournament"),
+        ),
+        Capability(
+            id="worldcup.predictions",
+            name="世界杯预测",
+            description="世界杯小组赛预测、出线概率、淘汰赛概率、比赛预测。",
+            domain="world_cup",
+            api_paths=(
+                "/world-cup/predictions",
+                "/world-cup/standings-probabilities",
+                "/world-cup/qualification-impact",
+                "/world-cup/tournament-match-predictions",
+                "/world-cup/match-prediction",
+            ),
+            frontend_views=("wc_probability", "wc_compare"),
+        ),
+        Capability(
+            id="worldcup.squads",
+            name="世界杯名单分析",
+            description="各队大名单、阵容平衡对比、球探需求分析。",
+            domain="world_cup",
+            api_paths=(
+                "/world-cup/squads/{team}",
+                "/world-cup/squad-balance-comparison/{a}/{b}",
+                "/world-cup/squads/{team}/scouting-needs",
+            ),
+            frontend_views=("wc_squads", "wc_compare"),
+        ),
+        Capability(
+            id="api.server",
+            name="API 服务",
+            description="FastAPI 只读 API 服务，支持 CORS、静态文件托管、工作区写操作。",
+            domain="infrastructure",
+            cli_commands=("serve",),
+            api_paths=("/health", "/license"),
+        ),
+        Capability(
+            id="frontend.analyst_console",
+            name="分析师工作台",
+            description=(
+                "单页前端应用，包含球员、球队、预测、球探、"
+                "动作价值、世界杯等多个分析视图。"
+            ),
+            domain="infrastructure",
+            frontend_views=(
+                "overview",
+                "players",
+                "compare",
+                "value",
+                "matches",
+                "teams",
+                "league",
+                "scouting",
+                "actions",
+                "reports",
+                "tactical",
+                "wc_schedule",
+                "wc_squads",
+                "wc_compare",
+                "wc_probability",
+                "wc_knockout",
+                "wc_tournament",
+                "license",
+                "data",
+                "calibration",
+                "backtest",
+                "help",
+            ),
+            data_artifacts=("frontend/data/",),
+        ),
+        Capability(
+            id="data.artifacts",
+            name="数据产物清单",
+            description="所有数据产物的元数据清单、版本信息、来源归属。",
+            domain="infrastructure",
+            cli_commands=("info", "capabilities"),
+            api_paths=(
+                "/artifacts",
+                "/model-runs",
+                "/reports/model-runs",
+                "/reports/model-runs/{run_id}",
+            ),
+            frontend_views=("data",),
+        ),
+    )
+
+    domains = tuple(sorted({c.domain for c in caps}))
+
+    return CapabilityRegistry(
+        generated_at=_dt.datetime.now(_dt.UTC).isoformat(),
+        package_version=__version__,
+        domains=domains,
+        capabilities=caps,
     )
