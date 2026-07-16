@@ -1,6 +1,6 @@
 # ScoutFootball 能力真相表
 
-> 审计快照：2026-07-16，分支 `codex/integration`，提交 `f9644fd79f1b3aa3b32ed214de1a50771bfe5241`。本文只描述本地仓库可核验状态，不证明线上部署当前可达，也不把计划、样例或估算写成生产能力。
+> 审计快照：2026-07-17，分支 `codex/integration`。本文只描述本地仓库可核验状态，不证明线上部署当前可达，也不把计划、样例或估算写成生产能力。工程与发布缺口表已更新到 2026-07-17，反映 G0-B 修复和 G1 子任务3（真实浏览器 E2E）落地。
 
 项目属性以 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) 为准：本地优先、MIT 开放源代码、个人维护、非盈利。本表中的桌面、容器、API 或可选协作能力不代表 SaaS、商业版、企业支持或营收计划。
 
@@ -120,8 +120,8 @@
 
 | 缺口 | 当前观察 | 目标状态 |
 | --- | --- | --- |
-| 真实浏览器 E2E | CI 有 Ruff、pytest、Node 语法/测试，未见关键流程浏览器自动化 | 三个黄金工作流在 API、静态和低覆盖路径运行 |
-| 发布 fail-open | 发布/数据类 workflow 存在 `continue-on-error`、shell 失败抑制或 placeholder | 关键验证失败即停止；仅非关键上传可明确容错 |
+| 真实浏览器 E2E | 2026-07-17 起 `tests/e2e/` 提供 Playwright + 系统 Chrome 的 smoke + workflow 覆盖（LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全），通过 `-m e2e` 显式运行 | 三个黄金工作流在 API、静态和低覆盖路径运行 |
+| 发布 fail-open | 2026-07-17 G0-B 已清理关键发布/数据 workflow 的 `continue-on-error`、`|| true` 和成功 placeholder | 关键验证失败即停止；仅非关键上传可明确容错 |
 | 签名与跨平台 | 签名发现被禁用，平台状态在文档间有漂移 | 每个平台独立构建、签名/未签名声明、安装与回滚证据 |
 | 静态新鲜度 | `frontend/data_manifest.json` 记录的生成时间仍为 2026-06-23 | 构建时生成，超过阈值或契约不匹配即阻断 |
 | 契约维护 | API、静态 JSON、前端和文档手工同步 | schema registry + 生成式清单 + compatibility tests |
