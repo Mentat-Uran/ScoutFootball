@@ -242,6 +242,12 @@ const i18n = {
         shortlist_compare_sync_dup: "{n} 名已在对比盘中",
         shortlist_compare_sync_cap: "{n} 名因对比盘已满跳过",
         shortlist_compare_sync_empty: "未选择可同步的球员",
+        shortlist_decision_pack_import: "导入候选决策包",
+        shortlist_decision_pack_import_title: "从 JSON 文件恢复候选名单（合并 reason_codes 与档案，不覆盖既有数据）",
+        shortlist_decision_pack_import_ok: "已导入 {n} 名球员（{merged} 名合并，{added} 名新增）",
+        shortlist_decision_pack_import_empty: "决策包中没有球员可导入",
+        shortlist_decision_pack_import_invalid: "决策包格式无效：{reason}",
+        shortlist_decision_pack_import_read_fail: "读取文件失败",
         shortlist_provenance_log_title: "来源审计日志",
         shortlist_provenance_empty: "暂无来源事件",
         shortlist_provenance_count: "{n} 条来源事件",
@@ -1393,6 +1399,12 @@ const i18n = {
         shortlist_compare_sync_dup: "{n} already in tray",
         shortlist_compare_sync_cap: "{n} skipped (tray full)",
         shortlist_compare_sync_empty: "No players selected to sync",
+        shortlist_decision_pack_import: "Import decision pack",
+        shortlist_decision_pack_import_title: "Restore shortlist from JSON file (merges reason_codes and dossiers, does not overwrite existing data)",
+        shortlist_decision_pack_import_ok: "Imported {n} players ({merged} merged, {added} added)",
+        shortlist_decision_pack_import_empty: "No players in decision pack to import",
+        shortlist_decision_pack_import_invalid: "Invalid decision pack format: {reason}",
+        shortlist_decision_pack_import_read_fail: "Failed to read file",
         shortlist_provenance_log_title: "Provenance Log",
         shortlist_provenance_empty: "No provenance events recorded",
         shortlist_provenance_count: "{n} provenance events",
@@ -18902,6 +18914,7 @@ function bindEvents() {
     if (scoutDecisionPackCsvButton) {
         scoutDecisionPackCsvButton.addEventListener("click", exportShortlistDecisionPackCSV);
     }
+    _wireDecisionPackImportButton();
     const scoutShortlistTacticalButton = document.getElementById("scout-shortlist-to-tactical");
     if (scoutShortlistTacticalButton) {
         scoutShortlistTacticalButton.addEventListener("click", sendShortlistToTacticalBoard);
@@ -24291,4 +24304,185 @@ function exportShortlistDecisionPackCSV() {
         "scoutfootball-shortlist-decision-pack.csv",
         "text/csv;charset=utf-8",
     );
+}
+
+// Round 93: decision pack import — restores a shortlist from a JSON file
+// produced by exportShortlistDecisionPackJSON. Validates schema + version,
+// then merges each player's reason_codes into the browser-local shortlist
+// (respecting the existing accumulation semantics from Round 87) and
+// restores the dossier fields (priority/recommendation/target_role/rationale)
+// via the existing updateShortlistDossier helper. Does NOT overwrite existing
+// entries — only adds new ones or merges reason codes into existing ones.
+const _DECISION_PACK_SUPPORTED_VERSIONS = ["1.0.0", "1.1.0"];
+const _DECISION_PACK_SCHEMA = "scoutfootball.shortlist-decision-pack";
+
+function _validateShortlistDecisionPack(pack) {
+    if (!pack || typeof pack !== "object" || Array.isArray(pack)) {
+        return { ok: false, reason: "not_object" };
+    }
+    if (pack.schema !== _DECISION_PACK_SCHEMA) {
+        return { ok: false, reason: "schema_mismatch" };
+    }
+    if (!_DECISION_PACK_SUPPORTED_VERSIONS.includes(pack.version)) {
+        return { ok: false, reason: "unsupported_version" };
+    }
+    if (!Array.isArray(pack.players)) {
+        return { ok: false, reason: "players_not_array" };
+    }
+    return { ok: true };
+}
+
+function _normalizeDecisionPackPlayer(player) {
+    if (!player || typeof player !== "object") return null;
+    const name = String(player.player || player.player_name || player.name || "").trim();
+    if (!name) return null;
+    const key = String(player.player_id || player.player_key || player.key || name).trim();
+    const team = String(player.team || "");
+    const position = String(player.position || "");
+    const rating = player.rating ?? null;
+    const reasonCodes = Array.isArray(player.reason_codes)
+        ? player.reason_codes.map((c) => String(c || "").trim()).filter(Boolean)
+        : (player.reason_code ? [String(player.reason_code).trim()] : []);
+    return {
+        key,
+        name,
+        team,
+        position,
+        rating,
+        reason_codes: reasonCodes,
+        priority: String(player.priority || "standard"),
+        recommendation: String(player.recommendation || "monitor"),
+        target_role: String(player.target_role || ""),
+        rationale: String(player.rationale_and_risks || player.rationale || ""),
+    };
+}
+
+function _mergeDecisionPackPlayer(list, player) {
+    const idx = list.findIndex((p) => p.key === player.key);
+    if (idx >= 0) {
+        const entry = _normalizeEntryReasonCodes(list[idx]);
+        let mergedCount = 0;
+        for (const code of player.reason_codes) {
+            if (!entry.reason_codes.includes(code)) {
+                entry.reason_codes.push(code);
+                mergedCount++;
+            }
+        }
+        entry.reason_code = entry.reason_codes[0] || "";
+        if (player.team && !entry.team) entry.team = player.team;
+        if (player.position && !entry.position) entry.position = player.position;
+        if (player.rating != null && entry.rating == null) entry.rating = player.rating;
+        return { kind: "merged", entry, mergedCount };
+    }
+    const entry = {
+        key: player.key,
+        name: player.name,
+        team: player.team,
+        position: player.position,
+        rating: player.rating,
+        reason_codes: player.reason_codes.slice(),
+        reason_code: player.reason_codes[0] || "",
+    };
+    list.push(entry);
+    return { kind: "added", entry, mergedCount: 0 };
+}
+
+function importShortlistDecisionPackJSON(pack) {
+    const validation = _validateShortlistDecisionPack(pack);
+    if (!validation.ok) {
+        return { ok: false, error: "invalid", reason: validation.reason };
+    }
+    if (pack.players.length === 0) {
+        return { ok: false, error: "empty" };
+    }
+    const list = getPlayerShortlist();
+    let addedCount = 0;
+    let mergedCount = 0;
+    const dossierUpdates = [];
+    for (const raw of pack.players) {
+        const player = _normalizeDecisionPackPlayer(raw);
+        if (!player) continue;
+        const result = _mergeDecisionPackPlayer(list, player);
+        if (result.kind === "added") addedCount++;
+        else if (result.kind === "merged" && result.mergedCount > 0) mergedCount++;
+        dossierUpdates.push(player);
+    }
+    savePlayerShortlist(list);
+    // Restore dossier fields via the existing helper so validation + persistence fire.
+    for (const player of dossierUpdates) {
+        if (["urgent", "standard", "monitor"].includes(player.priority)) {
+            updateShortlistDossier(player.key, player.name, "priority", player.priority);
+        }
+        if (["target", "monitor", "decline"].includes(player.recommendation)) {
+            updateShortlistDossier(player.key, player.name, "recommendation", player.recommendation);
+        }
+        if (player.target_role) {
+            updateShortlistDossier(player.key, player.name, "target_role", player.target_role);
+        }
+        if (player.rationale) {
+            updateShortlistDossier(player.key, player.name, "rationale", player.rationale);
+        }
+    }
+    return { ok: true, added: addedCount, merged: mergedCount, total: pack.players.length };
+}
+
+function _setDecisionPackImportStatus(message) {
+    const statusEl = document.getElementById("scout-decision-pack-import-status");
+    if (statusEl) statusEl.textContent = message;
+}
+
+function _handleDecisionPackFileLoad(event) {
+    const file = event.target.files && event.target.files[0];
+    // Reset the input value so the same file can be re-selected later.
+    event.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        let pack;
+        try {
+            pack = JSON.parse(reader.result);
+        } catch {
+            _setDecisionPackImportStatus(t("shortlist_decision_pack_import_invalid").replace(
+                "{reason}", "json_parse_error",
+            ));
+            return;
+        }
+        const result = importShortlistDecisionPackJSON(pack);
+        if (result.ok) {
+            if (result.total === 0 || (result.added === 0 && result.merged === 0)) {
+                _setDecisionPackImportStatus(t("shortlist_decision_pack_import_empty"));
+            } else {
+                _setDecisionPackImportStatus(
+                    t("shortlist_decision_pack_import_ok")
+                        .replace("{n}", String(result.added + result.merged))
+                        .replace("{merged}", String(result.merged))
+                        .replace("{added}", String(result.added)),
+                );
+            }
+            renderScouting();
+        } else if (result.error === "empty") {
+            _setDecisionPackImportStatus(t("shortlist_decision_pack_import_empty"));
+        } else if (result.error === "invalid") {
+            _setDecisionPackImportStatus(
+                t("shortlist_decision_pack_import_invalid").replace("{reason}", result.reason),
+            );
+        }
+    };
+    reader.onerror = () => {
+        _setDecisionPackImportStatus(t("shortlist_decision_pack_import_read_fail"));
+    };
+    reader.readAsText(file);
+}
+
+function _wireDecisionPackImportButton() {
+    const btn = document.getElementById("scout-import-decision-pack");
+    const fileInput = document.getElementById("scout-decision-pack-file");
+    if (!btn || !fileInput) return;
+    if (btn.dataset.round93Wired === "1") return;
+    btn.dataset.round93Wired = "1";
+    btn.title = t("shortlist_decision_pack_import_title");
+    btn.addEventListener("click", () => {
+        fileInput.click();
+    });
+    fileInput.addEventListener("change", _handleDecisionPackFileLoad);
 }
