@@ -18,6 +18,14 @@ Pipeline 端到端入口为 `scoutfootball ingest` -> `scoutfootball build-featu
 ## Git 与 worktree 安全
 
 - 不覆盖、暂存、stash、reset、checkout 或清理用户未提交修改。工作区不干净但改动与任务无关时，优先绕开；存在重叠时必须停止并报告。
+- Remote GitHub access is currently unavailable: the account used for
+  `https://github.com/Mentaturan/ScoutFootball_for_World_Cup.git` is suspended
+  (observed 2026-07-17: `remote: Your account is suspended`, HTTP 403). All
+  remote operations — `git push`, PR creation, release publishing, GitHub
+  Actions triggers, `gh` CLI calls — will fail until the account is restored
+  via https://support.github.com. Continue committing locally; queue pushes
+  and run `git push --set-upstream origin codex/integration` (or the relevant
+  branch) once access is restored. Do not retry remote operations in a loop.
 - 优先使用已经存在且状态清楚的活跃 worktree。需要隔离时，先查看 `git worktree list --porcelain`，确认目标分支未在其他 worktree 检出，再创建名称唯一的新 worktree；不得盲用固定目录或覆盖已有目录。
 - 不假设 `main`、`codex/integration` 或任何工作树处于可合并状态。创建分支、squash 或 fast-forward 前必须核验基线、分支指向、工作区清洁度和差异范围。
 - 本地提交和合并只在用户当前目标明确授权时进行；push、远程 PR、部署、正式 release、tag 和发布资产始终需要明确授权。
