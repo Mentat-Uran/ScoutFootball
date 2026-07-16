@@ -250,6 +250,11 @@ const i18n = {
         shortlist_decision_pack_import_read_fail: "读取文件失败",
         shortlist_decision_pack_import_provenance: "（合并 {provenance} 条来源日志）",
         shortlist_decision_pack_import_watchlist: "（观察名单 {n} 名：{added} 新增，{merged} 合并）",
+        shortlist_decision_pack_migrated: "（从 v{from} 迁移至 v1.2.0）",
+        shortlist_decision_pack_preview: "👁 预览决策包",
+        shortlist_decision_pack_preview_title: "预览 JSON 决策包将如何合并到当前候选名单（只读，不修改数据）",
+        shortlist_decision_pack_preview_ok: "预览：候选名单 {n} 名（{added} 新增，{merged} 合并），观察名单 {wn} 名（{w_added} 新增，{w_merged} 合并），来源日志 {prov} 条",
+        shortlist_decision_pack_preview_empty: "预览：决策包中没有可合并的条目",
         shortlist_provenance_log_title: "来源审计日志",
         shortlist_provenance_empty: "暂无来源事件",
         shortlist_provenance_count: "{n} 条来源事件",
@@ -1409,6 +1414,11 @@ const i18n = {
         shortlist_decision_pack_import_read_fail: "Failed to read file",
         shortlist_decision_pack_import_provenance: "({provenance} provenance log entries merged)",
         shortlist_decision_pack_import_watchlist: "(watchlist {n}: {added} added, {merged} merged)",
+        shortlist_decision_pack_migrated: "(migrated from v{from} to v1.2.0)",
+        shortlist_decision_pack_preview: "👁 Preview decision pack",
+        shortlist_decision_pack_preview_title: "Preview how the JSON decision pack would merge into the current shortlist (read-only, does not modify data)",
+        shortlist_decision_pack_preview_ok: "Preview: shortlist {n} ({added} added, {merged} merged), watchlist {wn} ({w_added} added, {w_merged} merged), provenance {prov}",
+        shortlist_decision_pack_preview_empty: "Preview: no entries in decision pack to merge",
         shortlist_provenance_log_title: "Provenance Log",
         shortlist_provenance_empty: "No provenance events recorded",
         shortlist_provenance_count: "{n} provenance events",
@@ -18919,6 +18929,7 @@ function bindEvents() {
         scoutDecisionPackCsvButton.addEventListener("click", exportShortlistDecisionPackCSV);
     }
     _wireDecisionPackImportButton();
+    _wireDecisionPackPreviewButton();
     const scoutShortlistTacticalButton = document.getElementById("scout-shortlist-to-tactical");
     if (scoutShortlistTacticalButton) {
         scoutShortlistTacticalButton.addEventListener("click", sendShortlistToTacticalBoard);
@@ -24344,6 +24355,7 @@ function exportShortlistDecisionPackCSV() {
 // entries — only adds new ones or merges reason codes into existing ones.
 const _DECISION_PACK_SUPPORTED_VERSIONS = ["1.0.0", "1.1.0", "1.2.0"];
 const _DECISION_PACK_SCHEMA = "scoutfootball.shortlist-decision-pack";
+const _DECISION_PACK_LATEST_VERSION = "1.2.0";
 
 function _validateShortlistDecisionPack(pack) {
     if (!pack || typeof pack !== "object" || Array.isArray(pack)) {
@@ -24364,6 +24376,35 @@ function _validateShortlistDecisionPack(pack) {
         return { ok: false, reason: "watchlist_players_not_array" };
     }
     return { ok: true };
+}
+
+// Round 96: schema migration helper — detects the version of an imported
+// decision pack and normalizes it to the latest shape (1.2.0) before
+// validation/import. Older packs (1.0.0 without watchlist_players, 1.1.0
+// without watchlist_players) are transparently upgraded with empty arrays
+// so downstream code can treat all packs uniformly. Returns:
+//   { ok: false, reason }                     — invalid pack
+//   { ok: true, migrated, from_version, pack } — normalized pack
+// `migrated` is true when from_version != LATEST. `from_version` is the
+// original version string (or "" when missing). `pack` is the normalized
+// pack (a shallow copy — does not mutate the input).
+function _migrateDecisionPackVersion(pack) {
+    const validation = _validateShortlistDecisionPack(pack);
+    if (!validation.ok) {
+        return { ok: false, reason: validation.reason };
+    }
+    const fromVersion = String(pack.version || "");
+    const migrated = fromVersion !== _DECISION_PACK_LATEST_VERSION;
+    const normalizedPack = {
+        ...pack,
+        version: _DECISION_PACK_LATEST_VERSION,
+        players: Array.isArray(pack.players) ? pack.players : [],
+        watchlist_players: Array.isArray(pack.watchlist_players)
+            ? pack.watchlist_players
+            : [],
+        provenance_log: Array.isArray(pack.provenance_log) ? pack.provenance_log : [],
+    };
+    return { ok: true, migrated, from_version: fromVersion, pack: normalizedPack };
 }
 
 function _normalizeDecisionPackPlayer(player) {
@@ -24497,21 +24538,31 @@ function _mergeDecisionPackWatchlistPlayer(list, player) {
 }
 
 function importShortlistDecisionPackJSON(pack) {
-    const validation = _validateShortlistDecisionPack(pack);
-    if (!validation.ok) {
-        return { ok: false, error: "invalid", reason: validation.reason };
+    // Round 96: route through the migration helper so older packs (1.0.0 /
+    // 1.1.0) are transparently upgraded to 1.2.0 shape before import. This
+    // also surfaces `migrated` + `from_version` in the result so the UI can
+    // tell the user their pack was upgraded.
+    const migration = _migrateDecisionPackVersion(pack);
+    if (!migration.ok) {
+        return { ok: false, error: "invalid", reason: migration.reason };
     }
+    const normalizedPack = migration.pack;
     // Round 95: a pack is "empty" only when BOTH players and watchlist_players
     // are absent/empty. v1.2.0 packs may carry only watchlist entries.
-    const watchlistRaw = Array.isArray(pack.watchlist_players) ? pack.watchlist_players : [];
-    if (pack.players.length === 0 && watchlistRaw.length === 0) {
-        return { ok: false, error: "empty" };
+    const watchlistRaw = normalizedPack.watchlist_players;
+    if (normalizedPack.players.length === 0 && watchlistRaw.length === 0) {
+        return {
+            ok: false,
+            error: "empty",
+            migrated: migration.migrated,
+            from_version: migration.from_version,
+        };
     }
     const list = getPlayerShortlist();
     let addedCount = 0;
     let mergedCount = 0;
     const dossierUpdates = [];
-    for (const raw of pack.players) {
+    for (const raw of normalizedPack.players) {
         const player = _normalizeDecisionPackPlayer(raw);
         if (!player) continue;
         const result = _mergeDecisionPackPlayer(list, player);
@@ -24519,7 +24570,7 @@ function importShortlistDecisionPackJSON(pack) {
         else if (result.kind === "merged" && result.mergedCount > 0) mergedCount++;
         dossierUpdates.push(player);
     }
-    if (pack.players.length > 0) savePlayerShortlist(list);
+    if (normalizedPack.players.length > 0) savePlayerShortlist(list);
     // Restore dossier fields via the existing helper so validation + persistence fire.
     for (const player of dossierUpdates) {
         if (["urgent", "standard", "monitor"].includes(player.priority)) {
@@ -24552,16 +24603,149 @@ function importShortlistDecisionPackJSON(pack) {
         }
         savePlayerWatchlist(watchlist);
     }
-    const provenanceMerged = _mergeProvenanceLogEntries(pack.provenance_log || []);
+    const provenanceMerged = _mergeProvenanceLogEntries(normalizedPack.provenance_log);
     return {
         ok: true,
         added: addedCount,
         merged: mergedCount,
-        total: pack.players.length,
+        total: normalizedPack.players.length,
         provenance_merged: provenanceMerged,
         watchlist_added: watchlistAdded,
         watchlist_merged: watchlistMerged,
         watchlist_total: watchlistRaw.length,
+        migrated: migration.migrated,
+        from_version: migration.from_version,
+    };
+}
+
+// Round 96: dry-run preview — computes what WOULD be added/merged/skipped if
+// the given pack were imported right now, without mutating localStorage or
+// the module-level provenance log. Returns the same shape as
+// importShortlistDecisionPackJSON plus per-player preview lists so the UI
+// can render a "X will be added, Y will merge Z new codes, W will be skipped"
+// breakdown before the user commits to the import.
+function previewDecisionPackImport(pack) {
+    const migration = _migrateDecisionPackVersion(pack);
+    if (!migration.ok) {
+        return { ok: false, error: "invalid", reason: migration.reason };
+    }
+    const normalizedPack = migration.pack;
+    if (normalizedPack.players.length === 0 && normalizedPack.watchlist_players.length === 0) {
+        return {
+            ok: false,
+            error: "empty",
+            migrated: migration.migrated,
+            from_version: migration.from_version,
+        };
+    }
+    const shortlist = getPlayerShortlist();
+    let shortlistAdded = 0;
+    let shortlistMerged = 0;
+    const shortlistPreview = [];
+    for (const raw of normalizedPack.players) {
+        const player = _normalizeDecisionPackPlayer(raw);
+        if (!player) continue;
+        const idx = shortlist.findIndex((entry) => entry.key === player.key);
+        if (idx >= 0) {
+            const entry = _normalizeEntryReasonCodes(shortlist[idx]);
+            let newCodes = 0;
+            for (const code of player.reason_codes) {
+                if (!entry.reason_codes.includes(code)) newCodes++;
+            }
+            if (newCodes > 0) {
+                shortlistMerged++;
+                shortlistPreview.push({
+                    name: player.name,
+                    action: "merge",
+                    new_codes: newCodes,
+                });
+            } else {
+                shortlistPreview.push({
+                    name: player.name,
+                    action: "skip",
+                    new_codes: 0,
+                });
+            }
+        } else {
+            shortlistAdded++;
+            shortlistPreview.push({
+                name: player.name,
+                action: "add",
+                new_codes: player.reason_codes.length,
+            });
+        }
+    }
+    const watchlist = getPlayerWatchlist();
+    let watchlistAdded = 0;
+    let watchlistMerged = 0;
+    const watchlistPreview = [];
+    for (const raw of normalizedPack.watchlist_players) {
+        const player = _normalizeDecisionPackPlayer(raw);
+        if (!player) continue;
+        const idx = watchlist.findIndex((entry) => entry.key === player.key);
+        if (idx >= 0) {
+            const entry = _normalizeEntryReasonCodes(watchlist[idx]);
+            let newCodes = 0;
+            for (const code of player.reason_codes) {
+                if (!entry.reason_codes.includes(code)) newCodes++;
+            }
+            if (newCodes > 0) {
+                watchlistMerged++;
+                watchlistPreview.push({
+                    name: player.name,
+                    action: "merge",
+                    new_codes: newCodes,
+                });
+            } else {
+                watchlistPreview.push({
+                    name: player.name,
+                    action: "skip",
+                    new_codes: 0,
+                });
+            }
+        } else {
+            watchlistAdded++;
+            watchlistPreview.push({
+                name: player.name,
+                action: "add",
+                new_codes: player.reason_codes.length,
+            });
+        }
+    }
+    // Compute provenance preview count without mutating _shortlistProvenanceLog.
+    const existingProvKeys = new Set(
+        _shortlistProvenanceLog.map((e) =>
+            String((e && e.timestamp) || "") + "|" +
+            String((e && e.player_key) || "") + "|" +
+            String((e && e.action) || ""),
+        ),
+    );
+    let provenanceAdded = 0;
+    for (const raw of normalizedPack.provenance_log) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const timestamp = String(raw.timestamp || "");
+        const playerKey = String(raw.player_key || "");
+        if (!timestamp || !playerKey) continue;
+        const action = raw.action === "merged" ? "merged" : "removed";
+        const dedupKey = timestamp + "|" + playerKey + "|" + action;
+        if (existingProvKeys.has(dedupKey)) continue;
+        existingProvKeys.add(dedupKey);
+        provenanceAdded++;
+    }
+    return {
+        ok: true,
+        migrated: migration.migrated,
+        from_version: migration.from_version,
+        shortlist_added: shortlistAdded,
+        shortlist_merged: shortlistMerged,
+        shortlist_total: normalizedPack.players.length,
+        shortlist_preview: shortlistPreview,
+        watchlist_added: watchlistAdded,
+        watchlist_merged: watchlistMerged,
+        watchlist_total: normalizedPack.watchlist_players.length,
+        watchlist_preview: watchlistPreview,
+        provenance_added: provenanceAdded,
+        provenance_total: normalizedPack.provenance_log.length,
     };
 }
 
@@ -24607,6 +24791,12 @@ function _handleDecisionPackFileLoad(event) {
                         .replace("{added}", String(result.watchlist_added))
                         .replace("{merged}", String(result.watchlist_merged));
                 }
+                // Round 96: surface migration notice when an older pack was
+                // transparently upgraded to 1.2.0 shape before import.
+                if (result.migrated) {
+                    msg += " " + t("shortlist_decision_pack_migrated")
+                        .replace("{from}", String(result.from_version || ""));
+                }
                 _setDecisionPackImportStatus(msg);
             }
             renderScouting();
@@ -24635,4 +24825,79 @@ function _wireDecisionPackImportButton() {
         fileInput.click();
     });
     fileInput.addEventListener("change", _handleDecisionPackFileLoad);
+}
+
+// Round 96: dry-run preview flow — reads a decision pack file but does NOT
+// mutate localStorage. Instead it surfaces a preview of what WOULD be
+// added/merged/skipped so the user can decide whether to commit. The
+// preview renders into #scout-decision-pack-preview-status via textContent
+// (never innerHTML). When the user wants to commit, they invoke the regular
+// import flow (which re-reads the file). The preview result is also stashed
+// on the button via dataset so tests can inspect it.
+function _setDecisionPackPreviewStatus(message) {
+    const statusEl = document.getElementById("scout-decision-pack-preview-status");
+    if (statusEl) statusEl.textContent = message;
+}
+
+function _handleDecisionPackPreviewFileLoad(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        let pack;
+        try {
+            pack = JSON.parse(reader.result);
+        } catch {
+            _setDecisionPackPreviewStatus(t("shortlist_decision_pack_import_invalid").replace(
+                "{reason}", "json_parse_error",
+            ));
+            return;
+        }
+        const result = previewDecisionPackImport(pack);
+        if (result.ok) {
+            const totalShortlist = result.shortlist_added + result.shortlist_merged;
+            const totalWatchlist = result.watchlist_added + result.watchlist_merged;
+            if (totalShortlist === 0 && totalWatchlist === 0 && result.provenance_added === 0) {
+                _setDecisionPackPreviewStatus(t("shortlist_decision_pack_preview_empty"));
+                return;
+            }
+            let msg = t("shortlist_decision_pack_preview_ok")
+                .replace("{n}", String(totalShortlist))
+                .replace("{added}", String(result.shortlist_added))
+                .replace("{merged}", String(result.shortlist_merged))
+                .replace("{wn}", String(totalWatchlist))
+                .replace("{w_added}", String(result.watchlist_added))
+                .replace("{w_merged}", String(result.watchlist_merged))
+                .replace("{prov}", String(result.provenance_added));
+            if (result.migrated) {
+                msg += " " + t("shortlist_decision_pack_migrated")
+                    .replace("{from}", String(result.from_version || ""));
+            }
+            _setDecisionPackPreviewStatus(msg);
+        } else if (result.error === "empty") {
+            _setDecisionPackPreviewStatus(t("shortlist_decision_pack_preview_empty"));
+        } else if (result.error === "invalid") {
+            _setDecisionPackPreviewStatus(
+                t("shortlist_decision_pack_import_invalid").replace("{reason}", result.reason),
+            );
+        }
+    };
+    reader.onerror = () => {
+        _setDecisionPackPreviewStatus(t("shortlist_decision_pack_import_read_fail"));
+    };
+    reader.readAsText(file);
+}
+
+function _wireDecisionPackPreviewButton() {
+    const btn = document.getElementById("scout-preview-decision-pack");
+    const fileInput = document.getElementById("scout-decision-pack-preview-file");
+    if (!btn || !fileInput) return;
+    if (btn.dataset.round96Wired === "1") return;
+    btn.dataset.round96Wired = "1";
+    btn.title = t("shortlist_decision_pack_preview_title");
+    btn.addEventListener("click", () => {
+        fileInput.click();
+    });
+    fileInput.addEventListener("change", _handleDecisionPackPreviewFileLoad);
 }

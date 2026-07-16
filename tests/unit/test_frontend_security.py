@@ -2367,23 +2367,26 @@ class TestShortlistDecisionPackImport:
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
-        body = js[idx : idx + 400]
-        assert "_validateShortlistDecisionPack(pack)" in body
+        body = js[idx : idx + 600]
+        # Round 96: import now routes through _migrateDecisionPackVersion,
+        # which internally calls _validateShortlistDecisionPack.
+        assert "_migrateDecisionPackVersion(pack)" in body
 
     def test_import_returns_invalid_on_validation_fail(self):
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
         body = js[idx : idx + 800]
-        assert 'return { ok: false, error: "invalid", reason: validation.reason }' in body
+        assert 'return { ok: false, error: "invalid", reason: migration.reason }' in body
 
     def test_import_returns_empty_on_zero_players(self):
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
-        body = js[idx : idx + 800]
-        assert "pack.players.length === 0" in body
-        assert 'return { ok: false, error: "empty" }' in body
+        body = js[idx : idx + 1200]
+        # Round 96: empty check now uses normalizedPack.players.length.
+        assert "normalizedPack.players.length === 0" in body
+        assert 'error: "empty"' in body
 
     def test_import_gets_existing_shortlist(self):
         """Must read the existing shortlist via getPlayerShortlist (not overwrite)."""
@@ -2406,10 +2409,11 @@ class TestShortlistDecisionPackImport:
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
-        body = js[idx : idx + 3500]
+        body = js[idx : idx + 4500]
         assert "added: addedCount" in body
         assert "merged: mergedCount" in body
-        assert "total: pack.players.length" in body
+        # Round 96: total now uses normalizedPack.players.length.
+        assert "total: normalizedPack.players.length" in body
 
     def test_import_uses_update_shortlist_dossier(self):
         """Dossier fields must be restored via updateShortlistDossier."""
@@ -2494,7 +2498,7 @@ class TestShortlistDecisionPackImport:
         js = _read_app_js()
         idx = js.find("function _handleDecisionPackFileLoad")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert "new FileReader()" in body
         assert "reader.readAsText(file)" in body
 
@@ -2503,7 +2507,7 @@ class TestShortlistDecisionPackImport:
         js = _read_app_js()
         idx = js.find("function _handleDecisionPackFileLoad")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert "JSON.parse(reader.result)" in body
         assert "json_parse_error" in body
 
@@ -2511,35 +2515,35 @@ class TestShortlistDecisionPackImport:
         js = _read_app_js()
         idx = js.find("function _handleDecisionPackFileLoad")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert "importShortlistDecisionPackJSON(pack)" in body
 
     def test_handle_file_load_renders_scouting_on_success(self):
         js = _read_app_js()
         idx = js.find("function _handleDecisionPackFileLoad")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert "renderScouting()" in body
 
     def test_handle_file_load_surfaces_empty_status(self):
         js = _read_app_js()
         idx = js.find("function _handleDecisionPackFileLoad")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert 't("shortlist_decision_pack_import_empty")' in body
 
     def test_handle_file_load_surfaces_invalid_status(self):
         js = _read_app_js()
         idx = js.find("function _handleDecisionPackFileLoad")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert 't("shortlist_decision_pack_import_invalid")' in body
 
     def test_handle_file_load_surfaces_ok_status(self):
         js = _read_app_js()
         idx = js.find("function _handleDecisionPackFileLoad")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert 't("shortlist_decision_pack_import_ok")' in body
         # Round 95: {n} now uses totalShortlist (added + merged) for the
         # shortlist section; watchlist counts surface via a separate suffix.
@@ -2552,7 +2556,7 @@ class TestShortlistDecisionPackImport:
         js = _read_app_js()
         idx = js.find("function _handleDecisionPackFileLoad")
         assert idx > 0
-        body = js[idx : idx + 2500]
+        body = js[idx : idx + 3500]
         assert "reader.onerror" in body
         assert 't("shortlist_decision_pack_import_read_fail")' in body
 
@@ -2831,16 +2835,18 @@ class TestShortlistProvenanceLogImportMerge:
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
-        body = js[idx : idx + 3000]
+        body = js[idx : idx + 4500]
         assert "_mergeProvenanceLogEntries(" in body
-        assert "pack.provenance_log || []" in body
+        # Round 96: now uses normalizedPack.provenance_log (no || [] needed
+        # because migration helper guarantees an array).
+        assert "normalizedPack.provenance_log" in body
 
     def test_import_returns_provenance_merged(self):
         """Return object must include provenance_merged count."""
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
-        body = js[idx : idx + 3000]
+        body = js[idx : idx + 4500]
         assert "provenance_merged" in body
         assert "provenanceMerged" in body
 
@@ -2849,7 +2855,7 @@ class TestShortlistProvenanceLogImportMerge:
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
-        body = js[idx : idx + 3000]
+        body = js[idx : idx + 4500]
         dossier_idx = body.find("updateShortlistDossier(player.key, player.name, \"rationale\"")
         provenance_idx = body.find("_mergeProvenanceLogEntries(")
         assert dossier_idx > 0
@@ -3050,7 +3056,7 @@ class TestShortlistDecisionPackWatchlistImport:
         js = _read_app_js()
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
-        body = js[idx : idx + 3500]
+        body = js[idx : idx + 4500]
         assert "watchlist_added: watchlistAdded" in body
         assert "watchlist_merged: watchlistMerged" in body
         assert "watchlist_total: watchlistRaw.length" in body
@@ -3061,7 +3067,8 @@ class TestShortlistDecisionPackWatchlistImport:
         idx = js.find("function importShortlistDecisionPackJSON")
         assert idx > 0
         body = js[idx : idx + 1200]
-        assert "pack.players.length === 0 && watchlistRaw.length === 0" in body
+        # Round 96: empty check now uses normalizedPack.players.length.
+        assert "normalizedPack.players.length === 0 && watchlistRaw.length === 0" in body
 
     def test_import_uses_normalize_decision_pack_player_for_watchlist(self):
         """Watchlist entries must be normalized via _normalizeDecisionPackPlayer
@@ -3279,4 +3286,699 @@ class TestShortlistDecisionPackWatchlistImport:
         assert "{n}" in line
         assert "{added}" in line
         assert "{merged}" in line
+
+
+# ===== Round 96: Decision Pack Migration + Preview ==========================
+
+class TestShortlistDecisionPackMigration:
+    """Round 96: verify _migrateDecisionPackVersion helper."""
+
+    def test_latest_version_constant_defined(self):
+        js = _read_app_js()
+        assert "_DECISION_PACK_LATEST_VERSION" in js
+        idx = js.find("_DECISION_PACK_LATEST_VERSION")
+        assert idx > 0
+        body = js[idx : idx + 100]
+        assert '"1.2.0"' in body
+
+    def test_migrate_function_defined(self):
+        js = _read_app_js()
+        assert "function _migrateDecisionPackVersion" in js
+
+    def test_migrate_calls_validate_internally(self):
+        """Migration must delegate validation to _validateShortlistDecisionPack."""
+        js = _read_app_js()
+        idx = js.find("function _migrateDecisionPackVersion")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "_validateShortlistDecisionPack(pack)" in body
+
+    def test_migrate_rejects_invalid_pack(self):
+        """When validation fails, migration returns {ok: false, reason}."""
+        js = _read_app_js()
+        idx = js.find("function _migrateDecisionPackVersion")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "if (!validation.ok)" in body
+        assert 'return { ok: false, reason: validation.reason }' in body
+
+    def test_migrate_returns_normalized_pack(self):
+        """Success return must have ok, migrated, from_version, pack fields."""
+        js = _read_app_js()
+        idx = js.find("function _migrateDecisionPackVersion")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "migrated" in body
+        assert "from_version" in body
+        assert "pack: normalizedPack" in body
+
+    def test_migrate_sets_migrated_flag(self):
+        """migrated must be true when from_version != LATEST."""
+        js = _read_app_js()
+        idx = js.find("function _migrateDecisionPackVersion")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "fromVersion !== _DECISION_PACK_LATEST_VERSION" in body
+
+    def test_migrate_normalizes_missing_arrays(self):
+        """Missing players/watchlist_players/provenance_log must default to []."""
+        js = _read_app_js()
+        idx = js.find("function _migrateDecisionPackVersion")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "players: Array.isArray(pack.players) ? pack.players : []" in body
+        assert (
+            "watchlist_players: Array.isArray(pack.watchlist_players)" in body
+        )
+        assert (
+            "provenance_log: Array.isArray(pack.provenance_log) ? pack.provenance_log : []"
+            in body
+        )
+
+    def test_migrate_sets_version_to_latest(self):
+        """Normalized pack must have version set to _DECISION_PACK_LATEST_VERSION."""
+        js = _read_app_js()
+        idx = js.find("function _migrateDecisionPackVersion")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "version: _DECISION_PACK_LATEST_VERSION" in body
+
+    def test_migrate_does_not_mutate_input(self):
+        """Must use spread (...) to create a copy, not mutate the input pack."""
+        js = _read_app_js()
+        idx = js.find("function _migrateDecisionPackVersion")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "...pack" in body
+
+    def test_migrate_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function _migrateDecisionPackVersion")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 1500
+        body = js[idx:end_idx]
+        assert "eval(" not in body
+
+
+class TestShortlistDecisionPackImportMigration:
+    """Round 96: verify importShortlistDecisionPackJSON uses migration helper."""
+
+    def test_import_calls_migrate_helper(self):
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "_migrateDecisionPackVersion(pack)" in body
+
+    def test_import_returns_invalid_on_migration_fail(self):
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'return { ok: false, error: "invalid", reason: migration.reason }' in body
+
+    def test_import_uses_normalized_pack(self):
+        """After migration, all subsequent reads must use normalizedPack, not pack."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 4500]
+        assert "const normalizedPack = migration.pack" in body
+        assert "normalizedPack.players" in body
+        assert "normalizedPack.provenance_log" in body
+
+    def test_import_returns_migrated_fields(self):
+        """Success return must include migrated + from_version."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 4500]
+        assert "migrated: migration.migrated" in body
+        assert "from_version: migration.from_version" in body
+
+    def test_import_empty_return_includes_migrated_fields(self):
+        """Empty return must also include migrated + from_version so UI can
+        surface the migration notice even when the pack has no entries."""
+        js = _read_app_js()
+        idx = js.find("function importShortlistDecisionPackJSON")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        # The empty branch must include migrated + from_version.
+        empty_idx = body.find('error: "empty"')
+        assert empty_idx > 0
+        empty_block = body[empty_idx : empty_idx + 200]
+        assert "migrated: migration.migrated" in empty_block
+        assert "from_version: migration.from_version" in empty_block
+
+    def test_handle_file_load_surfaces_migrated_notice(self):
+        """ok status must append migrated suffix when result.migrated is true."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "if (result.migrated)" in body
+        assert 't("shortlist_decision_pack_migrated")' in body
+        assert '.replace("{from}"' in body
+
+    def test_handle_file_load_no_innerhtml(self):
+        """File load handler must use textContent, never innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 3500
+        body = js[idx:end_idx]
+        assert "innerHTML" not in body
+
+    def test_handle_file_load_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackFileLoad")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 3500
+        body = js[idx:end_idx]
+        assert "eval(" not in body
+
+
+class TestShortlistDecisionPackPreview:
+    """Round 96: verify previewDecisionPackImport dry-run flow."""
+
+    # --- previewDecisionPackImport function ---
+
+    def test_preview_function_defined(self):
+        js = _read_app_js()
+        assert "function previewDecisionPackImport" in js
+
+    def test_preview_calls_migrate_helper(self):
+        """Preview must route through _migrateDecisionPackVersion."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "_migrateDecisionPackVersion(pack)" in body
+
+    def test_preview_returns_invalid_on_migration_fail(self):
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'return { ok: false, error: "invalid", reason: migration.reason }' in body
+
+    def test_preview_uses_normalized_pack(self):
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 4500]
+        assert "const normalizedPack = migration.pack" in body
+        assert "normalizedPack.players" in body
+        assert "normalizedPack.watchlist_players" in body
+        assert "normalizedPack.provenance_log" in body
+
+    def test_preview_empty_check_considers_both_lists(self):
+        """Empty guard must check both players AND watchlist_players."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert (
+            "normalizedPack.players.length === 0 && normalizedPack.watchlist_players.length === 0"
+            in body
+        )
+
+    def test_preview_empty_return_includes_migrated_fields(self):
+        """Empty return must include migrated + from_version."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        empty_idx = body.find('error: "empty"')
+        assert empty_idx > 0
+        empty_block = body[empty_idx : empty_idx + 200]
+        assert "migrated: migration.migrated" in empty_block
+        assert "from_version: migration.from_version" in empty_block
+
+    def test_preview_reads_existing_shortlist(self):
+        """Must read existing shortlist via getPlayerShortlist (not overwrite)."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 4500]
+        assert "getPlayerShortlist()" in body
+
+    def test_preview_reads_existing_watchlist(self):
+        """Must read existing watchlist via getPlayerWatchlist."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 4500]
+        assert "getPlayerWatchlist()" in body
+
+    def test_preview_uses_normalize_entry_reason_codes(self):
+        """For existing entries, must call _normalizeEntryReasonCodes."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 4500]
+        assert "_normalizeEntryReasonCodes(" in body
+
+    def test_preview_uses_normalize_decision_pack_player(self):
+        """Imported entries must be normalized via _normalizeDecisionPackPlayer."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 4500]
+        assert "_normalizeDecisionPackPlayer(raw)" in body
+
+    def test_preview_returns_shortlist_counts(self):
+        """Success return must have shortlist_added/merged/total."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "shortlist_added: shortlistAdded" in body
+        assert "shortlist_merged: shortlistMerged" in body
+        assert "shortlist_total: normalizedPack.players.length" in body
+
+    def test_preview_returns_shortlist_preview_list(self):
+        """Success return must have shortlist_preview array."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "shortlist_preview: shortlistPreview" in body
+
+    def test_preview_returns_watchlist_counts(self):
+        """Success return must have watchlist_added/merged/total."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "watchlist_added: watchlistAdded" in body
+        assert "watchlist_merged: watchlistMerged" in body
+        assert "watchlist_total: normalizedPack.watchlist_players.length" in body
+
+    def test_preview_returns_watchlist_preview_list(self):
+        """Success return must have watchlist_preview array."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "watchlist_preview: watchlistPreview" in body
+
+    def test_preview_returns_provenance_counts(self):
+        """Success return must have provenance_added + provenance_total."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "provenance_added: provenanceAdded" in body
+        assert "provenance_total: normalizedPack.provenance_log.length" in body
+
+    def test_preview_does_not_save_shortlist(self):
+        """Preview must NOT call savePlayerShortlist (no mutation)."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 6000
+        body = js[idx:end_idx]
+        assert "savePlayerShortlist" not in body
+
+    def test_preview_does_not_save_watchlist(self):
+        """Preview must NOT call savePlayerWatchlist (no mutation)."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 6000
+        body = js[idx:end_idx]
+        assert "savePlayerWatchlist" not in body
+
+    def test_preview_does_not_merge_provenance(self):
+        """Preview must NOT call _mergeProvenanceLogEntries (no mutation)."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 6000
+        body = js[idx:end_idx]
+        assert "_mergeProvenanceLogEntries" not in body
+
+    def test_preview_does_not_update_dossier(self):
+        """Preview must NOT call updateShortlistDossier (no mutation)."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 6000
+        body = js[idx:end_idx]
+        assert "updateShortlistDossier" not in body
+
+    def test_preview_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 6000
+        body = js[idx:end_idx]
+        assert "eval(" not in body
+
+    def test_preview_builds_provenance_dedup_set(self):
+        """Preview must build a Set of existing provenance keys for dedup."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "existingProvKeys" in body
+        assert "new Set(" in body
+
+    def test_preview_actions_are_add_merge_skip(self):
+        """Preview per-player action must be one of add/merge/skip."""
+        js = _read_app_js()
+        idx = js.find("function previewDecisionPackImport")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'action: "add"' in body
+        assert 'action: "merge"' in body
+        assert 'action: "skip"' in body
+
+
+class TestShortlistDecisionPackPreviewFileLoad:
+    """Round 96: verify _handleDecisionPackPreviewFileLoad + wire button."""
+
+    def test_set_preview_status_function_defined(self):
+        js = _read_app_js()
+        assert "function _setDecisionPackPreviewStatus" in js
+
+    def test_set_preview_status_uses_textcontent(self):
+        """Status setter must use textContent, never innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function _setDecisionPackPreviewStatus")
+        assert idx > 0
+        body = js[idx : idx + 400]
+        assert "textContent" in body
+        assert "innerHTML" not in body
+        assert 'getElementById("scout-decision-pack-preview-status")' in body
+
+    def test_handle_preview_file_load_function_defined(self):
+        js = _read_app_js()
+        assert "function _handleDecisionPackPreviewFileLoad" in js
+
+    def test_handle_preview_file_load_resets_input_value(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'event.target.value = ""' in body
+
+    def test_handle_preview_file_load_uses_filereader(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "new FileReader()" in body
+        assert "reader.readAsText(file)" in body
+
+    def test_handle_preview_file_load_catches_json_parse_error(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "JSON.parse(reader.result)" in body
+        assert "json_parse_error" in body
+
+    def test_handle_preview_file_load_calls_preview_function(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "previewDecisionPackImport(pack)" in body
+
+    def test_handle_preview_file_load_surfaces_empty_status(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert 't("shortlist_decision_pack_preview_empty")' in body
+
+    def test_handle_preview_file_load_surfaces_invalid_status(self):
+        """Invalid status must reuse the import_invalid i18n key with {reason}."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert 't("shortlist_decision_pack_import_invalid")' in body
+        assert '.replace("{reason}", result.reason)' in body
+
+    def test_handle_preview_file_load_surfaces_ok_status(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert 't("shortlist_decision_pack_preview_ok")' in body
+        # All 7 placeholders must be replaced.
+        assert '.replace("{n}", String(totalShortlist))' in body
+        assert '.replace("{added}", String(result.shortlist_added))' in body
+        assert '.replace("{merged}", String(result.shortlist_merged))' in body
+        assert '.replace("{wn}", String(totalWatchlist))' in body
+        assert '.replace("{w_added}", String(result.watchlist_added))' in body
+        assert '.replace("{w_merged}", String(result.watchlist_merged))' in body
+        assert '.replace("{prov}", String(result.provenance_added))' in body
+
+    def test_handle_preview_file_load_surfaces_migrated_notice(self):
+        """ok status must append migrated suffix when result.migrated is true."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "if (result.migrated)" in body
+        assert 't("shortlist_decision_pack_migrated")' in body
+
+    def test_handle_preview_file_load_handles_reader_error(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "reader.onerror" in body
+        assert 't("shortlist_decision_pack_import_read_fail")' in body
+
+    def test_handle_preview_file_load_no_innerhtml(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 3500
+        body = js[idx:end_idx]
+        assert "innerHTML" not in body
+
+    def test_handle_preview_file_load_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 3500
+        body = js[idx:end_idx]
+        assert "eval(" not in body
+
+    def test_handle_preview_file_load_does_not_call_import(self):
+        """Preview handler must NOT call importShortlistDecisionPackJSON."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 3500
+        body = js[idx:end_idx]
+        assert "importShortlistDecisionPackJSON" not in body
+
+    def test_handle_preview_file_load_does_not_render_scouting(self):
+        """Preview must NOT trigger renderScouting (no state changed)."""
+        js = _read_app_js()
+        idx = js.find("function _handleDecisionPackPreviewFileLoad")
+        assert idx > 0
+        end_idx = js.find("\nfunction ", idx + 1)
+        if end_idx < 0:
+            end_idx = idx + 3500
+        body = js[idx:end_idx]
+        assert "renderScouting" not in body
+
+    # --- _wireDecisionPackPreviewButton ---
+
+    def test_wire_preview_button_function_defined(self):
+        js = _read_app_js()
+        assert "function _wireDecisionPackPreviewButton" in js
+
+    def test_wire_preview_button_targets_correct_elements(self):
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackPreviewButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'getElementById("scout-preview-decision-pack")' in body
+        assert 'getElementById("scout-decision-pack-preview-file")' in body
+
+    def test_wire_preview_button_idempotent_via_dataset(self):
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackPreviewButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'btn.dataset.round96Wired === "1"' in body
+        assert 'btn.dataset.round96Wired = "1"' in body
+
+    def test_wire_preview_button_sets_title_via_t(self):
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackPreviewButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'btn.title = t("shortlist_decision_pack_preview_title")' in body
+
+    def test_wire_preview_button_triggers_file_input_click(self):
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackPreviewButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "fileInput.click()" in body
+
+    def test_wire_preview_button_wires_change_listener(self):
+        js = _read_app_js()
+        idx = js.find("function _wireDecisionPackPreviewButton")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert (
+            'fileInput.addEventListener("change", _handleDecisionPackPreviewFileLoad)'
+            in body
+        )
+
+    def test_wire_preview_button_called_in_init(self):
+        """The preview wire function must be called during scouting init."""
+        js = _read_app_js()
+        # Find a call to _wireDecisionPackPreviewButton() that is not the
+        # function definition itself.
+        def_idx = js.find("function _wireDecisionPackPreviewButton")
+        assert def_idx > 0
+        # Search for the call site anywhere in the file.
+        call_idx = js.find("_wireDecisionPackPreviewButton()")
+        assert call_idx > 0
+        # The call site must not be the function definition line.
+        assert call_idx != def_idx
+
+
+class TestShortlistDecisionPackPreviewHtml:
+    """Round 96: verify index.html has preview button + file input + status span."""
+
+    def test_index_has_preview_button(self):
+        content = _read_index()
+        assert 'id="scout-preview-decision-pack"' in content
+
+    def test_index_preview_button_has_i18n_attribute(self):
+        content = _read_index()
+        idx = content.find('id="scout-preview-decision-pack"')
+        assert idx > 0
+        snippet = content[max(0, idx - 200) : idx + 200]
+        assert 'data-i18n="shortlist_decision_pack_preview"' in snippet
+
+    def test_index_has_preview_file_input(self):
+        content = _read_index()
+        assert 'id="scout-decision-pack-preview-file"' in content
+
+    def test_index_preview_file_input_accepts_json(self):
+        content = _read_index()
+        idx = content.find('id="scout-decision-pack-preview-file"')
+        assert idx > 0
+        snippet = content[idx : idx + 200]
+        assert 'accept="application/json,.json"' in snippet
+
+    def test_index_preview_file_input_is_hidden(self):
+        content = _read_index()
+        idx = content.find('id="scout-decision-pack-preview-file"')
+        assert idx > 0
+        snippet = content[idx : idx + 200]
+        assert "hidden" in snippet
+
+    def test_index_has_preview_status_span(self):
+        content = _read_index()
+        assert 'id="scout-decision-pack-preview-status"' in content
+
+    def test_index_preview_status_has_aria_live(self):
+        content = _read_index()
+        idx = content.find('id="scout-decision-pack-preview-status"')
+        assert idx > 0
+        snippet = content[idx : idx + 200]
+        assert 'aria-live="polite"' in snippet
+
+
+class TestShortlistDecisionPackMigrationI18n:
+    """Round 96: verify i18n keys for migration + preview."""
+
+    _MIGRATED_KEY = "shortlist_decision_pack_migrated"
+    _PREVIEW_KEY = "shortlist_decision_pack_preview"
+    _PREVIEW_TITLE_KEY = "shortlist_decision_pack_preview_title"
+    _PREVIEW_OK_KEY = "shortlist_decision_pack_preview_ok"
+    _PREVIEW_EMPTY_KEY = "shortlist_decision_pack_preview_empty"
+
+    def test_migrated_key_present_zh(self):
+        js = _read_app_js()
+        assert self._MIGRATED_KEY + ":" in js
+
+    def test_migrated_key_present_en(self):
+        js = _read_app_js()
+        # The en block is after the zh block; both must contain the key.
+        count = js.count(self._MIGRATED_KEY + ":")
+        assert count >= 2, f"Expected >= 2 occurrences of {self._MIGRATED_KEY}, got {count}"
+
+    def test_migrated_key_has_from_placeholder(self):
+        js = _read_app_js()
+        idx = js.find(self._MIGRATED_KEY + ":")
+        assert idx > 0
+        line_end = js.find(",\n", idx)
+        assert line_end > 0
+        line = js[idx : line_end]
+        assert "{from}" in line
+
+    def test_preview_key_present_zh(self):
+        js = _read_app_js()
+        count = js.count(self._PREVIEW_KEY + ":")
+        assert count >= 2
+
+    def test_preview_title_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._PREVIEW_TITLE_KEY + ":")
+        assert count >= 2
+
+    def test_preview_ok_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._PREVIEW_OK_KEY + ":")
+        assert count >= 2
+
+    def test_preview_ok_key_has_placeholders(self):
+        """preview_ok must contain all 7 placeholders."""
+        js = _read_app_js()
+        idx = js.find(self._PREVIEW_OK_KEY + ":")
+        assert idx > 0
+        line_end = js.find(",\n", idx)
+        assert line_end > 0
+        line = js[idx : line_end]
+        placeholders = (
+            "{n}", "{added}", "{merged}",
+            "{wn}", "{w_added}", "{w_merged}", "{prov}",
+        )
+        for placeholder in placeholders:
+            assert placeholder in line, (
+                f"Missing placeholder {placeholder} in preview_ok"
+            )
+
+    def test_preview_empty_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._PREVIEW_EMPTY_KEY + ":")
+        assert count >= 2
 
