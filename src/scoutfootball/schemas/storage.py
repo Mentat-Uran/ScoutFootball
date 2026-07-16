@@ -8,6 +8,114 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class SourceLicense(BaseModel):
+    """License and attribution metadata for a data source.
+
+    Records what can be done with the data, how it must be attributed,
+    and whether it can be redistributed or exported.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    source_name: str
+    license_name: str
+    attribution_required: bool = True
+    redistribution_allowed: bool = False
+    commercial_use_allowed: bool = False
+    retention_policy_days: int | None = None
+    deletion_strategy: str = ""
+    source_url: str = ""
+    notes: str = ""
+
+
+class SnapshotInfo(BaseModel):
+    """Snapshot metadata for a persisted dataset.
+
+    Every dataset write carries snapshot info so downstream consumers
+    know exactly which version of the source produced the output.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    snapshot_id: str
+    as_of: datetime
+    source_sha256: str = Field(default="", min_length=0, max_length=64)
+    parser_version: str = ""
+    record_count: int = Field(default=0, ge=0)
+    generated_at: datetime | None = None
+
+
+class LineageEntry(BaseModel):
+    """One edge in the data lineage graph.
+
+    Records which upstream datasets and code version produced a
+    downstream artifact. Lineage is conservative: missing upstream
+    info is marked as not_recorded rather than guessed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    upstream_id: str
+    upstream_layer: str
+    downstream_id: str
+    downstream_layer: str
+    transform: str = ""
+    transform_version: str = ""
+    recorded_at: datetime | None = None
+    status: str = "recorded"
+
+
+class CoverageInfo(BaseModel):
+    """Data coverage summary for a dataset.
+
+    Describes which competitions, seasons, teams or time ranges a
+    dataset covers, so consumers can assess representativeness.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    competition_count: int = Field(default=0, ge=0)
+    season_count: int = Field(default=0, ge=0)
+    team_count: int = Field(default=0, ge=0)
+    player_count: int = Field(default=0, ge=0)
+    match_count: int = Field(default=0, ge=0)
+    date_range_start: datetime | None = None
+    date_range_end: datetime | None = None
+    notes: str = ""
+
+
+class DataContract(BaseModel):
+    """Complete data contract for one persisted artifact.
+
+    Combines schema, source license, snapshot info, lineage and
+    coverage into a single machine-readable record.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    artifact_id: str
+    layer: str
+    purpose: str
+    status: str = "delivered"
+    license: SourceLicense | None = None
+    snapshot: SnapshotInfo | None = None
+    lineage: tuple[LineageEntry, ...] = Field(default_factory=tuple)
+    coverage: CoverageInfo | None = None
+    primary_keys: tuple[str, ...] = Field(default_factory=tuple)
+    columns: tuple[ColumnDefinition, ...] = Field(default_factory=tuple)
+    recorded: bool = True
+    recorded_note: str = ""
+
+    def validate_columns(self, columns: Iterable[str]) -> None:
+        observed = set(columns)
+        missing = tuple(c.name for c in self.columns if c.name not in observed)
+        if missing:
+            missing_text = ", ".join(missing)
+            raise ValueError(
+                f"{self.artifact_id} is missing required columns: {missing_text}"
+            )
+
+
 class ColumnDefinition(BaseModel):
     """Describes one table column in the local analytical lakehouse."""
 
@@ -250,3 +358,34 @@ def build_core_table_definitions() -> tuple[TableDefinition, ...]:
             ),
         ),
     )
+
+
+class DataContractRegistry(BaseModel):
+    """Machine-readable registry of all data contracts.
+
+    Central catalog of all persisted artifacts with their schema,
+    license, snapshot, lineage and coverage metadata. Serves as the
+    single source of truth for data provenance.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    generated_at: str
+    package_version: str = ""
+    layers: tuple[str, ...] = ()
+    contracts: tuple[DataContract, ...] = Field(default_factory=tuple)
+
+    def by_layer(self, layer: str) -> tuple[DataContract, ...]:
+        return tuple(c for c in self.contracts if c.layer == layer)
+
+    def count_by_status(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for c in self.contracts:
+            counts[c.status] = counts.get(c.status, 0) + 1
+        return counts
+
+    def count_by_layer(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for c in self.contracts:
+            counts[c.layer] = counts.get(c.layer, 0) + 1
+        return counts
