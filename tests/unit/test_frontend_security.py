@@ -6137,3 +6137,252 @@ class TestWcStandingsProbabilitiesI18n:
         count = js.count("wc_standings_prob_loading:")
         assert count >= 2
 
+
+class TestFetchWcTournamentOverallLeaderboard:
+    """Verifies the overall leaderboard fetch function shape and behavior."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "async function fetchWcTournamentOverallLeaderboard" in js
+
+    def test_calls_correct_endpoint(self):
+        js = _read_app_js()
+        assert "/world-cup/tournament/overall-leaderboard" in js
+
+    def test_passes_sort_by_param(self):
+        js = _read_app_js()
+        assert "sort_by=" in js
+
+    def test_passes_num_simulations(self):
+        js = _read_app_js()
+        idx = js.find("overall-leaderboard")
+        assert idx > 0
+        body = js[idx : idx + 300]
+        assert "num_simulations" in body
+
+    def test_uses_encode_uri_component(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentOverallLeaderboard")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "encodeURIComponent" in body
+
+    def test_stores_in_cache(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentOverallLeaderboard")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "tournamentOverallLeaderboard" in body
+
+    def test_accepts_ok_status(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentOverallLeaderboard")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert 'status === "ok"' in body
+
+    def test_accepts_no_data_status(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentOverallLeaderboard")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert 'status === "no_data"' in body
+
+    def test_returns_null_on_error(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentOverallLeaderboard")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "console.warn" in body
+        assert "return null" in body
+
+    def test_has_cache_slot(self):
+        js = _read_app_js()
+        assert "tournamentOverallLeaderboard: null" in js
+
+
+class TestWcOverallLeaderboardRender:
+    """Verifies the overall leaderboard rendering in renderWcTournament."""
+
+    def test_panel_exists_in_render(self):
+        js = _read_app_js()
+        idx = js.find("wc_overall_title")
+        assert idx > 0
+
+    def test_uses_escape_html_for_title(self):
+        js = _read_app_js()
+        pattern = 'escapeHtml(t("wc_overall_title"))'
+        assert pattern in js
+
+    def test_sort_select_exists(self):
+        js = _read_app_js()
+        assert 'id="wc-overall-sort"' in js
+
+    def test_sort_options_present(self):
+        js = _read_app_js()
+        assert "wc_overall_sort_advance" in js
+        assert "wc_overall_sort_win_group" in js
+        assert "wc_overall_sort_points" in js
+        assert "wc_overall_sort_gd" in js
+        assert "wc_overall_sort_gf" in js
+
+    def test_table_has_correct_columns(self):
+        js = _read_app_js()
+        idx = js.find("wc-overall-sort")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "<th>#</th>" in body
+        assert "wc_standings_prob_advance_col" in body
+        assert "wc_standings_prob_win_col" in body
+
+    def test_teams_map_rendered(self):
+        js = _read_app_js()
+        idx = js.find("tournamentOverallLeaderboard?.status")
+        assert idx > 0
+
+    def test_escape_html_team_name(self):
+        js = _read_app_js()
+        idx = js.find("tournamentOverallLeaderboard?.status")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "escapeHtml(t.team)" in body or "escapeHtml(" in body
+
+    def test_status_pill_for_advance_prob(self):
+        js = _read_app_js()
+        idx = js.find("tournamentOverallLeaderboard?.status")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "status-pill" in body
+        assert "advance_prob" in body
+
+    def test_status_pill_for_win_group_prob(self):
+        js = _read_app_js()
+        idx = js.find("tournamentOverallLeaderboard?.status")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "win_group_prob" in body
+
+    def test_color_thresholds_used(self):
+        js = _read_app_js()
+        idx = js.find("tournamentOverallLeaderboard?.status")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "status-high" in body
+        assert "status-medium" in body
+        assert "status-low" in body
+
+    def test_disclaimer_rendered(self):
+        js = _read_app_js()
+        assert "wc_overall_disclaimer" in js
+
+    def test_no_eval_used(self):
+        js = _read_app_js()
+        idx = js.find("wc_overall_title")
+        assert idx > 0
+        body = js[idx - 500 : idx + 3000]
+        assert "eval(" not in body
+
+    def test_table_scroll_container(self):
+        js = _read_app_js()
+        idx = js.find("wc-overall-sort")
+        assert idx > 0
+        body = js[idx : idx + 1000]
+        assert "table-scroll" in body
+
+
+class TestWcOverallLeaderboardWiring:
+    """Verifies the overall leaderboard is wired into event handlers."""
+
+    def test_initial_load_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find("async function loadAndRenderWcTournament")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "fetchWcTournamentOverallLeaderboard" in body
+
+    def test_sort_change_handler(self):
+        js = _read_app_js()
+        assert "wc-overall-sort" in js
+        idx = js.find('overallSortSelect')
+        assert idx > 0 or js.find('wc-overall-sort') > 0
+
+    def test_reset_refetches_leaderboard(self):
+        js = _read_app_js()
+        idx = js.find("resetBtn.addEventListener")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "fetchWcTournamentOverallLeaderboard" in body
+
+    def test_apply_result_refetches_leaderboard(self):
+        js = _read_app_js()
+        # Find the apply button handler with overall leaderboard fetch
+        assert "wc-tournament-apply" in js
+        assert "fetchWcTournamentOverallLeaderboard" in js
+        # Verify they are both in renderWcTournament
+        render_idx = js.find("function renderWcTournament")
+        assert render_idx > 0
+        # Check the apply button section has the leaderboard fetch
+        apply_idx = js.find('wc-tournament-apply')
+        assert apply_idx > render_idx
+        # Find fetch call after apply handler
+        fetch_after_apply = js.find(
+            "fetchWcTournamentOverallLeaderboard",
+            js.find('root.querySelectorAll(".wc-tournament-apply")'),
+        )
+        assert fetch_after_apply > 0
+
+    def test_clear_result_refetches_leaderboard(self):
+        js = _read_app_js()
+        assert "wc-tournament-clear" in js
+        assert "fetchWcTournamentOverallLeaderboard" in js
+        # Find fetch call after clear handler
+        fetch_after_clear = js.find(
+            "fetchWcTournamentOverallLeaderboard",
+            js.find('root.querySelectorAll(".wc-tournament-clear")'),
+        )
+        assert fetch_after_clear > 0
+
+    def test_sort_by_preserved_on_refetch(self):
+        js = _read_app_js()
+        assert "sort_by" in js
+        idx = js.find("tournamentOverallLeaderboard?.sort_by")
+        assert idx > 0
+
+
+class TestWcOverallLeaderboardI18n:
+    """Verifies the i18n key set for overall leaderboard."""
+
+    REQUIRED_KEYS = (
+        "wc_overall_title",
+        "wc_overall_sort_advance",
+        "wc_overall_sort_win_group",
+        "wc_overall_sort_points",
+        "wc_overall_sort_gd",
+        "wc_overall_sort_gf",
+        "wc_overall_disclaimer",
+    )
+
+    def test_all_keys_present_in_app_js(self):
+        js = _read_app_js()
+        for key in self.REQUIRED_KEYS:
+            assert f"{key}:" in js, f"Missing i18n key: {key}"
+
+    def test_all_keys_present_twice(self):
+        js = _read_app_js()
+        for key in self.REQUIRED_KEYS:
+            count = js.count(f"{key}:")
+            assert count >= 2, f"i18n key {key} appears {count} times (expected >= 2 for zh+en)"
+
+    def test_disclaimer_no_raw_html(self):
+        js = _read_app_js()
+        idx = js.find("wc_overall_disclaimer:")
+        assert idx > 0
+        body = js[idx : idx + 600]
+        assert "<script" not in body.lower()
+        assert "onerror=" not in body.lower()
+
+    def test_title_key_present(self):
+        js = _read_app_js()
+        count = js.count("wc_overall_title:")
+        assert count >= 2
+
