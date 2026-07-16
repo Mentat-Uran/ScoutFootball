@@ -249,6 +249,7 @@ const i18n = {
         shortlist_decision_pack_import_invalid: "决策包格式无效：{reason}",
         shortlist_decision_pack_import_read_fail: "读取文件失败",
         shortlist_decision_pack_import_provenance: "（合并 {provenance} 条来源日志）",
+        shortlist_decision_pack_import_watchlist: "（观察名单 {n} 名：{added} 新增，{merged} 合并）",
         shortlist_provenance_log_title: "来源审计日志",
         shortlist_provenance_empty: "暂无来源事件",
         shortlist_provenance_count: "{n} 条来源事件",
@@ -1407,6 +1408,7 @@ const i18n = {
         shortlist_decision_pack_import_invalid: "Invalid decision pack format: {reason}",
         shortlist_decision_pack_import_read_fail: "Failed to read file",
         shortlist_decision_pack_import_provenance: "({provenance} provenance log entries merged)",
+        shortlist_decision_pack_import_watchlist: "(watchlist {n}: {added} added, {merged} merged)",
         shortlist_provenance_log_title: "Provenance Log",
         shortlist_provenance_empty: "No provenance events recorded",
         shortlist_provenance_count: "{n} provenance events",
@@ -24226,14 +24228,28 @@ function buildShortlistDecisionPack() {
             || Number(right.rating || 0) - Number(left.rating || 0)
             || left.player.localeCompare(right.player)
         ));
+    const watchlistPlayers = getPlayerWatchlist().map((entry) => {
+        const codes = _entryReasonCodes(entry);
+        return {
+            player_id: entry.key || "",
+            player: entry.name || "",
+            team: entry.team || "",
+            position: entry.position || "",
+            rating: entry.rating ?? null,
+            reason_code: entry.reason_code || codes[0] || "",
+            reason_codes: codes,
+        };
+    });
     return {
         schema: "scoutfootball.shortlist-decision-pack",
-        version: "1.1.0",
-        status: players.length ? "ok" : "empty",
+        version: "1.2.0",
+        status: players.length || watchlistPlayers.length ? "ok" : "empty",
         exported_at: new Date().toISOString(),
         storage_scope: "browser-local-download",
         player_count: players.length,
         players,
+        watchlist_player_count: watchlistPlayers.length,
+        watchlist_players: watchlistPlayers,
         provenance_log: _shortlistProvenanceLog.map((entry) => ({
             timestamp: String(entry.timestamp || ""),
             player_key: String(entry.player_key || ""),
@@ -24249,6 +24265,7 @@ function buildShortlistDecisionPack() {
             "This export is not a server-side audit record, transfer instruction, or cross-device sync artifact.",
             "Ratings and confidence reflect the loaded local or API data snapshot and may have incomplete coverage.",
             "Provenance log is a browser-local audit trail of source-code merge/remove events; it is not a server-side audit record.",
+            "Watchlist entries are browser-local tracking state without dossier fields; they carry reason_codes for source attribution.",
         ],
     };
 }
@@ -24296,6 +24313,16 @@ function exportShortlistDecisionPackCSV() {
             (entry.resulting_codes || []).join("|"),
         ]),
         [],
+        ["# Watchlist"],
+        ["watchlist_player_count", pack.watchlist_player_count || 0],
+        [],
+        ["player_id", "player", "team", "position", "rating", "reason_code", "reason_codes"],
+        ...(pack.watchlist_players || []).map((player) => [
+            player.player_id, player.player, player.team, player.position,
+            player.rating ?? "", player.reason_code,
+            (player.reason_codes || []).join("|"),
+        ]),
+        [],
         ["# Limitations"],
         ...pack.limitations.map((limitation) => [limitation]),
         [],
@@ -24315,7 +24342,7 @@ function exportShortlistDecisionPackCSV() {
 // restores the dossier fields (priority/recommendation/target_role/rationale)
 // via the existing updateShortlistDossier helper. Does NOT overwrite existing
 // entries — only adds new ones or merges reason codes into existing ones.
-const _DECISION_PACK_SUPPORTED_VERSIONS = ["1.0.0", "1.1.0"];
+const _DECISION_PACK_SUPPORTED_VERSIONS = ["1.0.0", "1.1.0", "1.2.0"];
 const _DECISION_PACK_SCHEMA = "scoutfootball.shortlist-decision-pack";
 
 function _validateShortlistDecisionPack(pack) {
@@ -24330,6 +24357,11 @@ function _validateShortlistDecisionPack(pack) {
     }
     if (!Array.isArray(pack.players)) {
         return { ok: false, reason: "players_not_array" };
+    }
+    // Round 95: v1.2.0 packs may carry a watchlist_players array. When present
+    // it must be an array — absent/omitted is fine for backward compat.
+    if (pack.watchlist_players !== undefined && !Array.isArray(pack.watchlist_players)) {
+        return { ok: false, reason: "watchlist_players_not_array" };
     }
     return { ok: true };
 }
@@ -24430,12 +24462,49 @@ function _mergeDecisionPackPlayer(list, player) {
     return { kind: "added", entry, mergedCount: 0 };
 }
 
+// Round 95: watchlist merge helper — mirror of _mergeDecisionPackPlayer but
+// operates on the watchlist (no dossier fields). Dedup by key, accumulate
+// reason_codes without overwriting existing team/position/rating, push a new
+// entry when no match is found. Returns { kind, entry, mergedCount }.
+function _mergeDecisionPackWatchlistPlayer(list, player) {
+    const idx = list.findIndex((p) => p.key === player.key);
+    if (idx >= 0) {
+        const entry = _normalizeEntryReasonCodes(list[idx]);
+        let mergedCount = 0;
+        for (const code of player.reason_codes) {
+            if (!entry.reason_codes.includes(code)) {
+                entry.reason_codes.push(code);
+                mergedCount++;
+            }
+        }
+        entry.reason_code = entry.reason_codes[0] || "";
+        if (player.team && !entry.team) entry.team = player.team;
+        if (player.position && !entry.position) entry.position = player.position;
+        if (player.rating != null && entry.rating == null) entry.rating = player.rating;
+        return { kind: "merged", entry, mergedCount };
+    }
+    const entry = {
+        key: player.key,
+        name: player.name,
+        team: player.team,
+        position: player.position,
+        rating: player.rating,
+        reason_codes: player.reason_codes.slice(),
+        reason_code: player.reason_codes[0] || "",
+    };
+    list.push(entry);
+    return { kind: "added", entry, mergedCount: 0 };
+}
+
 function importShortlistDecisionPackJSON(pack) {
     const validation = _validateShortlistDecisionPack(pack);
     if (!validation.ok) {
         return { ok: false, error: "invalid", reason: validation.reason };
     }
-    if (pack.players.length === 0) {
+    // Round 95: a pack is "empty" only when BOTH players and watchlist_players
+    // are absent/empty. v1.2.0 packs may carry only watchlist entries.
+    const watchlistRaw = Array.isArray(pack.watchlist_players) ? pack.watchlist_players : [];
+    if (pack.players.length === 0 && watchlistRaw.length === 0) {
         return { ok: false, error: "empty" };
     }
     const list = getPlayerShortlist();
@@ -24450,7 +24519,7 @@ function importShortlistDecisionPackJSON(pack) {
         else if (result.kind === "merged" && result.mergedCount > 0) mergedCount++;
         dossierUpdates.push(player);
     }
-    savePlayerShortlist(list);
+    if (pack.players.length > 0) savePlayerShortlist(list);
     // Restore dossier fields via the existing helper so validation + persistence fire.
     for (const player of dossierUpdates) {
         if (["urgent", "standard", "monitor"].includes(player.priority)) {
@@ -24466,6 +24535,23 @@ function importShortlistDecisionPackJSON(pack) {
             updateShortlistDossier(player.key, player.name, "rationale", player.rationale);
         }
     }
+    // Round 95: merge watchlist players (v1.2.0+). Watchlist entries have no
+    // dossier fields, so we only accumulate reason_codes + fill missing
+    // team/position/rating. The merge respects the same accumulation
+    // semantics as togglePlayerWatchlist.
+    let watchlistAdded = 0;
+    let watchlistMerged = 0;
+    if (watchlistRaw.length > 0) {
+        const watchlist = getPlayerWatchlist();
+        for (const raw of watchlistRaw) {
+            const player = _normalizeDecisionPackPlayer(raw);
+            if (!player) continue;
+            const result = _mergeDecisionPackWatchlistPlayer(watchlist, player);
+            if (result.kind === "added") watchlistAdded++;
+            else if (result.kind === "merged" && result.mergedCount > 0) watchlistMerged++;
+        }
+        savePlayerWatchlist(watchlist);
+    }
     const provenanceMerged = _mergeProvenanceLogEntries(pack.provenance_log || []);
     return {
         ok: true,
@@ -24473,6 +24559,9 @@ function importShortlistDecisionPackJSON(pack) {
         merged: mergedCount,
         total: pack.players.length,
         provenance_merged: provenanceMerged,
+        watchlist_added: watchlistAdded,
+        watchlist_merged: watchlistMerged,
+        watchlist_total: watchlistRaw.length,
     };
 }
 
@@ -24499,16 +24588,24 @@ function _handleDecisionPackFileLoad(event) {
         }
         const result = importShortlistDecisionPackJSON(pack);
         if (result.ok) {
-            if (result.total === 0 || (result.added === 0 && result.merged === 0)) {
+            const totalShortlist = result.added + result.merged;
+            const totalWatchlist = result.watchlist_added + result.watchlist_merged;
+            if (totalShortlist === 0 && totalWatchlist === 0) {
                 _setDecisionPackImportStatus(t("shortlist_decision_pack_import_empty"));
             } else {
                 let msg = t("shortlist_decision_pack_import_ok")
-                    .replace("{n}", String(result.added + result.merged))
+                    .replace("{n}", String(totalShortlist))
                     .replace("{merged}", String(result.merged))
                     .replace("{added}", String(result.added));
                 if (result.provenance_merged > 0) {
                     msg += " " + t("shortlist_decision_pack_import_provenance")
                         .replace("{provenance}", String(result.provenance_merged));
+                }
+                if (totalWatchlist > 0) {
+                    msg += " " + t("shortlist_decision_pack_import_watchlist")
+                        .replace("{n}", String(totalWatchlist))
+                        .replace("{added}", String(result.watchlist_added))
+                        .replace("{merged}", String(result.watchlist_merged));
                 }
                 _setDecisionPackImportStatus(msg);
             }
