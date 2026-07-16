@@ -1,5 +1,5 @@
 {
-  "total_rows": 8141,
+  "total_rows": 26678,
   "columns": [
     {
       "name": "player_id",
@@ -53,13 +53,13 @@
       "name": "npxg",
       "dtype": "object",
       "source": "player_stats",
-      "missing_rate": 1.0
+      "missing_rate": 0.3052
     },
     {
       "name": "xa",
-      "dtype": "object",
+      "dtype": "float64",
       "source": "player_stats",
-      "missing_rate": 1.0
+      "missing_rate": 0.3052
     },
     {
       "name": "available_flag",
@@ -71,7 +71,7 @@
       "name": "tackles",
       "dtype": "object",
       "source": "player_stats",
-      "missing_rate": 0.2232
+      "missing_rate": 0.0681
     },
     {
       "name": "passes",
@@ -105,7 +105,7 @@
     },
     {
       "name": "competition_id",
-      "dtype": "string",
+      "dtype": "object",
       "source": "category",
       "missing_rate": 0.0
     },
@@ -143,61 +143,61 @@
       "name": "tackles_won",
       "dtype": "Int64",
       "source": "player_stats",
-      "missing_rate": 0.0002
+      "missing_rate": 0.5283
     },
     {
       "name": "interceptions",
       "dtype": "Int64",
       "source": "player_stats",
-      "missing_rate": 0.0002
+      "missing_rate": 0.5283
     },
     {
       "name": "fouls_committed",
       "dtype": "Int64",
       "source": "player_stats",
-      "missing_rate": 0.0002
+      "missing_rate": 0.5283
     },
     {
       "name": "fouls_drawn",
       "dtype": "Int64",
       "source": "player_stats",
-      "missing_rate": 0.0002
+      "missing_rate": 0.5283
     },
     {
       "name": "crosses",
       "dtype": "Int64",
       "source": "player_stats",
-      "missing_rate": 0.0002
+      "missing_rate": 0.5283
     },
     {
       "name": "own_goals",
       "dtype": "Int64",
       "source": "player_stats",
-      "missing_rate": 0.0002
+      "missing_rate": 0.5283
     },
     {
       "name": "xt_total",
       "dtype": "float64",
       "source": "player_stats",
-      "missing_rate": 0.9261
+      "missing_rate": 0.9774
     },
     {
       "name": "xt_per_90",
       "dtype": "float64",
       "source": "player_stats",
-      "missing_rate": 0.9261
+      "missing_rate": 0.9774
     },
     {
       "name": "vaep_total",
       "dtype": "float64",
       "source": "player_stats",
-      "missing_rate": 0.7177
+      "missing_rate": 0.9139
     },
     {
       "name": "vaep_per_90",
       "dtype": "float64",
       "source": "player_stats",
-      "missing_rate": 0.7177
+      "missing_rate": 0.9139
     },
     {
       "name": "finishing_raw",
@@ -224,6 +224,12 @@
       "missing_rate": 0.0
     },
     {
+      "name": "understat_source_covered",
+      "dtype": "bool",
+      "source": "source_coverage",
+      "missing_rate": 0.0
+    },
+    {
       "name": "has_expected_metrics",
       "dtype": "bool",
       "source": "derived",
@@ -237,5 +243,5 @@
     }
   ],
   "input_hash": "unknown",
-  "timestamp": "2026-07-12T17:53:16.022391+00:00"
+  "timestamp": "2026-07-16T21:19:59.979539+00:00"
 }
