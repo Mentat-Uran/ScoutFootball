@@ -19717,6 +19717,13 @@ let wcApiData = {
     knockoutScenarios: {},  // team → scenario data from /world-cup/tournament/knockout/scenarios/{team}
     groupStageSimulation: null,  // from /world-cup/tournament/group-simulation
     tournamentExport: null,  // from /world-cup/tournament/export
+    // Round 102 — WC match intelligence additions
+    matchSpotlightCache: {},  // home|away -> player spotlight from /world-cup/match-briefings/{home}/{away}/spotlight
+    teamFormTrendCache: {},  // team -> form trend from /world-cup/teams/{team}/form-trend
+    tournamentKnockoutMatchImpact: null,  // from /world-cup/tournament/knockout/match-impact
+    tournamentTopMatches: null,  // from /world-cup/tournament/top-matches
+    matchSpotlightLoading: new Set(),
+    teamFormTrendLoading: new Set(),
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -20219,6 +20226,84 @@ async function fetchWcTournamentMatchImpact(group) {
     return null;
 }
 
+// Round 102 — fetch helpers for WC match intelligence endpoints.
+async function fetchWcMatchPlayerSpotlight(home, away, topN = 5) {
+    if (!home || !away) return null;
+    const cacheKey = `${home}|${away}`;
+    if (wcApiData.matchSpotlightCache[cacheKey]) return wcApiData.matchSpotlightCache[cacheKey];
+    wcApiData.matchSpotlightLoading.add(cacheKey);
+    try {
+        const data = await fetchJson(
+            `/world-cup/match-briefings/${encodeURIComponent(home)}/${encodeURIComponent(away)}/spotlight?top_n=${topN}`,
+            { fetchOpts: { signal: AbortSignal.timeout(60000) } },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.matchSpotlightCache[cacheKey] = data;
+            wcApiData.apiOnline = true;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Spotlight] fetch failed:", e.message);
+    }
+    wcApiData.matchSpotlightCache[cacheKey] = null;
+    return null;
+}
+
+async function fetchWcTeamFormTrend(team, lastN = 6) {
+    if (!team) return null;
+    if (wcApiData.teamFormTrendCache[team]) return wcApiData.teamFormTrendCache[team];
+    wcApiData.teamFormTrendLoading.add(team);
+    try {
+        const data = await fetchJson(
+            `/world-cup/teams/${encodeURIComponent(team)}/form-trend?last_n=${lastN}`,
+            { fetchOpts: { signal: AbortSignal.timeout(60000) } },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.teamFormTrendCache[team] = data;
+            wcApiData.apiOnline = true;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Form Trend] fetch failed:", e.message);
+    }
+    wcApiData.teamFormTrendCache[team] = null;
+    return null;
+}
+
+async function fetchWcTournamentKnockoutMatchImpact(numSimulations = 5000, topN = 10) {
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/knockout/match-impact?num_simulations=${numSimulations}&top_n=${topN}`,
+            { fetchOpts: { signal: AbortSignal.timeout(120000) } },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentKnockoutMatchImpact = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] KO match impact unavailable:", e.message);
+    }
+    wcApiData.tournamentKnockoutMatchImpact = null;
+    return null;
+}
+
+async function fetchWcTournamentTopMatches(groupTopN = 5, knockoutTopN = 5, numSimulations = 1000) {
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/top-matches?group_top_n=${groupTopN}&knockout_top_n=${knockoutTopN}&num_simulations=${numSimulations}`,
+            { fetchOpts: { signal: AbortSignal.timeout(120000) } },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentTopMatches = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] top matches unavailable:", e.message);
+    }
+    wcApiData.tournamentTopMatches = null;
+    return null;
+}
+
 function exportWcQualificationImpactJSON(impact) {
     if (impact?.schema !== "scoutfootball.world-cup-qualification-impact") return;
     const payload = {
@@ -20341,9 +20426,63 @@ async function loadAndRenderWcTournament() {
         fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentOverallLeaderboard("advance_prob"),
         fetchWcTournamentMatchImpact(),
+        fetchWcTournamentTopMatches(5, 5, 1000),
     ]);
     wcApiData.tournamentLoading = false;
     renderWcTournament();
+}
+
+function _renderWcKoImpactBody(z) {
+    const body = document.getElementById("wc-ko-impact-body");
+    if (!body) return;
+    const data = wcApiData.tournamentKnockoutMatchImpact;
+    if (!data) {
+        body.innerHTML = `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${z ? "暂无数据" : "No data"}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        body.innerHTML = `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${escapeHtml(data.disclaimer || (z ? "暂无待处理淘汰赛比赛" : "No pending knockout matches"))}</p>`;
+        return;
+    }
+    const matches = data.matches || [];
+    if (matches.length === 0) {
+        body.innerHTML = `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${z ? "暂无待处理淘汰赛比赛" : "No pending knockout matches"}</p>`;
+        return;
+    }
+    body.innerHTML = `<table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>${z ? "轮次" : "Round"}</th>
+                <th>${z ? "比赛" : "Match"}</th>
+                <th>${z ? "夺冠概率波动" : "Championship Swing"}</th>
+                <th>${z ? "最大影响球队" : "Top Affected"}</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${matches.map((m, i) => {
+                const swingVal = m.max_swing != null ? m.max_swing : 0;
+                const impactCls = swingVal >= 0.15 ? "status-high" : swingVal >= 0.05 ? "status-medium" : "status-low";
+                const swingPct = (swingVal * 100).toFixed(1) + "%";
+                const topTeam = m.max_swing_team || (m.per_team && m.per_team[0] && m.per_team[0].team) || "—";
+                const topSwing = m.max_swing != null
+                    ? (m.max_swing * 100).toFixed(1) + "%"
+                    : (m.per_team && m.per_team[0] ? (m.per_team[0].swing * 100).toFixed(1) + "%" : "—");
+                const totalImpactStr = (m.total_impact || 0).toFixed(2);
+                const dateStr = m.date ? `<br><span style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(m.date)}</span>` : "";
+                return `<tr>
+                    <td><span class="status-pill" style="font-size:0.6rem">${i + 1}</span></td>
+                    <td><span class="status-pill status-medium" style="font-size:0.6rem">${escapeHtml(m.round || m.round_label || "—")}</span></td>
+                    <td><strong>${escapeHtml(m.home || "—")}</strong> vs <strong>${escapeHtml(m.away || "—")}</strong>${dateStr}</td>
+                    <td><span class="status-pill ${impactCls}" style="font-size:0.65rem">${swingPct}</span> <span style="font-size:0.6rem;color:var(--text-muted)">(Σ ${totalImpactStr})</span></td>
+                    <td>${escapeHtml(topTeam)} <span style="font-size:0.65rem;color:var(--text-muted)">(${topSwing})</span></td>
+                </tr>`;
+            }).join("")}
+        </tbody>
+    </table>
+    <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+        ${z ? "每场比赛对所有球队夺冠概率的最大波动；蒙特卡洛模拟。" : "Max championship probability swing per match; Monte-Carlo simulated."}
+    </p>`;
 }
 
 function renderWcTournament() {
@@ -20682,6 +20821,80 @@ function renderWcTournament() {
 
         <article class="liquid-panel compact" style="margin-bottom:1rem">
             <div class="panel-head">
+                <h3>${z ? "重点比赛排行" : "Top Matches to Watch"}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <span style="font-size:0.7rem;color:var(--text-muted)">${z ? "跨阶段统一榜单" : "cross-stage unified ranking"}</span>
+                    <button class="text-button" id="wc-top-matches-refresh" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">↻</button>
+                </div>
+            </div>
+            <div class="table-scroll" style="max-height:380px;overflow-y:auto">
+                ${(() => {
+                    const tm = wcApiData.tournamentTopMatches;
+                    if (!tm) {
+                        return `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${z ? "加载中..." : "Loading..."}</p>`;
+                    }
+                    if (tm.status === "no_data") {
+                        return `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${escapeHtml(tm.disclaimer || (z ? "暂无数据" : "No data"))}</p>`;
+                    }
+                    if (!tm.matches || tm.matches.length === 0) {
+                        return `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${z ? "暂无重点比赛" : "No top matches"}</p>`;
+                    }
+                    return `<table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>${z ? "阶段" : "Stage"}</th>
+                                <th>${z ? "比赛" : "Match"}</th>
+                                <th>${z ? "小组" : "Group"}</th>
+                                <th>${z ? "总影响" : "Total Impact"}</th>
+                                <th>${z ? "指标" : "Metric"}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tm.matches.map((m, i) => {
+                                const stageLabel = m.stage === "knockout"
+                                    ? (z ? "淘汰赛" : "Knockout")
+                                    : (z ? "小组赛" : "Group");
+                                const stageCls = m.stage === "knockout" ? "status-high" : "status-medium";
+                                const impactCls = m.total_impact >= 1.5 ? "status-high" : m.total_impact >= 0.5 ? "status-medium" : "status-low";
+                                const metricLabel = m.impact_metric === "championship_prob_swing"
+                                    ? (z ? "夺冠概率波动" : "Championship swing")
+                                    : (z ? "出线概率波动" : "Advancement swing");
+                                const roundLabel = m.round_label ? `<span style="font-size:0.6rem;color:var(--text-muted)"> · ${escapeHtml(m.round_label)}</span>` : "";
+                                return `<tr>
+                                    <td><span class="status-pill" style="font-size:0.6rem">${i + 1}</span></td>
+                                    <td><span class="status-pill ${stageCls}" style="font-size:0.6rem">${stageLabel}</span></td>
+                                    <td><strong>${escapeHtml(m.home || "—")}</strong> vs <strong>${escapeHtml(m.away || "—")}</strong>${roundLabel}<br><span style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(m.date || "")} ${m.venue ? "· " + escapeHtml(m.venue) : ""}</span></td>
+                                    <td>${m.group ? `<span class="status-pill" style="font-size:0.6rem">${escapeHtml(m.group)}</span>` : "—"}</td>
+                                    <td><span class="status-pill ${impactCls}" style="font-size:0.65rem">${m.total_impact.toFixed(2)}</span></td>
+                                    <td><span style="font-size:0.65rem;color:var(--text-muted)">${metricLabel}</span></td>
+                                </tr>`;
+                            }).join("")}
+                        </tbody>
+                    </table>`;
+                })()}
+            </div>
+            <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+                ${z ? "基于剩余比赛对各队出线/夺冠概率的影响排序，使用蒙特卡洛模拟。" : "Ranked by impact on each team's advancement/championship probability. Monte-Carlo simulated."}
+            </p>
+        </article>
+
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div class="panel-head">
+                <h3>${z ? "淘汰赛比赛重要性" : "Knockout Match Impact"}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <button class="text-button" id="wc-ko-impact-load" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">${z ? "加载" : "Load"}</button>
+                </div>
+            </div>
+            <div class="table-scroll" style="max-height:380px;overflow-y:auto" id="wc-ko-impact-body">
+                <p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">
+                    ${z ? "点击「加载」计算淘汰赛阶段每场比赛对夺冠概率的影响" : "Click \"Load\" to compute knockout match impact on championship probability"}
+                </p>
+            </div>
+        </article>
+
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div class="panel-head">
                 <h3>${z ? "出线球队" : "Advancing Teams"}</h3>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem" class="wc-advancing-grid">
@@ -20817,6 +21030,36 @@ function renderWcTournament() {
     if (refreshBtn && !refreshBtn.dataset.bound) {
         refreshBtn.dataset.bound = "1";
         refreshBtn.addEventListener("click", () => loadAndRenderWcTournament());
+    }
+
+    // Round 102 — Top Matches refresh button
+    const topMatchesRefresh = document.getElementById("wc-top-matches-refresh");
+    if (topMatchesRefresh && !topMatchesRefresh.dataset.bound) {
+        topMatchesRefresh.dataset.bound = "1";
+        topMatchesRefresh.addEventListener("click", async () => {
+            topMatchesRefresh.disabled = true;
+            await fetchWcTournamentTopMatches(5, 5, 1000);
+            topMatchesRefresh.disabled = false;
+            renderWcTournament();
+        });
+    }
+
+    // Round 102 — KO Match Impact load button (lazy load; expensive simulation)
+    const koImpactLoad = document.getElementById("wc-ko-impact-load");
+    if (koImpactLoad && !koImpactLoad.dataset.bound) {
+        koImpactLoad.dataset.bound = "1";
+        koImpactLoad.addEventListener("click", async () => {
+            koImpactLoad.disabled = true;
+            koImpactLoad.textContent = z ? "计算中..." : "Computing...";
+            await fetchWcTournamentKnockoutMatchImpact(3000, 10);
+            koImpactLoad.disabled = false;
+            koImpactLoad.textContent = z ? "刷新" : "Refresh";
+            _renderWcKoImpactBody(z);
+        });
+        // If data already cached from a prior load, render immediately
+        if (wcApiData.tournamentKnockoutMatchImpact) {
+            _renderWcKoImpactBody(z);
+        }
     }
 
     const resetBtn = document.getElementById("wc-tournament-reset");
@@ -21015,6 +21258,11 @@ function renderWcTournament() {
         koPrintBtn.addEventListener("click", () => {
             window.print();
         });
+    }
+
+    // Round 102 — auto-render KO Match Impact body if cached
+    if (wcApiData.tournamentKnockoutMatchImpact) {
+        _renderWcKoImpactBody(z);
     }
 
     // Auto-render knockout bracket if data is available
@@ -22342,6 +22590,7 @@ async function openWcFixtureBriefing(home, away) {
 }
 
 function renderWcSchedule() {
+    const z = appState.lang === "zh";
     const groupFilter = document.getElementById("wc-group-filter").value;
     const mdFilter = document.getElementById("wc-matchday-filter").value;
 
@@ -22505,6 +22754,152 @@ function renderWcSchedule() {
             await openWcFixtureBriefing(button.dataset.wcHome, button.dataset.wcAway);
         });
     });
+
+    // Round 102 — populate team dropdown for form trend panel
+    const formTrendTeamSelect = document.getElementById("wc-form-trend-team");
+    if (formTrendTeamSelect && !formTrendTeamSelect.dataset.populated) {
+        const teams = wcAllTeams();
+        if (teams.length > 0) {
+            formTrendTeamSelect.innerHTML = teams.map((tm) =>
+                `<option value="${escapeAttr(tm)}">${escapeHtml(tm)}</option>`
+            ).join("");
+            formTrendTeamSelect.dataset.populated = "1";
+        }
+    }
+    const formTrendTitle = document.getElementById("wc-form-trend-title");
+    if (formTrendTitle) {
+        formTrendTitle.textContent = z ? "球队状态趋势" : "Team Form Trend";
+    }
+    const formTrendBtn = document.getElementById("wc-form-trend-btn");
+    if (formTrendBtn && !formTrendBtn.dataset.bound) {
+        formTrendBtn.dataset.bound = "1";
+        formTrendBtn.textContent = z ? "加载" : "Load";
+        formTrendBtn.addEventListener("click", async () => {
+            const team = document.getElementById("wc-form-trend-team").value;
+            if (!team) return;
+            formTrendBtn.disabled = true;
+            formTrendBtn.textContent = z ? "加载中..." : "Loading...";
+            await fetchWcTeamFormTrend(team, 6);
+            formTrendBtn.disabled = false;
+            formTrendBtn.textContent = z ? "刷新" : "Refresh";
+            renderWcFormTrendPanel(team);
+        });
+        // Auto-render if cached
+        const cachedTeam = formTrendTeamSelect.value;
+        if (cachedTeam && wcApiData.teamFormTrendCache[cachedTeam]) {
+            renderWcFormTrendPanel(cachedTeam);
+        }
+    }
+}
+
+// Round 102 — render form trend chart panel.
+function renderWcFormTrendPanel(team) {
+    const panel = document.getElementById("wc-form-trend-panel");
+    if (!panel) return;
+    const z = appState.lang === "zh";
+    const data = wcApiData.teamFormTrendCache[team];
+    if (!data || data.status !== "ok") {
+        const limitations = data?.limitations || [];
+        const disclaimer = limitations.length
+            ? limitations.join(" ")
+            : (z ? "暂无数据" : "No data");
+        panel.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">${escapeHtml(disclaimer)}</p>`;
+        return;
+    }
+    const matches = data.matches || [];
+    const summary = data.summary || {};
+    const formScore = Number(summary.form_score_normalized || 0);
+    const formCls = formScore >= 0.7 ? "status-high" : formScore >= 0.4 ? "status-medium" : "status-low";
+
+    // Build form row W/D/L pills
+    const formPills = matches.map((m) => {
+        const outcome = m.outcome || "";
+        let cls = "status-low";
+        let label = "—";
+        if (outcome === "W" || outcome === "win") { cls = "status-high"; label = "W"; }
+        else if (outcome === "D" || outcome === "draw") { cls = "status-medium"; label = "D"; }
+        else if (outcome === "L" || outcome === "loss") { cls = "status-low"; label = "L"; }
+        const projTag = m.kind === "recorded" ? "" : `<span style="font-size:0.55rem;color:var(--text-muted)">★</span>`;
+        return `<span class="status-pill ${cls}" style="font-size:0.65rem;margin:0.1rem">${label}${projTag}</span>`;
+    }).join("");
+
+    panel.innerHTML = `
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:0.6rem">
+            <div><span style="font-size:0.75rem;color:var(--text-muted)">${z ? "球队" : "Team"}</span><strong style="margin-left:0.4rem">${escapeHtml(team)}</strong></div>
+            <div><span style="font-size:0.75rem;color:var(--text-muted)">${z ? "近 N 场" : "Last N"}</span><strong style="margin-left:0.4rem">${matches.length}</strong></div>
+            <div><span style="font-size:0.75rem;color:var(--text-muted)">${z ? "战绩" : "Record"}</span>
+                <strong style="margin-left:0.4rem">${summary.wins || 0}W-${summary.draws || 0}D-${summary.losses || 0}L</strong></div>
+            <div><span style="font-size:0.75rem;color:var(--text-muted)">${z ? "状态分" : "Form"}</span>
+                <span class="status-pill ${formCls}" style="font-size:0.7rem;margin-left:0.4rem">${(formScore * 100).toFixed(0)}%</span></div>
+            <div style="font-size:0.7rem;color:var(--text-muted)">${z ? "★ = 预测（未录入）" : "★ = projected"}</div>
+        </div>
+        <div style="margin-bottom:0.8rem">${formPills || `<span style="color:var(--text-muted);font-size:0.85rem">${z ? "暂无比赛" : "No matches"}</span>`}</div>
+        <div id="wc-form-trend-chart" class="chart-box" style="height:240px"></div>
+        <div class="table-scroll" style="max-height:280px;margin-top:0.6rem">
+            <table>
+                <thead>
+                    <tr>
+                        <th>${z ? "日期" : "Date"}</th>
+                        <th>${z ? "对手" : "Opponent"}</th>
+                        <th>${z ? "场地" : "Venue"}</th>
+                        <th>${z ? "结果/预测" : "Result/Proj"}</th>
+                        <th>${z ? "进球" : "Goals"}</th>
+                        <th>${z ? "来源" : "Source"}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${matches.map((m) => {
+                        const isHome = m.venue === "home";
+                        const opp = m.opponent;
+                        const venueLabel = isHome ? (z ? "主" : "H") : (z ? "客" : "A");
+                        const teamGoals = Number(m.team_goals || 0);
+                        const oppGoals = Number(m.opponent_goals || 0);
+                        const resultStr = m.kind === "recorded"
+                            ? `${Math.round(teamGoals)}-${Math.round(oppGoals)}`
+                            : `${teamGoals.toFixed(1)}-${oppGoals.toFixed(1)}`;
+                        const outcome = m.outcome || "";
+                        let outcomeCls = "status-low";
+                        if (outcome === "W" || outcome === "win") outcomeCls = "status-high";
+                        else if (outcome === "D" || outcome === "draw") outcomeCls = "status-medium";
+                        return `<tr>
+                            <td>${escapeHtml(m.date || "—")}</td>
+                            <td>${escapeHtml(opp || "—")}</td>
+                            <td><span class="status-pill" style="font-size:0.6rem">${venueLabel}</span></td>
+                            <td><span class="status-pill ${outcomeCls}" style="font-size:0.6rem">${escapeHtml(outcome || "—")}</span> ${escapeHtml(resultStr)}</td>
+                            <td style="font-size:0.7rem">${teamGoals.toFixed(1)} / ${oppGoals.toFixed(1)}</td>
+                            <td style="font-size:0.7rem;color:var(--text-muted)">${m.kind === "recorded" ? (z ? "已录入" : "recorded") : (z ? "预测" : "projected")}</td>
+                        </tr>`;
+                    }).join("") || `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:1rem">${z ? "暂无比赛" : "No matches"}</td></tr>`}
+                </tbody>
+            </table>
+        </div>
+        <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+            ${z ? "状态分综合已录入与预测比赛的胜平负；预测使用世界杯强度模型。" : "Form score blends recorded and projected matches; projections use WC strength model."}
+        </p>
+    `;
+    // Initialize chart after DOM is ready
+    setTimeout(() => {
+        const chartEl = document.getElementById("wc-form-trend-chart");
+        if (chartEl && typeof echarts !== "undefined") {
+            const innerChart = echarts.init(chartEl);
+            const xLabels = matches.map((m, i) => `M${i + 1}`);
+            const teamGoals = matches.map((m) => Number(m.team_goals || 0));
+            const oppGoals = matches.map((m) => Number(m.opponent_goals || 0));
+            innerChart.setOption({
+                animation: false,
+                grid: {left: 50, right: 20, top: 30, bottom: 30},
+                legend: {data: [z ? "本队预期进球" : "Team xG", z ? "对手预期进球" : "Opp xG"], textStyle: {color: chartTextColor(), fontSize: 11}},
+                tooltip: {trigger: "axis"},
+                xAxis: {type: "category", data: xLabels, axisLabel: {color: chartTextColor(), fontSize: 10}},
+                yAxis: {type: "value", axisLabel: {color: chartTextColor(), fontSize: 10}, splitLine: {lineStyle: {color: chartGridColor()}}},
+                series: [
+                    {name: z ? "本队预期进球" : "Team xG", type: "line", smooth: true, data: teamGoals, itemStyle: {color: "#7ca8ff"}},
+                    {name: z ? "对手预期进球" : "Opp xG", type: "line", smooth: true, data: oppGoals, itemStyle: {color: "#ff7c7c"}},
+                ],
+            });
+            innerChart.resize();
+        }
+    }, 50);
 }
 
 function renderWcSquads() {
@@ -22863,6 +23258,7 @@ function renderWcCompare() {
     renderTop([...ratedB], document.getElementById("wc-compare-b-top"));
 
     renderWcMatchPredictionPanel(teamA, teamB);
+    renderWcMatchSpotlightPanel(teamA, teamB);
 }
 
 function renderWcMatchPredictionPanel(teamA, teamB) {
@@ -22981,6 +23377,125 @@ function renderWcMatchPredictionPanel(teamA, teamB) {
     if (exportCsv && briefing?.status === "ok") {
         exportCsv.addEventListener("click", () => exportWcBriefingCSV(briefing));
     }
+}
+
+// Round 102 — Player Spotlight panel for match compare view.
+// Ranks players from both squads by spotlight_score, which blends rating,
+// position weight, confidence, and matchup vs opponent weak spots.
+function renderWcMatchSpotlightPanel(teamA, teamB) {
+    const panel = document.getElementById("wc-match-spotlight-panel");
+    if (!panel) return;
+    const z = appState.lang === "zh";
+    const cacheKey = `${teamA}|${teamB}`;
+    const spotlight = wcApiData.matchSpotlightCache[cacheKey];
+    const isLoading = wcApiData.matchSpotlightLoading.has(cacheKey);
+
+    if (!spotlight && !isLoading) {
+        // Lazy-load on first render of compare view
+        panel.innerHTML = `
+            <article class="liquid-panel compact-panel">
+                <div class="panel-head">
+                    <h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3>
+                    <button class="text-button wc-load-spotlight" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${z ? "加载聚光灯" : "Load Spotlight"}</button>
+                </div>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin:0.5rem 0">
+                    ${z ? "基于评分、位置权重、信心和对手弱点的球员影响力排序。" : "Ranks players by rating, position weight, confidence, and opponent weakness."}
+                </p>
+            </article>`;
+        const loadBtn = panel.querySelector(".wc-load-spotlight");
+        if (loadBtn) {
+            loadBtn.addEventListener("click", async () => {
+                loadBtn.disabled = true;
+                loadBtn.textContent = z ? "加载中..." : "Loading...";
+                await fetchWcMatchPlayerSpotlight(teamA, teamB, 5);
+                renderWcMatchSpotlightPanel(teamA, teamB);
+            });
+        }
+        return;
+    }
+
+    if (isLoading && !spotlight) {
+        panel.innerHTML = `
+            <article class="liquid-panel compact-panel">
+                <div class="panel-head"><h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3></div>
+                <p style="color:var(--text-muted);padding:0.8rem 0">${z ? "加载中..." : "Loading..."}</p>
+            </article>`;
+        return;
+    }
+
+    if (!spotlight || spotlight.status !== "ok") {
+        const limitations = spotlight?.limitations || [];
+        const disclaimer = limitations.length
+            ? limitations.join(" ")
+            : t("wc_no_data");
+        panel.innerHTML = `
+            <article class="liquid-panel compact-panel">
+                <div class="panel-head"><h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3></div>
+                <p style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(disclaimer)}</p>
+            </article>`;
+        return;
+    }
+
+    const players = spotlight.players || [];
+    if (players.length === 0) {
+        panel.innerHTML = `
+            <article class="liquid-panel compact-panel">
+                <div class="panel-head"><h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3></div>
+                <p style="color:var(--text-muted);padding:0.8rem 0">${z ? "暂无评分球员" : "No rated players"}</p>
+            </article>`;
+        return;
+    }
+
+    const maxScore = Math.max(...players.map((p) => p.spotlight_score || 0), 0.0001);
+    panel.innerHTML = `
+        <article class="liquid-panel compact-panel">
+            <div class="panel-head">
+                <h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3>
+                <span class="status-pill status-medium" style="font-size:0.65rem">${escapeHtml(spotlight.model_version || "spotlight-v1")}</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>${z ? "球员" : "Player"}</th>
+                            <th>${z ? "球队" : "Team"}</th>
+                            <th>${z ? "位置" : "Pos"}</th>
+                            <th>${z ? "评分" : "Rating"}</th>
+                            <th>${z ? "聚光灯分" : "Spotlight"}</th>
+                            <th>${z ? "原因" : "Reason"}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${players.map((p, i) => {
+                            const scorePct = ((p.spotlight_score || 0) / maxScore * 100).toFixed(0);
+                            const scoreCls = (p.spotlight_score || 0) >= maxScore * 0.85 ? "status-high" : (p.spotlight_score || 0) >= maxScore * 0.6 ? "status-medium" : "status-low";
+                            const teamCls = p.team === teamA ? "status-high" : "status-medium";
+                            const ratingStr = p.rating != null ? Number(p.rating).toFixed(1) : "—";
+                            return `<tr>
+                                <td><span class="status-pill" style="font-size:0.6rem">${i + 1}</span></td>
+                                <td><strong>${escapeHtml(p.name)}</strong></td>
+                                <td><span class="status-pill ${teamCls}" style="font-size:0.6rem">${escapeHtml(p.team)}</span></td>
+                                <td>${escapeHtml(p.position || "—")}</td>
+                                <td>${ratingStr}</td>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:0.4rem">
+                                        <span class="status-pill ${scoreCls}" style="font-size:0.65rem">${(p.spotlight_score || 0).toFixed(3)}</span>
+                                        <div style="width:60px;height:6px;background:var(--border-color,rgba(128,128,128,0.2));border-radius:3px;overflow:hidden">
+                                            <div style="width:${sanitizeCssPercent(Number(scorePct))}%;height:100%;background:var(--accent,#7ca8ff)"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(p.reason || "—")}</td>
+                            </tr>`;
+                        }).join("")}
+                    </tbody>
+                </table>
+            </div>
+            <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+                ${z ? "聚光灯分基于评分、位置权重、信心系数和对手弱点匹配。仅作为观赛参考。" : "Spotlight score blends rating, position weight, confidence, and opponent-weakness matchup. Observational guide only."}
+            </p>
+        </article>`;
 }
 
 function renderWcProbability() {
