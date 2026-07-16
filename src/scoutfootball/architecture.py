@@ -164,6 +164,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball build-features",
             "uv run python -m scoutfootball train",
             "uv run python -m scoutfootball validate",
+            "uv run python -m scoutfootball preflight",
             "uv run python -m scoutfootball serve",
             "uv run streamlit run src/scoutfootball/app/streamlit_app.py",
         ),

@@ -86,6 +86,53 @@ def _cmd_optimizer_preflight(args: argparse.Namespace) -> None:
         sys.exit(2)
 
 
+def _cmd_preflight(args: argparse.Namespace) -> None:
+    """Content-level Parquet preflight across key data artifacts.
+
+    Resolves footer-vs-content truth conflicts documented in AGENTS.md by
+    fully decoding each file (DuckDB primary, pandas fallback) and comparing
+    against footer metadata. Reports schema, row counts, null counts and a
+    content fingerprint. Quarantine is opt-in and reversible.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.parquet_preflight import (
+        preflight_key_artifacts,
+        preflight_parquet,
+        quarantine_unreadable,
+        summarize_reports,
+    )
+
+    settings = PlatformSettings.from_root()
+    paths = list(args.paths) if args.paths else []
+
+    if paths:
+        # Explicit paths resolve against cwd (standard CLI behaviour), not
+        # data_root. ``preflight_parquet`` keeps data_root-relative resolution
+        # for the key-artifact path used by ``--target``.
+        abs_paths = [Path(p).resolve() for p in paths]
+        reports = [preflight_parquet(p, settings) for p in abs_paths]
+    else:
+        reports = preflight_key_artifacts(target=args.target, settings=settings)
+
+    fmt = "json" if args.json else "text"
+    print(summarize_reports(reports, fmt=fmt))
+
+    if args.quarantine:
+        result = quarantine_unreadable(reports, settings, dry_run=False)
+        if result.moved:
+            print(f"\nQuarantined {len(result.moved)} unreadable file(s):")
+            for p in result.moved:
+                print(f"  - {p}")
+            if result.manifest_path:
+                print(f"Manifest: {result.manifest_path}")
+        else:
+            print("\nNo unreadable files to quarantine.")
+
+    # Exit non-zero when any file failed to decode, so CI can gate on it.
+    if any(not r.ok for r in reports):
+        sys.exit(2)
+
+
 def _cmd_import_truth_labels(args: argparse.Namespace) -> None:
     """Import scouting workspace review decisions as truth labels."""
     import json as _json
@@ -1517,6 +1564,34 @@ def main() -> None:
         help="Directory containing raw optimizer inputs",
     )
 
+    pf_p = sub.add_parser(
+        "preflight",
+        help="Content-level Parquet preflight (footer vs decode, schema, hash)",
+    )
+    pf_p.add_argument(
+        "paths",
+        nargs="*",
+        help="Optional explicit parquet paths (absolute or relative to data root). "
+        "Defaults to the project's key artifacts.",
+    )
+    pf_p.add_argument(
+        "--target",
+        choices=["raw", "gold", "sample", "key", "all"],
+        default="key",
+        help="Which artifact set to scan when no explicit paths are given",
+    )
+    pf_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a JSON manifest instead of human-readable text",
+    )
+    pf_p.add_argument(
+        "--quarantine",
+        action="store_true",
+        help="Move unreadable files into data/quarantine/ (reversible; manifest written). "
+        "Default is report-only.",
+    )
+
     av_p = sub.add_parser(
         "action-value",
         help="Run action value pipeline (StatsBomb -> xT -> player metrics)",
@@ -1780,6 +1855,7 @@ def main() -> None:
         "train-rating-nn": _cmd_train_rating_nn,
         "validate": _cmd_validate,
         "optimizer-preflight": _cmd_optimizer_preflight,
+        "preflight": _cmd_preflight,
         "action-value": _cmd_action_value,
         "action-value-matches": _cmd_action_value_matches,
         "export-ratings": _cmd_export_ratings,
