@@ -2,7 +2,7 @@
 
 > 初版：2026-07-17。本文记录维护者在 ScoutFootball 中的真实个人任务和参考工作流执行证据。
 >
-> **状态：骨架待填写。** 下方列出的工作流入口和步骤基于代码实际能力推断，但维护者尚未填写真实使用记录。每个工作流需维护者确认：是否在用、输入、步骤、输出、现有替代工具、错误和阻断。
+> **状态：部分填写。** 3.1 数据导入与验证工作流已有真实执行证据（2026-07-17）。其余工作流待维护者填写。
 
 ## 填写说明
 
@@ -82,13 +82,19 @@
 
 ### 3.1 数据导入与验证
 
-- **是否在用**：待填写
-- **输入**：待填写（数据源、赛季范围）
-- **步骤**：待填写（`ingest` → `validate` → `preflight`）
-- **输出**：待填写（raw 快照、验证报告、preflight 报告）
-- **现有替代工具**：待填写
-- **错误和阻断**：待填写
-- **复盘证据**：待填写
+- **是否在用**：是
+- **输入**：本地已存在的 6 个数据源快照（StatsBomb Open、Football-Data、ClubElo、Understat、FBref、Transfermarkt 手动），无需联网抓取
+- **步骤**：
+  1. `uv run python -m scoutfootball info` — 确认模块和命令状态
+  2. `uv run python -m scoutfootball validate` — 运行 6 项数据验证门禁
+  3. `uv run python -m scoutfootball preflight` — 对 21 个关键 Parquet 产物执行内容级 preflight
+- **输出**：
+  - validate 结果：`Validation: PASS (6/6 checks passed)`
+  - preflight 结果：`21/21 ok, 0 unreadable, 0 footer/content mismatch, 0 flagged`
+  - 关键产物行数确认（见下方复盘证据）
+- **现有替代工具**：无（此前没有统一的数据验证和 preflight 入口；G0-B 新增了 `preflight` 命令）
+- **错误和阻断**：无。本次运行全部通过
+- **复盘证据**：见下方"参考工作流端到端运行证据"
 
 ### 3.2 模型训练与评估
 
@@ -116,15 +122,49 @@
 
 > G0-A 子任务 3 要求：选择至少一个会重复使用的参考工作流，保存一次真实端到端运行和人工复盘证据。
 
-### 参考工作流 1：待维护者选择并执行
+### 参考工作流 1：数据导入与验证（3.1）
 
-- **选择的工作流**：待填写（从上方 1.x / 2.x / 3.x 中选一个）
-- **执行日期**：待填写
-- **真实输入**：待填写
-- **执行步骤与命令**：待填写
-- **执行结果**：待填写（截图、日志、输出文件路径）
-- **人工复盘**：待填写（是否达到预期、有什么问题、下一步改进）
-- **是否可重复使用**：待填写
+- **选择的工作流**：3.1 数据导入与验证
+- **执行日期**：2026-07-17
+- **执行环境**：Windows, Python 3.11, uv, 工作目录 `c:\football\scoutlab`
+- **真实输入**：本地已存在的 6 个数据源快照，21 个关键 Parquet 产物
+- **执行步骤与命令**：
+  ```bash
+  # 1. 确认模块和命令状态
+  PYTHONPATH=src uv run python -m scoutfootball info
+
+  # 2. 运行数据验证门禁
+  PYTHONPATH=src uv run python -m scoutfootball validate
+
+  # 3. 对关键 Parquet 产物执行内容级 preflight
+  PYTHONPATH=src uv run python -m scoutfootball preflight
+  ```
+- **执行结果**：
+  - `info`：正常输出 8 个模块和 11 条命令清单
+  - `validate`：`Validation: PASS (6/6 checks passed)`，退出码 0
+  - `preflight`：`21/21 ok, 0 unreadable, 0 footer/content mismatch, 0 flagged`，退出码 0
+  - 关键产物行数（preflight 确认 footer 与 content 一致）：
+
+    | 产物路径 | 行数 | 列数 | 大小 |
+    |---|---|---|---|
+    | raw/football_data/combined_results.parquet | 68953 | 190 | 5.9 MB |
+    | raw/statsbomb_open/matches_all.parquet | 2187 | 12 | — |
+    | raw/statsbomb_open/events_sample.parquet | 11871 | 137 | — |
+    | raw/understat/players_10seasons.parquet | 31902 | 20 | — |
+    | raw/fbref/player_standard_5seasons.parquet | 14356 | 26 | — |
+    | gold/feature_store/player_match.parquet | 27598 | 32 | 1.21 MB |
+    | gold/feature_store/team_match.parquet | 137906 | 24 | — |
+    | gold/feature_store/player_ratings.parquet | 8595 | 23 | — |
+    | gold/feature_store/player_truth_labels.parquet | 29723 | 8 | 0.39 MB |
+    | gold/feature_store/player_value_metrics.parquet | 3740 | 30 | — |
+    | gold/feature_store/player_action_value.parquet | 9951 | 29 | — |
+    | gold/feature_store/rating_feature_matrix.parquet | 26678 | 40 | 1.2 MB |
+
+- **人工复盘**：
+  - **是否达到预期**：是。数据验证和 preflight 全部通过，21 个关键产物的 footer 行数与 content 行数一致，无损坏文件，无需隔离。
+  - **有什么问题**：无。本次运行无错误、无阻断。
+  - **下一步改进**：未来可增加自动化的定期 preflight（如 CI 或定时任务），在数据更新后自动检测 footer/content 不一致。G0-B 已清理了 workflow 的 fail-open 模式，`preflight` 可作为发布门禁接入。
+- **是否可重复使用**：是。此工作流不依赖网络（数据已在本地），可随时重复执行。维护者每次数据更新后都应运行 `validate` + `preflight` 确认数据完整性。
 
 ---
 
