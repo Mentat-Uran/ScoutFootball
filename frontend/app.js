@@ -236,6 +236,12 @@ const i18n = {
         shortlist_compare_loading: "正在对比…",
         shortlist_compare_unavailable: "对比数据不可用",
         shortlist_compare_failed: "对比请求失败",
+        shortlist_compare_sync_tray: "加入跨球探对比盘",
+        shortlist_compare_sync_tray_title: "将选中的球员同步到跨球探对比盘（最多 6 名）",
+        shortlist_compare_sync_added: "已加入 {n} 名",
+        shortlist_compare_sync_dup: "{n} 名已在对比盘中",
+        shortlist_compare_sync_cap: "{n} 名因对比盘已满跳过",
+        shortlist_compare_sync_empty: "未选择可同步的球员",
         shortlist_provenance_log_title: "来源审计日志",
         shortlist_provenance_empty: "暂无来源事件",
         shortlist_provenance_count: "{n} 条来源事件",
@@ -1381,6 +1387,12 @@ const i18n = {
         shortlist_compare_loading: "Comparing…",
         shortlist_compare_unavailable: "Comparison unavailable",
         shortlist_compare_failed: "Comparison fetch failed",
+        shortlist_compare_sync_tray: "Send to compare tray",
+        shortlist_compare_sync_tray_title: "Sync selected players to the cross-scouting compare tray (max 6)",
+        shortlist_compare_sync_added: "Added {n}",
+        shortlist_compare_sync_dup: "{n} already in tray",
+        shortlist_compare_sync_cap: "{n} skipped (tray full)",
+        shortlist_compare_sync_empty: "No players selected to sync",
         shortlist_provenance_log_title: "Provenance Log",
         shortlist_provenance_empty: "No provenance events recorded",
         shortlist_provenance_count: "{n} provenance events",
@@ -9785,7 +9797,7 @@ function renderScouting() {
             return `
             <div class="watch-card">
                 <div>
-                    <label style="display:inline-flex;align-items:center;gap:0.15rem;margin-right:0.4rem;font-size:0.7rem;color:var(--text-muted);cursor:pointer;vertical-align:middle"><input type="checkbox" data-shortlist-compare-key="${escapeAttr(dossierKey)}" data-shortlist-compare-name="${escapeAttr(pName)}" ${cmpChecked}>${escapeHtml(zh ? "对比" : "Cmp")}</label>
+                    <label style="display:inline-flex;align-items:center;gap:0.15rem;margin-right:0.4rem;font-size:0.7rem;color:var(--text-muted);cursor:pointer;vertical-align:middle"><input type="checkbox" data-shortlist-compare-key="${escapeAttr(dossierKey)}" data-shortlist-compare-name="${escapeAttr(pName)}" data-shortlist-compare-team="${escapeAttr(player.team || "")}" ${cmpChecked}>${escapeHtml(zh ? "对比" : "Cmp")}</label>
                     <strong>${escapeHtml(pName)}</strong>
                     <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player, "shortlist")}
                 </div>
@@ -23672,6 +23684,7 @@ function _renderShortlistCompareBar() {
     let html = '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">';
     html += `<button class="glass-control" data-shortlist-compare-run="1" type="button" ${canCompare ? "" : "disabled"} style="font-size:0.72rem;padding:0.2rem 0.5rem">${escapeHtml(t("shortlist_compare_btn").replace("{n}", String(n)))}</button>`;
     if (n > 0) {
+        html += `<button class="text-button" data-shortlist-compare-sync-tray="1" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem" title="${escapeAttr(t("shortlist_compare_sync_tray_title"))}">${escapeHtml(t("shortlist_compare_sync_tray"))}</button>`;
         html += `<button class="text-button" data-shortlist-compare-clear="1" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem">${escapeHtml(t("shortlist_compare_clear"))}</button>`;
     }
     if (hint) {
@@ -23694,6 +23707,23 @@ function _wireShortlistCompareBar() {
             _renderShortlistCompareResult(names);
         });
     }
+    const syncBtn = bar.querySelector('button[data-shortlist-compare-sync-tray="1"]');
+    if (syncBtn) {
+        syncBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const result = _syncShortlistCompareToTray();
+            const hintEl = bar.querySelector("span[style*='text-muted']");
+            const msg = _formatSyncTrayMessage(result);
+            if (hintEl && msg) {
+                hintEl.textContent = msg;
+            } else if (msg) {
+                const span = document.createElement("span");
+                span.style.cssText = "font-size:0.7rem;color:var(--text-muted)";
+                span.textContent = msg;
+                bar.querySelector("div").appendChild(span);
+            }
+        });
+    }
     const clearBtn = bar.querySelector('button[data-shortlist-compare-clear="1"]');
     if (clearBtn) {
         clearBtn.addEventListener("click", (e) => {
@@ -23704,6 +23734,24 @@ function _wireShortlistCompareBar() {
             renderScouting();
         });
     }
+}
+
+function _formatSyncTrayMessage(result) {
+    if (!result) return "";
+    if (result.added === 0 && result.skipped_dup === 0 && result.skipped_cap === 0) {
+        return t("shortlist_compare_sync_empty");
+    }
+    const parts = [];
+    if (result.added > 0) {
+        parts.push(t("shortlist_compare_sync_added").replace("{n}", String(result.added)));
+    }
+    if (result.skipped_dup > 0) {
+        parts.push(t("shortlist_compare_sync_dup").replace("{n}", String(result.skipped_dup)));
+    }
+    if (result.skipped_cap > 0) {
+        parts.push(t("shortlist_compare_sync_cap").replace("{n}", String(result.skipped_cap)));
+    }
+    return parts.join(" \u00B7 ");
 }
 
 function _wireShortlistCompareCheckboxes(rootEl) {
@@ -23723,15 +23771,44 @@ function _wireShortlistCompareCheckboxes(rootEl) {
 }
 
 function _resolveShortlistCompareNames() {
+    return _resolveShortlistComparePlayers().map((p) => p.name);
+}
+
+function _resolveShortlistComparePlayers() {
     const shortlistEl = document.getElementById("shortlist");
     if (!shortlistEl) return [];
-    const nameByKey = {};
+    const infoByKey = {};
     shortlistEl.querySelectorAll('input[data-shortlist-compare-key]').forEach((box) => {
         const key = box.getAttribute("data-shortlist-compare-key") || "";
         const name = box.getAttribute("data-shortlist-compare-name") || "";
-        if (key && name) nameByKey[key] = name;
+        const team = box.getAttribute("data-shortlist-compare-team") || "";
+        if (key && name) infoByKey[key] = { key, name, team };
     });
-    return _shortlistCompareSelection.map((k) => nameByKey[k]).filter(Boolean);
+    return _shortlistCompareSelection
+        .map((k) => infoByKey[k])
+        .filter((v) => v !== undefined);
+}
+
+function _syncShortlistCompareToTray() {
+    const players = _resolveShortlistComparePlayers();
+    if (players.length === 0) return { added: 0, skipped_dup: 0, skipped_cap: 0 };
+    let added = 0;
+    let skippedDup = 0;
+    let skippedCap = 0;
+    for (const p of players) {
+        if (_crossScoutingCompareTray.some((t) => t.key === p.key)) {
+            skippedDup++;
+            continue;
+        }
+        if (_crossScoutingCompareTray.length >= _CROSS_SCOUTING_COMPARE_MAX) {
+            skippedCap++;
+            continue;
+        }
+        _crossScoutingCompareTray.push(p);
+        added++;
+    }
+    if (added > 0) _renderCompareTray();
+    return { added, skipped_dup: skippedDup, skipped_cap: skippedCap };
 }
 
 async function _renderShortlistCompareResult(names) {
@@ -24136,16 +24213,27 @@ function buildShortlistDecisionPack() {
         ));
     return {
         schema: "scoutfootball.shortlist-decision-pack",
-        version: "1.0.0",
+        version: "1.1.0",
         status: players.length ? "ok" : "empty",
         exported_at: new Date().toISOString(),
         storage_scope: "browser-local-download",
         player_count: players.length,
         players,
+        provenance_log: _shortlistProvenanceLog.map((entry) => ({
+            timestamp: String(entry.timestamp || ""),
+            player_key: String(entry.player_key || ""),
+            player_name: String(entry.player_name || ""),
+            action: entry.action === "merged" ? "merged" : "removed",
+            reason_code: String(entry.reason_code || ""),
+            resulting_codes: Array.isArray(entry.resulting_codes)
+                ? entry.resulting_codes.map((c) => String(c || ""))
+                : [],
+        })),
         limitations: [
             "Shortlist selection and dossiers are browser-local decision context.",
             "This export is not a server-side audit record, transfer instruction, or cross-device sync artifact.",
             "Ratings and confidence reflect the loaded local or API data snapshot and may have incomplete coverage.",
+            "Provenance log is a browser-local audit trail of source-code merge/remove events; it is not a server-side audit record.",
         ],
     };
 }
@@ -24183,6 +24271,14 @@ function exportShortlistDecisionPackCSV() {
             (player.reason_codes || []).join("|"),
             player.priority, player.recommendation, player.target_role,
             player.rationale_and_risks,
+        ]),
+        [],
+        ["# Provenance Log"],
+        ["timestamp", "player_key", "player_name", "action", "reason_code", "resulting_codes"],
+        ...(pack.provenance_log || []).map((entry) => [
+            entry.timestamp, entry.player_key, entry.player_name,
+            entry.action, entry.reason_code,
+            (entry.resulting_codes || []).join("|"),
         ]),
         [],
         ["# Limitations"],
