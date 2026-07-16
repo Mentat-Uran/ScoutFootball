@@ -415,6 +415,13 @@ const i18n = {
         wc_standings_prob_win_col: "头名%",
         wc_standings_prob_disclaimer: "出线概率基于实力加权蒙特卡洛模拟剩余小组赛，仅供参考。",
         wc_standings_prob_loading: "模拟中...",
+        wc_overall_title: "全部球队总榜",
+        wc_overall_sort_advance: "按出线概率",
+        wc_overall_sort_win_group: "按头名概率",
+        wc_overall_sort_points: "按积分",
+        wc_overall_sort_gd: "按净胜球",
+        wc_overall_sort_gf: "按进球数",
+        wc_overall_disclaimer: "全部48支球队按实力加权蒙特卡洛模拟排序，仅供参考。",
         sort_priority: "优先级",
         sort_date: "日期",
         sort_name: "姓名",
@@ -1628,6 +1635,13 @@ const i18n = {
         wc_standings_prob_win_col: "Win Grp%",
         wc_standings_prob_disclaimer: "Advancement probabilities use strength-weighted Monte Carlo simulation of remaining group matches. Illustrative only.",
         wc_standings_prob_loading: "Simulating...",
+        wc_overall_title: "Overall Leaderboard",
+        wc_overall_sort_advance: "by Adv. Prob.",
+        wc_overall_sort_win_group: "by Group Win",
+        wc_overall_sort_points: "by Points",
+        wc_overall_sort_gd: "by Goal Diff",
+        wc_overall_sort_gf: "by Goals For",
+        wc_overall_disclaimer: "All 48 teams ranked by strength-weighted Monte Carlo simulation. Illustrative only.",
         sort_priority: "Priority",
         sort_date: "Date",
         sort_name: "Name",
@@ -19661,6 +19675,7 @@ let wcApiData = {
     tournamentQualificationImpact: null, // selected group local standings impact
     tournamentTiebreakDiagnostics: null, // selected group local tied clusters
     tournamentStandingsProbabilities: null, // selected group with advance/win_group prob
+    tournamentOverallLeaderboard: null, // all 48 teams ranked by advancement prob
     tournamentScenarios: null, // team -> scenarios
     tournamentSelectedGroup: "A",
     tournamentLoading: false,
@@ -20134,6 +20149,25 @@ async function fetchWcTournamentStandingsProbabilities(group) {
     return null;
 }
 
+async function fetchWcTournamentOverallLeaderboard(sortBy) {
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/overall-leaderboard?sort_by=${encodeURIComponent(sortBy || "advance_prob")}&num_simulations=2000`,
+            {
+                timeout: 30000,
+            },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentOverallLeaderboard = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] overall leaderboard unavailable:", e.message);
+    }
+    wcApiData.tournamentOverallLeaderboard = null;
+    return null;
+}
+
 function exportWcQualificationImpactJSON(impact) {
     if (impact?.schema !== "scoutfootball.world-cup-qualification-impact") return;
     const payload = {
@@ -20254,6 +20288,7 @@ async function loadAndRenderWcTournament() {
         fetchWcTournamentQualificationImpact(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentTiebreakDiagnostics(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
+        fetchWcTournamentOverallLeaderboard("advance_prob"),
     ]);
     wcApiData.tournamentLoading = false;
     renderWcTournament();
@@ -20472,6 +20507,65 @@ function renderWcTournament() {
 
         <article class="liquid-panel compact" style="margin-bottom:1rem">
             <div class="panel-head">
+                <h3>${escapeHtml(t("wc_overall_title"))}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <select id="wc-overall-sort" class="filter-select" style="min-width:120px;font-size:0.75rem">
+                        <option value="advance_prob">${escapeHtml(t("wc_overall_sort_advance"))}</option>
+                        <option value="win_group_prob">${escapeHtml(t("wc_overall_sort_win_group"))}</option>
+                        <option value="points">${escapeHtml(t("wc_overall_sort_points"))}</option>
+                        <option value="goal_difference">${escapeHtml(t("wc_overall_sort_gd"))}</option>
+                        <option value="goals_for">${escapeHtml(t("wc_overall_sort_gf"))}</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-scroll" style="max-height:420px;overflow-y:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>${z ? "球队" : "Team"}</th>
+                            <th>${z ? "小组" : "Grp"}</th>
+                            <th>P</th>
+                            <th>Pts</th>
+                            <th>GD</th>
+                            <th>${escapeHtml(t("wc_standings_prob_advance_col"))}</th>
+                            <th>${escapeHtml(t("wc_standings_prob_win_col"))}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(wcApiData.tournamentOverallLeaderboard?.status === "ok" && wcApiData.tournamentOverallLeaderboard.teams)
+                            ? wcApiData.tournamentOverallLeaderboard.teams.map((t) => {
+                                const advPct = (t.advance_prob * 100).toFixed(0) + "%";
+                                const winPct = (t.win_group_prob * 100).toFixed(0) + "%";
+                                const advCls = t.advance_prob >= 0.7 ? "status-high" : t.advance_prob >= 0.3 ? "status-medium" : "status-low";
+                                const winCls = t.win_group_prob >= 0.5 ? "status-high" : t.win_group_prob >= 0.15 ? "status-medium" : "status-low";
+                                const posCls = t.position === 1 ? "status-high" : t.position === 2 ? "status-medium" : (t.position === 3 ? "status-low" : "");
+                                return `<tr>
+                                    <td><span class="status-pill" style="font-size:0.6rem">${t.rank}</span></td>
+                                    <td>${escapeHtml(t.team)}</td>
+                                    <td><span class="status-pill ${posCls}" style="font-size:0.6rem">${t.group}-${t.position}</span></td>
+                                    <td>${t.played}</td>
+                                    <td><strong>${t.points}</strong></td>
+                                    <td>${t.goal_difference >= 0 ? "+" : ""}${t.goal_difference}</td>
+                                    <td><span class="status-pill ${advCls}" style="font-size:0.65rem">${advPct}</span></td>
+                                    <td><span class="status-pill ${winCls}" style="font-size:0.65rem">${winPct}</span></td>
+                                </tr>`;
+                            }).join("")
+                            : `<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem">
+                                ${wcApiData.tournamentOverallLeaderboard?.status === "no_data"
+                                    ? escapeHtml(wcApiData.tournamentOverallLeaderboard.disclaimer || "")
+                                    : (z ? "加载中..." : "Loading...")}
+                            </td></tr>`}
+                    </tbody>
+                </table>
+            </div>
+            <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+                ${escapeHtml(t("wc_overall_disclaimer"))}
+            </p>
+        </article>
+
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div class="panel-head">
                 <h3>${z ? "出线球队" : "Advancing Teams"}</h3>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem" class="wc-advancing-grid">
@@ -20590,6 +20684,14 @@ function renderWcTournament() {
             renderWcTournament();
         });
     }
+    const overallSortSelect = document.getElementById("wc-overall-sort");
+    if (overallSortSelect && !overallSortSelect.dataset.bound) {
+        overallSortSelect.dataset.bound = "1";
+        overallSortSelect.addEventListener("change", async (e) => {
+            await fetchWcTournamentOverallLeaderboard(e.target.value);
+            renderWcTournament();
+        });
+    }
     const qualificationExport = document.getElementById("wc-qualification-export");
     if (qualificationExport && impact) {
         qualificationExport.addEventListener("click", () => exportWcQualificationImpactJSON(impact));
@@ -20610,6 +20712,9 @@ function renderWcTournament() {
                 fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
                 fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
                 fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
+                fetchWcTournamentOverallLeaderboard(
+                    wcApiData.tournamentOverallLeaderboard?.sort_by || "advance_prob"
+                ),
             ]);
             renderWcTournament();
         });
@@ -20637,6 +20742,9 @@ function renderWcTournament() {
                     fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
                     fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
                     fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentOverallLeaderboard(
+                        wcApiData.tournamentOverallLeaderboard?.sort_by || "advance_prob"
+                    ),
                 ]);
                 renderWcTournament();
             }
@@ -20656,6 +20764,9 @@ function renderWcTournament() {
                     fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
                     fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
                     fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentOverallLeaderboard(
+                        wcApiData.tournamentOverallLeaderboard?.sort_by || "advance_prob"
+                    ),
                 ]);
                 renderWcTournament();
             }

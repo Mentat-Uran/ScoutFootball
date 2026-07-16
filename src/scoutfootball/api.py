@@ -9055,6 +9055,123 @@ def get_wc_tournament_standings_probabilities(
     })
 
 
+def get_wc_tournament_overall_leaderboard(
+    num_simulations: int = 2000,
+    sort_by: str = "advance_prob",
+) -> dict:
+    """Return all 48 World Cup teams ranked by advancement probability.
+
+    Runs a strength-weighted group-stage simulation and returns a flat list
+    of all teams sorted by the requested metric, alongside their group,
+    current standings position, advance probability, and group-win probability.
+
+    Parameters
+    ----------
+    num_simulations:
+        Number of Monte Carlo iterations.
+    sort_by:
+        Column to sort by. One of ``"advance_prob"`` (default),
+        ``"win_group_prob"``, ``"points"``, ``"goal_difference"``,
+        ``"goals_for"``.
+    """
+    from scoutfootball.worldcup.tournament import compute_all_standings
+
+    state = _wc_tournament_state()
+
+    if sort_by not in ("advance_prob", "win_group_prob", "points", "goal_difference", "goals_for"):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_sort",
+            "message": (
+                f"Invalid sort_by '{sort_by}'. Valid: advance_prob, "
+                "win_group_prob, points, goal_difference, goals_for"
+            ),
+        })
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads or not strengths:
+        return _clean_json_value({
+            "status": "no_data",
+            "teams": [],
+            "num_simulations": 0,
+            "sort_by": sort_by,
+            "disclaimer": (
+                "World Cup squad data unavailable; probability estimates "
+                "cannot be computed."
+            ),
+        })
+
+    from scoutfootball.worldcup.data import simulate_group_stage
+
+    sim_result = simulate_group_stage(
+        state,
+        team_strengths=strengths,
+        num_simulations=num_simulations,
+        mode="strength",
+        seed=42,
+    )
+
+    prob_by_team: dict[str, dict[str, float]] = {}
+    for entry in sim_result.get("advancement_probability", []):
+        prob_by_team[entry["team"]] = {
+            "advance_prob": entry.get("advance_prob", 0.0),
+            "win_group_prob": entry.get("win_group_prob", 0.0),
+        }
+
+    all_standings = compute_all_standings(state)
+
+    teams: list[dict[str, Any]] = []
+    for letter, rows in all_standings.items():
+        for pos, s in enumerate(rows, start=1):
+            prob = prob_by_team.get(s.team, {})
+            teams.append({
+                "team": s.team,
+                "group": letter,
+                "position": pos,
+                "played": s.played,
+                "won": s.won,
+                "drawn": s.drawn,
+                "lost": s.lost,
+                "goals_for": s.goals_for,
+                "goals_against": s.goals_against,
+                "goal_difference": s.goal_difference,
+                "points": s.points,
+                "advance_prob": prob.get("advance_prob", 0.0),
+                "win_group_prob": prob.get("win_group_prob", 0.0),
+            })
+
+    if sort_by == "advance_prob":
+        teams.sort(key=lambda t: (-t["advance_prob"], -t["points"], -t["goal_difference"]))
+    elif sort_by == "win_group_prob":
+        teams.sort(key=lambda t: (-t["win_group_prob"], -t["points"], -t["goal_difference"]))
+    elif sort_by == "points":
+        teams.sort(key=lambda t: (-t["points"], -t["goal_difference"], -t["goals_for"]))
+    elif sort_by == "goal_difference":
+        teams.sort(key=lambda t: (-t["goal_difference"], -t["points"]))
+    elif sort_by == "goals_for":
+        teams.sort(key=lambda t: (-t["goals_for"], -t["points"]))
+
+    for rank, t in enumerate(teams, start=1):
+        t["rank"] = rank
+
+    return _clean_json_value({
+        "status": "ok",
+        "teams": teams,
+        "num_simulations": sim_result.get("num_simulations", 0),
+        "remaining_matches": sim_result.get("remaining_matches", 0),
+        "mode": "strength",
+        "sort_by": sort_by,
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": sim_result.get(
+            "disclaimer",
+            (
+                "Advancement probabilities use strength-weighted Monte Carlo "
+                "simulation of remaining group matches. Illustrative only."
+            ),
+        ),
+    })
+
+
 def get_wc_tournament_matches(
     group: str | None = None,
     pending: bool = False,
