@@ -8,7 +8,13 @@ from .match import (
     PeriodType,
     TrackingFrame,
 )
-from .project import DataDirectorySpec, ModuleBoundary, ProjectArchitecture
+from .project import (
+    Capability,
+    CapabilityRegistry,
+    DataDirectorySpec,
+    ModuleBoundary,
+    ProjectArchitecture,
+)
 from .storage import (
     ColumnDefinition,
     IngestMetadata,
@@ -18,6 +24,8 @@ from .storage import (
 )
 
 __all__ = [
+    "Capability",
+    "CapabilityRegistry",
     "ColumnDefinition",
     "DataDirectorySpec",
     "IngestMetadata",
