@@ -5640,7 +5640,7 @@ async function fetchAndRenderDiagnostics(home, away) {
             </div>
         </div>`;
 
-    body.innerHTML = `${calHtml}${driftHtml}${attrHtml}${ciCacheHtml}`;
+    body.innerHTML = [calHtml, driftHtml, attrHtml, ciCacheHtml].join("");
     if (btn) btn.disabled = false;
 }
 
@@ -5761,7 +5761,7 @@ async function fetchAndRenderEnsembleAttribution(home, away) {
             </div>`;
     }
 
-    body.innerHTML = `${weightsHtml}${blendedHtml}${perModelHtml}`;
+    body.innerHTML = [weightsHtml, blendedHtml, perModelHtml].join("");
     if (btn) btn.disabled = false;
 }
 
@@ -10494,7 +10494,7 @@ async function renderRunComparison(runIdA, runIdB) {
     const statusEl = document.getElementById("run-comparison-status");
     if (!body) return;
     const z = appState.lang === "zh";
-    body.innerHTML = `<p style="color:var(--text-muted)">${z ? "加载中..." : "Loading..."}</p>`;
+    body.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "加载中..." : "Loading...")}</p>`;
 
     const [detailA, detailB] = await Promise.all([
         fetchModelRunDetail(runIdA),
@@ -10502,7 +10502,7 @@ async function renderRunComparison(runIdA, runIdB) {
     ]);
 
     if (!detailA || !detailB) {
-        body.innerHTML = `<p style="color:var(--text-muted)">${z ? "无法加载运行详情" : "Failed to load run details"}</p>`;
+        body.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "无法加载运行详情" : "Failed to load run details")}</p>`;
         if (statusEl) { statusEl.textContent = z ? "加载失败" : "failed"; statusEl.className = "status-pill status-low"; }
         return;
     }
@@ -15182,10 +15182,10 @@ function renderReports() {
             supervisionPanel.textContent = z ? "未找到本地真值标签产物。" : "No local truth-label artifact found.";
         } else {
             supervisionPanel.innerHTML = `
-                <div><strong>${eligible.toLocaleString()} / ${total.toLocaleString()}</strong> ${z ? "行可用于监督" : "rows eligible for supervision"}</div>
-                <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "已排除循环或未获准来源：" : "Excluded circular or unapproved sources: "}${excluded || (z ? "无" : "none")}</div>
-                <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "赛季内时间可用：" : "Temporally in-season: "}${temporallyEligible.toLocaleString()}${z ? "；赛后快照：" : "; post-season snapshots: "}${postSeason.toLocaleString()}</div>
-                <div style="margin-top:0.25rem;color:var(--text-muted)">${transfermarktIdentityReport.status === "available" ? `Transfermarkt identity matches: ${identityMapped.toLocaleString()} / ${identityTotal.toLocaleString()}; review: ${identityReview.toLocaleString()}` : "No local Transfermarkt identity report."}</div>
+                <div><strong>${escapeHtml(String(eligible.toLocaleString()))} / ${escapeHtml(String(total.toLocaleString()))}</strong> ${escapeHtml(z ? "行可用于监督" : "rows eligible for supervision")}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${escapeHtml(z ? "已排除循环或未获准来源：" : "Excluded circular or unapproved sources: ")}${excluded || escapeHtml(z ? "无" : "none")}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${escapeHtml(z ? "赛季内时间可用：" : "Temporally in-season: ")}${escapeHtml(String(temporallyEligible.toLocaleString()))}${escapeHtml(z ? "；赛后快照：" : "; post-season snapshots: ")}${escapeHtml(String(postSeason.toLocaleString()))}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${transfermarktIdentityReport.status === "available" ? escapeHtml(`Transfermarkt identity matches: ${identityMapped.toLocaleString()} / ${identityTotal.toLocaleString()}; review: ${identityReview.toLocaleString()}`) : escapeHtml("No local Transfermarkt identity report.")}</div>
                 <div style="margin-top:0.35rem;color:var(--text-muted)">${escapeHtml(report.caveat || "")}</div>`;
         }
     }
@@ -16807,7 +16807,7 @@ function _renderEnsembleWeights(data) {
             ${data.saved_at ? `<div><span>${escapeHtml(t("ensemble_saved_at"))}</span><strong style="font-size:0.75rem">${escapeHtml(String(data.saved_at).slice(0, 19).replace("T", " "))}</strong></div>` : ""}
         </div>`;
 
-    body.innerHTML = `${weightBars}${meta}`;
+    body.innerHTML = [weightBars, meta].join("");
 }
 
 function _renderCalibrationComparison(data) {
@@ -16930,7 +16930,7 @@ function _renderCalibrationComparison(data) {
             </table>`;
     }
 
-    body.innerHTML = `${overallHtml}${scoreLineHtml}${leagueHtml}`;
+    body.innerHTML = [overallHtml, scoreLineHtml, leagueHtml].join("");
 }
 
 function _renderBacktestFoldChart(data, models, folds) {
@@ -23395,11 +23395,11 @@ function renderWcMatchSpotlightPanel(teamA, teamB) {
         panel.innerHTML = `
             <article class="liquid-panel compact-panel">
                 <div class="panel-head">
-                    <h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3>
-                    <button class="text-button wc-load-spotlight" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${z ? "加载聚光灯" : "Load Spotlight"}</button>
+                    <h3>${escapeHtml(z ? "球员聚光灯" : "Player Spotlight")}</h3>
+                    <button class="text-button wc-load-spotlight" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${escapeHtml(z ? "加载聚光灯" : "Load Spotlight")}</button>
                 </div>
                 <p style="font-size:0.75rem;color:var(--text-muted);margin:0.5rem 0">
-                    ${z ? "基于评分、位置权重、信心和对手弱点的球员影响力排序。" : "Ranks players by rating, position weight, confidence, and opponent weakness."}
+                    ${escapeHtml(z ? "基于评分、位置权重、信心和对手弱点的球员影响力排序。" : "Ranks players by rating, position weight, confidence, and opponent weakness.")}
                 </p>
             </article>`;
         const loadBtn = panel.querySelector(".wc-load-spotlight");
@@ -23417,8 +23417,8 @@ function renderWcMatchSpotlightPanel(teamA, teamB) {
     if (isLoading && !spotlight) {
         panel.innerHTML = `
             <article class="liquid-panel compact-panel">
-                <div class="panel-head"><h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3></div>
-                <p style="color:var(--text-muted);padding:0.8rem 0">${z ? "加载中..." : "Loading..."}</p>
+                <div class="panel-head"><h3>${escapeHtml(z ? "球员聚光灯" : "Player Spotlight")}</h3></div>
+                <p style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(z ? "加载中..." : "Loading...")}</p>
             </article>`;
         return;
     }
@@ -23430,7 +23430,7 @@ function renderWcMatchSpotlightPanel(teamA, teamB) {
             : t("wc_no_data");
         panel.innerHTML = `
             <article class="liquid-panel compact-panel">
-                <div class="panel-head"><h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3></div>
+                <div class="panel-head"><h3>${escapeHtml(z ? "球员聚光灯" : "Player Spotlight")}</h3></div>
                 <p style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(disclaimer)}</p>
             </article>`;
         return;
@@ -23440,8 +23440,8 @@ function renderWcMatchSpotlightPanel(teamA, teamB) {
     if (players.length === 0) {
         panel.innerHTML = `
             <article class="liquid-panel compact-panel">
-                <div class="panel-head"><h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3></div>
-                <p style="color:var(--text-muted);padding:0.8rem 0">${z ? "暂无评分球员" : "No rated players"}</p>
+                <div class="panel-head"><h3>${escapeHtml(z ? "球员聚光灯" : "Player Spotlight")}</h3></div>
+                <p style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(z ? "暂无评分球员" : "No rated players")}</p>
             </article>`;
         return;
     }
