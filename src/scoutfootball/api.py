@@ -8526,6 +8526,118 @@ def get_wc_squad(team: str) -> dict:
     })
 
 
+def get_wc_squad_scouting_needs(
+    team: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Per-player scouting-need overlay for a World Cup squad.
+
+    For each unique club team appearing in the squad, runs
+    :func:`compute_position_gap_report` and aggregates the gaps by
+    ``position_group``. Each squad player is then annotated with a
+    ``scouting_need`` object describing the gap (if any) at their position
+    within their club team's roster, plus a link target for the scouting
+    dashboard.
+
+    Descriptive overlay — does not recommend transfers. Players whose club
+    team is not present in the rating matrix get ``scouting_need: null`` and
+    ``club_gap_status: "team_not_found"`` rather than a fabricated gap.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_gap_report,
+    )
+
+    enriched, _ = _get_wc_enriched_squads()
+    squad = enriched.get(team, get_squad(team))
+
+    df = load_player_ratings()
+    if df.empty:
+        return _clean_json_value({
+            "status": "no_data",
+            "team": team,
+            "club_gaps": {},
+            "players": [],
+            "disclaimer": (
+                "Rating matrix unavailable; scouting-need overlay cannot "
+                "be computed."
+            ),
+        })
+
+    # Build a map of club_team -> {position_group -> gap dict} so each
+    # player can be annotated in O(1) without re-running the report.
+    club_gaps: dict[str, dict] = {}
+    for p in squad:
+        club = p.club
+        if not club or club in club_gaps:
+            continue
+        try:
+            result = compute_position_gap_report(
+                df,
+                club,
+                season=season,
+                min_player_minutes=min_player_minutes,
+            )
+        except Exception:  # noqa: BLE001 — defensive on user-facing path
+            logger.warning(
+                "compute_position_gap_report failed for club %r", club
+            )
+            result = {"status": "error", "gaps": []}
+        gaps_by_pos: dict[str, dict] = {}
+        if result.get("status") == "ok":
+            for g in result.get("gaps", []) or []:
+                pos = g.get("position_group")
+                if pos:
+                    gaps_by_pos[pos] = g
+        club_gaps[club] = {
+            "status": result.get("status", "error"),
+            "league": result.get("league"),
+            "n_gaps": result.get("n_gaps", 0),
+            "gaps_by_position": gaps_by_pos,
+        }
+
+    players = []
+    for p in squad:
+        club = p.club
+        club_entry = club_gaps.get(club) if club else None
+        gap = None
+        if club_entry and club_entry.get("status") == "ok":
+            gap = club_entry.get("gaps_by_position", {}).get(p.position)
+        players.append({
+            "name": p.name,
+            "position": p.position,
+            "club": p.club,
+            "club_league": p.club_league,
+            "has_rating": p.has_rating,
+            "rating": round(p.rating, 2) if p.rating is not None else None,
+            "rating_confidence": p.rating_confidence,
+            "club_gap_status": club_entry.get("status") if club_entry else "team_not_found",
+            "scouting_need": gap,
+        })
+
+    return _clean_json_value({
+        "status": "ok",
+        "team": team,
+        "group": get_team_group(team),
+        "is_host": team in HOSTS,
+        "season": season,
+        "club_gaps": club_gaps,
+        "players": players,
+        "source_attribution": (
+            "Gap reports derived from FBref/Understat rating matrix via "
+            "ScoutFootball optimizer; club names matched against the "
+            "rating matrix's `team` column."
+        ),
+        "disclaimer": (
+            "Scouting-need pills reflect the player's club team depth at "
+            "their listed position; they are descriptive overlays and do "
+            "not constitute transfer recommendations. Players at non-Big5 "
+            "clubs may have no rating-matrix coverage and show no pill."
+        ),
+    })
+
+
 def get_wc_squad_balance_comparison(team_a: str, team_b: str) -> dict:
     """Compare two expected-callup snapshots without inferring a lineup."""
     enriched_squads, _ = _get_wc_enriched_squads()

@@ -144,6 +144,7 @@ from scoutfootball.api import (
     get_wc_schedule,
     get_wc_squad,
     get_wc_squad_balance_comparison,
+    get_wc_squad_scouting_needs,
     get_wc_team_outlook,
     get_wc_teams,
     get_wc_tournament_matches,
@@ -1506,6 +1507,18 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/squads/{team}")
     def wc_squad(team: str):
         return get_wc_squad(team)
+
+    @app.get("/world-cup/squads/{team}/scouting-needs")
+    def wc_squad_scouting_needs(
+        team: str,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_wc_squad_scouting_needs(
+            team,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
 
     @app.get("/world-cup/squad-balance-comparison/{team_a}/{team_b}")
     def wc_squad_balance_comparison(team_a: str, team_b: str):
