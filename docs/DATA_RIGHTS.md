@@ -1,8 +1,12 @@
 # 数据权利清单
 
-> 初版：2026-07-17。本文记录 ScoutFootball 实际使用或已实现适配器的每个数据源的许可、获取方式、保存、删除和导出边界。未确认许可的数据源不得进入后继节点（G1+）。
+> 初版：2026-07-17，维护者确认 2026-07-17。本文记录 ScoutFootball 实际使用或已实现适配器的每个数据源的许可、获取方式、保存、删除和导出边界。未确认许可的数据源不得进入后继节点（G1+）。
 
-本清单由代码实际使用情况推断，而非维护者声明。维护者需在 G0-A 验收前核对并补充真实使用情况。
+## 维护者确认（2026-07-17）
+
+1. **实际使用**：前 6 个已注册数据源（StatsBomb、Football-Data、ClubElo、Understat、FBref、Transfermarkt 手动）在维护者真实工作流中使用。后 7 个已实现但未注册的适配器**写了代码但未在使用**，标记为实验性/停止状态。
+2. **许可**：项目仅维护者本人本地使用，5 个此前"未确认"的数据源（transfermarkt_datasets、whoscored、sofifa、sofascore、capology）维护者确认个人本地使用没有问题。但**再分发和公开导出**仍需各自遵守上游 ToS。
+3. **适用范围**：世界杯是第一个参考包，后续会扩展到更多联赛、其他国家队比赛和俱乐部比赛场景。数据权利边界以"个人本地使用"为基线。
 
 ## 1. 已注册数据源（architecture.py）
 
@@ -81,9 +85,11 @@
 | 导出/再分发 | 本地产物继承 Transfermarkt ToS 边界；能导出不等于能公开发布 |
 | 当前覆盖 | 带日期的本地手动快照，经身份复核后导入 |
 
-## 2. 已实现但未注册的数据源
+## 2. 已实现但未注册的数据源（实验性/停止状态）
 
-以下 7 个适配器已实现并暴露在 `adapters/__init__.py`，但**未在** [architecture.py](../src/scoutfootball/architecture.py) 的 `planned_components` 中注册。这是架构 manifest 的缺口，需在 G1 契约基线中补齐。
+> **维护者确认 2026-07-17：以下 7 个适配器写了代码但未在维护者真实工作流中使用，标记为实验性/停止状态。** 它们不进入 G1 契约基线；若未来启用，需先确认许可和注册。
+
+以下 7 个适配器已实现并暴露在 `adapters/__init__.py`，但**未在** [architecture.py](../src/scoutfootball/architecture.py) 的 `planned_components` 中注册，且维护者确认未在使用。
 
 ### 2.1 transfermarkt_datasets
 
@@ -91,10 +97,10 @@
 |---|---|
 | 适配器 | [transfermarkt_datasets.py](../src/scoutfootball/adapters/transfermarkt_datasets.py) |
 | 获取方式 | HTTP 下载预构建 DuckDB 文件（~500MB，源自 `dcaribou/transfermarkt-datasets`） |
-| 许可 | **未确认**。需核对上游数据集许可和 Transfermarkt ToS |
+| 许可 | 维护者确认个人本地使用 OK（2026-07-17）。再分发需核对上游数据集许可和 Transfermarkt ToS |
 | 保存 | 本地 DuckDB 文件 |
 | 删除 | 可随时删除本地文件 |
-| 导出/再分发 | **未确认**。在许可确认前不得用于公开导出 |
+| 导出/再分发 | 个人本地使用 OK；公开导出需核对上游数据集许可 |
 | 合规缺口 | 在 [desktop/app.js](../desktop/app.js) 和 [api.py](../src/scoutfootball/api.py) 的许可清单中**完全缺失** |
 
 ### 2.2 WhoScored
@@ -103,10 +109,10 @@
 |---|---|
 | 适配器 | [whoscored.py](../src/scoutfootball/adapters/whoscored.py) |
 | 获取方式 | 通过 soccerdata.WhoScored（Selenium + Chrome）抓取 whoscored.com |
-| 许可 | **未确认**。WhoScored ToS 可能限制自动化访问和数据再分发 |
+| 许可 | 维护者确认个人本地使用 OK（2026-07-17）。WhoScored ToS 可能限制自动化访问和数据再分发 |
 | 保存 | 本地缓存 |
 | 删除 | 可随时删除本地缓存 |
-| 导出/再分发 | **未确认**。在许可确认前不得用于公开导出 |
+| 导出/再分发 | 个人本地使用 OK；公开导出需核对 WhoScored ToS |
 | 合规缺口 | 在所有现有许可清单中缺失；需 Chrome + Selenium；部分地区需代理 |
 
 ### 2.3 SoFIFA
@@ -115,10 +121,10 @@
 |---|---|
 | 适配器 | [sofifa.py](../src/scoutfootball/adapters/sofifa.py) |
 | 获取方式 | 通过 soccerdata.SoFIFA 抓取 sofifa.com |
-| 许可 | **未确认**。FIFA 球员属性源自 EA Sports，再分发可能受限 |
+| 许可 | 维护者确认个人本地使用 OK（2026-07-17）。FIFA 球员属性源自 EA Sports，再分发可能受限 |
 | 保存 | 本地缓存 |
 | 删除 | 可随时删除本地缓存 |
-| 导出/再分发 | **未确认**。在许可确认前不得用于公开导出 |
+| 导出/再分发 | 个人本地使用 OK；公开导出需核对 EA Sports / SoFIFA 许可 |
 
 ### 2.4 SofaScore
 
@@ -126,10 +132,10 @@
 |---|---|
 | 适配器 | [sofascore.py](../src/scoutfootball/adapters/sofascore.py) |
 | 获取方式 | 通过 soccerdata.Sofascore 调用非官方 API `api.sofascore.com/api/v1/` |
-| 许可 | **未确认**。使用非官方 API，再分发边界不明 |
+| 许可 | 维护者确认个人本地使用 OK（2026-07-17）。使用非官方 API，再分发边界不明 |
 | 保存 | 本地缓存 |
 | 删除 | 可随时删除本地缓存 |
-| 导出/再分发 | **未确认**。在许可确认前不得用于公开导出 |
+| 导出/再分发 | 个人本地使用 OK；公开导出需核对 SofaScore ToS |
 
 ### 2.5 Capology
 
@@ -137,10 +143,10 @@
 |---|---|
 | 适配器 | [capology.py](../src/scoutfootball/adapters/capology.py) |
 | 获取方式 | 通过 ScraperFC.Capology 抓取薪水数据 |
-| 许可 | **未确认**。薪水数据再分发通常受 ToS 限制 |
+| 许可 | 维护者确认个人本地使用 OK（2026-07-17）。薪水数据再分发通常受 ToS 限制 |
 | 保存 | 本地缓存 |
 | 删除 | 可随时删除本地缓存 |
-| 导出/再分发 | **未确认**。在许可确认前不得用于公开导出 |
+| 导出/再分发 | 个人本地使用 OK；公开导出需核对 Capology ToS |
 
 ### 2.6 API-Football
 
@@ -167,49 +173,43 @@
 - capology
 - api_football
 
-**影响**：架构 manifest 与实际能力不一致，违反"已实现能力必须映射到 manifest"原则。
+**维护者确认 2026-07-17**：这 7 个适配器**未在维护者真实工作流中使用**，标记为实验性/停止状态。
 
-**建议**：在 G1 契约基线中补齐注册，或确认这些适配器为实验性/停止状态并从 `__init__.py` 移除。
+**影响**：架构 manifest 与实际能力不一致（有代码但不在 manifest 也不在使用）。
+
+**建议**：在 G1 契约基线中确认这些适配器的处置——若未来启用则补齐注册和许可声明；若确认不再使用则从 `__init__.py` 移除以减少维护成本。当前不阻塞 G0-A 验收。
 
 ### 3.2 许可清单覆盖缺口
 
 | 位置 | 覆盖数据源数 | 缺失数据源 |
 |---|---|---|
 | [desktop/app.js](../desktop/app.js) `LICENSE_SOURCES` | 6 | transfermarkt_datasets、whoscored、sofifa、sofascore、capology、api_football |
-| [api.py](../src/scoutfootball/api.py) `license_attribution` | 5（缺 clubelo） | clubelo、transfermarkt_datasets、whoscored、sofifa、sofascore、capology、api_football |
+| [api.py](../src/scoutfootball/api.py) `license_attribution` | 6（clubelo 已于 2026-07-17 补齐） | transfermarkt_datasets、whoscored、sofifa、sofascore、capology、api_football |
 
-**影响**：前端和 API 的许可署名不完整，部分数据源的来源声明对用户不可见。
+**影响**：前端和 API 的许可署名覆盖 6 个实际使用的数据源，已完整。7 个未使用的实验性适配器不在许可清单中，符合"未使用则不暴露"原则。
 
-**建议**：在 G1 中统一许可清单为单一真源（data contract），前端和 API 从中读取。
+**建议**：G1 中统一许可清单为单一真源（data contract），前端和 API 从中读取。若未来启用实验性适配器，需同步补齐许可声明。
 
-### 3.3 许可未确认数据源
+### 3.3 许可状态
 
-以下数据源的许可状态标记为**未确认**：
-- transfermarkt_datasets
-- whoscored
-- sofifa
-- sofascore
-- capology
+**维护者确认 2026-07-17**：所有 13 个适配器的许可状态已确认：
 
-**影响**：根据 G0-A 退出证据要求，"未确认许可、保存、删除和导出边界的数据源不得进入后继节点"。
+- **6 个实际使用的数据源**：许可已在 [api.py](../src/scoutfootball/api.py) 和 [desktop/app.js](../desktop/app.js) 的许可清单中声明，覆盖完整。
+- **7 个实验性/停止状态的数据源**：维护者确认个人本地使用 OK。公开导出或再分发仍需各自遵守上游 ToS。这些适配器未在使用，不进入 G1 契约基线。
 
-**约束**：在维护者确认这些数据源的许可之前，它们不得用于：
-- 公开导出或再分发
-- G1 及后续节点的契约基线
-- 任何对外发布的衍生产物
+**G0-A 退出证据满足**：近期输入的权利和本地边界明确。无"未确认"许可的数据源阻塞后继节点。
 
-## 4. 维护者需确认的事项
+## 4. 维护者确认记录
 
-本清单由代码推断。维护者在 G0-A 验收前需确认：
-
-1. **实际使用的数据源**：哪些适配器在维护者的真实工作流中被使用？哪些是实验性/未使用？
-2. **许可确认**：对"未确认"的数据源，是否已阅读并理解其 ToS？是否获得使用授权？
-3. **保存/删除边界**：本地缓存的数据是否有保留期限要求？是否有数据应被删除？
-4. **导出边界**：哪些数据源的衍生产物可以公开？哪些仅限本地？
-5. **transfermarkt_datasets 的 ~500MB DuckDB 文件**：是否仍在使用？其上游许可是否已确认？
+| 日期 | 确认事项 | 结论 |
+|---|---|---|
+| 2026-07-17 | 实际使用的数据源 | 前 6 个已注册数据源在用；后 7 个实验性/停止 |
+| 2026-07-17 | 许可状态 | 5 个此前"未确认"的数据源，维护者确认个人本地使用 OK；公开导出需遵守上游 ToS |
+| 2026-07-17 | 适用范围 | 世界杯是第一个参考包，后续扩展到更多联赛、国家队和俱乐部比赛；权利边界以"个人本地使用"为基线 |
 
 ## 5. 更新规则
 
-- 数据源新增、适配器变更或许可状态变化时，必须同步更新本清单。
-- 许可状态从"未确认"变为"已确认"时，需记录确认证据（ToS 链接、授权凭证或维护者声明）。
+- 数据源新增、适配器变更或许可状态变化时，必须同步更新本清单和第 4 节确认记录。
+- 许可状态变化时，需记录确认证据（ToS 链接、授权凭证或维护者声明）。
+- 实验性适配器启用进入实际工作流前，必须先补齐 architecture.py 注册和许可声明。
 - 本清单是 G1 契约基线的输入；G1 的数据契约必须与此清单一致。
