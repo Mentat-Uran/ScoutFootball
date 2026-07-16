@@ -88,10 +88,10 @@
 - 当前验证：Node 语法检查、前端契约测试、API 集成测试、安全回归、本地浏览器交互检查，以及 `tests/e2e/` 下的 Playwright 真实浏览器 E2E（smoke + 8 个工作流场景，覆盖 LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全，通过 `-m e2e` 显式运行）。Node 测试仍不替代真实浏览器 E2E；二者互补。
 - 当前 `frontend/data_manifest.json` 的记录生成时间仍为 2026-06-23；在构建时自动刷新并校验契约之前，静态快照新鲜度属于已知风险。
 
-## G1 解锁后的前端顺序
+## G1 验证后的前端顺序
 
-1. 为球探决策、比赛准备、数据/模型发布三个黄金流程加入真实浏览器 CI，覆盖 LIVE、STATIC、OFFLINE、空数据、低覆盖、字段缺失、移动阅读和导入安全。
-2. 从 OpenAPI、导航、静态映射和 capability registry 生成前端能力/契约清单；构建时刷新 manifest，漂移或陈旧即阻断发布。
+1. ~~为球探决策、比赛准备、数据/模型发布三个黄金流程加入真实浏览器 CI，覆盖 LIVE、STATIC、OFFLINE、空数据、低覆盖、字段缺失、移动阅读和导入安全。~~ 已完成（G1 子任务3，`tests/e2e/`，commit e30cc57 + d413d68）。
+2. 从 OpenAPI、导航、静态映射和 capability registry 生成前端能力/契约清单；构建时刷新 manifest，漂移或陈旧即阻断发布。（部分完成：`data/project_manifest.json` + `scripts/generate_manifest.py --check` 已就位；`frontend/data_manifest.json` 构建时门禁仍待集成）
 3. 按领域拆分 `app.js`，先抽出契约/数据访问、球探、世界杯和动作价值模块，并保持现有安全 helper 与静态降级语义。
 4. 把工作流中的“下一步、缺失证据、阻断原因”做成一等状态；不再用增加顶层视图表示进度。
 5. 继续加强本地导入、导出、备份和迁移；公开链接、云同步、组织账号及多人实时协作不在当前章程范围内。

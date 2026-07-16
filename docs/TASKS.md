@@ -32,16 +32,22 @@
 
 退出证据：21 个关键 Parquet 产物 preflight 全部通过（c74263e）；发布 fail-open 为 0（01d85a1）；demo.sh 统一为 FastAPI 同源托管（端口 8000）并增加 `--smoke` 健康检查；README 部署引用已核验（2026-07-17：Vercel 前端可达，Render 后端 free tier 冷启动未完全通过，未标记为 live）。
 
+### G1：黄金流程与契约基线 — `verified`（G0-A + G0-B 已验证）
+
+- [x] 建立机器可读 capability registry，从 OpenAPI、CLI、前端导航、静态映射和模型登记生成清单。（`data/project_manifest.json`：9 domains, 24 capabilities, 28 data contracts；`scripts/generate_manifest.py --check` 作为发布门禁）
+- [x] 统一来源、许可、`as_of`、快照、lineage、覆盖和 `recorded/not_recorded` 数据契约。（`src/scoutfootball/schemas/storage.py` `DataContract` schema；`data/project_manifest.json` data_contracts 28 条；`build_run_lineage` 记录 dataset_snapshot/input_hash/status）
+- [x] 为当前声明支持的参考工作流加入真实浏览器 E2E，覆盖 LIVE、STATIC、OFFLINE、空数据、低覆盖、字段缺失、移动阅读和导入安全。（`tests/e2e/`：5 smoke + 8 workflow = 13 测试通过；commit e30cc57, d413d68）
+- [x] 构建时生成静态 manifest；关键 API/静态契约、文件新鲜度或序列化失败时阻断发布。（`scripts/generate_manifest.py` 生成 + `--check` 门禁；`tests/unit/test_static_json_contracts.py` 检查静态 JSON 结构；`frontend/data_manifest.json` 陈旧度门禁为已知风险，见退出证据）
+
+退出证据：
+- 参考工作流 fixture 通过 — 13 个 E2E 测试通过（e30cc57 smoke harness, d413d68 workflow coverage），覆盖 LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全。
+- 新决策包的外部事实和派生主张证据完整 — 架构基础已就位：`DataContract` schema 含 license/snapshot/lineage/coverage/recorded；world cup briefing 保留 source_attribution/limitations/input_snapshot（未记录时 status=not_recorded）；球探工作区保留 audit/review/selections/source/snapshot；tournament import preview 有 integrity_failed 检测。部分满足：统一的决策包 validator 留到 C1（C1 要求 provenance 字段经 registry 强制）。
+- API/静态同快照一致 — `scripts/generate_manifest.py --check` 提供 project_manifest 发布门禁（hash 对比，stale 返回 1）；`tests/unit/test_static_json_contracts.py` 检查静态 JSON 结构。部分满足：`frontend/data_manifest.json` 记录生成时间仍为 2026-06-23，其构建时陈旧度门禁未集成（已知风险，`FRONTEND_STATUS.md` 已记录，完整门禁属 G1 后置维护项或 C1）。
+- 入口文档口径一致 — 4 处冲突已修复（e3d0e22：README.md, README_ZH.md, CAPABILITIES.md, FRONTEND_STATUS.md）。
+
 ## 下一解锁节点
 
-### G1：黄金流程与契约基线 — `ready`（G0-A + G0-B 已验证）
-
-- 建立机器可读 capability registry，从 OpenAPI、CLI、前端导航、静态映射和模型登记生成清单。
-- 统一来源、许可、`as_of`、快照、lineage、覆盖和 `recorded/not_recorded` 数据契约。
-- 为当前声明支持的参考工作流加入真实浏览器 E2E，覆盖 LIVE、STATIC、OFFLINE、空数据、低覆盖、字段缺失、移动阅读和导入安全。
-- 构建时生成静态 manifest；关键 API/静态契约、文件新鲜度或序列化失败时阻断发布。
-
-退出证据：参考工作流 fixture 通过；新决策包的外部事实和派生主张证据完整；API/静态同快照一致；入口文档口径一致。
+C1 可信证据内核已被 G1 解锁，但维护者尚未选择启动。C1 的目标是把可信度从 UI 提示升级为数据和代码强制执行的内核（来源/许可登记、快照与 lineage、身份工作台、契约注册与质量 SLO、模型晋级与回滚）。启动取决于维护者是否有真实工作流需要强制 provenance，而非日期。G1 后置维护项（TASKS.md 历史归档、模块边界 ADR、最小文档生成与陈旧度报告）可在 C1 启动前择机完成。
 
 ## 后续依赖表
 
