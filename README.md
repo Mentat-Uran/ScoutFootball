@@ -4,7 +4,7 @@
 
 https://scoutfootball.vercel.app/ — this URL is an optional historical deployment target, not the primary product mode and not a guarantee that the current commit or backend is reachable. Core use is local and does not depend on this URL. Verify the version, access policy, `/health`, and a real data request before calling any online demo live.
 
-> **核验 2026-07-17：** Vercel 前端可达；Render 后端在 free tier（冷启动 60–90s），`/health` 未在超时内完全通过。未标记为 live。
+> **Verified 2026-07-17:** Vercel frontend is reachable; Render backend is on free tier (cold start 60–90s), `/health` did not fully pass within the timeout. Not marked as live.
 
 > **A local-first, open-source, personally maintained, non-profit football analytics toolkit.**
 
@@ -14,7 +14,7 @@ https://scoutfootball.vercel.app/ — this URL is an optional historical deploym
 [![PyTorch](https://img.shields.io/badge/PyTorch-Optimized-ee4c2c)](https://pytorch.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B)](https://streamlit.io/)
 
-**English** | **[中文](docs/README_ZH.md)**
+**English** | **[Chinese](docs/README_ZH.md)**
 
 ---
 
@@ -84,7 +84,7 @@ The `frontend/` directory contains a static analysis workbench with a consistent
 
 The project is configured for a Vercel frontend and Render backend. Treat it as live only after checking the deployed version, access policy, `/health`, and a representative API request; local build success is not deployment confirmation.
 
-**核验 2026-07-17：** Vercel 前端可达并返回完整 UI；Vercel `/health` 返回 404（预期行为——后端在 Render 上，不在 Vercel 上）。Render 后端已部署但在 free tier，冷启动需 60–90s，`/health` 未在本次超时内完全通过。线上部署不是本地项目的解锁条件——核心使用方式是本地。
+**Verified 2026-07-17:** Vercel frontend is reachable and returns the full UI; Vercel `/health` returns 404 (expected — the backend is on Render, not Vercel). The Render backend is deployed but on free tier, cold start takes 60–90s, and `/health` did not fully pass within the timeout. Online deployment is not an unlock condition for the local project — the primary use mode is local.
 
 ### LAN / Campus Network Deployment
 
