@@ -4377,3 +4377,669 @@ class TestLeagueFormHeatmapI18n:
         count = js.count(self._DATE_KEY + ":")
         assert count >= 2
 
+
+# ---------------------------------------------------------------------------
+# Round 98: League fixture difficulty heatmap + distribution chart
+# ---------------------------------------------------------------------------
+
+
+class TestLeagueDifficultyHeatmapFunction:
+    """Round 98: verify renderLeagueDifficultyHeatmap function."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "function renderLeagueDifficultyHeatmap(data)" in js
+
+    def test_targets_correct_container(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 300]
+        assert 'getElementById("league-difficulty-heatmap")' in body
+
+    def test_targets_status_element(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 500]
+        assert 'getElementById("league-difficulty-heatmap-status")' in body
+
+    def test_uses_get_chart(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert 'getChart("league-difficulty-heatmap")' in body
+
+    def test_handles_empty_teams(self):
+        """When teams is empty, must clear chart and show no_data status."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "teams.length === 0" in body
+        assert "chart.clear()" in body
+        assert 't("league_difficulty_heatmap_no_data")' in body
+
+    def test_reads_fixtures_from_teams(self):
+        """Must read fixtures array from each team."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "fixtures" in body
+        assert "Array.isArray(teams[yi].fixtures)" in body
+
+    def test_builds_heat_data_array(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "heatData.push" in body
+        assert "heatData" in body
+
+    def test_builds_tooltip_cells_array(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "tooltipCells.push" in body
+        assert "tooltipCells" in body
+
+    def test_uses_continuous_visual_map(self):
+        """Must use continuous visualMap (not piecewise) for 0-100 difficulty score."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'type: "continuous"' in body
+        assert "min: 0" in body
+        assert "max: 100" in body
+
+    def test_uses_green_amber_red_gradient(self):
+        """Continuous visualMap must use green→amber→red color gradient."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "#16a34a" in body  # green (easy)
+        assert "#ca8a04" in body  # amber (moderate)
+        assert "#dc2626" in body  # red (hard)
+
+    def test_uses_heatmap_series_type(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'type: "heatmap"' in body
+
+    def test_uses_set_option_with_not_merge(self):
+        """Must call setOption with true (notMerge) to clear stale state."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chart.setOption(" in body
+        assert ", true)" in body
+
+    def test_uses_request_animation_frame_for_resize(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "requestAnimationFrame" in body
+        assert "chart.resize()" in body
+
+    def test_uses_chart_text_color(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chartTextColor()" in body
+
+    def test_uses_chart_grid_color(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chartGridColor()" in body
+
+    def test_uses_t_for_match_n_label(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 't("league_difficulty_heatmap_match_n")' in body
+
+    def test_tooltip_uses_escape_html_for_team(self):
+        """Tooltip must escape team name."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(cell.team)" in body
+
+    def test_tooltip_uses_escape_html_for_opponent(self):
+        """Tooltip must escape opponent name."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(cell.opponent)" in body
+
+    def test_tooltip_uses_escape_html_for_venue_label(self):
+        """Tooltip must escape venue label."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(venueLabel)" in body
+
+    def test_tooltip_uses_escape_html_for_date(self):
+        """Tooltip must escape date string."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(dateStr)" in body
+
+    def test_tooltip_uses_escape_html_for_level_label(self):
+        """Tooltip must escape difficulty level label."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(levelLabel)" in body
+
+    def test_tooltip_uses_escape_html_for_i18n_labels(self):
+        """Tooltip must escape i18n label strings."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'escapeHtml(t("league_difficulty_heatmap_opponent"))' in body
+        assert 'escapeHtml(t("league_difficulty_heatmap_venue"))' in body
+        assert 'escapeHtml(t("league_difficulty_heatmap_date"))' in body
+        assert 'escapeHtml(t("league_difficulty_heatmap_score"))' in body
+        assert 'escapeHtml(t("league_difficulty_heatmap_xpts"))' in body
+        assert 'escapeHtml(t("league_difficulty_heatmap_level"))' in body
+
+    def test_status_uses_text_content(self):
+        """Status element must use textContent, not innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "statusEl.textContent" in body
+        assert "statusEl.innerHTML" not in body
+
+    def test_no_eval_in_function(self):
+        """No eval() calls in the heatmap function."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "eval(" not in body
+
+    def test_xaxis_is_category(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "xAxis" in body
+        assert 'type: "category"' in body
+
+    def test_yaxis_is_category(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "yAxis" in body
+
+    def test_cell_label_shows_difficulty_score(self):
+        """Cell label formatter must show the difficulty score number."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "params.value[2]" in body
+
+    def test_builds_x_labels_from_upcoming_n(self):
+        """X-axis labels must be built from upcoming_n using i18n match_n template."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "xLabels.push" in body
+        assert "upcomingN" in body
+        assert "{n}" in body
+
+    def test_y_labels_from_team_names(self):
+        """Y-axis labels must be team names."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "yLabels" in body
+        assert "teams.map" in body
+
+    def test_skips_missing_fixtures(self):
+        """Must skip cells when a team has fewer fixtures than upcomingN."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "if (!f) continue" in body
+
+    def test_reads_difficulty_score_from_fixture(self):
+        """Must read difficulty_score from each fixture for the heat value."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "difficulty_score" in body
+
+    def test_uses_league_diff_label_for_level(self):
+        """Tooltip must use leagueDiffLabel() to localize the difficulty level."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "leagueDiffLabel(" in body
+
+    def test_updates_status_on_success(self):
+        """Must update status element text on success."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyHeatmap")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "statusEl.textContent" in body
+        assert "status-pill status-high" in body
+
+
+class TestLeagueDifficultyDistributionFunction:
+    """Round 98: verify renderLeagueDifficultyDistribution function."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "function renderLeagueDifficultyDistribution(data)" in js
+
+    def test_targets_correct_container(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 300]
+        assert 'getElementById("league-difficulty-distribution")' in body
+
+    def test_targets_status_element(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 500]
+        assert 'getElementById("league-difficulty-distribution-status")' in body
+
+    def test_uses_get_chart(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert 'getChart("league-difficulty-distribution")' in body
+
+    def test_handles_empty_teams(self):
+        """When teams is empty, must clear chart and show no_data status."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "teams.length === 0" in body
+        assert "chart.clear()" in body
+        assert 't("league_difficulty_distribution_no_data")' in body
+
+    def test_sorts_by_avg_difficulty_descending(self):
+        """Must sort teams by avg_difficulty descending (hardest first)."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "avg_difficulty" in body
+        assert "sort(" in body
+        assert "avgB - avgA" in body
+
+    def test_uses_bar_series_type(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'type: "bar"' in body
+
+    def test_uses_set_option_with_not_merge(self):
+        """Must call setOption with true (notMerge)."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chart.setOption(" in body
+        assert ", true)" in body
+
+    def test_uses_request_animation_frame_for_resize(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "requestAnimationFrame" in body
+        assert "chart.resize()" in body
+
+    def test_uses_chart_text_color(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chartTextColor()" in body
+
+    def test_uses_chart_grid_color(self):
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "chartGridColor()" in body
+
+    def test_colors_bars_by_difficulty_level(self):
+        """Bar colors must reflect difficulty: red >= 70, amber >= 50, green < 50."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert ">= 70" in body
+        assert ">= 50" in body
+        assert "#dc2626" in body  # red
+        assert "#ca8a04" in body  # amber
+        assert "#16a34a" in body  # green
+
+    def test_tooltip_uses_escape_html_for_team(self):
+        """Tooltip must escape team name."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "escapeHtml(team)" in body
+
+    def test_tooltip_uses_escape_html_for_avg_label(self):
+        """Tooltip must escape the avg difficulty i18n label."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'escapeHtml(t("league_difficulty_distribution_avg"))' in body
+
+    def test_status_uses_text_content(self):
+        """Status element must use textContent, not innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "statusEl.textContent" in body
+        assert "statusEl.innerHTML" not in body
+
+    def test_no_eval_in_function(self):
+        """No eval() calls in the distribution function."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert "eval(" not in body
+
+    def test_xaxis_is_value(self):
+        """X-axis must be value type (numeric 0-100)."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'type: "value"' in body
+
+    def test_yaxis_is_category(self):
+        """Y-axis must be category type (team names)."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 6000]
+        assert 'type: "category"' in body
+
+    def test_reads_avg_difficulty_from_teams(self):
+        """Must read avg_difficulty from each team."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "avg_difficulty" in body
+
+    def test_reads_n_fixtures_from_teams(self):
+        """Must read n_fixtures from each team for tooltip."""
+        js = _read_app_js()
+        idx = js.find("function renderLeagueDifficultyDistribution")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "n_fixtures" in body
+
+
+class TestLeagueDifficultyChartsIntegration:
+    """Round 98: verify loadLeagueDifficulty calls both render functions."""
+
+    def test_load_league_difficulty_calls_heatmap_on_success(self):
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueDifficulty")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "renderLeagueDifficultyHeatmap(data)" in body
+
+    def test_load_league_difficulty_calls_distribution_on_success(self):
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueDifficulty")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert "renderLeagueDifficultyDistribution(data)" in body
+
+    def test_load_league_difficulty_calls_heatmap_on_empty(self):
+        """Must call renderLeagueDifficultyHeatmap with empty teams in no_data path."""
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueDifficulty")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert 'renderLeagueDifficultyHeatmap({ teams: [] })' in body
+
+    def test_load_league_difficulty_calls_distribution_on_empty(self):
+        """Must call renderLeagueDifficultyDistribution with empty teams in no_data path."""
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueDifficulty")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        assert 'renderLeagueDifficultyDistribution({ teams: [] })' in body
+
+    def test_load_league_difficulty_calls_heatmap_on_error(self):
+        """Must call renderLeagueDifficultyHeatmap with empty teams in catch block."""
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueDifficulty")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        # Catch block should also clear the heatmap
+        catch_idx = body.find("} catch (err) {")
+        assert catch_idx > 0
+        catch_body = body[catch_idx:]
+        assert 'renderLeagueDifficultyHeatmap({ teams: [] })' in catch_body
+
+    def test_load_league_difficulty_calls_distribution_on_error(self):
+        """Must call renderLeagueDifficultyDistribution with empty teams in catch block."""
+        js = _read_app_js()
+        idx = js.find("async function loadLeagueDifficulty")
+        assert idx > 0
+        body = js[idx : idx + 4000]
+        catch_idx = body.find("} catch (err) {")
+        assert catch_idx > 0
+        catch_body = body[catch_idx:]
+        assert 'renderLeagueDifficultyDistribution({ teams: [] })' in catch_body
+
+
+class TestLeagueDifficultyChartsHtml:
+    """Round 98: verify heatmap + distribution HTML containers in index.html."""
+
+    def test_heatmap_container_present(self):
+        html = _read_index()
+        assert 'id="league-difficulty-heatmap"' in html
+
+    def test_heatmap_container_has_chart_box_class(self):
+        html = _read_index()
+        idx = html.find('id="league-difficulty-heatmap"')
+        assert idx > 0
+        snippet = html[max(0, idx - 100) : idx + 50]
+        assert "chart-box" in snippet
+
+    def test_heatmap_status_present(self):
+        html = _read_index()
+        assert 'id="league-difficulty-heatmap-status"' in html
+
+    def test_heatmap_title_has_i18n_attr(self):
+        html = _read_index()
+        assert 'data-i18n="league_difficulty_heatmap_title"' in html
+
+    def test_heatmap_container_has_height(self):
+        """Container must have an inline height style."""
+        html = _read_index()
+        idx = html.find('id="league-difficulty-heatmap"')
+        assert idx > 0
+        snippet = html[max(0, idx - 50) : idx + 100]
+        assert "height:" in snippet
+
+    def test_heatmap_panel_has_chart_panel_class(self):
+        """Panel wrapper should use chart-panel class."""
+        html = _read_index()
+        idx = html.find('id="league-difficulty-heatmap"')
+        assert idx > 0
+        before = html[:idx]
+        panel_idx = before.rfind("liquid-panel")
+        assert panel_idx > 0
+        snippet = html[panel_idx : panel_idx + 50]
+        assert "chart-panel" in snippet
+
+    def test_distribution_container_present(self):
+        html = _read_index()
+        assert 'id="league-difficulty-distribution"' in html
+
+    def test_distribution_container_has_chart_box_class(self):
+        html = _read_index()
+        idx = html.find('id="league-difficulty-distribution"')
+        assert idx > 0
+        snippet = html[max(0, idx - 100) : idx + 100]
+        assert "chart-box" in snippet
+
+    def test_distribution_status_present(self):
+        html = _read_index()
+        assert 'id="league-difficulty-distribution-status"' in html
+
+    def test_distribution_title_has_i18n_attr(self):
+        html = _read_index()
+        assert 'data-i18n="league_difficulty_distribution_title"' in html
+
+    def test_distribution_container_has_height(self):
+        """Container must have an inline height style."""
+        html = _read_index()
+        idx = html.find('id="league-difficulty-distribution"')
+        assert idx > 0
+        snippet = html[max(0, idx - 50) : idx + 100]
+        assert "height:" in snippet
+
+    def test_distribution_panel_has_chart_panel_class(self):
+        """Panel wrapper should use chart-panel class."""
+        html = _read_index()
+        idx = html.find('id="league-difficulty-distribution"')
+        assert idx > 0
+        before = html[:idx]
+        panel_idx = before.rfind("liquid-panel")
+        assert panel_idx > 0
+        snippet = html[panel_idx : panel_idx + 50]
+        assert "chart-panel" in snippet
+
+
+class TestLeagueDifficultyChartsI18n:
+    """Round 98: verify heatmap + distribution i18n keys."""
+
+    _HEATMAP_TITLE = "league_difficulty_heatmap_title"
+    _HEATMAP_NO_DATA = "league_difficulty_heatmap_no_data"
+    _HEATMAP_MATCH_N = "league_difficulty_heatmap_match_n"
+    _HEATMAP_OPPONENT = "league_difficulty_heatmap_opponent"
+    _HEATMAP_VENUE = "league_difficulty_heatmap_venue"
+    _HEATMAP_DATE = "league_difficulty_heatmap_date"
+    _HEATMAP_SCORE = "league_difficulty_heatmap_score"
+    _HEATMAP_XPTS = "league_difficulty_heatmap_xpts"
+    _HEATMAP_LEVEL = "league_difficulty_heatmap_level"
+    _DIST_TITLE = "league_difficulty_distribution_title"
+    _DIST_NO_DATA = "league_difficulty_distribution_no_data"
+    _DIST_AVG = "league_difficulty_distribution_avg"
+
+    def test_heatmap_title_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_TITLE + ":")
+        assert count >= 2
+
+    def test_heatmap_no_data_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_NO_DATA + ":")
+        assert count >= 2
+
+    def test_heatmap_match_n_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_MATCH_N + ":")
+        assert count >= 2
+
+    def test_heatmap_match_n_key_has_placeholder(self):
+        js = _read_app_js()
+        idx = js.find(self._HEATMAP_MATCH_N + ":")
+        assert idx > 0
+        line_end = js.find(",\n", idx)
+        assert line_end > 0
+        line = js[idx : line_end]
+        assert "{n}" in line
+
+    def test_heatmap_opponent_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_OPPONENT + ":")
+        assert count >= 2
+
+    def test_heatmap_venue_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_VENUE + ":")
+        assert count >= 2
+
+    def test_heatmap_date_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_DATE + ":")
+        assert count >= 2
+
+    def test_heatmap_score_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_SCORE + ":")
+        assert count >= 2
+
+    def test_heatmap_xpts_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_XPTS + ":")
+        assert count >= 2
+
+    def test_heatmap_level_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._HEATMAP_LEVEL + ":")
+        assert count >= 2
+
+    def test_distribution_title_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._DIST_TITLE + ":")
+        assert count >= 2
+
+    def test_distribution_no_data_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._DIST_NO_DATA + ":")
+        assert count >= 2
+
+    def test_distribution_avg_key_present(self):
+        js = _read_app_js()
+        count = js.count(self._DIST_AVG + ":")
+        assert count >= 2
+
