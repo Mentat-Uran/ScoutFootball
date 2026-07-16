@@ -208,7 +208,7 @@ PYTHONPATH=src uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
 uv run streamlit run src/scoutfootball/app/streamlit_app.py
 ```
 
-**首次运行提示：** 部分采集路径会下载并缓存公开数据，需要网络连接；另一些路径需要手动/授权的本地输入。`scripts/demo.sh` 在同源端口说明修正前不再作为标准启动入口。
+**首次运行提示：** 部分采集路径会下载并缓存公开数据，需要网络连接；另一些路径需要手动/授权的本地输入。`scripts/demo.sh` 已与同源 FastAPI 设置对齐（端口 8000）并含 `--smoke` 健康检查，是本地 demo 流水的标准启动入口。
 
 ## 技术栈与合规
 

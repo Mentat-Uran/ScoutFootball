@@ -85,7 +85,7 @@
 - CSV 使用 `csvCell()` 防公式注入。
 - StatsBomb 衍生图表和导出必须显示 attribution。
 - 动画尊重 `prefers-reduced-motion`；交互元素保留焦点态和移动端触控尺寸。
-- 当前验证：Node 语法检查、前端契约测试、API 集成测试、安全回归和本地浏览器交互检查。CI 尚未形成覆盖三个黄金工作流的真实浏览器自动化，因此不能把纯 Node 测试视为完整 UI 验收。
+- 当前验证：Node 语法检查、前端契约测试、API 集成测试、安全回归、本地浏览器交互检查，以及 `tests/e2e/` 下的 Playwright 真实浏览器 E2E（smoke + 8 个工作流场景，覆盖 LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全，通过 `-m e2e` 显式运行）。Node 测试仍不替代真实浏览器 E2E；二者互补。
 - 当前 `frontend/data_manifest.json` 的记录生成时间仍为 2026-06-23；在构建时自动刷新并校验契约之前，静态快照新鲜度属于已知风险。
 
 ## G1 解锁后的前端顺序

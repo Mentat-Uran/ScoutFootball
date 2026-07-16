@@ -316,7 +316,7 @@ Open http://127.0.0.1:8000 for the Liquid Glass frontend, or run Streamlit:
 uv run streamlit run src/scoutfootball/app/streamlit_app.py
 ```
 
-**First run note:** Some ingestion paths download and cache public data and require an internet connection; others require manual/authorized local inputs. `scripts/demo.sh` currently needs same-origin port alignment before it can be treated as the canonical launcher.
+**First run note:** Some ingestion paths download and cache public data and require an internet connection; others require manual/authorized local inputs. `scripts/demo.sh` is aligned with the same-origin FastAPI setup (port 8000) and includes a `--smoke` health check; it is the canonical local launcher for the demo pipeline.
 
 ### Tech Stack & Compliance
 
