@@ -1,9 +1,12 @@
 # ScoutFootball for World Cup
 
-## link
-https://scoutfootball.vercel.app/
+## Optional demo reference
 
-> **Your local-first football analytics toolkit for the 2026 FIFA World Cup.**
+https://scoutfootball.vercel.app/ — this URL is an optional historical deployment target, not the primary product mode and not a guarantee that the current commit or backend is reachable. Core use is local and does not depend on this URL. Verify the version, access policy, `/health`, and a real data request before calling any online demo live.
+
+> **核验 2026-07-17：** Vercel 前端可达；Render 后端在 free tier（冷启动 60–90s），`/health` 未在超时内完全通过。未标记为 live。
+
+> **A local-first, open-source, personally maintained, non-profit football analytics toolkit.**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/uv-Fast-magenta)](https://github.com/astral-sh/uv)
@@ -21,9 +24,20 @@ The 2026 FIFA World Cup kicks off June 11 across the US, Canada, and Mexico — 
 
 ### What It Does
 
-ScoutFootball is a local-first football analytics platform that turns public data, manual imports, interpretable player ratings, and match predictions into a reproducible research pipeline.
+ScoutFootball is a local-first, open-source, personally maintained, non-profit football analytics and research project. It turns public data, lawful manual imports, interpretable player ratings, and match predictions into reproducible workflows that run primarily on the user's own machine.
 
-The focus right now: upgrading the rating system into an interpretable, evaluable scouting tool — fixing true impact labels and training targets first, then integrating event action values, football-specific visualizations, and model cards.
+It is not being developed as a SaaS, paid product, enterprise platform, or data marketplace. The code and documentation are available under the repository's MIT License; third-party data and video remain subject to their own licenses. The canonical positioning and decision rules are in [`docs/PROJECT_CHARTER.md`](docs/PROJECT_CHARTER.md).
+
+The World Cup is the first reference pack, not the permanent boundary of the core platform; the same evidence and workflow contracts are intended to support recruitment and match preparation beyond one tournament.
+
+The focus now is to turn the broad prototype into three trustworthy, repeatable workflows: scouting decisions, match preparation, and data/model releases. Source licenses, snapshots, identity review, contracts, browser E2E, and fail-closed releases take priority over adding more top-level pages or model complexity.
+
+### Strategy and verified scope
+
+- [`docs/PROJECT_CHARTER.md`](docs/PROJECT_CHARTER.md) defines the local, open, personal, non-profit project identity and takes precedence over other planning documents.
+- [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) separates shipped, partial, sample, browser/local-only, planned, and unverified capabilities.
+- [`docs/FOOTBALL_TOOLING_LANDSCAPE_2026.md`](docs/FOOTBALL_TOOLING_LANDSCAPE_2026.md) maps the 2026 commercial and open tooling landscape as technical context, not as a monetization or market-entry plan.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) defines a dependency-gated long-term development order without calendar deadlines; [`docs/TASKS.md`](docs/TASKS.md) contains the current executable queue.
 
 ### Core Capabilities
 
@@ -37,13 +51,13 @@ The focus right now: upgrading the rating system into an interpretable, evaluabl
 - **Neural Rating Candidate:** `scoutfootball train-rating-nn` trains a supervised sklearn MLP candidate only from supervision-eligible labels in `rating_feature_matrix.parquet` + `player_truth_labels.parquet`, writing provenance and its source-policy audit to `data/models/player_rating_nn/`; it does not replace `player_ratings_optimized.parquet` unless it beats the current optimizer on the same eligible holdout and baseline checks.
 - **Model Evaluation & Cards:** Data sources, label definitions, bounds, and known biases documented in `docs/MODEL_CARD.md`.
 - **Match Prediction:** Independent Poisson baseline with score probability matrices, plus Football-Data head-to-head history and recent-form comparison with form-trend momentum ratings and offline snapshots.
-- **Product & Visuals:** 15-page Streamlit console with artifact overview, scouting queue, and action-value sample pages. Liquid Glass static frontend with 7 analysis views (Overview, Players, Value, Matches, Scouting, Action Values, Reports), 4 World Cup views (Schedule, Squads, Compare, Probability), and a first-slice local tactical board. FastAPI read-only backend serves artifacts, player profiles, rating snapshots, predictions, review queue, watchlist, shortlist, action-value samples, model runs, and source-bounded World Cup match briefings. Each World Cup schedule row opens its pre-match briefing, which connects the simplified score model with squad-rating coverage and can create a browser-local tactical plan; the briefing can also be downloaded as versioned JSON or spreadsheet-safe CSV. It explicitly states that rosters are placeholders and the output is not live team news. `mplsoccer` powers pitch plots, pizza charts, and shot maps. The scouting desk exports and imports a versioned browser-local workspace with revision/timestamp audit fields, import previews, conflict detection, safe merge, explicit replacement, and shortlist dossiers (priority, recommendation, target role, rationale/risk). Model-run reports expose exact input snapshot and feature-manifest lineage when recorded, and explicitly label legacy runs without captured lineage. Player profiles export multi-section scouting reports (CSV/JSON); player comparison results export to CSV. Frontend rendering escapes API/local JSON strings, CSV exports guard against spreadsheet formula injection, and tactical-board JSON imports pass through a schema sanitizer. API status pill distinguishes LIVE / STATIC / OFFLINE; review queue is paginated (50 per page); NaN/undefined values are guarded; static export no longer writes repr strings for dataclass/Pydantic responses.
+- **Product & Visuals:** 15-page Streamlit console and a Liquid Glass static workbench with 22 current top-level view targets across core analysis, World Cup, tactical, quality, and governance areas. This breadth is not itself a maturity claim; the exact inventory and boundaries are in `docs/CAPABILITIES.md`. FastAPI serves the corresponding local artifacts and source-bounded World Cup briefings. Scouting projects, decision packs, tactical projects, and several briefing handoffs are browser-local by default, not cloud or multi-user sync. Estimated rosters and tournament outputs are explicitly separate from official live team news.
 
 ### Liquid Glass Frontend
 
 The `frontend/` directory contains a static analysis workbench with a consistent geometric icon system (no emojis). All navigation icons use minimal Unicode symbols (◎ ◇ € △ □ ⌁ ▣ ⬡ ⊕ ⟷ ⊞) for visual consistency. API, local Parquet-derived JSON, demo strings, and imported tactical-board project fields are escaped or sanitized before entering HTML.
 
-**7 Analysis Views:**
+**Core analysis workflow views (selected; not the full navigation inventory):**
 
 | View | Description | Data Source |
 | --- | --- | --- |
@@ -55,7 +69,7 @@ The `frontend/` directory contains a static analysis workbench with a consistent
 | **Actions** (⌁) | xT/VAEP ranking, sample filters, 3-match player→match action evidence, tactical heatmap handoff | `/action-values`, `/action-values/evidence/{player_id}` API |
 | **Reports** (▣) | Model runs, backend contracts, metrics | `/reports/model-runs` API |
 
-**4 World Cup Views:**
+**World Cup entry views (selected; the current product also includes knockout and tournament views):**
 
 | View | Description |
 | --- | --- |
@@ -64,11 +78,13 @@ The `frontend/` directory contains a static analysis workbench with a consistent
 | **Compare** (⟷) | Head-to-head team comparison with radar overlay |
 | **Probability** (⊞) | Group advancement probabilities, 48-team strength ranking |
 
-### Live Demo
+### Deployment target
 
-**https://scoutfootball.vercel.app/**
+**https://scoutfootball.vercel.app/** (frontend) · `https://scoutfootball-for-world-cup.onrender.com` (backend, Render free tier)
 
-Frontend hosted on Vercel, backend on Render (free tier — first request may take ~30s to wake up).
+The project is configured for a Vercel frontend and Render backend. Treat it as live only after checking the deployed version, access policy, `/health`, and a representative API request; local build success is not deployment confirmation.
+
+**核验 2026-07-17：** Vercel 前端可达并返回完整 UI；Vercel `/health` 返回 404（预期行为——后端在 Render 上，不在 Vercel 上）。Render 后端已部署但在 free tier，冷启动需 60–90s，`/health` 未在本次超时内完全通过。线上部署不是本地项目的解锁条件——核心使用方式是本地。
 
 ### LAN / Campus Network Deployment
 
@@ -178,14 +194,13 @@ The frontend falls back to built-in demo data when the FastAPI backend is unavai
 To see real data:
 
 ```bash
-# 1. Start the FastAPI backend (serves local Parquet/DuckDB artifacts)
-PYTHONPATH=src uv run python -m scoutfootball serve
+# FastAPI serves the frontend and local Parquet/DuckDB artifacts on one origin
+PYTHONPATH=src uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
 
-# 2. In another terminal, start the frontend
-python3 -m http.server 8600 --directory frontend
-
-# 3. Open http://localhost:8600 in your browser
+# Open http://127.0.0.1:8000
 ```
+
+`frontend/config.js` uses same-origin API requests. A separate plain static server is useful for testing STATIC fallback, but it will not call an API on another port unless the configuration is deliberately changed.
 
 To generate the rating artifacts the frontend reads:
 
@@ -214,12 +229,12 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 ### Current Known Limitations
 
 **Rating System:**
-- The current local truth-label artifact is entirely self-referential `expert_tier` data and is therefore excluded from supervised NN training and optimizer anchors; collect independently sourced labels before claiming a player-level validation result
+- The 2026-07-16 audit could read the truth-label footer/schema but not the content or `label_source` distribution. Treat the source mix and supervision eligibility as unverified until the locked project runtime completes a content-level source-policy audit; no player-level validation claim should rely on the footer row count.
 - Rating system is in calibration phase; strong teams (Barcelona, Real Madrid) may be systematically undervalued
 - League intercept bias exists (Serie A -16.6, Ligue 1 -11.3)
 
 **Data Coverage:**
-- Action value artifacts contain 15,062 xT/VAEP rows derived from the current StatsBomb Open Data sample; they are not full-league coverage
+- The action-value aggregate file footer reported 9,951 rows in the 2026-07-16 audit, but the current audit runtime could not fully decode it; treat it as unavailable until the locked project runtime passes content-level validation. The separate match-evidence slice contains only 94 player-match evidence records across 3 matches, not tracking data or full-league coverage.
 - FBref data limited to 5 seasons; coarse position mapping needs StatsBomb/formation data
 - World Cup squads are populated, but rating coverage remains incomplete outside the major leagues
 
@@ -231,30 +246,28 @@ PYTHONPATH=src uv run python -m scoutfootball train-rating-nn
 - Some VAEP rows only have `player_id`; identity mapping remains incomplete
 - Tactical board MP4 export requires ffmpeg installed on the system
 
-**Not Included in v1.0:**
-- Spatial/video analysis (StatsBomb 360, tracking data)
-- Real-time collaboration on tactical board
-- Mobile-optimized tactical board editing
+**Scope boundaries:**
+- Spatial/video analysis (StatsBomb 360, tracking data) remains dependency-gated local research, not a current capability
+- Public links, cloud sync, organization accounts, and real-time tactical-board collaboration are outside the current project charter
+- Mobile tactical-board editing is optional and must first prove value without increasing single-maintainer complexity
 
 ### Electronic Tactical Board
 
-The tactical board is available as a local-first coaching and analysis workspace inside `frontend/`, aligned with products such as [Tactico](https://tactico.pro/), [DrawTactics](https://drawtactics.com/animated-tactics-board), [TacticSlate](https://tacticslate.com/football-tactic-board), [JLA Tactics Board](https://jlatacticsboard.com/), and [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards). It includes normalized pitch coordinates, formations and set pieces, drawing tools, frame/path animation, local JSON projects, schema migration, report snapshots, and PNG/PDF/WebM/GIF export. A pre-match plan saves a versioned decision pack containing the exact loaded prediction, coverage, score matrix, and available local-artifact provenance; when a prediction is unavailable it records `not_loaded` rather than placeholder probabilities. Projects and JSON exports remain browser-local. MP4 remains an optional local-backend capability requiring ffmpeg; public links, cloud sync, video telestration, tracking import, and real-time collaboration remain later work.
+The tactical board is available as a local-first coaching and analysis workspace inside `frontend/`, aligned with products such as [Tactico](https://tactico.pro/), [DrawTactics](https://drawtactics.com/animated-tactics-board), [TacticSlate](https://tacticslate.com/football-tactic-board), [JLA Tactics Board](https://jlatacticsboard.com/), and [Metrica Tactical Boards](https://www.metrica-sports.com/help-center/tactical-boards). It includes normalized pitch coordinates, formations and set pieces, drawing tools, frame/path animation, local JSON projects, schema migration, report snapshots, and PNG/PDF/WebM/GIF export. A pre-match plan saves a versioned decision pack containing the exact loaded prediction, coverage, score matrix, and available local-artifact provenance; when a prediction is unavailable it records `not_loaded` rather than placeholder probabilities. Projects and JSON exports remain browser-local. MP4 remains an optional local-backend capability requiring ffmpeg. Public links, cloud sync, organization accounts, and real-time collaboration are out of scope under the current charter; local video telestration and tracking import remain gated research.
 
-Long-term sequencing and engineering gates are documented in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Long-term sequencing and engineering gates are documented in [`docs/ROADMAP.md`](docs/ROADMAP.md). Current work comes only from the top of [`docs/TASKS.md`](docs/TASKS.md); the old P1.5 numbering is historical.
 
-The remaining P1.5 work is release hardening and selective sharing: clipboard image export, read-only local presentation links, stricter migration fixtures, and browser CI. Cloud sync, video telestration, tracking-data import, 2D/3D synchronized views, live collaboration, and behind-goal views remain later extensions.
+### Desktop App
 
-### Desktop App (macOS)
-
-A standalone desktop application is available for macOS (Apple Silicon / arm64). It bundles the Python backend, frontend, and pre-computed data into a single native app with auto-update support.
+The repository contains Electron/PyInstaller packaging and a historical macOS arm64 build record. This audit did not reproduce the `.dmg`, signature, installation, auto-update, or release asset, so desktop delivery remains partially verified rather than a current availability promise.
 
 | Feature | Status |
 |---|---|
-| macOS arm64 (.dmg) | Built and verified |
-| Auto-update via GitHub releases | Implemented (electron-updater) |
-| System tray | Implemented |
-| Bundled data | Player ratings, match results, models |
-| Windows build | Not yet (requires Windows machine) |
+| macOS arm64 (.dmg) | Historical build record; current artifact/signature/install unverified |
+| Auto-update via GitHub releases | Code path exists; end-to-end update unverified in this audit |
+| System tray | Code path exists |
+| Bundled data | Packaging configuration exists; exact current bundle requires release inspection |
+| Windows build | Script exists; current artifact/install unverified |
 
 Build from source:
 
@@ -263,33 +276,15 @@ cd desktop && npm install
 bash scripts/build-desktop.sh --mac
 ```
 
-Output: `desktop/dist/ScoutFootball-1.0.0-arm64.dmg`
+Expected local output path: `desktop/dist/`; exact versioned asset depends on the build configuration.
 
 ### Local Data Overview
 
-| Source | Cache | Coverage |
-| --- | --- | --- |
-| **FBref** | 14,356 rows per table | 5 seasons, standard/shooting/misc |
-| **Football-Data** | 68,953 raw CSV rows | 10 seasons, 20 divisions |
-| **Understat** | 31,902 player-season rows | 10 seasons, 6 leagues |
-| **StatsBomb Open Data** | 126 matches / 11,871 events | Public match & event sample |
-| **Ratings** | 30,483 rows | Optimized player ratings |
-| **Feature Matrix** | 8,141 rows | With missing-field flags and position-median fallback |
+README does not maintain volatile cache counts. Use generated data-health reports and [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md). In the 2026-07-16 audit, several Parquet footers were readable but full decoding failed in the available runtime; footer counts are not proof of usable data. The StatsBomb match index, the 3-match event sample, and player-match evidence are different files and grains and must not be combined into one coverage figure.
 
 ### Architecture
 
-10-layer roadmap. Layers 1-7 are the current trunk; 8-10 expand into scouting workflows, prediction calibration, and spatial/video research:
-
-1. **Data & Compliance** — caching, cleaning, merging
-2. **Standard Facts** — unified entities (matches, players, events)
-3. **Cross-Provider Standardization** — SPADL, kloppy/floodlight compatibility
-4. **Event Action Value** — xT -> VAEP
-5. **Player Truth & Rating** — model cards, truth labels, season stats
-6. **Evaluation & Reporting** — baselines, error analysis
-7. **Product & API** — FastAPI, Streamlit, mplsoccer, electronic tactical board
-8. **Scout Decision** — watchlist, expert review queue, tactical notes
-9. **Score Prediction & Calibration** — Dixon-Coles + time decay
-10. **Spatial/Video/Off-Ball** — StatsBomb 360, tracking, xG+
+The target structure is ScoutFootball Core (source/license, snapshot/lineage, identity, contracts, model governance, evidence packages, workspaces, adapters) plus World Cup, Recruitment, Opposition & Match, and later Academy packs. The gated phases and non-goals are maintained only in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ### Quick Start
 
@@ -304,28 +299,24 @@ git clone https://github.com/Mentaturan/ScoutFootball_for_World_Cup.git
 cd ScoutFootball_for_World_Cup
 uv sync
 
-# One-command demo (validates data, runs pipeline, starts servers)
-bash scripts/demo.sh
-
-# Or step by step:
+# Validate and build step by step:
 PYTHONPATH=src uv run python -m scoutfootball info      # Project info
 PYTHONPATH=src uv run python -m scoutfootball validate   # Validate data
 PYTHONPATH=src uv run python -m scoutfootball ingest     # Ingest data
 PYTHONPATH=src uv run python -m scoutfootball build-features
 PYTHONPATH=src uv run python -m scoutfootball train      # Train ratings
 
-# Start web UI (two terminals)
-PYTHONPATH=src uv run python -m scoutfootball serve      # API on :8600
-python3 -m http.server 8601 --directory frontend         # Frontend on :8601
+# Start the same-origin web UI and API
+PYTHONPATH=src uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
 ```
 
-Open http://localhost:8601 for the Liquid Glass frontend, or run Streamlit:
+Open http://127.0.0.1:8000 for the Liquid Glass frontend, or run Streamlit:
 
 ```bash
 uv run streamlit run src/scoutfootball/app/streamlit_app.py
 ```
 
-**First run note:** The pipeline will download and cache public data on first run. This requires an internet connection. Subsequent runs use local cache.
+**First run note:** Some ingestion paths download and cache public data and require an internet connection; others require manual/authorized local inputs. `scripts/demo.sh` currently needs same-origin port alignment before it can be treated as the canonical launcher.
 
 ### Tech Stack & Compliance
 
