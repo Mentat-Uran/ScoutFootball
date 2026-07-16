@@ -401,6 +401,16 @@ const i18n = {
         wc_scouting_need_players_label: "人数",
         wc_scouting_need_mean_score_label: "均分",
         wc_scouting_need_disclaimer: "球探需求胶囊反映球员所在俱乐部在其位置的阵容深度，仅为描述性叠加层，不构成转会建议。非五大联赛球员可能不在评分矩阵中，因此不显示胶囊。",
+        wc_match_pred_col: "预测",
+        wc_match_pred_home: "主胜",
+        wc_match_pred_draw: "平",
+        wc_match_pred_away: "客胜",
+        wc_match_pred_expected: "预期 {score}",
+        wc_match_pred_as_expected: "如预期",
+        wc_match_pred_upset: "爆冷",
+        wc_match_pred_hold: "未中",
+        wc_match_pred_team_not_found: "球队未纳入模型",
+        wc_match_pred_disclaimer: "每场预测使用 world_cup_strength_poisson 基线模型，为赛前预测，不反映比赛中状态。偏差分类将实际结果与 argmax 预测对比；赛前概率 < 0.30 的结果被标记为爆冷。",
         sort_priority: "优先级",
         sort_date: "日期",
         sort_name: "姓名",
@@ -1600,6 +1610,16 @@ const i18n = {
         wc_scouting_need_players_label: "Players",
         wc_scouting_need_mean_score_label: "Mean Score",
         wc_scouting_need_disclaimer: "Scouting-need pills reflect the player's club team depth at their position; they are descriptive overlays and do not constitute transfer recommendations. Players at non-Big5 clubs may have no rating-matrix coverage and show no pill.",
+        wc_match_pred_col: "Prediction",
+        wc_match_pred_home: "Home",
+        wc_match_pred_draw: "Draw",
+        wc_match_pred_away: "Away",
+        wc_match_pred_expected: "Expected {score}",
+        wc_match_pred_as_expected: "As Expected",
+        wc_match_pred_upset: "Upset",
+        wc_match_pred_hold: "Hold",
+        wc_match_pred_team_not_found: "Team not in model",
+        wc_match_pred_disclaimer: "Per-match predictions use the world_cup_strength_poisson baseline model. Pre-recording only; does not reflect in-play state. Delta classification compares actual result to argmax prediction; outcomes with pre-match probability < 0.30 are flagged as upsets.",
         sort_priority: "Priority",
         sort_date: "Date",
         sort_name: "Name",
@@ -19629,6 +19649,7 @@ let wcApiData = {
     outlookLoading: new Set(),
     tournament: null,       // from /world-cup/tournament/summary
     tournamentMatches: null, // from /world-cup/tournament/matches
+    tournamentMatchPredictions: null, // from /world-cup/tournament/match-predictions
     tournamentQualificationImpact: null, // selected group local standings impact
     tournamentTiebreakDiagnostics: null, // selected group local tied clusters
     tournamentScenarios: null, // team -> scenarios
@@ -19984,6 +20005,75 @@ async function fetchWcTournamentMatches(group) {
     }
 }
 
+async function fetchWcTournamentMatchPredictions(group) {
+    const params = group ? `group=${encodeURIComponent(group)}` : "";
+    try {
+        const data = await fetchJson("/world-cup/tournament/match-predictions", {
+            params,
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentMatchPredictions = data;
+        }
+        return data;
+    } catch (e) {
+        console.warn("[WC Tournament] fetchWcTournamentMatchPredictions failed:", e.message);
+        return null;
+    }
+}
+
+/**
+ * Build a compact prediction pill for a single match.
+ *
+ * Renders a 3-segment stacked bar (home_win / draw / away_win) with
+ * percentages for pending matches, or an "actual vs predicted" delta
+ * badge for completed matches. Returns a muted placeholder when the
+ * prediction data is unavailable or the match is not found in the
+ * predictions payload.
+ *
+ * @param {string} matchId - The match identifier.
+ * @returns {string} HTML string (escaped).
+ */
+function _wcMatchPredictionPill(matchId) {
+    const data = wcApiData.tournamentMatchPredictions;
+    if (!data || data.status !== "ok" || !Array.isArray(data.predictions)) {
+        return `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
+    }
+    const entry = data.predictions.find((p) => p && p.match_id === matchId);
+    if (!entry) {
+        return `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
+    }
+    if (entry.status === "team_not_found") {
+        return `<span class="status-pill status-low" style="font-size:0.65rem;padding:0.15rem 0.4rem" title="${escapeAttr(t("wc_match_pred_team_not_found"))}">${escapeHtml(t("wc_match_pred_team_not_found"))}</span>`;
+    }
+    if (entry.status === "error") {
+        return `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
+    }
+    if (entry.completed && entry.delta) {
+        const cls = entry.delta.classification;
+        const label = cls === "as_expected"
+            ? t("wc_match_pred_as_expected")
+            : cls === "upset"
+                ? t("wc_match_pred_upset")
+                : t("wc_match_pred_hold");
+        const pillClass = cls === "as_expected"
+            ? "status-high"
+            : cls === "upset"
+                ? "status-low"
+                : "status-medium";
+        return `<span class="status-pill ${pillClass}" style="font-size:0.65rem;padding:0.15rem 0.4rem" title="${escapeAttr(t("wc_match_pred_expected").replace("{score}", `${entry.most_likely_scoreline.home_goals}-${entry.most_likely_scoreline.away_goals}`))}">${escapeHtml(label)}</span>`;
+    }
+    // Pending match: render 3-segment stacked bar
+    const hw = Math.round((entry.home_win_prob || 0) * 100);
+    const dr = Math.round((entry.draw_prob || 0) * 100);
+    const aw = Math.max(0, 100 - hw - dr);
+    return `<div style="display:flex;align-items:center;gap:0.2rem;font-size:0.65rem" title="${escapeAttr(`${t("wc_match_pred_home")} ${hw}% · ${t("wc_match_pred_draw")} ${dr}% · ${t("wc_match_pred_away")} ${aw}%`)}">
+        <span style="background:#16a34a;color:#fff;padding:0.1rem 0.25rem;border-radius:2px 0 0 2px;min-width:1.6rem;text-align:center">${hw}</span>
+        <span style="background:#ca8a04;color:#fff;padding:0.1rem 0.25rem;min-width:1.6rem;text-align:center">${dr}</span>
+        <span style="background:#dc2626;color:#fff;padding:0.1rem 0.25rem;border-radius:0 2px 2px 0;min-width:1.6rem;text-align:center">${aw}</span>
+    </div>`;
+}
+
 async function fetchWcTournamentQualificationImpact(group) {
     try {
         const data = await fetchJson(`/world-cup/tournament/qualification-impact?group=${encodeURIComponent(group)}`, {
@@ -20132,6 +20222,7 @@ async function loadAndRenderWcTournament() {
     await Promise.all([
         fetchWcTournamentSummary(),
         fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+        fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentQualificationImpact(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentTiebreakDiagnostics(wcApiData.tournamentSelectedGroup),
     ]);
@@ -20288,17 +20379,20 @@ function renderWcTournament() {
                                 <th>${z ? "主队" : "Home"}</th>
                                 <th>${z ? "比分" : "Score"}</th>
                                 <th>${z ? "客队" : "Away"}</th>
+                                <th>${escapeHtml(t("wc_match_pred_col"))}</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             ${matches.map((m) => {
+                                const predPill = _wcMatchPredictionPill(m.match_id);
                                 if (m.completed) {
                                     return `<tr>
                                         <td>${m.matchday}</td>
                                         <td>${escapeHtml(m.home)}</td>
                                         <td><strong>${m.result.home_goals}-${m.result.away_goals}</strong></td>
                                         <td>${escapeHtml(m.away)}</td>
+                                        <td>${predPill}</td>
                                         <td><button class="text-button wc-tournament-clear" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">${z ? "清除" : "Clear"}</button></td>
                                     </tr>`;
                                 }
@@ -20311,12 +20405,16 @@ function renderWcTournament() {
                                         <input type="number" min="0" max="30" class="wc-tournament-input" data-match-id="${escapeAttr(m.match_id)}" data-side="away" style="width:2.5rem" placeholder="-">
                                     </td>
                                     <td>${escapeHtml(m.away)}</td>
+                                    <td>${predPill}</td>
                                     <td><button class="text-button wc-tournament-apply" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">${z ? "录入" : "Apply"}</button></td>
                                 </tr>`;
                             }).join("")}
                         </tbody>
                     </table>
                 </div>
+                <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.4rem;line-height:1.4">
+                    ${escapeHtml(t("wc_match_pred_disclaimer"))}
+                </p>
             </article>
         </div>
 
@@ -20431,6 +20529,7 @@ function renderWcTournament() {
             wcApiData.tournamentSelectedGroup = e.target.value;
             await Promise.all([
                 fetchWcTournamentMatches(e.target.value),
+                fetchWcTournamentMatchPredictions(e.target.value),
                 fetchWcTournamentSummary(),
                 fetchWcTournamentQualificationImpact(e.target.value),
                 fetchWcTournamentTiebreakDiagnostics(e.target.value),
@@ -20454,7 +20553,10 @@ function renderWcTournament() {
         resetBtn.dataset.bound = "1";
         resetBtn.addEventListener("click", async () => {
             await resetTournament();
-            await fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup);
+            await Promise.all([
+                fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+                fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
+            ]);
             renderWcTournament();
         });
     }
@@ -20475,10 +20577,11 @@ function renderWcTournament() {
             }
             const result = await postTournamentResult(matchId, hg, ag);
             if (result && result.status === "ok") {
-                // Refresh summary and matches, then re-render
+                // Refresh summary, matches, and predictions, then re-render
                 await Promise.all([
                     fetchWcTournamentSummary(),
                     fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
                 ]);
                 renderWcTournament();
             }
@@ -20496,6 +20599,7 @@ function renderWcTournament() {
                 await Promise.all([
                     fetchWcTournamentSummary(),
                     fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
                 ]);
                 renderWcTournament();
             }

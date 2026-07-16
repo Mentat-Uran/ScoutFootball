@@ -516,6 +516,62 @@ def _world_cup_market_summary(score_matrix: list[list[float]]) -> dict[str, floa
     }
 
 
+def _most_likely_wc_scoreline(score_matrix: list[list[float]]) -> dict[str, Any]:
+    """Return the (home_goals, away_goals, probability) with highest probability."""
+    best_h, best_a, best_p = 0, 0, 0.0
+    for i, row in enumerate(score_matrix):
+        for j, prob in enumerate(row):
+            if prob > best_p:
+                best_h, best_a, best_p = i, j, prob
+    return {
+        "home_goals": best_h,
+        "away_goals": best_a,
+        "probability": round(best_p, 4),
+    }
+
+
+def _classify_prediction_delta(
+    home_win_prob: float,
+    draw_prob: float,
+    away_win_prob: float,
+    home_goals: int,
+    away_goals: int,
+) -> dict[str, Any]:
+    """Classify an actual result vs the pre-match prediction.
+
+    Returns one of three classifications:
+    - ``as_expected``: actual outcome matches the argmax prediction.
+    - ``upset``: actual outcome's pre-match probability was < 0.30 (and not as_expected).
+    - ``hold``: middle-probability outcome happened (neither as_expected nor upset).
+    """
+    probs = {
+        "home_win": float(home_win_prob),
+        "draw": float(draw_prob),
+        "away_win": float(away_win_prob),
+    }
+    if home_goals > away_goals:
+        actual = "home_win"
+    elif home_goals == away_goals:
+        actual = "draw"
+    else:
+        actual = "away_win"
+    predicted = max(probs, key=probs.get)
+    actual_prob = probs[actual]
+    if actual == predicted:
+        classification = "as_expected"
+    elif actual_prob < 0.30:
+        classification = "upset"
+    else:
+        classification = "hold"
+    return {
+        "classification": classification,
+        "actual_outcome": actual,
+        "predicted_outcome": predicted,
+        "actual_prob": round(actual_prob, 4),
+        "predicted_prob": round(probs[predicted], 4),
+    }
+
+
 def get_world_cup_match_prediction(home_team: str, away_team: str) -> dict[str, Any]:
     enriched_squads, strengths = _get_wc_enriched_squads()
     valid_teams = set(enriched_squads)
@@ -8910,6 +8966,131 @@ def get_wc_tournament_matches(
         "status": "ok",
         "count": len(matches_out),
         "matches": matches_out,
+    })
+
+
+def get_wc_tournament_match_predictions(group: str | None = None) -> dict:
+    """Batch Poisson predictions for scheduled group-stage matches.
+
+    Returns a compact per-match prediction summary for all scheduled
+    group-stage matches in the tournament state (filtered by ``group``
+    when provided). Reuses the existing ``world_cup_strength_poisson``
+    model. Completed matches are annotated with their actual result and
+    a prediction-delta classification (``as_expected`` / ``upset`` /
+    ``hold``) so the frontend can surface actual-vs-predicted badges.
+    """
+    from scoutfootball.worldcup.tournament import _match_completed
+
+    state = _wc_tournament_state()
+
+    if group:
+        letter = group.upper()
+        if letter not in GROUPS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "unknown_group",
+                "message": f"Unknown group '{group}'. Valid: A-L",
+            })
+
+    enriched_squads, _strengths = _get_wc_enriched_squads()
+    if not enriched_squads:
+        return _clean_json_value({
+            "status": "no_data",
+            "group": group.upper() if group else None,
+            "count": 0,
+            "predictions": [],
+            "model": "world_cup_strength_poisson",
+            "disclaimer": (
+                "World Cup squad data unavailable; predictions cannot be "
+                "computed."
+            ),
+        })
+
+    predictions: list[dict[str, Any]] = []
+    for m in state.matches:
+        if group and m.get("group") != group.upper():
+            continue
+        home = m.get("home")
+        away = m.get("away")
+        if not home or not away or home == away:
+            continue
+        match_base = {
+            "match_id": m["match_id"],
+            "home": home,
+            "away": away,
+            "group": m.get("group"),
+            "matchday": m.get("matchday"),
+            "date": m.get("date"),
+            "venue": m.get("venue"),
+            "city": m.get("city"),
+        }
+        if home not in enriched_squads or away not in enriched_squads:
+            predictions.append({
+                **match_base,
+                "status": "team_not_found",
+                "completed": False,
+            })
+            continue
+        pred = get_world_cup_match_prediction(home, away)
+        if "error" in pred:
+            predictions.append({
+                **match_base,
+                "status": "error",
+                "message": pred["error"],
+                "completed": False,
+            })
+            continue
+        result = state.results.get(m["match_id"])
+        completed = _match_completed(result)
+        entry: dict[str, Any] = {
+            **match_base,
+            "status": "ok",
+            "completed": completed,
+            "home_win_prob": pred["home_win"],
+            "draw_prob": pred["draw"],
+            "away_win_prob": pred["away_win"],
+            "expected_goals_home": pred["home_lambda"],
+            "expected_goals_away": pred["away_lambda"],
+            "home_strength": pred["home_strength"],
+            "away_strength": pred["away_strength"],
+            "host_bonus": pred["host_bonus"],
+            "home_is_host": home in HOSTS,
+            "away_is_host": away in HOSTS,
+            "most_likely_scoreline": _most_likely_wc_scoreline(
+                pred["score_matrix"]
+            ),
+        }
+        if completed and result is not None:
+            entry["result"] = {
+                "home_goals": result.get("home_goals"),
+                "away_goals": result.get("away_goals"),
+                "winner": result.get("winner"),
+                "decided_by": result.get("decided_by"),
+            }
+            entry["delta"] = _classify_prediction_delta(
+                pred["home_win"],
+                pred["draw"],
+                pred["away_win"],
+                int(result.get("home_goals", 0)),
+                int(result.get("away_goals", 0)),
+            )
+        predictions.append(entry)
+
+    return _clean_json_value({
+        "status": "ok",
+        "group": group.upper() if group else None,
+        "count": len(predictions),
+        "predictions": predictions,
+        "model": "world_cup_strength_poisson",
+        "model_version": "wc-1.0",
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": (
+            "Per-match predictions use the world_cup_strength_poisson "
+            "baseline model. Pre-recording only; does not reflect in-play "
+            "state. Delta classification compares actual result to argmax "
+            "prediction; outcomes with pre-match probability < 0.30 are "
+            "flagged as upsets."
+        ),
     })
 
 
