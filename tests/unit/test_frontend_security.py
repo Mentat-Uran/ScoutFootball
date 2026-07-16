@@ -1159,7 +1159,7 @@ class TestShortlistQuickCompare:
         js = _read_app_js()
         idx = js.find("function _renderShortlistCompareBar")
         assert idx > 0
-        func_body = js[idx : idx + 1300]
+        func_body = js[idx : idx + 1700]
         # The only innerHTML assignment should contain escapeHtml calls
         assert "innerHTML" in func_body
         assert "escapeHtml" in func_body
@@ -1818,4 +1818,361 @@ class TestShortlistProvenanceLogReset:
         assert en_start > 0
         en_block = js[en_start : en_start + 5000]
         for key in self._PROVENANCE_I18N_KEYS:
+            assert key + ":" in en_block, f"Missing en i18n key: {key}"
+
+
+# ===== 28. Round 92: Provenance export + compare tray sync ===================
+class TestShortlistProvenanceExportAndTraySync:
+    """Round 92: provenance log in decision pack export + compare tray sync."""
+
+    # --- Decision pack: provenance log in JSON ---
+
+    def test_decision_pack_version_bumped(self):
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert 'version: "1.1.0"' in body
+
+    def test_decision_pack_includes_provenance_log(self):
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "provenance_log:" in body
+        assert "_shortlistProvenanceLog.map" in body
+
+    def test_decision_pack_provenance_entry_has_all_fields(self):
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        for field in ("timestamp", "player_key", "player_name",
+                      "action", "reason_code", "resulting_codes"):
+            assert field + ":" in body, f"Missing provenance field: {field}"
+
+    def test_decision_pack_provenance_action_normalised(self):
+        """action must be normalised to 'merged' or 'removed'."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 'entry.action === "merged" ? "merged" : "removed"' in body
+
+    def test_decision_pack_provenance_resulting_codes_is_array(self):
+        """resulting_codes must be Array.isArray-guarded and mapped to String."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "Array.isArray(entry.resulting_codes)" in body
+        assert ".map((c) => String(c || \"\"))" in body
+
+    def test_decision_pack_provenance_fields_coerced_to_string(self):
+        """All string fields must be coerced via String()."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        prov_start = body.find("provenance_log:")
+        prov_end = body.find("limitations:")
+        prov = body[prov_start:prov_end]
+        assert "String(entry.timestamp" in prov
+        assert "String(entry.player_key" in prov
+        assert "String(entry.player_name" in prov
+        assert "String(entry.reason_code" in prov
+
+    def test_decision_pack_limitations_include_provenance_disclaimer(self):
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "Provenance log is a browser-local audit trail" in body
+        assert "not a server-side audit record" in body
+
+    def test_decision_pack_limitations_count_is_four(self):
+        """Limitations array now has 4 entries (was 3 before Round 92)."""
+        js = _read_app_js()
+        idx = js.find("function buildShortlistDecisionPack")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        lim_start = body.find("limitations: [")
+        lim_end = body.find("],", lim_start)
+        lim_block = body[lim_start:lim_end]
+        assert lim_block.count('"Shortlist selection') == 1
+        assert lim_block.count('"This export is not') == 1
+        assert lim_block.count('"Ratings and confidence') == 1
+        assert lim_block.count('"Provenance log is') == 1
+
+    # --- Decision pack: provenance log in CSV ---
+
+    def test_csv_export_has_provenance_section(self):
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "# Provenance Log" in body
+
+    def test_csv_export_provenance_header_row(self):
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        prov_start = body.find("# Provenance Log")
+        prov_block = body[prov_start : prov_start + 600]
+        assert "timestamp" in prov_block
+        assert "player_key" in prov_block
+        assert "player_name" in prov_block
+        assert "action" in prov_block
+        assert "reason_code" in prov_block
+        assert "resulting_codes" in prov_block
+
+    def test_csv_export_provenance_uses_csv_cell(self):
+        """CSV rows must go through csvCell for formula injection protection."""
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "row.map(csvCell).join" in body
+
+    def test_csv_export_provenance_resulting_codes_pipe_joined(self):
+        """resulting_codes in CSV must be pipe-joined like reason_codes."""
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        prov_start = body.find("# Provenance Log")
+        prov_block = body[prov_start : prov_start + 800]
+        assert '.join("|")' in prov_block
+
+    def test_csv_export_provenance_handles_missing_log(self):
+        """CSV must guard against missing provenance_log via || []."""
+        js = _read_app_js()
+        idx = js.find("function exportShortlistDecisionPackCSV")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "(pack.provenance_log || [])" in body
+
+    # --- Compare tray sync: helpers ---
+
+    def test_resolve_players_function_defined(self):
+        js = _read_app_js()
+        assert "function _resolveShortlistComparePlayers" in js
+
+    def test_resolve_names_delegates_to_resolve_players(self):
+        """_resolveShortlistCompareNames must delegate to _resolveShortlistComparePlayers."""
+        js = _read_app_js()
+        idx = js.find("function _resolveShortlistCompareNames")
+        assert idx > 0
+        body = js[idx : idx + 400]
+        assert "_resolveShortlistComparePlayers()" in body
+        assert ".map((p) => p.name)" in body
+
+    def test_resolve_players_reads_team_attribute(self):
+        """_resolveShortlistComparePlayers must read data-shortlist-compare-team."""
+        js = _read_app_js()
+        idx = js.find("function _resolveShortlistComparePlayers")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert 'data-shortlist-compare-team' in body
+        assert "team" in body
+
+    def test_resolve_players_returns_key_name_team(self):
+        """Each entry must have key, name, team."""
+        js = _read_app_js()
+        idx = js.find("function _resolveShortlistComparePlayers")
+        assert idx > 0
+        body = js[idx : idx + 800]
+        assert "key: " in body or "{ key, name, team }" in body
+
+    def test_sync_function_defined(self):
+        js = _read_app_js()
+        assert "function _syncShortlistCompareToTray" in js
+
+    def test_sync_returns_added_skipped_dup_skipped_cap(self):
+        """Sync function must return {added, skipped_dup, skipped_cap}."""
+        js = _read_app_js()
+        idx = js.find("function _syncShortlistCompareToTray")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "added: 0" in body
+        assert "skipped_dup: 0" in body
+        assert "skipped_cap: 0" in body
+        assert "added, skipped_dup: skippedDup, skipped_cap: skippedCap" in body
+
+    def test_sync_dedup_check(self):
+        """Sync must skip players already in tray by key."""
+        js = _read_app_js()
+        idx = js.find("function _syncShortlistCompareToTray")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert '_crossScoutingCompareTray.some' in body
+        assert 't.key === p.key' in body
+
+    def test_sync_cap_check(self):
+        """Sync must respect _CROSS_SCOUTING_COMPARE_MAX cap."""
+        js = _read_app_js()
+        idx = js.find("function _syncShortlistCompareToTray")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert '_CROSS_SCOUTING_COMPARE_MAX' in body
+
+    def test_sync_calls_render_compare_tray_only_when_added(self):
+        """Sync must call _renderCompareTray() only when added > 0."""
+        js = _read_app_js()
+        idx = js.find("function _syncShortlistCompareToTray")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "if (added > 0) _renderCompareTray()" in body
+
+    def test_sync_early_return_on_empty(self):
+        """Sync must early-return when no players to sync."""
+        js = _read_app_js()
+        idx = js.find("function _syncShortlistCompareToTray")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "players.length === 0" in body
+
+    def test_sync_pushes_player_object(self):
+        """Sync must push the player object to _crossScoutingCompareTray."""
+        js = _read_app_js()
+        idx = js.find("function _syncShortlistCompareToTray")
+        assert idx > 0
+        body = js[idx : idx + 1200]
+        assert "_crossScoutingCompareTray.push(p)" in body
+
+    # --- Compare tray sync: format message ---
+
+    def test_format_sync_message_function_defined(self):
+        js = _read_app_js()
+        assert "function _formatSyncTrayMessage" in js
+
+    def test_format_sync_message_empty_case(self):
+        js = _read_app_js()
+        idx = js.find("function _formatSyncTrayMessage")
+        assert idx > 0
+        body = js[idx : idx + 900]
+        assert 't("shortlist_compare_sync_empty")' in body
+
+    def test_format_sync_message_uses_replace_for_counts(self):
+        """All count messages must use .replace('{n}', ...)."""
+        js = _read_app_js()
+        idx = js.find("function _formatSyncTrayMessage")
+        assert idx > 0
+        body = js[idx : idx + 900]
+        assert '.replace("{n}", String(result.added))' in body
+        assert '.replace("{n}", String(result.skipped_dup))' in body
+        assert '.replace("{n}", String(result.skipped_cap))' in body
+
+    def test_format_sync_message_joins_with_middot(self):
+        """Parts must be joined with middle dot."""
+        js = _read_app_js()
+        idx = js.find("function _formatSyncTrayMessage")
+        assert idx > 0
+        body = js[idx : idx + 900]
+        assert 'join(" \\u00B7 ")' in body
+
+    def test_format_sync_message_returns_empty_string_on_falsy(self):
+        js = _read_app_js()
+        idx = js.find("function _formatSyncTrayMessage")
+        assert idx > 0
+        body = js[idx : idx + 200]
+        assert "if (!result) return \"\"" in body
+
+    # --- Compare tray sync: bar rendering + wiring ---
+
+    def test_bar_renders_sync_button_when_selection_nonempty(self):
+        """Sync button must only render when n > 0."""
+        js = _read_app_js()
+        idx = js.find("function _renderShortlistCompareBar")
+        assert idx > 0
+        body = js[idx : idx + 1300]
+        assert 'if (n > 0)' in body
+        assert 'data-shortlist-compare-sync-tray="1"' in body
+
+    def test_bar_sync_button_uses_escape_html_for_label(self):
+        js = _read_app_js()
+        idx = js.find("function _renderShortlistCompareBar")
+        assert idx > 0
+        body = js[idx : idx + 1300]
+        assert 'escapeHtml(t("shortlist_compare_sync_tray"))' in body
+
+    def test_bar_sync_button_uses_escape_attr_for_title(self):
+        js = _read_app_js()
+        idx = js.find("function _renderShortlistCompareBar")
+        assert idx > 0
+        body = js[idx : idx + 1300]
+        assert 'escapeAttr(t("shortlist_compare_sync_tray_title"))' in body
+
+    def test_wire_bar_wires_sync_button(self):
+        js = _read_app_js()
+        idx = js.find("function _wireShortlistCompareBar")
+        assert idx > 0
+        body = js[idx : idx + 1600]
+        assert 'data-shortlist-compare-sync-tray="1"' in body
+        assert "_syncShortlistCompareToTray()" in body
+        assert "_formatSyncTrayMessage" in body
+
+    def test_wire_bar_sync_sets_text_content_not_innerhtml(self):
+        """Sync feedback must use textContent, not innerHTML."""
+        js = _read_app_js()
+        idx = js.find("function _wireShortlistCompareBar")
+        assert idx > 0
+        body = js[idx : idx + 1600]
+        sync_start = body.find("data-shortlist-compare-sync-tray")
+        sync_block = body[sync_start : sync_start + 800]
+        assert "textContent" in sync_block
+        assert "innerHTML" not in sync_block
+
+    # --- Checkbox team attribute ---
+
+    def test_checkbox_has_team_attribute(self):
+        """Checkbox must include data-shortlist-compare-team using escapeAttr."""
+        js = _read_app_js()
+        idx = js.find("data-shortlist-compare-key=")
+        assert idx > 0
+        snippet = js[idx : idx + 400]
+        assert "data-shortlist-compare-team=" in snippet
+        assert "escapeAttr(player.team" in snippet
+
+    # --- No eval / no raw innerHTML ---
+
+    def test_no_eval_in_sync_code(self):
+        """No eval() in the sync helpers."""
+        js = _read_app_js()
+        for fname in ("_syncShortlistCompareToTray", "_formatSyncTrayMessage",
+                      "_resolveShortlistComparePlayers"):
+            idx = js.find("function " + fname)
+            assert idx > 0
+            end_idx = js.find("\nfunction ", idx + 1)
+            if end_idx < 0:
+                end_idx = idx + 2000
+            snippet = js[idx:end_idx]
+            assert "eval(" not in snippet, f"eval found in {fname}"
+
+    # --- i18n keys ---
+
+    _SYNC_I18N_KEYS = (
+        "shortlist_compare_sync_tray",
+        "shortlist_compare_sync_tray_title",
+        "shortlist_compare_sync_added",
+        "shortlist_compare_sync_dup",
+        "shortlist_compare_sync_cap",
+        "shortlist_compare_sync_empty",
+    )
+
+    def test_sync_i18n_keys_present_zh(self):
+        js = _read_app_js()
+        zh_end = js.find('shortlist_compare_failed: "对比请求失败"')
+        assert zh_end > 0
+        zh_block = js[:zh_end + 600]
+        for key in self._SYNC_I18N_KEYS:
+            assert key + ":" in zh_block, f"Missing zh i18n key: {key}"
+
+    def test_sync_i18n_keys_present_en(self):
+        js = _read_app_js()
+        en_start = js.find('shortlist_compare_failed: "Comparison fetch failed"')
+        assert en_start > 0
+        en_block = js[en_start : en_start + 1500]
+        for key in self._SYNC_I18N_KEYS:
             assert key + ":" in en_block, f"Missing en i18n key: {key}"
