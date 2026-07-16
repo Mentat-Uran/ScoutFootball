@@ -8938,6 +8938,123 @@ def get_wc_tournament_standings(group: str | None = None) -> dict:
     })
 
 
+def get_wc_tournament_standings_probabilities(
+    group: str | None = None,
+    num_simulations: int = 2000,
+) -> dict:
+    """Return group standings enriched with Monte Carlo advancement probabilities.
+
+    Runs a strength-weighted group-stage simulation and returns per-team
+    ``advance_prob`` and ``win_group_prob`` alongside the current standings.
+    When ``group`` is provided, only that group's data is returned; otherwise
+    all 12 groups are included.
+
+    Uses the existing ``simulate_group_stage`` function with ``mode="strength"``
+    and a fixed seed for stability across calls with the same input state.
+    """
+    from dataclasses import asdict
+
+    from scoutfootball.worldcup.tournament import (
+        compute_all_standings,
+        compute_group_standings,
+    )
+
+    state = _wc_tournament_state()
+
+    if group:
+        letter = group.upper()
+        if letter not in GROUPS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "unknown_group",
+                "message": f"Unknown group '{group}'. Valid: A-L",
+            })
+        group_filter = letter
+    else:
+        group_filter = None
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads or not strengths:
+        return _clean_json_value({
+            "status": "no_data",
+            "group": group_filter,
+            "groups": {},
+            "num_simulations": 0,
+            "disclaimer": (
+                "World Cup squad data unavailable; probability estimates "
+                "cannot be computed."
+            ),
+        })
+
+    from scoutfootball.worldcup.data import simulate_group_stage
+
+    sim_result = simulate_group_stage(
+        state,
+        team_strengths=strengths,
+        num_simulations=num_simulations,
+        mode="strength",
+        seed=42,
+    )
+
+    prob_by_team: dict[str, dict[str, float]] = {}
+    for entry in sim_result.get("advancement_probability", []):
+        prob_by_team[entry["team"]] = {
+            "advance_prob": entry.get("advance_prob", 0.0),
+            "win_group_prob": entry.get("win_group_prob", 0.0),
+        }
+
+    if group_filter:
+        standings_rows = compute_group_standings(state, group_filter)
+        groups_out = {
+            group_filter: [
+                {
+                    **asdict(s),
+                    "advance_prob": prob_by_team.get(s.team, {}).get(
+                        "advance_prob", 0.0
+                    ),
+                    "win_group_prob": prob_by_team.get(s.team, {}).get(
+                        "win_group_prob", 0.0
+                    ),
+                }
+                for s in standings_rows
+            ],
+        }
+    else:
+        all_standings = compute_all_standings(state)
+        groups_out = {
+            letter: [
+                {
+                    **asdict(s),
+                    "advance_prob": prob_by_team.get(s.team, {}).get(
+                        "advance_prob", 0.0
+                    ),
+                    "win_group_prob": prob_by_team.get(s.team, {}).get(
+                        "win_group_prob", 0.0
+                    ),
+                }
+                for s in rows
+            ]
+            for letter, rows in all_standings.items()
+        }
+
+    return _clean_json_value({
+        "status": "ok",
+        "group": group_filter,
+        "groups": groups_out,
+        "num_simulations": sim_result.get("num_simulations", 0),
+        "remaining_matches": sim_result.get("remaining_matches", 0),
+        "mode": "strength",
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": sim_result.get(
+            "disclaimer",
+            (
+                "Advancement probabilities use strength-weighted Monte Carlo "
+                "simulation of remaining group matches. Illustrative only."
+            ),
+        ),
+    })
+
+
 def get_wc_tournament_matches(
     group: str | None = None,
     pending: bool = False,

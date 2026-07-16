@@ -411,6 +411,10 @@ const i18n = {
         wc_match_pred_hold: "未中",
         wc_match_pred_team_not_found: "球队未纳入模型",
         wc_match_pred_disclaimer: "每场预测使用 world_cup_strength_poisson 基线模型，为赛前预测，不反映比赛中状态。偏差分类将实际结果与 argmax 预测对比；赛前概率 < 0.30 的结果被标记为爆冷。",
+        wc_standings_prob_advance_col: "出线%",
+        wc_standings_prob_win_col: "头名%",
+        wc_standings_prob_disclaimer: "出线概率基于实力加权蒙特卡洛模拟剩余小组赛，仅供参考。",
+        wc_standings_prob_loading: "模拟中...",
         sort_priority: "优先级",
         sort_date: "日期",
         sort_name: "姓名",
@@ -1620,6 +1624,10 @@ const i18n = {
         wc_match_pred_hold: "Hold",
         wc_match_pred_team_not_found: "Team not in model",
         wc_match_pred_disclaimer: "Per-match predictions use the world_cup_strength_poisson baseline model. Pre-recording only; does not reflect in-play state. Delta classification compares actual result to argmax prediction; outcomes with pre-match probability < 0.30 are flagged as upsets.",
+        wc_standings_prob_advance_col: "Adv%",
+        wc_standings_prob_win_col: "Win Grp%",
+        wc_standings_prob_disclaimer: "Advancement probabilities use strength-weighted Monte Carlo simulation of remaining group matches. Illustrative only.",
+        wc_standings_prob_loading: "Simulating...",
         sort_priority: "Priority",
         sort_date: "Date",
         sort_name: "Name",
@@ -19652,6 +19660,7 @@ let wcApiData = {
     tournamentMatchPredictions: null, // from /world-cup/tournament/match-predictions
     tournamentQualificationImpact: null, // selected group local standings impact
     tournamentTiebreakDiagnostics: null, // selected group local tied clusters
+    tournamentStandingsProbabilities: null, // selected group with advance/win_group prob
     tournamentScenarios: null, // team -> scenarios
     tournamentSelectedGroup: "A",
     tournamentLoading: false,
@@ -20106,6 +20115,25 @@ async function fetchWcTournamentTiebreakDiagnostics(group) {
     return null;
 }
 
+async function fetchWcTournamentStandingsProbabilities(group) {
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/standings-probabilities?group=${encodeURIComponent(group)}&num_simulations=2000`,
+            {
+                timeout: 30000,
+            },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentStandingsProbabilities = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] standings probabilities unavailable:", e.message);
+    }
+    wcApiData.tournamentStandingsProbabilities = null;
+    return null;
+}
+
 function exportWcQualificationImpactJSON(impact) {
     if (impact?.schema !== "scoutfootball.world-cup-qualification-impact") return;
     const payload = {
@@ -20225,6 +20253,7 @@ async function loadAndRenderWcTournament() {
         fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentQualificationImpact(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentTiebreakDiagnostics(wcApiData.tournamentSelectedGroup),
+        fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
     ]);
     wcApiData.tournamentLoading = false;
     renderWcTournament();
@@ -20273,6 +20302,16 @@ function renderWcTournament() {
 
     // Standings for selected group
     const groupStandings = (data.standings && data.standings[selectedGroup]) || [];
+
+    // Standings probabilities (enriched with advance/win_group prob)
+    const standingsProb = wcApiData.tournamentStandingsProbabilities;
+    const probByTeam = {};
+    if (standingsProb?.status === "ok" && standingsProb.groups?.[selectedGroup]) {
+        for (const row of standingsProb.groups[selectedGroup]) {
+            probByTeam[row.team] = row;
+        }
+    }
+    const hasProbData = Object.keys(probByTeam).length > 0;
 
     // Best thirds (list of dicts)
     const bestThirds = data.best_thirds || [];
@@ -20332,12 +20371,22 @@ function renderWcTournament() {
                                 <th>GA</th>
                                 <th>GD</th>
                                 <th>Pts</th>
+                                ${hasProbData ? `<th>${escapeHtml(t("wc_standings_prob_advance_col"))}</th><th>${escapeHtml(t("wc_standings_prob_win_col"))}</th>` : ""}
                             </tr>
                         </thead>
                         <tbody>
                             ${groupStandings.map((s, i) => {
                                 const pos = i + 1;
                                 const cls = pos === 1 ? "status-high" : pos === 2 ? "status-medium" : (pos === 3 ? "status-low" : "");
+                                const probRow = probByTeam[s.team];
+                                const advPct = probRow ? (probRow.advance_prob * 100).toFixed(0) + "%" : "";
+                                const winPct = probRow ? (probRow.win_group_prob * 100).toFixed(0) + "%" : "";
+                                const advCls = probRow
+                                    ? probRow.advance_prob >= 0.7 ? "status-high" : probRow.advance_prob >= 0.3 ? "status-medium" : "status-low"
+                                    : "";
+                                const winCls = probRow
+                                    ? probRow.win_group_prob >= 0.5 ? "status-high" : probRow.win_group_prob >= 0.15 ? "status-medium" : "status-low"
+                                    : "";
                                 return `<tr>
                                     <td><span class="status-pill ${cls}" style="font-size:0.6rem">${pos}</span></td>
                                     <td>${escapeHtml(s.team)}</td>
@@ -20349,6 +20398,7 @@ function renderWcTournament() {
                                     <td>${s.goals_against}</td>
                                     <td>${s.goal_difference >= 0 ? "+" : ""}${s.goal_difference}</td>
                                     <td><strong>${s.points}</strong></td>
+                                    ${hasProbData ? `<td>${probRow ? `<span class="status-pill ${advCls}" style="font-size:0.65rem">${advPct}</span>` : "—"}</td><td>${probRow ? `<span class="status-pill ${winCls}" style="font-size:0.65rem">${winPct}</span>` : "—"}</td>` : ""}
                                 </tr>`;
                             }).join("")}
                         </tbody>
@@ -20357,6 +20407,8 @@ function renderWcTournament() {
                 <p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem">
                     ${z ? "前 2 名直接出线，第 3 名参与最佳小组第三评比" : "Top 2 advance; 3rd enters best-thirds ranking"}
                 </p>
+                ${hasProbData ? `<p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.3rem;line-height:1.4">${escapeHtml(t("wc_standings_prob_disclaimer"))}</p>` : ""}
+                ${standingsProb?.status === "no_data" ? `<p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.3rem">${escapeHtml(standingsProb.disclaimer || "")}</p>` : ""}
                 ${impact ? `<div style="margin-top:0.6rem;padding:0.5rem;border-left:2px solid var(--accent);font-size:0.72rem">
                     <div style="display:flex;justify-content:space-between;gap:0.4rem"><strong>${z ? "本地出线影响" : "Local qualification impact"}</strong><button class="text-button" id="wc-qualification-export" type="button" style="font-size:0.65rem">${z ? "导出 JSON" : "Export JSON"}</button></div>
                     ${z ? "第三名" : "Third"}: ${escapeHtml(impact.third_place?.team || "—")} · ${z ? "跨组排名" : "cross-group rank"} ${impact.third_place?.rank || "—"}/${impact.third_place?.cutoff_rank || 8}
@@ -20533,6 +20585,7 @@ function renderWcTournament() {
                 fetchWcTournamentSummary(),
                 fetchWcTournamentQualificationImpact(e.target.value),
                 fetchWcTournamentTiebreakDiagnostics(e.target.value),
+                fetchWcTournamentStandingsProbabilities(e.target.value),
             ]);
             renderWcTournament();
         });
@@ -20556,6 +20609,7 @@ function renderWcTournament() {
             await Promise.all([
                 fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
                 fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
+                fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
             ]);
             renderWcTournament();
         });
@@ -20577,11 +20631,12 @@ function renderWcTournament() {
             }
             const result = await postTournamentResult(matchId, hg, ag);
             if (result && result.status === "ok") {
-                // Refresh summary, matches, and predictions, then re-render
+                // Refresh summary, matches, predictions, and probabilities, then re-render
                 await Promise.all([
                     fetchWcTournamentSummary(),
                     fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
                     fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
                 ]);
                 renderWcTournament();
             }
@@ -20600,6 +20655,7 @@ function renderWcTournament() {
                     fetchWcTournamentSummary(),
                     fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
                     fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
                 ]);
                 renderWcTournament();
             }

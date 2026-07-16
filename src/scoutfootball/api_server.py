@@ -151,6 +151,7 @@ from scoutfootball.api import (
     get_wc_tournament_matches,
     get_wc_tournament_scenarios,
     get_wc_tournament_standings,
+    get_wc_tournament_standings_probabilities,
     get_wc_tournament_summary,
     get_world_cup_match_briefing,
     get_world_cup_match_prediction,
@@ -1557,6 +1558,15 @@ def create_app() -> FastAPI:
     @app.get("/world-cup/tournament/standings")
     def wc_tournament_standings(group: str | None = None):
         return get_wc_tournament_standings(group=group)
+
+    @app.get("/world-cup/tournament/standings-probabilities")
+    def wc_tournament_standings_probabilities(
+        group: str | None = None,
+        num_simulations: int = 2000,
+    ):
+        return get_wc_tournament_standings_probabilities(
+            group=group, num_simulations=num_simulations
+        )
 
     @app.get("/world-cup/tournament/qualification-impact")
     def wc_tournament_qualification_impact(group: str):

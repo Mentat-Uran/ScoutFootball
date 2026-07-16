@@ -5789,21 +5789,21 @@ class TestWcMatchPredictionWiring:
         js = _read_app_js()
         idx = js.find("function renderWcTournament(")
         assert idx > 0
-        body = js[idx : idx + 12000]
+        body = js[idx : idx + 15000]
         assert "_wcMatchPredictionPill(m.match_id)" in body
 
     def test_render_wc_tournament_has_prediction_column_header(self):
         js = _read_app_js()
         idx = js.find("function renderWcTournament(")
         assert idx > 0
-        body = js[idx : idx + 12000]
+        body = js[idx : idx + 15000]
         assert 't("wc_match_pred_col")' in body
 
     def test_render_wc_tournament_has_disclaimer(self):
         js = _read_app_js()
         idx = js.find("function renderWcTournament(")
         assert idx > 0
-        body = js[idx : idx + 12000]
+        body = js[idx : idx + 15000]
         assert 't("wc_match_pred_disclaimer")' in body
 
     def test_load_and_render_calls_fetch(self):
@@ -5889,4 +5889,251 @@ class TestWcMatchPredictionI18n:
         assert "<script" not in body.lower()
         assert "onerror=" not in body.lower()
 
+
+class TestFetchWcTournamentStandingsProbabilities:
+    """Verifies the fetch function exists, caches correctly, and handles errors."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "async function fetchWcTournamentStandingsProbabilities(" in js
+
+    def test_uses_correct_endpoint(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentStandingsProbabilities(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "standings-probabilities" in body
+        assert "group=" in body
+        assert "num_simulations=2000" in body
+
+    def test_caches_in_wcapi_data(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentStandingsProbabilities(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "wcApiData.tournamentStandingsProbabilities" in body
+
+    def test_handles_ok_status(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentStandingsProbabilities(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert 'status === "ok"' in body
+
+    def test_handles_no_data_status(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentStandingsProbabilities(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert 'status === "no_data"' in body
+
+    def test_has_try_catch(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentStandingsProbabilities(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "try {" in body
+        assert "catch" in body
+
+    def test_no_eval(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentStandingsProbabilities(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "eval(" not in body
+
+    def test_returns_data_on_success(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentStandingsProbabilities(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "return data" in body
+
+    def test_sets_null_on_failure(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentStandingsProbabilities(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "tournamentStandingsProbabilities = null" in body
+
+
+class TestWcStandingsProbabilitiesRender:
+    """Verifies the standings table renders probability columns correctly."""
+
+    def test_render_has_prob_by_team_lookup(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "probByTeam" in body
+
+    def test_render_has_has_prob_data_flag(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "hasProbData" in body
+
+    def test_render_conditionally_shows_advance_col(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "wc_standings_prob_advance_col" in body
+
+    def test_render_conditionally_shows_win_col(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "wc_standings_prob_win_col" in body
+
+    def test_advance_prob_uses_status_pill(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "status-pill" in body
+        assert "advPct" in body
+
+    def test_win_prob_uses_status_pill(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "winPct" in body
+
+    def test_team_name_escaped(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "escapeHtml(s.team)" in body
+
+    def test_header_uses_t_function(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert 't("wc_standings_prob_advance_col")' in body
+        assert 't("wc_standings_prob_win_col")' in body
+
+    def test_disclaimer_uses_escape_html(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert 'escapeHtml(t("wc_standings_prob_disclaimer"))' in body
+
+    def test_no_eval_in_render(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "eval(" not in body
+
+    def test_prob_row_looks_up_by_team(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "probByTeam[s.team]" in body
+
+    def test_adv_color_tiers(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "advance_prob >= 0.7" in body
+        assert "advance_prob >= 0.3" in body
+
+    def test_win_color_tiers(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 8000]
+        assert "win_group_prob >= 0.5" in body
+        assert "win_group_prob >= 0.15" in body
+
+
+class TestWcStandingsProbabilitiesWiring:
+    """Wiring tests verifying fetchWcTournamentStandingsProbabilities is called
+    from every relevant event handler path."""
+
+    def test_load_and_render_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find("async function loadAndRenderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "fetchWcTournamentStandingsProbabilities(" in body
+
+    def test_group_select_change_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find('getElementById("wc-tournament-group-select")')
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "fetchWcTournamentStandingsProbabilities(e.target.value)" in body
+
+    def test_reset_button_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find('getElementById("wc-tournament-reset")')
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "fetchWcTournamentStandingsProbabilities(" in body
+
+    def test_apply_result_handler_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find(".wc-tournament-apply")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "fetchWcTournamentStandingsProbabilities(" in body
+
+    def test_clear_result_handler_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find(".wc-tournament-clear")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "fetchWcTournamentStandingsProbabilities(" in body
+
+    def test_uses_selected_group(self):
+        js = _read_app_js()
+        idx = js.find("async function loadAndRenderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "wcApiData.tournamentSelectedGroup" in body
+
+
+class TestWcStandingsProbabilitiesI18n:
+    """Verifies the i18n key set is complete in both locales."""
+
+    REQUIRED_KEYS = (
+        "wc_standings_prob_advance_col",
+        "wc_standings_prob_win_col",
+        "wc_standings_prob_disclaimer",
+        "wc_standings_prob_loading",
+    )
+
+    def test_all_keys_present_in_app_js(self):
+        js = _read_app_js()
+        for key in self.REQUIRED_KEYS:
+            assert f"{key}:" in js, f"Missing i18n key: {key}"
+
+    def test_all_keys_present_twice(self):
+        js = _read_app_js()
+        for key in self.REQUIRED_KEYS:
+            count = js.count(f"{key}:")
+            assert count >= 2, f"i18n key {key} appears {count} times (expected >= 2 for zh+en)"
+
+    def test_disclaimer_no_raw_html(self):
+        js = _read_app_js()
+        idx = js.find("wc_standings_prob_disclaimer:")
+        assert idx > 0
+        body = js[idx : idx + 600]
+        assert "<script" not in body.lower()
+        assert "onerror=" not in body.lower()
+
+    def test_loading_key_present(self):
+        js = _read_app_js()
+        count = js.count("wc_standings_prob_loading:")
+        assert count >= 2
 
