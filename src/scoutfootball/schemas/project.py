@@ -23,6 +23,10 @@ class DataDirectorySpec(BaseModel):
     layer: str
     relative_path: str
     purpose: str
+    source_name: str = ""
+    license_name: str = ""
+    recorded: bool = True
+    recorded_note: str = ""
 
 
 class Capability(BaseModel):

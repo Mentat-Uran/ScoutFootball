@@ -8,9 +8,13 @@ from . import __version__
 from .schemas import (
     Capability,
     CapabilityRegistry,
+    DataContract,
+    DataContractRegistry,
     DataDirectorySpec,
     ModuleBoundary,
     ProjectArchitecture,
+    SourceLicense,
+    build_core_table_definitions,
 )
 
 
@@ -77,31 +81,43 @@ def build_default_architecture() -> ProjectArchitecture:
                 layer="raw",
                 relative_path="raw/statsbomb_open",
                 purpose="Immutable official open-data JSON snapshots.",
+                source_name="statsbomb_open",
+                license_name="StatsBomb Open Data User Protocol",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/football_data",
                 purpose="Downloaded CSV baselines for fixtures, results and odds.",
+                source_name="football_data",
+                license_name="Football-Data.co.uk non-commercial",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/clubelo",
                 purpose="Team Elo snapshots before silver normalization.",
+                source_name="clubelo",
+                license_name="ClubElo public data",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/understat",
                 purpose="Cached supplemental attacking metrics.",
+                source_name="understat",
+                license_name="Understat public data",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/fbref",
                 purpose="Low-frequency cached standard-table extracts.",
+                source_name="fbref",
+                license_name="FBref personal research only; no redistribution",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/transfermarkt_manual",
                 purpose="Manually provided market and contract snapshots.",
+                source_name="transfermarkt_manual",
+                license_name="Transfermarkt manual import only",
             ),
             DataDirectorySpec(
                 layer="silver",
@@ -589,7 +605,7 @@ def build_capability_registry() -> CapabilityRegistry:
             name="数据产物清单",
             description="所有数据产物的元数据清单、版本信息、来源归属。",
             domain="infrastructure",
-            cli_commands=("info", "capabilities"),
+            cli_commands=("info", "capabilities", "data-contracts"),
             api_paths=(
                 "/artifacts",
                 "/model-runs",
@@ -607,4 +623,125 @@ def build_capability_registry() -> CapabilityRegistry:
         package_version=__version__,
         domains=domains,
         capabilities=caps,
+    )
+
+
+def _source_licenses() -> dict[str, SourceLicense]:
+    """Return the canonical source license definitions."""
+    return {
+        "statsbomb_open": SourceLicense(
+            source_name="statsbomb_open",
+            license_name="StatsBomb Open Data User Protocol",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://github.com/statsbomb/open-data",
+            notes="Free for research; attribution required.",
+        ),
+        "football_data": SourceLicense(
+            source_name="football_data",
+            license_name="Football-Data.co.uk non-commercial",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://www.football-data.co.uk/",
+            notes="Free for non-commercial use; attribution suggested.",
+        ),
+        "clubelo": SourceLicense(
+            source_name="clubelo",
+            license_name="ClubElo public data",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="http://api.clubelo.com/",
+            notes="Public data; attribution suggested.",
+        ),
+        "understat": SourceLicense(
+            source_name="understat",
+            license_name="Understat public data",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://understat.com/",
+            notes="Public data; scrape respects robots.txt and ToS.",
+        ),
+        "fbref": SourceLicense(
+            source_name="fbref",
+            license_name="FBref personal research only",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://fbref.com/",
+            notes="Personal research only; no redistribution of raw data.",
+        ),
+        "transfermarkt_manual": SourceLicense(
+            source_name="transfermarkt_manual",
+            license_name="Transfermarkt manual import only",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://www.transfermarkt.com/",
+            notes="Manual import only; no automated scraping.",
+        ),
+    }
+
+
+def build_data_contract_registry() -> DataContractRegistry:
+    """Build the canonical data contract registry.
+
+    Combines core table schemas with source license, lineage and
+    coverage metadata into a single machine-readable catalog.
+    Raw-layer artifacts carry explicit source licenses; derived
+    layers inherit from their upstream sources.
+    """
+    licenses = _source_licenses()
+    arch = build_default_architecture()
+    table_defs = build_core_table_definitions()
+
+    raw_dirs = [d for d in arch.data_directories if d.layer == "raw"]
+    raw_contracts = tuple(
+        DataContract(
+            artifact_id=d.relative_path,
+            layer=d.layer,
+            purpose=d.purpose,
+            license=licenses.get(d.source_name) if d.source_name else None,
+            recorded=d.recorded,
+            recorded_note=d.recorded_note,
+        )
+        for d in raw_dirs
+    )
+
+    silver_contracts = tuple(
+        DataContract(
+            artifact_id=t.name,
+            layer=t.layer,
+            purpose=t.purpose,
+            primary_keys=t.primary_keys,
+            columns=t.columns,
+        )
+        for t in table_defs
+    )
+
+    derived_dirs = [
+        d for d in arch.data_directories if d.layer not in ("raw", "silver")
+    ]
+    derived_contracts = tuple(
+        DataContract(
+            artifact_id=d.relative_path,
+            layer=d.layer,
+            purpose=d.purpose,
+            recorded=d.recorded,
+            recorded_note=d.recorded_note,
+        )
+        for d in derived_dirs
+    )
+
+    all_contracts = raw_contracts + silver_contracts + derived_contracts
+    layers = tuple(sorted({c.layer for c in all_contracts}))
+
+    return DataContractRegistry(
+        generated_at=_dt.datetime.now(_dt.UTC).isoformat(),
+        package_version=__version__,
+        layers=layers,
+        contracts=all_contracts,
     )

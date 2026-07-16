@@ -11,6 +11,7 @@ import pandas as pd
 
 from scoutfootball.architecture import (
     build_capability_registry,
+    build_data_contract_registry,
     build_default_architecture,
 )
 
@@ -69,6 +70,57 @@ def _cmd_capabilities(args: argparse.Namespace) -> None:
         lines.append("")
 
     if args.counts:
+        status_counts = registry.count_by_status()
+        lines.append("Status summary:")
+        for status, count in sorted(status_counts.items()):
+            lines.append(f"  {status}: {count}")
+
+    print("\n".join(lines))
+
+
+def _cmd_data_contracts(args: argparse.Namespace) -> None:
+    registry = build_data_contract_registry()
+
+    if args.json:
+        print(json.dumps(registry.model_dump(mode="json"), indent=2, ensure_ascii=False))
+        return
+
+    lines = [
+        f"ScoutFootball data contract registry (v{registry.package_version})",
+        f"Generated: {registry.generated_at}",
+        f"Total contracts: {len(registry.contracts)}",
+        f"Layers ({len(registry.layers)}): {', '.join(registry.layers)}",
+        "",
+    ]
+
+    if args.layer:
+        contracts = registry.by_layer(args.layer)
+        if not contracts:
+            print(f"No contracts found for layer: {args.layer}")
+            sys.exit(1)
+        lines.append(f"Layer: {args.layer} ({len(contracts)} contracts)")
+    else:
+        contracts = registry.contracts
+
+    for contract in contracts:
+        lines.append(f"  [{contract.layer}] {contract.artifact_id}")
+        lines.append(f"      {contract.purpose}")
+        lines.append(f"      status: {contract.status}")
+        if contract.license:
+            lines.append(f"      license: {contract.license.license_name}")
+        if contract.primary_keys:
+            lines.append(f"      primary_keys: {', '.join(contract.primary_keys)}")
+        if contract.columns:
+            lines.append(f"      columns: {len(contract.columns)}")
+        if not contract.recorded:
+            lines.append(f"      recorded: false ({contract.recorded_note})")
+        lines.append("")
+
+    if args.counts:
+        layer_counts = registry.count_by_layer()
+        lines.append("Layer summary:")
+        for layer, count in sorted(layer_counts.items()):
+            lines.append(f"  {layer}: {count}")
         status_counts = registry.count_by_status()
         lines.append("Status summary:")
         for status, count in sorted(status_counts.items()):
@@ -1595,6 +1647,16 @@ def main() -> None:
     )
     caps_p.add_argument("--counts", action="store_true", help="Show status counts summary")
 
+    dc_p = sub.add_parser(
+        "data-contracts",
+        help="List all data contracts with license, schema, lineage and coverage",
+    )
+    dc_p.add_argument("--layer", type=str, default=None, help="Filter by layer")
+    dc_p.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of human-readable text"
+    )
+    dc_p.add_argument("--counts", action="store_true", help="Show layer counts summary")
+
     ingest_p = sub.add_parser("ingest", help="Run daily data ingestion")
     ingest_p.add_argument(
         "--sources",
@@ -1910,6 +1972,7 @@ def main() -> None:
     handlers = {
         "info": _cmd_info,
         "capabilities": _cmd_capabilities,
+        "data-contracts": _cmd_data_contracts,
         "ingest": _cmd_ingest,
         "build-features": _cmd_build_features,
         "train": _cmd_train,
