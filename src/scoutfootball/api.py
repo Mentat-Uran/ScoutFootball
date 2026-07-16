@@ -727,6 +727,459 @@ def get_world_cup_match_briefing(home_team: str, away_team: str) -> dict[str, An
     })
 
 
+# ── Player spotlight position weights ────────────────────────────────────
+# Higher weight = more likely to be flagged as "player to watch".
+# Attackers and creative mids rank higher than defensive roles for
+# spotlight purposes; this is a presentation heuristic, not a rating.
+_WC_SPOTLIGHT_POSITION_WEIGHTS: dict[str, float] = {
+    "ST": 1.20,
+    "W": 1.15,
+    "AM": 1.10,
+    "CM": 1.00,
+    "DM": 0.85,
+    "FB": 0.80,
+    "CB": 0.80,
+    "GK": 0.60,
+}
+
+_WC_SPOTLIGHT_CONFIDENCE_MULTIPLIER: dict[str, float] = {
+    "high": 1.00,
+    "medium": 0.85,
+    "low": 0.65,
+    "none": 0.40,
+}
+
+
+def _wc_spotlight_opponent_weakness(
+    squad: list[Any], opponent_squad: list[Any]
+) -> dict[str, float]:
+    """Score how weak each opponent defensive role is.
+
+    Returns a dict mapping opponent role -> weakness_score (0..1), where
+    higher means the opponent is weaker at that role (lower average
+    rating among their players in that role, scaled to 0..1).
+
+    Used to boost attacking player weights when they line up against
+    a weak opposing defensive role.
+    """
+    role_ratings: dict[str, list[float]] = {"CB": [], "FB": [], "DM": [], "GK": []}
+    for player in opponent_squad:
+        if not player.has_rating or player.rating is None:
+            continue
+        if player.position in role_ratings:
+            role_ratings[player.position].append(float(player.rating))
+
+    weakness: dict[str, float] = {}
+    for role, ratings in role_ratings.items():
+        if not ratings:
+            # No rated player at this role = unknown, treat as neutral 0.5
+            weakness[role] = 0.5
+            continue
+        avg = sum(ratings) / len(ratings)
+        # WC ratings observed range ~30..85; map [30, 85] -> [1.0, 0.0]
+        # so a low-rated defender (avg ~30) yields weakness ~1.0 (very weak)
+        # and a top defender (avg ~85) yields weakness ~0.0 (very strong).
+        scaled = max(0.0, min(1.0, (85.0 - avg) / 55.0))
+        weakness[role] = scaled
+    return weakness
+
+
+def _wc_spotlight_player_score(
+    player: Any,
+    team_rated: list[Any],
+    opponent_weakness: dict[str, float],
+    team_avg_rating: float,
+) -> tuple[float, str]:
+    """Compute a single player's spotlight score and the reason text.
+
+    The score blends absolute rating, rating confidence, the player's
+    role's general "watchability" weight, and a position-vs-opponent
+    matchup bonus (e.g. an ST facing a weak CB line gets a boost).
+    """
+    if not player.has_rating or player.rating is None:
+        return 0.0, ""
+    rating = float(player.rating)
+    confidence = _WC_SPOTLIGHT_CONFIDENCE_MULTIPLIER.get(
+        player.rating_confidence, 0.40
+    )
+    position_weight = _WC_SPOTLIGHT_POSITION_WEIGHTS.get(player.position, 1.0)
+
+    # Normalize rating above team average (above-average players get a boost).
+    rating_delta = max(0.0, rating - team_avg_rating) if team_avg_rating else 0.0
+
+    # Position-vs-opponent matchup bonus.
+    matchup_bonus = 0.0
+    matchup_reason = ""
+    pos = player.position
+    if pos == "ST":
+        cb_weak = opponent_weakness.get("CB", 0.5)
+        gk_weak = opponent_weakness.get("GK", 0.5)
+        matchup_bonus = 0.10 * cb_weak + 0.05 * gk_weak
+        if cb_weak >= 0.6:
+            matchup_reason = "faces a weak CB line"
+        elif gk_weak >= 0.6:
+            matchup_reason = "faces a weak GK"
+    elif pos == "W":
+        fb_weak = opponent_weakness.get("FB", 0.5)
+        matchup_bonus = 0.10 * fb_weak
+        if fb_weak >= 0.6:
+            matchup_reason = "vs weak fullbacks"
+    elif pos == "AM":
+        dm_weak = opponent_weakness.get("DM", 0.5)
+        matchup_bonus = 0.08 * dm_weak
+        if dm_weak >= 0.6:
+            matchup_reason = "vs weak defensive mid"
+    elif pos in ("CM", "DM"):
+        # Central mids benefit from opponent having a weak midfield generally.
+        matchup_bonus = 0.05 * opponent_weakness.get("DM", 0.5)
+
+    base_score = (
+        0.55 * (rating / 100.0)
+        + 0.20 * confidence
+        + 0.15 * position_weight
+        + 0.10 * (rating_delta / 30.0 if rating_delta else 0.0)
+        + matchup_bonus
+    )
+    return base_score, matchup_reason
+
+
+def get_wc_match_player_spotlight(
+    home_team: str, away_team: str, *, top_n: int = 5
+) -> dict[str, Any]:
+    """Return ranked 'players to watch' for a World Cup fixture.
+
+    Each team contributes up to ``max(2, top_n // 2)`` candidates. Players
+    are scored by absolute rating, rating confidence, role watchability,
+    team-relative rating delta, and a position-vs-opponent matchup bonus.
+
+    The output is *illustrative* — based on placeholder squads and local
+    ratings, not a confirmed lineup, injury report, or tactical forecast.
+    """
+    if home_team == away_team:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_fixture",
+            "message": "Home and away World Cup teams must be different.",
+        })
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    valid_teams = set(enriched_squads)
+    if home_team not in valid_teams:
+        return _clean_json_value({
+            "status": "error",
+            "code": "unknown_team",
+            "message": f"World Cup home team '{home_team}' not found.",
+        })
+    if away_team not in valid_teams:
+        return _clean_json_value({
+            "status": "error",
+            "code": "unknown_team",
+            "message": f"World Cup away team '{away_team}' not found.",
+        })
+
+    home_squad = enriched_squads.get(home_team, [])
+    away_squad = enriched_squads.get(away_team, [])
+
+    home_rated = [
+        p for p in home_squad if p.has_rating and p.rating is not None
+    ]
+    away_rated = [
+        p for p in away_squad if p.has_rating and p.rating is not None
+    ]
+
+    if not home_rated and not away_rated:
+        return _clean_json_value({
+            "schema": "scoutfootball.world-cup-match-player-spotlight",
+            "version": "1.0.0",
+            "status": "no_rated_players",
+            "fixture": {"home_team": home_team, "away_team": away_team},
+            "players": [],
+            "limitations": [
+                "No rated players available for either side; spotlight "
+                "cannot be computed.",
+            ],
+        })
+
+    home_avg = (
+        sum(float(p.rating) for p in home_rated) / len(home_rated)
+        if home_rated else 0.0
+    )
+    away_avg = (
+        sum(float(p.rating) for p in away_rated) / len(away_rated)
+        if away_rated else 0.0
+    )
+
+    home_weakness = _wc_spotlight_opponent_weakness(home_squad, away_squad)
+    away_weakness = _wc_spotlight_opponent_weakness(away_squad, home_squad)
+
+    # Each side contributes up to ceil(top_n/2) + 1 candidates, then we merge.
+    per_side_cap = max(2, (top_n + 1) // 2 + 1)
+
+    def _rank_side(
+        team: str,
+        squad: list[Any],
+        rated: list[Any],
+        opponent_weakness: dict[str, float],
+        team_avg: float,
+    ) -> list[dict[str, Any]]:
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for player in rated:
+            score, matchup_reason = _wc_spotlight_player_score(
+                player, rated, opponent_weakness, team_avg
+            )
+            reason_parts = []
+            if player.rating is not None and team_avg:
+                delta = float(player.rating) - team_avg
+                if delta >= 5.0:
+                    reason_parts.append(
+                        f"top-rated in squad (+{delta:.1f})"
+                    )
+                elif delta <= -5.0:
+                    reason_parts.append(
+                        f"role depth (rating {float(player.rating):.1f})"
+                    )
+            if matchup_reason:
+                reason_parts.append(matchup_reason)
+            pos_label = _WC_SPOTLIGHT_POSITION_WEIGHTS.get(
+                player.position, 1.0
+            )
+            if pos_label >= 1.10 and not reason_parts:
+                reason_parts.append("attacking threat role")
+            scored.append((
+                score,
+                {
+                    "name": player.name,
+                    "team": team,
+                    "position": player.position,
+                    "club": player.club,
+                    "club_league": player.club_league,
+                    "rating": round(float(player.rating), 2) if player.rating else None,
+                    "rating_confidence": player.rating_confidence,
+                    "spotlight_score": round(score, 4),
+                    "reason": "; ".join(reason_parts) if reason_parts else "rated contributor",
+                },
+            ))
+        scored.sort(key=lambda x: -x[0])
+        return [entry for _, entry in scored[:per_side_cap]]
+
+    home_candidates = _rank_side(
+        home_team, home_squad, home_rated, away_weakness, home_avg
+    )
+    away_candidates = _rank_side(
+        away_team, away_squad, away_rated, home_weakness, away_avg
+    )
+
+    all_candidates = home_candidates + away_candidates
+    all_candidates.sort(key=lambda p: -p["spotlight_score"])
+    top = all_candidates[:top_n]
+
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-match-player-spotlight",
+        "version": "1.0.0",
+        "status": "ok",
+        "fixture": {"home_team": home_team, "away_team": away_team},
+        "prediction_summary": {
+            "home_strength": round(float(strengths.get(home_team, 0.0)), 4),
+            "away_strength": round(float(strengths.get(away_team, 0.0)), 4),
+            "home_advantage_flag": home_team in HOSTS,
+        },
+        "players": top,
+        "total_candidates": len(all_candidates),
+        "source_attribution": (
+            "Spotlight scores blend ScoutFootball local ratings, rating "
+            "confidence, role watchability, and opponent-position weakness. "
+            "Squads are placeholder callup snapshots, not confirmed lineups."
+        ),
+        "limitations": [
+            "Spotlight is an illustrative presentation heuristic, not a "
+            "performance forecast or lineup prediction.",
+            "Rating coverage gaps for non-Big5 leagues reduce the reliability "
+            "of position-vs-opponent matchup bonuses.",
+            "The matchup bonus assumes position-vs-position confrontation; "
+            "actual tactical matchups depend on the manager's setup.",
+        ],
+    })
+
+
+def get_wc_team_form_trend(team: str, *, last_n: int = 6) -> dict[str, Any]:
+    """Return a team's recent form trend for the World Cup view.
+
+    Combines two signal sources:
+    1. Recorded group-stage results from local tournament state (if any).
+    2. Pre-tournament expected-results trajectory derived from the
+       team's strength and the group-stage schedule order.
+
+    The trend is illustrative only — pre-tournament matches are
+    strength-derived expectations, not actual fixtures.
+    """
+    from scoutfootball.worldcup.data import get_team_group
+    from scoutfootball.worldcup.tournament import _match_completed
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if team not in enriched_squads:
+        return _clean_json_value({
+            "status": "error",
+            "code": "unknown_team",
+            "message": f"World Cup team '{team}' not found.",
+        })
+
+    team_strength = float(strengths.get(team, 0.2))
+    state = _wc_tournament_state()
+
+    # 1) Pull recorded WC results (group stage + knockout if any).
+    recorded: list[dict[str, Any]] = []
+    for m in state.matches:
+        if team not in (m.get("home"), m.get("away")):
+            continue
+        result = state.results.get(m["match_id"])
+        if not _match_completed(result):
+            continue
+        hg = int(result.get("home_goals", 0))
+        ag = int(result.get("away_goals", 0))
+        is_home = m.get("home") == team
+        team_goals = hg if is_home else ag
+        opp_goals = ag if is_home else hg
+        opp = m.get("away") if is_home else m.get("home")
+        if team_goals > opp_goals:
+            outcome = "W"
+            points = 3
+        elif team_goals == opp_goals:
+            outcome = "D"
+            points = 1
+        else:
+            outcome = "L"
+            points = 0
+        recorded.append({
+            "kind": "recorded",
+            "date": m.get("date", ""),
+            "opponent": opp,
+            "venue": "home" if is_home else "away",
+            "team_goals": team_goals,
+            "opponent_goals": opp_goals,
+            "outcome": outcome,
+            "points": points,
+            "group": m.get("group"),
+        })
+
+    # 2) Project expected group-stage results from strength for unrecorded
+    #    matches in this team's group (pre-tournament form proxy).
+    group = get_team_group(team)
+    projected: list[dict[str, Any]] = []
+    if group:
+        for m in state.matches:
+            if m.get("group") != group:
+                continue
+            if team not in (m.get("home"), m.get("away")):
+                continue
+            if _match_completed(state.results.get(m["match_id"])):
+                continue  # already in `recorded`
+            opp = m.get("away") if m.get("home") == team else m.get("home")
+            opp_strength = float(strengths.get(opp, 0.2))
+            # Simple expected score: stronger team wins more often, ~2.3 goals.
+            strength_diff = team_strength - opp_strength
+            expected_team_goals = max(0.3, min(4.0, 1.55 + 1.2 * strength_diff))
+            expected_opp_goals = max(0.3, min(4.0, 1.55 - 1.2 * strength_diff))
+            if expected_team_goals > expected_opp_goals + 0.25:
+                outcome = "W"
+                points = 3
+            elif expected_team_goals < expected_opp_goals - 0.25:
+                outcome = "L"
+                points = 0
+            else:
+                outcome = "D"
+                points = 1
+            is_home = m.get("home") == team
+            projected.append({
+                "kind": "projected",
+                "date": m.get("date", ""),
+                "opponent": opp,
+                "venue": "home" if is_home else "away",
+                "team_goals": round(expected_team_goals, 2),
+                "opponent_goals": round(expected_opp_goals, 2),
+                "outcome": outcome,
+                "points": points,
+                "group": m.get("group"),
+            })
+
+    # Recorded matches take priority; fill the rest with projected up to last_n.
+    recorded_sorted = sorted(recorded, key=lambda r: r["date"], reverse=True)
+    projected_sorted = sorted(projected, key=lambda r: r["date"])
+
+    # Combine: show projected (chronological) then recorded (most recent first)
+    # so the user sees the projected trajectory then live results on top.
+    combined = projected_sorted + recorded_sorted
+
+    # Trim to last_n entries for the trend chart.
+    if len(combined) > last_n:
+        combined = combined[-last_n:]
+
+    # Compute a simple form score: weighted recent points (decay 0.8 per match).
+    form_score = 0.0
+    decay = 1.0
+    total_decay = 0.0
+    # iterate from most recent to oldest
+    for entry in reversed(combined):
+        form_score += entry["points"] * decay
+        total_decay += decay
+        decay *= 0.8
+    form_score = form_score / total_decay if total_decay else 0.0
+    # Normalize to 0..1 (3 points = 1.0)
+    form_score_normalized = form_score / 3.0
+
+    # Build a simple trajectory of cumulative points.
+    cumulative = 0
+    trajectory = []
+    for entry in combined:
+        cumulative += entry["points"]
+        trajectory.append({
+            "date": entry["date"],
+            "opponent": entry["opponent"],
+            "outcome": entry["outcome"],
+            "team_goals": entry["team_goals"],
+            "opponent_goals": entry["opponent_goals"],
+            "points": entry["points"],
+            "cumulative_points": cumulative,
+            "kind": entry["kind"],
+            "venue": entry["venue"],
+        })
+
+    wins = sum(1 for e in combined if e["outcome"] == "W")
+    draws = sum(1 for e in combined if e["outcome"] == "D")
+    losses = sum(1 for e in combined if e["outcome"] == "L")
+
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-team-form-trend",
+        "version": "1.0.0",
+        "status": "ok",
+        "team": team,
+        "group": group,
+        "strength": round(team_strength, 4),
+        "matches": trajectory,
+        "summary": {
+            "recorded_count": len(recorded),
+            "projected_count": len(projected),
+            "wins": wins,
+            "draws": draws,
+            "losses": losses,
+            "form_score": round(form_score, 3),
+            "form_score_normalized": round(form_score_normalized, 3),
+        },
+        "source_attribution": (
+            "Recorded results come from local tournament state; projected "
+            "matches use strength-derived expected scorelines. Pre-tournament "
+            "form is illustrative only."
+        ),
+        "limitations": [
+            "Projected outcomes are strength-based expectations, not actual "
+            "match results or forecasts.",
+            "Form score uses exponential decay (0.8) weighting of recent "
+            "points; it is a presentation summary, not a model probability.",
+            "Recorded and projected matches may interleave; the trajectory "
+            "shows projected (chronological) then recorded (most recent first).",
+        ],
+    })
+
+
 def _match_model_comparison(home_team: str, away_team: str) -> dict[str, Any] | None:
     """Return 1x2 probabilities from both Poisson and Dixon-Coles for a match.
 
@@ -9433,13 +9886,53 @@ def get_wc_tournament_match_impact(
     impact_matches = []
     for m in pending_matches:
         mid = m["match_id"]
-        home = m.get("home_team", "")
-        away = m.get("away_team", "")
+        home = m.get("home", "")
+        away = m.get("away", "")
         m_group = m.get("group", "")
 
-        home_win_probs = _sim_with_result(mid, 2, 1)
-        draw_probs = _sim_with_result(mid, 1, 1)
-        away_win_probs = _sim_with_result(mid, 1, 2)
+        # Use model-derived scorelines from the WC strength Poisson model
+        # instead of hardcoded 2-1/1-1/1-2. Falls back to defaults if the
+        # prediction endpoint is unavailable.
+        try:
+            prediction = get_world_cup_match_prediction(home, away)
+            if prediction.get("error") or "score_matrix" not in prediction:
+                raise ValueError("prediction unavailable")
+            mls = _most_likely_wc_scoreline(prediction["score_matrix"])
+            # mls format: {"home_goals": int, "away_goals": int, "probability": float}
+            base_home = int(mls.get("home_goals", 1))
+            base_away = int(mls.get("away_goals", 1))
+            # Build three distinct outcome scorelines (home win / draw / away win).
+            if base_home > base_away:
+                home_win_goals = (base_home, base_away)
+                draw_goals = (base_away, base_away)
+                away_win_goals = (max(0, base_away - 1), base_away + 1)
+            elif base_home < base_away:
+                home_win_goals = (base_away, max(0, base_away - 1))
+                draw_goals = (base_home, base_home)
+                away_win_goals = (base_home, base_away)
+            else:
+                # Most likely was a draw — nudge to distinct W/D/L.
+                home_win_goals = (base_home + 1, base_away)
+                draw_goals = (base_home, base_away)
+                away_win_goals = (base_home, base_away + 1)
+            # Safety: ensure W/D/L span.
+            if (
+                home_win_goals[0] <= home_win_goals[1]
+                or draw_goals[0] != draw_goals[1]
+                or away_win_goals[0] >= away_win_goals[1]
+            ):
+                home_win_goals = (2, 1)
+                draw_goals = (1, 1)
+                away_win_goals = (1, 2)
+        except Exception:
+            # Fallback: classic 2-1 / 1-1 / 1-2 scenarios.
+            home_win_goals = (2, 1)
+            draw_goals = (1, 1)
+            away_win_goals = (1, 2)
+
+        home_win_probs = _sim_with_result(mid, home_win_goals[0], home_win_goals[1])
+        draw_probs = _sim_with_result(mid, draw_goals[0], draw_goals[1])
+        away_win_probs = _sim_with_result(mid, away_win_goals[0], away_win_goals[1])
 
         all_teams = set(home_win_probs.keys()) | set(draw_probs.keys()) | set(away_win_probs.keys())
 
@@ -9478,6 +9971,11 @@ def get_wc_tournament_match_impact(
             "date": m.get("date"),
             "venue": m.get("venue"),
             "city": m.get("city"),
+            "scenario_scorelines": {
+                "home_win": list(home_win_goals),
+                "draw": list(draw_goals),
+                "away_win": list(away_win_goals),
+            },
             "total_impact": total_impact,
             "max_swing": max_swing,
             "max_swing_team": max_swing_team,
@@ -9498,7 +9996,263 @@ def get_wc_tournament_match_impact(
             "Match impact uses strength-weighted Monte Carlo simulation of "
             "remaining group matches. Impact = sum of advancement probability "
             "swings across all teams in the group when the match outcome "
-            "varies. Illustrative only."
+            "varies. Scenario scorelines are derived from the WC strength "
+            "Poisson model's most likely outcome. Illustrative only."
+        ),
+    })
+
+
+def get_wc_tournament_knockout_match_impact(
+    *, num_simulations: int = 5000, top_n: int = 10
+) -> dict:
+    """Rank remaining knockout matches by championship-probability swing.
+
+    Mirrors :func:`get_wc_tournament_match_impact` but for knockout fixtures:
+    for each pending KO match with both teams populated, simulates the three
+    outcomes (home win / draw / away win; draws resolved by penalties
+    assigned to the home side for the simulation only) and measures each
+    team's championship probability swing across the scenarios.
+
+    Returns the top-N matches sorted by total championship-probability impact.
+    """
+    import copy
+
+    from scoutfootball.worldcup.data import project_knockout_probabilities
+    from scoutfootball.worldcup.tournament import (
+        get_knockout_overview,
+    )
+
+    state = _wc_tournament_state()
+    overview = get_knockout_overview(state)
+    if not overview.get("generated"):
+        return _clean_json_value({
+            "status": "not_generated",
+            "matches": [],
+            "num_simulations": 0,
+            "disclaimer": (
+                "No knockout bracket has been generated. Call "
+                "/world-cup/tournament/knockout/generate first."
+            ),
+        })
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads or not strengths:
+        return _clean_json_value({
+            "status": "no_data",
+            "matches": [],
+            "num_simulations": 0,
+            "disclaimer": (
+                "World Cup squad data unavailable; knockout match impact "
+                "cannot be computed."
+            ),
+        })
+
+    pending = []
+    for m in overview.get("matches", []):
+        if m.get("status") == "completed":
+            continue
+        home = m.get("home")
+        away = m.get("away")
+        if not home or not away:
+            continue
+        pending.append(m)
+
+    if not pending:
+        return _clean_json_value({
+            "status": "ok",
+            "matches": [],
+            "num_simulations": num_simulations,
+            "mode": "strength",
+            "source_attribution": _STATSBOMB_ATTRIBUTION,
+            "disclaimer": "No remaining knockout matches with both teams set.",
+        })
+
+    def _sim_knockout_with_result(match_id: str, winner: str):
+        modified = copy.deepcopy(state)
+        ko_match = modified.knockout_match_by_id(match_id)
+        if not ko_match:
+            return {}
+        # Apply a 1-0 or 0-1 result depending on winner.
+        if winner == ko_match.get("home"):
+            hg, ag = 1, 0
+        else:
+            hg, ag = 0, 1
+        ko_match["status"] = "completed"
+        ko_match["home_goals"] = hg
+        ko_match["away_goals"] = ag
+        ko_match["winner"] = winner
+        ko_match["decided_by"] = "regular"
+        modified.results[match_id] = {
+            "status": "completed",
+            "home_goals": hg,
+            "away_goals": ag,
+            "winner": winner,
+            "decided_by": "regular",
+        }
+        if "matches" not in modified.knockout:
+            modified.knockout["matches"] = []
+        for i, km in enumerate(modified.knockout.get("matches", [])):
+            if km.get("match_id") == match_id:
+                modified.knockout["matches"][i] = ko_match
+                break
+        # Re-project KO bracket from modified state.
+        new_overview = get_knockout_overview(modified)
+        result = project_knockout_probabilities(new_overview, strengths)
+        prob_map = {}
+        for entry in result.get("tournament_win_probability", []):
+            prob_map[entry["team"]] = entry.get("win_probability", 0.0)
+        return prob_map
+
+    impact_matches = []
+    for m in pending:
+        mid = m.get("match_id", "")
+        home = m.get("home", "")
+        away = m.get("away", "")
+        round_label = m.get("round_label", m.get("round", ""))
+
+        home_win_probs = _sim_knockout_with_result(mid, home)
+        away_win_probs = _sim_knockout_with_result(mid, away)
+        # No draw scenario in KO; assign draw column to a 50/50 split for
+        # presentation parity with the group-stage panel.
+        draw_probs = {
+            team: (home_win_probs.get(team, 0.0) + away_win_probs.get(team, 0.0)) / 2.0
+            for team in set(home_win_probs) | set(away_win_probs)
+        }
+
+        all_teams = set(home_win_probs) | set(away_win_probs) | set(draw_probs)
+        total_impact = 0.0
+        max_swing = 0.0
+        max_swing_team = ""
+        per_team_impact = []
+        for team in sorted(all_teams):
+            hw = home_win_probs.get(team, 0.0)
+            dr = draw_probs.get(team, 0.0)
+            aw = away_win_probs.get(team, 0.0)
+            team_max = max(hw, dr, aw)
+            team_min = min(hw, dr, aw)
+            swing = team_max - team_min
+            total_impact += swing
+            if swing > max_swing:
+                max_swing = swing
+                max_swing_team = team
+            per_team_impact.append({
+                "team": team,
+                "home_win_prob": hw,
+                "draw_prob": dr,
+                "away_win_prob": aw,
+                "swing": swing,
+            })
+        per_team_impact.sort(key=lambda t: -t["swing"])
+
+        impact_matches.append({
+            "match_id": mid,
+            "home": home,
+            "away": away,
+            "round": round_label,
+            "position": m.get("position"),
+            "total_impact": total_impact,
+            "max_swing": max_swing,
+            "max_swing_team": max_swing_team,
+            "per_team": per_team_impact,
+        })
+
+    impact_matches.sort(key=lambda m: -m["total_impact"])
+    top_matches = impact_matches[:top_n]
+
+    return _clean_json_value({
+        "status": "ok",
+        "matches": top_matches,
+        "total_pending": len(pending),
+        "num_simulations": num_simulations,
+        "mode": "strength",
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": (
+            "Knockout match impact uses Bradley-Terry strength model with "
+            "Monte Carlo tournament win probability. Impact = sum of "
+            "championship probability swings across all teams when the "
+            "match winner varies. Draw column is the average of the two "
+            "win scenarios because knockout matches cannot end in a draw. "
+            "Illustrative only."
+        ),
+    })
+
+
+def get_wc_tournament_top_matches(
+    *, group_top_n: int = 5, knockout_top_n: int = 5, num_simulations: int = 1000
+) -> dict:
+    """Combine group-stage and KO match impact into a single top-N view.
+
+    Returns a unified leaderboard of the most impactful remaining matches
+    across the whole tournament, suitable for a 'Top Matches to Watch'
+    panel. Normalizes the impact metric so group-stage advancement swings
+    are comparable to KO championship swings.
+    """
+    group_impact = get_wc_tournament_match_impact(
+        num_simulations=num_simulations, top_n=group_top_n
+    )
+    ko_impact = get_wc_tournament_knockout_match_impact(
+        num_simulations=max(num_simulations, 5000), top_n=knockout_top_n
+    )
+
+    unified: list[dict[str, Any]] = []
+
+    if group_impact.get("status") == "ok":
+        for m in group_impact.get("matches", []):
+            unified.append({
+                "match_id": m["match_id"],
+                "stage": "group",
+                "home": m["home"],
+                "away": m["away"],
+                "stage_label": f"Group {m.get('group', '')}",
+                "date": m.get("date", ""),
+                "venue": m.get("venue", ""),
+                "city": m.get("city", ""),
+                "total_impact": m["total_impact"],
+                "max_swing": m["max_swing"],
+                "max_swing_team": m["max_swing_team"],
+                "impact_metric": "advancement_prob_swing",
+                "per_team": m.get("per_team", []),
+            })
+
+    if ko_impact.get("status") == "ok":
+        for m in ko_impact.get("matches", []):
+            unified.append({
+                "match_id": m["match_id"],
+                "stage": "knockout",
+                "home": m["home"],
+                "away": m["away"],
+                "stage_label": m.get("round", "Knockout"),
+                "date": "",
+                "venue": "",
+                "city": "",
+                "total_impact": m["total_impact"],
+                "max_swing": m["max_swing"],
+                "max_swing_team": m["max_swing_team"],
+                "impact_metric": "championship_prob_swing",
+                "per_team": m.get("per_team", []),
+            })
+
+    # Sort by total_impact (which is naturally on different scales between
+    # group and KO; we keep raw values so the user can see the actual swing
+    # magnitude per stage, but rank by total_impact).
+    unified.sort(key=lambda m: -m["total_impact"])
+
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-top-matches",
+        "version": "1.0.0",
+        "status": "ok",
+        "matches": unified[: group_top_n + knockout_top_n],
+        "group_stage_count": len(group_impact.get("matches", [])),
+        "knockout_count": len(ko_impact.get("matches", [])),
+        "group_stage_status": group_impact.get("status", "no_data"),
+        "knockout_status": ko_impact.get("status", "no_data"),
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": (
+            "Unified top matches to watch, combining group-stage advancement "
+            "swings and knockout championship swings. The two stages use "
+            "different baseline probabilities, so total_impact is not strictly "
+            "comparable across stages — review per_team swings for context. "
+            "Illustrative only."
         ),
     })
 

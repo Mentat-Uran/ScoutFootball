@@ -139,14 +139,17 @@ from scoutfootball.api import (
     get_wc_knockout_probabilities,
     get_wc_knockout_review_ledger,
     get_wc_knockout_scenarios,
+    get_wc_match_player_spotlight,
     get_wc_predictions,
     get_wc_qualification_impact,
     get_wc_schedule,
     get_wc_squad,
     get_wc_squad_balance_comparison,
     get_wc_squad_scouting_needs,
+    get_wc_team_form_trend,
     get_wc_team_outlook,
     get_wc_teams,
+    get_wc_tournament_knockout_match_impact,
     get_wc_tournament_match_impact,
     get_wc_tournament_match_predictions,
     get_wc_tournament_matches,
@@ -155,6 +158,7 @@ from scoutfootball.api import (
     get_wc_tournament_standings,
     get_wc_tournament_standings_probabilities,
     get_wc_tournament_summary,
+    get_wc_tournament_top_matches,
     get_world_cup_match_briefing,
     get_world_cup_match_prediction,
     health_check,
@@ -1607,6 +1611,37 @@ def create_app() -> FastAPI:
         return get_wc_tournament_match_impact(
             group=group, num_simulations=num_simulations, top_n=top_n
         )
+
+    @app.get("/world-cup/tournament/knockout/match-impact")
+    def wc_tournament_knockout_match_impact(
+        num_simulations: int = Query(5000, ge=100, le=20000),
+        top_n: int = Query(10, ge=1, le=50),
+    ):
+        return get_wc_tournament_knockout_match_impact(
+            num_simulations=num_simulations, top_n=top_n
+        )
+
+    @app.get("/world-cup/tournament/top-matches")
+    def wc_tournament_top_matches(
+        group_top_n: int = Query(5, ge=1, le=20),
+        knockout_top_n: int = Query(5, ge=1, le=20),
+        num_simulations: int = Query(1000, ge=100, le=10000),
+    ):
+        return get_wc_tournament_top_matches(
+            group_top_n=group_top_n,
+            knockout_top_n=knockout_top_n,
+            num_simulations=num_simulations,
+        )
+
+    @app.get("/world-cup/match-briefings/{home}/{away}/spotlight")
+    def wc_match_player_spotlight(
+        home: str, away: str, top_n: int = Query(5, ge=1, le=10)
+    ):
+        return get_wc_match_player_spotlight(home, away, top_n=top_n)
+
+    @app.get("/world-cup/teams/{team}/form-trend")
+    def wc_team_form_trend(team: str, last_n: int = Query(6, ge=1, le=20)):
+        return get_wc_team_form_trend(team, last_n=last_n)
 
     @app.get("/world-cup/tournament/scenarios/{team}")
     def wc_tournament_scenarios(team: str, max_scenarios: int = Query(30, ge=1, le=200)):
