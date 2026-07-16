@@ -5056,7 +5056,7 @@ class TestWcScoutingNeedPillFunction:
         js = _read_app_js()
         assert "function _wcScoutingNeedPill(" in js
 
-    def test_uses_squadScoutingNeedsCache(self):
+    def test_uses_squad_scouting_needs_cache(self):
         js = _read_app_js()
         idx = js.find("function _wcScoutingNeedPill(")
         assert idx > 0
@@ -5241,7 +5241,7 @@ class TestRenderWcSquadScoutingNeeds:
         body = js[idx : idx + 3000]
         assert 'getElementById("wc-scouting-needs-status")' in body
 
-    def test_uses_textContent_for_status(self):
+    def test_uses_text_content_for_status(self):
         js = _read_app_js()
         idx = js.find("function renderWcSquadScoutingNeeds(")
         assert idx > 0
@@ -5341,14 +5341,14 @@ class TestFetchWcSquadScoutingNeeds:
         js = _read_app_js()
         assert "async function fetchWcSquadScoutingNeeds(" in js
 
-    def test_uses_squadScoutingNeedsCache(self):
+    def test_uses_squad_scouting_needs_cache(self):
         js = _read_app_js()
         idx = js.find("async function fetchWcSquadScoutingNeeds(")
         assert idx > 0
-        body = js[idx : idx + 2000]
+        body = js[idx : idx + 1500]
         assert "squadScoutingNeedsCache" in body
 
-    def test_uses_squadScoutingNeedsLoading_set(self):
+    def test_uses_squad_scouting_needs_loading_set(self):
         js = _read_app_js()
         idx = js.find("async function fetchWcSquadScoutingNeeds(")
         assert idx > 0
@@ -5554,5 +5554,339 @@ class TestWcScoutingNeedRenderWcSquadsIntegration:
         assert idx > 0
         body = js[idx : idx + 800]
         assert "fetchWcSquadScoutingNeeds(" in body
+
+
+# ===== 56. WC tournament match prediction pill ==============================
+
+
+class TestWcMatchPredictionPillFunction:
+    """Tests for the `_wcMatchPredictionPill` frontend helper."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "function _wcMatchPredictionPill(" in js
+
+    def test_reads_tournament_match_predictions_cache(self):
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "wcApiData.tournamentMatchPredictions" in body
+
+    def test_returns_muted_placeholder_when_no_data(self):
+        """Must return a muted placeholder when cache is empty."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "var(--text-muted)" in body
+
+    def test_returns_placeholder_when_match_not_found(self):
+        """Must look up the entry via data.predictions.find and return placeholder if absent."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "data.predictions.find" in body
+
+    def test_team_not_found_branch_renders_status_pill(self):
+        """When status === 'team_not_found', must render a status-low pill."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert '"team_not_found"' in body
+        assert "status-low" in body
+
+    def test_team_not_found_branch_uses_i18n_label(self):
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert 't("wc_match_pred_team_not_found")' in body
+
+    def test_error_branch_returns_muted_placeholder(self):
+        """When status === 'error', must render the muted placeholder, not a pill."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert '"error"' in body
+
+    def test_completed_match_renders_delta_pill(self):
+        """Completed matches with a delta must render a status-pill."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert "entry.completed && entry.delta" in body
+        assert "status-pill" in body
+
+    def test_delta_classification_branches(self):
+        """The three classifications must each map to a pillClass."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert '"as_expected"' in body
+        assert '"upset"' in body
+        # "hold" is the fallback branch — assert via its i18n key instead
+        assert 't("wc_match_pred_hold")' in body
+        assert "status-high" in body
+        assert "status-medium" in body
+
+    def test_delta_label_uses_i18n(self):
+        """Classification labels must be sourced from i18n, not hardcoded strings."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert 't("wc_match_pred_as_expected")' in body
+        assert 't("wc_match_pred_upset")' in body
+        assert 't("wc_match_pred_hold")' in body
+
+    def test_delta_title_shows_expected_scoreline(self):
+        """The pill title must reference most_likely_scoreline via the i18n template."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3000]
+        assert 't("wc_match_pred_expected")' in body
+        assert "most_likely_scoreline.home_goals" in body
+        assert "most_likely_scoreline.away_goals" in body
+
+    def test_pending_match_renders_stacked_bar(self):
+        """Pending matches must render the 3-segment stacked bar."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        # Three color segments: green home, amber draw, red away
+        assert "#16a34a" in body
+        assert "#ca8a04" in body
+        assert "#dc2626" in body
+
+    def test_pending_bar_uses_home_draw_away_probs(self):
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        # Home and draw probs are read directly; away is derived as 100 - hw - dr
+        assert "entry.home_win_prob" in body
+        assert "entry.draw_prob" in body
+        assert "100 - hw - dr" in body
+
+    def test_pending_bar_title_uses_i18n_breakdown(self):
+        """The stacked-bar title must include home/draw/away labels via i18n."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert 't("wc_match_pred_home")' in body
+        assert 't("wc_match_pred_draw")' in body
+        assert 't("wc_match_pred_away")' in body
+
+    def test_uses_escape_html_for_labels(self):
+        """All rendered labels must pass through escapeHtml."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "escapeHtml(label)" in body
+
+    def test_uses_escape_attr_for_titles(self):
+        """All title attributes must pass through escapeAttr."""
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "escapeAttr(" in body
+
+    def test_no_eval_in_pill_function(self):
+        js = _read_app_js()
+        idx = js.find("function _wcMatchPredictionPill(")
+        assert idx > 0
+        end_idx = js.find("function ", idx + 30)
+        body = js[idx:end_idx] if end_idx > 0 else js[idx : idx + 4000]
+        assert "eval(" not in body
+        assert "new Function(" not in body
+
+
+class TestFetchWcTournamentMatchPredictions:
+    """Tests for the `fetchWcTournamentMatchPredictions` fetcher."""
+
+    def test_function_defined(self):
+        js = _read_app_js()
+        assert "async function fetchWcTournamentMatchPredictions(" in js
+
+    def test_calls_match_predictions_endpoint(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchPredictions(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "/world-cup/tournament/match-predictions" in body
+
+    def test_passes_group_param_when_present(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchPredictions(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "group=${encodeURIComponent(group)}" in body
+
+    def test_uses_60s_timeout(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchPredictions(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "AbortSignal.timeout(60000)" in body
+
+    def test_caches_payload_on_success(self):
+        """Successful responses must be cached into wcApiData.tournamentMatchPredictions."""
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchPredictions(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "wcApiData.tournamentMatchPredictions = data" in body
+
+    def test_accepts_ok_and_no_data_statuses(self):
+        """Both 'ok' and 'no_data' statuses must be cached."""
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchPredictions(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert '"ok"' in body
+        assert '"no_data"' in body
+
+    def test_returns_null_on_error(self):
+        """Fetcher must return null (not throw) on error."""
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchPredictions(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "return null" in body
+
+    def test_logs_warning_on_failure(self):
+        js = _read_app_js()
+        idx = js.find("async function fetchWcTournamentMatchPredictions(")
+        assert idx > 0
+        body = js[idx : idx + 1500]
+        assert "console.warn" in body
+
+    def test_cache_slot_defined_in_wc_api_data(self):
+        """The cache slot must be declared on wcApiData."""
+        js = _read_app_js()
+        # Find the wcApiData declaration and check the slot
+        idx = js.find("tournamentMatchPredictions: null")
+        assert idx > 0
+
+
+class TestWcMatchPredictionWiring:
+    """Wiring tests verifying the pill is invoked from renderWcTournament and
+    that fetchWcTournamentMatchPredictions is invoked from every relevant
+    event handler path."""
+
+    def test_render_wc_tournament_invokes_pill_helper(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 12000]
+        assert "_wcMatchPredictionPill(m.match_id)" in body
+
+    def test_render_wc_tournament_has_prediction_column_header(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 12000]
+        assert 't("wc_match_pred_col")' in body
+
+    def test_render_wc_tournament_has_disclaimer(self):
+        js = _read_app_js()
+        idx = js.find("function renderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 12000]
+        assert 't("wc_match_pred_disclaimer")' in body
+
+    def test_load_and_render_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find("async function loadAndRenderWcTournament(")
+        assert idx > 0
+        body = js[idx : idx + 2000]
+        assert "fetchWcTournamentMatchPredictions(" in body
+
+    def test_group_select_change_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find('getElementById("wc-tournament-group-select")')
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "fetchWcTournamentMatchPredictions(e.target.value)" in body
+
+    def test_reset_button_calls_fetch(self):
+        js = _read_app_js()
+        idx = js.find('getElementById("wc-tournament-reset")')
+        assert idx > 0
+        body = js[idx : idx + 2500]
+        assert "fetchWcTournamentMatchPredictions(" in body
+
+    def test_apply_result_handler_calls_fetch(self):
+        """The Apply result handler must refresh predictions after posting the result."""
+        js = _read_app_js()
+        idx = js.find(".wc-tournament-apply")
+        assert idx > 0
+        # Find the Promise.all block following the apply handler
+        body = js[idx : idx + 3500]
+        assert "fetchWcTournamentMatchPredictions(" in body
+
+    def test_clear_result_handler_calls_fetch(self):
+        """The Clear result handler must refresh predictions after clearing the result."""
+        js = _read_app_js()
+        idx = js.find(".wc-tournament-clear")
+        assert idx > 0
+        body = js[idx : idx + 3500]
+        assert "fetchWcTournamentMatchPredictions(" in body
+
+
+class TestWcMatchPredictionI18n:
+    """Verifies the i18n key set is complete in both locales."""
+
+    REQUIRED_KEYS = (
+        "wc_match_pred_col",
+        "wc_match_pred_home",
+        "wc_match_pred_draw",
+        "wc_match_pred_away",
+        "wc_match_pred_expected",
+        "wc_match_pred_as_expected",
+        "wc_match_pred_upset",
+        "wc_match_pred_hold",
+        "wc_match_pred_team_not_found",
+        "wc_match_pred_disclaimer",
+    )
+
+    def test_all_keys_present_in_app_js(self):
+        js = _read_app_js()
+        for key in self.REQUIRED_KEYS:
+            assert f"{key}:" in js, f"Missing i18n key: {key}"
+
+    def test_expected_template_has_score_placeholder(self):
+        """wc_match_pred_expected must include the {score} placeholder."""
+        js = _read_app_js()
+        idx = js.find("wc_match_pred_expected:")
+        assert idx > 0
+        body = js[idx : idx + 200]
+        assert "{score}" in body
+
+    def test_disclaimer_mentions_poisson_model(self):
+        """Disclaimer text must reference the world_cup_strength_poisson model."""
+        js = _read_app_js()
+        # Search for the key in both zh and en blocks; at least one mention
+        assert "world_cup_strength_poisson" in js
+
+    def test_no_raw_html_in_disclaimer(self):
+        """Disclaimer value must not embed raw HTML tags (XSS guard)."""
+        js = _read_app_js()
+        idx = js.find("wc_match_pred_disclaimer:")
+        assert idx > 0
+        body = js[idx : idx + 600]
+        assert "<script" not in body.lower()
+        assert "onerror=" not in body.lower()
 
 
