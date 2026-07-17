@@ -443,6 +443,36 @@ def _cmd_inspect_raw_source(args: argparse.Namespace) -> None:
         print(f"Wrote local raw-source inspection: {output}")
 
 
+def _cmd_reep_identity_lookup(args: argparse.Namespace) -> None:
+    """Look up an exact provider ID in a local Reep identity snapshot."""
+    from scoutfootball.evaluation.reep_identity import lookup_reep_provider_identity
+
+    try:
+        report = lookup_reep_provider_identity(
+            provider=args.provider,
+            provider_id=args.provider_id,
+            path=args.path,
+            limit=args.limit,
+            snapshot_ledger_path=args.snapshot_ledger,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Error: unable to look up Reep identity: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+    print(f"Reep exact {report['lookup']['provider']} identity lookup: {report['status']}")
+    print(f"  Matches: {report['match_count']} (returned {report['returned_count']})")
+    print(f"  Snapshot: {report['source_snapshot']['status']}")
+    for match in report["matches"]:
+        print(
+            "  - "
+            f"{match['entity_type'] or 'unknown'}: "
+            f"{match['full_name'] or match['name'] or match['reep_id'] or 'unnamed'}"
+        )
+
+
 def _cmd_record_source_policy(args: argparse.Namespace) -> None:
     """Preview or append an explicit local retention/deletion policy."""
     from scoutfootball.evaluation.source_policy_ledger import (
@@ -2306,6 +2336,33 @@ def main() -> None:
         "--overwrite", action="store_true", help="Allow replacement of an existing evidence JSON"
     )
     raw_inspection_p.add_argument("--json", action="store_true", help="Emit the evidence payload")
+    reep_identity_p = sub.add_parser(
+        "reep-identity-lookup",
+        help="Look up an exact provider ID in a local Reep identity snapshot for manual review",
+    )
+    reep_identity_p.add_argument(
+        "--provider",
+        required=True,
+        choices=("transfermarkt", "fbref", "wikidata"),
+        help="Provider identifier namespace to query exactly",
+    )
+    reep_identity_p.add_argument(
+        "--id", dest="provider_id", required=True, help="Exact provider identifier"
+    )
+    reep_identity_p.add_argument(
+        "--path",
+        default="raw/reep/people.csv",
+        help="Local CSV path below data/raw/reep",
+    )
+    reep_identity_p.add_argument(
+        "--limit", type=int, default=20, help="Maximum matches returned (1-100)"
+    )
+    reep_identity_p.add_argument(
+        "--snapshot-ledger",
+        default="data/reports/data_health/source_snapshot_ledger.jsonl",
+        help="Optional local source-snapshot ledger for provenance display",
+    )
+    reep_identity_p.add_argument("--json", action="store_true", help="Emit JSON")
     policy_p = sub.add_parser(
         "record-source-policy",
         help="Preview or append an explicit local source retention/deletion policy",
@@ -2795,6 +2852,7 @@ def main() -> None:
         "validate-decision-package": _cmd_validate_decision_package,
         "record-source-snapshot": _cmd_record_source_snapshot,
         "inspect-raw-source": _cmd_inspect_raw_source,
+        "reep-identity-lookup": _cmd_reep_identity_lookup,
         "record-source-policy": _cmd_record_source_policy,
         "record-quality-audit": _cmd_record_quality_audit,
         "record-quality-threshold": _cmd_record_quality_threshold,
