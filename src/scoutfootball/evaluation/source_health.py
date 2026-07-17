@@ -11,10 +11,48 @@ from scoutfootball.evaluation.source_snapshot_ledger import (
     latest_snapshot_by_source,
     read_source_snapshot_ledger,
 )
+from scoutfootball.schemas.storage import SourceLicense
 
 
 def _iso(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def source_license_policy_status(license_info: SourceLicense | None) -> dict[str, Any]:
+    """Describe recorded retention/deletion policy without supplying missing terms.
+
+    A registered license is not, by itself, evidence that local retention and
+    deletion handling have been decided.  This helper deliberately keeps that
+    distinction machine-readable for both source-health and contract-quality.
+    """
+    if license_info is None:
+        return {
+            "status": "not_recorded",
+            "missing_fields": ["source_license"],
+            "note": (
+                "No source license is registered, so retention and deletion policy are unknown."
+            ),
+        }
+
+    missing_fields: list[str] = []
+    if license_info.retention_policy_days is None:
+        missing_fields.append("retention_policy_days")
+    if not license_info.deletion_strategy.strip():
+        missing_fields.append("deletion_strategy")
+    return {
+        "status": "recorded" if not missing_fields else "baseline_required",
+        "retention_policy_days": license_info.retention_policy_days,
+        "deletion_strategy": license_info.deletion_strategy or None,
+        "missing_fields": missing_fields,
+        "note": (
+            "Recorded local policy fields; this does not interpret third-party license terms."
+            if not missing_fields
+            else (
+                "A maintainer-recorded retention period and deletion strategy are required; "
+                "missing values are not inferred from a license name or local files."
+            )
+        ),
+    }
 
 
 def build_source_health_report(
@@ -40,9 +78,7 @@ def build_source_health_report(
         directory = settings.data_root / relative
         files = (
             sorted(
-                path
-                for path in directory.rglob("*")
-                if path.is_file() and path.name != ".gitkeep"
+                path for path in directory.rglob("*") if path.is_file() and path.name != ".gitkeep"
             )
             if directory.exists()
             else []
@@ -53,9 +89,16 @@ def build_source_health_report(
                 "source_id": contract.license.source_name if contract.license else relative,
                 "contract": {"status": "recorded", "artifact_id": contract.artifact_id},
                 "license": (
-                    {"status": "recorded", "details": contract.license.model_dump(mode="json")}
+                    {
+                        "status": "recorded",
+                        "details": contract.license.model_dump(mode="json"),
+                        "policy": source_license_policy_status(contract.license),
+                    }
                     if contract.license
-                    else {"status": "not_recorded"}
+                    else {
+                        "status": "not_recorded",
+                        "policy": source_license_policy_status(None),
+                    }
                 ),
                 "local_observation": {
                     "status": status,
@@ -76,13 +119,11 @@ def build_source_health_report(
 
     raw_root = settings.data_root / "raw"
     observed_dirs = (
-        {path.name for path in raw_root.iterdir() if path.is_dir()}
-        if raw_root.exists()
-        else set()
+        {path.name for path in raw_root.iterdir() if path.is_dir()} if raw_root.exists() else set()
     )
     return {
         "report_type": "scoutfootball.source_health",
-        "report_version": "1.0",
+        "report_version": "1.1",
         "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "registered_source_count": len(entries),
         "registered_sources": entries,
@@ -117,9 +158,10 @@ def _snapshot_status(record: dict[str, Any] | None) -> dict[str, Any]:
 def _inspections_by_path(evidence: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     if evidence is None:
         return {}
-    if not isinstance(evidence, dict) or evidence.get(
-        "report_type"
-    ) != "scoutfootball.parquet_preflight_evidence":
+    if (
+        not isinstance(evidence, dict)
+        or evidence.get("report_type") != "scoutfootball.parquet_preflight_evidence"
+    ):
         raise ValueError("evidence_report_type_invalid")
     artifacts = evidence.get("artifacts", [])
     if not isinstance(artifacts, list):
@@ -132,11 +174,7 @@ def _inspections_by_path(evidence: dict[str, Any] | None) -> dict[str, dict[str,
             raise ValueError("evidence_artifact_invalid")
         normalized = path.replace("\\", "/")
         is_windows_absolute = len(normalized) >= 3 and normalized[1:3] == ":/"
-        if (
-            normalized.startswith("/")
-            or is_windows_absolute
-            or ".." in normalized.split("/")
-        ):
+        if normalized.startswith("/") or is_windows_absolute or ".." in normalized.split("/"):
             raise ValueError("evidence_artifact_path_invalid")
         observations[normalized] = {
             "artifact_path": normalized,
@@ -154,9 +192,11 @@ def format_source_health_report(report: dict[str, Any]) -> str:
     lines = [f"Source health: {report['registered_source_count']} registered sources"]
     for source in report["registered_sources"]:
         observation = source["local_observation"]
+        policy_status = source.get("license", {}).get("policy", {}).get("status", "not_recorded")
         lines.append(
             f"  - {source['source_id']}: {observation['status']}, "
-            f"{observation['file_count']} files, snapshot={source['snapshot']['status']}"
+            f"{observation['file_count']} files, snapshot={source['snapshot']['status']}, "
+            f"policy={policy_status}"
         )
     if report["unregistered_raw_directories"]:
         unregistered = ", ".join(report["unregistered_raw_directories"])

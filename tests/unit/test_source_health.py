@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 
 from scoutfootball.config import PlatformSettings
-from scoutfootball.evaluation.source_health import build_source_health_report
+from scoutfootball.evaluation.source_health import (
+    build_source_health_report,
+    format_source_health_report,
+    source_license_policy_status,
+)
+from scoutfootball.schemas.storage import SourceLicense
 
 
 def test_source_health_marks_local_observation_separately_from_snapshot(tmp_path) -> None:
@@ -19,6 +24,11 @@ def test_source_health_marks_local_observation_separately_from_snapshot(tmp_path
         item for item in report["registered_sources"] if item["source_id"] == "football_data"
     )
     assert football_data["license"]["status"] == "recorded"
+    assert football_data["license"]["policy"]["status"] == "baseline_required"
+    assert football_data["license"]["policy"]["missing_fields"] == [
+        "retention_policy_days",
+        "deletion_strategy",
+    ]
     assert football_data["local_observation"]["file_count"] == 1
     assert football_data["snapshot"]["status"] == "not_recorded"
     assert report["unregistered_raw_directories"] == ["unregistered_source"]
@@ -71,3 +81,42 @@ def test_source_health_exposes_only_explicit_ledger_snapshots(tmp_path) -> None:
     )
     assert football_data["snapshot"]["status"] == "recorded"
     assert football_data["snapshot"]["as_of"] == "2026-07-16"
+
+
+def test_source_license_policy_status_requires_explicit_retention_and_deletion_terms() -> None:
+    incomplete = source_license_policy_status(
+        SourceLicense(source_name="local_fixture", license_name="local test")
+    )
+    complete = source_license_policy_status(
+        SourceLicense(
+            source_name="local_fixture",
+            license_name="local test",
+            retention_policy_days=30,
+            deletion_strategy=(
+                "Remove local raw data and derived artifacts on a documented request."
+            ),
+        )
+    )
+
+    assert incomplete["status"] == "baseline_required"
+    assert complete["status"] == "recorded"
+    assert complete["missing_fields"] == []
+
+
+def test_source_health_formatter_accepts_a_legacy_report_without_policy_field() -> None:
+    rendered = format_source_health_report(
+        {
+            "registered_source_count": 1,
+            "registered_sources": [
+                {
+                    "source_id": "legacy_source",
+                    "license": {"status": "recorded"},
+                    "local_observation": {"status": "empty", "file_count": 0},
+                    "snapshot": {"status": "not_recorded"},
+                }
+            ],
+            "unregistered_raw_directories": [],
+        }
+    )
+
+    assert "policy=not_recorded" in rendered

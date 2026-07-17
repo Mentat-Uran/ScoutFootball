@@ -3225,11 +3225,15 @@ Report type: `scoutfootball.parquet_preflight_evidence`; current report version:
 
 `scoutfootball source-health` is a separate read-only local observation. It
 lists registered raw sources, their recorded license, observed file counts, and
-unregistered raw directories. Local file modification times are never treated
-as an upstream snapshot timestamp. Its optional `--evidence <preflight JSON>`
-attaches only matching raw-artifact inspection fingerprints; malformed reports
-and path-escape attempts are rejected, and this attachment never fills in
-missing source snapshot provenance.
+unregistered raw directories. It also reports whether each registered source
+has an explicit local `retention_policy_days` and `deletion_strategy`. A source
+license alone does not fill either field: absent policy fields remain
+`baseline_required` rather than being inferred from a license name, source URL,
+or local files. Local file modification times are never treated as an upstream
+snapshot timestamp. Its optional `--evidence <preflight JSON>` attaches only
+matching raw-artifact inspection fingerprints; malformed reports and path-
+escape attempts are rejected, and this attachment never fills in missing source
+snapshot provenance or retention/deletion terms.
 
 `scoutfootball record-source-snapshot --source <registered source> --snapshot-date
 YYYY-MM-DD --evidence <preflight JSON>` appends one JSONL record to the local
