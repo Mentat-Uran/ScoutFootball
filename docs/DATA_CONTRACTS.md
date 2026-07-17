@@ -3091,3 +3091,25 @@ rather than reimplementing gradient-boosted feature engineering. Add as
 **Not recommended**: Using socceraction as the primary action schema.
 InternalAction's string-based enums and 0-100 normalized coordinates are
 better suited to our multi-source pipeline and frontend visualization needs.
+
+---
+
+## 12. Local Parquet preflight evidence report
+
+`scoutfootball preflight --evidence-out <path>` writes a local JSON evidence
+report for the artifacts inspected in that command invocation. It is an
+observation record, not a claim that every historical provenance field is
+complete.
+
+- `inspection` preserves the content-level decode result, footer comparison,
+  schema/content fingerprints, file size, and reader used.
+- `provenance.contract` and `provenance.source_license` are copied only when a
+  matching directory contract is registered.
+- `provenance.snapshot` and `provenance.lineage` are `not_recorded` when the
+  registry has no such metadata; filesystem timestamps and filenames are never
+  substituted as evidence.
+- Reports are local files. The command refuses to replace an existing report
+  unless the user explicitly adds `--overwrite-evidence`.
+
+Report type: `scoutfootball.parquet_preflight_evidence`; current report version:
+`1.0`.
