@@ -15132,10 +15132,15 @@ function renderReports() {
     const holdoutSummary = latestRun.holdout_summary || {};
     const optTest = holdoutSummary.optimized_test || {};
     const runSpearman = optTest.spearman ?? latestMetrics.spearman ?? latestRun.spearman;
-    const runStatus = runSpearman != null ? `Spearman ${Number(runSpearman).toFixed(3)}` : "no metrics";
+    const latestAdmission = latestRun.admission || {};
+    const runStatus = latestAdmission.status === "reviewable"
+        ? "reviewable by maintainer"
+        : latestAdmission.status === "not_reviewable"
+            ? "evidence incomplete"
+            : runSpearman != null ? `Spearman ${Number(runSpearman).toFixed(3)}` : "no metrics";
     document.getElementById("report-run-title").textContent = latestRun.run_id || "rating_optimizer_gpu";
     document.getElementById("report-run-status").textContent = runStatus;
-    document.getElementById("report-run-status").className = `status-pill ${runSpearman != null ? "status-high" : "status-low"}`;
+    document.getElementById("report-run-status").className = `status-pill ${latestAdmission.status === "reviewable" ? "status-high" : latestAdmission.status === "not_reviewable" ? "status-medium" : runSpearman != null ? "status-high" : "status-low"}`;
 
     const valueMetrics = valueSummaryMeta.metrics || {};
     const valueImprovement = valueMetrics.mae_improvement_vs_baseline;
@@ -15223,10 +15228,21 @@ function renderReports() {
             const snapshotHash = lineage.dataset_snapshot?.input_hash || hash;
             const manifestHash = lineage.feature_manifest?.hash || null;
             const lineageStatus = lineage.status || "not_recorded";
+            const admission = run.admission || {};
+            const admissionStatus = admission.status || "not_available";
+            const failedAdmissionChecks = Array.isArray(admission.failed_checks)
+                ? admission.failed_checks
+                : [];
 
             // Header status
-            const statusText = spearman != null ? "READY" : "N/A";
-            const statusClass = spearman != null ? "status-high" : "status-low";
+            const statusText = admissionStatus === "reviewable"
+                ? (z ? "可人工复核" : "REVIEWABLE")
+                : admissionStatus === "not_reviewable"
+                    ? (z ? "证据不完整" : "NOT REVIEWABLE")
+                    : (z ? "未复核" : "NOT REVIEWED");
+            const statusClass = admissionStatus === "reviewable"
+                ? "status-high"
+                : admissionStatus === "not_reviewable" ? "status-medium" : "status-low";
 
             // Details row
             const detailParts = [
@@ -15244,6 +15260,9 @@ function renderReports() {
             }
             if (dataSource) {
                 detailParts.push(`<span style="color:var(--text-muted)">source</span> ${escapeHtml(dataSource)}`);
+            }
+            if (failedAdmissionChecks.length) {
+                detailParts.push(`<span style="color:var(--text-muted)">evidence missing</span> ${escapeHtml(failedAdmissionChecks.join(", "))}`);
             }
 
             // Metrics blocks
@@ -15347,12 +15366,19 @@ function renderReports() {
                     </div>`;
             }
 
+            const admissionHtml = `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? '模型准入' : 'Model admission'}</p>
+                <div style="font-size:0.75rem;line-height:1.5">
+                    <div><span style="color:var(--text-muted)">${z ? '状态' : 'Status'}:</span> ${escapeHtml(statusText)}</div>
+                    ${failedAdmissionChecks.length ? `<div><span style="color:var(--text-muted)">${z ? '缺失证据' : 'Missing evidence'}:</span> ${escapeHtml(failedAdmissionChecks.join(", "))}</div>` : ""}
+                    <div style="color:var(--text-muted)">${escapeHtml(z ? '此状态不执行晋级或切换评分产物。' : 'This status does not promote or switch the rating artifact.')}</div>
+                </div>`;
+
             // Reproduce command for copy button
             const copyBtn = cmd
                 ? `<button class="text-button" data-copy-cmd="${escapeAttr(cmd)}" style="font-size:0.72rem;padding:0.15rem 0.4rem;margin-left:0.3rem" title="${z ? '复制命令' : 'Copy command'}">\u25C6 ${z ? '复制' : 'Copy'}</button>`
                 : '';
 
-            const fullDetailSections = [lineageHtml, depHtml, detailSections].filter(Boolean)
+            const fullDetailSections = [admissionHtml, lineageHtml, depHtml, detailSections].filter(Boolean)
                 .join("<hr style=\"border:none;border-top:1px solid var(--border,#333);margin:0.35rem 0\">");
 
             const runIdx = run.run_id || `run_${Math.random().toString(36).slice(2, 8)}`;
