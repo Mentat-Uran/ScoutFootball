@@ -6560,6 +6560,19 @@ def _model_run_lineage(meta: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _model_run_admission(run_dir: Path) -> dict[str, Any]:
+    """Expose a compact, read-only admission summary for one local run."""
+    from scoutfootball.evaluation.model_admission import evaluate_optimizer_run
+
+    report = evaluate_optimizer_run(run_dir)
+    return {
+        "status": report["status"],
+        "failed_checks": report.get("failed_checks", []),
+        "comparison": report.get("comparison"),
+        "limitations": report.get("limitations", []),
+    }
+
+
 def get_model_runs() -> dict:
     """Return model run registry from local artifacts."""
     settings = _settings()
@@ -6577,6 +6590,7 @@ def get_model_runs() -> dict:
                 meta["updated_at"] = meta_path.stat().st_mtime
                 meta["data_source"] = ds_label
                 meta["lineage"] = _model_run_lineage(meta)
+                meta["admission"] = _model_run_admission(run_dir)
                 # Build reproduce command from stored args
                 run_args = meta.get("args", {})
                 meta["reproduce_command"] = _build_reproduce_command(
@@ -6595,6 +6609,14 @@ def get_model_runs() -> dict:
             meta["updated_at"] = meta_path.stat().st_mtime
             meta["data_source"] = ds_label
             meta["lineage"] = _model_run_lineage(meta)
+            meta["admission"] = {
+                "status": "not_available",
+                "failed_checks": ["run_directory"],
+                "comparison": None,
+                "limitations": [
+                    "The fallback parameter metadata has no model-run directory to review."
+                ],
+            }
             run_args = meta.get("args", {})
             meta["reproduce_command"] = _build_reproduce_command("latest", run_args)
             _enrich_holdout_summary(meta)
@@ -6632,6 +6654,7 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
             meta["updated_at"] = meta_path.stat().st_mtime
             meta["data_source"] = ds_label
             meta["lineage"] = _model_run_lineage(meta)
+            meta["admission"] = _model_run_admission(run_dir)
 
             # Build reproduce command from stored args
             run_args = meta.get("args", {})

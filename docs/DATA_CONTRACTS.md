@@ -751,7 +751,12 @@ Model run registry with holdout metrics. New optimizer runs include a
 snapshot `input_hash`, and a fingerprint/version of
 `rating_feature_matrix_manifest.json`. Legacy runs return
 `lineage.status: not_recorded` rather than implying that provenance was
-captured retroactively. A missing manifest yields `status: partial`.
+captured retroactively. A missing manifest yields `status: partial`. Each
+directory-backed run also has an `admission` summary from the local read-only
+model-admission checks: `status`, `failed_checks`, optional holdout comparison,
+and limitations. `reviewable` means evidence exists for human review only;
+`not_reviewable` is not a failed model score and neither status activates a
+rating artifact.
 
 ### GET /reports/model-runs/{run_id}
 Full details for a single model run, including the same lineage object for
