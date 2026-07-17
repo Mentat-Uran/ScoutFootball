@@ -27,11 +27,11 @@ def _load_optimizer_module():
     import types
 
     import optimizer.constants as _c
-    import optimizer.scoring as _s
+    from optimizer.team_aggregation import build_team_aggregation_weights
     mod = types.SimpleNamespace()
     mod.POSITION_SLOT_CAPS = _c.POSITION_SLOT_CAPS
     mod.POSITION_SLOT_GROUPS = _c.POSITION_SLOT_GROUPS
-    mod._build_team_aggregation_weights = _s._build_team_aggregation_weights
+    mod._build_team_aggregation_weights = build_team_aggregation_weights
     mod.map_position_detailed = _c.map_position_detailed
     return mod
 
