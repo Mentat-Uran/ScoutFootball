@@ -26,7 +26,12 @@ if _real_torch is None:
     sys.modules["torch"] = _mock_torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from optimizer.data import build_run_lineage, compute_input_hash, save_model_run  # noqa: E402
+from optimizer.data import (  # noqa: E402
+    build_run_lineage,
+    compute_error_cases,
+    compute_input_hash,
+    save_model_run,
+)
 
 # Restore real torch so other test files are not poisoned
 if _real_torch is not None:
@@ -57,6 +62,51 @@ class TestSaveModelRun:
         assert meta["params_shape"] == [77]
         assert abs(meta["params_mean"] - params.mean()) < 0.01
         assert abs(meta["metrics"]["spearman"] - 0.65) < 0.01
+
+    def test_nested_holdout_metrics_remain_machine_readable(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        run_dir = save_model_run(
+            params,
+            {
+                "baseline_test": {"spearman": 0.55},
+                "optimized_test": {"spearman": 0.65},
+            },
+            output_dir=tmp_path,
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["metrics"]["baseline_test"]["spearman"] == 0.55
+        assert meta["metrics"]["optimized_test"]["spearman"] == 0.65
+
+    def test_error_cases_are_derived_from_current_holdout_predictions(self):
+        matched = pd.DataFrame(
+            {
+                "team": ["Over FC", "Under FC", "Over FC"],
+                "actual_points": [50, 50, 50],
+                "pred_points_calibrated": [65, 35, 55],
+            }
+        )
+
+        result = compute_error_cases(matched)
+
+        assert result is not None
+        assert result["residual_definition"] == "prediction_minus_actual"
+        assert result["over_estimated"][-1] == {"team": "Over FC", "residual": 10.0}
+        assert result["under_estimated"][0] == {"team": "Under FC", "residual": -15.0}
+
+    def test_error_cases_from_the_current_holdout_are_persisted(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        error_cases = {"over_estimated": [{"team": "Over FC", "residual": 10.0}]}
+
+        run_dir = save_model_run(
+            params,
+            {"optimized_test": {"spearman": 0.65}},
+            output_dir=tmp_path,
+            error_cases=error_cases,
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["error_cases"] == error_cases
 
     def test_with_args(self, tmp_path):
         params = np.random.randn(77).astype(np.float32)

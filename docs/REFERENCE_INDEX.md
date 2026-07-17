@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-17T11:24:29.331561+00:00`
-- content SHA-256：`a8d77531a648d1e038e817f82c45a34f275fae28fb6c7c808af15bb89c1ff06f`
+- manifest generated_at：`2026-07-17T11:35:36.030855+00:00`
+- content SHA-256：`ef5d322bcad6c8a9cd963ccfb8b74cb4b3f8a0754282af3a9f90c16e1f3f6dce`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -24,6 +24,7 @@
 - `uv run python -m scoutfootball validate`
 - `uv run python -m scoutfootball source-health`
 - `uv run python -m scoutfootball contract-quality`
+- `uv run python -m scoutfootball model-admission`
 - `uv run python -m scoutfootball record-source-snapshot`
 - `uv run python -m scoutfootball preflight`
 - `uv run python -m scoutfootball preflight --evidence-out <path>`
@@ -49,7 +50,7 @@
 | --- | --- | --- | --- | --- | --- |
 | pipeline.ingest | data_pipeline | delivered | — | ingest | — |
 | pipeline.build_features | data_pipeline | delivered | — | build-features | — |
-| pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, contract-quality, record-source-snapshot | — |
+| pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, contract-quality, model-admission, record-source-snapshot | — |
 | ratings.training | player_ratings | delivered | — | train, train-rating-nn | — |
 | ratings.export | player_ratings | delivered | /ratings, /ratings/meta, /ratings/snapshots | export-ratings | players, value |
 | ratings.truth_labels | player_ratings | delivered | /reports/truth-labels, /reports/transfermarkt-identities | import-truth-labels, import-transfermarkt-truth-labels, transfermarkt-identity-review, reconcile-transfermarkt-truth-labels, audit-truth-labels | — |

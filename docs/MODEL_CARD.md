@@ -105,6 +105,17 @@ Test Spearman: mean=0.716, std=0.001
 - The current tracked label artifact has zero eligible rows, so no NN or
   truth-anchor holdout number may be presented as player-level validation.
 
+### Local optimizer admission evidence（2026-07-17）
+
+- `scoutfootball model-admission` only marks a future optimizer run
+  `reviewable` when its own metadata has recorded lineage, a time split,
+  structured baseline/candidate holdout metrics, and same-run error cases.
+- The command is a read-only evidence screen. It does not promote a model,
+  switch the rating artifact used by the workbench, or turn a proxy team-points
+  result into player-ability validation.
+- Historical run folders missing these records remain `not_reviewable`; their
+  historical prose metrics are not reconstructed as machine-readable evidence.
+
 ### v1.3.1-dev（2026-06-09）
 
 - 新增 train-fitted league residual offset：输出 `pred_points_global`、`pred_points_league_offset`、`pred_points_calibrated`。

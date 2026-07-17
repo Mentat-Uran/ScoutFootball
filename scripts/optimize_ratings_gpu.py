@@ -48,6 +48,7 @@ from optimizer.cv import _print_metric_block, run_cross_validation, run_paramete
 from optimizer.data import (
     _filter_by_seasons,
     build_dc_tensors,
+    compute_error_cases,
     compute_input_hash,
     evaluate_params,
     fit_team_points_calibrator,
@@ -537,6 +538,7 @@ def main():
         feat_hash=feat_hash,
         data_dir=data_dir,
         data_coverage=data_coverage,
+        error_cases=compute_error_cases(optimized_test_eval["matched"]),
     )
 
     print(f"\n{'='*80}")

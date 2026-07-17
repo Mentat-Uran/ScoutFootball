@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-17T11:24:29.331561+00:00",
+  "generated_at": "2026-07-17T11:35:36.030855+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -260,6 +260,7 @@
       "uv run python -m scoutfootball validate",
       "uv run python -m scoutfootball source-health",
       "uv run python -m scoutfootball contract-quality",
+      "uv run python -m scoutfootball model-admission",
       "uv run python -m scoutfootball record-source-snapshot",
       "uv run python -m scoutfootball preflight",
       "uv run python -m scoutfootball preflight --evidence-out <path>",
@@ -281,7 +282,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-17T11:24:29.330562+00:00",
+    "generated_at": "2026-07-17T11:35:36.029851+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -348,6 +349,7 @@
           "optimizer-preflight",
           "source-health",
           "contract-quality",
+          "model-admission",
           "record-source-snapshot"
         ],
         "frontend_views": [],
@@ -883,7 +885,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-17T11:24:29.330562+00:00",
+    "generated_at": "2026-07-17T11:35:36.030855+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -1785,5 +1787,5 @@
       }
     ]
   },
-  "content_sha256": "a8d77531a648d1e038e817f82c45a34f275fae28fb6c7c808af15bb89c1ff06f"
+  "content_sha256": "ef5d322bcad6c8a9cd963ccfb8b74cb4b3f8a0754282af3a9f90c16e1f3f6dce"
 }
