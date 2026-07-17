@@ -1169,25 +1169,50 @@ def permutation_feature_importance(
     return result
 
 
-def compute_input_hash(data_dir: Path) -> str:
-    """Compute SHA256 hash of key input files for reproducibility."""
-    hasher = hashlib.sha256()
-    key_files = [
-        "gold/feature_store/rating_feature_matrix.parquet",
+def optimizer_input_artifacts(data_dir: Path) -> list[str]:
+    """List the local artifacts that can influence an optimizer run.
+
+    The active player-rating output is deliberately excluded: the optimizer
+    does not read it, so including it would make a candidate's lineage depend
+    on the score artifact it may later replace. Optional FBref inputs follow
+    the same five-season/three-season fallback that ``load_data`` uses.
+    """
+    root = Path(data_dir)
+    candidates = [
+        "raw/fbref/player_stats_big5_3seasons.parquet",
         "raw/football_data/combined_results.parquet",
-        "gold/feature_store/player_ratings_optimized.parquet",
+        "raw/understat/players_10seasons.parquet",
+        "gold/feature_store/rating_feature_matrix.parquet",
+        "gold/feature_store/player_truth_labels.parquet",
     ]
-    for rel_path in key_files:
+    for preferred, fallback in (
+        (
+            "raw/fbref/player_misc_5seasons.parquet",
+            "raw/fbref/player_misc_3seasons.parquet",
+        ),
+        (
+            "raw/fbref/player_shooting_5seasons.parquet",
+            "raw/fbref/player_shooting_3seasons.parquet",
+        ),
+    ):
+        candidates.append(preferred if (root / preferred).exists() else fallback)
+    return [relative for relative in candidates if (root / relative).exists()]
+
+
+def compute_input_hash(data_dir: Path) -> str:
+    """Compute SHA256 hash of artifacts actually read by the optimizer."""
+    hasher = hashlib.sha256()
+    for rel_path in optimizer_input_artifacts(data_dir):
         fpath = data_dir / rel_path
-        if fpath.exists():
-            hasher.update(fpath.read_bytes())
+        hasher.update(fpath.read_bytes())
     return hasher.hexdigest()[:16]
 
 
 def build_run_lineage(data_dir: Path, *, input_hash: str | None = None) -> dict:
     """Describe the local dataset and feature-manifest snapshot used by a run.
 
-    The rating optimizer's input hash identifies the selected source artifacts.
+    The rating optimizer's input hash identifies source artifacts actually read
+    by the run, never an active player-rating output.
     The adjacent feature-manifest hash identifies the schema and feature build
     metadata separately, so a run can be reproduced or explicitly marked as
     partially recorded when older artifacts lack that manifest.
@@ -1212,11 +1237,7 @@ def build_run_lineage(data_dir: Path, *, input_hash: str | None = None) -> dict:
         "status": "recorded" if manifest_hash else "partial",
         "dataset_snapshot": {
             "input_hash": snapshot_hash,
-            "input_artifacts": [
-                "gold/feature_store/rating_feature_matrix.parquet",
-                "raw/football_data/combined_results.parquet",
-                "gold/feature_store/player_ratings_optimized.parquet",
-            ],
+            "input_artifacts": optimizer_input_artifacts(root),
         },
         "feature_manifest": {
             "path": "gold/feature_store/rating_feature_matrix_manifest.json",
