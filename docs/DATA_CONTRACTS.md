@@ -3273,6 +3273,17 @@ are never rewritten; duplicate immutable snapshot IDs are refused. Pass the
 same ledger to `source-health --snapshot-ledger <path>` to display only its
 latest explicitly recorded entry for each source.
 
+`scoutfootball reep-identity-lookup --provider
+{transfermarkt,fbref,wikidata} --id <provider-id>` performs an exact,
+read-only search of the registered local `raw/reep/people.csv` snapshot. It
+returns a bounded set of Reep identity references and their cross-provider IDs,
+including duplicates when they exist. It reads no legacy `raw/transfermarkt/`
+file and does not create mappings to ScoutFootball canonical player IDs, truth
+labels, market values, ratings, or rosters. A reported match remains input for
+manual identity review. With `--snapshot-ledger <path>`, the output displays
+only an explicitly recorded Reep snapshot declaration; a missing ledger record
+stays `not_recorded`.
+
 `scoutfootball record-source-policy` previews an explicit local policy by
 default and appends it only with `--confirm` (default ledger:
 `data/reports/data_health/source_policy_ledger.jsonl`). A declaration must name

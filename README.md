@@ -337,6 +337,18 @@ uv run python -m scoutfootball record-source-snapshot --source reep --snapshot-d
 This establishes neither an upstream date nor rights by itself; the date is an
 explicit maintainer declaration and source use remains bounded by its contract.
 
+The retained Reep snapshot can also help a maintainer cross-check one exact
+Transfermarkt, FBref, or Wikidata identifier before a separate manual identity
+review. It reads only the local CSV and never imports Transfermarkt files or
+writes a player rating, roster, market value, or truth label:
+
+```powershell
+uv run python -m scoutfootball reep-identity-lookup --provider transfermarkt --id <provider-id> --json
+```
+
+The result may contain multiple Reep rows. Even one exact match is only an
+identity-review aid; it is not a confirmed canonical ScoutFootball player ID.
+
 ### Verification safety
 
 `uv run pytest` does not run mutation-capable pipeline integration checks by
