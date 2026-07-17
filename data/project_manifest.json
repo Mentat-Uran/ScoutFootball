@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-17T11:09:48.344117+00:00",
+  "generated_at": "2026-07-17T11:18:25.353033+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -259,6 +259,7 @@
       "uv run python -m scoutfootball train-rating-nn",
       "uv run python -m scoutfootball validate",
       "uv run python -m scoutfootball source-health",
+      "uv run python -m scoutfootball contract-quality",
       "uv run python -m scoutfootball record-source-snapshot",
       "uv run python -m scoutfootball preflight",
       "uv run python -m scoutfootball preflight --evidence-out <path>",
@@ -279,7 +280,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-17T11:09:48.342614+00:00",
+    "generated_at": "2026-07-17T11:18:25.353033+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -343,7 +344,10 @@
         "cli_commands": [
           "validate",
           "preflight",
-          "optimizer-preflight"
+          "optimizer-preflight",
+          "source-health",
+          "contract-quality",
+          "record-source-snapshot"
         ],
         "frontend_views": [],
         "data_artifacts": [],
@@ -402,6 +406,7 @@
         "cli_commands": [
           "import-truth-labels",
           "import-transfermarkt-truth-labels",
+          "transfermarkt-identity-review",
           "audit-truth-labels"
         ],
         "frontend_views": [],
@@ -876,7 +881,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-17T11:09:48.344117+00:00",
+    "generated_at": "2026-07-17T11:18:25.353033+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -1778,5 +1783,5 @@
       }
     ]
   },
-  "content_sha256": "e2447f5a5b98c67888b6d29d865a197a2eb0faeeb60a78c8c251f2df4ba415ac"
+  "content_sha256": "1deb83aad26c7dcc734b107cdc81907b301464151df8ac05979cd605244e7ad7"
 }
