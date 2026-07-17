@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-17T13:12:23.539393+00:00`
-- content SHA-256：`95ce5d875a25d213521443061d5925c96f826b2cd3a4c875ff6a70346bc6ed9c`
+- manifest generated_at：`2026-07-17T13:49:24.760799+00:00`
+- content SHA-256：`41b63698ecac0c809990abb4d67885349efe1e7b0d085ac1e55b76acf362333b`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -32,6 +32,8 @@
 - `uv run python -m scoutfootball validate-decision-package <path>`
 - `uv run python -m scoutfootball record-source-snapshot`
 - `uv run python -m scoutfootball record-source-policy`
+- `uv run python -m scoutfootball record-quality-audit`
+- `uv run python -m scoutfootball record-quality-threshold`
 - `uv run python -m scoutfootball preflight`
 - `uv run python -m scoutfootball preflight --evidence-out <path>`
 - `uv run python -m scoutfootball optimizer-preflight`
@@ -56,7 +58,7 @@
 | --- | --- | --- | --- | --- | --- |
 | pipeline.ingest | data_pipeline | delivered | — | ingest | — |
 | pipeline.build_features | data_pipeline | delivered | — | build-features | — |
-| pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, contract-quality, model-admission, discard-model-run, reject-model-run, promote-model-run, rollback-model-run, validate-decision-package, record-source-snapshot, record-source-policy | — |
+| pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, contract-quality, model-admission, discard-model-run, reject-model-run, promote-model-run, rollback-model-run, validate-decision-package, record-source-snapshot, record-source-policy, record-quality-audit, record-quality-threshold | — |
 | ratings.training | player_ratings | delivered | — | train, train-rating-nn | — |
 | ratings.export | player_ratings | delivered | /ratings, /ratings/meta, /ratings/snapshots | export-ratings | players, value |
 | ratings.truth_labels | player_ratings | delivered | /reports/truth-labels, /reports/transfermarkt-identities | import-truth-labels, import-transfermarkt-truth-labels, transfermarkt-identity-review, reconcile-transfermarkt-truth-labels, audit-truth-labels | — |

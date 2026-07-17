@@ -3257,3 +3257,30 @@ raw files or derived artifacts. Pass the ledger to `source-health --policy-ledge
 <path>` or `contract-quality --policy-ledger <path>` to observe the latest
 append-only declaration per source. A missing or malformed ledger remains a
 baseline gap or command error; it is never silently ignored.
+
+`scoutfootball record-quality-audit` records one maintainer-reviewed local
+sample for either `identity_resolution` or `source_claim`. It previews by
+default and appends only with `--confirm` (default ledger:
+`data/reports/data_health/quality_audit_ledger.jsonl`). Every record must name
+a registered raw source, an opaque local sample ID, an explicit
+`confirmed_correct` or `confirmed_error` outcome, reviewer, local evidence
+reference, and decision text. The command does not inspect the source or infer
+the outcome. A correction is another append-only record with `--supersedes`;
+the prior entry is retained in the ledger but excluded from the effective audit
+denominator. Malformed records, duplicate IDs, missing corrections, and
+cross-sample corrections are rejected.
+
+Pass the ledger to `contract-quality --audit-ledger <path>` to expose the
+effective reviewed sample count, correct/error counts, source scope, and
+observed error rate for identity resolution and source claims. The ledger is
+local-only and stores references rather than third-party source content.
+
+`scoutfootball record-quality-threshold` separately previews or, with
+`--confirm`, appends a maintainer-selected maximum error rate and minimum
+effective sample count for one audit kind (default ledger:
+`data/reports/data_health/quality_threshold_ledger.jsonl`). A threshold cannot
+be derived from observed data and must include decision text. Pass this ledger
+to `contract-quality --threshold-ledger <path>` together with the audit ledger:
+the relevant check remains `baseline_required` when either record is missing or
+the effective sample count is below the stated minimum, passes only when the
+observed rate is within the recorded maximum, and fails when it exceeds it.

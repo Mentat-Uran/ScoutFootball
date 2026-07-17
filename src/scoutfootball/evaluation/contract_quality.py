@@ -12,6 +12,12 @@ from typing import Any
 
 from scoutfootball.architecture import build_data_contract_registry
 from scoutfootball.config import PlatformSettings
+from scoutfootball.evaluation.quality_audit_ledger import (
+    latest_threshold_by_kind,
+    read_quality_audit_ledger,
+    read_quality_threshold_ledger,
+    summarize_quality_audits,
+)
 from scoutfootball.evaluation.source_health import (
     _inspections_by_path,
     source_license_policy_status,
@@ -25,7 +31,7 @@ from scoutfootball.evaluation.source_snapshot_ledger import (
     read_source_snapshot_ledger,
 )
 
-CONTRACT_QUALITY_VERSION = "1.2.0"
+CONTRACT_QUALITY_VERSION = "1.3.0"
 
 
 def _now_iso() -> str:
@@ -87,12 +93,62 @@ def _preflight_check(evidence: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
+def _audit_rate_check(
+    *,
+    name: str,
+    audit_kind: str,
+    audit_summary: dict[str, dict[str, Any]],
+    threshold: dict[str, Any] | None,
+    note: str,
+) -> dict[str, Any]:
+    """Evaluate reviewed samples only against an explicit maintainer threshold."""
+    observed = audit_summary[audit_kind]
+    if threshold is None:
+        status = "baseline_required"
+        threshold_status = "not_recorded"
+    elif observed["record_count"] < threshold["minimum_sample_count"]:
+        status = "baseline_required"
+        threshold_status = "insufficient_sample"
+    elif observed["error_rate"] <= threshold["maximum_error_rate"]:
+        status = "pass"
+        threshold_status = "met"
+    else:
+        status = "fail"
+        threshold_status = "not_met"
+    return _status(
+        name,
+        status,
+        audit_status="observed" if observed["record_count"] else "not_recorded",
+        audited_sample_count=observed["record_count"],
+        confirmed_correct_count=observed["confirmed_correct_count"],
+        confirmed_error_count=observed["confirmed_error_count"],
+        observed_error_rate=observed["error_rate"],
+        audited_sources=observed["audited_sources"],
+        correction_count=observed["correction_count"],
+        threshold_status=threshold_status,
+        threshold=(
+            {
+                "threshold_id": threshold["threshold_id"],
+                "maximum_error_rate": threshold["maximum_error_rate"],
+                "minimum_sample_count": threshold["minimum_sample_count"],
+                "decision": threshold["decision"],
+                "recorded_at": threshold["recorded_at"],
+            }
+            if threshold is not None
+            else None
+        ),
+        note=note,
+    )
+
+
 def build_contract_quality_report(
     settings: PlatformSettings | None = None,
     *,
     preflight_evidence: dict[str, Any] | None = None,
     snapshot_ledger_path: str | None = None,
     policy_ledger_path: str | None = None,
+    audit_ledger_path: str | None = None,
+    threshold_ledger_path: str | None = None,
 ) -> dict[str, Any]:
     """Build a baseline for C1 quality SLOs without inventing thresholds."""
     settings = settings or PlatformSettings.from_root()
@@ -133,6 +189,16 @@ def build_contract_quality_report(
         contract.license.source_name for contract in raw_contracts if contract.license
     }
     recorded_snapshot_ids = sorted(raw_source_ids & set(snapshots))
+    audit_summary = (
+        summarize_quality_audits(read_quality_audit_ledger(audit_ledger_path))
+        if audit_ledger_path
+        else summarize_quality_audits([])
+    )
+    thresholds = (
+        latest_threshold_by_kind(read_quality_threshold_ledger(threshold_ledger_path))
+        if threshold_ledger_path
+        else {}
+    )
 
     checks = [
         _status(
@@ -172,20 +238,24 @@ def build_contract_quality_report(
                 "source snapshot date; add a dated ledger entry only when known."
             ),
         ),
-        _status(
-            "identity_conflict_error_rate",
-            "baseline_required",
+        _audit_rate_check(
+            name="identity_conflict_error_rate",
+            audit_kind="identity_resolution",
+            audit_summary=audit_summary,
+            threshold=thresholds.get("identity_resolution"),
             note=(
-                "Requires a maintained manual audit denominator; unresolved or "
-                "ambiguous identities are not silently treated as correct."
+                "Requires reviewed identity-resolution samples and a maintainer-selected "
+                "threshold; unresolved or ambiguous identities are never treated as correct."
             ),
         ),
-        _status(
-            "source_claim_error_rate",
-            "baseline_required",
+        _audit_rate_check(
+            name="source_claim_error_rate",
+            audit_kind="source_claim",
+            audit_summary=audit_summary,
+            threshold=thresholds.get("source_claim"),
             note=(
-                "Requires an audited set of external factual claims; contract presence "
-                "alone is not proof that each claim is correct."
+                "Requires reviewed external factual claims and a maintainer-selected "
+                "threshold; contract presence alone is not proof that each claim is correct."
             ),
         ),
     ]
@@ -203,6 +273,8 @@ def build_contract_quality_report(
             "recording_scope": "local contract registry and explicitly supplied local evidence",
             "snapshot_ledger_supplied": bool(snapshot_ledger_path),
             "policy_ledger_supplied": bool(policy_ledger_path),
+            "audit_ledger_supplied": bool(audit_ledger_path),
+            "threshold_ledger_supplied": bool(threshold_ledger_path),
             "preflight_evidence_supplied": preflight_evidence is not None,
         },
         "overall_status": "fail" if failures else ("incomplete" if pending else "pass"),
@@ -218,6 +290,10 @@ def build_contract_quality_report(
             (
                 "Observed snapshot coverage is an audit baseline, not a claim that "
                 "unrecorded sources are invalid or stale."
+            ),
+            (
+                "Reviewed audit samples are evaluated only after the maintainer records "
+                "an applicable threshold and enough samples are present."
             ),
         ],
     }
