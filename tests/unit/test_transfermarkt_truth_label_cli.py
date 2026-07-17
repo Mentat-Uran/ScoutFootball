@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 
@@ -75,6 +76,10 @@ def test_transfermarkt_import_dry_run_previews_date_and_feature_coverage(
     assert summary["as_of_date_min"] == "2025-05-20"
     assert summary["identity"]["mapped_rows"] == 1
     assert summary["identity"]["review_rows"] == 0
+    assert summary["input_provenance"]["snapshot"]["sha256"] == hashlib.sha256(
+        snapshot.read_bytes()
+    ).hexdigest()
+    assert summary["input_provenance"]["feature_matrix"]["size_bytes"] > 0
     assert pd.read_parquet(output)["label_source"].tolist() == ["award"]
 
 
@@ -113,3 +118,6 @@ def test_transfermarkt_import_replaces_only_matching_source_key(tmp_path, monkey
         (tmp_path / "transfermarkt_identity_report.json").read_text(encoding="utf-8"),
     )
     assert identity["mapped_rows"] == 1
+    assert identity["input_provenance"]["snapshot"]["sha256"] == hashlib.sha256(
+        snapshot.read_bytes()
+    ).hexdigest()
