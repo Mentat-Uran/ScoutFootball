@@ -51,6 +51,28 @@ EXPECTED_NAV_VIEWS = [
     "help",
 ]
 
+INITIAL_LOAD_TIMEOUT_MS = 30_000
+
+
+def open_loaded_app(page, live_server_url: str):
+    """Navigate through the real initial load without relying on network-idle.
+
+    The SPA deliberately keeps a periodic health poll alive, so Playwright's
+    ``networkidle`` is not a stable definition of readiness. The application
+    instead exposes a state only after its initial local API/static payloads
+    and World Cup bootstrap have settled.
+    """
+    response = page.goto(
+        live_server_url,
+        wait_until="domcontentloaded",
+        timeout=INITIAL_LOAD_TIMEOUT_MS,
+    )
+    page.locator("html[data-scoutfootball-initial-load='ready']").wait_for(
+        state="attached",
+        timeout=INITIAL_LOAD_TIMEOUT_MS,
+    )
+    return response
+
 
 def test_health_endpoint_reachable(live_server_url: str) -> None:
     """Sanity check: the FastAPI server is up and /health returns 200."""
@@ -71,7 +93,7 @@ def test_index_page_loads_with_all_nav_buttons(page, live_server_url: str) -> No
     ``nav-action`` class and ``data-view='overview'`` but is not part of
     the 22-button nav stack.
     """
-    response = page.goto(live_server_url, wait_until="domcontentloaded", timeout=10_000)
+    response = open_loaded_app(page, live_server_url)
     assert response is not None
     assert response.status == 200
 
@@ -91,23 +113,21 @@ def test_index_page_loads_with_all_nav_buttons(page, live_server_url: str) -> No
 
 def test_initial_view_is_overview(page, live_server_url: str) -> None:
     """On first load, the overview nav button is marked active."""
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=10_000)
+    open_loaded_app(page, live_server_url)
 
     active_button = page.locator(".nav-stack .nav-action.active[data-view='overview']")
     expect_visible(active_button)
     assert active_button.get_attribute("aria-current") == "page"
 
 
-def test_switching_to_players_view_updates_active_state(
-    page, live_server_url: str
-) -> None:
+def test_switching_to_players_view_updates_active_state(page, live_server_url: str) -> None:
     """Clicking the players nav button toggles the active state correctly.
 
     This exercises the setView() click handler wired up in app.js and
     catches regressions in event binding (e.g. nav buttons rendered after
     the listener was attached).
     """
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=10_000)
+    open_loaded_app(page, live_server_url)
 
     players_button = page.locator(".nav-stack .nav-action[data-view='players']")
     expect_visible(players_button)
@@ -116,9 +136,7 @@ def test_switching_to_players_view_updates_active_state(
     # After click, players button must be active and have aria-current.
     expect_visible(page.locator(".nav-stack .nav-action.active[data-view='players']"))
     assert (
-        page.locator(
-            ".nav-stack .nav-action[data-view='players']"
-        ).get_attribute("aria-current")
+        page.locator(".nav-stack .nav-action[data-view='players']").get_attribute("aria-current")
         == "page"
     )
 
@@ -128,9 +146,7 @@ def test_switching_to_players_view_updates_active_state(
     assert overview_button.get_attribute("aria-current") is None
 
 
-def test_no_uncaught_console_errors_on_initial_load(
-    page, live_server_url: str
-) -> None:
+def test_no_uncaught_console_errors_on_initial_load(page, live_server_url: str) -> None:
     """The initial page load should not emit console error messages.
 
     We collect console messages during navigation and assert none of them
@@ -141,9 +157,7 @@ def test_no_uncaught_console_errors_on_initial_load(
     errors: list[str] = []
     page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
 
-    page.goto(live_server_url, wait_until="networkidle", timeout=15_000)
-    # Give late-loading views a moment to settle before asserting.
-    page.wait_for_timeout(500)
+    open_loaded_app(page, live_server_url)
 
     assert not errors, f"Console errors during initial load: {errors}"
 
@@ -155,7 +169,5 @@ def expect_visible(locator) -> None:
     across smoke tests.
     """
     expect_count = locator.count()
-    assert expect_count == 1, (
-        f"Expected exactly 1 match for {locator}, found {expect_count}"
-    )
+    assert expect_count == 1, f"Expected exactly 1 match for {locator}, found {expect_count}"
     assert locator.first.is_visible(), f"Expected visible: {locator}"
