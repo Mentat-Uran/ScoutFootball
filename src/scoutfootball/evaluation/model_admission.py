@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from scoutfootball.config import PlatformSettings
+from scoutfootball.evaluation.optimizer_preflight import REQUIRED_ARTIFACTS
 
-MODEL_ADMISSION_VERSION = "1.0.0"
+MODEL_ADMISSION_VERSION = "1.0.1"
 
 
 def _now() -> str:
@@ -55,14 +56,23 @@ def evaluate_optimizer_run(run_dir: Path | str) -> dict[str, Any]:
     candidate = metrics.get("optimized_test")
     has_baseline = isinstance(baseline, dict) and _finite_metric(baseline.get("spearman"))
     has_candidate = isinstance(candidate, dict) and _finite_metric(candidate.get("spearman"))
-    artifact_statuses = (meta.get("data_coverage") or {}).get("artifact_statuses", [])
-    required_input_failures = [
-        item.get("source")
-        for item in artifact_statuses
-        if isinstance(item, dict)
-        and item.get("source") in {"fbref_standard", "football_data_results"}
-        and item.get("status") != "loaded"
-    ]
+    data_coverage = meta.get("data_coverage")
+    artifact_statuses = (
+        data_coverage.get("artifact_statuses", []) if isinstance(data_coverage, dict) else []
+    )
+    statuses_by_source: dict[str, set[str]] = {}
+    if isinstance(artifact_statuses, list):
+        for item in artifact_statuses:
+            if isinstance(item, dict) and isinstance(item.get("source"), str):
+                status = item.get("status")
+                if isinstance(status, str):
+                    statuses_by_source.setdefault(item["source"], set()).add(status)
+    required_input_failures = []
+    for source in REQUIRED_ARTIFACTS:
+        statuses = statuses_by_source.get(source, set())
+        if "loaded" not in statuses:
+            detail = "not_recorded" if not statuses else ", ".join(sorted(statuses))
+            required_input_failures.append(f"{source}: {detail}")
     train = meta.get("train_seasons")
     test = meta.get("test_seasons")
     checks = [
