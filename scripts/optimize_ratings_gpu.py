@@ -164,9 +164,6 @@ def main():
         args.prior_weight = args.prior_strength
 
     data_dir = Path(args.data_dir).resolve()
-    candidate_run_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
-    candidate_dir = data_dir / "models" / "runs" / candidate_run_id
-    candidate_dir.mkdir(parents=True, exist_ok=False)
     print("=" * 80)
     print("球员评分权重优化器 (PyTorch GPU)")
     print("=" * 80)
@@ -306,6 +303,9 @@ def main():
             )
         else:
             print(f"  球员真值标签锚定跳过: {truth_anchor.get('reason')}")
+    candidate_run_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    candidate_dir = data_dir / "models" / "runs" / candidate_run_id
+    candidate_dir.mkdir(parents=True, exist_ok=False)
     best_params = optimize(
         train_feat, train_team_pts, device,
         n_steps=args.steps, lr=args.lr, pop_size=args.pop,
