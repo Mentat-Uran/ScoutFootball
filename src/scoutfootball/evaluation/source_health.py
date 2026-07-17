@@ -15,11 +15,13 @@ def _iso(timestamp: float) -> str:
 
 def build_source_health_report(
     settings: PlatformSettings | None = None,
+    preflight_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Inspect local raw directories without treating mtime as source snapshot time."""
     settings = settings or PlatformSettings.from_root()
     registry = build_data_contract_registry()
     registered = [contract for contract in registry.contracts if contract.layer == "raw"]
+    inspections = _inspections_by_path(preflight_evidence)
     entries = []
     registered_dirs = set()
     for contract in registered:
@@ -27,10 +29,15 @@ def build_source_health_report(
         registered_dirs.add(relative.removeprefix("raw/").split("/", 1)[0])
         directory = settings.data_root / relative
         files = (
-            sorted(path for path in directory.rglob("*") if path.is_file())
+            sorted(
+                path
+                for path in directory.rglob("*")
+                if path.is_file() and path.name != ".gitkeep"
+            )
             if directory.exists()
             else []
         )
+        status = "missing" if not directory.exists() else ("present" if files else "empty")
         entries.append(
             {
                 "source_id": contract.license.source_name if contract.license else relative,
@@ -41,7 +48,7 @@ def build_source_health_report(
                     else {"status": "not_recorded"}
                 ),
                 "local_observation": {
-                    "status": "present" if directory.exists() else "missing",
+                    "status": status,
                     "file_count": len(files),
                     "total_bytes": sum(path.stat().st_size for path in files),
                     "newest_local_mtime": (
@@ -52,6 +59,11 @@ def build_source_health_report(
                     "status": "not_recorded",
                     "note": "Local modification time is not asserted as source snapshot time.",
                 },
+                "inspection_capture": [
+                    inspections[path]
+                    for path in sorted(inspections)
+                    if path == relative or path.startswith(f"{relative}/")
+                ],
             }
         )
 
@@ -74,6 +86,41 @@ def build_source_health_report(
             "captured by an import workflow.",
         ],
     }
+
+
+def _inspections_by_path(evidence: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    if evidence is None:
+        return {}
+    if not isinstance(evidence, dict) or evidence.get(
+        "report_type"
+    ) != "scoutfootball.parquet_preflight_evidence":
+        raise ValueError("evidence_report_type_invalid")
+    artifacts = evidence.get("artifacts", [])
+    if not isinstance(artifacts, list):
+        raise ValueError("evidence_artifacts_invalid")
+    observations: dict[str, dict[str, Any]] = {}
+    for artifact in artifacts:
+        path = artifact.get("artifact_path") if isinstance(artifact, dict) else None
+        inspection = artifact.get("inspection") if isinstance(artifact, dict) else None
+        if not isinstance(path, str) or not isinstance(inspection, dict):
+            raise ValueError("evidence_artifact_invalid")
+        normalized = path.replace("\\", "/")
+        is_windows_absolute = len(normalized) >= 3 and normalized[1:3] == ":/"
+        if (
+            normalized.startswith("/")
+            or is_windows_absolute
+            or ".." in normalized.split("/")
+        ):
+            raise ValueError("evidence_artifact_path_invalid")
+        observations[normalized] = {
+            "artifact_path": normalized,
+            "content_hash": inspection.get("content_hash"),
+            "schema_hash": inspection.get("schema_hash"),
+            "row_count": inspection.get("row_count"),
+            "reader": inspection.get("reader"),
+            "inspected_at": evidence.get("generated_at"),
+        }
+    return observations
 
 
 def format_source_health_report(report: dict[str, Any]) -> str:
