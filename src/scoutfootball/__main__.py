@@ -210,6 +210,7 @@ def _cmd_source_health(args: argparse.Namespace) -> None:
         report = build_source_health_report(
             preflight_evidence=evidence,
             snapshot_ledger_path=args.snapshot_ledger,
+            policy_ledger_path=args.policy_ledger,
         )
     except ValueError as exc:
         print(f"Error: invalid source-health input: {exc}", file=sys.stderr)
@@ -240,6 +241,7 @@ def _cmd_contract_quality(args: argparse.Namespace) -> None:
         report = build_contract_quality_report(
             preflight_evidence=evidence,
             snapshot_ledger_path=args.snapshot_ledger,
+            policy_ledger_path=args.policy_ledger,
         )
     except ValueError as exc:
         print(f"Error: invalid contract-quality input: {exc}", file=sys.stderr)
@@ -415,6 +417,44 @@ def _cmd_record_source_snapshot(args: argparse.Namespace) -> None:
         print(f"  Ledger: {ledger}")
         print(f"  Source: {record['source_id']}")
         print(f"  Declared snapshot date: {record['snapshot_date']}")
+
+
+def _cmd_record_source_policy(args: argparse.Namespace) -> None:
+    """Preview or append an explicit local retention/deletion policy."""
+    from scoutfootball.evaluation.source_policy_ledger import (
+        append_source_policy_record,
+        build_source_policy_record,
+    )
+
+    try:
+        record = build_source_policy_record(
+            source_id=args.source,
+            retention_mode=args.retention_mode,
+            retention_days=args.retention_days,
+            deletion_trigger=args.deletion_trigger,
+            deletion_strategy=args.deletion_strategy,
+            derived_artifact_action=args.derived_artifact_action,
+            decision=args.decision,
+        )
+        ledger = Path(args.ledger).resolve()
+        if args.confirm:
+            ledger = append_source_policy_record(record, ledger)
+    except (ValueError, FileExistsError) as exc:
+        print(f"Error: unable to record source policy: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    status = "recorded" if args.confirm else "preview"
+    result = {"status": status, "ledger": str(ledger), "record": record}
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif args.confirm:
+        print(f"Recorded local source policy: {record['policy_id']}")
+        print(f"  Ledger: {ledger}")
+        print(f"  Source: {record['source_id']}")
+        print(f"  Retention mode: {record['retention']['mode']}")
+    else:
+        print(f"Preview local source policy: {record['policy_id']}")
+        print("  No files or ledger records were changed; rerun with --confirm to append.")
 
 
 def _cmd_optimizer_preflight(args: argparse.Namespace) -> None:
@@ -2049,6 +2089,9 @@ def main() -> None:
     source_health_p.add_argument(
         "--snapshot-ledger", help="Optional append-only local source snapshot ledger"
     )
+    source_health_p.add_argument(
+        "--policy-ledger", help="Optional append-only local source policy ledger"
+    )
     contract_quality_p = sub.add_parser(
         "contract-quality",
         help="Report contract-quality gates and honest baseline gaps from local evidence",
@@ -2059,6 +2102,9 @@ def main() -> None:
     )
     contract_quality_p.add_argument(
         "--snapshot-ledger", help="Optional append-only local source snapshot ledger"
+    )
+    contract_quality_p.add_argument(
+        "--policy-ledger", help="Optional append-only local source policy ledger"
     )
     model_admission_p = sub.add_parser(
         "model-admission",
@@ -2139,6 +2185,49 @@ def main() -> None:
         help="Local append-only JSONL ledger path",
     )
     snapshot_p.add_argument("--json", action="store_true", help="Emit the appended record as JSON")
+    policy_p = sub.add_parser(
+        "record-source-policy",
+        help="Preview or append an explicit local source retention/deletion policy",
+    )
+    policy_p.add_argument("--source", required=True, help="Registered raw source identifier")
+    policy_p.add_argument(
+        "--retention-mode",
+        required=True,
+        choices=("days", "until_manual_deletion", "until_rights_change"),
+        help="Explicit local retention policy mode",
+    )
+    policy_p.add_argument(
+        "--retention-days",
+        type=int,
+        default=None,
+        help="Required only when --retention-mode days",
+    )
+    policy_p.add_argument(
+        "--deletion-trigger",
+        required=True,
+        help="Maintainer-recorded condition that starts deletion handling",
+    )
+    policy_p.add_argument(
+        "--deletion-strategy",
+        required=True,
+        help="Maintainer-recorded local raw-content deletion procedure",
+    )
+    policy_p.add_argument(
+        "--derived-artifact-action",
+        required=True,
+        help="Maintainer-recorded handling for dependent local artifacts",
+    )
+    policy_p.add_argument(
+        "--decision", required=True, help="Maintainer decision text retained in the ledger")
+    policy_p.add_argument(
+        "--ledger",
+        default="data/reports/data_health/source_policy_ledger.jsonl",
+        help="Local append-only JSONL policy ledger path",
+    )
+    policy_p.add_argument(
+        "--confirm", action="store_true", help="Actually append the policy declaration"
+    )
+    policy_p.add_argument("--json", action="store_true", help="Emit JSON")
     preflight_p = sub.add_parser(
         "optimizer-preflight",
         help="Check rating optimizer runtime and raw inputs",
@@ -2505,6 +2594,7 @@ def main() -> None:
         "rollback-model-run": _cmd_rollback_model_run,
         "validate-decision-package": _cmd_validate_decision_package,
         "record-source-snapshot": _cmd_record_source_snapshot,
+        "record-source-policy": _cmd_record_source_policy,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,
         "action-value": _cmd_action_value,

@@ -3226,14 +3226,14 @@ Report type: `scoutfootball.parquet_preflight_evidence`; current report version:
 `scoutfootball source-health` is a separate read-only local observation. It
 lists registered raw sources, their recorded license, observed file counts, and
 unregistered raw directories. It also reports whether each registered source
-has an explicit local `retention_policy_days` and `deletion_strategy`. A source
-license alone does not fill either field: absent policy fields remain
-`baseline_required` rather than being inferred from a license name, source URL,
-or local files. Local file modification times are never treated as an upstream
-snapshot timestamp. Its optional `--evidence <preflight JSON>` attaches only
-matching raw-artifact inspection fingerprints; malformed reports and path-
-escape attempts are rejected, and this attachment never fills in missing source
-snapshot provenance or retention/deletion terms.
+has an explicit local retention and deletion policy. A source license alone does
+not fill either field: absent policy fields remain `baseline_required` rather
+than being inferred from a license name, source URL, or local files. Local file
+modification times are never treated as an upstream snapshot timestamp. Its
+optional `--evidence <preflight JSON>` attaches only matching raw-artifact
+inspection fingerprints; malformed reports and path-escape attempts are
+rejected, and this attachment never fills in missing source snapshot provenance
+or retention/deletion terms.
 
 `scoutfootball record-source-snapshot --source <registered source> --snapshot-date
 YYYY-MM-DD --evidence <preflight JSON>` appends one JSONL record to the local
@@ -3244,3 +3244,16 @@ declaration, never a timestamp inferred from the filesystem. Existing records
 are never rewritten; duplicate immutable snapshot IDs are refused. Pass the
 same ledger to `source-health --snapshot-ledger <path>` to display only its
 latest explicitly recorded entry for each source.
+
+`scoutfootball record-source-policy` previews an explicit local policy by
+default and appends it only with `--confirm` (default ledger:
+`data/reports/data_health/source_policy_ledger.jsonl`). A declaration must name
+a registered raw source and include a retention mode, deletion trigger, raw
+deletion strategy, dependent-artifact action, and maintainer decision text.
+Retention can be a positive number of days, `until_manual_deletion`, or
+`until_rights_change`; the latter two remain explicit non-numeric policies and
+are never converted into invented day counts. Recording a policy does not alter
+raw files or derived artifacts. Pass the ledger to `source-health --policy-ledger
+<path>` or `contract-quality --policy-ledger <path>` to observe the latest
+append-only declaration per source. A missing or malformed ledger remains a
+baseline gap or command error; it is never silently ignored.
