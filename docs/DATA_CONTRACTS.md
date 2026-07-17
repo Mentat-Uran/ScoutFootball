@@ -800,6 +800,15 @@ overwrite `gold/feature_store` parameter files or activate
 `player_ratings_optimized.parquet`; promotion and rollback remain separate,
 explicit maintainer actions.
 
+### Local candidate discard
+
+`scoutfootball discard-model-run <run_id>` is a local-only preview. It only
+deletes after `--confirm`, and only accepts a run under `data/models/runs/`
+whose metadata explicitly says `activation.status: not_activated`. Historic or
+otherwise unclassified runs are retained. An interrupted run without readable
+metadata needs the additional `--allow-incomplete` opt-in; this is intended for
+explicit cleanup after a failed local run, not bulk retention management.
+
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
 `/world-cup/squads/{team}` and `/world-cup/outlook/{team}` include a versioned

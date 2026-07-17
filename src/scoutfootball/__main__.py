@@ -258,12 +258,37 @@ def _cmd_model_admission(args: argparse.Namespace) -> None:
         build_model_admission_report,
         format_model_admission_report,
     )
-
     report = build_model_admission_report(run_id=args.run_id)
     print(
         json.dumps(report, indent=2, ensure_ascii=False)
         if args.json
         else format_model_admission_report(report)
+    )
+
+
+def _cmd_discard_model_run(args: argparse.Namespace) -> None:
+    """Discard one explicitly selected local optimizer candidate after confirmation."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.model_run_lifecycle import (
+        ModelRunLifecycleError,
+        discard_optimizer_run,
+        format_optimizer_run_discard,
+    )
+
+    try:
+        report = discard_optimizer_run(
+            PlatformSettings.from_root(),
+            args.run_id,
+            confirm=args.confirm,
+            allow_incomplete=args.allow_incomplete,
+        )
+    except ModelRunLifecycleError as exc:
+        print(f"Error: cannot discard model run: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(
+        json.dumps(report, indent=2, ensure_ascii=False)
+        if args.json
+        else format_optimizer_run_discard(report)
     )
 
 
@@ -1941,6 +1966,20 @@ def main() -> None:
     )
     model_admission_p.add_argument("--run-id", default=None)
     model_admission_p.add_argument("--json", action="store_true", help="Emit JSON")
+    discard_model_run_p = sub.add_parser(
+        "discard-model-run",
+        help="Preview or discard one unactivated local optimizer candidate",
+    )
+    discard_model_run_p.add_argument("run_id", help="Candidate run directory name")
+    discard_model_run_p.add_argument(
+        "--confirm", action="store_true", help="Actually delete the selected candidate directory"
+    )
+    discard_model_run_p.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Allow a confirmed discard when the run lacks readable metadata",
+    )
+    discard_model_run_p.add_argument("--json", action="store_true", help="Emit JSON")
     snapshot_p = sub.add_parser(
         "record-source-snapshot",
         help="Append an explicitly dated local source snapshot backed by preflight evidence",
@@ -2316,6 +2355,7 @@ def main() -> None:
         "source-health": _cmd_source_health,
         "contract-quality": _cmd_contract_quality,
         "model-admission": _cmd_model_admission,
+        "discard-model-run": _cmd_discard_model_run,
         "record-source-snapshot": _cmd_record_source_snapshot,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,
