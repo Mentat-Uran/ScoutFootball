@@ -160,20 +160,58 @@ def build_source_health_report(
     observed_dirs = (
         {path.name for path in raw_root.iterdir() if path.is_dir()} if raw_root.exists() else set()
     )
+    unregistered_raw_directories = sorted(observed_dirs - registered_dirs)
     return {
         "report_type": "scoutfootball.source_health",
-        "report_version": "1.2",
+        "report_version": "1.3",
         "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "registered_source_count": len(entries),
         "policy_ledger_supplied": bool(policy_ledger_path),
         "registered_sources": entries,
-        "unregistered_raw_directories": sorted(observed_dirs - registered_dirs),
+        "unregistered_raw_directories": unregistered_raw_directories,
+        "unregistered_raw_directory_details": _unregistered_directory_details(
+            raw_root, unregistered_raw_directories
+        ),
         "limitations": [
             "This is a local filesystem observation, not proof of upstream freshness or rights.",
             "Source snapshot and lineage remain not_recorded unless explicitly "
             "captured by an import workflow.",
+            "Unregistered directory modification times are local observations, not source dates.",
         ],
     }
+
+
+def _unregistered_directory_details(raw_root, directory_names: list[str]) -> list[dict[str, Any]]:
+    """Summarize unregistered inputs without reading their content or inferring provenance."""
+    details: list[dict[str, Any]] = []
+    for directory_name in directory_names:
+        directory = raw_root / directory_name
+        files = sorted(
+            path for path in directory.rglob("*") if path.is_file() and path.name != ".gitkeep"
+        )
+        details.append(
+            {
+                "directory": directory_name,
+                "file_count": len(files),
+                "total_bytes": sum(path.stat().st_size for path in files),
+                "newest_local_mtime": (
+                    _iso(max(path.stat().st_mtime for path in files)) if files else None
+                ),
+                "files": [
+                    {
+                        "relative_path": path.relative_to(raw_root).as_posix(),
+                        "bytes": path.stat().st_size,
+                        "local_mtime": _iso(path.stat().st_mtime),
+                    }
+                    for path in files
+                ],
+                "note": (
+                    "Local metadata only; file names and mtimes do not establish source, "
+                    "license, snapshot date, or permission to import."
+                ),
+            }
+        )
+    return details
 
 
 def _snapshot_status(record: dict[str, Any] | None) -> dict[str, Any]:
@@ -241,4 +279,9 @@ def format_source_health_report(report: dict[str, Any]) -> str:
     if report["unregistered_raw_directories"]:
         unregistered = ", ".join(report["unregistered_raw_directories"])
         lines.append("  UNREGISTERED RAW DIRECTORIES: " + unregistered)
+        for item in report.get("unregistered_raw_directory_details", []):
+            lines.append(
+                f"    - {item['directory']}: {item['file_count']} files, "
+                f"{item['total_bytes']} bytes (local metadata only)"
+            )
     return "\n".join(lines)
