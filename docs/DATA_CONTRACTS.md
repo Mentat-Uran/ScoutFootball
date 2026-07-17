@@ -3237,6 +3237,12 @@ or retention/deletion terms. Its optional evidence input accepts either a
 Parquet preflight report or a `scoutfootball.raw_source_file_inspection` report
 for one registered raw CSV; both attach only local structural fingerprints.
 
+`scoutfootball contract-quality --evidence <JSON>` accepts either a Parquet
+preflight report or a registered raw-CSV inspection report. The latter passes
+the local content-readability check only when it records `status: ok`, a
+content hash, row count, and reader; it does not turn CSV inspection into a
+claim about source rights, freshness, or repository-wide coverage.
+
 `scoutfootball contract-quality` treats a non-empty unregistered raw directory
 as a failed gate. This prevents legacy or unknown local source files from being
 mistaken for contract-governed inputs. The check does not move, delete, or

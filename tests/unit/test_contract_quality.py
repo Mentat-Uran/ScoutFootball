@@ -89,6 +89,33 @@ def test_contract_quality_fails_a_recorded_unreadable_artifact(tmp_path) -> None
     assert report["failed_checks"] == ["preflight_content_readability"]
 
 
+def test_contract_quality_accepts_a_readable_registered_raw_csv_inspection(tmp_path) -> None:
+    evidence = {
+        "report_type": "scoutfootball.raw_source_file_inspection",
+        "generated_at": "2026-07-17T00:00:00Z",
+        "source_id": "reep",
+        "artifacts": [
+            {
+                "artifact_path": "raw/reep/people.csv",
+                "inspection": {
+                    "status": "ok",
+                    "content_hash": "a" * 64,
+                    "row_count": 2,
+                    "reader": "python_csv_utf8",
+                },
+            }
+        ],
+    }
+
+    report = build_contract_quality_report(
+        PlatformSettings.from_root(tmp_path), preflight_evidence=evidence
+    )
+
+    preflight = _check(report, "preflight_content_readability")
+    assert preflight["status"] == "pass"
+    assert preflight["inspected_artifact_count"] == 1
+
+
 def test_contract_quality_rejects_unsafe_evidence_paths(tmp_path) -> None:
     evidence = _evidence()
     evidence["artifacts"][0]["artifact_path"] = "../outside.parquet"
