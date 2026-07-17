@@ -34,7 +34,7 @@ def test_model_run_api_exposes_read_only_admission_summary(tmp_path, monkeypatch
                 "data_coverage": {
                     "artifact_statuses": [
                         {"source": "fbref_standard", "status": "loaded"},
-                        {"source": "football_data", "status": "loaded"},
+                        {"source": "football_data_results", "status": "loaded"},
                     ]
                 },
             }

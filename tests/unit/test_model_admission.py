@@ -74,6 +74,24 @@ def test_admission_rejects_a_required_football_data_input_that_was_not_loaded(tm
     assert "required_inputs" in report["runs"][0]["failed_checks"]
 
 
+def test_admission_rejects_an_unrecorded_required_input(tmp_path) -> None:
+    _write_run(tmp_path, "unrecorded-input", complete=True)
+    meta_path = tmp_path / "data" / "models" / "runs" / "unrecorded-input" / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["data_coverage"]["artifact_statuses"] = [
+        {"source": "fbref_standard", "status": "loaded"},
+    ]
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    report = build_model_admission_report(PlatformSettings.from_root(tmp_path))
+
+    run = report["runs"][0]
+    assert "required_inputs" in run["failed_checks"]
+    assert "football_data_results: not_recorded" in next(
+        check["note"] for check in run["checks"] if check["name"] == "required_inputs"
+    )
+
+
 def test_admission_can_target_missing_run(tmp_path) -> None:
     report = build_model_admission_report(
         PlatformSettings.from_root(tmp_path), run_id="not-there"
