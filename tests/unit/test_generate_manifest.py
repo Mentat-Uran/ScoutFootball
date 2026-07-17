@@ -78,3 +78,32 @@ def test_manifest_has_expected_capability_count(tmp_path: Path) -> None:
     assert len(caps) >= 20
     contracts = data["data_contracts"]["contracts"]
     assert len(contracts) >= 20
+
+
+def test_reference_index_is_generated_and_checked(tmp_path: Path) -> None:
+    output = tmp_path / "manifest.json"
+    reference = tmp_path / "REFERENCE_INDEX.md"
+    gen = _run_script(["--output", str(output), "--reference-output", str(reference)])
+    assert gen.returncode == 0, gen.stderr
+    content = reference.read_text(encoding="utf-8")
+    assert "# ScoutFootball 参考索引" in content
+    assert "## 能力登记" in content
+    assert "## 数据契约登记" in content
+
+    check = _run_script([
+        "--output", str(output),
+        "--reference-output",
+        str(reference),
+        "--check",
+    ])
+    assert check.returncode == 0, check.stdout + check.stderr
+
+    reference.write_text(content + "stale", encoding="utf-8")
+    stale = _run_script([
+        "--output", str(output),
+        "--reference-output",
+        str(reference),
+        "--check",
+    ])
+    assert stale.returncode == 1
+    assert "reference index is stale" in stale.stdout.lower()
