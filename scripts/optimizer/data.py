@@ -1312,6 +1312,7 @@ def save_model_run(
     data_dir: Path | None = None,
     data_coverage: dict | None = None,
     error_cases: dict | None = None,
+    candidate_artifacts: dict | None = None,
     train_seasons: tuple[str, ...] | list[str] | None = None,
     test_seasons: tuple[str, ...] | list[str] | None = None,
 ):
@@ -1356,6 +1357,8 @@ def save_model_run(
     }
     if data_coverage is not None:
         meta["data_coverage"] = _json_ready(data_coverage)
+    if candidate_artifacts is not None:
+        meta["candidate_artifacts"] = _json_ready(candidate_artifacts)
 
     # Dependency versions for reproducibility
     dep_versions: dict[str, str] = {
