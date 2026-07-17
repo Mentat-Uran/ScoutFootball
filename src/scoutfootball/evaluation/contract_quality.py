@@ -19,8 +19,13 @@ from scoutfootball.evaluation.quality_audit_ledger import (
     summarize_quality_audits,
 )
 from scoutfootball.evaluation.source_health import (
+    DEFAULT_QUALITY_AUDIT_LEDGER_FILENAME,
+    DEFAULT_QUALITY_THRESHOLD_LEDGER_FILENAME,
+    DEFAULT_SOURCE_POLICY_LEDGER_FILENAME,
+    DEFAULT_SOURCE_SNAPSHOT_LEDGER_FILENAME,
     _inspections_by_path,
     build_source_health_report,
+    resolve_local_ledger_path,
     source_license_policy_status,
 )
 from scoutfootball.evaluation.source_policy_ledger import (
@@ -32,7 +37,7 @@ from scoutfootball.evaluation.source_snapshot_ledger import (
     read_source_snapshot_ledger,
 )
 
-CONTRACT_QUALITY_VERSION = "1.5.0"
+CONTRACT_QUALITY_VERSION = "1.6.0"
 
 
 def _now_iso() -> str:
@@ -169,9 +174,21 @@ def build_contract_quality_report(
     raw_without_license = [
         contract.artifact_id for contract in raw_contracts if contract.license is None
     ]
+    resolved_policy_ledger = resolve_local_ledger_path(
+        settings, policy_ledger_path, DEFAULT_SOURCE_POLICY_LEDGER_FILENAME
+    )
+    resolved_snapshot_ledger = resolve_local_ledger_path(
+        settings, snapshot_ledger_path, DEFAULT_SOURCE_SNAPSHOT_LEDGER_FILENAME
+    )
+    resolved_audit_ledger = resolve_local_ledger_path(
+        settings, audit_ledger_path, DEFAULT_QUALITY_AUDIT_LEDGER_FILENAME
+    )
+    resolved_threshold_ledger = resolve_local_ledger_path(
+        settings, threshold_ledger_path, DEFAULT_QUALITY_THRESHOLD_LEDGER_FILENAME
+    )
     policies = (
-        latest_policy_by_source(read_source_policy_ledger(policy_ledger_path))
-        if policy_ledger_path
+        latest_policy_by_source(read_source_policy_ledger(resolved_policy_ledger))
+        if resolved_policy_ledger
         else {}
     )
     source_policy_gaps = [
@@ -193,8 +210,8 @@ def build_contract_quality_report(
         contract.artifact_id for contract in registry.contracts if not contract.recorded
     ]
     snapshots = (
-        latest_snapshot_by_source(read_source_snapshot_ledger(snapshot_ledger_path))
-        if snapshot_ledger_path
+        latest_snapshot_by_source(read_source_snapshot_ledger(resolved_snapshot_ledger))
+        if resolved_snapshot_ledger
         else {}
     )
     raw_source_ids = {
@@ -204,13 +221,13 @@ def build_contract_quality_report(
     source_health = build_source_health_report(settings)
     unregistered_raw_directories = source_health["unregistered_raw_directories"]
     audit_summary = (
-        summarize_quality_audits(read_quality_audit_ledger(audit_ledger_path))
-        if audit_ledger_path
+        summarize_quality_audits(read_quality_audit_ledger(resolved_audit_ledger))
+        if resolved_audit_ledger
         else summarize_quality_audits([])
     )
     thresholds = (
-        latest_threshold_by_kind(read_quality_threshold_ledger(threshold_ledger_path))
-        if threshold_ledger_path
+        latest_threshold_by_kind(read_quality_threshold_ledger(resolved_threshold_ledger))
+        if resolved_threshold_ledger
         else {}
     )
 
@@ -297,11 +314,16 @@ def build_contract_quality_report(
         "generated_at": _now_iso(),
         "scope": {
             "recording_scope": "local contract registry and explicitly supplied local evidence",
-            "snapshot_ledger_supplied": bool(snapshot_ledger_path),
-            "policy_ledger_supplied": bool(policy_ledger_path),
-            "audit_ledger_supplied": bool(audit_ledger_path),
-            "threshold_ledger_supplied": bool(threshold_ledger_path),
+            "snapshot_ledger_supplied": bool(resolved_snapshot_ledger),
+            "policy_ledger_supplied": bool(resolved_policy_ledger),
+            "audit_ledger_supplied": bool(resolved_audit_ledger),
+            "threshold_ledger_supplied": bool(resolved_threshold_ledger),
             "preflight_evidence_supplied": preflight_evidence is not None,
+            "ledger_resolution": (
+                "When a ledger path is not supplied, the canonical default at "
+                "<data_root>/reports/data_health/<filename> is auto-discovered; "
+                "explicit --*-ledger arguments always override the default."
+            ),
         },
         "overall_status": "fail" if failures else ("incomplete" if pending else "pass"),
         "failed_checks": failures,
@@ -324,6 +346,10 @@ def build_contract_quality_report(
             (
                 "Reviewed audit samples are evaluated only after the maintainer records "
                 "an applicable threshold and enough samples are present."
+            ),
+            (
+                "Auto-discovered ledgers are read-only; a missing default file is treated "
+                "as an empty ledger, never as a failure."
             ),
         ],
     }
