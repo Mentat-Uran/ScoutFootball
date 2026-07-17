@@ -29,6 +29,7 @@
 - [x] 清理发布和数据 workflow 中关键步骤的 `continue-on-error`、`|| true` 和成功 placeholder；关键失败不得产出“成功发布”。
 - [x] 修复 `scripts/demo.sh` 的端口说明和启动参数，统一为 FastAPI 同源托管并增加 smoke test。
 - [x] 核验或移除 README 中的线上部署引用；无法访问时明确写“未核验”。线上部署不是本地项目的解锁条件。
+- [x] 默认 Python 测试不再调用会改写当前数据根目录的 ingest、feature build 或训练；真实写入型 pipeline 验收必须显式设置 `SCOUTFOOTBALL_RUN_MUTATING_PIPELINE_TESTS=1`，并建议使用独立 `SCOUTFOOTBALL_DATA_ROOT`。
 
 退出证据：21 个关键 Parquet 产物 preflight 全部通过（c74263e）；发布 fail-open 为 0（01d85a1）；demo.sh 统一为 FastAPI 同源托管（端口 8000）并增加 `--smoke` 健康检查；README 部署引用已核验（2026-07-17：Vercel 前端可达，Render 后端 free tier 冷启动未完全通过，未标记为 live）。
 

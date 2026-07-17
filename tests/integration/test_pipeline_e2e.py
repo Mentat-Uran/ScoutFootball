@@ -13,6 +13,7 @@ pytestmark = pytest.mark.integration
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _SRC_DIR = _PROJECT_ROOT / "src"
+_RUN_MUTATING_PIPELINE_TESTS = os.environ.get("SCOUTFOOTBALL_RUN_MUTATING_PIPELINE_TESTS") == "1"
 
 
 def _run_cli(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -44,6 +45,13 @@ def test_validate_command():
     assert result.returncode == 0, f"stdout: {result.stdout}\nstderr: {result.stderr}"
 
 
+@pytest.mark.skipif(
+    not _RUN_MUTATING_PIPELINE_TESTS,
+    reason=(
+        "requires SCOUTFOOTBALL_RUN_MUTATING_PIPELINE_TESTS=1 because it writes "
+        "feature artifacts to the configured local data root"
+    ),
+)
 def test_build_features_produces_output():
     """scoutfootball build-features should exit 0 and mention feature sets."""
     result = _run_cli("build-features", timeout=300)
@@ -51,11 +59,20 @@ def test_build_features_produces_output():
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(
+    not _RUN_MUTATING_PIPELINE_TESTS,
+    reason=(
+        "requires SCOUTFOOTBALL_RUN_MUTATING_PIPELINE_TESTS=1 because it runs the "
+        "real training pipeline against the configured local data root"
+    ),
+)
 def test_train_command():
-    """scoutfootball train should exit 0 (may skip models if no data).
+    """Explicitly run the real training pipeline against configured local data.
 
-    Marked slow because train involves GPU optimization and can take
-    several minutes. Run with: pytest -m slow
+    This remains a slow integration check, but it is intentionally excluded
+    from normal test runs because training can take minutes and write model or
+    feature artifacts. Run only after choosing the intended data root:
+    ``$env:SCOUTFOOTBALL_RUN_MUTATING_PIPELINE_TESTS='1'; uv run pytest -m slow``.
     """
     result = _run_cli("train", timeout=600)
     assert result.returncode == 0, f"stdout: {result.stdout}\nstderr: {result.stderr}"

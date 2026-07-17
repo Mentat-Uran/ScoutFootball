@@ -157,24 +157,23 @@ class TestCalibration:
 
 
 class TestPipeline:
-    def test_daily_ingest_returns_results(self):
+    def test_daily_ingest_isolated_from_repository_data(self, tmp_path):
         from scoutfootball.pipeline import run_daily_ingest
 
-        results = run_daily_ingest(sources=("statsbomb_open",))
-        # In CI (no LFS data), statsbomb_open may fail gracefully
-        if results.get("statsbomb_open", "").startswith("failed"):
-            pytest.skip("statsbomb_open not available (missing LFS data in CI)")
-        assert "statsbomb_open" in results
+        settings = _make_settings(tmp_path)
+        results = run_daily_ingest(sources=("statsbomb_open",), settings=settings)
 
-    def test_build_features_returns_results(self):
+        assert results["statsbomb_open"] == "skipped: no cached StatsBomb match directory"
+        assert not settings.raw_root.exists()
+
+    def test_build_features_fails_gracefully_with_empty_local_data_root(self, tmp_path):
         from scoutfootball.pipeline import run_build_features
 
-        results = run_build_features()
-        # In CI (no LFS data), player_ratings_optimized.parquet is a pointer
-        # file, so the features step may fail gracefully.
-        if "player_match" not in results:
-            pytest.skip("player_match not available (missing LFS data in CI)")
-        assert "player_match" in results
+        settings = _make_settings(tmp_path)
+        results = run_build_features(settings=settings)
+
+        assert results["features"].startswith("failed:")
+        assert not settings.gold_root.exists()
 
     def test_weekly_train_skips_on_validation_failure(self, tmp_path):
         from scoutfootball.pipeline import run_weekly_train

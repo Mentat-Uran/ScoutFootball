@@ -325,6 +325,20 @@ recorded in the contract registry. It does not upload data, infer missing
 provenance, or overwrite an existing evidence file unless
 `--overwrite-evidence` is supplied.
 
+### Verification safety
+
+`uv run pytest` does not run mutation-capable pipeline integration checks by
+default. Feature building and training can write local feature or model
+artifacts, so run them only after deliberately choosing the data root:
+
+```powershell
+$env:SCOUTFOOTBALL_RUN_MUTATING_PIPELINE_TESTS = "1"
+uv run pytest tests/integration/test_pipeline_e2e.py
+```
+
+Use a disposable `SCOUTFOOTBALL_DATA_ROOT` for this check when the maintained
+local data directory must not be changed.
+
 ### Tech Stack & Compliance
 
 - **Stack:** Python, uv, DuckDB + Parquet, pandas, scikit-learn, Streamlit, Plotly, mplsoccer, FastAPI, PyTorch.
