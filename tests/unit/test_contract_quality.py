@@ -12,6 +12,13 @@ from scoutfootball.evaluation.quality_audit_ledger import (
     build_quality_audit_record,
     build_quality_threshold_record,
 )
+from scoutfootball.evaluation.source_health import (
+    DEFAULT_DATA_HEALTH_DIR,
+    DEFAULT_QUALITY_AUDIT_LEDGER_FILENAME,
+    DEFAULT_QUALITY_THRESHOLD_LEDGER_FILENAME,
+    DEFAULT_SOURCE_POLICY_LEDGER_FILENAME,
+    DEFAULT_SOURCE_SNAPSHOT_LEDGER_FILENAME,
+)
 from scoutfootball.evaluation.source_policy_ledger import (
     append_source_policy_record,
     build_source_policy_record,
@@ -288,3 +295,155 @@ def test_contract_quality_fails_when_a_recorded_threshold_is_exceeded(tmp_path) 
     assert claim_rate["status"] == "fail"
     assert claim_rate["threshold_status"] == "not_met"
     assert report["failed_checks"] == ["source_claim_error_rate"]
+
+
+def test_contract_quality_auto_discovers_default_policy_ledger(tmp_path) -> None:
+    """A policy recorded at the canonical default path must be visible without --policy-ledger."""
+    settings = PlatformSettings.from_root(tmp_path)
+    ledger_dir = settings.report_root / DEFAULT_DATA_HEALTH_DIR
+    ledger_dir.mkdir(parents=True)
+    ledger_path = ledger_dir / DEFAULT_SOURCE_POLICY_LEDGER_FILENAME
+    record = build_source_policy_record(
+        source_id="football_data",
+        retention_mode="until_manual_deletion",
+        retention_days=None,
+        deletion_trigger="Maintainer requests deletion.",
+        deletion_strategy="Remove local raw source files after confirmation.",
+        derived_artifact_action="Invalidate dependent artifacts for regeneration.",
+        decision="Local policy approved by maintainer.",
+        recorded_at="2026-07-17T00:00:00Z",
+    )
+    append_source_policy_record(record, ledger_path)
+
+    report = build_contract_quality_report(settings)
+
+    assert report["scope"]["policy_ledger_supplied"] is True
+    policy = _check(report, "source_retention_and_deletion_policies")
+    assert policy["sources_with_complete_policy"] == 1
+    assert {item["source_id"] for item in policy["sources_missing_policy"]} == {
+        "clubelo",
+        "fbref",
+        "reep",
+        "statsbomb_open",
+        "transfermarkt_manual",
+        "understat",
+    }
+
+
+def test_contract_quality_auto_discovers_default_snapshot_ledger(tmp_path) -> None:
+    """A snapshot at the canonical default path is visible without --snapshot-ledger."""
+    settings = PlatformSettings.from_root(tmp_path)
+    ledger_dir = settings.report_root / DEFAULT_DATA_HEALTH_DIR
+    ledger_dir.mkdir(parents=True)
+    ledger_path = ledger_dir / DEFAULT_SOURCE_SNAPSHOT_LEDGER_FILENAME
+    ledger_path.write_text(
+        '{"record_type":"scoutfootball.source_snapshot_ledger","snapshot_id":"id",'
+        '"source_id":"football_data","snapshot_date":"2026-07-16",'
+        '"recorded_at":"2026-07-17T00:00:00Z","evidence":{"artifact_count":1}}\n',
+        encoding="utf-8",
+    )
+
+    report = build_contract_quality_report(settings)
+
+    assert report["scope"]["snapshot_ledger_supplied"] is True
+    snapshots = _check(report, "explicit_source_snapshots")
+    assert snapshots["status"] == "observed"
+    assert snapshots["explicit_snapshot_sources"] == ["football_data"]
+
+
+def test_contract_quality_auto_discovers_default_audit_and_threshold_ledgers(tmp_path) -> None:
+    """Audit and threshold ledgers at the canonical default path must be visible without args."""
+    settings = PlatformSettings.from_root(tmp_path)
+    ledger_dir = settings.report_root / DEFAULT_DATA_HEALTH_DIR
+    ledger_dir.mkdir(parents=True)
+    audit_ledger = ledger_dir / DEFAULT_QUALITY_AUDIT_LEDGER_FILENAME
+    threshold_ledger = ledger_dir / DEFAULT_QUALITY_THRESHOLD_LEDGER_FILENAME
+    audit = build_quality_audit_record(
+        audit_kind="identity_resolution",
+        source_id="transfermarkt_manual",
+        sample_id="identity-001",
+        outcome="confirmed_correct",
+        reviewer="maintainer",
+        evidence_reference="local-review:identity-001",
+        decision="Reviewed against the local permitted snapshot.",
+        recorded_at="2026-07-17T00:00:00Z",
+    )
+    threshold = build_quality_threshold_record(
+        audit_kind="identity_resolution",
+        maximum_error_rate=0.0,
+        minimum_sample_count=1,
+        decision="One reviewed fixture is sufficient only for this test scope.",
+        recorded_at="2026-07-17T00:01:00Z",
+    )
+    append_quality_audit_record(audit, audit_ledger)
+    append_quality_threshold_record(threshold, threshold_ledger)
+
+    report = build_contract_quality_report(settings)
+
+    assert report["scope"]["audit_ledger_supplied"] is True
+    assert report["scope"]["threshold_ledger_supplied"] is True
+    identity_rate = _check(report, "identity_conflict_error_rate")
+    assert identity_rate["status"] == "pass"
+    assert identity_rate["threshold_status"] == "met"
+
+
+def test_contract_quality_empty_default_workspace_keeps_baseline_required(tmp_path) -> None:
+    """Auto-discovery must not invent evidence when no default ledger files exist."""
+    settings = PlatformSettings.from_root(tmp_path)
+
+    report = build_contract_quality_report(settings)
+
+    assert report["scope"]["policy_ledger_supplied"] is False
+    assert report["scope"]["snapshot_ledger_supplied"] is False
+    assert report["scope"]["audit_ledger_supplied"] is False
+    assert report["scope"]["threshold_ledger_supplied"] is False
+    policy = _check(report, "source_retention_and_deletion_policies")
+    assert policy["status"] == "baseline_required"
+    assert policy["sources_with_complete_policy"] == 0
+
+
+def test_contract_quality_explicit_ledger_overrides_auto_discovered_default(tmp_path) -> None:
+    """An explicit --policy-ledger must override the auto-discovered default file."""
+    settings = PlatformSettings.from_root(tmp_path)
+    default_dir = settings.report_root / DEFAULT_DATA_HEALTH_DIR
+    default_dir.mkdir(parents=True)
+    default_ledger = default_dir / DEFAULT_SOURCE_POLICY_LEDGER_FILENAME
+    default_record = build_source_policy_record(
+        source_id="football_data",
+        retention_mode="until_manual_deletion",
+        retention_days=None,
+        deletion_trigger="Maintainer requests deletion.",
+        deletion_strategy="Remove local raw source files after confirmation.",
+        derived_artifact_action="Invalidate dependent artifacts for regeneration.",
+        decision="Default-ledger policy declaration.",
+        recorded_at="2026-07-17T00:00:00Z",
+    )
+    append_source_policy_record(default_record, default_ledger)
+    override_ledger = tmp_path / "override_policy.jsonl"
+    override_record = build_source_policy_record(
+        source_id="clubelo",
+        retention_mode="until_manual_deletion",
+        retention_days=None,
+        deletion_trigger="Maintainer requests deletion.",
+        deletion_strategy="Remove local raw source files after confirmation.",
+        derived_artifact_action="Invalidate dependent artifacts for regeneration.",
+        decision="Override-ledger policy declaration.",
+        recorded_at="2026-07-17T00:00:00Z",
+    )
+    append_source_policy_record(override_record, override_ledger)
+
+    report = build_contract_quality_report(
+        settings, policy_ledger_path=str(override_ledger)
+    )
+
+    policy = _check(report, "source_retention_and_deletion_policies")
+    # Only clubelo is recorded in the override ledger; football_data falls back to baseline.
+    assert policy["sources_with_complete_policy"] == 1
+    assert {item["source_id"] for item in policy["sources_missing_policy"]} == {
+        "fbref",
+        "football_data",
+        "reep",
+        "statsbomb_open",
+        "transfermarkt_manual",
+        "understat",
+    }

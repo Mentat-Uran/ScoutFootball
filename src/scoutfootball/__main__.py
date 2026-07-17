@@ -2215,10 +2215,20 @@ def main() -> None:
         "--evidence", help="Optional local preflight evidence JSON to attach by registered source"
     )
     source_health_p.add_argument(
-        "--snapshot-ledger", help="Optional append-only local source snapshot ledger"
+        "--snapshot-ledger",
+        help=(
+            "Optional append-only local source snapshot ledger; when omitted, the "
+            "canonical default at data/reports/data_health/source_snapshot_ledger.jsonl "
+            "is auto-discovered."
+        ),
     )
     source_health_p.add_argument(
-        "--policy-ledger", help="Optional append-only local source policy ledger"
+        "--policy-ledger",
+        help=(
+            "Optional append-only local source policy ledger; when omitted, the "
+            "canonical default at data/reports/data_health/source_policy_ledger.jsonl "
+            "is auto-discovered."
+        ),
     )
     contract_quality_p = sub.add_parser(
         "contract-quality",
@@ -2229,16 +2239,32 @@ def main() -> None:
         "--evidence", help="Optional local preflight evidence JSON"
     )
     contract_quality_p.add_argument(
-        "--snapshot-ledger", help="Optional append-only local source snapshot ledger"
+        "--snapshot-ledger",
+        help=(
+            "Optional append-only local source snapshot ledger; auto-discovered at "
+            "data/reports/data_health/source_snapshot_ledger.jsonl when omitted."
+        ),
     )
     contract_quality_p.add_argument(
-        "--policy-ledger", help="Optional append-only local source policy ledger"
+        "--policy-ledger",
+        help=(
+            "Optional append-only local source policy ledger; auto-discovered at "
+            "data/reports/data_health/source_policy_ledger.jsonl when omitted."
+        ),
     )
     contract_quality_p.add_argument(
-        "--audit-ledger", help="Optional append-only local identity/source claim audit ledger"
+        "--audit-ledger",
+        help=(
+            "Optional append-only local identity/source claim audit ledger; auto-discovered "
+            "at data/reports/data_health/quality_audit_ledger.jsonl when omitted."
+        ),
     )
     contract_quality_p.add_argument(
-        "--threshold-ledger", help="Optional append-only local quality-threshold ledger"
+        "--threshold-ledger",
+        help=(
+            "Optional append-only local quality-threshold ledger; auto-discovered at "
+            "data/reports/data_health/quality_threshold_ledger.jsonl when omitted."
+        ),
     )
     model_admission_p = sub.add_parser(
         "model-admission",

@@ -17,6 +17,40 @@ from scoutfootball.evaluation.source_snapshot_ledger import (
 )
 from scoutfootball.schemas.storage import SourceLicense
 
+# Canonical local ledger filenames. The recording commands
+# (`record-source-policy`, `record-source-snapshot`, `record-quality-audit`,
+# `record-quality-threshold`) default to these paths under
+# ``<data_root>/reports/data_health/``. Reporting commands use the same
+# defaults via :func:`resolve_local_ledger_path` so that maintainer-recorded
+# evidence is surfaced without forcing the user to repeat ``--*-ledger`` on
+# every read. Explicit CLI arguments always override the default.
+DEFAULT_DATA_HEALTH_DIR = "data_health"
+DEFAULT_SOURCE_POLICY_LEDGER_FILENAME = "source_policy_ledger.jsonl"
+DEFAULT_SOURCE_SNAPSHOT_LEDGER_FILENAME = "source_snapshot_ledger.jsonl"
+DEFAULT_QUALITY_AUDIT_LEDGER_FILENAME = "quality_audit_ledger.jsonl"
+DEFAULT_QUALITY_THRESHOLD_LEDGER_FILENAME = "quality_threshold_ledger.jsonl"
+
+
+def resolve_local_ledger_path(
+    settings: PlatformSettings,
+    explicit_path: str | None,
+    filename: str,
+) -> str | None:
+    """Resolve a local ledger path, auto-discovering the canonical default.
+
+    The canonical default location is ``<report_root>/data_health/<filename>``.
+    Returns ``explicit_path`` unchanged when supplied (even if the file does
+    not exist, preserving the existing reader contract of treating a missing
+    file as an empty ledger). When ``explicit_path`` is ``None``, returns the
+    default path only if that file actually exists on disk, otherwise
+    ``None`` — so the ``*_ledger_supplied`` report flag stays truthful and
+    empty-default workspaces (e.g. tests under ``tmp_path``) are unaffected.
+    """
+    if explicit_path:
+        return explicit_path
+    default_path = settings.report_root / DEFAULT_DATA_HEALTH_DIR / filename
+    return str(default_path) if default_path.exists() else None
+
 
 def _iso(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -96,14 +130,20 @@ def build_source_health_report(
     registry = build_data_contract_registry()
     registered = [contract for contract in registry.contracts if contract.layer == "raw"]
     inspections = _inspections_by_path(preflight_evidence)
+    resolved_snapshot_ledger = resolve_local_ledger_path(
+        settings, snapshot_ledger_path, DEFAULT_SOURCE_SNAPSHOT_LEDGER_FILENAME
+    )
+    resolved_policy_ledger = resolve_local_ledger_path(
+        settings, policy_ledger_path, DEFAULT_SOURCE_POLICY_LEDGER_FILENAME
+    )
     snapshots = (
-        latest_snapshot_by_source(read_source_snapshot_ledger(snapshot_ledger_path))
-        if snapshot_ledger_path
+        latest_snapshot_by_source(read_source_snapshot_ledger(resolved_snapshot_ledger))
+        if resolved_snapshot_ledger
         else {}
     )
     policies = (
-        latest_policy_by_source(read_source_policy_ledger(policy_ledger_path))
-        if policy_ledger_path
+        latest_policy_by_source(read_source_policy_ledger(resolved_policy_ledger))
+        if resolved_policy_ledger
         else {}
     )
     entries = []
@@ -163,10 +203,11 @@ def build_source_health_report(
     unregistered_raw_directories = sorted(observed_dirs - registered_dirs)
     return {
         "report_type": "scoutfootball.source_health",
-        "report_version": "1.3",
+        "report_version": "1.4",
         "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "registered_source_count": len(entries),
-        "policy_ledger_supplied": bool(policy_ledger_path),
+        "policy_ledger_supplied": bool(resolved_policy_ledger),
+        "snapshot_ledger_supplied": bool(resolved_snapshot_ledger),
         "registered_sources": entries,
         "unregistered_raw_directories": unregistered_raw_directories,
         "unregistered_raw_directory_details": _unregistered_directory_details(
@@ -177,6 +218,11 @@ def build_source_health_report(
             "Source snapshot and lineage remain not_recorded unless explicitly "
             "captured by a local evidence workflow.",
             "Unregistered directory modification times are local observations, not source dates.",
+            (
+                "When no ledger path is supplied, policy and snapshot ledgers are auto-"
+                "discovered at <data_root>/reports/data_health/; explicit --*-ledger "
+                "arguments always override the default."
+            ),
         ],
     }
 
