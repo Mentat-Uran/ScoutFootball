@@ -32,7 +32,7 @@ from scoutfootball.evaluation.source_snapshot_ledger import (
     read_source_snapshot_ledger,
 )
 
-CONTRACT_QUALITY_VERSION = "1.4.0"
+CONTRACT_QUALITY_VERSION = "1.5.0"
 
 
 def _now_iso() -> str:
@@ -44,7 +44,14 @@ def _status(name: str, status: str, **details: Any) -> dict[str, Any]:
 
 
 def _inspection_is_ok(inspection: dict[str, Any]) -> bool:
-    """Apply the preflight's documented content-readiness rule to saved JSON."""
+    """Apply the relevant content-readiness rule to supported local evidence."""
+    if inspection.get("status") == "ok":
+        return bool(
+            isinstance(inspection.get("content_hash"), str)
+            and inspection["content_hash"]
+            and inspection.get("row_count") is not None
+            and inspection.get("reader")
+        )
     return bool(
         inspection.get("exists")
         and inspection.get("readable")
@@ -60,7 +67,10 @@ def _preflight_check(evidence: dict[str, Any] | None) -> dict[str, Any]:
             "preflight_content_readability",
             "not_recorded",
             inspected_artifact_count=0,
-            note="Pass --evidence from `scoutfootball preflight --evidence-out`.",
+            note=(
+                "Pass Parquet evidence from `scoutfootball preflight --evidence-out` or "
+                "CSV evidence from `scoutfootball inspect-raw-source --evidence-out`."
+            ),
         )
 
     # Shared validation keeps evidence-path rules identical to source-health.
@@ -88,7 +98,8 @@ def _preflight_check(evidence: dict[str, Any] | None) -> dict[str, Any]:
         failing_artifacts=failures,
         evidence_generated_at=evidence.get("generated_at"),
         note=(
-            "This applies only to artifacts captured by the supplied local evidence; "
+            "This accepts Parquet preflight and registered raw-CSV inspection evidence, and "
+            "applies only to artifacts captured by the supplied local evidence; "
             "it does not assert repository-wide coverage or freshness."
         ),
     )
