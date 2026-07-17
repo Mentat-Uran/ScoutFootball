@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-17T10:57:21.575372+00:00",
+  "generated_at": "2026-07-17T11:09:48.344117+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -268,6 +268,7 @@
       "uv run python -m scoutfootball export-ratings",
       "uv run python -m scoutfootball import-truth-labels",
       "uv run python -m scoutfootball import-transfermarkt-truth-labels",
+      "uv run python -m scoutfootball transfermarkt-identity-review",
       "uv run python -m scoutfootball audit-truth-labels",
       "uv run python -m scoutfootball backtest",
       "uv run python -m scoutfootball tune-predictions",
@@ -278,7 +279,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-17T10:57:21.573868+00:00",
+    "generated_at": "2026-07-17T11:09:48.342614+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -875,7 +876,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-17T10:57:21.575372+00:00",
+    "generated_at": "2026-07-17T11:09:48.344117+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -1777,5 +1778,5 @@
       }
     ]
   },
-  "content_sha256": "11e121012b3308dd19092221a95f636fbac873a3e0d61ba8081afb821d1d47d7"
+  "content_sha256": "e2447f5a5b98c67888b6d29d865a197a2eb0faeeb60a78c8c251f2df4ba415ac"
 }

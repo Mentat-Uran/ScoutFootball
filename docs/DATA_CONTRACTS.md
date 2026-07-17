@@ -276,6 +276,15 @@ rows are excluded from supervision and written to
 /reports/transfermarkt-identities` exposes that local report; it is an audit
 of the current matrix, not a cross-provider identity authority.
 
+`scoutfootball transfermarkt-identity-review` records an explicit local
+`confirmed`, `rejected`, or `revoked` decision in an append-only JSONL ledger.
+Confirmation is accepted only for an ID already present in that report row's
+candidate set. On a later import, `--identity-ledger <path>` consumes only
+decisions whose snapshot SHA-256, feature-matrix SHA-256, season, and source
+row all match the current inputs. A revocation makes a prior manual choice
+ineligible for subsequent imports; it does not silently delete historical
+truth-label rows, which must be reconciled explicitly by the maintainer.
+
 Both the dry-run summary and the persisted identity report include SHA-256 and
 byte size for the explicitly supplied snapshot and local feature matrix. These
 fingerprints identify the exact input files without uploading or copying them;

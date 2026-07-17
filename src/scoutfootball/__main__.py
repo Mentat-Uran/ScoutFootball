@@ -416,6 +416,7 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
     from scoutfootball.adapters.transfermarkt_manual import load_snapshot, snapshot_to_truth_labels
     from scoutfootball.evaluation.transfermarkt_identity import (
         apply_resolved_transfermarkt_identities,
+        apply_transfermarkt_identity_review_decisions,
         resolve_transfermarkt_snapshot_identities,
         transfermarkt_identity_report,
     )
@@ -461,10 +462,18 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
             feature_matrix,
             season=args.season,
         )
+        identities, identity_review = apply_transfermarkt_identity_review_decisions(
+            identities,
+            snapshot_sha256=str(input_provenance["snapshot"]["sha256"]),
+            feature_matrix_sha256=str(input_provenance["feature_matrix"]["sha256"]),
+            season=args.season,
+            ledger_path=args.identity_ledger,
+        )
     except Exception as exc:
         print(f"Error: unable to resolve Transfermarkt identities: {exc}")
         sys.exit(1)
     identity = transfermarkt_identity_report(identities)
+    identity["review_decisions"] = identity_review
     new_labels = apply_resolved_transfermarkt_identities(new_labels, identities)
 
     output_path = Path(args.output).resolve()
@@ -510,6 +519,8 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
         else output_path.with_name("transfermarkt_identity_report.json")
     )
     identity_payload = {
+        "schema": "scoutfootball.transfermarkt-identity-report",
+        "version": "1.1.0",
         **identity,
         "season": str(args.season),
         "input_provenance": input_provenance,
@@ -539,6 +550,27 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
     print(f"  Deterministic identity matches: {identity['mapped_rows']} / {identity['total_rows']}")
     print(f"  Identity review report: {identity_path}")
     print(f"  Total labels in file: {len(combined)}")
+
+
+def _cmd_transfermarkt_identity_review(args: argparse.Namespace) -> None:
+    """Append one explicit local decision for a Transfermarkt review row."""
+    from scoutfootball.evaluation.transfermarkt_identity_review import (
+        append_review_decision_from_report,
+    )
+
+    try:
+        record = append_review_decision_from_report(
+            args.report,
+            args.ledger,
+            source_row=args.source_row,
+            action=args.action,
+            canonical_player_id=args.canonical_player_id,
+            reason=args.reason,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Error: unable to record identity review decision: {exc}", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps({"ledger": str(Path(args.ledger).resolve()), "decision": record}, indent=2))
 
 
 def _cmd_audit_truth_labels(args: argparse.Namespace) -> None:
@@ -1939,9 +1971,31 @@ def main() -> None:
         help="JSON audit output for mapped, review, and unresolved identity rows",
     )
     transfermarkt_truth_p.add_argument(
+        "--identity-ledger", type=str, default=None,
+        help="Optional local append-only manual identity-review ledger",
+    )
+    transfermarkt_truth_p.add_argument(
         "--dry-run", action="store_true",
         help="Validate, merge in memory, and print the time/coverage preview without writing",
     )
+    identity_review_p = sub.add_parser(
+        "transfermarkt-identity-review",
+        help="Record an explicit local decision for a Transfermarkt identity review row",
+    )
+    identity_review_p.add_argument(
+        "--report", required=True, help="Local identity review report JSON"
+    )
+    identity_review_p.add_argument(
+        "--ledger",
+        default="data/reports/data_health/transfermarkt_identity_review_ledger.jsonl",
+        help="Local append-only JSONL decision ledger",
+    )
+    identity_review_p.add_argument("--source-row", type=int, required=True)
+    identity_review_p.add_argument(
+        "--action", choices=("confirmed", "rejected", "revoked"), required=True
+    )
+    identity_review_p.add_argument("--canonical-player-id", default=None)
+    identity_review_p.add_argument("--reason", default="")
 
     truth_audit_p = sub.add_parser(
         "audit-truth-labels",
@@ -2127,6 +2181,7 @@ def main() -> None:
         "export-ratings": _cmd_export_ratings,
         "import-truth-labels": _cmd_import_truth_labels,
         "import-transfermarkt-truth-labels": _cmd_import_transfermarkt_truth_labels,
+        "transfermarkt-identity-review": _cmd_transfermarkt_identity_review,
         "audit-truth-labels": _cmd_audit_truth_labels,
         "backtest": _cmd_backtest,
         "tune-predictions": _cmd_tune_predictions,

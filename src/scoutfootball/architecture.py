@@ -202,6 +202,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball export-ratings",
             "uv run python -m scoutfootball import-truth-labels",
             "uv run python -m scoutfootball import-transfermarkt-truth-labels",
+            "uv run python -m scoutfootball transfermarkt-identity-review",
             "uv run python -m scoutfootball audit-truth-labels",
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",

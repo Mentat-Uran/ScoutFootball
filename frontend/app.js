@@ -15175,6 +15175,11 @@ function renderReports() {
         const identityMapped = Number(identity.mapped_rows || 0);
         const identityTotal = Number(identity.total_rows || 0);
         const identityReview = Number(identity.review_rows || 0);
+        const identityDecisions = identity.review_decisions || {};
+        const identityConfirmed = Number(identityDecisions.confirmed_rows || 0);
+        const identityConfirmationText = z
+            ? `本次导入应用的人工身份确认：${identityConfirmed.toLocaleString()}。`
+            : `Manual identity confirmations applied to this import: ${identityConfirmed.toLocaleString()}.`;
         const excluded = Object.entries(report.excluded_source_counts || {})
             .map(([source, count]) => `${escapeHtml(source)}: ${escapeHtml(String(count))}`)
             .join(" · ");
@@ -15186,6 +15191,7 @@ function renderReports() {
                 <div style="margin-top:0.25rem;color:var(--text-muted)">${escapeHtml(z ? "已排除循环或未获准来源：" : "Excluded circular or unapproved sources: ")}${excluded || escapeHtml(z ? "无" : "none")}</div>
                 <div style="margin-top:0.25rem;color:var(--text-muted)">${escapeHtml(z ? "赛季内时间可用：" : "Temporally in-season: ")}${escapeHtml(String(temporallyEligible.toLocaleString()))}${escapeHtml(z ? "；赛后快照：" : "; post-season snapshots: ")}${escapeHtml(String(postSeason.toLocaleString()))}</div>
                 <div style="margin-top:0.25rem;color:var(--text-muted)">${transfermarktIdentityReport.status === "available" ? escapeHtml(`Transfermarkt identity matches: ${identityMapped.toLocaleString()} / ${identityTotal.toLocaleString()}; review: ${identityReview.toLocaleString()}`) : escapeHtml("No local Transfermarkt identity report.")}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${transfermarktIdentityReport.status === "available" ? escapeHtml(identityConfirmationText) : ""}</div>
                 <div style="margin-top:0.35rem;color:var(--text-muted)">${escapeHtml(report.caveat || "")}</div>`;
         }
     }
