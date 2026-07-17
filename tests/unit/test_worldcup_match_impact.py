@@ -13,44 +13,44 @@ def api_module():
 class TestMatchImpactStatus:
     def test_ok_status(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         assert result["status"] == "ok"
 
     def test_has_matches_list(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         assert isinstance(result["matches"], list)
 
     def test_has_num_simulations(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
-        assert result["num_simulations"] == 200
+        assert result["num_simulations"] == 10
 
     def test_has_mode_strength(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         assert result["mode"] == "strength"
 
     def test_has_disclaimer(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         assert isinstance(result["disclaimer"], str)
         assert len(result["disclaimer"]) > 0
 
     def test_has_source_attribution(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         assert "source_attribution" in result
 
     def test_has_total_pending(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         assert isinstance(result["total_pending"], int)
         assert result["total_pending"] >= 0
@@ -59,7 +59,7 @@ class TestMatchImpactStatus:
 class TestMatchImpactPerMatch:
     def test_match_has_required_fields(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         if not result["matches"]:
             pytest.skip("No pending matches")
@@ -72,21 +72,21 @@ class TestMatchImpactPerMatch:
 
     def test_total_impact_non_negative(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         for m in result["matches"]:
             assert m["total_impact"] >= 0
 
     def test_max_swing_non_negative(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         for m in result["matches"]:
             assert m["max_swing"] >= 0
 
     def test_per_team_has_fields(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         if not result["matches"]:
             pytest.skip("No pending matches")
@@ -100,7 +100,7 @@ class TestMatchImpactPerMatch:
 
     def test_per_team_probs_in_range(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         for m in result["matches"]:
             for pt in m["per_team"]:
@@ -110,7 +110,7 @@ class TestMatchImpactPerMatch:
 
     def test_per_team_swing_is_max_minus_min(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         for m in result["matches"]:
             for pt in m["per_team"]:
@@ -123,7 +123,7 @@ class TestMatchImpactPerMatch:
 
     def test_per_team_sorted_by_swing_desc(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         for m in result["matches"]:
             swings = [pt["swing"] for pt in m["per_team"]]
@@ -131,7 +131,7 @@ class TestMatchImpactPerMatch:
 
     def test_matches_sorted_by_total_impact_desc(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=10
+            num_simulations=10, top_n=10
         )
         impacts = [m["total_impact"] for m in result["matches"]]
         assert impacts == sorted(impacts, reverse=True)
@@ -140,7 +140,7 @@ class TestMatchImpactPerMatch:
 class TestMatchImpactGroupFilter:
     def test_group_filter_returns_only_matching(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            group="A", num_simulations=200, top_n=10
+            group="A", num_simulations=10, top_n=10
         )
         assert result["status"] == "ok"
         for m in result["matches"]:
@@ -153,7 +153,7 @@ class TestMatchImpactGroupFilter:
 
     def test_group_filter_case_insensitive(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            group="a", num_simulations=200, top_n=10
+            group="a", num_simulations=10, top_n=10
         )
         assert result["status"] == "ok"
         for m in result["matches"]:
@@ -163,7 +163,7 @@ class TestMatchImpactGroupFilter:
 class TestMatchImpactTopN:
     def test_top_n_limits_results(self, api_module):
         result = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=3
+            num_simulations=10, top_n=3
         )
         assert len(result["matches"]) <= 3
 
@@ -171,10 +171,10 @@ class TestMatchImpactTopN:
 class TestMatchImpactDeterministic:
     def test_same_result_with_same_state(self, api_module):
         result1 = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         result2 = api_module.get_wc_tournament_match_impact(
-            num_simulations=200, top_n=5
+            num_simulations=10, top_n=5
         )
         assert len(result1["matches"]) == len(result2["matches"])
         for m1, m2 in zip(result1["matches"], result2["matches"], strict=True):

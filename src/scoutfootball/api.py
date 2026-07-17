@@ -9836,6 +9836,16 @@ def get_wc_tournament_match_impact(
 
     state = _wc_tournament_state()
 
+    # Cache keyed on tournament state fingerprint + parameters; state changes
+    # (e.g. marking a result) invalidate the cache automatically.
+    cache_key = (
+        f"wc_match_impact::{_wc_tournament_state_fingerprint(state)}"
+        f"::{group}::{num_simulations}::{top_n}"
+    )
+    cached = _wc_cache.get(cache_key)
+    if cached is not _MISSING:
+        return cached
+
     enriched_squads, strengths = _get_wc_enriched_squads()
     if not enriched_squads or not strengths:
         return _clean_json_value({
@@ -9873,7 +9883,7 @@ def get_wc_tournament_match_impact(
         pending_matches.append(m)
 
     if not pending_matches:
-        return _clean_json_value({
+        result = _clean_json_value({
             "status": "ok",
             "matches": [],
             "num_simulations": num_simulations,
@@ -9881,6 +9891,8 @@ def get_wc_tournament_match_impact(
             "source_attribution": _STATSBOMB_ATTRIBUTION,
             "disclaimer": "No remaining group-stage matches to analyze.",
         })
+        _wc_cache.set(cache_key, result)
+        return result
 
     def _sim_with_result(match_id, home_goals, away_goals):
         modified = copy.deepcopy(state)
@@ -10009,7 +10021,7 @@ def get_wc_tournament_match_impact(
     impact_matches.sort(key=lambda m: -m["total_impact"])
     top_matches = impact_matches[:top_n]
 
-    return _clean_json_value({
+    result = _clean_json_value({
         "status": "ok",
         "matches": top_matches,
         "total_pending": len(pending_matches),
@@ -10024,6 +10036,8 @@ def get_wc_tournament_match_impact(
             "Poisson model's most likely outcome. Illustrative only."
         ),
     })
+    _wc_cache.set(cache_key, result)
+    return result
 
 
 def get_wc_tournament_knockout_match_impact(
@@ -10047,6 +10061,17 @@ def get_wc_tournament_knockout_match_impact(
     )
 
     state = _wc_tournament_state()
+
+    # Cache keyed on tournament state fingerprint + parameters; state changes
+    # (e.g. marking a result or regenerating the bracket) invalidate the cache.
+    cache_key = (
+        f"wc_ko_match_impact::{_wc_tournament_state_fingerprint(state)}"
+        f"::{num_simulations}::{top_n}"
+    )
+    cached = _wc_cache.get(cache_key)
+    if cached is not _MISSING:
+        return cached
+
     overview = get_knockout_overview(state)
     if not overview.get("generated"):
         return _clean_json_value({
@@ -10082,7 +10107,7 @@ def get_wc_tournament_knockout_match_impact(
         pending.append(m)
 
     if not pending:
-        return _clean_json_value({
+        result = _clean_json_value({
             "status": "ok",
             "matches": [],
             "num_simulations": num_simulations,
@@ -10090,6 +10115,8 @@ def get_wc_tournament_knockout_match_impact(
             "source_attribution": _STATSBOMB_ATTRIBUTION,
             "disclaimer": "No remaining knockout matches with both teams set.",
         })
+        _wc_cache.set(cache_key, result)
+        return result
 
     def _sim_knockout_with_result(match_id: str, winner: str):
         modified = copy.deepcopy(state)
@@ -10119,9 +10146,12 @@ def get_wc_tournament_knockout_match_impact(
             if km.get("match_id") == match_id:
                 modified.knockout["matches"][i] = ko_match
                 break
-        # Re-project KO bracket from modified state.
+        # Re-project KO bracket from modified state. Pass num_simulations so
+        # the caller's requested MC iteration count is actually honored.
         new_overview = get_knockout_overview(modified)
-        result = project_knockout_probabilities(new_overview, strengths)
+        result = project_knockout_probabilities(
+            new_overview, strengths, num_simulations=num_simulations
+        )
         prob_map = {}
         for entry in result.get("tournament_win_probability", []):
             prob_map[entry["team"]] = entry.get("win_probability", 0.0)
@@ -10183,7 +10213,7 @@ def get_wc_tournament_knockout_match_impact(
     impact_matches.sort(key=lambda m: -m["total_impact"])
     top_matches = impact_matches[:top_n]
 
-    return _clean_json_value({
+    result = _clean_json_value({
         "status": "ok",
         "matches": top_matches,
         "total_pending": len(pending),
@@ -10199,6 +10229,8 @@ def get_wc_tournament_knockout_match_impact(
             "Illustrative only."
         ),
     })
+    _wc_cache.set(cache_key, result)
+    return result
 
 
 def get_wc_tournament_top_matches(
