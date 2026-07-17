@@ -790,6 +790,10 @@ truth-label inputs. The currently active
 output, not optimizer input; changing an active score artifact must not change
 the lineage of a candidate that did not read it.
 
+Optimizer run metadata records the actual season lists returned by its time
+split, rather than configuration such as `--test-seasons 1`. A missing or
+numeric count in the metadata is not converted into a claimed holdout season.
+
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
 `/world-cup/squads/{team}` and `/world-cup/outlook/{team}` include a versioned

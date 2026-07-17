@@ -60,7 +60,7 @@ def evaluate_optimizer_run(run_dir: Path | str) -> dict[str, Any]:
         item.get("source")
         for item in artifact_statuses
         if isinstance(item, dict)
-        and item.get("source") in {"fbref_standard", "football_data"}
+        and item.get("source") in {"fbref_standard", "football_data_results"}
         and item.get("status") != "loaded"
     ]
     train = meta.get("train_seasons")
