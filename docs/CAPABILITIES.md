@@ -125,7 +125,7 @@
 | 签名与跨平台 | 签名发现被禁用，平台状态在文档间有漂移 | 每个平台独立构建、签名/未签名声明、安装与回滚证据 |
 | 静态新鲜度 | 已以本地 release 导出刷新 `frontend/data_manifest.json`；检查器同时核对文件清单、大小、去重和汇总元数据。`npm run build:sites` 与 CI 在复制 STATIC 快照前均会失败关闭 | 自动重新生成、来源/快照 SLO 与跨产物一致性仍留给 C1；门禁不会把旧快照写成新数据 |
 | 契约维护 | API、静态 JSON、前端和文档手工同步 | schema registry + 生成式清单 + compatibility tests |
-| 模块边界 | API/前端核心文件过大 | 按 data/model/scouting/match/worldcup/governance 领域拆分 |
+| 模块边界 | API/前端核心文件仍高度集中；[`ADR-0001`](adr/0001-core-module-boundaries.md) 已固定 facade、领域边界、首个低耦合 seam 和每次拆分的验证门槛 | 仅在已选参考工作流的契约/E2E 通过后，一次拆分一个领域 seam |
 | 任务真源 | `TASKS.md` 混合活跃队列与长期历史 | 顶部只保留当前队列，历史按版本归档 |
 
 ## 当前验收优先级
