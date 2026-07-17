@@ -153,3 +153,17 @@ def test_reep_lookup_rejects_incomplete_snapshot_schema(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="reep_schema_missing"):
         lookup_reep_provider_identity(provider="wikidata", provider_id="Q1", settings=settings)
+
+
+def test_reep_lookup_rejects_inconsistent_row_width(tmp_path) -> None:
+    settings = PlatformSettings.from_root(tmp_path)
+    _write_people_csv(
+        settings,
+        "reep_id,key_wikidata,type,name,full_name,key_transfermarkt,key_fbref\n"
+        "r1,Q1,player,Alice,Alice Example,123,alice-1,extra\n",
+    )
+
+    with pytest.raises(ValueError, match="csv_row_width_mismatch:2"):
+        lookup_reep_provider_identity(
+            provider="transfermarkt", provider_id="123", settings=settings
+        )
