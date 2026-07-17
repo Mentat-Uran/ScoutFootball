@@ -71,6 +71,11 @@ def build_identity_review_decision(
         raise ValueError("identity_decision_action_invalid")
     context = _report_context(report)
     queue = report.get("review_queue")
+    if not isinstance(queue, list) or not queue:
+        # A later import may have consumed a confirmation and therefore have an
+        # empty active queue. Preserve the original candidate set in
+        # ``review_context`` so a maintainer can still revoke that exact choice.
+        queue = report.get("review_context")
     if not isinstance(queue, list):
         raise ValueError("identity_report_review_queue_invalid")
     reviewed = next(

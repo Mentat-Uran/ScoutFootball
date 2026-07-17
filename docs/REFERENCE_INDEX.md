@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-17T11:18:25.353033+00:00`
-- content SHA-256：`1deb83aad26c7dcc734b107cdc81907b301464151df8ac05979cd605244e7ad7`
+- manifest generated_at：`2026-07-17T11:24:29.331561+00:00`
+- content SHA-256：`a8d77531a648d1e038e817f82c45a34f275fae28fb6c7c808af15bb89c1ff06f`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -34,6 +34,7 @@
 - `uv run python -m scoutfootball import-truth-labels`
 - `uv run python -m scoutfootball import-transfermarkt-truth-labels`
 - `uv run python -m scoutfootball transfermarkt-identity-review`
+- `uv run python -m scoutfootball reconcile-transfermarkt-truth-labels`
 - `uv run python -m scoutfootball audit-truth-labels`
 - `uv run python -m scoutfootball backtest`
 - `uv run python -m scoutfootball tune-predictions`
@@ -51,7 +52,7 @@
 | pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, contract-quality, record-source-snapshot | — |
 | ratings.training | player_ratings | delivered | — | train, train-rating-nn | — |
 | ratings.export | player_ratings | delivered | /ratings, /ratings/meta, /ratings/snapshots | export-ratings | players, value |
-| ratings.truth_labels | player_ratings | delivered | /reports/truth-labels, /reports/transfermarkt-identities | import-truth-labels, import-transfermarkt-truth-labels, transfermarkt-identity-review, audit-truth-labels | — |
+| ratings.truth_labels | player_ratings | delivered | /reports/truth-labels, /reports/transfermarkt-identities | import-truth-labels, import-transfermarkt-truth-labels, transfermarkt-identity-review, reconcile-transfermarkt-truth-labels, audit-truth-labels | — |
 | predictions.match | match_predictions | delivered | /predictions/{home}/{away}, /predictions/meta, /predictions/ensemble/weights, /predictions/{home}/{away}/attribution, /predictions/{home}/{away}/diagnostics | backtest, tune-predictions, optimize-ensemble | matches |
 | predictions.calibration | match_predictions | delivered | /predictions/calibration, /predictions/backtest, /predictions/tuning, /predictions/drift, /predictions/calibration/reliability, /predictions/calibration/scoreline | backtest, tune-predictions | matches, calibration, backtest |
 | predictions.value_bet | match_predictions | delivered | /predictions/{home}/{away}/value | — | matches |
