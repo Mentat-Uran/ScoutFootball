@@ -193,6 +193,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball train-rating-nn",
             "uv run python -m scoutfootball validate",
             "uv run python -m scoutfootball source-health",
+            "uv run python -m scoutfootball record-source-snapshot",
             "uv run python -m scoutfootball preflight",
             "uv run python -m scoutfootball preflight --evidence-out <path>",
             "uv run python -m scoutfootball optimizer-preflight",

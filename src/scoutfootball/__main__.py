@@ -207,9 +207,12 @@ def _cmd_source_health(args: argparse.Namespace) -> None:
     )
 
     try:
-        report = build_source_health_report(preflight_evidence=evidence)
+        report = build_source_health_report(
+            preflight_evidence=evidence,
+            snapshot_ledger_path=args.snapshot_ledger,
+        )
     except ValueError as exc:
-        print(f"Error: invalid preflight evidence: {exc}", file=sys.stderr)
+        print(f"Error: invalid source-health input: {exc}", file=sys.stderr)
         sys.exit(1)
     output = (
         json.dumps(report, indent=2, ensure_ascii=False)
@@ -217,6 +220,31 @@ def _cmd_source_health(args: argparse.Namespace) -> None:
         else format_source_health_report(report)
     )
     print(output)
+
+
+def _cmd_record_source_snapshot(args: argparse.Namespace) -> None:
+    from scoutfootball.evaluation.source_snapshot_ledger import (
+        append_source_snapshot_record,
+        build_source_snapshot_record,
+    )
+
+    try:
+        record = build_source_snapshot_record(
+            source_id=args.source,
+            snapshot_date=args.snapshot_date,
+            evidence_path=args.evidence,
+        )
+        ledger = append_source_snapshot_record(record, args.ledger)
+    except (ValueError, FileExistsError) as exc:
+        print(f"Error: unable to record source snapshot: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if args.json:
+        print(json.dumps({"ledger": str(ledger), "record": record}, indent=2, ensure_ascii=False))
+    else:
+        print(f"Recorded local source snapshot: {record['snapshot_id']}")
+        print(f"  Ledger: {ledger}")
+        print(f"  Source: {record['source_id']}")
+        print(f"  Declared snapshot date: {record['snapshot_date']}")
 
 
 def _cmd_optimizer_preflight(args: argparse.Namespace) -> None:
@@ -1756,6 +1784,24 @@ def main() -> None:
     source_health_p.add_argument(
         "--evidence", help="Optional local preflight evidence JSON to attach by registered source"
     )
+    source_health_p.add_argument(
+        "--snapshot-ledger", help="Optional append-only local source snapshot ledger"
+    )
+    snapshot_p = sub.add_parser(
+        "record-source-snapshot",
+        help="Append an explicitly dated local source snapshot backed by preflight evidence",
+    )
+    snapshot_p.add_argument("--source", required=True, help="Registered raw source identifier")
+    snapshot_p.add_argument(
+        "--snapshot-date", required=True, help="Explicit upstream snapshot date (YYYY-MM-DD)"
+    )
+    snapshot_p.add_argument("--evidence", required=True, help="Local preflight evidence JSON")
+    snapshot_p.add_argument(
+        "--ledger",
+        default="data/reports/data_health/source_snapshot_ledger.jsonl",
+        help="Local append-only JSONL ledger path",
+    )
+    snapshot_p.add_argument("--json", action="store_true", help="Emit the appended record as JSON")
     preflight_p = sub.add_parser(
         "optimizer-preflight",
         help="Check rating optimizer runtime and raw inputs",
@@ -2073,6 +2119,7 @@ def main() -> None:
         "train-rating-nn": _cmd_train_rating_nn,
         "validate": _cmd_validate,
         "source-health": _cmd_source_health,
+        "record-source-snapshot": _cmd_record_source_snapshot,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,
         "action-value": _cmd_action_value,

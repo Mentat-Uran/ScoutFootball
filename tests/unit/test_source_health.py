@@ -54,3 +54,20 @@ def test_source_health_rejects_evidence_path_escape(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="evidence_artifact_path_invalid"):
         build_source_health_report(settings, preflight_evidence=evidence)
+
+
+def test_source_health_exposes_only_explicit_ledger_snapshots(tmp_path) -> None:
+    settings = PlatformSettings.from_root(tmp_path)
+    ledger = tmp_path / "snapshots.jsonl"
+    ledger.write_text(
+        '{"record_type":"scoutfootball.source_snapshot_ledger","snapshot_id":"id","source_id":"football_data","snapshot_date":"2026-07-16","recorded_at":"2026-07-17T00:00:00Z","evidence":{"artifact_count":1}}\n',
+        encoding="utf-8",
+    )
+
+    report = build_source_health_report(settings, snapshot_ledger_path=str(ledger))
+
+    football_data = next(
+        item for item in report["registered_sources"] if item["source_id"] == "football_data"
+    )
+    assert football_data["snapshot"]["status"] == "recorded"
+    assert football_data["snapshot"]["as_of"] == "2026-07-16"

@@ -7,6 +7,10 @@ from typing import Any
 
 from scoutfootball.architecture import build_data_contract_registry
 from scoutfootball.config import PlatformSettings
+from scoutfootball.evaluation.source_snapshot_ledger import (
+    latest_snapshot_by_source,
+    read_source_snapshot_ledger,
+)
 
 
 def _iso(timestamp: float) -> str:
@@ -16,12 +20,18 @@ def _iso(timestamp: float) -> str:
 def build_source_health_report(
     settings: PlatformSettings | None = None,
     preflight_evidence: dict[str, Any] | None = None,
+    snapshot_ledger_path: str | None = None,
 ) -> dict[str, Any]:
     """Inspect local raw directories without treating mtime as source snapshot time."""
     settings = settings or PlatformSettings.from_root()
     registry = build_data_contract_registry()
     registered = [contract for contract in registry.contracts if contract.layer == "raw"]
     inspections = _inspections_by_path(preflight_evidence)
+    snapshots = (
+        latest_snapshot_by_source(read_source_snapshot_ledger(snapshot_ledger_path))
+        if snapshot_ledger_path
+        else {}
+    )
     entries = []
     registered_dirs = set()
     for contract in registered:
@@ -55,10 +65,7 @@ def build_source_health_report(
                         _iso(max(path.stat().st_mtime for path in files)) if files else None
                     ),
                 },
-                "snapshot": {
-                    "status": "not_recorded",
-                    "note": "Local modification time is not asserted as source snapshot time.",
-                },
+                "snapshot": _snapshot_status(snapshots.get(contract.license.source_name)),
                 "inspection_capture": [
                     inspections[path]
                     for path in sorted(inspections)
@@ -85,6 +92,25 @@ def build_source_health_report(
             "Source snapshot and lineage remain not_recorded unless explicitly "
             "captured by an import workflow.",
         ],
+    }
+
+
+def _snapshot_status(record: dict[str, Any] | None) -> dict[str, Any]:
+    if record is None:
+        return {
+            "status": "not_recorded",
+            "note": "Local modification time is not asserted as source snapshot time.",
+        }
+    return {
+        "status": "recorded",
+        "snapshot_id": record["snapshot_id"],
+        "as_of": record["snapshot_date"],
+        "recorded_at": record["recorded_at"],
+        "evidence": record["evidence"],
+        "note": (
+            "Explicit local ledger record; no upstream freshness is inferred "
+            "beyond its declared date."
+        ),
     }
 
 
