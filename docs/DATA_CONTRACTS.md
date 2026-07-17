@@ -276,6 +276,11 @@ rows are excluded from supervision and written to
 /reports/transfermarkt-identities` exposes that local report; it is an audit
 of the current matrix, not a cross-provider identity authority.
 
+Both the dry-run summary and the persisted identity report include SHA-256 and
+byte size for the explicitly supplied snapshot and local feature matrix. These
+fingerprints identify the exact input files without uploading or copying them;
+they do not turn an unrecorded historical snapshot into an earlier `as_of`.
+
 ---
 
 ## 7. team_match.parquet

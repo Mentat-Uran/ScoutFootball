@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -14,6 +15,19 @@ from scoutfootball.architecture import (
     build_data_contract_registry,
     build_default_architecture,
 )
+
+
+def _local_file_provenance(path: Path) -> dict[str, object]:
+    """Return reproducible metadata for an explicitly supplied local file."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "path": str(path),
+        "sha256": digest.hexdigest(),
+        "size_bytes": path.stat().st_size,
+    }
 
 
 def _cmd_info(_args: argparse.Namespace) -> None:
@@ -362,6 +376,18 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
     if not snapshot_path.exists():
         print(f"Error: snapshot file not found: {snapshot_path}")
         sys.exit(1)
+    feature_matrix_path = Path(args.feature_matrix).resolve()
+    if not feature_matrix_path.exists():
+        print(f"Error: feature matrix file not found: {feature_matrix_path}")
+        sys.exit(1)
+    try:
+        input_provenance = {
+            "snapshot": _local_file_provenance(snapshot_path),
+            "feature_matrix": _local_file_provenance(feature_matrix_path),
+        }
+    except OSError as exc:
+        print(f"Error: unable to fingerprint local import inputs: {exc}")
+        sys.exit(1)
     try:
         new_labels = snapshot_to_truth_labels(
             snapshot_path,
@@ -375,7 +401,7 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
 
     try:
         snapshot = load_snapshot(snapshot_path).dataframe
-        feature_matrix = pd.read_parquet(Path(args.feature_matrix).resolve())
+        feature_matrix = pd.read_parquet(feature_matrix_path)
         identities = resolve_transfermarkt_snapshot_identities(
             snapshot,
             feature_matrix,
@@ -409,7 +435,7 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
     report = truth_label_supervision_report(combined)
     summary = {
         "source": "transfermarkt_value",
-        "snapshot": str(snapshot_path),
+        "input_provenance": input_provenance,
         "season": str(args.season),
         "incoming_rows": int(len(new_labels)),
         "replaced_rows": replaced_rows,
@@ -432,7 +458,7 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
     identity_payload = {
         **identity,
         "season": str(args.season),
-        "snapshot": str(snapshot_path),
+        "input_provenance": input_provenance,
         "mappings": identities.mappings.to_dict(orient="records"),
         "review_queue": identities.review_queue.to_dict(orient="records"),
         "unresolved": identities.unresolved.to_dict(orient="records"),
