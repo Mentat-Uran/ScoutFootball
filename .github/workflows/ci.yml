@@ -33,6 +33,9 @@ jobs:
           PYTHONPATH: src
         run: uv run python scripts/generate_manifest.py --check
 
+      - name: Verify current-task authority boundary
+        run: uv run python scripts/archive_tasks_history.py --check
+
   test:
     runs-on: ubuntu-latest
     steps:
