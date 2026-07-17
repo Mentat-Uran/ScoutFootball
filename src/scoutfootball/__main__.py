@@ -252,6 +252,21 @@ def _cmd_contract_quality(args: argparse.Namespace) -> None:
     print(output)
 
 
+def _cmd_model_admission(args: argparse.Namespace) -> None:
+    """Show whether local optimizer runs contain evidence for human review."""
+    from scoutfootball.evaluation.model_admission import (
+        build_model_admission_report,
+        format_model_admission_report,
+    )
+
+    report = build_model_admission_report(run_id=args.run_id)
+    print(
+        json.dumps(report, indent=2, ensure_ascii=False)
+        if args.json
+        else format_model_admission_report(report)
+    )
+
+
 def _cmd_record_source_snapshot(args: argparse.Namespace) -> None:
     from scoutfootball.evaluation.source_snapshot_ledger import (
         append_source_snapshot_record,
@@ -1920,6 +1935,12 @@ def main() -> None:
     contract_quality_p.add_argument(
         "--snapshot-ledger", help="Optional append-only local source snapshot ledger"
     )
+    model_admission_p = sub.add_parser(
+        "model-admission",
+        help="Check whether local optimizer runs have evidence for human promotion review",
+    )
+    model_admission_p.add_argument("--run-id", default=None)
+    model_admission_p.add_argument("--json", action="store_true", help="Emit JSON")
     snapshot_p = sub.add_parser(
         "record-source-snapshot",
         help="Append an explicitly dated local source snapshot backed by preflight evidence",
@@ -2294,6 +2315,7 @@ def main() -> None:
         "validate": _cmd_validate,
         "source-health": _cmd_source_health,
         "contract-quality": _cmd_contract_quality,
+        "model-admission": _cmd_model_admission,
         "record-source-snapshot": _cmd_record_source_snapshot,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,

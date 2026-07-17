@@ -1289,6 +1289,7 @@ def save_model_run(
     feat_hash: str | None = None,
     data_dir: Path | None = None,
     data_coverage: dict | None = None,
+    error_cases: dict | None = None,
 ):
     """Save model run with full provenance to data/models/runs/<timestamp>/.
 
@@ -1315,10 +1316,11 @@ def save_model_run(
         "params_mean": float(params.mean()),
         "params_std": float(params.std()),
         "input_hash": feat_hash,
-        "metrics": {
-            k: float(v) if isinstance(v, (int, float, np.floating)) else str(v)
-            for k, v in metrics.items()
-        },
+        # Metrics contain nested baseline/holdout dictionaries. Preserve that
+        # structure so a later promotion review can compare like-for-like
+        # evidence; converting nested values to ``str`` makes it impossible to
+        # distinguish an evaluated candidate from a legacy opaque record.
+        "metrics": _json_ready(metrics),
         "lineage": build_run_lineage(data_dir or Path("data"), input_hash=feat_hash),
     }
     if data_coverage is not None:
@@ -1363,10 +1365,12 @@ def save_model_run(
             meta[pos_key] = _json_ready(metrics[pos_key])
             break
 
-    # Error cases: load holdout predictions and find biggest residuals
-    error_cases = _compute_error_cases(output_dir)
-    if error_cases:
-        meta["error_cases"] = error_cases
+    # Prefer error cases derived from this exact holdout evaluation. The legacy
+    # file lookup remains only as a compatibility fallback and must not make a
+    # run depend on a stale shared file.
+    recorded_error_cases = error_cases or _compute_error_cases(output_dir)
+    if recorded_error_cases:
+        meta["error_cases"] = _json_ready(recorded_error_cases)
 
     if args is not None:
         meta["args"] = {
@@ -1400,6 +1404,50 @@ def save_model_run(
 
     print(f"  模型运行登记已保存: {run_dir}")
     return run_dir
+
+
+def compute_error_cases(matched_df: pd.DataFrame) -> dict | None:
+    """Summarize the largest team-level residuals for one holdout evaluation."""
+    if matched_df.empty or "team" not in matched_df.columns:
+        return None
+
+    prepared = matched_df.copy()
+    residual_col = "residual"
+    prediction_columns = ("pred_points_calibrated", "pred_points_global", "pred_rating")
+    prediction_column = next(
+        (column for column in prediction_columns if column in prepared),
+        None,
+    )
+    if prediction_column is not None and "actual_points" in prepared.columns:
+        prepared[residual_col] = (
+            pd.to_numeric(prepared[prediction_column], errors="coerce")
+            - pd.to_numeric(prepared["actual_points"], errors="coerce")
+        )
+        residual_definition = "prediction_minus_actual"
+    elif residual_col in prepared.columns:
+        # A historical fallback file may have an undocumented residual sign.
+        # Preserve it for inspection instead of mislabelling the direction.
+        residual_definition = "legacy_residual_column_direction_not_recorded"
+    else:
+        return None
+
+    prepared[residual_col] = pd.to_numeric(prepared[residual_col], errors="coerce")
+    prepared = prepared.dropna(subset=["team", residual_col])
+    if prepared.empty:
+        return None
+
+    aggregated = prepared.groupby("team", observed=True)[residual_col].mean().sort_values()
+    return {
+        "residual_definition": residual_definition,
+        "over_estimated": [
+            {"team": str(team), "residual": round(float(value), 1)}
+            for team, value in aggregated.tail(5).items()
+        ],
+        "under_estimated": [
+            {"team": str(team), "residual": round(float(value), 1)}
+            for team, value in aggregated.head(5).items()
+        ],
+    }
 
 
 def _compute_error_cases(output_dir: Path | None) -> dict | None:
@@ -1463,19 +1511,8 @@ def _compute_error_cases(output_dir: Path | None) -> dict | None:
         else:
             return None
 
-    # Aggregate by team (a team may appear in multiple seasons)
-    agg = df.groupby(team_col)[residual_col].mean().sort_values()
-    over_estimated = [
-        {"team": str(team), "residual": round(float(val), 1)}
-        for team, val in agg.tail(5).items()
-    ]
-    under_estimated = [
-        {"team": str(team), "residual": round(float(val), 1)}
-        for team, val in agg.head(5).items()
-    ]
-    # over_estimated = model predicts too high (positive residual)
-    # under_estimated = model predicts too low (negative residual)
-    return {"over_estimated": over_estimated, "under_estimated": under_estimated}
+    prepared = df.rename(columns={team_col: "team", residual_col: "residual"})
+    return compute_error_cases(prepared)
 
 
 def _json_ready(value):

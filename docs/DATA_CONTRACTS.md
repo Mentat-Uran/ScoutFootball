@@ -759,6 +759,25 @@ reproducibility review. New runs may also include `data_coverage` with source
 rows, observed-field counts, and optional-artifact statuses. Historic runs
 without that field are not retroactively labelled as fully audited.
 
+### Local model-admission report
+
+`scoutfootball model-admission` is a read-only local screen over
+`data/models/runs/<run_id>/`. A run is `reviewable` only when its own directory
+contains `optimized_params.npy`, recorded input and feature-manifest lineage,
+non-empty train/test season split, finite structured baseline and candidate
+holdout Spearman values, and an error-case summary from that same holdout.
+The report also flags explicitly unavailable required optimizer inputs. It does
+not set a performance threshold, write a promotion pointer, alter
+`player_ratings_optimized.parquet`, or claim that a reviewable run is promoted.
+Historic records that predate these fields are `not_reviewable`, never upgraded
+from filenames, timestamps, or prose metrics.
+
+New optimizer run metadata preserves nested `baseline_*` and `optimized_*`
+metric objects and records the holdout's largest team-level under/over-estimates
+with residual definition `prediction_minus_actual`. These are evidence for a
+maintainer's comparison, not a substitute for calibration, slice, and scope
+review.
+
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
 `/world-cup/squads/{team}` and `/world-cup/outlook/{team}` include a versioned
