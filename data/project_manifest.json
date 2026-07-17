@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-16T19:41:42.150534+00:00",
+  "generated_at": "2026-07-17T10:13:27.322471+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -274,7 +274,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-16T19:41:42.149494+00:00",
+    "generated_at": "2026-07-17T10:13:27.321454+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -871,7 +871,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-16T19:41:42.150534+00:00",
+    "generated_at": "2026-07-17T10:13:27.322471+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",

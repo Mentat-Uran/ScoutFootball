@@ -126,7 +126,7 @@ G0-A 与 G0-B 可以并行；G1 必须等待二者全部通过。三者均已验
 
 - `TASKS.md` 顶部只保留已解锁队列，将历史交付日志按版本归档。
 - [x] 为 `frontend/app.js`、`api.py` 和 `api_server.py` 写模块边界 ADR（[`adr/0001-core-module-boundaries.md`](adr/0001-core-module-boundaries.md)）；每次只拆一个能降低参考工作流风险的低耦合 seam，不承诺全面重构。
-- 建立最小文档生成和陈旧度报告；更完整的 registry UI 留到 C1。
+- [x] 建立最小文档生成和陈旧度报告（[`REFERENCE_INDEX.md`](REFERENCE_INDEX.md) 由 `project_manifest.json` 生成并受 `generate_manifest.py --check` 校验）；更完整的 registry UI 留到 C1。
 
 ### G0/G1 非目标
 

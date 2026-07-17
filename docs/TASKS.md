@@ -34,7 +34,7 @@
 
 ### G1：黄金流程与契约基线 — `verified`（G0-A + G0-B 已验证）
 
-- [x] 建立机器可读 capability registry，从 OpenAPI、CLI、前端导航、静态映射和模型登记生成清单。（`data/project_manifest.json`：9 domains, 24 capabilities, 28 data contracts；`scripts/generate_manifest.py --check` 作为发布门禁）
+- [x] 建立机器可读 capability registry，从 OpenAPI、CLI、前端导航、静态映射和模型登记生成清单。（`data/project_manifest.json` 与 `docs/REFERENCE_INDEX.md` 由 `scripts/generate_manifest.py` 同步生成；`--check` 在 CI lint job 作为失败关闭门禁）
 - [x] 统一来源、许可、`as_of`、快照、lineage、覆盖和 `recorded/not_recorded` 数据契约。（`src/scoutfootball/schemas/storage.py` `DataContract` schema；`data/project_manifest.json` data_contracts 28 条；`build_run_lineage` 记录 dataset_snapshot/input_hash/status）
 - [x] 为当前声明支持的参考工作流加入真实浏览器 E2E，覆盖 LIVE、STATIC、OFFLINE、空数据、低覆盖、字段缺失、移动阅读和导入安全。（`tests/e2e/`：5 smoke + 8 workflow = 13 测试通过；commit e30cc57, d413d68）
 - [x] 构建时生成静态 manifest；关键 API/静态契约、文件新鲜度或序列化失败时阻断发布。（`scripts/generate_manifest.py` 生成 + `--check` 门禁；`tests/unit/test_static_json_contracts.py` 检查静态 JSON 结构；`scripts/check_frontend_manifest.py` 在 CI 和 `npm run build:sites` 复制 STATIC 快照前失败关闭）
