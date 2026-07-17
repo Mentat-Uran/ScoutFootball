@@ -3241,6 +3241,12 @@ mistaken for contract-governed inputs. The check does not move, delete, or
 register those files: their source, rights, and migration decision must be
 explicit before they enter the active raw contract boundary.
 
+For that local review, `source-health` includes a metadata-only detail for each
+unregistered directory: relative file paths, file counts, byte sizes, and local
+modification times. It never reads file contents in this report, hashes are not
+presented as provenance, and local modification times remain explicitly distinct
+from upstream snapshot dates.
+
 `scoutfootball record-source-snapshot --source <registered source> --snapshot-date
 YYYY-MM-DD --evidence <preflight JSON>` appends one JSONL record to the local
 snapshot ledger (default: `data/reports/data_health/source_snapshot_ledger.jsonl`).

@@ -36,6 +36,28 @@ def test_source_health_marks_local_observation_separately_from_snapshot(tmp_path
     assert football_data["local_observation"]["file_count"] == 1
     assert football_data["snapshot"]["status"] == "not_recorded"
     assert report["unregistered_raw_directories"] == ["unregistered_source"]
+    details = report["unregistered_raw_directory_details"]
+    assert details[0]["directory"] == "unregistered_source"
+    assert details[0]["file_count"] == 0
+    assert details[0]["newest_local_mtime"] is None
+
+
+def test_source_health_exposes_only_local_metadata_for_unregistered_files(tmp_path) -> None:
+    settings = PlatformSettings.from_root(tmp_path)
+    legacy_file = settings.raw_root / "legacy_source" / "nested" / "input.csv"
+    legacy_file.parent.mkdir(parents=True)
+    legacy_file.write_text("private local content\n", encoding="utf-8")
+
+    report = build_source_health_report(settings)
+    detail = report["unregistered_raw_directory_details"][0]
+
+    assert detail["directory"] == "legacy_source"
+    assert detail["file_count"] == 1
+    assert detail["total_bytes"] == legacy_file.stat().st_size
+    assert detail["files"][0]["relative_path"] == "legacy_source/nested/input.csv"
+    assert detail["files"][0]["bytes"] == legacy_file.stat().st_size
+    assert detail["files"][0]["local_mtime"]
+    assert "private local content" not in str(detail)
 
 
 def test_source_health_attaches_only_valid_raw_inspections(tmp_path) -> None:

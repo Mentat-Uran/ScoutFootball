@@ -190,9 +190,8 @@ def build_contract_quality_report(
         contract.license.source_name for contract in raw_contracts if contract.license
     }
     recorded_snapshot_ids = sorted(raw_source_ids & set(snapshots))
-    unregistered_raw_directories = build_source_health_report(settings)[
-        "unregistered_raw_directories"
-    ]
+    source_health = build_source_health_report(settings)
+    unregistered_raw_directories = source_health["unregistered_raw_directories"]
     audit_summary = (
         summarize_quality_audits(read_quality_audit_ledger(audit_ledger_path))
         if audit_ledger_path
@@ -222,6 +221,9 @@ def build_contract_quality_report(
             "unregistered_raw_directories",
             "fail" if unregistered_raw_directories else "pass",
             unregistered_raw_directories=unregistered_raw_directories,
+            unregistered_raw_directory_details=source_health[
+                "unregistered_raw_directory_details"
+            ],
             note=(
                 "Observed raw directories must be registered with a source contract or "
                 "kept outside the active data root; this check does not infer their rights."

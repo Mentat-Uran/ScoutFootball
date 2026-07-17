@@ -63,6 +63,7 @@ def test_contract_quality_fails_with_an_unregistered_active_raw_directory(tmp_pa
 
     assert raw_directories["status"] == "fail"
     assert raw_directories["unregistered_raw_directories"] == ["legacy_unregistered_source"]
+    assert raw_directories["unregistered_raw_directory_details"][0]["file_count"] == 0
     assert "unregistered_raw_directories" in report["failed_checks"]
 
 
