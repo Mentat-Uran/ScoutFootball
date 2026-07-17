@@ -121,3 +121,48 @@ def test_transfermarkt_import_replaces_only_matching_source_key(tmp_path, monkey
     assert identity["input_provenance"]["snapshot"]["sha256"] == hashlib.sha256(
         snapshot.read_bytes()
     ).hexdigest()
+
+
+def test_transfermarkt_review_confirmation_is_bound_to_current_input_hashes(
+    tmp_path, monkeypatch
+) -> None:
+    snapshot = tmp_path / "snapshot.csv"
+    output = tmp_path / "truth_labels.parquet"
+    feature_matrix = tmp_path / "rating_feature_matrix.parquet"
+    report = tmp_path / "identity_report.json"
+    ledger = tmp_path / "identity_ledger.jsonl"
+    _write_snapshot(snapshot)
+    pd.DataFrame(
+        {
+            "player_id": ["alice|one", "alice|two"],
+            "player_name": ["Alice Example", "Alice Example"],
+            "team_name": ["Other FC", "Different FC"],
+            "season_id": ["2425", "2425"],
+        }
+    ).to_parquet(feature_matrix, index=False)
+    args = (
+        "import-transfermarkt-truth-labels",
+        "--snapshot", str(snapshot),
+        "--season", "2425",
+        "--output", str(output),
+        "--feature-matrix", str(feature_matrix),
+        "--identity-report", str(report),
+    )
+
+    _run_cli(monkeypatch, *args)
+    assert not output.exists()
+    _run_cli(
+        monkeypatch,
+        "transfermarkt-identity-review",
+        "--report", str(report),
+        "--ledger", str(ledger),
+        "--source-row", "0",
+        "--action", "confirmed",
+        "--canonical-player-id", "alice|two",
+    )
+    _run_cli(monkeypatch, *args, "--identity-ledger", str(ledger))
+
+    labels = pd.read_parquet(output)
+    assert labels["player_id"].tolist() == ["alice|two"]
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["review_decisions"]["confirmed_rows"] == 1
