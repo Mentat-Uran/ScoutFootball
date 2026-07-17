@@ -140,6 +140,7 @@ def test_contract_quality_accepts_only_the_sources_declared_in_a_policy_ledger(t
     assert {item["source_id"] for item in policy["sources_missing_policy"]} == {
         "clubelo",
         "fbref",
+        "reep",
         "statsbomb_open",
         "transfermarkt_manual",
         "understat",

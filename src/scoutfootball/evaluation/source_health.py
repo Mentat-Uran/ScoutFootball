@@ -175,7 +175,7 @@ def build_source_health_report(
         "limitations": [
             "This is a local filesystem observation, not proof of upstream freshness or rights.",
             "Source snapshot and lineage remain not_recorded unless explicitly "
-            "captured by an import workflow.",
+            "captured by a local evidence workflow.",
             "Unregistered directory modification times are local observations, not source dates.",
         ],
     }
@@ -238,7 +238,11 @@ def _inspections_by_path(evidence: dict[str, Any] | None) -> dict[str, dict[str,
         return {}
     if (
         not isinstance(evidence, dict)
-        or evidence.get("report_type") != "scoutfootball.parquet_preflight_evidence"
+        or evidence.get("report_type")
+        not in {
+            "scoutfootball.parquet_preflight_evidence",
+            "scoutfootball.raw_source_file_inspection",
+        }
     ):
         raise ValueError("evidence_report_type_invalid")
     artifacts = evidence.get("artifacts", [])

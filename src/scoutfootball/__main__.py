@@ -421,6 +421,28 @@ def _cmd_record_source_snapshot(args: argparse.Namespace) -> None:
         print(f"  Declared snapshot date: {record['snapshot_date']}")
 
 
+def _cmd_inspect_raw_source(args: argparse.Namespace) -> None:
+    """Create local structural evidence for one registered raw CSV input."""
+    from scoutfootball.evaluation.raw_source_inspection import (
+        inspect_raw_csv,
+        write_raw_source_inspection_report,
+    )
+
+    try:
+        report = inspect_raw_csv(source_id=args.source, path=args.path)
+        output = write_raw_source_inspection_report(
+            report, args.evidence_out, overwrite=args.overwrite
+        )
+    except (ValueError, FileExistsError, OSError) as exc:
+        print(f"Error: unable to inspect raw source file: {exc}", file=sys.stderr)
+        sys.exit(1)
+    result = {"evidence": str(output), "report": report}
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(f"Wrote local raw-source inspection: {output}")
+
+
 def _cmd_record_source_policy(args: argparse.Namespace) -> None:
     """Preview or append an explicit local retention/deletion policy."""
     from scoutfootball.evaluation.source_policy_ledger import (
@@ -2267,6 +2289,23 @@ def main() -> None:
         help="Local append-only JSONL ledger path",
     )
     snapshot_p.add_argument("--json", action="store_true", help="Emit the appended record as JSON")
+    raw_inspection_p = sub.add_parser(
+        "inspect-raw-source",
+        help="Inspect one registered local UTF-8 CSV source file and write local evidence",
+    )
+    raw_inspection_p.add_argument(
+        "--source", required=True, help="Registered raw source identifier"
+    )
+    raw_inspection_p.add_argument(
+        "--path", required=True, help="CSV path under the registered source directory"
+    )
+    raw_inspection_p.add_argument(
+        "--evidence-out", required=True, help="Output path for local inspection JSON"
+    )
+    raw_inspection_p.add_argument(
+        "--overwrite", action="store_true", help="Allow replacement of an existing evidence JSON"
+    )
+    raw_inspection_p.add_argument("--json", action="store_true", help="Emit the evidence payload")
     policy_p = sub.add_parser(
         "record-source-policy",
         help="Preview or append an explicit local source retention/deletion policy",
@@ -2755,6 +2794,7 @@ def main() -> None:
         "rollback-model-run": _cmd_rollback_model_run,
         "validate-decision-package": _cmd_validate_decision_package,
         "record-source-snapshot": _cmd_record_source_snapshot,
+        "inspect-raw-source": _cmd_inspect_raw_source,
         "record-source-policy": _cmd_record_source_policy,
         "record-quality-audit": _cmd_record_quality_audit,
         "record-quality-threshold": _cmd_record_quality_threshold,

@@ -120,6 +120,16 @@ def build_default_architecture() -> ProjectArchitecture:
                 license_name="Transfermarkt manual import only",
             ),
             DataDirectorySpec(
+                layer="raw",
+                relative_path="raw/reep",
+                purpose=(
+                    "Local Reep identity-register snapshots for identifier mapping review; "
+                    "not market-value, performance, or truth-label inputs."
+                ),
+                source_name="reep",
+                license_name="CC0 1.0 Universal",
+            ),
+            DataDirectorySpec(
                 layer="silver",
                 relative_path="silver/dimensions",
                 purpose="Normalized competitions, teams, players and seasons.",
@@ -193,6 +203,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball train-rating-nn",
             "uv run python -m scoutfootball validate",
             "uv run python -m scoutfootball source-health",
+            "uv run python -m scoutfootball inspect-raw-source",
             "uv run python -m scoutfootball contract-quality",
             "uv run python -m scoutfootball model-admission",
             "uv run python -m scoutfootball discard-model-run <run_id>",
@@ -276,6 +287,7 @@ def build_capability_registry() -> CapabilityRegistry:
                 "preflight",
                 "optimizer-preflight",
                 "source-health",
+                "inspect-raw-source",
                 "contract-quality",
                 "model-admission",
                 "discard-model-run",
@@ -716,6 +728,19 @@ def _source_licenses() -> dict[str, SourceLicense]:
             commercial_use_allowed=False,
             source_url="https://www.transfermarkt.com/",
             notes="Manual import only; no automated scraping.",
+        ),
+        "reep": SourceLicense(
+            source_name="reep",
+            license_name="CC0 1.0 Universal",
+            attribution_required=False,
+            redistribution_allowed=True,
+            commercial_use_allowed=True,
+            source_url="https://github.com/withqwerty/reep",
+            notes=(
+                "Repository-published Wikidata-derived identity register; local use is limited "
+                "to identifier mapping review and does not establish market-value "
+                "or performance facts."
+            ),
         ),
     }
 

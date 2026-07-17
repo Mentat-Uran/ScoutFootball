@@ -325,6 +325,18 @@ recorded in the contract registry. It does not upload data, infer missing
 provenance, or overwrite an existing evidence file unless
 `--overwrite-evidence` is supplied.
 
+For a registered local CSV source that is intentionally outside the Parquet
+pipeline, use `inspect-raw-source` before recording a source snapshot. The
+inspection is local-only and records structural hashes rather than CSV values:
+
+```powershell
+uv run python -m scoutfootball inspect-raw-source --source reep --path raw/reep/people.csv --evidence-out data/reports/data_health/reep-people-inspection.json
+uv run python -m scoutfootball record-source-snapshot --source reep --snapshot-date YYYY-MM-DD --evidence data/reports/data_health/reep-people-inspection.json
+```
+
+This establishes neither an upstream date nor rights by itself; the date is an
+explicit maintainer declaration and source use remains bounded by its contract.
+
 ### Verification safety
 
 `uv run pytest` does not run mutation-capable pipeline integration checks by
