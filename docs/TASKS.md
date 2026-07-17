@@ -47,7 +47,7 @@
 
 ## 下一解锁节点
 
-C1 可信证据内核已被 G1 解锁，但维护者尚未选择启动。C1 的目标是把可信度从 UI 提示升级为数据和代码强制执行的内核（来源/许可登记、快照与 lineage、身份工作台、契约注册与质量 SLO、模型晋级与回滚）。启动取决于维护者是否有真实工作流需要强制 provenance，而非日期。G1 后置维护项（TASKS.md 历史归档、模块边界 ADR、最小文档生成与陈旧度报告）均已完成。
+C1 可信证据内核 — `in_progress`。首个验收载体选择已在使用的 3.1 数据导入与验证：`scoutfootball preflight --evidence-out <path>` 将内容级检查结果与已登记的 contract、source license、snapshot、lineage 写入本地证据报告；缺失字段明确为 `not_recorded`，既不上传数据也不补造历史 provenance。C1 的其余范围（来源健康、append-only snapshot、身份工作台、质量 SLO、模型晋级与回滚）仍未完成。G1 后置维护项（TASKS.md 历史归档、模块边界 ADR、最小文档生成与陈旧度报告）均已完成。
 
 ## 后续依赖表
 

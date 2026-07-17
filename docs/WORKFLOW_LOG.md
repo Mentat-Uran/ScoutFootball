@@ -87,10 +87,11 @@
 - **步骤**：
   1. `uv run python -m scoutfootball info` — 确认模块和命令状态
   2. `uv run python -m scoutfootball validate` — 运行 6 项数据验证门禁
-  3. `uv run python -m scoutfootball preflight` — 对 21 个关键 Parquet 产物执行内容级 preflight
+  3. `uv run python -m scoutfootball preflight --target key --evidence-out data/reports/data_health/preflight-evidence-2026-07-17.json` — 对 21 个关键 Parquet 产物执行内容级 preflight，并保留本地可复核证据报告
 - **输出**：
   - validate 结果：`Validation: PASS (6/6 checks passed)`
   - preflight 结果：`21/21 ok, 0 unreadable, 0 footer/content mismatch, 0 flagged`
+  - evidence report：`data/reports/data_health/preflight-evidence-2026-07-17.json`；记录 21 个 content-level inspection，9 个已登记 source license；未登记的 snapshot 与 lineage 保持 `not_recorded`
   - 关键产物行数确认（见下方复盘证据）
 - **现有替代工具**：无（此前没有统一的数据验证和 preflight 入口；G0-B 新增了 `preflight` 命令）
 - **错误和阻断**：无。本次运行全部通过
@@ -136,13 +137,14 @@
   # 2. 运行数据验证门禁
   PYTHONPATH=src uv run python -m scoutfootball validate
 
-  # 3. 对关键 Parquet 产物执行内容级 preflight
-  PYTHONPATH=src uv run python -m scoutfootball preflight
+  # 3. 对关键 Parquet 产物执行内容级 preflight，并显式保存本地证据报告
+  PYTHONPATH=src uv run python -m scoutfootball preflight --target key --evidence-out data/reports/data_health/preflight-evidence-2026-07-17.json
   ```
 - **执行结果**：
   - `info`：正常输出 8 个模块和 11 条命令清单
   - `validate`：`Validation: PASS (6/6 checks passed)`，退出码 0
   - `preflight`：`21/21 ok, 0 unreadable, 0 footer/content mismatch, 0 flagged`，退出码 0
+  - `preflight --evidence-out`：本地写入 `data/reports/data_health/preflight-evidence-2026-07-17.json`；21 个 artifact inspection 均通过，已登记的 source license 为 9 个，snapshot 和 lineage 均未登记并如实输出为 `not_recorded`
   - 关键产物行数（preflight 确认 footer 与 content 一致）：
 
     | 产物路径 | 行数 | 列数 | 大小 |
@@ -163,8 +165,8 @@
 - **人工复盘**：
   - **是否达到预期**：是。数据验证和 preflight 全部通过，21 个关键产物的 footer 行数与 content 行数一致，无损坏文件，无需隔离。
   - **有什么问题**：无。本次运行无错误、无阻断。
-  - **下一步改进**：未来可增加自动化的定期 preflight（如 CI 或定时任务），在数据更新后自动检测 footer/content 不一致。G0-B 已清理了 workflow 的 fail-open 模式，`preflight` 可作为发布门禁接入。
-- **是否可重复使用**：是。此工作流不依赖网络（数据已在本地），可随时重复执行。维护者每次数据更新后都应运行 `validate` + `preflight` 确认数据完整性。
+  - **下一步改进**：C1 的后续切片应补齐 source health、append-only snapshot 和 lineage 的真实记录；本次报告不会根据文件名或时间戳猜测它们。G0-B 已清理 workflow 的 fail-open 模式，`preflight` 可作为发布门禁接入。
+- **是否可重复使用**：是。此工作流不依赖网络（数据已在本地），可随时重复执行。维护者每次数据更新后都应运行 `validate` + `preflight --evidence-out <new-path>` 确认完整性，并保留新的本地证据文件。
 
 ---
 

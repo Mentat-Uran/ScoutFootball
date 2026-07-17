@@ -219,6 +219,27 @@ def _cmd_preflight(args: argparse.Namespace) -> None:
     fmt = "json" if args.json else "text"
     print(summarize_reports(reports, fmt=fmt))
 
+    if args.evidence_out:
+        from scoutfootball.evaluation.preflight_evidence import (
+            build_preflight_evidence_report,
+            write_preflight_evidence_report,
+        )
+
+        try:
+            evidence = build_preflight_evidence_report(
+                reports,
+                target=args.target if not paths else "explicit_paths",
+            )
+            output = write_preflight_evidence_report(
+                evidence,
+                Path(args.evidence_out),
+                overwrite=args.overwrite_evidence,
+            )
+        except OSError as exc:
+            print(f"Unable to write evidence report: {exc}", file=sys.stderr)
+            sys.exit(2)
+        print(f"Evidence report: {output}", file=sys.stderr)
+
     if args.quarantine:
         result = quarantine_unreadable(reports, settings, dry_run=False)
         if result.moved:
@@ -1706,6 +1727,20 @@ def main() -> None:
         "--json",
         action="store_true",
         help="Emit a JSON manifest instead of human-readable text",
+    )
+    pf_p.add_argument(
+        "--evidence-out",
+        default=None,
+        help=(
+            "Write a portable evidence JSON report that links the inspected files to "
+            "recorded contract, source-license, snapshot, and lineage metadata. "
+            "Refuses to overwrite an existing file by default."
+        ),
+    )
+    pf_p.add_argument(
+        "--overwrite-evidence",
+        action="store_true",
+        help="Allow --evidence-out to replace an existing local report.",
     )
     pf_p.add_argument(
         "--quarantine",

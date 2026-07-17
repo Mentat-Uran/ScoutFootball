@@ -302,6 +302,7 @@ uv sync
 # Validate and build step by step:
 PYTHONPATH=src uv run python -m scoutfootball info      # Project info
 PYTHONPATH=src uv run python -m scoutfootball validate   # Validate data
+PYTHONPATH=src uv run python -m scoutfootball preflight --target key --evidence-out data/reports/data_health/preflight-evidence.json
 PYTHONPATH=src uv run python -m scoutfootball ingest     # Ingest data
 PYTHONPATH=src uv run python -m scoutfootball build-features
 PYTHONPATH=src uv run python -m scoutfootball train      # Train ratings
@@ -317,6 +318,12 @@ uv run streamlit run src/scoutfootball/app/streamlit_app.py
 ```
 
 **First run note:** Some ingestion paths download and cache public data and require an internet connection; others require manual/authorized local inputs. `scripts/demo.sh` is aligned with the same-origin FastAPI setup (port 8000) and includes a `--smoke` health check; it is the canonical local launcher for the demo pipeline.
+
+`preflight --evidence-out` is an explicit local write: it saves the content-level
+inspection together with only the source-license, snapshot, and lineage metadata
+recorded in the contract registry. It does not upload data, infer missing
+provenance, or overwrite an existing evidence file unless
+`--overwrite-evidence` is supplied.
 
 ### Tech Stack & Compliance
 

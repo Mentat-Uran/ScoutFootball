@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-17T10:13:27.322471+00:00`
-- content SHA-256：`46c8822b211e860f2dfda536eb6c594f2c3b1178e70e8d0d6955ffbf1d4dfe6f`
+- manifest generated_at：`2026-07-17T10:27:36.359002+00:00`
+- content SHA-256：`50d851eea67eaa85ab868e4fc709ea456e6fc58e70b42856656fa9b78f91421d`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -16,12 +16,14 @@
 - `uv run ruff check .`
 - `uv run python -m scoutfootball info`
 - `uv run python -m scoutfootball capabilities`
+- `uv run python -m scoutfootball data-contracts`
 - `uv run python -m scoutfootball ingest`
 - `uv run python -m scoutfootball build-features`
 - `uv run python -m scoutfootball train`
 - `uv run python -m scoutfootball train-rating-nn`
 - `uv run python -m scoutfootball validate`
 - `uv run python -m scoutfootball preflight`
+- `uv run python -m scoutfootball preflight --evidence-out <path>`
 - `uv run python -m scoutfootball optimizer-preflight`
 - `uv run python -m scoutfootball action-value`
 - `uv run python -m scoutfootball action-value-matches`
