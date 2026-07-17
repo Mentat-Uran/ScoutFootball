@@ -7,6 +7,10 @@ from typing import Any
 
 from scoutfootball.architecture import build_data_contract_registry
 from scoutfootball.config import PlatformSettings
+from scoutfootball.evaluation.source_policy_ledger import (
+    latest_policy_by_source,
+    read_source_policy_ledger,
+)
 from scoutfootball.evaluation.source_snapshot_ledger import (
     latest_snapshot_by_source,
     read_source_snapshot_ledger,
@@ -18,7 +22,10 @@ def _iso(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def source_license_policy_status(license_info: SourceLicense | None) -> dict[str, Any]:
+def source_license_policy_status(
+    license_info: SourceLicense | None,
+    policy_record: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Describe recorded retention/deletion policy without supplying missing terms.
 
     A registered license is not, by itself, evidence that local retention and
@@ -34,6 +41,27 @@ def source_license_policy_status(license_info: SourceLicense | None) -> dict[str
             ),
         }
 
+    if policy_record is not None:
+        retention = policy_record["retention"]
+        deletion = policy_record["deletion"]
+        return {
+            "status": "recorded",
+            "policy_source": "local_policy_ledger",
+            "policy_id": policy_record["policy_id"],
+            "retention_mode": retention["mode"],
+            "retention_policy_days": retention["days"],
+            "deletion_strategy": deletion["strategy"],
+            "deletion_trigger": deletion["trigger"],
+            "derived_artifact_action": deletion["derived_artifact_action"],
+            "decision": policy_record["decision"],
+            "recorded_at": policy_record["recorded_at"],
+            "missing_fields": [],
+            "note": (
+                "Explicit maintainer policy from the supplied local ledger; "
+                "this does not interpret third-party license terms."
+            ),
+        }
+
     missing_fields: list[str] = []
     if license_info.retention_policy_days is None:
         missing_fields.append("retention_policy_days")
@@ -41,6 +69,8 @@ def source_license_policy_status(license_info: SourceLicense | None) -> dict[str
         missing_fields.append("deletion_strategy")
     return {
         "status": "recorded" if not missing_fields else "baseline_required",
+        "policy_source": "contract" if not missing_fields else "not_recorded",
+        "retention_mode": "days" if license_info.retention_policy_days is not None else None,
         "retention_policy_days": license_info.retention_policy_days,
         "deletion_strategy": license_info.deletion_strategy or None,
         "missing_fields": missing_fields,
@@ -59,6 +89,7 @@ def build_source_health_report(
     settings: PlatformSettings | None = None,
     preflight_evidence: dict[str, Any] | None = None,
     snapshot_ledger_path: str | None = None,
+    policy_ledger_path: str | None = None,
 ) -> dict[str, Any]:
     """Inspect local raw directories without treating mtime as source snapshot time."""
     settings = settings or PlatformSettings.from_root()
@@ -68,6 +99,11 @@ def build_source_health_report(
     snapshots = (
         latest_snapshot_by_source(read_source_snapshot_ledger(snapshot_ledger_path))
         if snapshot_ledger_path
+        else {}
+    )
+    policies = (
+        latest_policy_by_source(read_source_policy_ledger(policy_ledger_path))
+        if policy_ledger_path
         else {}
     )
     entries = []
@@ -92,7 +128,10 @@ def build_source_health_report(
                     {
                         "status": "recorded",
                         "details": contract.license.model_dump(mode="json"),
-                        "policy": source_license_policy_status(contract.license),
+                        "policy": source_license_policy_status(
+                            contract.license,
+                            policies.get(contract.license.source_name),
+                        ),
                     }
                     if contract.license
                     else {
@@ -123,9 +162,10 @@ def build_source_health_report(
     )
     return {
         "report_type": "scoutfootball.source_health",
-        "report_version": "1.1",
+        "report_version": "1.2",
         "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "registered_source_count": len(entries),
+        "policy_ledger_supplied": bool(policy_ledger_path),
         "registered_sources": entries,
         "unregistered_raw_directories": sorted(observed_dirs - registered_dirs),
         "limitations": [

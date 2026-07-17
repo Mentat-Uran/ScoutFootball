@@ -16,12 +16,16 @@ from scoutfootball.evaluation.source_health import (
     _inspections_by_path,
     source_license_policy_status,
 )
+from scoutfootball.evaluation.source_policy_ledger import (
+    latest_policy_by_source,
+    read_source_policy_ledger,
+)
 from scoutfootball.evaluation.source_snapshot_ledger import (
     latest_snapshot_by_source,
     read_source_snapshot_ledger,
 )
 
-CONTRACT_QUALITY_VERSION = "1.1.0"
+CONTRACT_QUALITY_VERSION = "1.2.0"
 
 
 def _now_iso() -> str:
@@ -88,6 +92,7 @@ def build_contract_quality_report(
     *,
     preflight_evidence: dict[str, Any] | None = None,
     snapshot_ledger_path: str | None = None,
+    policy_ledger_path: str | None = None,
 ) -> dict[str, Any]:
     """Build a baseline for C1 quality SLOs without inventing thresholds."""
     settings = settings or PlatformSettings.from_root()
@@ -96,13 +101,25 @@ def build_contract_quality_report(
     raw_without_license = [
         contract.artifact_id for contract in raw_contracts if contract.license is None
     ]
+    policies = (
+        latest_policy_by_source(read_source_policy_ledger(policy_ledger_path))
+        if policy_ledger_path
+        else {}
+    )
     source_policy_gaps = [
         {
             "source_id": contract.license.source_name if contract.license else contract.artifact_id,
-            "missing_fields": source_license_policy_status(contract.license)["missing_fields"],
+            "missing_fields": source_license_policy_status(
+                contract.license,
+                policies.get(contract.license.source_name) if contract.license else None,
+            )["missing_fields"],
         }
         for contract in raw_contracts
-        if source_license_policy_status(contract.license)["status"] != "recorded"
+        if source_license_policy_status(
+            contract.license,
+            policies.get(contract.license.source_name) if contract.license else None,
+        )["status"]
+        != "recorded"
     ]
     unrecorded_contracts = [
         contract.artifact_id for contract in registry.contracts if not contract.recorded
@@ -185,6 +202,7 @@ def build_contract_quality_report(
         "scope": {
             "recording_scope": "local contract registry and explicitly supplied local evidence",
             "snapshot_ledger_supplied": bool(snapshot_ledger_path),
+            "policy_ledger_supplied": bool(policy_ledger_path),
             "preflight_evidence_supplied": preflight_evidence is not None,
         },
         "overall_status": "fail" if failures else ("incomplete" if pending else "pass"),

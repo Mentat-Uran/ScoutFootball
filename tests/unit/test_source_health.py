@@ -8,6 +8,10 @@ from scoutfootball.evaluation.source_health import (
     format_source_health_report,
     source_license_policy_status,
 )
+from scoutfootball.evaluation.source_policy_ledger import (
+    append_source_policy_record,
+    build_source_policy_record,
+)
 from scoutfootball.schemas.storage import SourceLicense
 
 
@@ -81,6 +85,32 @@ def test_source_health_exposes_only_explicit_ledger_snapshots(tmp_path) -> None:
     )
     assert football_data["snapshot"]["status"] == "recorded"
     assert football_data["snapshot"]["as_of"] == "2026-07-16"
+
+
+def test_source_health_uses_an_explicit_local_policy_ledger(tmp_path) -> None:
+    settings = PlatformSettings.from_root(tmp_path)
+    ledger = tmp_path / "source_policies.jsonl"
+    record = build_source_policy_record(
+        source_id="football_data",
+        retention_mode="until_manual_deletion",
+        retention_days=None,
+        deletion_trigger="Maintainer requests deletion.",
+        deletion_strategy="Remove local raw source files after confirmation.",
+        derived_artifact_action="Invalidate dependent artifacts for regeneration.",
+        decision="Local policy approved by maintainer.",
+        recorded_at="2026-07-17T00:00:00Z",
+    )
+    append_source_policy_record(record, ledger)
+
+    report = build_source_health_report(settings, policy_ledger_path=str(ledger))
+    football_data = next(
+        item for item in report["registered_sources"] if item["source_id"] == "football_data"
+    )
+
+    assert report["policy_ledger_supplied"] is True
+    assert football_data["license"]["policy"]["status"] == "recorded"
+    assert football_data["license"]["policy"]["policy_source"] == "local_policy_ledger"
+    assert football_data["license"]["policy"]["retention_mode"] == "until_manual_deletion"
 
 
 def test_source_license_policy_status_requires_explicit_retention_and_deletion_terms() -> None:
