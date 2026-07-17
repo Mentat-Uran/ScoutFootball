@@ -194,12 +194,23 @@ def _cmd_validate(_args: argparse.Namespace) -> None:
 
 
 def _cmd_source_health(args: argparse.Namespace) -> None:
+    evidence = None
+    if args.evidence:
+        try:
+            evidence = json.loads(Path(args.evidence).resolve().read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"Error: unable to read preflight evidence: {exc}", file=sys.stderr)
+            sys.exit(1)
     from scoutfootball.evaluation.source_health import (
         build_source_health_report,
         format_source_health_report,
     )
 
-    report = build_source_health_report()
+    try:
+        report = build_source_health_report(preflight_evidence=evidence)
+    except ValueError as exc:
+        print(f"Error: invalid preflight evidence: {exc}", file=sys.stderr)
+        sys.exit(1)
     output = (
         json.dumps(report, indent=2, ensure_ascii=False)
         if args.json
@@ -1742,6 +1753,9 @@ def main() -> None:
         "source-health", help="Inspect registered local raw-source health without network access"
     )
     source_health_p.add_argument("--json", action="store_true", help="Emit JSON")
+    source_health_p.add_argument(
+        "--evidence", help="Optional local preflight evidence JSON to attach by registered source"
+    )
     preflight_p = sub.add_parser(
         "optimizer-preflight",
         help="Check rating optimizer runtime and raw inputs",
