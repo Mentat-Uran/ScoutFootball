@@ -21,7 +21,7 @@
 - 产品宽度显著超过旧文档的“7 个分析视图 + 4 个世界杯视图”：当前 HTML 中可见 22 个顶层 `data-view` 目标。
 - 关键缺口不再是“有没有更多功能”，而是统一契约、能力登记、真实浏览器 E2E、发布门禁、完整可读数据和三个端到端决策闭环。
 - 浏览器球探工作区、战术工程和部分世界杯输入仍是本地状态；动作价值下钻仍只有 3 场比赛、94 条球员—比赛证据记录，并非 tracking；预计名单和模拟结果不是官方实时事实。
-- 本次运行时能读取若干 Parquet footer 元数据，但完整解码报错。以下行数只能作为“文件元数据声称”，不能作为数据已可用或内容已核验的证据。
+- 2026-07-17 在当前锁定 `uv` 运行时执行 `scoutfootball preflight --target key`，21 个关键 Parquet 均完成内容级解码、schema 检查和抽样校验。该结果只覆盖本次本地检查的文件，不证明来源权利、快照新鲜度或未来运行时持续可读。
 
 ## 仓库规模快照
 
@@ -45,7 +45,7 @@
 | 领域 | 当前能力 | 状态 | 证据边界 / 下一门槛 |
 | --- | --- | --- | --- |
 | 数据流水线 | `ingest`、`build-features`、`train`、验证和多类导出入口 | 已交付 | 每条数据源仍需统一来源、许可、快照、删除和陈旧度登记 |
-| 本地数据层 | raw/silver/gold/models/reports/logs，DuckDB + Parquet | 已交付 | 本次运行时出现 Parquet 完整读取失败，需标准运行时 preflight 与修复路径 |
+| 本地数据层 | raw/silver/gold/models/reports/logs，DuckDB + Parquet | 已交付 | 当前锁定 `uv` 运行时的 21 个关键 Parquet 已通过内容级 preflight；每次数据或运行时变更后仍须重新检查，且这不替代来源、快照与许可审计 |
 | 球员评分 | 优化器、覆盖/可用性约束、holdout 指标、模型运行登记、候选评分快照与本地准入/拒绝/晋级/回滚 | 部分交付 | 只有维护者带决策文本并确认后才会切换已核验候选；v1.3.1/v1.3.2 后续完整重跑、独立真值与经审计设定的质量阈值仍未完成 |
 | NN 评分 | `train-rating-nn` 监督式候选入口 | 样例/实验 | 只有独立合格标签、时间外 holdout 并优于 baseline 后才可晋级 |
 | 真值标签 | schema、来源政策、手动 Transfermarkt 快照导入与保守身份复核 | 部分交付 | 标签来源、独立性和当前可读行数口径仍需统一；不得把模型衍生标签当外部真值 |
@@ -83,13 +83,13 @@
 | `data/gold/feature_store/player_truth_labels.parquet` | 29,723 | 包含 `label_source`，但来源分布未在本次成功解码 |
 | `data/gold/feature_store/player_match_action_value_sample.parquet` | 94 | 仅比赛证据样例，不是完整联赛 |
 
-完整读取在本次审计环境报 `OSError: Repetition level histogram size mismatch`。可能原因包括文件兼容、编码或当前 PyArrow 运行时问题；在标准 `uv` 环境成功读取并完成内容级校验前，不能据 footer 宣布数据健康。优先动作：
-
-1. 修复或重建可复现的 `uv` 运行时和缓存路径。
-2. 用项目锁定依赖执行 `optimizer-preflight` 与通用 Parquet preflight。
-3. 对失败文件记录 writer、schema、row-group、hash 和最小复现。
-4. 若需重写文件，先备份并验证行数、schema、数值统计和来源没有变化。
-5. 由自动能力清单读取验证后的报告，不再手工复制行数到多个文档。
+此前审计环境曾报 `OSError: Repetition level histogram size mismatch`，但 2026-07-17
+在当前锁定 `uv` 运行时对 `preflight --target key` 的 21 个关键产物完成了内容级
+解码、schema 与抽样校验，未发现不可读文件。该检查只说明本次本地输入可读，不把
+footer、mtime 或这一次运行写成来源新鲜度、许可完整性或永久数据健康结论。数据、
+依赖或运行时变更后必须重新运行 preflight；若再次失败，先记录 writer、schema、
+row-group、hash 和最小复现，只有完成备份及行数、schema、统计和来源不变校验后，
+才可考虑重写文件。
 
 ## 真实性分类
 
