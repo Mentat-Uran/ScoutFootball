@@ -24302,6 +24302,12 @@ function renderTacticalFrameList() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // A deterministic browser-visible readiness signal for local E2E checks.
+    // It is set only after the same initial API/static data loading path that a
+    // maintainer uses has settled, rather than relying on network-idle in an app
+    // that intentionally keeps a periodic local health poll running.
+    document.documentElement.dataset.scoutfootballInitialLoad = "loading";
+
     // Restore theme preference
     const savedTheme = localStorage.getItem("sf-theme");
     if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
@@ -24474,6 +24480,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Initialize World Cup — already started in parallel above, just await completion
     await wcInitPromise;
+    document.documentElement.dataset.scoutfootballInitialLoad = "ready";
+    document.dispatchEvent(new Event("scoutfootball:initial-load-ready"));
 });
 
 const SCOUT_QUEUE_KEY = "scout-queue-statuses";

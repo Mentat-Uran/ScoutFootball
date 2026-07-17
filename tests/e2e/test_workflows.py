@@ -25,6 +25,7 @@ Run with::
 from __future__ import annotations
 
 import pytest
+from test_smoke import open_loaded_app
 
 pytestmark = pytest.mark.e2e
 
@@ -43,7 +44,7 @@ def test_overview_renders_data_health_panel(page, live_server_url: str) -> None:
     If this fails, every downstream view that depends on artifactSummary
     is suspect.
     """
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=15_000)
+    open_loaded_app(page, live_server_url)
     # renderOverview() runs on initial paint, but the underlying /artifacts
     # fetch is async. Wait for at least one health-item to be present.
     health_list = page.locator("#data-health-list .health-item")
@@ -53,15 +54,13 @@ def test_overview_renders_data_health_panel(page, live_server_url: str) -> None:
     )
 
 
-def test_overview_license_attribution_lists_known_sources(
-    page, live_server_url: str
-) -> None:
+def test_overview_license_attribution_lists_known_sources(page, live_server_url: str) -> None:
     """The license-attribution panel lists the known open data sources.
 
     Catches regressions in /artifacts.license_attribution mapping or in
     the overview's rendering of that map.
     """
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=15_000)
+    open_loaded_app(page, live_server_url)
     license_list = page.locator("#license-list .health-item")
     license_list.first.wait_for(state="visible", timeout=10_000)
     assert license_list.count() >= 1, (
@@ -72,16 +71,14 @@ def test_overview_license_attribution_lists_known_sources(
 # ── STATIC: license view populates the data source manifest table ────
 
 
-def test_license_view_populates_data_source_table(
-    page, live_server_url: str
-) -> None:
+def test_license_view_populates_data_source_table(page, live_server_url: str) -> None:
     """The license view's table body must contain real rows, not the
     initial 'Loading...' placeholder.
 
     This proves the /license endpoint (or /artifacts fallback) returned
     data and renderLicense() replaced the placeholder rows.
     """
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=15_000)
+    open_loaded_app(page, live_server_url)
 
     # Switch to the license view via the nav button.
     page.locator(".nav-stack .nav-action[data-view='license']").click()
@@ -113,9 +110,7 @@ def test_license_view_populates_data_source_table(
 # ── Mobile reading: nav remains usable on a phone-sized viewport ─────
 
 
-def test_mobile_viewport_nav_remains_usable(
-    page, context, live_server_url: str
-) -> None:
+def test_mobile_viewport_nav_remains_usable(page, context, live_server_url: str) -> None:
     """On a 375x667 viewport, the nav buttons must still be visible
     and clickable.
 
@@ -125,7 +120,7 @@ def test_mobile_viewport_nav_remains_usable(
     # Set the viewport to a phone-sized layout. We use a fresh page on
     # the same context so the test is independent of any prior navigation.
     page.set_viewport_size({"width": 375, "height": 667})
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=15_000)
+    open_loaded_app(page, live_server_url)
 
     # The nav stack must be visible. We don't require it to be in a
     # particular layout (drawer vs. sidebar) — only that the buttons
@@ -142,9 +137,7 @@ def test_mobile_viewport_nav_remains_usable(
 # ── OFFLINE: SPA degrades gracefully when the network is taken away ──
 
 
-def test_offline_does_not_crash_initial_load(
-    context, live_server_url: str
-) -> None:
+def test_offline_does_not_crash_initial_load(context, live_server_url: str) -> None:
     """With the browser context set to offline before navigation, the
     SPA must still load its HTML shell without throwing an uncaught
     exception.
@@ -182,9 +175,7 @@ def test_offline_does_not_crash_initial_load(
         nav_stack = page.locator(".nav-stack")
         if nav_stack.count() > 0:
             # Clicking another view must not throw a pageerror either.
-            players_button = page.locator(
-                ".nav-stack .nav-action[data-view='players']"
-            )
+            players_button = page.locator(".nav-stack .nav-action[data-view='players']")
             if players_button.count() > 0:
                 players_button.click()
                 page.wait_for_timeout(500)
@@ -206,7 +197,7 @@ def test_data_view_renders_artifact_table(page, live_server_url: str) -> None:
     not always present). This test confirms the view still populates
     instead of leaving the placeholder or crashing.
     """
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=15_000)
+    open_loaded_app(page, live_server_url)
 
     page.locator(".nav-stack .nav-action[data-view='data']").click()
 
@@ -234,9 +225,7 @@ def test_data_view_renders_artifact_table(page, live_server_url: str) -> None:
 # ── Field-missing: a view does not crash when an API field is absent ─
 
 
-def test_wc_tournament_view_renders_without_api_data(
-    page, live_server_url: str
-) -> None:
+def test_wc_tournament_view_renders_without_api_data(page, live_server_url: str) -> None:
     """The wc_tournament view must render its shell even if the
     tournament API call fails or returns an empty payload.
 
@@ -245,7 +234,7 @@ def test_wc_tournament_view_renders_without_api_data(
     visible and the status pill is present — the view must not be a
     blank screen even before any data arrives.
     """
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=15_000)
+    open_loaded_app(page, live_server_url)
 
     page.locator(".nav-stack .nav-action[data-view='wc_tournament']").click()
 
@@ -277,7 +266,16 @@ def test_tournament_import_preview_rejects_tampered_state_from_browser(
     It proves the same safety net holds when the request originates
     from fetch() inside the SPA, not just from the TestClient.
     """
-    page.goto(live_server_url, wait_until="domcontentloaded", timeout=15_000)
+    # This request-level security check needs a real browser same-origin context,
+    # not a full SPA bootstrap. Keeping it separate from the application's
+    # intentionally broad initial data load makes the tamper assertion focused.
+    response = page.goto(
+        f"{live_server_url}/health",
+        wait_until="domcontentloaded",
+        timeout=30_000,
+    )
+    assert response is not None
+    assert response.status == 200
 
     # Build a tampered state payload. We reuse init_state() and mutate
     # one team name so the integrity check fails. The encoding follows
@@ -317,12 +315,8 @@ def test_tournament_import_preview_rejects_tampered_state_from_browser(
     )
 
     # The preview endpoint must reject the tampered payload.
-    assert result["status"] == "error", (
-        f"Expected status='error', got: {result}"
-    )
-    assert result["code"] == "integrity_failed", (
-        f"Expected code='integrity_failed', got: {result}"
-    )
+    assert result["status"] == "error", f"Expected status='error', got: {result}"
+    assert result["code"] == "integrity_failed", f"Expected code='integrity_failed', got: {result}"
     # The integrity_errors list must mention the altered home team.
     integrity_errors = result.get("integrity_errors") or []
     assert any("altered home" in err for err in integrity_errors), (
@@ -337,6 +331,5 @@ def expect_active_view(page, view: str) -> None:
     """Assert the given view's nav button is the active one."""
     active = page.locator(f".nav-stack .nav-action.active[data-view='{view}']")
     assert active.count() == 1, (
-        f"Expected exactly 1 active nav button for view '{view}', "
-        f"found {active.count()}"
+        f"Expected exactly 1 active nav button for view '{view}', found {active.count()}"
     )
