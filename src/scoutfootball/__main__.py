@@ -370,6 +370,28 @@ def _cmd_rollback_model_run(args: argparse.Namespace) -> None:
     )
 
 
+def _cmd_validate_decision_package(args: argparse.Namespace) -> None:
+    """Validate one user-selected local decision-package JSON export."""
+    from scoutfootball.evaluation.decision_package import (
+        DecisionPackageValidationError,
+        format_decision_package_report,
+        validate_decision_package_file,
+    )
+
+    try:
+        report = validate_decision_package_file(args.path)
+    except DecisionPackageValidationError as exc:
+        print(f"Error: cannot validate decision package: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(
+        json.dumps(report, indent=2, ensure_ascii=False)
+        if args.json
+        else format_decision_package_report(report)
+    )
+    if report["status"] != "valid":
+        sys.exit(2)
+
+
 def _cmd_record_source_snapshot(args: argparse.Namespace) -> None:
     from scoutfootball.evaluation.source_snapshot_ledger import (
         append_source_snapshot_record,
@@ -2096,6 +2118,12 @@ def main() -> None:
         "--confirm", action="store_true", help="Actually restore the selected backup"
     )
     rollback_model_run_p.add_argument("--json", action="store_true", help="Emit JSON")
+    decision_package_p = sub.add_parser(
+        "validate-decision-package",
+        help="Validate one local decision-package JSON export without importing or changing it",
+    )
+    decision_package_p.add_argument("path", help="Path to a browser-local JSON export")
+    decision_package_p.add_argument("--json", action="store_true", help="Emit JSON")
     snapshot_p = sub.add_parser(
         "record-source-snapshot",
         help="Append an explicitly dated local source snapshot backed by preflight evidence",
@@ -2475,6 +2503,7 @@ def main() -> None:
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
         "rollback-model-run": _cmd_rollback_model_run,
+        "validate-decision-package": _cmd_validate_decision_package,
         "record-source-snapshot": _cmd_record_source_snapshot,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,

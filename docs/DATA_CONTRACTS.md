@@ -874,6 +874,17 @@ The comparison view can download the briefing as a browser-local JSON export
 (`scoutfootball.world-cup-match-briefing-export` v1.0.0) or CSV report. Both
 retain source attribution and limitations; CSV cells use the shared formula
 injection guard and neither action writes server state.
+
+`scoutfootball validate-decision-package <path>` reads a user-selected local
+UTF-8 JSON file without importing or changing it. It fails closed for unknown
+schemas, malformed exports, missing source attribution or limitations,
+unrecorded-as-recorded input snapshots, invalid probability distributions, and
+out-of-range rating coverage. It currently supports individual World Cup
+briefings, their browser-local JSON export, the tracked static
+`scoutfootball.world-cup-match-briefings` collection, and browser-local
+shortlist decision packs. A passing result validates the local contract and
+recorded evidence fields only; it does not independently verify upstream facts.
+
 When a briefing creates a tactical-board project, its decision-pack provenance
 also stores the bounded briefing schema, version, and source attribution. The
 tactical JSON export preview surfaces those fields so the board can be checked
