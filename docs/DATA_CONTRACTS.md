@@ -3126,3 +3126,13 @@ as an upstream snapshot timestamp. Its optional `--evidence <preflight JSON>`
 attaches only matching raw-artifact inspection fingerprints; malformed reports
 and path-escape attempts are rejected, and this attachment never fills in
 missing source snapshot provenance.
+
+`scoutfootball record-source-snapshot --source <registered source> --snapshot-date
+YYYY-MM-DD --evidence <preflight JSON>` appends one JSONL record to the local
+snapshot ledger (default: `data/reports/data_health/source_snapshot_ledger.jsonl`).
+It accepts only a registered raw source and evidence containing at least one
+matching inspected artifact. The supplied date remains an explicit maintainer
+declaration, never a timestamp inferred from the filesystem. Existing records
+are never rewritten; duplicate immutable snapshot IDs are refused. Pass the
+same ledger to `source-health --snapshot-ledger <path>` to display only its
+latest explicitly recorded entry for each source.
