@@ -131,12 +131,16 @@ def lookup_reep_provider_identity(
     match_count = 0
     try:
         with resolved.open("r", encoding="utf-8-sig", newline="") as handle:
-            reader = csv.DictReader(handle)
+            reader = csv.DictReader(handle, restkey="__extra_columns__", restval=None)
             headers = set(reader.fieldnames or [])
             missing = sorted(_REQUIRED_COLUMNS - headers)
             if missing:
                 raise ValueError(f"reep_schema_missing:{','.join(missing)}")
             for row in reader:
+                if row.get("__extra_columns__") is not None or any(
+                    row.get(header) is None for header in reader.fieldnames or []
+                ):
+                    raise ValueError(f"csv_row_width_mismatch:{reader.line_num}")
                 if _clean(row.get(column)) != identifier:
                     continue
                 match_count += 1
