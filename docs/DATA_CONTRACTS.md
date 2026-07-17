@@ -799,8 +799,29 @@ New optimizer executions write parameters, training visualizations, and a
 `data/models/runs/<run_id>/` candidate directory. The run metadata records the
 candidate rating file name, SHA-256, row count, and columns. They do not
 overwrite `gold/feature_store` parameter files or activate
-`player_ratings_optimized.parquet`; promotion and rollback remain separate,
-explicit maintainer actions.
+`player_ratings_optimized.parquet` until a separate, explicit maintainer
+action is confirmed.
+
+### Local candidate decision, promotion, and rollback
+
+`scoutfootball reject-model-run <run_id> --decision <text>` records a retained
+local rejection only with `--confirm`; it never changes active artifacts.
+`scoutfootball promote-model-run <run_id> --decision <text>` is a default
+preview. Its confirmed form accepts only a `reviewable`, explicitly
+`not_activated` candidate with a readable candidate score snapshot whose
+SHA-256, row count, columns, identity keys, finite scores, and
+season-and-position percentile contract all match its metadata. It also reads
+the current active ratings, parameters, and metadata before copying all three
+to a unique local `data/models/backups/<backup_id>/` directory with hashes.
+Only then does it replace the three active artifacts and record the human
+decision and backup ID in both active and candidate metadata.
+
+`scoutfootball rollback-model-run <backup_id> --decision <text>` is likewise a
+preview until `--confirm`. It accepts only the verified backup belonging to the
+currently activated candidate and restores its three hashed files. The
+candidate is marked `rolled_back` and the backup retains a local rollback
+record. Neither command treats a positive holdout delta or `reviewable` status
+as an automatic promotion decision.
 
 ### Local candidate discard
 
