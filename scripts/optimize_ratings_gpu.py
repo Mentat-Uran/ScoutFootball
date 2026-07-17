@@ -539,6 +539,8 @@ def main():
         data_dir=data_dir,
         data_coverage=data_coverage,
         error_cases=compute_error_cases(optimized_test_eval["matched"]),
+        train_seasons=holdout.train_seasons,
+        test_seasons=holdout.test_seasons,
     )
 
     print(f"\n{'='*80}")

@@ -1311,6 +1311,8 @@ def save_model_run(
     data_dir: Path | None = None,
     data_coverage: dict | None = None,
     error_cases: dict | None = None,
+    train_seasons: tuple[str, ...] | list[str] | None = None,
+    test_seasons: tuple[str, ...] | list[str] | None = None,
 ):
     """Save model run with full provenance to data/models/runs/<timestamp>/.
 
@@ -1365,20 +1367,28 @@ def save_model_run(
             pass
     meta["dependency_versions"] = dep_versions
 
-    # Train/test season split
-    if args is not None:
-        train_seasons = getattr(args, "train_seasons", None)
-        test_seasons = getattr(args, "test_seasons", None)
-        if train_seasons:
-            meta["train_seasons"] = (
-                [train_seasons] if isinstance(train_seasons, str)
-                else list(train_seasons)
-            )
-        if test_seasons:
-            meta["test_seasons"] = (
-                [test_seasons] if isinstance(test_seasons, str)
-                else list(test_seasons)
-            )
+    # Record the actual split selected by ``make_holdout_split``. CLI knobs
+    # such as ``--test-seasons 1`` are configuration counts, not a season
+    # list, and must never be represented as the holdout itself.
+    def _season_list(value: object) -> list[str] | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (list, tuple)):
+            return [str(season) for season in value]
+        return None
+
+    recorded_train = _season_list(train_seasons)
+    recorded_test = _season_list(test_seasons)
+    if recorded_train is None and args is not None:
+        recorded_train = _season_list(getattr(args, "train_seasons", None))
+    if recorded_test is None and args is not None:
+        recorded_test = _season_list(getattr(args, "test_seasons", None))
+    if recorded_train:
+        meta["train_seasons"] = recorded_train
+    if recorded_test:
+        meta["test_seasons"] = recorded_test
 
     # Position-level metrics (if provided in metrics dict)
     for pos_key in ("position_metrics", "position_metrics_by_group"):

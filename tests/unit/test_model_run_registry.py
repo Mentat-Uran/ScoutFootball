@@ -191,6 +191,35 @@ class TestSaveModelRun:
         assert meta["train_seasons"] == ["2021,2022,2023"]
         assert meta["test_seasons"] == ["2024"]
 
+    def test_actual_time_split_overrides_cli_count_configuration(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        args = argparse.Namespace(test_seasons=1)
+
+        run_dir = save_model_run(
+            params,
+            {"spearman": 0.65},
+            args=args,
+            output_dir=tmp_path,
+            train_seasons=("2223", "2324"),
+            test_seasons=("2425",),
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["train_seasons"] == ["2223", "2324"]
+        assert meta["test_seasons"] == ["2425"]
+
+    def test_numeric_cli_test_season_count_is_not_saved_as_a_split(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        run_dir = save_model_run(
+            params,
+            {"spearman": 0.65},
+            args=argparse.Namespace(test_seasons=1),
+            output_dir=tmp_path,
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert "test_seasons" not in meta
+
     def test_position_metrics_persisted(self, tmp_path):
         params = np.random.randn(77).astype(np.float32)
         metrics = {
