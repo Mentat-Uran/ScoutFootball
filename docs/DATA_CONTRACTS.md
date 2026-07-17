@@ -282,8 +282,19 @@ Confirmation is accepted only for an ID already present in that report row's
 candidate set. On a later import, `--identity-ledger <path>` consumes only
 decisions whose snapshot SHA-256, feature-matrix SHA-256, season, and source
 row all match the current inputs. A revocation makes a prior manual choice
-ineligible for subsequent imports; it does not silently delete historical
-truth-label rows, which must be reconciled explicitly by the maintainer.
+ineligible for subsequent imports. Each non-empty import also writes a local
+append-only `transfermarkt_truth_label_import_ledger.jsonl` beside the output
+unless `--label-ledger` selects another path. It records the input hashes,
+source row, resolved ID, identity method, label key, and a fingerprint of the
+exact row written; it never copies the source snapshot.
+
+`scoutfootball reconcile-transfermarkt-truth-labels --identity-ledger <path>
+--label-ledger <path>` is preview-only by default. After a revocation it lists
+only labels whose ledger record proves they came from that manual confirmation
+and whose current row fingerprint still matches. `--apply` atomically removes
+only those proven rows. Historical labels without this new import ledger, rows
+replaced by a later import, and labels from another source remain untouched and
+are reported for maintainer review rather than silently deleted.
 
 Both the dry-run summary and the persisted identity report include SHA-256 and
 byte size for the explicitly supplied snapshot and local feature matrix. These

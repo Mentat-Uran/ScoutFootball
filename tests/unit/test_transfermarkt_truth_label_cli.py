@@ -166,3 +166,79 @@ def test_transfermarkt_review_confirmation_is_bound_to_current_input_hashes(
     assert labels["player_id"].tolist() == ["alice|two"]
     payload = json.loads(report.read_text(encoding="utf-8"))
     assert payload["review_decisions"]["confirmed_rows"] == 1
+
+
+def test_identity_revocation_reconciles_only_proven_label_rows(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    snapshot = tmp_path / "snapshot.csv"
+    output = tmp_path / "truth_labels.parquet"
+    feature_matrix = tmp_path / "rating_feature_matrix.parquet"
+    report = tmp_path / "identity_report.json"
+    identity_ledger = tmp_path / "identity_ledger.jsonl"
+    label_ledger = tmp_path / "label_ledger.jsonl"
+    _write_snapshot(snapshot)
+    _write_existing_labels(output)
+    pd.DataFrame(
+        {
+            "player_id": ["alice|one", "alice|two"],
+            "player_name": ["Alice Example", "Alice Example"],
+            "team_name": ["Other FC", "Different FC"],
+            "season_id": ["2425", "2425"],
+        }
+    ).to_parquet(feature_matrix, index=False)
+    import_args = (
+        "import-transfermarkt-truth-labels",
+        "--snapshot", str(snapshot),
+        "--season", "2425",
+        "--output", str(output),
+        "--feature-matrix", str(feature_matrix),
+        "--identity-report", str(report),
+        "--identity-ledger", str(identity_ledger),
+        "--label-ledger", str(label_ledger),
+    )
+
+    _run_cli(monkeypatch, *import_args)
+    _run_cli(
+        monkeypatch,
+        "transfermarkt-identity-review",
+        "--report", str(report),
+        "--ledger", str(identity_ledger),
+        "--source-row", "0",
+        "--action", "confirmed",
+        "--canonical-player-id", "alice|two",
+    )
+    _run_cli(monkeypatch, *import_args)
+    assert set(pd.read_parquet(output)["label_source"]) == {"award", "transfermarkt_value"}
+
+    _run_cli(
+        monkeypatch,
+        "transfermarkt-identity-review",
+        "--report", str(report),
+        "--ledger", str(identity_ledger),
+        "--source-row", "0",
+        "--action", "revoked",
+    )
+    capsys.readouterr()
+    _run_cli(
+        monkeypatch,
+        "reconcile-transfermarkt-truth-labels",
+        "--labels", str(output),
+        "--identity-ledger", str(identity_ledger),
+        "--label-ledger", str(label_ledger),
+    )
+    preview = json.loads(capsys.readouterr().out)
+    assert preview["dry_run"] is True
+    assert preview["removable_rows"] == 1
+    assert set(pd.read_parquet(output)["label_source"]) == {"award", "transfermarkt_value"}
+
+    _run_cli(
+        monkeypatch,
+        "reconcile-transfermarkt-truth-labels",
+        "--labels", str(output),
+        "--identity-ledger", str(identity_ledger),
+        "--label-ledger", str(label_ledger),
+        "--apply",
+    )
+    labels = pd.read_parquet(output)
+    assert labels["label_source"].tolist() == ["award"]

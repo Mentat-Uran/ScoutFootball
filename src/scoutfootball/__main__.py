@@ -474,7 +474,7 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
         print(f"Error: unable to fingerprint local import inputs: {exc}")
         sys.exit(1)
     try:
-        new_labels = snapshot_to_truth_labels(
+        source_labels = snapshot_to_truth_labels(
             snapshot_path,
             args.season,
             confidence=args.confidence,
@@ -487,13 +487,13 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
     try:
         snapshot = load_snapshot(snapshot_path).dataframe
         feature_matrix = pd.read_parquet(feature_matrix_path)
-        identities = resolve_transfermarkt_snapshot_identities(
+        initial_identities = resolve_transfermarkt_snapshot_identities(
             snapshot,
             feature_matrix,
             season=args.season,
         )
         identities, identity_review = apply_transfermarkt_identity_review_decisions(
-            identities,
+            initial_identities,
             snapshot_sha256=str(input_provenance["snapshot"]["sha256"]),
             feature_matrix_sha256=str(input_provenance["feature_matrix"]["sha256"]),
             season=args.season,
@@ -504,7 +504,7 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
         sys.exit(1)
     identity = transfermarkt_identity_report(identities)
     identity["review_decisions"] = identity_review
-    new_labels = apply_resolved_transfermarkt_identities(new_labels, identities)
+    new_labels = apply_resolved_transfermarkt_identities(source_labels, identities)
 
     output_path = Path(args.output).resolve()
     try:
@@ -556,6 +556,7 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
         "input_provenance": input_provenance,
         "mappings": identities.mappings.to_dict(orient="records"),
         "review_queue": identities.review_queue.to_dict(orient="records"),
+        "review_context": initial_identities.review_queue.to_dict(orient="records"),
         "unresolved": identities.unresolved.to_dict(orient="records"),
     }
     identity_path.parent.mkdir(parents=True, exist_ok=True)
@@ -572,13 +573,40 @@ def _cmd_import_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
         )
         return
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    combined.to_parquet(output_path, index=False)
+    from scoutfootball.evaluation.transfermarkt_label_reconciliation import (
+        append_transfermarkt_label_import_records,
+        build_transfermarkt_label_import_records,
+        write_truth_labels_atomically,
+    )
+
+    label_ledger = (
+        Path(args.label_ledger).resolve()
+        if args.label_ledger
+        else output_path.with_name("transfermarkt_truth_label_import_ledger.jsonl")
+    )
+    try:
+        import_records = build_transfermarkt_label_import_records(
+            source_labels,
+            identities.mappings,
+            input_provenance=input_provenance,
+            season=str(args.season),
+            labels_path=output_path,
+        )
+        write_truth_labels_atomically(combined, output_path)
+        append_transfermarkt_label_import_records(import_records, label_ledger)
+    except (OSError, ValueError) as exc:
+        print(
+            "Error: labels may have been written but their reconciliation ledger was not "
+            f"updated: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     print(f"Imported {len(new_labels)} dated Transfermarkt labels to {output_path}")
     print(f"  Replaced matching player-season-source rows: {replaced_rows}")
     print(f"  Source snapshot dates: {summary['as_of_date_min']} to {summary['as_of_date_max']}")
     print(f"  Deterministic identity matches: {identity['mapped_rows']} / {identity['total_rows']}")
     print(f"  Identity review report: {identity_path}")
+    print(f"  Reconciliation label ledger: {label_ledger}")
     print(f"  Total labels in file: {len(combined)}")
 
 
@@ -601,6 +629,38 @@ def _cmd_transfermarkt_identity_review(args: argparse.Namespace) -> None:
         print(f"Error: unable to record identity review decision: {exc}", file=sys.stderr)
         sys.exit(1)
     print(json.dumps({"ledger": str(Path(args.ledger).resolve()), "decision": record}, indent=2))
+
+
+def _cmd_reconcile_transfermarkt_truth_labels(args: argparse.Namespace) -> None:
+    """Preview or apply narrowly proven removals after identity revocation."""
+    from scoutfootball.evaluation.transfermarkt_label_reconciliation import (
+        reconcile_revoked_transfermarkt_labels,
+        write_truth_labels_atomically,
+    )
+
+    labels_path = Path(args.labels).resolve()
+    if not labels_path.exists():
+        print(f"Error: truth labels file not found: {labels_path}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        labels = pd.read_parquet(labels_path)
+        reconciled, report = reconcile_revoked_transfermarkt_labels(
+            labels,
+            identity_ledger_path=args.identity_ledger,
+            label_ledger_path=args.label_ledger,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Error: unable to reconcile Transfermarkt labels: {exc}", file=sys.stderr)
+        sys.exit(1)
+    report["dry_run"] = not args.apply
+    report["labels_path"] = str(labels_path)
+    if args.apply:
+        try:
+            write_truth_labels_atomically(reconciled, labels_path)
+        except OSError as exc:
+            print(f"Error: unable to write reconciled truth labels: {exc}", file=sys.stderr)
+            sys.exit(1)
+    print(json.dumps(report, indent=2, ensure_ascii=False))
 
 
 def _cmd_audit_truth_labels(args: argparse.Namespace) -> None:
@@ -2016,6 +2076,10 @@ def main() -> None:
         help="Optional local append-only manual identity-review ledger",
     )
     transfermarkt_truth_p.add_argument(
+        "--label-ledger", type=str, default=None,
+        help="Optional append-only import ledger used for later revocation reconciliation",
+    )
+    transfermarkt_truth_p.add_argument(
         "--dry-run", action="store_true",
         help="Validate, merge in memory, and print the time/coverage preview without writing",
     )
@@ -2037,6 +2101,21 @@ def main() -> None:
     )
     identity_review_p.add_argument("--canonical-player-id", default=None)
     identity_review_p.add_argument("--reason", default="")
+
+    reconcile_transfermarkt_p = sub.add_parser(
+        "reconcile-transfermarkt-truth-labels",
+        help="Preview or explicitly apply proven label removals after identity revocation",
+    )
+    reconcile_transfermarkt_p.add_argument(
+        "--labels",
+        default="data/gold/feature_store/player_truth_labels.parquet",
+        help="Local truth-label parquet to inspect",
+    )
+    reconcile_transfermarkt_p.add_argument("--identity-ledger", required=True)
+    reconcile_transfermarkt_p.add_argument("--label-ledger", required=True)
+    reconcile_transfermarkt_p.add_argument(
+        "--apply", action="store_true", help="Atomically write only proven removals"
+    )
 
     truth_audit_p = sub.add_parser(
         "audit-truth-labels",
@@ -2224,6 +2303,7 @@ def main() -> None:
         "import-truth-labels": _cmd_import_truth_labels,
         "import-transfermarkt-truth-labels": _cmd_import_transfermarkt_truth_labels,
         "transfermarkt-identity-review": _cmd_transfermarkt_identity_review,
+        "reconcile-transfermarkt-truth-labels": _cmd_reconcile_transfermarkt_truth_labels,
         "audit-truth-labels": _cmd_audit_truth_labels,
         "backtest": _cmd_backtest,
         "tune-predictions": _cmd_tune_predictions,
