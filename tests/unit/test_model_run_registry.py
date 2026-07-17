@@ -30,6 +30,7 @@ from optimizer.data import (  # noqa: E402
     build_run_lineage,
     compute_error_cases,
     compute_input_hash,
+    optimizer_input_artifacts,
     save_model_run,
 )
 
@@ -279,3 +280,31 @@ class TestComputeInputHash:
         (gold_dir / "rating_feature_matrix.parquet").write_bytes(b"test")
         h2 = compute_input_hash(tmp_path)
         assert h1 != h2
+
+    def test_active_rating_output_never_changes_optimizer_input_hash(self, tmp_path):
+        ratings = tmp_path / "gold" / "feature_store" / "player_ratings_optimized.parquet"
+        ratings.parent.mkdir(parents=True)
+        ratings.write_bytes(b"active-score-v1")
+
+        before = compute_input_hash(tmp_path)
+        ratings.write_bytes(b"active-score-v2")
+        after = compute_input_hash(tmp_path)
+
+        assert before == after
+        assert "gold/feature_store/player_ratings_optimized.parquet" not in (
+            optimizer_input_artifacts(tmp_path)
+        )
+
+    def test_lineage_lists_only_actual_optimizer_inputs(self, tmp_path):
+        raw = tmp_path / "raw" / "football_data"
+        raw.mkdir(parents=True)
+        (raw / "combined_results.parquet").write_bytes(b"results")
+        active = tmp_path / "gold" / "feature_store" / "player_ratings_optimized.parquet"
+        active.parent.mkdir(parents=True, exist_ok=True)
+        active.write_bytes(b"active-score")
+
+        lineage = build_run_lineage(tmp_path)
+
+        assert lineage["dataset_snapshot"]["input_artifacts"] == [
+            "raw/football_data/combined_results.parquet"
+        ]

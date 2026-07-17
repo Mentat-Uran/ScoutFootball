@@ -783,6 +783,13 @@ with residual definition `prediction_minus_actual`. These are evidence for a
 maintainer's comparison, not a substitute for calibration, slice, and scope
 review.
 
+The optimizer input hash lists only artifacts the optimizer can read: its raw
+FBref/Football-Data/Understat inputs and, when present, local matrix or
+truth-label inputs. The currently active
+`player_ratings_optimized.parquet` is explicitly excluded because it is an
+output, not optimizer input; changing an active score artifact must not change
+the lineage of a candidate that did not read it.
+
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
 `/world-cup/squads/{team}` and `/world-cup/outlook/{team}` include a versioned
