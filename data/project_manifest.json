@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-17T13:49:24.760799+00:00",
+  "generated_at": "2026-07-17T14:56:23.413180+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -138,6 +138,15 @@
         "recorded_note": ""
       },
       {
+        "layer": "raw",
+        "relative_path": "raw/reep",
+        "purpose": "Local Reep identity-register snapshots for identifier mapping review; not market-value, performance, or truth-label inputs.",
+        "source_name": "reep",
+        "license_name": "CC0 1.0 Universal",
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
         "layer": "silver",
         "relative_path": "silver/dimensions",
         "purpose": "Normalized competitions, teams, players and seasons.",
@@ -259,6 +268,7 @@
       "uv run python -m scoutfootball train-rating-nn",
       "uv run python -m scoutfootball validate",
       "uv run python -m scoutfootball source-health",
+      "uv run python -m scoutfootball inspect-raw-source",
       "uv run python -m scoutfootball contract-quality",
       "uv run python -m scoutfootball model-admission",
       "uv run python -m scoutfootball discard-model-run <run_id>",
@@ -290,7 +300,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-17T13:49:24.760799+00:00",
+    "generated_at": "2026-07-17T14:56:23.411677+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -356,6 +366,7 @@
           "preflight",
           "optimizer-preflight",
           "source-health",
+          "inspect-raw-source",
           "contract-quality",
           "model-admission",
           "discard-model-run",
@@ -901,7 +912,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-17T13:49:24.760799+00:00",
+    "generated_at": "2026-07-17T14:56:23.413180+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -1047,6 +1058,30 @@
           "deletion_strategy": "",
           "source_url": "https://www.transfermarkt.com/",
           "notes": "Manual import only; no automated scraping."
+        },
+        "snapshot": null,
+        "lineage": [],
+        "coverage": null,
+        "primary_keys": [],
+        "columns": [],
+        "recorded": true,
+        "recorded_note": ""
+      },
+      {
+        "artifact_id": "raw/reep",
+        "layer": "raw",
+        "purpose": "Local Reep identity-register snapshots for identifier mapping review; not market-value, performance, or truth-label inputs.",
+        "status": "delivered",
+        "license": {
+          "source_name": "reep",
+          "license_name": "CC0 1.0 Universal",
+          "attribution_required": false,
+          "redistribution_allowed": true,
+          "commercial_use_allowed": true,
+          "retention_policy_days": null,
+          "deletion_strategy": "",
+          "source_url": "https://github.com/withqwerty/reep",
+          "notes": "Repository-published Wikidata-derived identity register; local use is limited to identifier mapping review and does not establish market-value or performance facts."
         },
         "snapshot": null,
         "lineage": [],
@@ -1803,5 +1838,5 @@
       }
     ]
   },
-  "content_sha256": "41b63698ecac0c809990abb4d67885349efe1e7b0d085ac1e55b76acf362333b"
+  "content_sha256": "ae81fcdb3c7a13b52250cc699a20f98c9dd8ebac312b7f647ab75d32bb918994"
 }

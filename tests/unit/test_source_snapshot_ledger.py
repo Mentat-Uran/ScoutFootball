@@ -76,3 +76,39 @@ def test_snapshot_ledger_rejects_missing_source_evidence_and_invalid_dates(tmp_p
             snapshot_date="not-a-date",
             evidence_path=evidence_path,
         )
+
+
+def test_snapshot_ledger_accepts_registered_raw_csv_inspection(tmp_path) -> None:
+    evidence_path = tmp_path / "csv-inspection.json"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "report_type": "scoutfootball.raw_source_file_inspection",
+                "report_version": "1.0",
+                "generated_at": "2026-07-17T00:00:00Z",
+                "source_id": "reep",
+                "artifacts": [
+                    {
+                        "artifact_path": "raw/reep/people.csv",
+                        "inspection": {
+                            "status": "ok",
+                            "content_hash": "csv-hash",
+                            "schema_hash": "headers",
+                            "row_count": 2,
+                            "reader": "python_csv_utf8",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    record = build_source_snapshot_record(
+        source_id="reep",
+        snapshot_date="2026-06-21",
+        evidence_path=evidence_path,
+    )
+
+    assert record["evidence"]["report_type"] == "scoutfootball.raw_source_file_inspection"
+    assert record["artifacts"][0]["content_hash"] == "csv-hash"

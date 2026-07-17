@@ -3233,7 +3233,9 @@ modification times are never treated as an upstream snapshot timestamp. Its
 optional `--evidence <preflight JSON>` attaches only matching raw-artifact
 inspection fingerprints; malformed reports and path-escape attempts are
 rejected, and this attachment never fills in missing source snapshot provenance
-or retention/deletion terms.
+or retention/deletion terms. Its optional evidence input accepts either a
+Parquet preflight report or a `scoutfootball.raw_source_file_inspection` report
+for one registered raw CSV; both attach only local structural fingerprints.
 
 `scoutfootball contract-quality` treats a non-empty unregistered raw directory
 as a failed gate. This prevents legacy or unknown local source files from being
@@ -3247,8 +3249,16 @@ modification times. It never reads file contents in this report, hashes are not
 presented as provenance, and local modification times remain explicitly distinct
 from upstream snapshot dates.
 
+`scoutfootball inspect-raw-source --source <registered source> --path
+raw/<source>/<file>.csv --evidence-out <inspection JSON>` fully reads one local
+UTF-8 CSV below that source's registered raw directory and writes a portable,
+local-only structural inspection. It records a content hash, header schema
+hash, row/column counts, byte size, and reader, but never copies cell values or
+uses file metadata as a source date. It rejects path escapes, malformed CSV,
+non-UTF-8 input, duplicate/blank headers, and inconsistent row widths.
+
 `scoutfootball record-source-snapshot --source <registered source> --snapshot-date
-YYYY-MM-DD --evidence <preflight JSON>` appends one JSONL record to the local
+YYYY-MM-DD --evidence <preflight-or-raw-inspection JSON>` appends one JSONL record to the local
 snapshot ledger (default: `data/reports/data_health/source_snapshot_ledger.jsonl`).
 It accepts only a registered raw source and evidence containing at least one
 matching inspected artifact. The supplied date remains an explicit maintainer

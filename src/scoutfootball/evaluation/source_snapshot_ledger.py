@@ -14,6 +14,7 @@ from scoutfootball.architecture import build_data_contract_registry
 SNAPSHOT_LEDGER_TYPE = "scoutfootball.source_snapshot_ledger"
 SNAPSHOT_LEDGER_VERSION = "1.0"
 PREFLIGHT_EVIDENCE_TYPE = "scoutfootball.parquet_preflight_evidence"
+RAW_SOURCE_INSPECTION_TYPE = "scoutfootball.raw_source_file_inspection"
 
 
 def _now_iso() -> str:
@@ -34,7 +35,10 @@ def _read_evidence(path: Path | str) -> dict[str, Any]:
         payload = json.loads(Path(path).resolve().read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"evidence_unreadable: {exc}") from exc
-    if not isinstance(payload, dict) or payload.get("report_type") != PREFLIGHT_EVIDENCE_TYPE:
+    if not isinstance(payload, dict) or payload.get("report_type") not in {
+        PREFLIGHT_EVIDENCE_TYPE,
+        RAW_SOURCE_INSPECTION_TYPE,
+    }:
         raise ValueError("evidence_report_type_invalid")
     if not isinstance(payload.get("artifacts"), list):
         raise ValueError("evidence_artifacts_invalid")
@@ -80,6 +84,11 @@ def build_source_snapshot_record(
     if source_root is None:
         raise ValueError("source_not_registered")
     evidence = _read_evidence(evidence_path)
+    if (
+        evidence["report_type"] == RAW_SOURCE_INSPECTION_TYPE
+        and evidence.get("source_id") != source_id
+    ):
+        raise ValueError("evidence_source_mismatch")
     artifacts: list[dict[str, Any]] = []
     for artifact in evidence["artifacts"]:
         if not isinstance(artifact, dict) or not isinstance(artifact.get("inspection"), dict):
@@ -88,6 +97,14 @@ def build_source_snapshot_record(
         if artifact_path != source_root and not artifact_path.startswith(f"{source_root}/"):
             continue
         inspection = artifact["inspection"]
+        if evidence["report_type"] == RAW_SOURCE_INSPECTION_TYPE:
+            if inspection.get("status") != "ok":
+                raise ValueError("evidence_artifact_not_readable")
+            if (
+                not isinstance(inspection.get("content_hash"), str)
+                or not inspection["content_hash"]
+            ):
+                raise ValueError("evidence_artifact_content_hash_invalid")
         artifacts.append(
             {
                 "artifact_path": artifact_path,

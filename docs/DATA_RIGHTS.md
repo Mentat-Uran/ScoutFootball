@@ -4,13 +4,13 @@
 
 ## 维护者确认（2026-07-17）
 
-1. **实际使用**：前 6 个已注册数据源（StatsBomb、Football-Data、ClubElo、Understat、FBref、Transfermarkt 手动）在维护者真实工作流中使用。后 7 个已实现但未注册的适配器**写了代码但未在使用**，标记为实验性/停止状态。
+1. **实际使用**：6 个分析输入源（StatsBomb、Football-Data、ClubElo、Understat、FBref、Transfermarkt 手动）在维护者真实工作流中使用；Reep 是另行登记的本地身份映射快照，不进入分析、标签或对外数据流。后 7 个已实现但未注册的适配器**写了代码但未在使用**，标记为实验性/停止状态。
 2. **许可**：项目仅维护者本人本地使用，5 个此前"未确认"的数据源（transfermarkt_datasets、whoscored、sofifa、sofascore、capology）维护者确认个人本地使用没有问题。但**再分发和公开导出**仍需各自遵守上游 ToS。
 3. **适用范围**：世界杯是第一个参考包，后续会扩展到更多联赛、其他国家队比赛和俱乐部比赛场景。数据权利边界以"个人本地使用"为基线。
 
 ## 1. 已注册数据源（architecture.py）
 
-以下 6 个数据源已在 [architecture.py](../src/scoutfootball/architecture.py) 的 `planned_components` 中注册。
+以下 7 个数据源已在 [architecture.py](../src/scoutfootball/architecture.py) 的 `planned_components` 中注册。
 
 ### 1.1 StatsBomb Open Data
 
@@ -84,6 +84,17 @@
 | 删除 | 可随时删除本地快照 |
 | 导出/再分发 | 本地产物继承 Transfermarkt ToS 边界；能导出不等于能公开发布 |
 | 当前覆盖 | 带日期的本地手动快照，经身份复核后导入 |
+
+### 1.7 Reep identity register
+
+| Item | Value |
+|---|---|
+| Acquisition | Explicit maintainer-triggered download of repository-published `people.csv`; no login, scraping, or credentials |
+| License | Repository declares CC0 1.0 Universal; this record does not independently interpret that declaration |
+| Local boundary | `data/raw/reep/` is ignored by Git and retained only for local identifier-mapping review |
+| Permitted use | Cross-provider identifier lookup/review only; not a market-value, performance, roster, or truth-label source |
+| Snapshot | Reep metadata declares data version `2026.25`, generated `2026-06-21T08:36:25Z`; local inspection and snapshot-ledger records identify the exact retained CSV |
+| Retention and deletion | Explicitly recorded in the local source-policy ledger; deletion invalidates any future dependent identity bridge for regeneration |
 
 ## 2. 已实现但未注册的数据源（实验性/停止状态）
 
@@ -186,7 +197,7 @@
 | [desktop/app.js](../desktop/app.js) `LICENSE_SOURCES` | 6 | transfermarkt_datasets、whoscored、sofifa、sofascore、capology、api_football |
 | [api.py](../src/scoutfootball/api.py) `license_attribution` | 6（clubelo 已于 2026-07-17 补齐） | transfermarkt_datasets、whoscored、sofifa、sofascore、capology、api_football |
 
-**影响**：前端和 API 的许可署名覆盖 6 个实际使用的数据源，已完整。7 个未使用的实验性适配器不在许可清单中，符合"未使用则不暴露"原则。
+**影响**：前端和 API 的许可署名覆盖 6 个实际使用的分析数据源，已完整。Reep 只作为本地身份映射快照，当前不进入前端或 API 输出；7 个未使用的实验性适配器不在许可清单中，符合"未使用则不暴露"原则。
 
 **建议**：G1 中统一许可清单为单一真源（data contract），前端和 API 从中读取。若未来启用实验性适配器，需同步补齐许可声明。
 
@@ -194,7 +205,7 @@
 
 **维护者确认 2026-07-17**：所有 13 个适配器的许可状态已确认：
 
-- **6 个实际使用的数据源**：许可已在 [api.py](../src/scoutfootball/api.py) 和 [desktop/app.js](../desktop/app.js) 的许可清单中声明，覆盖完整。
+- **6 个实际使用的分析数据源**：许可已在 [api.py](../src/scoutfootball/api.py) 和 [desktop/app.js](../desktop/app.js) 的许可清单中声明，覆盖完整。Reep 的本地身份映射快照仅在数据契约和本清单中登记，尚未进入这些输出面。
 - **7 个实验性/停止状态的数据源**：维护者确认个人本地使用 OK。公开导出或再分发仍需各自遵守上游 ToS。这些适配器未在使用，不进入 G1 契约基线。
 
 **G0-A 退出证据满足**：近期输入的权利和本地边界明确。无"未确认"许可的数据源阻塞后继节点。
@@ -204,6 +215,7 @@
 | 日期 | 确认事项 | 结论 |
 |---|---|---|
 | 2026-07-17 | 实际使用的数据源 | 前 6 个已注册数据源在用；后 7 个实验性/停止 |
+| 2026-07-17 | Reep identity register | 维护者授权下载并保留 CC0 声明的本地 `people.csv` 身份映射快照；仅用于后续人工身份映射复核，不进入市场价值、表现、名单或真值标签流程 |
 | 2026-07-17 | 许可状态 | 5 个此前"未确认"的数据源，维护者确认个人本地使用 OK；公开导出需遵守上游 ToS |
 | 2026-07-17 | 适用范围 | 世界杯是第一个参考包，后续扩展到更多联赛、国家队和俱乐部比赛；权利边界以"个人本地使用"为基线 |
 

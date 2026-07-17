@@ -14,6 +14,7 @@ frontend/local-data-manifest.json
 
 # Raw data: allow specific sources, exclude others
 data/raw/transfermarkt_datasets/
+data/raw/reep/
 data/silver/**
 data/gold/scoutlab.duckdb
 data/gold/scoutfootball.duckdb

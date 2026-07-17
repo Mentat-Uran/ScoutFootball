@@ -81,6 +81,26 @@ def test_source_health_attaches_only_valid_raw_inspections(tmp_path) -> None:
     assert football_data["inspection_capture"][0]["content_hash"] == "abc"
 
 
+def test_source_health_accepts_raw_csv_inspection(tmp_path) -> None:
+    settings = PlatformSettings.from_root(tmp_path)
+    evidence = {
+        "report_type": "scoutfootball.raw_source_file_inspection",
+        "generated_at": "2026-07-17T00:00:00Z",
+        "source_id": "reep",
+        "artifacts": [
+            {
+                "artifact_path": "raw/reep/people.csv",
+                "inspection": {"content_hash": "abc", "row_count": 2, "reader": "python_csv_utf8"},
+            }
+        ],
+    }
+
+    report = build_source_health_report(settings, preflight_evidence=evidence)
+
+    reep = next(item for item in report["registered_sources"] if item["source_id"] == "reep")
+    assert reep["inspection_capture"][0]["content_hash"] == "abc"
+
+
 def test_source_health_rejects_evidence_path_escape(tmp_path) -> None:
     settings = PlatformSettings.from_root(tmp_path)
     evidence = {
