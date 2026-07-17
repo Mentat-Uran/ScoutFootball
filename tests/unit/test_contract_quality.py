@@ -54,6 +54,18 @@ def test_contract_quality_never_calls_missing_snapshot_evidence_a_pass(tmp_path)
     assert _check(report, "explicit_source_snapshots")["status"] == "baseline_required"
 
 
+def test_contract_quality_fails_with_an_unregistered_active_raw_directory(tmp_path) -> None:
+    settings = PlatformSettings.from_root(tmp_path)
+    (settings.raw_root / "legacy_unregistered_source").mkdir(parents=True)
+
+    report = build_contract_quality_report(settings)
+    raw_directories = _check(report, "unregistered_raw_directories")
+
+    assert raw_directories["status"] == "fail"
+    assert raw_directories["unregistered_raw_directories"] == ["legacy_unregistered_source"]
+    assert "unregistered_raw_directories" in report["failed_checks"]
+
+
 def test_contract_quality_accepts_content_evidence_but_keeps_snapshot_baseline_honest(
     tmp_path,
 ) -> None:

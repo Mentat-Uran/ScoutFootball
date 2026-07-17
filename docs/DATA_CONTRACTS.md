@@ -3235,6 +3235,12 @@ inspection fingerprints; malformed reports and path-escape attempts are
 rejected, and this attachment never fills in missing source snapshot provenance
 or retention/deletion terms.
 
+`scoutfootball contract-quality` treats a non-empty unregistered raw directory
+as a failed gate. This prevents legacy or unknown local source files from being
+mistaken for contract-governed inputs. The check does not move, delete, or
+register those files: their source, rights, and migration decision must be
+explicit before they enter the active raw contract boundary.
+
 `scoutfootball record-source-snapshot --source <registered source> --snapshot-date
 YYYY-MM-DD --evidence <preflight JSON>` appends one JSONL record to the local
 snapshot ledger (default: `data/reports/data_health/source_snapshot_ledger.jsonl`).

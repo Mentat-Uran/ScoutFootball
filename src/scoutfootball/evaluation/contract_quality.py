@@ -20,6 +20,7 @@ from scoutfootball.evaluation.quality_audit_ledger import (
 )
 from scoutfootball.evaluation.source_health import (
     _inspections_by_path,
+    build_source_health_report,
     source_license_policy_status,
 )
 from scoutfootball.evaluation.source_policy_ledger import (
@@ -31,7 +32,7 @@ from scoutfootball.evaluation.source_snapshot_ledger import (
     read_source_snapshot_ledger,
 )
 
-CONTRACT_QUALITY_VERSION = "1.3.0"
+CONTRACT_QUALITY_VERSION = "1.4.0"
 
 
 def _now_iso() -> str:
@@ -189,6 +190,9 @@ def build_contract_quality_report(
         contract.license.source_name for contract in raw_contracts if contract.license
     }
     recorded_snapshot_ids = sorted(raw_source_ids & set(snapshots))
+    unregistered_raw_directories = build_source_health_report(settings)[
+        "unregistered_raw_directories"
+    ]
     audit_summary = (
         summarize_quality_audits(read_quality_audit_ledger(audit_ledger_path))
         if audit_ledger_path
@@ -213,6 +217,15 @@ def build_contract_quality_report(
             registered_raw_source_count=len(raw_contracts),
             sources_with_license=len(raw_contracts) - len(raw_without_license),
             missing_license_contracts=raw_without_license,
+        ),
+        _status(
+            "unregistered_raw_directories",
+            "fail" if unregistered_raw_directories else "pass",
+            unregistered_raw_directories=unregistered_raw_directories,
+            note=(
+                "Observed raw directories must be registered with a source contract or "
+                "kept outside the active data root; this check does not infer their rights."
+            ),
         ),
         _status(
             "source_retention_and_deletion_policies",
@@ -286,6 +299,10 @@ def build_contract_quality_report(
             (
                 "It does not infer freshness, source truth, identity correctness, or a "
                 "quality threshold from local file metadata."
+            ),
+            (
+                "A non-empty unregistered raw directory blocks this report so legacy or "
+                "unclassified files cannot be mistaken for contract-governed inputs."
             ),
             (
                 "Observed snapshot coverage is an audit baseline, not a claim that "
