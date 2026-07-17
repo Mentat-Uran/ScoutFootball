@@ -53,6 +53,25 @@ class TestSaveModelRun:
         assert (run_dir / "optimized_params.npy").exists()
         assert (run_dir / "meta.json").exists()
 
+    def test_explicit_candidate_run_id_reuses_its_prepared_directory(self, tmp_path):
+        candidate_dir = tmp_path / "candidate-run"
+        candidate_dir.mkdir()
+        history = candidate_dir / "training_history.json"
+        history.write_text("{}", encoding="utf-8")
+
+        run_dir = save_model_run(
+            np.array([1.0], dtype=np.float32),
+            {"spearman": 0.65},
+            output_dir=tmp_path,
+            run_id="candidate-run",
+        )
+
+        assert run_dir == candidate_dir
+        assert history.exists()
+        assert (candidate_dir / "optimized_params.npy").exists()
+        meta = json.loads((candidate_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["activation"]["status"] == "not_activated"
+
     def test_meta_json_content(self, tmp_path):
         params = np.random.randn(77).astype(np.float32)
         metrics = {"spearman": 0.65, "pearson": 0.68}

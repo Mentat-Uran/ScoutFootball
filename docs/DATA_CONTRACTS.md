@@ -794,6 +794,12 @@ Optimizer run metadata records the actual season lists returned by its time
 split, rather than configuration such as `--test-seasons 1`. A missing or
 numeric count in the metadata is not converted into a claimed holdout season.
 
+New optimizer executions write parameters and training visualizations only to
+their unique `data/models/runs/<run_id>/` candidate directory. They do not
+overwrite `gold/feature_store` parameter files or activate
+`player_ratings_optimized.parquet`; promotion and rollback remain separate,
+explicit maintainer actions.
+
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
 `/world-cup/squads/{team}` and `/world-cup/outlook/{team}` include a versioned
