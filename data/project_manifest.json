@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-17T13:12:23.539393+00:00",
+  "generated_at": "2026-07-17T13:49:24.760799+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -268,6 +268,8 @@
       "uv run python -m scoutfootball validate-decision-package <path>",
       "uv run python -m scoutfootball record-source-snapshot",
       "uv run python -m scoutfootball record-source-policy",
+      "uv run python -m scoutfootball record-quality-audit",
+      "uv run python -m scoutfootball record-quality-threshold",
       "uv run python -m scoutfootball preflight",
       "uv run python -m scoutfootball preflight --evidence-out <path>",
       "uv run python -m scoutfootball optimizer-preflight",
@@ -288,7 +290,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-17T13:12:23.538878+00:00",
+    "generated_at": "2026-07-17T13:49:24.760799+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -362,7 +364,9 @@
           "rollback-model-run",
           "validate-decision-package",
           "record-source-snapshot",
-          "record-source-policy"
+          "record-source-policy",
+          "record-quality-audit",
+          "record-quality-threshold"
         ],
         "frontend_views": [],
         "data_artifacts": [],
@@ -897,7 +901,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-17T13:12:23.539393+00:00",
+    "generated_at": "2026-07-17T13:49:24.760799+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -1799,5 +1803,5 @@
       }
     ]
   },
-  "content_sha256": "95ce5d875a25d213521443061d5925c96f826b2cd3a4c875ff6a70346bc6ed9c"
+  "content_sha256": "41b63698ecac0c809990abb4d67885349efe1e7b0d085ac1e55b76acf362333b"
 }

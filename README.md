@@ -339,6 +339,33 @@ uv run pytest tests/integration/test_pipeline_e2e.py
 Use a disposable `SCOUTFOOTBALL_DATA_ROOT` for this check when the maintained
 local data directory must not be changed.
 
+### Local quality-audit records
+
+`contract-quality` reports identity-resolution and external-source claim error
+rates only from an explicitly supplied local audit ledger. It never treats
+unreviewed rows, ambiguous identities, or contract presence as correct. Record
+one manually reviewed sample in preview mode first:
+
+```powershell
+uv run python -m scoutfootball record-quality-audit --audit-kind identity_resolution --source transfermarkt_manual --sample-id "local-review-001" --outcome confirmed_correct --reviewer "maintainer" --evidence-reference "local-review:001" --decision "Reviewed against the permitted local snapshot."
+```
+
+Add `--confirm` only after the review. A quality gate can apply only after the
+maintainer also records its own error-rate and sample-count threshold:
+
+```powershell
+uv run python -m scoutfootball record-quality-threshold --audit-kind identity_resolution --maximum-error-rate 0.05 --minimum-sample-count 40 --decision "Local review threshold for this source scope."
+```
+
+Use `--confirm` only after selecting that threshold, then inspect both local ledgers:
+
+```powershell
+uv run python -m scoutfootball contract-quality --audit-ledger data/reports/data_health/quality_audit_ledger.jsonl --threshold-ledger data/reports/data_health/quality_threshold_ledger.jsonl
+```
+
+The report never derives a threshold: insufficient samples remain
+`baseline_required`, and an exceeded recorded threshold fails the relevant check.
+
 ### Tech Stack & Compliance
 
 - **Stack:** Python, uv, DuckDB + Parquet, pandas, scikit-learn, Streamlit, Plotly, mplsoccer, FastAPI, PyTorch.

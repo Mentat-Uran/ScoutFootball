@@ -242,6 +242,8 @@ def _cmd_contract_quality(args: argparse.Namespace) -> None:
             preflight_evidence=evidence,
             snapshot_ledger_path=args.snapshot_ledger,
             policy_ledger_path=args.policy_ledger,
+            audit_ledger_path=args.audit_ledger,
+            threshold_ledger_path=args.threshold_ledger,
         )
     except ValueError as exc:
         print(f"Error: invalid contract-quality input: {exc}", file=sys.stderr)
@@ -454,6 +456,80 @@ def _cmd_record_source_policy(args: argparse.Namespace) -> None:
         print(f"  Retention mode: {record['retention']['mode']}")
     else:
         print(f"Preview local source policy: {record['policy_id']}")
+        print("  No files or ledger records were changed; rerun with --confirm to append.")
+
+
+def _cmd_record_quality_audit(args: argparse.Namespace) -> None:
+    """Preview or append one explicit maintainer-reviewed C1 audit sample."""
+    from scoutfootball.evaluation.quality_audit_ledger import (
+        append_quality_audit_record,
+        build_quality_audit_record,
+    )
+
+    try:
+        record = build_quality_audit_record(
+            audit_kind=args.audit_kind,
+            source_id=args.source,
+            sample_id=args.sample_id,
+            outcome=args.outcome,
+            reviewer=args.reviewer,
+            evidence_reference=args.evidence_reference,
+            decision=args.decision,
+            supersedes_audit_id=args.supersedes,
+        )
+        ledger = Path(args.ledger).resolve()
+        if args.confirm:
+            ledger = append_quality_audit_record(record, ledger)
+    except (ValueError, FileExistsError) as exc:
+        print(f"Error: unable to record quality audit: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    status = "recorded" if args.confirm else "preview"
+    result = {"status": status, "ledger": str(ledger), "record": record}
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif args.confirm:
+        print(f"Recorded local quality audit: {record['audit_id']}")
+        print(f"  Ledger: {ledger}")
+        print(f"  Kind: {record['audit_kind']}")
+        print(f"  Outcome: {record['outcome']}")
+    else:
+        print(f"Preview local quality audit: {record['audit_id']}")
+        print("  No files or ledger records were changed; rerun with --confirm to append.")
+
+
+def _cmd_record_quality_threshold(args: argparse.Namespace) -> None:
+    """Preview or append a maintainer-selected quality threshold."""
+    from scoutfootball.evaluation.quality_audit_ledger import (
+        append_quality_threshold_record,
+        build_quality_threshold_record,
+    )
+
+    try:
+        record = build_quality_threshold_record(
+            audit_kind=args.audit_kind,
+            maximum_error_rate=args.maximum_error_rate,
+            minimum_sample_count=args.minimum_sample_count,
+            decision=args.decision,
+        )
+        ledger = Path(args.ledger).resolve()
+        if args.confirm:
+            ledger = append_quality_threshold_record(record, ledger)
+    except (ValueError, FileExistsError) as exc:
+        print(f"Error: unable to record quality threshold: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    status = "recorded" if args.confirm else "preview"
+    result = {"status": status, "ledger": str(ledger), "record": record}
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif args.confirm:
+        print(f"Recorded local quality threshold: {record['threshold_id']}")
+        print(f"  Ledger: {ledger}")
+        print(f"  Kind: {record['audit_kind']}")
+        print(f"  Maximum error rate: {record['maximum_error_rate']}")
+    else:
+        print(f"Preview local quality threshold: {record['threshold_id']}")
         print("  No files or ledger records were changed; rerun with --confirm to append.")
 
 
@@ -2106,6 +2182,12 @@ def main() -> None:
     contract_quality_p.add_argument(
         "--policy-ledger", help="Optional append-only local source policy ledger"
     )
+    contract_quality_p.add_argument(
+        "--audit-ledger", help="Optional append-only local identity/source claim audit ledger"
+    )
+    contract_quality_p.add_argument(
+        "--threshold-ledger", help="Optional append-only local quality-threshold ledger"
+    )
     model_admission_p = sub.add_parser(
         "model-admission",
         help="Check whether local optimizer runs have evidence for human promotion review",
@@ -2228,6 +2310,85 @@ def main() -> None:
         "--confirm", action="store_true", help="Actually append the policy declaration"
     )
     policy_p.add_argument("--json", action="store_true", help="Emit JSON")
+    quality_audit_p = sub.add_parser(
+        "record-quality-audit",
+        help="Preview or append one explicit local identity or source-claim audit sample",
+    )
+    quality_audit_p.add_argument(
+        "--audit-kind",
+        required=True,
+        choices=("identity_resolution", "source_claim"),
+        help="The reviewed C1 quality dimension",
+    )
+    quality_audit_p.add_argument("--source", required=True, help="Registered raw source identifier")
+    quality_audit_p.add_argument(
+        "--sample-id", required=True, help="Opaque local identifier for the reviewed sample"
+    )
+    quality_audit_p.add_argument(
+        "--outcome",
+        required=True,
+        choices=("confirmed_correct", "confirmed_error"),
+        help="Maintainer-confirmed outcome; never inferred by the command",
+    )
+    quality_audit_p.add_argument(
+        "--reviewer", required=True, help="Local reviewer identifier retained with the audit"
+    )
+    quality_audit_p.add_argument(
+        "--evidence-reference",
+        required=True,
+        help="Opaque local reference locating the reviewed evidence",
+    )
+    quality_audit_p.add_argument(
+        "--decision", required=True, help="Maintainer decision text retained in the ledger"
+    )
+    quality_audit_p.add_argument(
+        "--supersedes",
+        default=None,
+        help="Optional prior audit ID for an append-only correction of the same sample",
+    )
+    quality_audit_p.add_argument(
+        "--ledger",
+        default="data/reports/data_health/quality_audit_ledger.jsonl",
+        help="Local append-only JSONL audit ledger path",
+    )
+    quality_audit_p.add_argument(
+        "--confirm", action="store_true", help="Actually append the reviewed sample"
+    )
+    quality_audit_p.add_argument("--json", action="store_true", help="Emit JSON")
+    quality_threshold_p = sub.add_parser(
+        "record-quality-threshold",
+        help="Preview or append a maintainer-selected local quality threshold",
+    )
+    quality_threshold_p.add_argument(
+        "--audit-kind",
+        required=True,
+        choices=("identity_resolution", "source_claim"),
+        help="The C1 quality dimension governed by the threshold",
+    )
+    quality_threshold_p.add_argument(
+        "--maximum-error-rate",
+        required=True,
+        type=float,
+        help="Maintainer-selected maximum observed error rate from 0 to 1",
+    )
+    quality_threshold_p.add_argument(
+        "--minimum-sample-count",
+        required=True,
+        type=int,
+        help="Minimum effective reviewed samples before this threshold can apply",
+    )
+    quality_threshold_p.add_argument(
+        "--decision", required=True, help="Maintainer rationale retained in the ledger"
+    )
+    quality_threshold_p.add_argument(
+        "--ledger",
+        default="data/reports/data_health/quality_threshold_ledger.jsonl",
+        help="Local append-only JSONL threshold ledger path",
+    )
+    quality_threshold_p.add_argument(
+        "--confirm", action="store_true", help="Actually append the threshold declaration"
+    )
+    quality_threshold_p.add_argument("--json", action="store_true", help="Emit JSON")
     preflight_p = sub.add_parser(
         "optimizer-preflight",
         help="Check rating optimizer runtime and raw inputs",
@@ -2595,6 +2756,8 @@ def main() -> None:
         "validate-decision-package": _cmd_validate_decision_package,
         "record-source-snapshot": _cmd_record_source_snapshot,
         "record-source-policy": _cmd_record_source_policy,
+        "record-quality-audit": _cmd_record_quality_audit,
+        "record-quality-threshold": _cmd_record_quality_threshold,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,
         "action-value": _cmd_action_value,

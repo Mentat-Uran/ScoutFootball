@@ -6,6 +6,12 @@ import pytest
 
 from scoutfootball.config import PlatformSettings
 from scoutfootball.evaluation.contract_quality import build_contract_quality_report
+from scoutfootball.evaluation.quality_audit_ledger import (
+    append_quality_audit_record,
+    append_quality_threshold_record,
+    build_quality_audit_record,
+    build_quality_threshold_record,
+)
 from scoutfootball.evaluation.source_policy_ledger import (
     append_source_policy_record,
     build_source_policy_record,
@@ -125,3 +131,119 @@ def test_contract_quality_accepts_only_the_sources_declared_in_a_policy_ledger(t
         "transfermarkt_manual",
         "understat",
     }
+
+
+def test_contract_quality_exposes_audited_error_rates_without_calling_them_a_pass(tmp_path) -> None:
+    ledger = tmp_path / "quality_audits.jsonl"
+    identity = build_quality_audit_record(
+        audit_kind="identity_resolution",
+        source_id="transfermarkt_manual",
+        sample_id="identity-001",
+        outcome="confirmed_correct",
+        reviewer="maintainer",
+        evidence_reference="local-review:identity-001",
+        decision="Reviewed against the local permitted snapshot.",
+        recorded_at="2026-07-17T00:00:00Z",
+    )
+    claim = build_quality_audit_record(
+        audit_kind="source_claim",
+        source_id="football_data",
+        sample_id="claim-001",
+        outcome="confirmed_error",
+        reviewer="maintainer",
+        evidence_reference="local-review:claim-001",
+        decision="Reviewed an external factual claim against the local input.",
+        recorded_at="2026-07-17T00:01:00Z",
+    )
+    append_quality_audit_record(identity, ledger)
+    append_quality_audit_record(claim, ledger)
+
+    report = build_contract_quality_report(
+        PlatformSettings.from_root(tmp_path), audit_ledger_path=str(ledger)
+    )
+    identity_rate = _check(report, "identity_conflict_error_rate")
+    claim_rate = _check(report, "source_claim_error_rate")
+
+    assert report["scope"]["audit_ledger_supplied"] is True
+    assert identity_rate["status"] == "baseline_required"
+    assert identity_rate["audit_status"] == "observed"
+    assert identity_rate["audited_sample_count"] == 1
+    assert identity_rate["observed_error_rate"] == 0.0
+    assert claim_rate["audit_status"] == "observed"
+    assert claim_rate["confirmed_error_count"] == 1
+    assert claim_rate["observed_error_rate"] == 1.0
+    assert report["overall_status"] == "incomplete"
+
+
+def test_contract_quality_applies_only_an_explicit_threshold_with_enough_samples(tmp_path) -> None:
+    audit_ledger = tmp_path / "quality_audits.jsonl"
+    threshold_ledger = tmp_path / "quality_thresholds.jsonl"
+    audit = build_quality_audit_record(
+        audit_kind="identity_resolution",
+        source_id="transfermarkt_manual",
+        sample_id="identity-001",
+        outcome="confirmed_correct",
+        reviewer="maintainer",
+        evidence_reference="local-review:identity-001",
+        decision="Reviewed against the local permitted snapshot.",
+        recorded_at="2026-07-17T00:00:00Z",
+    )
+    threshold = build_quality_threshold_record(
+        audit_kind="identity_resolution",
+        maximum_error_rate=0.0,
+        minimum_sample_count=1,
+        decision="One reviewed fixture is sufficient only for this test scope.",
+        recorded_at="2026-07-17T00:01:00Z",
+    )
+    append_quality_audit_record(audit, audit_ledger)
+    append_quality_threshold_record(threshold, threshold_ledger)
+
+    report = build_contract_quality_report(
+        PlatformSettings.from_root(tmp_path),
+        audit_ledger_path=str(audit_ledger),
+        threshold_ledger_path=str(threshold_ledger),
+    )
+    identity_rate = _check(report, "identity_conflict_error_rate")
+    source_claim_rate = _check(report, "source_claim_error_rate")
+
+    assert report["scope"]["threshold_ledger_supplied"] is True
+    assert identity_rate["status"] == "pass"
+    assert identity_rate["threshold_status"] == "met"
+    assert identity_rate["threshold"]["threshold_id"] == threshold["threshold_id"]
+    assert source_claim_rate["status"] == "baseline_required"
+    assert source_claim_rate["threshold_status"] == "not_recorded"
+
+
+def test_contract_quality_fails_when_a_recorded_threshold_is_exceeded(tmp_path) -> None:
+    audit_ledger = tmp_path / "quality_audits.jsonl"
+    threshold_ledger = tmp_path / "quality_thresholds.jsonl"
+    audit = build_quality_audit_record(
+        audit_kind="source_claim",
+        source_id="football_data",
+        sample_id="claim-001",
+        outcome="confirmed_error",
+        reviewer="maintainer",
+        evidence_reference="local-review:claim-001",
+        decision="Reviewed against the local permitted input.",
+        recorded_at="2026-07-17T00:00:00Z",
+    )
+    threshold = build_quality_threshold_record(
+        audit_kind="source_claim",
+        maximum_error_rate=0.0,
+        minimum_sample_count=1,
+        decision="Reject any confirmed source claim error in this test scope.",
+        recorded_at="2026-07-17T00:01:00Z",
+    )
+    append_quality_audit_record(audit, audit_ledger)
+    append_quality_threshold_record(threshold, threshold_ledger)
+
+    report = build_contract_quality_report(
+        PlatformSettings.from_root(tmp_path),
+        audit_ledger_path=str(audit_ledger),
+        threshold_ledger_path=str(threshold_ledger),
+    )
+    claim_rate = _check(report, "source_claim_error_rate")
+
+    assert claim_rate["status"] == "fail"
+    assert claim_rate["threshold_status"] == "not_met"
+    assert report["failed_checks"] == ["source_claim_error_rate"]
