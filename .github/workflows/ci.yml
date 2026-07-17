@@ -67,3 +67,24 @@ jobs:
 
       - name: Test frontend contracts
         run: node --test frontend/tests/*.test.js
+
+  static-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify static snapshot inventory
+        run: uv run --no-sync python scripts/check_frontend_manifest.py
+
+      - name: Build verified static package
+        run: npm run build:sites

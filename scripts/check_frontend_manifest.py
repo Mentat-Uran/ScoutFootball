@@ -23,6 +23,7 @@ Exit codes:
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -49,6 +50,60 @@ def _scan_actual_files(data_dir: Path) -> dict[str, float]:
         rel = "/" + p.relative_to(base).as_posix()
         actual[rel] = round(p.stat().st_size / 1024, 1)
     return actual
+
+
+def _validate_recorded_files(manifest: object) -> tuple[dict[str, float] | None, str | None]:
+    """Validate the file inventory before comparing it with the snapshot.
+
+    A malformed or internally inconsistent manifest is just as unsafe as a
+    stale one: the static UI could otherwise advertise a freshness claim that
+    the gate never actually checked.  Keep this validation dependency-free so
+    it can run before a static build.
+    """
+    if not isinstance(manifest, dict):
+        return None, "top level must be a JSON object"
+
+    files = manifest.get("files")
+    if not isinstance(files, list):
+        return None, "files must be a list"
+
+    recorded: dict[str, float] = {}
+    for index, entry in enumerate(files):
+        if not isinstance(entry, dict):
+            return None, f"files[{index}] must be an object"
+        path = entry.get("path")
+        kb = entry.get("kb")
+        if not isinstance(path, str) or not path.startswith("/data/"):
+            return None, f"files[{index}].path must start with /data/"
+        if (
+            isinstance(kb, bool)
+            or not isinstance(kb, (int, float))
+            or not math.isfinite(kb)
+            or kb < 0
+        ):
+            return None, f"files[{index}].kb must be a finite non-negative number"
+        if path in recorded:
+            return None, f"duplicate file entry: {path}"
+        recorded[path] = float(kb)
+
+    file_count = manifest.get("file_count")
+    if (
+        isinstance(file_count, bool)
+        or not isinstance(file_count, int)
+        or file_count != len(recorded)
+    ):
+        return None, "file_count must match the unique file inventory"
+
+    total_kb = manifest.get("total_kb")
+    if (
+        isinstance(total_kb, bool)
+        or not isinstance(total_kb, (int, float))
+        or not math.isfinite(total_kb)
+        or abs(float(total_kb) - round(sum(recorded.values()), 1)) > SIZE_TOLERANCE_KB
+    ):
+        return None, "total_kb must match the file inventory"
+
+    return recorded, None
 
 
 def check_manifest(
@@ -81,7 +136,12 @@ def check_manifest(
         _print(f"FAIL: manifest unreadable at {manifest_path}: {exc}")
         return 1
 
-    recorded_files = {f["path"]: f["kb"] for f in manifest.get("files", [])}
+    recorded_files, validation_error = _validate_recorded_files(manifest)
+    if validation_error:
+        _print(f"FAIL: {manifest_path.name} has invalid metadata: {validation_error}")
+        return 1
+
+    assert recorded_files is not None
     actual_files = _scan_actual_files(data_dir)
 
     missing_on_disk = sorted(set(recorded_files) - set(actual_files))

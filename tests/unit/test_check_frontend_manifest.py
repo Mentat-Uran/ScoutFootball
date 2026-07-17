@@ -133,3 +133,53 @@ def test_empty_data_dir_with_empty_manifest_returns_zero(tmp_path: Path) -> None
     _write_json(manifest_path, _make_manifest({}))
 
     assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 0
+
+
+def test_duplicate_manifest_entry_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, {
+        "generated_at": "2026-07-17T00:00:00+00:00",
+        "file_count": 2,
+        "total_kb": 0.0,
+        "files": [
+            {"path": "/data/a.json", "kb": 0.0},
+            {"path": "/data/a.json", "kb": 0.0},
+        ],
+    })
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_manifest_total_mismatch_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, {
+        "generated_at": "2026-07-17T00:00:00+00:00",
+        "file_count": 1,
+        "total_kb": 5.0,
+        "files": [{"path": "/data/a.json", "kb": 0.0}],
+    })
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_invalid_manifest_file_entry_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, {
+        "generated_at": "2026-07-17T00:00:00+00:00",
+        "file_count": 1,
+        "total_kb": 0.0,
+        "files": [{"path": "/data/a.json", "kb": "unknown"}],
+    })
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1

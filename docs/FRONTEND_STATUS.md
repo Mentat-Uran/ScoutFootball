@@ -86,12 +86,12 @@
 - StatsBomb 衍生图表和导出必须显示 attribution。
 - 动画尊重 `prefers-reduced-motion`；交互元素保留焦点态和移动端触控尺寸。
 - 当前验证：Node 语法检查、前端契约测试、API 集成测试、安全回归、本地浏览器交互检查，以及 `tests/e2e/` 下的 Playwright 真实浏览器 E2E（smoke + 8 个工作流场景，覆盖 LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全，通过 `-m e2e` 显式运行）。Node 测试仍不替代真实浏览器 E2E；二者互补。
-- 当前 `frontend/data_manifest.json` 的记录生成时间仍为 2026-06-23，且 `scripts/check_frontend_manifest.py` 检测到 3 个未记录新文件和 6 个大小漂移，静态快照新鲜度属于已知风险。陈旧度检查脚本已就位（`uv run python scripts/check_frontend_manifest.py`，stale 返回 1），可在发布前手动运行；构建时自动刷新 manifest 的完整门禁留到 C1。
+- `frontend/data_manifest.json` 已由本地 release 导出刷新。`scripts/check_frontend_manifest.py` 会检查 JSON 文件清单、大小、重复项及 `file_count`/`total_kb` 汇总元数据；`npm run build:sites` 和 CI 在复制 STATIC 快照前会运行该检查并在漂移时失败关闭。导出 workflow 会在世界杯预测写入后重新生成并复核 manifest。构建时自动重新生成、来源/快照 SLO 与跨产物一致性仍留给 C1。
 
 ## G1 验证后的前端顺序
 
 1. ~~为球探决策、比赛准备、数据/模型发布三个黄金流程加入真实浏览器 CI，覆盖 LIVE、STATIC、OFFLINE、空数据、低覆盖、字段缺失、移动阅读和导入安全。~~ 已完成（G1 子任务3，`tests/e2e/`，commit e30cc57 + d413d68）。
-2. 从 OpenAPI、导航、静态映射和 capability registry 生成前端能力/契约清单；构建时刷新 manifest，漂移或陈旧即阻断发布。（部分完成：`data/project_manifest.json` + `scripts/generate_manifest.py --check` 已就位；`frontend/data_manifest.json` 构建时门禁仍待集成）
+2. 从 OpenAPI、导航、静态映射和 capability registry 生成前端能力/契约清单；构建时刷新 manifest，漂移或陈旧即阻断发布。（部分完成：`data/project_manifest.json` + `scripts/generate_manifest.py --check` 已就位；STATIC inventory 已在 CI/打包前失败关闭，但自动重建、来源/快照 SLO 与全契约 gate 仍待 C1）
 3. 按领域拆分 `app.js`，先抽出契约/数据访问、球探、世界杯和动作价值模块，并保持现有安全 helper 与静态降级语义。
 4. 把工作流中的“下一步、缺失证据、阻断原因”做成一等状态；不再用增加顶层视图表示进度。
 5. 继续加强本地导入、导出、备份和迁移；公开链接、云同步、组织账号及多人实时协作不在当前章程范围内。
