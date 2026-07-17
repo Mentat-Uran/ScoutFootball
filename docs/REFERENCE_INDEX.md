@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-17T12:10:09.644864+00:00`
-- content SHA-256：`749513f187d4d347a96704b0bd335cef0a7dbbf9994a6b4ee7a8c97568d4100f`
+- manifest generated_at：`2026-07-17T12:26:39.909383+00:00`
+- content SHA-256：`35e263045b3ef71c934126562d4912cd13db18cdad50df9112efd3a0e3eda670`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -26,6 +26,9 @@
 - `uv run python -m scoutfootball contract-quality`
 - `uv run python -m scoutfootball model-admission`
 - `uv run python -m scoutfootball discard-model-run <run_id>`
+- `uv run python -m scoutfootball reject-model-run <run_id> --decision <text>`
+- `uv run python -m scoutfootball promote-model-run <run_id> --decision <text>`
+- `uv run python -m scoutfootball rollback-model-run <backup_id> --decision <text>`
 - `uv run python -m scoutfootball record-source-snapshot`
 - `uv run python -m scoutfootball preflight`
 - `uv run python -m scoutfootball preflight --evidence-out <path>`
@@ -51,7 +54,7 @@
 | --- | --- | --- | --- | --- | --- |
 | pipeline.ingest | data_pipeline | delivered | — | ingest | — |
 | pipeline.build_features | data_pipeline | delivered | — | build-features | — |
-| pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, contract-quality, model-admission, discard-model-run, record-source-snapshot | — |
+| pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, contract-quality, model-admission, discard-model-run, reject-model-run, promote-model-run, rollback-model-run, record-source-snapshot | — |
 | ratings.training | player_ratings | delivered | — | train, train-rating-nn | — |
 | ratings.export | player_ratings | delivered | /ratings, /ratings/meta, /ratings/snapshots | export-ratings | players, value |
 | ratings.truth_labels | player_ratings | delivered | /reports/truth-labels, /reports/transfermarkt-identities | import-truth-labels, import-transfermarkt-truth-labels, transfermarkt-identity-review, reconcile-transfermarkt-truth-labels, audit-truth-labels | — |

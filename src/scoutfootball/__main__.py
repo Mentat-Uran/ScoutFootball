@@ -292,6 +292,84 @@ def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     )
 
 
+def _cmd_reject_model_run(args: argparse.Namespace) -> None:
+    """Record an explicit local rejection without deleting a candidate."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.model_run_lifecycle import (
+        ModelRunLifecycleError,
+        format_optimizer_run_action,
+        reject_optimizer_run,
+    )
+
+    try:
+        report = reject_optimizer_run(
+            PlatformSettings.from_root(),
+            args.run_id,
+            decision=args.decision,
+            confirm=args.confirm,
+        )
+    except ModelRunLifecycleError as exc:
+        print(f"Error: cannot reject model run: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(
+        json.dumps(report, indent=2, ensure_ascii=False)
+        if args.json
+        else format_optimizer_run_action(report)
+    )
+
+
+def _cmd_promote_model_run(args: argparse.Namespace) -> None:
+    """Promote a reviewable candidate only after explicit confirmation."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.model_run_lifecycle import (
+        ModelRunLifecycleError,
+        format_optimizer_run_action,
+        promote_optimizer_run,
+    )
+
+    try:
+        report = promote_optimizer_run(
+            PlatformSettings.from_root(),
+            args.run_id,
+            decision=args.decision,
+            confirm=args.confirm,
+        )
+    except ModelRunLifecycleError as exc:
+        print(f"Error: cannot promote model run: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(
+        json.dumps(report, indent=2, ensure_ascii=False)
+        if args.json
+        else format_optimizer_run_action(report)
+    )
+
+
+def _cmd_rollback_model_run(args: argparse.Namespace) -> None:
+    """Restore a verified local active-artifact backup after confirmation."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.model_run_lifecycle import (
+        ModelRunLifecycleError,
+        format_optimizer_run_action,
+        rollback_optimizer_run,
+    )
+
+    try:
+        report = rollback_optimizer_run(
+            PlatformSettings.from_root(),
+            args.backup_id,
+            decision=args.decision,
+            confirm=args.confirm,
+        )
+    except ModelRunLifecycleError as exc:
+        print(f"Error: cannot roll back model run: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(
+        json.dumps(report, indent=2, ensure_ascii=False)
+        if args.json
+        else format_optimizer_run_action(report)
+    )
+
+
 def _cmd_record_source_snapshot(args: argparse.Namespace) -> None:
     from scoutfootball.evaluation.source_snapshot_ledger import (
         append_source_snapshot_record,
@@ -1980,6 +2058,44 @@ def main() -> None:
         help="Allow a confirmed discard when the run lacks readable metadata",
     )
     discard_model_run_p.add_argument("--json", action="store_true", help="Emit JSON")
+    reject_model_run_p = sub.add_parser(
+        "reject-model-run",
+        help="Preview or record an explicit local rejection of one unactivated optimizer candidate",
+    )
+    reject_model_run_p.add_argument("run_id", help="Candidate run directory name")
+    reject_model_run_p.add_argument(
+        "--decision", required=True, help="Maintainer decision text retained in candidate metadata"
+    )
+    reject_model_run_p.add_argument(
+        "--confirm", action="store_true", help="Actually record the rejection in candidate metadata"
+    )
+    reject_model_run_p.add_argument("--json", action="store_true", help="Emit JSON")
+    promote_model_run_p = sub.add_parser(
+        "promote-model-run",
+        help="Preview or promote one reviewable local optimizer candidate with a reversible backup",
+    )
+    promote_model_run_p.add_argument("run_id", help="Candidate run directory name")
+    promote_model_run_p.add_argument(
+        "--decision", required=True, help="Maintainer decision text retained with the activation"
+    )
+    promote_model_run_p.add_argument(
+        "--confirm", action="store_true", help="Back up and replace active local rating artifacts"
+    )
+    promote_model_run_p.add_argument("--json", action="store_true", help="Emit JSON")
+    rollback_model_run_p = sub.add_parser(
+        "rollback-model-run",
+        help="Preview or restore one verified active-artifact backup",
+    )
+    rollback_model_run_p.add_argument(
+        "backup_id", help="Backup directory name created during promotion"
+    )
+    rollback_model_run_p.add_argument(
+        "--decision", required=True, help="Maintainer reason retained in the rollback record"
+    )
+    rollback_model_run_p.add_argument(
+        "--confirm", action="store_true", help="Actually restore the selected backup"
+    )
+    rollback_model_run_p.add_argument("--json", action="store_true", help="Emit JSON")
     snapshot_p = sub.add_parser(
         "record-source-snapshot",
         help="Append an explicitly dated local source snapshot backed by preflight evidence",
@@ -2356,6 +2472,9 @@ def main() -> None:
         "contract-quality": _cmd_contract_quality,
         "model-admission": _cmd_model_admission,
         "discard-model-run": _cmd_discard_model_run,
+        "reject-model-run": _cmd_reject_model_run,
+        "promote-model-run": _cmd_promote_model_run,
+        "rollback-model-run": _cmd_rollback_model_run,
         "record-source-snapshot": _cmd_record_source_snapshot,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,
