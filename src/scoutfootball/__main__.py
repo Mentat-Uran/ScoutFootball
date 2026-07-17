@@ -193,6 +193,21 @@ def _cmd_validate(_args: argparse.Namespace) -> None:
     print(report.summary())
 
 
+def _cmd_source_health(args: argparse.Namespace) -> None:
+    from scoutfootball.evaluation.source_health import (
+        build_source_health_report,
+        format_source_health_report,
+    )
+
+    report = build_source_health_report()
+    output = (
+        json.dumps(report, indent=2, ensure_ascii=False)
+        if args.json
+        else format_source_health_report(report)
+    )
+    print(output)
+
+
 def _cmd_optimizer_preflight(args: argparse.Namespace) -> None:
     from scoutfootball.evaluation.optimizer_preflight import optimizer_preflight
 
@@ -1723,6 +1738,10 @@ def main() -> None:
     nn_p.add_argument("--seed", type=int, default=42)
     nn_p.add_argument("--output-dir", type=str, default=None)
     sub.add_parser("validate", help="Run pre-training data validation")
+    source_health_p = sub.add_parser(
+        "source-health", help="Inspect registered local raw-source health without network access"
+    )
+    source_health_p.add_argument("--json", action="store_true", help="Emit JSON")
     preflight_p = sub.add_parser(
         "optimizer-preflight",
         help="Check rating optimizer runtime and raw inputs",
@@ -2039,6 +2058,7 @@ def main() -> None:
         "train": _cmd_train,
         "train-rating-nn": _cmd_train_rating_nn,
         "validate": _cmd_validate,
+        "source-health": _cmd_source_health,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,
         "action-value": _cmd_action_value,
