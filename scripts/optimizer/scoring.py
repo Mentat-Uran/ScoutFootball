@@ -403,6 +403,35 @@ def compute_ratings_torch(
     return overall
 
 
+def score_player_ratings_frame(
+    df: pd.DataFrame,
+    params: torch.Tensor,
+    device: torch.device,
+) -> pd.DataFrame:
+    """Attach candidate scores using the active season-and-position percentile contract.
+
+    The returned frame is an unactivated candidate artifact. Callers decide
+    where to write it; this function never touches the active feature store.
+    """
+    required = {"sub_position", "season"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"cannot score candidate ratings without columns: {', '.join(missing)}")
+    if df.empty:
+        raise ValueError("cannot score an empty candidate frame")
+
+    features = build_feature_tensors(df)
+    with torch.no_grad():
+        scores = compute_ratings_torch(features, params, device).detach().cpu().numpy()
+    result = df.copy()
+    result["optimized_score"] = scores.astype(np.float32)
+    result["same_position_score"] = (
+        result.groupby(["sub_position", "season"], observed=True)["optimized_score"].rank(pct=True)
+        * 100.0
+    )
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Team-level aggregation
 # ---------------------------------------------------------------------------

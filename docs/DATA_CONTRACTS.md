@@ -794,8 +794,10 @@ Optimizer run metadata records the actual season lists returned by its time
 split, rather than configuration such as `--test-seasons 1`. A missing or
 numeric count in the metadata is not converted into a claimed holdout season.
 
-New optimizer executions write parameters and training visualizations only to
-their unique `data/models/runs/<run_id>/` candidate directory. They do not
+New optimizer executions write parameters, training visualizations, and a
+`player_ratings_candidate.parquet` score snapshot only to their unique
+`data/models/runs/<run_id>/` candidate directory. The run metadata records the
+candidate rating file name, SHA-256, row count, and columns. They do not
 overwrite `gold/feature_store` parameter files or activate
 `player_ratings_optimized.parquet`; promotion and rollback remain separate,
 explicit maintainer actions.

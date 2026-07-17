@@ -29,6 +29,7 @@ Mac 完整模式 (较慢但更准):
 """
 
 import argparse
+import hashlib
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,8 +62,16 @@ from optimizer.data import (
     summarize_optimizer_data_coverage,
 )
 from optimizer.optimization import _get_default_params_tensor, optimize
-from optimizer.scoring import build_feature_tensors
+from optimizer.scoring import build_feature_tensors, score_player_ratings_frame
 from optimizer.truth import build_truth_label_anchor
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def main():
@@ -521,6 +530,18 @@ def main():
 
     # Save outputs
     print("\n[13] 保存输出...")
+    candidate_ratings_path = candidate_dir / "player_ratings_candidate.parquet"
+    candidate_ratings = score_player_ratings_frame(df, best_params, device)
+    candidate_ratings.to_parquet(candidate_ratings_path, index=False)
+    candidate_artifacts = {
+        "ratings": {
+            "path": candidate_ratings_path.name,
+            "sha256": _sha256_file(candidate_ratings_path),
+            "rows": int(len(candidate_ratings)),
+            "columns": list(candidate_ratings.columns),
+            "scope": "unactivated_local_candidate",
+        }
+    }
     # Build metrics dict for save_model_run
     metrics = {
         "baseline_train": baseline_train_eval["metrics"],
@@ -540,6 +561,7 @@ def main():
         data_dir=data_dir,
         data_coverage=data_coverage,
         error_cases=compute_error_cases(optimized_test_eval["matched"]),
+        candidate_artifacts=candidate_artifacts,
         train_seasons=holdout.train_seasons,
         test_seasons=holdout.test_seasons,
     )
@@ -548,6 +570,7 @@ def main():
     print("完成!")
     print(f"  candidate run (not activated): {run_dir}")
     print(f"  optimized_params.npy: {run_dir / 'optimized_params.npy'}")
+    print(f"  candidate ratings: {candidate_ratings_path}")
     print(f"{'='*80}")
 
 

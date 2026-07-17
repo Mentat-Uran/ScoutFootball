@@ -72,6 +72,19 @@ class TestSaveModelRun:
         meta = json.loads((candidate_dir / "meta.json").read_text(encoding="utf-8"))
         assert meta["activation"]["status"] == "not_activated"
 
+    def test_candidate_artifact_metadata_is_preserved(self, tmp_path):
+        run_dir = save_model_run(
+            np.array([1.0], dtype=np.float32),
+            {"spearman": 0.65},
+            output_dir=tmp_path,
+            candidate_artifacts={
+                "ratings": {"path": "player_ratings_candidate.parquet", "rows": 4}
+            },
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["candidate_artifacts"]["ratings"]["rows"] == 4
+
     def test_meta_json_content(self, tmp_path):
         params = np.random.randn(77).astype(np.float32)
         metrics = {"spearman": 0.65, "pearson": 0.68}
