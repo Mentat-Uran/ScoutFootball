@@ -30,9 +30,10 @@ Mac 完整模式 (较慢但更准):
 
 import argparse
 import time
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
-import numpy as np
 import pandas as pd
 import torch
 
@@ -163,6 +164,9 @@ def main():
         args.prior_weight = args.prior_strength
 
     data_dir = Path(args.data_dir).resolve()
+    candidate_run_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    candidate_dir = data_dir / "models" / "runs" / candidate_run_id
+    candidate_dir.mkdir(parents=True, exist_ok=False)
     print("=" * 80)
     print("球员评分权重优化器 (PyTorch GPU)")
     print("=" * 80)
@@ -326,7 +330,7 @@ def main():
         warmup_steps=args.warmup_steps, min_lr_ratio=args.min_lr_ratio,
         grad_clip=args.grad_clip, seed=args.seed,
         enable_viz=not args.no_viz,
-        output_dir=data_dir / "gold" / "feature_store",
+        output_dir=candidate_dir,
     )
     print(f"  总耗时: {time.time()-t0:.1f}s")
 
@@ -517,11 +521,6 @@ def main():
 
     # Save outputs
     print("\n[13] 保存输出...")
-    output_dir = data_dir / "gold" / "feature_store"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    np.save(output_dir / "optimized_params.npy", best_params_cpu.numpy())
-
     # Build metrics dict for save_model_run
     metrics = {
         "baseline_train": baseline_train_eval["metrics"],
@@ -531,10 +530,12 @@ def main():
         "overfit_rank_loss_gap": overfit_gap,
     }
 
-    save_model_run(
+    run_dir = save_model_run(
         params=best_params_cpu.numpy(),
         metrics=metrics,
         args=args,
+        output_dir=candidate_dir.parent,
+        run_id=candidate_run_id,
         feat_hash=feat_hash,
         data_dir=data_dir,
         data_coverage=data_coverage,
@@ -545,8 +546,8 @@ def main():
 
     print(f"\n{'='*80}")
     print("完成!")
-    print(f"  optimized_params.npy: {output_dir / 'optimized_params.npy'}")
-    print(f"  optimized_params_meta.json: {output_dir / 'optimized_params_meta.json'}")
+    print(f"  candidate run (not activated): {run_dir}")
+    print(f"  optimized_params.npy: {run_dir / 'optimized_params.npy'}")
     print(f"{'='*80}")
 
 

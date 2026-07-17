@@ -1307,6 +1307,7 @@ def save_model_run(
     metrics: dict,
     args: argparse.Namespace | None = None,
     output_dir: Path | None = None,
+    run_id: str | None = None,
     feat_hash: str | None = None,
     data_dir: Path | None = None,
     data_coverage: dict | None = None,
@@ -1325,7 +1326,9 @@ def save_model_run(
     import platform
     from datetime import UTC, datetime
 
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    if Path(timestamp).name != timestamp:
+        raise ValueError("run_id must be a single directory name")
     run_dir = (output_dir or Path("data/models/runs")) / timestamp
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1335,6 +1338,7 @@ def save_model_run(
     # Build meta
     meta: dict = {
         "timestamp": timestamp,
+        "run_id": timestamp,
         "params_shape": list(params.shape),
         "params_mean": float(params.mean()),
         "params_std": float(params.std()),
@@ -1345,6 +1349,10 @@ def save_model_run(
         # distinguish an evaluated candidate from a legacy opaque record.
         "metrics": _json_ready(metrics),
         "lineage": build_run_lineage(data_dir or Path("data"), input_hash=feat_hash),
+        "activation": {
+            "status": "not_activated",
+            "note": "Candidate artifacts remain local until an explicit promotion workflow exists.",
+        },
     }
     if data_coverage is not None:
         meta["data_coverage"] = _json_ready(data_coverage)
