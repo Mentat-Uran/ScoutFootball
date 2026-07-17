@@ -12,13 +12,16 @@ from typing import Any
 
 from scoutfootball.architecture import build_data_contract_registry
 from scoutfootball.config import PlatformSettings
-from scoutfootball.evaluation.source_health import _inspections_by_path
+from scoutfootball.evaluation.source_health import (
+    _inspections_by_path,
+    source_license_policy_status,
+)
 from scoutfootball.evaluation.source_snapshot_ledger import (
     latest_snapshot_by_source,
     read_source_snapshot_ledger,
 )
 
-CONTRACT_QUALITY_VERSION = "1.0.0"
+CONTRACT_QUALITY_VERSION = "1.1.0"
 
 
 def _now_iso() -> str:
@@ -93,6 +96,14 @@ def build_contract_quality_report(
     raw_without_license = [
         contract.artifact_id for contract in raw_contracts if contract.license is None
     ]
+    source_policy_gaps = [
+        {
+            "source_id": contract.license.source_name if contract.license else contract.artifact_id,
+            "missing_fields": source_license_policy_status(contract.license)["missing_fields"],
+        }
+        for contract in raw_contracts
+        if source_license_policy_status(contract.license)["status"] != "recorded"
+    ]
     unrecorded_contracts = [
         contract.artifact_id for contract in registry.contracts if not contract.recorded
     ]
@@ -119,6 +130,17 @@ def build_contract_quality_report(
             registered_raw_source_count=len(raw_contracts),
             sources_with_license=len(raw_contracts) - len(raw_without_license),
             missing_license_contracts=raw_without_license,
+        ),
+        _status(
+            "source_retention_and_deletion_policies",
+            "pass" if not source_policy_gaps else "baseline_required",
+            registered_raw_source_count=len(raw_contracts),
+            sources_with_complete_policy=len(raw_contracts) - len(source_policy_gaps),
+            sources_missing_policy=source_policy_gaps,
+            note=(
+                "A source license does not fill retention or deletion policy fields. "
+                "This check does not invent terms from external license names."
+            ),
         ),
         _preflight_check(preflight_evidence),
         _status(

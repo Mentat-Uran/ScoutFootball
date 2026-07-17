@@ -36,6 +36,10 @@ def test_contract_quality_never_calls_missing_snapshot_evidence_a_pass(tmp_path)
 
     assert report["overall_status"] == "incomplete"
     assert _check(report, "raw_source_licenses")["status"] == "pass"
+    policy = _check(report, "source_retention_and_deletion_policies")
+    assert policy["status"] == "baseline_required"
+    assert policy["sources_with_complete_policy"] == 0
+    assert policy["sources_missing_policy"]
     assert _check(report, "preflight_content_readability")["status"] == "not_recorded"
     assert _check(report, "explicit_source_snapshots")["status"] == "baseline_required"
 
