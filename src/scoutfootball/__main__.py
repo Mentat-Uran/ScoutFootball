@@ -222,6 +222,36 @@ def _cmd_source_health(args: argparse.Namespace) -> None:
     print(output)
 
 
+def _cmd_contract_quality(args: argparse.Namespace) -> None:
+    """Report local contract-quality gates without inventing missing evidence."""
+    evidence = None
+    if args.evidence:
+        try:
+            evidence = json.loads(Path(args.evidence).resolve().read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"Error: unable to read preflight evidence: {exc}", file=sys.stderr)
+            sys.exit(1)
+    from scoutfootball.evaluation.contract_quality import (
+        build_contract_quality_report,
+        format_contract_quality_report,
+    )
+
+    try:
+        report = build_contract_quality_report(
+            preflight_evidence=evidence,
+            snapshot_ledger_path=args.snapshot_ledger,
+        )
+    except ValueError as exc:
+        print(f"Error: invalid contract-quality input: {exc}", file=sys.stderr)
+        sys.exit(1)
+    output = (
+        json.dumps(report, indent=2, ensure_ascii=False)
+        if args.json
+        else format_contract_quality_report(report)
+    )
+    print(output)
+
+
 def _cmd_record_source_snapshot(args: argparse.Namespace) -> None:
     from scoutfootball.evaluation.source_snapshot_ledger import (
         append_source_snapshot_record,
@@ -1819,6 +1849,17 @@ def main() -> None:
     source_health_p.add_argument(
         "--snapshot-ledger", help="Optional append-only local source snapshot ledger"
     )
+    contract_quality_p = sub.add_parser(
+        "contract-quality",
+        help="Report contract-quality gates and honest baseline gaps from local evidence",
+    )
+    contract_quality_p.add_argument("--json", action="store_true", help="Emit JSON")
+    contract_quality_p.add_argument(
+        "--evidence", help="Optional local preflight evidence JSON"
+    )
+    contract_quality_p.add_argument(
+        "--snapshot-ledger", help="Optional append-only local source snapshot ledger"
+    )
     snapshot_p = sub.add_parser(
         "record-source-snapshot",
         help="Append an explicitly dated local source snapshot backed by preflight evidence",
@@ -2173,6 +2214,7 @@ def main() -> None:
         "train-rating-nn": _cmd_train_rating_nn,
         "validate": _cmd_validate,
         "source-health": _cmd_source_health,
+        "contract-quality": _cmd_contract_quality,
         "record-source-snapshot": _cmd_record_source_snapshot,
         "optimizer-preflight": _cmd_optimizer_preflight,
         "preflight": _cmd_preflight,

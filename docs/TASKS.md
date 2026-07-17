@@ -47,7 +47,7 @@
 
 ## 下一解锁节点
 
-C1 可信证据内核 — `in_progress`。首个验收载体选择已在使用的 3.1 数据导入与验证：`scoutfootball preflight --evidence-out <path>` 将内容级检查结果与已登记的 contract、source license、snapshot、lineage 写入本地证据报告；缺失字段明确为 `not_recorded`，既不上传数据也不补造历史 provenance。`source-health` 现可附加本地 inspection，并通过显式传入的 append-only snapshot ledger 展示已登记快照；`record-source-snapshot` 只接受维护者提供的日期和对应 preflight 证据，不从文件时间推断。Transfermarkt 身份复核现有本地追加式确认、拒绝和撤销决策，且只在当前输入哈希与候选集合匹配时消费；历史标签不会因撤销被静默删除。C1 的其余范围（质量 SLO、模型晋级与回滚，以及身份撤销后的显式标签 reconciliation）仍未完成。G1 后置维护项（TASKS.md 历史归档、模块边界 ADR、最小文档生成与陈旧度报告）均已完成。
+C1 可信证据内核 — `in_progress`。首个验收载体选择已在使用的 3.1 数据导入与验证：`scoutfootball preflight --evidence-out <path>` 将内容级检查结果与已登记的 contract、source license、snapshot、lineage 写入本地证据报告；缺失字段明确为 `not_recorded`，既不上传数据也不补造历史 provenance。`source-health` 现可附加本地 inspection，并通过显式传入的 append-only snapshot ledger 展示已登记快照；`record-source-snapshot` 只接受维护者提供的日期和对应 preflight 证据，不从文件时间推断。`contract-quality` 现在把可观测的登记、许可和已提供 preflight 内容可读性明确标为 pass/fail，同时把快照、身份和来源错误率等尚无审计分母的维度标为 `baseline_required`，不填充任意阈值。Transfermarkt 身份复核现有本地追加式确认、拒绝和撤销决策，且只在当前输入哈希与候选集合匹配时消费；历史标签不会因撤销被静默删除。C1 的其余范围（经维护者审计后设定的质量阈值、模型晋级与回滚，以及身份撤销后的显式标签 reconciliation）仍未完成。G1 后置维护项（TASKS.md 历史归档、模块边界 ADR、最小文档生成与陈旧度报告）均已完成。
 
 ## 后续依赖表
 

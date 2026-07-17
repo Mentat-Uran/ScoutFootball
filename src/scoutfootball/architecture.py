@@ -193,6 +193,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball train-rating-nn",
             "uv run python -m scoutfootball validate",
             "uv run python -m scoutfootball source-health",
+            "uv run python -m scoutfootball contract-quality",
             "uv run python -m scoutfootball record-source-snapshot",
             "uv run python -m scoutfootball preflight",
             "uv run python -m scoutfootball preflight --evidence-out <path>",
@@ -260,7 +261,14 @@ def build_capability_registry() -> CapabilityRegistry:
                 "唯一性、时间连续性、来源覆盖度。"
             ),
             domain="data_pipeline",
-            cli_commands=("validate", "preflight", "optimizer-preflight"),
+            cli_commands=(
+                "validate",
+                "preflight",
+                "optimizer-preflight",
+                "source-health",
+                "contract-quality",
+                "record-source-snapshot",
+            ),
             api_paths=("/health", "/artifacts"),
         ),
         Capability(
@@ -292,6 +300,7 @@ def build_capability_registry() -> CapabilityRegistry:
             cli_commands=(
                 "import-truth-labels",
                 "import-transfermarkt-truth-labels",
+                "transfermarkt-identity-review",
                 "audit-truth-labels",
             ),
             api_paths=(
