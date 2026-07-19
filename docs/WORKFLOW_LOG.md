@@ -349,8 +349,85 @@
   - **是否达到预期**：是。源头过滤生效，team_match.parquet 重建后不再含 NaN 进球；DC 训练链路的 NaN 防御（参考工作流 3）现在变成真正的"defense in depth"而不是第一道防线
   - **有什么问题**：无。过滤逻辑在 `match_id` 分配之前，因此 match_id 重新编号不会留下空缺；Bastia 和 Red Star 因有其他合法比赛（如 2025-02-21 的 1-0）仍出现在 team_match 中，这是预期行为
   - **数据治理启示**：football-data.co.uk 的未来比赛占位行是上游数据源行为，不在项目控制范围；但项目应在导入阶段就过滤它们，而不是依赖下游模型训练的防御性逻辑。`rebuild_combined_results`（raw CSV → combined_results.parquet）目前不过滤，因为它的职责是原样保留 raw 数据；过滤放在 `_build_team_match_from_football_data`（raw → gold）更合适
-  - **下一步改进**：可考虑在 `validate` 命令中增加"team_match NaN 进球比例"检查作为发布门禁；但当前源头过滤已经消除了这个问题，validate 检查是冗余的 defense in depth
+  - **下一步改进**：原计划在 `validate` 命令中增加"team_match NaN 进球比例"检查作为发布门禁，当时判断"源头过滤已经消除了这个问题，validate 检查是冗余的 defense in depth"。**该判断已被参考工作流 5 推翻**：validation 检查实际捕获了"源头过滤修复未持久化到磁盘产物"的真实 Layer 1 失效。已实现，见参考工作流 5。
 - **是否可重复使用**：是。修复是 `_build_team_match_from_football_data` 的内部防御性逻辑，对 `run_build_features` 调用方透明生效。维护者每次 build-features 后若 raw 数据新增未来比赛占位行，会看到 INFO 日志知道过滤了多少行。
+
+---
+
+### 参考工作流 5：validation goals 完整性检查捕获磁盘产物未重建（3.1 数据导入 + 发布门禁子流程）
+
+- **选择的工作流**：3.1 数据导入的 validation 发布门禁子流程（pre-training gate 扩展）
+- **执行日期**：2026-07-20
+- **执行环境**：Windows, Python 3.12.11, uv, 工作目录 `c:\football\scoutlab`
+- **真实输入**：本地 `data/gold/feature_store/team_match.parquet`，磁盘版本仍为 137906 行（含 2 行 NaN goals_for + 2 行 NaN goals_against，对应 fd-match-64766 Bastia vs Red Star 2025-12-05 占位行）
+- **根因**：参考工作流 3-4 修复了 `_build_team_match_from_football_data` 的源头过滤和 `fit_dixon_coles`/`compute_form_weights` 的模型层防御，但**没有重新运行 `build-features` 将修复持久化到磁盘产物**。team_match.parquet 磁盘版本仍是污染的 137906 行。参考工作流 4 的"下一步改进"曾判断"validate 检查是冗余的 defense in depth"，该判断是错误的。
+- **修复**：
+  - 新增 `validate_no_null_values(relative_path, value_columns, settings)` 函数（`src/scoutfootball/evaluation/validation.py`），与 `validate_no_null_keys` 区分语义：key 列标识行不能为空，value 列承载度量值，仅在 NaN 表示数据损坏时检查（如 goals_for/goals_against）
+  - 在 `run_pre_training_validation` 中为 `team_match.parquet` 增加 `goals_for`/`goals_against` NaN 检查（第 7 项检查）
+  - 在 `evaluation/__init__.py` 导出新函数
+- **回归测试**（`tests/unit/test_phase10.py`）：
+  1. `TestValidateNoNullValues.test_missing_file` — 文件不存在时返回 fail
+  2. `TestValidateNoNullValues.test_with_null_values` — 含 NaN 值时返回 fail，消息包含各列 null 计数
+  3. `TestValidateNoNullValues.test_without_null_values` — 无 NaN 时返回 pass
+  4. `TestValidateNoNullValues.test_missing_columns` — 列不存在时返回 fail
+  5. `TestRunPreTrainingValidation.test_includes_team_match_goals_completeness_check` — 验证 `run_pre_training_validation` 包含 goals 检查
+  6. `TestRunPreTrainingValidation.test_fails_when_team_match_has_nan_goals` — 验证 NaN goals 触发 fail（gate 训练）
+- **执行步骤与命令**：
+  ```bash
+  # 1. lint
+  uv run ruff check src/scoutfootball/evaluation/validation.py src/scoutfootball/evaluation/__init__.py tests/unit/test_phase10.py
+
+  # 2. 单元测试（TestValidateNoNullValues 4/4 + TestRunPreTrainingValidation 2/2 + 原有 9/9 = 15/15）
+  uv run pytest tests/unit/test_phase10.py::TestValidateNoNullValues tests/unit/test_phase10.py::TestRunPreTrainingValidation tests/unit/test_phase10.py::TestValidateNoNullKeys tests/unit/test_phase10.py::TestValidateParquetExists tests/unit/test_phase10.py::TestValidateRowCount tests/unit/test_phase10.py::TestValidationReport -v
+
+  # 3. 全量 unit 回归
+  uv run pytest tests/unit/ -q
+
+  # 4. 真实数据烟雾测试（关键步骤：在当前磁盘产物上运行 validation）
+  uv run python -c "from scoutfootball.evaluation.validation import run_pre_training_validation; r = run_pre_training_validation(); print(r.summary())"
+
+  # 5. 重建 team_match + team_rolling（最小重建，不动 player_match 链路）
+  uv run python -c "
+  from scoutfootball.config import PlatformSettings
+  from scoutfootball.pipeline import _build_team_match_from_football_data
+  from scoutfootball.features.team_rolling import build_team_rolling_features
+  settings = PlatformSettings.from_root()
+  tm = _build_team_match_from_football_data(settings)
+  tm.to_parquet(settings.gold_root / 'feature_store' / 'team_match.parquet', index=False)
+  tr = build_team_rolling_features(tm, windows=(3, 5))
+  tr.to_parquet(settings.gold_root / 'feature_store' / 'team_rolling.parquet', index=False)
+  print(f'team_match: {len(tm)} rows, NaN goals_for: {tm[\"goals_for\"].isna().sum()}, NaN goals_against: {tm[\"goals_against\"].isna().sum()}')
+  print(f'team_rolling: {len(tr)} rows')
+  "
+
+  # 6. 重建后重新运行 validation 确认通过
+  uv run python -c "from scoutfootball.evaluation.validation import run_pre_training_validation; r = run_pre_training_validation(); print(r.summary())"
+  ```
+- **执行结果**：
+  - ruff check 通过
+  - 单元测试：15/15 通过
+  - 全量 unit：通过（无 failures）
+  - **真实数据烟雾测试（步骤 4，重建前）**：
+    ```
+    Validation: FAIL (6/7 checks passed)
+      FAIL [no_null_values:gold/feature_store/team_match.parquet]: Null values: {'goals_for': 2, 'goals_against': 2}
+    ```
+    validation **成功捕获** team_match.parquet 磁盘版本仍含 NaN goals（fd-match-64766 Bastia vs Red Star 2025-12-05）。这正是 Layer 0 validation 的价值：在训练前就发现 Layer 1 源头过滤修复未持久化到磁盘产物。
+  - **重建（步骤 5）**：
+    ```
+    team_match: 137904 rows, NaN goals_for: 0, NaN goals_against: 0
+    team_rolling: 137904 rows
+    ```
+  - **重建后 validation（步骤 6）**：
+    ```
+    Validation: PASS (7/7 checks passed)
+    ```
+- **人工复盘**：
+  - **是否达到预期**：是，且超出预期。原本只是增加 defense-in-depth 检查，实际捕获了真实的 Layer 1 失效——上一轮修复了源头过滤代码但没有重建磁盘产物。这验证了"validation 不是冗余的 defense in depth，而是必要的 Layer 0 早期预警"。
+  - **有什么问题**：无。重建只影响 team_match 和 team_rolling（直接依赖源头过滤的产物），未动 player_match/player_rolling/rating_feature_matrix（与 football_data 无依赖关系）。
+  - **数据治理启示**：代码修复 ≠ 磁盘产物修复。修复 raw → gold 转换逻辑后，必须重新运行 `build-features` 将修复持久化到磁盘产物。validation 检查是捕获这种"代码-产物不一致"的关键机制。参考工作流 4 的"冗余 defense in depth"判断是错误的——任何"defense in depth"都可能在某个时刻成为唯一防线。
+  - **下一步改进**：可考虑在 `scoutfootball validate` CLI 输出中显式提示"若 no_null_values 失败，请运行 build-features 重建产物"。但当前 fail 消息已包含 null 计数，维护者可自行判断。
+- **是否可重复使用**：是。`validate_no_null_values` 是通用值列完整性检查，未来可扩展到其他数据契约（如 player_match 的 minutes_played、rating_feature_matrix 的 rating 等值列）。`run_pre_training_validation` 的第 7 项检查对 `run_weekly_train` 透明生效：若 goals 含 NaN，`skip_if_validation_fails=True` 会跳过训练并返回 fail 原因。
 
 ---
 

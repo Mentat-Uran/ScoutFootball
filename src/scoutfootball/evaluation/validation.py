@@ -108,6 +108,37 @@ def validate_no_null_keys(
     return ValidationCheckResult(name, True, "No null keys")
 
 
+def validate_no_null_values(
+    relative_path: str,
+    value_columns: tuple[str, ...],
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate that value columns contain no null values.
+
+    Distinct from ``validate_no_null_keys``: key columns identify rows and
+    must never be null, while value columns carry measurements that may
+    legitimately be NaN in some datasets (e.g. xg for matches without
+    shots). This check is for value columns where NaN indicates data
+    corruption rather than a meaningful missing measurement — for example
+    ``goals_for``/``goals_against`` in ``team_match.parquet``, where NaN
+    silently corrupts Dixon-Coles fitting (see WORKFLOW_LOG.md reference
+    workflow 3).
+    """
+    resolved = (settings or PlatformSettings.from_root()).data_root / relative_path
+    name = f"no_null_values:{relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"File missing: {resolved}")
+    df = pd.read_parquet(resolved)
+    missing_cols = [c for c in value_columns if c not in df.columns]
+    if missing_cols:
+        return ValidationCheckResult(name, False, f"Missing columns: {missing_cols}")
+    null_counts = {c: int(df[c].isnull().sum()) for c in value_columns}
+    has_nulls = any(v > 0 for v in null_counts.values())
+    if has_nulls:
+        return ValidationCheckResult(name, False, f"Null values: {null_counts}")
+    return ValidationCheckResult(name, True, "No null values")
+
+
 def run_pre_training_validation(
     settings: PlatformSettings | None = None,
 ) -> ValidationReport:
@@ -141,6 +172,18 @@ def run_pre_training_validation(
         validate_no_null_keys(
             "gold/feature_store/team_match.parquet",
             ("match_id", "team_id"),
+            settings,
+        )
+    )
+    # Goals completeness: NaN goals_for/goals_against in team_match.parquet
+    # silently corrupts Dixon-Coles fitting. The source-level filter in
+    # _build_team_match_from_football_data is the primary gate; this check
+    # is a pre-training defense-in-depth that catches source-filter regressions,
+    # manual edits, or new data sources before they reach model training.
+    report.checks.append(
+        validate_no_null_values(
+            "gold/feature_store/team_match.parquet",
+            ("goals_for", "goals_against"),
             settings,
         )
     )

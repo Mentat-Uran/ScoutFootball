@@ -13,7 +13,9 @@ from scoutfootball.evaluation.calibration import (
 from scoutfootball.evaluation.validation import (
     ValidationCheckResult,
     ValidationReport,
+    run_pre_training_validation,
     validate_no_null_keys,
+    validate_no_null_values,
     validate_parquet_exists,
     validate_row_count,
 )
@@ -127,6 +129,138 @@ class TestValidateNoNullKeys:
             settings=_make_settings(tmp_path),
         )
         assert result.passed
+
+
+class TestValidateNoNullValues:
+    """Value-column completeness checks (distinct from key-column checks).
+
+    Regression coverage for the goals_for/goals_against NaN corruption
+    chain fixed in WORKFLOW_LOG.md reference workflow 3. The source-level
+    filter in _build_team_match_from_football_data is the primary gate;
+    this validation check is a pre-training defense-in-depth.
+    """
+
+    def test_missing_file(self, tmp_path):
+        result = validate_no_null_values(
+            "gold/feature_store/nonexistent.parquet",
+            ("goals_for", "goals_against"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "missing" in result.message.lower()
+
+    def test_with_null_values(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame(
+            {
+                "match_id": ["m1", "m2", "m3"],
+                "team_id": ["t1", "t2", "t3"],
+                "goals_for": [2, np.nan, 1],
+                "goals_against": [1, 1, np.nan],
+            }
+        )
+        df.to_parquet(gold / "null_goals.parquet")
+        result = validate_no_null_values(
+            "gold/feature_store/null_goals.parquet",
+            ("goals_for", "goals_against"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Null values" in result.message
+        # Both columns must report their null counts.
+        assert "goals_for" in result.message
+        assert "goals_against" in result.message
+
+    def test_without_null_values(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame(
+            {
+                "match_id": ["m1", "m2"],
+                "team_id": ["t1", "t2"],
+                "goals_for": [2, 1],
+                "goals_against": [1, 1],
+            }
+        )
+        df.to_parquet(gold / "clean_goals.parquet")
+        result = validate_no_null_values(
+            "gold/feature_store/clean_goals.parquet",
+            ("goals_for", "goals_against"),
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+        assert "No null values" in result.message
+
+    def test_missing_columns(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame({"match_id": ["m1"], "team_id": ["t1"]})
+        df.to_parquet(gold / "no_goals_cols.parquet")
+        result = validate_no_null_values(
+            "gold/feature_store/no_goals_cols.parquet",
+            ("goals_for", "goals_against"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Missing columns" in result.message
+
+
+class TestRunPreTrainingValidation:
+    """Verify run_pre_training_validation includes the goals-completeness check."""
+
+    def test_includes_team_match_goals_completeness_check(self, tmp_path):
+        """The goals_for/goals_against NaN check must be part of the
+        pre-training validation report so that source-filter regressions
+        are caught before model training."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+
+        # Minimal valid player_match and team_match parquets.
+        pd.DataFrame(
+            {"match_id": [f"m{i}" for i in range(12)], "player_id": [f"p{i}" for i in range(12)]}
+        ).to_parquet(gold / "player_match.parquet")
+        pd.DataFrame(
+            {
+                "match_id": [f"m{i}" for i in range(12)],
+                "team_id": [f"t{i}" for i in range(12)],
+                "goals_for": list(range(12)),
+                "goals_against": list(range(12)),
+            }
+        ).to_parquet(gold / "team_match.parquet")
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        check_names = [c.check_name for c in report.checks]
+        assert any("no_null_values" in name and "team_match" in name for name in check_names), (
+            f"run_pre_training_validation must include goals-completeness check "
+            f"for team_match.parquet; got checks: {check_names}"
+        )
+        assert report.passed
+
+    def test_fails_when_team_match_has_nan_goals(self, tmp_path):
+        """If team_match.parquet contains NaN goals, validation must fail
+        before training is allowed to proceed."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+
+        pd.DataFrame(
+            {"match_id": [f"m{i}" for i in range(12)], "player_id": [f"p{i}" for i in range(12)]}
+        ).to_parquet(gold / "player_match.parquet")
+        pd.DataFrame(
+            {
+                "match_id": [f"m{i}" for i in range(12)],
+                "team_id": [f"t{i}" for i in range(12)],
+                "goals_for": [0, 1, np.nan, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                "goals_against": list(range(12)),
+            }
+        ).to_parquet(gold / "team_match.parquet")
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any("no_null_values" in name for name in failures), (
+            f"NaN goals must trigger a no_null_values failure; got failures: {failures}"
+        )
 
 
 class TestCalibration:
