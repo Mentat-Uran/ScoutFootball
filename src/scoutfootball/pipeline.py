@@ -1168,7 +1168,7 @@ def _load_raw_transfermarkt_csv(
 
     Returns (None, "none") if the required files are not found.
     """
-    tm_dir = settings.raw_root / "transfermarkt"
+    tm_dir = settings.raw_root / "transfermarkt_manual"
     mv_path = tm_dir / "player_latest_market_value.csv"
     profiles_path = tm_dir / "player_profiles.csv"
 
