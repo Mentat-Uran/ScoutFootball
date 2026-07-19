@@ -242,7 +242,7 @@ def test_promotion_fails_closed_when_candidate_artifact_hash_changes(tmp_path) -
     ratings_path = candidate / "player_ratings_candidate.parquet"
     ratings_path.write_bytes(ratings_path.read_bytes() + b"tampered")
 
-    with pytest.raises(ModelRunLifecycleError, match="SHA-256"):
+    with pytest.raises(ModelRunLifecycleError, match="candidate_rating_artifact"):
         promote_optimizer_run(
             PlatformSettings.from_root(tmp_path),
             "candidate",

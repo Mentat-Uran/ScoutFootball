@@ -193,11 +193,11 @@
   uv run python scripts/optimize_ratings_gpu.py --data_dir ./data --quick --no-viz
   # → 生成 data/models/runs/20260719T142124Z-631abaea/
 
-  # 2. 验证候选 admission 状态（7 项 evidence 检查）
+  # 2. 验证候选 admission 状态（8 项 evidence 检查）
   uv run python -m scoutfootball model-admission --json
-  # → reviewable_run_count: 1（lineage.status=recorded、parameter_artifact、
-  #   recorded_lineage、time_split、baseline_holdout、candidate_holdout、
-  #   error_cases、required_inputs 全部满足）
+  # → reviewable_run_count: 1（parameter_artifact、recorded_lineage、
+  #   time_split、baseline_holdout、candidate_holdout、error_cases、
+  #   required_inputs、candidate_rating_artifact 全部满足）
 
   # 3. 晋级候选到活跃产物（创建带 sha256 校验的备份）
   uv run python -m scoutfootball promote-model-run 20260719T142124Z-631abaea \
@@ -220,7 +220,7 @@
   #    meta  =E27BEAC8... size=26776      ✓ 与 baseline 完全一致
   ```
 - **执行结果**：
-  - 候选 run `20260719T142124Z-631abaea` 在 `model-admission` 中状态为 `reviewable`，7 项 evidence 检查全部通过
+  - 候选 run `20260719T142124Z-631abaea` 在 `model-admission` 中状态为 `reviewable`，8 项 evidence 检查全部通过（含 candidate_rating_artifact SHA-256 校验）
   - 候选 meta.json 关键字段：`lineage.status=recorded`、`lineage.feature_manifest.path=gold/feature_store/rating_feature_matrix_manifest.json`、`activation.status=rolled_back`、`activation.backup_id=20260719T142324Z-20260719T142124Z-631abaea-f1416f39`
   - 候选 metrics（test split）：baseline Spearman=0.6028 → optimized Spearman=0.6993（+0.0965）；baseline points MAE=18.22 → optimized points MAE=14.75（-3.47）
   - 候选 error_cases：over_estimated 5 队（Wolfsburg +1.4 .. Burnley +8.9）、under_estimated 5 队（Parma -35.0 .. Bologna -30.8）
@@ -230,7 +230,7 @@
   - **是否达到预期**：是。这是首次在当前 snapshot 上生成 `reviewable` 候选（此前 40 个历史 run 全部 `not_reviewable`，主因是缺 `rating_feature_matrix_manifest.json`）。promote/rollback 端到端可逆，活跃产物 sha256 在回滚后与 baseline 字节级一致。
   - **有什么问题**：无功能性阻断。运行时有一条 `FutureWarning: DataFrame concatenation with empty or all-NA entries is deprecated`（understat 拼接，data.py:439），不影响结果，未修复。
   - **reject 路径覆盖**：reject 是纯元数据操作（不删除候选目录、不变更活跃产物），由单元测试 `tests/unit/test_model_run_lifecycle.py::test_rejection_is_a_confirmed_metadata_action_that_keeps_candidate` 覆盖（验证 dry-run 保持 `not_activated`、`--confirm` 翻转为 `rejected` 且候选目录保留）。本次未重复跑 quick run 作为 reject 目标，因为该路径不涉及活跃产物可逆性这种需要端到端实测的场景。
-  - **下一步改进**：C1 退出门槛第 3 条已端到端验证。`data/raw/transfermarkt/` 遗留未登记目录已于 2026-07-19 对齐（3 个 CSV 移动到已登记的 `data/raw/transfermarkt_manual/`，`pipeline.py` 和 `fill_truth_labels.py` 路径同步更新，`contract-quality` 的 `unregistered_raw_directories` 检查从 `fail` 转为 `pass`）。剩余 C1 退出门槛包括补齐 6 个来源的 `snapshot_date`、建立身份/来源审计样本和阈值。
+  - **下一步改进**：C1 退出门槛第 3 条已端到端验证。`data/raw/transfermarkt/` 遗留未登记目录已于 2026-07-19 对齐（3 个 CSV 移动到已登记的 `data/raw/transfermarkt_manual/`，`pipeline.py` 和 `fill_truth_labels.py` 路径同步更新，`contract-quality` 的 `unregistered_raw_directories` 检查从 `fail` 转为 `pass`）。2026-07-19 后续补：`model-admission` 新增第 8 项 `candidate_rating_artifact` 检查，确保 `player_ratings_candidate.parquet` 存在且 SHA-256 与 meta.json 一致，`reviewable` 状态不再具有误导性；同时补齐该 run 目录下未被 git 跟踪的 `player_ratings_candidate.parquet` 和 `training_history.json`，与 DATA_CONTRACTS.md 声明的候选产物清单一致。剩余 C1 退出门槛包括补齐 6 个来源的 `snapshot_date`、建立身份/来源审计样本和阈值。
 - **是否可重复使用**：是。维护者每次模型迭代后可重复执行 `optimize_ratings_gpu.py → model-admission → promote-model-run` 流程；如需还原，使用 `rollback-model-run <backup_id>`。候选 meta.json 完整记录了 lineage、metrics、error_cases、args，可在同一 snapshot 上复算。
 
 ---
