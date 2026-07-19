@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 
 from scoutfootball.entities.normalize import normalize_person_name
@@ -14,6 +16,8 @@ UNDERSTAT_COMPETITION_IDS = {
     "Serie_A": "ITA-Serie A",
     "Ligue_1": "FRA-Ligue 1",
 }
+
+logger = logging.getLogger(__name__)
 
 
 def _season_code(value: object) -> str:
@@ -93,6 +97,28 @@ def build_understat_season_proxy(
 
     work["player_name"] = work["player_name"].astype("string").str.strip()
     work["team_name"] = work["team_title"].astype("string").str.strip()
+
+    # Understat aggregates season stats across all clubs a player appeared for,
+    # joining multi-team rows with commas (e.g. "Hull,West Ham" for a
+    # mid-season transfer).  We cannot split minutes/goals per team without
+    # per-team breakdowns, so we keep the first club as the primary team and
+    # flag multi-team rows.  This prevents comma-polluted team names from
+    # corrupting team-level aggregations, team-name matching, and rating
+    # feature matrix grouping.
+    multi_team_mask = work["team_name"].str.contains(",", na=False)
+    if multi_team_mask.any():
+        multi_count = int(multi_team_mask.sum())
+        first_teams = work.loc[multi_team_mask, "team_name"].str.split(",").str[0]
+        work.loc[multi_team_mask, "team_name"] = first_teams
+        work["multi_team_season"] = multi_team_mask
+        logger.info(
+            "Resolved %d multi-team Understat rows (comma-separated team_title) "
+            "to first club only; multi_team_season flag set",
+            multi_count,
+        )
+    else:
+        work["multi_team_season"] = False
+
     position = work["position"] if "position" in work.columns else pd.Series("", index=work.index)
     work["position_group"] = position.map(_position_group)
     work["player_id"] = "understat|" + work["id"].astype("string")
@@ -120,5 +146,6 @@ def build_understat_season_proxy(
         "match_id", "match_date", "player_id", "player_name", "team_id", "team_name",
         "competition_id", "season_id", "position_group", "minutes_played", "matches_played",
         "started", "goals", "assists", "shots", "npxg", "xa", "data_granularity", "source_name",
+        "multi_team_season",
     ]
     return build_player_match_features(work[proxy_columns])

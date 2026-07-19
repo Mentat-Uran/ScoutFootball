@@ -62,6 +62,8 @@ C1 in_progress 期间 defense-in-depth 补强（2026-07-20）：发现 `fit_dixo
 
 C1 in_progress 期间 pre-training validation 扩展与磁盘产物重建（2026-07-20）：新增 `validate_no_null_values(relative_path, value_columns, settings)` 函数，与 `validate_no_null_keys` 区分语义（key 列标识行不能为空 vs value 列承载度量值，仅在 NaN 表示数据损坏时检查）。在 `run_pre_training_validation` 中为 `team_match.parquet` 增加 `goals_for`/`goals_against` NaN 检查（第 7 项检查），作为 Layer 0 发布门禁。6 个回归测试覆盖函数本身与 `run_pre_training_validation` 集成。真实数据烟雾测试**捕获到 team_match.parquet 磁盘版本仍含 2 行 NaN goals**（fd-match-64766 Bastia vs Red Star 2025-12-05）——参考工作流 3-4 修复了源头过滤代码但未重建磁盘产物，validation 检查成为发现该 Layer 1 失效的唯一机制。最小重建 team_match（137906 → 137904 行）+ team_rolling（同步），未动 player_match 链路；重建后 validation 7/7 PASS。参考工作流 4"validate 检查是冗余 defense in depth"的判断被推翻。该修复对 `run_weekly_train` 透明生效：若 goals 含 NaN，`skip_if_validation_fails=True` 会跳过训练并返回 fail 原因，防止污染模型训练。完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 5。该修复属于 G0-B 真实性范畴的延伸，不改变 C1 退出门槛状态。
 
+C1 in_progress 期间 Understat 转会球员 team_name 逗号污染修复（2026-07-20）：巡检队名匹配率时发现 `rating_feature_matrix.parquet` 的 `team_name` 列包含 "Monaco,Nice" 等逗号连接的双队名，溯源至 Understat 原始数据中赛季中转会球员的 `team_title` 字段（980/31902 行含逗号，979 行 2 队、1 行 3 队）。`build_understat_season_proxy` 直接使用该字段，导致 485 行 player_match 和 rating_matrix 的 `team_name` 被双队名字符串污染，破坏所有基于 team_name 的聚合、匹配和评分。修复：取第一个队名作为主归属，新增 `multi_team_season` 布尔标志保留追溯能力。3 个回归测试覆盖双队、三队和无逗号路径。全量重建 player_match / player_rolling / rating_feature_matrix，重建后逗号 team_name 从 485 行降到 0；队名匹配率从无法评估提升到 96.3%（球队级别）/ 97.4%（队-赛季级别）。完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 6。该修复属于 G0-B 真实性范畴的数据完整性修复，不改变 C1 退出门槛状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
