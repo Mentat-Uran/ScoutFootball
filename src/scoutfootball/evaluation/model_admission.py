@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from datetime import UTC, datetime
@@ -11,7 +12,7 @@ from typing import Any
 from scoutfootball.config import PlatformSettings
 from scoutfootball.evaluation.optimizer_preflight import REQUIRED_ARTIFACTS
 
-MODEL_ADMISSION_VERSION = "1.0.1"
+MODEL_ADMISSION_VERSION = "1.0.2"
 
 
 def _now() -> str:
@@ -24,6 +25,54 @@ def _finite_metric(value: object) -> bool:
 
 def _check(name: str, passed: bool, note: str) -> dict[str, Any]:
     return {"name": name, "status": "pass" if passed else "fail", "note": note}
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _evaluate_candidate_rating_artifact(
+    meta: dict[str, Any], directory: Path
+) -> tuple[str, bool]:
+    """Verify the candidate rating parquet exists and matches its recorded SHA-256.
+
+    A reviewable run must not rely on a missing or tampered candidate score
+    snapshot. The maintainer promotion path re-checks the hash, but admission
+    surfaces the same problem earlier so reviewable status is not misleading.
+    Returns a human-readable note and a boolean pass flag.
+    """
+    artifacts = meta.get("candidate_artifacts")
+    if not isinstance(artifacts, dict):
+        return "candidate_artifacts metadata is missing", False
+    ratings_meta = artifacts.get("ratings")
+    if not isinstance(ratings_meta, dict):
+        return "candidate rating metadata is missing", False
+    rel_path = ratings_meta.get("path")
+    expected_hash = ratings_meta.get("sha256")
+    if not isinstance(rel_path, str) or not rel_path:
+        return "candidate rating path is missing", False
+    if not isinstance(expected_hash, str) or not expected_hash:
+        return "candidate rating sha256 is missing", False
+    # Reject absolute paths or parent traversal to keep the check scoped to the
+    # run directory.
+    ratings_path = (directory / rel_path).resolve()
+    try:
+        ratings_path.relative_to(directory.resolve())
+    except ValueError:
+        return f"candidate rating path escapes run directory: {rel_path}", False
+    if not ratings_path.is_file():
+        return f"candidate rating file is missing: {rel_path}", False
+    actual_hash = _sha256_file(ratings_path)
+    if actual_hash != expected_hash:
+        return (
+            f"candidate rating sha256 mismatch: metadata={expected_hash} actual={actual_hash}",
+            False,
+        )
+    return "candidate rating artifact verified", True
 
 
 def evaluate_optimizer_run(run_dir: Path | str) -> dict[str, Any]:
@@ -75,6 +124,9 @@ def evaluate_optimizer_run(run_dir: Path | str) -> dict[str, Any]:
             required_input_failures.append(f"{source}: {detail}")
     train = meta.get("train_seasons")
     test = meta.get("test_seasons")
+    candidate_rating_note, candidate_rating_ok = _evaluate_candidate_rating_artifact(
+        meta, directory
+    )
     checks = [
         _check(
             "parameter_artifact",
@@ -109,6 +161,7 @@ def evaluate_optimizer_run(run_dir: Path | str) -> dict[str, Any]:
                 else str(required_input_failures)
             ),
         ),
+        _check("candidate_rating_artifact", candidate_rating_ok, candidate_rating_note),
     ]
     failed = [item["name"] for item in checks if item["status"] == "fail"]
     comparison = None

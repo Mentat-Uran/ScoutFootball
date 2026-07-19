@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from scoutfootball.config import PlatformSettings
+
+
+def _sha256_file(path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def test_model_run_api_exposes_read_only_admission_summary(tmp_path, monkeypatch) -> None:
@@ -16,6 +26,10 @@ def test_model_run_api_exposes_read_only_admission_summary(tmp_path, monkeypatch
     run = tmp_path / "data" / "models" / "runs" / "candidate"
     run.mkdir(parents=True)
     np.save(run / "optimized_params.npy", np.array([1.0]))
+    ratings_path = run / "player_ratings_candidate.parquet"
+    pd.DataFrame({"player": ["A"], "optimized_score": [0.6]}).to_parquet(
+        ratings_path, index=False
+    )
     (run / "meta.json").write_text(
         json.dumps(
             {
@@ -36,6 +50,13 @@ def test_model_run_api_exposes_read_only_admission_summary(tmp_path, monkeypatch
                         {"source": "fbref_standard", "status": "loaded"},
                         {"source": "football_data_results", "status": "loaded"},
                     ]
+                },
+                "candidate_artifacts": {
+                    "ratings": {
+                        "path": "player_ratings_candidate.parquet",
+                        "sha256": _sha256_file(ratings_path),
+                        "rows": 1,
+                    }
                 },
             }
         ),
