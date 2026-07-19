@@ -229,6 +229,24 @@ def fit_dixon_coles(
     if matches_merged.empty:
         raise ValueError("No complete home-away match pairs found")
 
+    # Drop matches with NaN goals: they have no likelihood contribution and
+    # silently corrupt the optimizer via NaN in poisson.logpmf and tau correction.
+    nan_goals_mask = (
+        matches_merged["goals_for_home"].isna()
+        | matches_merged["goals_for_away"].isna()
+    )
+    if nan_goals_mask.any():
+        nan_count = int(nan_goals_mask.sum())
+        nan_match_ids = matches_merged.loc[nan_goals_mask, "match_id"].astype(str).tolist()
+        logger.warning(
+            "Dropping %d match(es) with NaN goals from Dixon-Coles fit: %s",
+            nan_count,
+            nan_match_ids[:10],
+        )
+        matches_merged = matches_merged.loc[~nan_goals_mask].reset_index(drop=True)
+        if matches_merged.empty:
+            raise ValueError("No complete home-away match pairs with non-NaN goals found")
+
     # Compute time decay weights if requested
     decay_weights = np.ones(len(matches_merged))
     effective_decay: float | None = None
@@ -839,6 +857,15 @@ def compute_form_weights(
     np.ndarray of per-match weights aligned to the fixture-level ordering
     produced by _build_bootstrap_fixtures.
     """
+    # Filter NaN-goal matches to align with fit_dixon_coles, which drops them
+    # internally after building matches_merged. Without this filter, form
+    # weights length would exceed the filtered matches_merged length and
+    # fit_dixon_coles would raise ValueError on length mismatch. NaN goals
+    # also silently corrupt form calculation (pts would default to 0).
+    nan_mask = team_match_df["goals_for"].isna() | team_match_df["goals_against"].isna()
+    if nan_mask.any():
+        team_match_df = team_match_df.loc[~nan_mask].reset_index(drop=True)
+
     if form_factor <= 0.0:
         fixtures = _build_bootstrap_fixtures(team_match_df)
         return np.ones(len(fixtures))

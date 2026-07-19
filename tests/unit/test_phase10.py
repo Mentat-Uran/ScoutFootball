@@ -184,6 +184,78 @@ class TestPipeline:
         )
         assert results.get("status") == "skipped"
 
+    def test_build_team_match_filters_nan_goals_placeholder_rows(self, tmp_path):
+        """Football-Data future-match placeholder rows (NaN FTHG/FTAG) must be
+        filtered before entering team_match.parquet.
+
+        Regression for the root cause behind the fit_dixon_coles NaN bug: the
+        football-data.co.uk results CSVs include scheduled-but-not-yet-played
+        matches with NaN FTHG/FTAG/FTR. Without filtering, these rows produce
+        NaN goals_for/goals_against in team_match.parquet and silently corrupt
+        downstream model training. See WORKFLOW_LOG.md reference workflow 3.
+        """
+        from scoutfootball.pipeline import _build_team_match_from_football_data
+
+        settings = _make_settings(tmp_path)
+        raw_fd_dir = settings.raw_root / "football_data"
+        raw_fd_dir.mkdir(parents=True)
+        input_path = raw_fd_dir / "combined_results.parquet"
+
+        # Mix of valid rows and one future-match placeholder (NaN FTHG/FTAG/FTR).
+        # The placeholder mirrors the real Bastia vs Red Star 2025-12-05 row
+        # observed in data/raw/football_data/combined_results.parquet.
+        rows = [
+            {
+                "Div": "E0", "Date": "01/01/2025", "HomeTeam": "Arsenal",
+                "AwayTeam": "Chelsea", "FTHG": 2, "FTAG": 1, "FTR": "H",
+                "league": "Premier League", "season": "2425",
+            },
+            {
+                "Div": "E0", "Date": "02/01/2025", "HomeTeam": "Liverpool",
+                "AwayTeam": "Man City", "FTHG": 1, "FTAG": 1, "FTR": "D",
+                "league": "Premier League", "season": "2425",
+            },
+            # Future-match placeholder: NaN goals across the board.
+            {
+                "Div": "F2", "Date": "05/12/2025", "HomeTeam": "Bastia",
+                "AwayTeam": "Red Star", "FTHG": pd.NA, "FTAG": pd.NA,
+                "FTR": pd.NA, "league": "Ligue 2", "season": "2526",
+            },
+        ]
+        pd.DataFrame(rows).to_parquet(input_path, index=False)
+
+        team_match = _build_team_match_from_football_data(settings)
+
+        # 2 valid matches × 2 teams per match = 4 rows; placeholder dropped.
+        assert len(team_match) == 4
+        assert team_match["goals_for"].notna().all()
+        assert team_match["goals_against"].notna().all()
+        # Placeholder teams must not appear in the output.
+        assert "Bastia" not in set(team_match["team_name"])
+        assert "Red Star" not in set(team_match["team_name"])
+
+    def test_build_team_match_all_nan_raises(self, tmp_path):
+        """If every Football-Data row has NaN goals, the build must fail loudly
+        rather than producing an empty or NaN-filled team_match.parquet."""
+        from scoutfootball.pipeline import _build_team_match_from_football_data
+
+        settings = _make_settings(tmp_path)
+        raw_fd_dir = settings.raw_root / "football_data"
+        raw_fd_dir.mkdir(parents=True)
+        input_path = raw_fd_dir / "combined_results.parquet"
+
+        rows = [
+            {
+                "Div": "E0", "Date": "01/01/2025", "HomeTeam": "Arsenal",
+                "AwayTeam": "Chelsea", "FTHG": pd.NA, "FTAG": pd.NA,
+                "FTR": pd.NA, "league": "Premier League", "season": "2425",
+            },
+        ]
+        pd.DataFrame(rows).to_parquet(input_path, index=False)
+
+        with pytest.raises(ValueError, match="future-match placeholders"):
+            _build_team_match_from_football_data(settings)
+
 
 class TestAPI:
     def test_health_check(self):
