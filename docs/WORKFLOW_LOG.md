@@ -429,6 +429,33 @@
   - **下一步改进**：可考虑在 `scoutfootball validate` CLI 输出中显式提示"若 no_null_values 失败，请运行 build-features 重建产物"。但当前 fail 消息已包含 null 计数，维护者可自行判断。
 - **是否可重复使用**：是。`validate_no_null_values` 是通用值列完整性检查，未来可扩展到其他数据契约（如 player_match 的 minutes_played、rating_feature_matrix 的 rating 等值列）。`run_pre_training_validation` 的第 7 项检查对 `run_weekly_train` 透明生效：若 goals 含 NaN，`skip_if_validation_fails=True` 会跳过训练并返回 fail 原因。
 
+### 参考工作流 6：Understat 转会球员 team_title 逗号分隔修复（3.1 数据导入子流程）
+
+- **是否在用**：是（数据治理巡检中发现）
+- **输入**：`data/raw/understat/players_10seasons.parquet`（31902 行），Understat 公开数据快照
+- **步骤**：
+  1. 巡检队名匹配率时发现 `rating_feature_matrix.parquet` 的 `team_name` 列包含 "Monaco,Nice" 等逗号连接的双队名
+  2. 溯源到 `player_match.parquet` 的 understat season_proxy 行（485 行）
+  3. 溯源到 `build_understat_season_proxy` 直接使用 `team_title` 字段，未处理逗号分隔的多队名
+  4. 确认原始数据：`players_10seasons.parquet` 中 980/31902 行的 `team_title` 含逗号，979 行是 2 队，1 行是 3 队
+  5. 修复：取第一个队名作为主归属，增加 `multi_team_season` 布尔标志
+  6. 重建：`run_build_features()` 全量重建 player_match / player_rolling / rating_feature_matrix
+  7. 验证：player_match 和 rating_matrix 的逗号 team_name 从 485 行降到 0；队名匹配率 96.3%（球队级别）/ 97.4%（队-赛季级别）
+- **输出**：
+  - 修复 `src/scoutfootball/features/understat_history.py`：`build_understat_season_proxy` 增加逗号 team_title 处理
+  - 新增 `multi_team_season` 列标记转会球员
+  - 3 个回归测试（双队、三队、无逗号）
+  - 重建后磁盘产物：player_match 27598 行（0 逗号）、rating_matrix 26678 行（0 逗号）
+- **现有替代工具**：无——之前未意识到 Understat 用逗号连接转会球员的多队名
+- **错误和阻断**：
+  - **BUG-006：Understat 转会球员 team_name 被逗号污染**：Understat 的赛季汇总数据中，赛季中转会的球员 `team_title` 是 "TeamA,TeamB" 格式（用逗号连接所有效力过的球队）。`build_understat_season_proxy` 直接使用该字段，导致 485 行 player_match 和 rating_matrix 的 `team_name` 是双队名字符串，破坏了所有基于 team_name 的聚合、匹配和评分。
+- **人工复盘**：
+  - **是否达到预期**：是。逗号污染完全消除，队名匹配率从无法评估提升到 96%+。
+  - **有什么问题**：Understat 没有按队分解的 stats，只能取第一队作为主归属。转会球员的 stats 全部归于第一队，这是一种近似，不精确但远好于逗号污染。`multi_team_season` 标志保留了追溯能力。
+  - **数据治理启示**：raw 数据字段的格式假设需要验证。Understat 的 `team_title` 看似单队名，实际在转会球员上是多队名逗号连接。这类"看似正常但边缘情况异常"的字段是数据污染的常见来源，需要在 raw → gold 转换时增加格式校验（如 team_name 不应包含逗号）。
+  - **下一步改进**：可考虑在 `run_pre_training_validation` 中增加 team_name 格式检查（不含逗号、不为空），作为数据完整性门禁。也可考虑对转会球员做更精细的处理（如按出场数比例分配到各队），但需要 Understat 按队分解的数据或额外数据源交叉验证。
+- **是否可重复使用**：是。`multi_team_season` 标志可用于下游过滤（如评分优化器排除转会球员），也可作为数据质量审计的依据。修复模式（检测异常格式 + 保守降级 + 保留标志）适用于其他 raw 字段的边缘情况处理。
+
 ---
 
 ## 更新规则
