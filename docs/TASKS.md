@@ -60,6 +60,8 @@ C1 in_progress 期间数据源头清理（2026-07-20）：溯源上一轮 NaN �
 
 C1 in_progress 期间 defense-in-depth 补强（2026-07-20）：发现 `fit_dixon_coles_with_form` 在含 NaN 进球数据上抛 `ValueError: match_weights length N does not match number of fixtures M`。根因是 `compute_form_weights` 基于未过滤的 `team_match_df` 计算权重（长度含 NaN fixture），而 `fit_dixon_coles` 内部过滤 NaN 后 `matches_merged` 长度更短，两者不匹配。此外 `compute_form_weights` 的 form 计算对 NaN 进球静默赋 `pts=0`（NaN 比较的 else 分支），污染该球队后续 match 的 form。修复在 `compute_form_weights` 开头过滤 NaN 进球 match，使权重长度与 `fit_dixon_coles` 过滤后的 `matches_merged` 一致，form 计算不再受 NaN 污染。3 个回归测试覆盖 `fit_dixon_coles_with_form` 的 NaN 路径与 `compute_form_weights` 的长度/有限性。test_match_prediction.py 46/46 + 全量 unit/integration 通过。该修复在实际数据上不触发（源头过滤已消除 NaN），但补齐了 ensemble 三模型之一的 defense-in-depth 缺口，确保未来其他数据源或代码变更引入 NaN 时 `fit_dixon_coles_with_form` 不会显式失败。
 
+C1 in_progress 期间 pre-training validation 扩展与磁盘产物重建（2026-07-20）：新增 `validate_no_null_values(relative_path, value_columns, settings)` 函数，与 `validate_no_null_keys` 区分语义（key 列标识行不能为空 vs value 列承载度量值，仅在 NaN 表示数据损坏时检查）。在 `run_pre_training_validation` 中为 `team_match.parquet` 增加 `goals_for`/`goals_against` NaN 检查（第 7 项检查），作为 Layer 0 发布门禁。6 个回归测试覆盖函数本身与 `run_pre_training_validation` 集成。真实数据烟雾测试**捕获到 team_match.parquet 磁盘版本仍含 2 行 NaN goals**（fd-match-64766 Bastia vs Red Star 2025-12-05）——参考工作流 3-4 修复了源头过滤代码但未重建磁盘产物，validation 检查成为发现该 Layer 1 失效的唯一机制。最小重建 team_match（137906 → 137904 行）+ team_rolling（同步），未动 player_match 链路；重建后 validation 7/7 PASS。参考工作流 4"validate 检查是冗余 defense in depth"的判断被推翻。该修复对 `run_weekly_train` 透明生效：若 goals 含 NaN，`skip_if_validation_fails=True` 会跳过训练并返回 fail 原因，防止污染模型训练。完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 5。该修复属于 G0-B 真实性范畴的延伸，不改变 C1 退出门槛状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
