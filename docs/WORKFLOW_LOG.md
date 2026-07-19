@@ -109,13 +109,21 @@
 
 ### 3.3 动作价值与优化器
 
-- **是否在用**：待填写
-- **输入**：待填写
-- **步骤**：待填写（`action-value` → `optimize-ensemble`）
-- **输出**：待填写
-- **现有替代工具**：待填写
-- **错误和阻断**：待填写
-- **复盘证据**：待填写
+- **是否在用**：是（评分权重优化器与模型候选治理部分在用；动作价值与 ensemble 优化待填写）
+- **输入**：本地 `data/` 目录的 5 个已加载来源（fbref_standard、fbref_misc、fbref_shooting、understat、football_data_results），时间切分 `train=1617..2425 / test=2526`
+- **步骤**：
+  1. `uv run python scripts/optimize_ratings_gpu.py --data_dir ./data --quick --no-viz` — 在 CPU 上快速生成 reviewable 候选
+  2. `uv run python -m scoutfootball model-admission --json` — 检查候选是否 `reviewable`（7 项 evidence 检查）
+  3. `uv run python -m scoutfootball promote-model-run <run_id> --decision "..." --confirm --json` — 晋级候选到活跃产物（创建带 sha256 的备份）
+  4. `uv run python -m scoutfootball rollback-model-run <backup_id> --decision "..." --confirm --json` — 从备份还原活跃产物
+  5. `uv run python -m scoutfootball reject-model-run <run_id> --decision "..." --confirm --json` — 拒绝候选（元数据操作，不删除文件）
+- **输出**：
+  - 候选 run 目录 `data/models/runs/<timestamp>-<uuid8>/`，含 `meta.json`（lineage、metrics、error_cases、activation 状态）+ `optimized_params.npy` + `player_ratings_candidate.parquet` + `training_history.json`
+  - 备份目录 `data/models/backups/<backup_timestamp>-<run_id>-<uuid8>/`，含 `manifest.json` + 三个 baseline 活跃产物副本
+  - 晋级时活跃产物 sha256 替换为候选 sha256；回滚时还原为 baseline sha256
+- **现有替代工具**：无（此前优化器 run 全部 `not_reviewable`，无晋级/回滚/拒绝的治理路径；C1 新增了 4 个 lifecycle 命令）
+- **错误和阻断**：无。本次运行全部通过
+- **复盘证据**：见下方"参考工作流 2：模型候选治理与可逆晋级"
 
 ---
 
@@ -167,6 +175,63 @@
   - **有什么问题**：无。本次运行无错误、无阻断。
   - **下一步改进**：C1 的后续切片应补齐 source health、append-only snapshot 和 lineage 的真实记录；本次报告不会根据文件名或时间戳猜测它们。G0-B 已清理 workflow 的 fail-open 模式，`preflight` 可作为发布门禁接入。
 - **是否可重复使用**：是。此工作流不依赖网络（数据已在本地），可随时重复执行。维护者每次数据更新后都应运行 `validate` + `preflight --evidence-out <new-path>` 确认完整性，并保留新的本地证据文件。
+
+### 参考工作流 2：模型候选治理与可逆晋级（3.3 评分权重优化器部分）
+
+- **选择的工作流**：3.3 评分权重优化器的模型候选治理子流程（生成 → admission → promote → rollback）
+- **执行日期**：2026-07-19
+- **执行环境**：Windows, Python 3.12.11, uv, CPU 模式（`torch 2.13.0+cpu`），工作目录 `c:\football\scoutlab`
+- **真实输入**：本地 5 个已加载来源（fbref_standard、fbref_misc、fbref_shooting、understat、football_data_results）；`--quick` 模式（steps=80, pop=6, patience=15, warmup=8, 跳过 CV/稳定性/重要性）；时间切分 `train=1617..2425 / test=2526`
+- **执行步骤与命令**：
+  ```bash
+  # 0. 先记录 baseline 活跃产物的 sha256（用于回滚后比对）
+  #    ratings=B657F3E4... size=2101840
+  #    params=7F0534FC... size=436
+  #    meta  =E27BEAC8... size=26776
+
+  # 1. 生成 reviewable 候选（CPU 上约 1 分钟）
+  uv run python scripts/optimize_ratings_gpu.py --data_dir ./data --quick --no-viz
+  # → 生成 data/models/runs/20260719T142124Z-631abaea/
+
+  # 2. 验证候选 admission 状态（7 项 evidence 检查）
+  uv run python -m scoutfootball model-admission --json
+  # → reviewable_run_count: 1（lineage.status=recorded、parameter_artifact、
+  #   recorded_lineage、time_split、baseline_holdout、candidate_holdout、
+  #   error_cases、required_inputs 全部满足）
+
+  # 3. 晋级候选到活跃产物（创建带 sha256 校验的备份）
+  uv run python -m scoutfootball promote-model-run 20260719T142124Z-631abaea \
+      --decision "C1 admission gate verification: promote reviewable candidate" \
+      --confirm --json
+  # → 创建 data/models/backups/20260719T142324Z-20260719T142124Z-631abaea-f1416f39/
+  # → 活跃产物 sha256 替换为候选 sha256
+  #    ratings=F6034D7F... size=1903108
+  #    params=D5678C2E... size=436
+  #    meta  =48010E9B... size=13226
+
+  # 4. 从备份还原活跃产物
+  uv run python -m scoutfootball rollback-model-run \
+      20260719T142324Z-20260719T142124Z-631abaea-f1416f39 \
+      --decision "C1 admission gate verification: restore original active artifacts after promote test" \
+      --confirm --json
+  # → 活跃产物 sha256 还原为 baseline
+  #    ratings=B657F3E4... size=2101840  ✓ 与 baseline 完全一致
+  #    params=7F0534FC... size=436        ✓ 与 baseline 完全一致
+  #    meta  =E27BEAC8... size=26776      ✓ 与 baseline 完全一致
+  ```
+- **执行结果**：
+  - 候选 run `20260719T142124Z-631abaea` 在 `model-admission` 中状态为 `reviewable`，7 项 evidence 检查全部通过
+  - 候选 meta.json 关键字段：`lineage.status=recorded`、`lineage.feature_manifest.path=gold/feature_store/rating_feature_matrix_manifest.json`、`activation.status=rolled_back`、`activation.backup_id=20260719T142324Z-20260719T142124Z-631abaea-f1416f39`
+  - 候选 metrics（test split）：baseline Spearman=0.6028 → optimized Spearman=0.6993（+0.0965）；baseline points MAE=18.22 → optimized points MAE=14.75（-3.47）
+  - 候选 error_cases：over_estimated 5 队（Wolfsburg +1.4 .. Burnley +8.9）、under_estimated 5 队（Parma -35.0 .. Bologna -30.8）
+  - promote 创建备份目录，含 `manifest.json` + 三个 baseline 活跃产物副本（带 sha256 校验）
+  - rollback 后三个活跃产物 sha256 与 baseline 完全一致，可逆性得到端到端验证
+- **人工复盘**：
+  - **是否达到预期**：是。这是首次在当前 snapshot 上生成 `reviewable` 候选（此前 40 个历史 run 全部 `not_reviewable`，主因是缺 `rating_feature_matrix_manifest.json`）。promote/rollback 端到端可逆，活跃产物 sha256 在回滚后与 baseline 字节级一致。
+  - **有什么问题**：无功能性阻断。运行时有一条 `FutureWarning: DataFrame concatenation with empty or all-NA entries is deprecated`（understat 拼接，data.py:439），不影响结果，未修复。
+  - **reject 路径覆盖**：reject 是纯元数据操作（不删除候选目录、不变更活跃产物），由单元测试 `tests/unit/test_model_run_lifecycle.py::test_rejection_is_a_confirmed_metadata_action_that_keeps_candidate` 覆盖（验证 dry-run 保持 `not_activated`、`--confirm` 翻转为 `rejected` 且候选目录保留）。本次未重复跑 quick run 作为 reject 目标，因为该路径不涉及活跃产物可逆性这种需要端到端实测的场景。
+  - **下一步改进**：C1 退出门槛第 3 条已端到端验证。剩余 C1 退出门槛包括补齐 6 个来源的 `snapshot_date`、建立身份/来源审计样本、处置 `data/raw/transfermarkt/` 遗留未登记目录。
+- **是否可重复使用**：是。维护者每次模型迭代后可重复执行 `optimize_ratings_gpu.py → model-admission → promote-model-run` 流程；如需还原，使用 `rollback-model-run <backup_id>`。候选 meta.json 完整记录了 lineage、metrics、error_cases、args，可在同一 snapshot 上复算。
 
 ---
 
