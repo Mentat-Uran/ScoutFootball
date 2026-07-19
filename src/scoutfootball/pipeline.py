@@ -605,6 +605,31 @@ def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataF
     matches["match_date"] = pd.to_datetime(
         matches["Date"], dayfirst=True, format="mixed", errors="raise"
     )
+
+    # Filter out future-match placeholder rows: football-data.co.uk includes
+    # scheduled-but-not-yet-played matches with NaN FTHG/FTAG/FTR. These rows
+    # have no goals and would pollute team_match.parquet with NaN goals,
+    # silently corrupting downstream model training (see fit_dixon_coles NaN
+    # handling and WORKFLOW_LOG.md reference workflow 3).
+    nan_goals_mask = matches["FTHG"].isna() | matches["FTAG"].isna()
+    if nan_goals_mask.any():
+        nan_count = int(nan_goals_mask.sum())
+        sample_cols = ["match_date", "Div", "HomeTeam", "AwayTeam"]
+        sample_rows = matches.loc[nan_goals_mask, sample_cols].head(5)
+        logger.info(
+            "Filtering %d future-match placeholder row(s) from Football-Data "
+            "(FTHG/FTAG NaN): %s",
+            nan_count,
+            sample_rows.to_dict("records"),
+        )
+        matches = matches.loc[~nan_goals_mask].reset_index(drop=True)
+        if matches.empty:
+            raise ValueError(
+                "All Football-Data rows have NaN FTHG/FTAG; raw data appears to "
+                "contain only future-match placeholders. Re-run ingest or inspect "
+                f"{input_path}."
+            )
+
     matches = matches.sort_values(["match_date", "league", "HomeTeam", "AwayTeam"]).reset_index(
         drop=True
     )
