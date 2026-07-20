@@ -1424,6 +1424,193 @@ class TestPipeline:
         args_force = parser.parse_args(["train", "--force"])
         assert args_force.force is True
 
+    def test_cli_train_rating_nn_defaults_to_skip_on_validation_failure(
+        self, monkeypatch, capsys
+    ):
+        """CLI ``scoutfootball train-rating-nn`` must default to fail-closed.
+
+        Regression for a G0-B gate asymmetry: Round 17 fixed the ``train``
+        command to default to ``skip_if_validation_fails=True``, but
+        ``train-rating-nn`` — a parallel path that produces the same NN
+        candidate artifacts — had no validation gate at all. A maintainer
+        could silently train an NN candidate on inconsistent data by using
+        ``train-rating-nn`` instead of ``train``. After the fix, the gate
+        runs first and skips training when validation fails (unless
+        ``--force``).
+        """
+        import argparse
+
+        from scoutfootball import __main__ as main_module
+        from scoutfootball.evaluation.validation import ValidationReport
+
+        # Failed report: one failing check.
+        failed_report = ValidationReport(
+            checks=[ValidationCheckResult("fake_check", False, "fake failure")]
+        )
+
+        def fake_run_pre_training_validation(*_args, **_kwargs):
+            return failed_report
+
+        train_called: list[bool] = []
+
+        def fake_train(*_args, **_kwargs):
+            train_called.append(True)
+            return None
+
+        monkeypatch.setattr(
+            main_module,
+            "run_pre_training_validation",
+            fake_run_pre_training_validation,
+            raising=False,
+        )
+        # The import inside _cmd_train_rating_nn looks up
+        # run_pre_training_validation on the validation module, so patch there too.
+        from scoutfootball.evaluation import validation as validation_module
+
+        monkeypatch.setattr(
+            validation_module, "run_pre_training_validation", fake_run_pre_training_validation
+        )
+        # Patch train_player_rating_nn_from_files on the module where it's
+        # imported (player_rating_nn), so the local import inside the cmd
+        # function picks up the fake.
+        from scoutfootball.models import player_rating_nn as nn_module
+
+        monkeypatch.setattr(nn_module, "train_player_rating_nn_from_files", fake_train)
+
+        args = argparse.Namespace(
+            force=False, min_labels=200, max_iter=300, seed=42, output_dir=None
+        )
+        main_module._cmd_train_rating_nn(args)
+
+        # Training must NOT have been called.
+        assert train_called == []
+        captured = capsys.readouterr()
+        assert "Skipping training" in captured.out
+        assert "pre-training validation failed" in captured.out
+
+    def test_cli_train_rating_nn_force_flag_overrides_validation_gate(
+        self, monkeypatch, capsys
+    ):
+        """``scoutfootball train-rating-nn --force`` overrides the gate.
+
+        The ``--force`` flag is the supported escape hatch for debugging or
+        for training on known-incomplete data at the maintainer's risk. It
+        must let training proceed even when validation fails.
+        """
+        import argparse
+
+        from scoutfootball import __main__ as main_module
+        from scoutfootball.evaluation.validation import ValidationReport
+
+        failed_report = ValidationReport(
+            checks=[ValidationCheckResult("fake_check", False, "fake failure")]
+        )
+
+        def fake_run_pre_training_validation(*_args, **_kwargs):
+            return failed_report
+
+        train_called: list[bool] = []
+
+        class FakeResult:
+            status = "trained (fake)"
+            metrics = {}
+
+        def fake_train(*_args, **_kwargs):
+            train_called.append(True)
+            return FakeResult()
+
+        monkeypatch.setattr(
+            main_module,
+            "run_pre_training_validation",
+            fake_run_pre_training_validation,
+            raising=False,
+        )
+        from scoutfootball.evaluation import validation as validation_module
+
+        monkeypatch.setattr(
+            validation_module, "run_pre_training_validation", fake_run_pre_training_validation
+        )
+        from scoutfootball.models import player_rating_nn as nn_module
+
+        monkeypatch.setattr(nn_module, "train_player_rating_nn_from_files", fake_train)
+
+        args = argparse.Namespace(
+            force=True, min_labels=200, max_iter=300, seed=42, output_dir=None
+        )
+        main_module._cmd_train_rating_nn(args)
+
+        # Training MUST have been called despite validation failure.
+        assert train_called == [True]
+        captured = capsys.readouterr()
+        assert "trained (fake)" in captured.out
+
+    def test_cli_train_rating_nn_proceeds_when_validation_passes(
+        self, monkeypatch, capsys
+    ):
+        """When validation passes, ``train-rating-nn`` must proceed to train.
+
+        This is the normal happy path: validation gate opens and training
+        runs. Verifies the gate doesn't false-positive on a passing report.
+        """
+        import argparse
+
+        from scoutfootball import __main__ as main_module
+        from scoutfootball.evaluation.validation import ValidationReport
+
+        passed_report = ValidationReport(
+            checks=[ValidationCheckResult("fake_check", True, "ok")]
+        )
+
+        def fake_run_pre_training_validation(*_args, **_kwargs):
+            return passed_report
+
+        train_called: list[bool] = []
+
+        class FakeResult:
+            status = "trained (fake)"
+            metrics = {}
+
+        def fake_train(*_args, **_kwargs):
+            train_called.append(True)
+            return FakeResult()
+
+        monkeypatch.setattr(
+            main_module,
+            "run_pre_training_validation",
+            fake_run_pre_training_validation,
+            raising=False,
+        )
+        from scoutfootball.evaluation import validation as validation_module
+
+        monkeypatch.setattr(
+            validation_module, "run_pre_training_validation", fake_run_pre_training_validation
+        )
+        from scoutfootball.models import player_rating_nn as nn_module
+
+        monkeypatch.setattr(nn_module, "train_player_rating_nn_from_files", fake_train)
+
+        # force=False is the default; gate must open because validation passes.
+        args = argparse.Namespace(
+            force=False, min_labels=200, max_iter=300, seed=42, output_dir=None
+        )
+        main_module._cmd_train_rating_nn(args)
+
+        assert train_called == [True]
+        captured = capsys.readouterr()
+        assert "trained (fake)" in captured.out
+
+    def test_cli_train_rating_nn_subparser_parses_force_flag(self):
+        """The ``train-rating-nn`` subparser must accept ``--force`` and default to False."""
+        from scoutfootball.__main__ import build_parser
+
+        parser = build_parser()
+        # Default: no --force
+        args_no_force = parser.parse_args(["train-rating-nn"])
+        assert args_no_force.force is False
+        # Explicit --force
+        args_force = parser.parse_args(["train-rating-nn", "--force"])
+        assert args_force.force is True
+
     def test_build_team_match_filters_nan_goals_placeholder_rows(self, tmp_path):
         """Football-Data future-match placeholder rows (NaN FTHG/FTAG) must be
         filtered before entering team_match.parquet.

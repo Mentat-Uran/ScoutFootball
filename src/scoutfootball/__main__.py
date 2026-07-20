@@ -170,10 +170,25 @@ def _cmd_train(args: argparse.Namespace) -> None:
 
 
 def _cmd_train_rating_nn(args: argparse.Namespace) -> None:
+    from scoutfootball.evaluation.validation import run_pre_training_validation
     from scoutfootball.models.player_rating_nn import (
         PlayerRatingNNConfig,
         train_player_rating_nn_from_files,
     )
+
+    # Default: skip training when pre-training validation fails (G0-B fail-closed).
+    # --force overrides for debugging/explicit override at the maintainer's risk.
+    # Mirrors the `train` command gate (Round 17 fix). Without this gate,
+    # `train-rating-nn` would be a parallel ungated path to the same model
+    # artifacts that `train` produces under gate — letting a maintainer
+    # silently train an NN candidate on inconsistent data.
+    report = run_pre_training_validation()
+    if not args.force and not report.passed:
+        print("Skipping training: pre-training validation failed.")
+        print(report.summary())
+        print("Run `scoutfootball validate` for details.")
+        print("To train anyway, pass --force (at your own risk).")
+        return
 
     result = train_player_rating_nn_from_files(
         config=PlayerRatingNNConfig(
@@ -2179,6 +2194,11 @@ def build_parser() -> argparse.ArgumentParser:
     nn_p.add_argument("--max-iter", type=int, default=300)
     nn_p.add_argument("--seed", type=int, default=42)
     nn_p.add_argument("--output-dir", type=str, default=None)
+    nn_p.add_argument(
+        "--force",
+        action="store_true",
+        help="Train even if pre-training validation fails (default: skip on failure)",
+    )
     sub.add_parser("validate", help="Run pre-training data validation")
     source_health_p = sub.add_parser(
         "source-health", help="Inspect registered local raw-source health without network access"
