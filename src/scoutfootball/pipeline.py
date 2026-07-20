@@ -12,6 +12,15 @@ import pandas as pd
 from scoutfootball.config import DEFAULT_INGEST_CONFIG, IngestConfig, PlatformSettings
 from scoutfootball.entities.normalize import normalize_country_name, normalize_person_name
 from scoutfootball.evaluation.validation import run_pre_training_validation
+from scoutfootball.features.manifest import (
+    SourceLineageEntry,
+    count_parquet_rows,
+    extract_lineage_attrs,
+    hash_file,
+    relative_to_data_root,
+    write_player_match_manifest,
+    write_team_match_manifest,
+)
 from scoutfootball.features.player_match import build_player_match_features
 from scoutfootball.features.player_rolling import build_player_rolling_features
 from scoutfootball.features.rating_matrix import build_rating_feature_matrix, write_feature_manifest
@@ -25,6 +34,28 @@ from scoutfootball.models.match_prediction import (
 from scoutfootball.storage.csv_safety import dataframe_to_csv
 
 logger = logging.getLogger(__name__)
+
+
+def _lineage_entry(
+    name: str,
+    path: Path,
+    settings: PlatformSettings,
+    *,
+    notes: str | None = None,
+) -> SourceLineageEntry:
+    """Build a SourceLineageEntry for *path* under *settings*.
+
+    Records the relative path, sha256[:16] file hash, and parquet row
+    count so manifests can detect input drift without re-reading the
+    underlying raw file.
+    """
+    return SourceLineageEntry(
+        name=name,
+        relative_path=relative_to_data_root(path, settings),
+        rows_read=count_parquet_rows(path),
+        input_hash=hash_file(path),
+        notes=notes,
+    )
 
 
 def _settings() -> PlatformSettings:
@@ -86,7 +117,26 @@ def run_build_features(
     try:
         team_match = _build_team_match_from_football_data(resolved)
         team_match_path = resolved.gold_root / "feature_store" / "team_match.parquet"
+        # Pop lineage/hash attrs before to_parquet: pandas tries to
+        # JSON-serialize df.attrs into parquet metadata, but
+        # SourceLineageEntry dataclasses are not JSON-serializable and
+        # would raise TypeError (or silently drop attrs depending on
+        # pandas build). Pass them explicitly to the manifest writer.
+        team_lineage, team_input_hash = extract_lineage_attrs(team_match)
         team_match.to_parquet(team_match_path, index=False)
+        # Write team_match_manifest.json next to the parquet file. Captures
+        # input file hash, row/column counts, schema and source lineage so
+        # downstream validation and audit can detect drift without re-reading
+        # the underlying raw parquet bytes.
+        try:
+            write_team_match_manifest(
+                team_match,
+                team_match_path,
+                source_lineage=team_lineage,
+                input_hash=team_input_hash,
+            )
+        except Exception as exc:
+            logger.warning("team_match manifest write failed: %s", exc)
         results["team_match"] = f"ok ({len(team_match)} rows -> {team_match_path.name})"
 
         team_rolling = build_team_rolling_features(team_match, windows=(3, 5))
@@ -114,8 +164,38 @@ def run_build_features(
             player_match = pd.concat(proxy_frames, ignore_index=True, sort=False)
             granularity_info = "season-level FBref + Understat proxies"
 
+        # Reconstruct source lineage on the concatenated frame. pd.concat
+        # does not preserve attrs in a predictable way, so we merge the
+        # lineage lists from each builder explicitly. Empty frames (e.g.
+        # statsbomb_open not found) contribute no lineage entries.
+        combined_lineage: list[SourceLineageEntry] = []
+        for frame in ([sb_match, fbref_proxy, understat_proxy] if not sb_match.empty
+                      else [fbref_proxy, understat_proxy]):
+            combined_lineage.extend(frame.attrs.get("_source_lineage", []) or [])
+        player_match.attrs["_source_lineage"] = combined_lineage
+        # Propagate the combined input hash from the statsbomb builder when
+        # available; otherwise let the manifest writer compute a fallback
+        # hash from the player_match contents.
+        sb_input_hash = sb_match.attrs.get("_input_hash") if not sb_match.empty else None
+        if sb_input_hash:
+            player_match.attrs["_input_hash"] = sb_input_hash
+
         player_match_path = resolved.gold_root / "feature_store" / "player_match.parquet"
+        # Pop lineage/hash attrs before to_parquet (same reason as team_match).
+        player_lineage, player_input_hash = extract_lineage_attrs(player_match)
         player_match.to_parquet(player_match_path, index=False)
+        # Write player_match_manifest.json. Adds source_breakdown (per-source
+        # row counts) on top of the shared schema, since player_match is the
+        # concatenation of statsbomb_open + fbref + understat.
+        try:
+            write_player_match_manifest(
+                player_match,
+                player_match_path,
+                source_lineage=player_lineage,
+                input_hash=player_input_hash,
+            )
+        except Exception as exc:
+            logger.warning("player_match manifest write failed: %s", exc)
         results["player_match"] = (
             f"ok ({len(player_match)} rows -> {player_match_path.name}; {granularity_info})"
         )
@@ -613,6 +693,7 @@ def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataF
     # silently corrupting downstream model training (see fit_dixon_coles NaN
     # handling and WORKFLOW_LOG.md reference workflow 3).
     nan_goals_mask = matches["FTHG"].isna() | matches["FTAG"].isna()
+    filtered_count = int(nan_goals_mask.sum()) if nan_goals_mask.any() else 0
     if nan_goals_mask.any():
         nan_count = int(nan_goals_mask.sum())
         sample_cols = ["match_date", "Div", "HomeTeam", "AwayTeam"]
@@ -648,20 +729,61 @@ def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataF
     matches["home_shots_on_target"] = pd.to_numeric(matches.get("HST"), errors="coerce")
     matches["away_shots_on_target"] = pd.to_numeric(matches.get("AST"), errors="coerce")
 
-    return build_team_match_features(matches)
+    team_match = build_team_match_features(matches)
+
+    # Attach source lineage for manifest writer. Notes record the pre-match_id
+    # filter so consumers can reconcile raw input row count with total_rows.
+    filter_note = (
+        f"{filtered_count} future-match placeholder row(s) filtered (FTHG/FTAG NaN); "
+        "home+away expansion produces 2 rows per remaining match"
+        if filtered_count > 0
+        else "home+away expansion produces 2 rows per match"
+    )
+    team_match.attrs["_source_lineage"] = [
+        _lineage_entry(
+            "football_data",
+            input_path,
+            settings,
+            notes=filter_note,
+        )
+    ]
+    team_match.attrs["_input_hash"] = _hash_input_frames(matches)
+    return team_match
+
+
+def _hash_input_frames(*frames: pd.DataFrame) -> str:
+    """Hash input DataFrame contents for manifest ``input_hash`` field.
+
+    Uses a stable parquet-bytes hash. Empty frames are skipped. Mirrors
+    ``rating_matrix._compute_dataframe_hash`` but lives here so pipeline
+    builders can call it without a private import.
+    """
+    import hashlib
+
+    hasher = hashlib.sha256()
+    for frame in frames:
+        if frame is None or frame.empty:
+            continue
+        try:
+            hasher.update(frame.to_parquet(index=False))
+        except Exception:
+            hasher.update(",".join(map(str, frame.columns)).encode())
+            hasher.update(str(len(frame)).encode())
+    return hasher.hexdigest()[:16]
 
 
 def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFrame:
     """Aggregate StatsBomb events into per-player-per-match appearances."""
     events_path = settings.raw_root / "statsbomb_open" / "events_all.parquet"
+    events_path_used = events_path
     if not events_path.exists():
-        events_path = settings.raw_root / "statsbomb_open" / "events_sample.parquet"
+        events_path_used = settings.raw_root / "statsbomb_open" / "events_sample.parquet"
     matches_path = settings.raw_root / "statsbomb_open" / "big5_matches.parquet"
 
-    if not events_path.exists() or not matches_path.exists():
+    if not events_path_used.exists() or not matches_path.exists():
         return pd.DataFrame()
 
-    events = pd.read_parquet(events_path)
+    events = pd.read_parquet(events_path_used)
     matches = pd.read_parquet(matches_path)
 
     if events.empty or matches.empty:
@@ -771,7 +893,25 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
         errors="ignore",
     )
 
-    return build_player_match_features(player_match)
+    built = build_player_match_features(player_match)
+    # Attach source lineage: events file + matches file. Both are needed to
+    # reconstruct the player_match rows, so both hashes are recorded.
+    built.attrs["_source_lineage"] = [
+        _lineage_entry(
+            "statsbomb_open",
+            events_path_used,
+            settings,
+            notes="events file; aggregated to per-player-per-match",
+        ),
+        _lineage_entry(
+            "statsbomb_open",
+            matches_path,
+            settings,
+            notes="matches metadata file; joined on match_id",
+        ),
+    ]
+    built.attrs["_input_hash"] = _hash_input_frames(events, matches)
+    return built
 
 
 def _build_player_match_proxy_from_fbref(settings: PlatformSettings) -> pd.DataFrame:
@@ -835,6 +975,16 @@ def _build_player_match_proxy_from_fbref(settings: PlatformSettings) -> pd.DataF
     proxy["source_name"] = "fbref"
 
     player_match = build_player_match_features(proxy)
+    # Attach source lineage for manifest writer.
+    player_match.attrs["_source_lineage"] = [
+        _lineage_entry(
+            "fbref",
+            input_path,
+            settings,
+            notes="season proxy; one row per player-season",
+        )
+    ]
+    player_match.attrs["_input_hash"] = _hash_input_frames(frame)
     return player_match
 
 
@@ -848,13 +998,34 @@ def _build_player_match_proxy_from_understat(
         logger.info("Understat historical player snapshot not found: %s", input_path)
         return pd.DataFrame()
     try:
-        return build_understat_season_proxy(
-            pd.read_parquet(input_path),
+        raw = pd.read_parquet(input_path)
+        proxy = build_understat_season_proxy(
+            raw,
             excluded_season_ids=excluded_season_ids,
         )
     except Exception as exc:
         logger.warning("Understat historical player proxy unavailable: %s", exc)
         return pd.DataFrame()
+
+    if proxy.empty:
+        return proxy
+
+    excluded_note = (
+        f"season proxy; excluded {len(excluded_season_ids)} season(s) already "
+        "covered by FBref to avoid double-counting"
+        if excluded_season_ids
+        else "season proxy; no seasons excluded"
+    )
+    proxy.attrs["_source_lineage"] = [
+        _lineage_entry(
+            "understat",
+            input_path,
+            settings,
+            notes=excluded_note,
+        )
+    ]
+    proxy.attrs["_input_hash"] = _hash_input_frames(raw)
+    return proxy
 
 
 def _save_poisson_artifacts(

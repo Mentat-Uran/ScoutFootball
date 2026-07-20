@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
@@ -180,6 +182,130 @@ def validate_unique_keys(
             f"{dup_count} duplicate rows for keys {list(key_columns)}",
         )
     return ValidationCheckResult(name, True, f"Keys {list(key_columns)} are unique")
+
+
+def validate_manifest_exists(
+    parquet_relative_path: str,
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate that a parquet file has a sidecar manifest with required fields.
+
+    Manifest is expected at ``{parquet_stem}_manifest.json`` next to the
+    parquet file (matches ``features.manifest.write_manifest`` convention).
+    Required fields mirror the aligned schema in DATA_CONTRACTS.md 7.1:
+    ``artifact``, ``schema_version``, ``total_rows``, ``column_count``,
+    ``columns``, ``input_hash``, ``source_lineage``, ``timestamp``.
+
+    Returns FAIL when:
+    - parquet file is missing (cannot infer manifest path reliably)
+    - manifest file is missing (build-features did not run or failed)
+    - manifest is not valid JSON
+    - manifest is missing any required field
+
+    Does NOT validate manifest freshness vs parquet content — that is
+    ``validate_manifest_freshness``'s responsibility.
+    """
+    resolved = (settings or PlatformSettings.from_root()).data_root / parquet_relative_path
+    name = f"manifest_exists:{parquet_relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"Parquet missing: {resolved}")
+    manifest_path = resolved.parent / f"{resolved.stem}_manifest.json"
+    if not manifest_path.exists():
+        return ValidationCheckResult(
+            name, False, f"Manifest missing: {manifest_path.name} (run build-features)"
+        )
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        return ValidationCheckResult(name, False, f"Manifest unreadable: {exc}")
+    required = (
+        "artifact",
+        "schema_version",
+        "total_rows",
+        "column_count",
+        "columns",
+        "input_hash",
+        "source_lineage",
+        "timestamp",
+    )
+    missing = [f for f in required if f not in payload]
+    if missing:
+        return ValidationCheckResult(
+            name, False, f"Manifest missing fields: {missing}"
+        )
+    return ValidationCheckResult(
+        name,
+        True,
+        f"Manifest OK ({manifest_path.name}, artifact={payload['artifact']}, "
+        f"schema={payload['schema_version']})",
+    )
+
+
+def validate_manifest_freshness(
+    parquet_relative_path: str,
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate that the sidecar manifest row count matches the parquet.
+
+    Detects stale manifests: build-features wrote the manifest, then a
+    later partial rebuild (manual edit, separate pipeline step, or
+    failed run) changed the parquet without refreshing the manifest.
+    A stale manifest misleads consumers about input hashes and row
+    counts even when the schema is present.
+
+    Returns FAIL when:
+    - parquet file is missing
+    - manifest file is missing (delegates to validate_manifest_exists)
+    - manifest is unreadable
+    - manifest.total_rows != actual parquet row count
+    - manifest.column_count != actual parquet column count
+
+    Does NOT re-hash inputs (expensive); use ``contract-quality`` for
+    full content-level manifest verification.
+    """
+    resolved = (settings or PlatformSettings.from_root()).data_root / parquet_relative_path
+    name = f"manifest_freshness:{parquet_relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"Parquet missing: {resolved}")
+    manifest_path = resolved.parent / f"{resolved.stem}_manifest.json"
+    if not manifest_path.exists():
+        return ValidationCheckResult(
+            name, False, f"Manifest missing: {manifest_path.name}"
+        )
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        return ValidationCheckResult(name, False, f"Manifest unreadable: {exc}")
+
+    manifest_rows = payload.get("total_rows")
+    manifest_cols = payload.get("column_count")
+    if manifest_rows is None or manifest_cols is None:
+        return ValidationCheckResult(
+            name, False, "Manifest missing total_rows or column_count"
+        )
+
+    df = pd.read_parquet(resolved)
+    actual_rows = int(len(df))
+    actual_cols = int(len(df.columns))
+    if int(manifest_rows) != actual_rows:
+        return ValidationCheckResult(
+            name,
+            False,
+            f"Row count drift: manifest={manifest_rows}, parquet={actual_rows}",
+        )
+    if int(manifest_cols) != actual_cols:
+        return ValidationCheckResult(
+            name,
+            False,
+            f"Column count drift: manifest={manifest_cols}, parquet={actual_cols}",
+        )
+    return ValidationCheckResult(
+        name,
+        True,
+        f"Manifest fresh (rows={actual_rows}, cols={actual_cols})",
+    )
 
 
 def run_pre_training_validation(
