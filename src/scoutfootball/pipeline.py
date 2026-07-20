@@ -214,8 +214,38 @@ def run_build_features(
                 rating_matrix_path = (
                     resolved.gold_root / "feature_store" / "rating_feature_matrix.parquet"
                 )
+                # Attach source lineage pointing at the two direct
+                # upstream parquet artifacts (player_match + player_rolling).
+                # rating_feature_matrix is a player-season aggregate
+                # built from these two tables; recording them here lets
+                # the manifest trace rating_matrix → player_match →
+                # raw inputs (statsbomb/fbref/understat) in one hop.
+                rating_matrix.attrs["_source_lineage"] = [
+                    _lineage_entry(
+                        "player_match",
+                        player_match_path,
+                        resolved,
+                    ),
+                    _lineage_entry(
+                        "player_rolling",
+                        player_rolling_path,
+                        resolved,
+                    ),
+                ]
+                # Pop lineage/hash attrs before to_parquet (same reason
+                # as team_match/player_match: pandas tries to JSON-
+                # serialize SourceLineageEntry dataclasses in attrs),
+                # then pass them explicitly to write_feature_manifest.
+                rating_lineage, rating_input_hash = extract_lineage_attrs(
+                    rating_matrix
+                )
                 rating_matrix.to_parquet(rating_matrix_path, index=False)
-                write_feature_manifest(rating_matrix, rating_matrix_path)
+                write_feature_manifest(
+                    rating_matrix,
+                    rating_matrix_path,
+                    source_lineage=rating_lineage,
+                    input_hash=rating_input_hash,
+                )
                 results["rating_feature_matrix"] = (
                     f"ok ({len(rating_matrix)} rows -> {rating_matrix_path.name})"
                 )
