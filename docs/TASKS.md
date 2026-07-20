@@ -64,6 +64,8 @@ C1 in_progress 期间 pre-training validation 扩展与磁盘产物重建（2026
 
 C1 in_progress 期间 Understat 转会球员 team_name 逗号污染修复（2026-07-20）：巡检队名匹配率时发现 `rating_feature_matrix.parquet` 的 `team_name` 列包含 "Monaco,Nice" 等逗号连接的双队名，溯源至 Understat 原始数据中赛季中转会球员的 `team_title` 字段（980/31902 行含逗号，979 行 2 队、1 行 3 队）。`build_understat_season_proxy` 直接使用该字段，导致 485 行 player_match 和 rating_matrix 的 `team_name` 被双队名字符串污染，破坏所有基于 team_name 的聚合、匹配和评分。修复：取第一个队名作为主归属，新增 `multi_team_season` 布尔标志保留追溯能力。3 个回归测试覆盖双队、三队和无逗号路径。全量重建 player_match / player_rolling / rating_feature_matrix，重建后逗号 team_name 从 485 行降到 0；队名匹配率从无法评估提升到 96.3%（球队级别）/ 97.4%（队-赛季级别）。完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 6。该修复属于 G0-B 真实性范畴的数据完整性修复，不改变 C1 退出门槛状态。
 
+C1 in_progress 期间 pre-training validation 第二轮扩展（2026-07-20）：将 `run_pre_training_validation` 从 7 项扩展到 11 项，补齐发布门禁的 defense-in-depth 缺口。新增两个基础检查函数：`validate_no_negative_values`（核心计数指标不能为负，负值意味符号翻转或导入损坏）和 `validate_unique_keys`（聚合表主键必须唯一，重复行导致训练样本重复计数）。在 `run_pre_training_validation` 中新增 4 项检查：`player_match.parquet` 的 goals/assists/minutes_played 非空检查、`player_match.parquet` 的 goals/assists/minutes_played 非负检查、`team_match.parquet` 的 goals_for/goals_against 非负检查、`rating_feature_matrix.parquet` 的 player_id+season_id 唯一性检查。14 个新增回归测试覆盖两个新函数的 10 个场景 + `run_pre_training_validation` 的 4 个集成场景。真实数据烟雾测试 11/11 PASS。该修复属于 G0-B 真实性范畴的发布门禁强化，不改变 C1 退出门槛状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |

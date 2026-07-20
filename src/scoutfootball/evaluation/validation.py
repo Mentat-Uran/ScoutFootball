@@ -139,6 +139,49 @@ def validate_no_null_values(
     return ValidationCheckResult(name, True, "No null values")
 
 
+def validate_no_negative_values(
+    relative_path: str,
+    value_columns: tuple[str, ...],
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    resolved = (settings or PlatformSettings.from_root()).data_root / relative_path
+    name = f"no_negative_values:{relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"File missing: {resolved}")
+    df = pd.read_parquet(resolved)
+    missing_cols = [c for c in value_columns if c not in df.columns]
+    if missing_cols:
+        return ValidationCheckResult(name, False, f"Missing columns: {missing_cols}")
+    neg_counts = {c: int((df[c] < 0).sum()) for c in value_columns}
+    has_negs = any(v > 0 for v in neg_counts.values())
+    if has_negs:
+        return ValidationCheckResult(name, False, f"Negative values: {neg_counts}")
+    return ValidationCheckResult(name, True, "No negative values")
+
+
+def validate_unique_keys(
+    relative_path: str,
+    key_columns: tuple[str, ...],
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    resolved = (settings or PlatformSettings.from_root()).data_root / relative_path
+    name = f"unique_keys:{relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"File missing: {resolved}")
+    df = pd.read_parquet(resolved)
+    missing_cols = [c for c in key_columns if c not in df.columns]
+    if missing_cols:
+        return ValidationCheckResult(name, False, f"Missing columns: {missing_cols}")
+    dup_count = int(df.duplicated(subset=list(key_columns)).sum())
+    if dup_count > 0:
+        return ValidationCheckResult(
+            name,
+            False,
+            f"{dup_count} duplicate rows for keys {list(key_columns)}",
+        )
+    return ValidationCheckResult(name, True, f"Keys {list(key_columns)} are unique")
+
+
 def run_pre_training_validation(
     settings: PlatformSettings | None = None,
 ) -> ValidationReport:
@@ -184,6 +227,44 @@ def run_pre_training_validation(
         validate_no_null_values(
             "gold/feature_store/team_match.parquet",
             ("goals_for", "goals_against"),
+            settings,
+        )
+    )
+    # Player-match core metric completeness: goals, assists, and minutes
+    # are the foundation of all downstream rating and projection features.
+    # NaN in these columns means the aggregation pipeline silently dropped
+    # values or a new data source introduced null measurements.
+    report.checks.append(
+        validate_no_null_values(
+            "gold/feature_store/player_match.parquet",
+            ("goals", "assists", "minutes_played"),
+            settings,
+        )
+    )
+    # Non-negativity: core count metrics can never be negative. Negative
+    # values indicate arithmetic errors, sign flips, or corrupt imports.
+    report.checks.append(
+        validate_no_negative_values(
+            "gold/feature_store/team_match.parquet",
+            ("goals_for", "goals_against"),
+            settings,
+        )
+    )
+    report.checks.append(
+        validate_no_negative_values(
+            "gold/feature_store/player_match.parquet",
+            ("goals", "assists", "minutes_played"),
+            settings,
+        )
+    )
+    # Rating matrix row uniqueness: each player-season must appear exactly
+    # once. Duplicate rows would double-count players in rating training
+    # or silently merge incompatible records from different identity
+    # resolution paths.
+    report.checks.append(
+        validate_unique_keys(
+            "gold/feature_store/rating_feature_matrix.parquet",
+            ("player_id", "season_id"),
             settings,
         )
     )

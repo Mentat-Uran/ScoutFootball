@@ -14,10 +14,12 @@ from scoutfootball.evaluation.validation import (
     ValidationCheckResult,
     ValidationReport,
     run_pre_training_validation,
+    validate_no_negative_values,
     validate_no_null_keys,
     validate_no_null_values,
     validate_parquet_exists,
     validate_row_count,
+    validate_unique_keys,
 )
 
 
@@ -206,19 +208,179 @@ class TestValidateNoNullValues:
         assert "Missing columns" in result.message
 
 
-class TestRunPreTrainingValidation:
-    """Verify run_pre_training_validation includes the goals-completeness check."""
+class TestValidateNoNegativeValues:
+    """Non-negativity checks for core count metrics.
 
-    def test_includes_team_match_goals_completeness_check(self, tmp_path):
-        """The goals_for/goals_against NaN check must be part of the
-        pre-training validation report so that source-filter regressions
-        are caught before model training."""
+    Negative goals, assists, or minutes indicate arithmetic errors,
+    sign flips, or corrupt imports. These checks catch regressions
+    in the feature-building pipeline before they reach model training.
+    """
+
+    def test_missing_file(self, tmp_path):
+        result = validate_no_negative_values(
+            "gold/feature_store/nonexistent.parquet",
+            ("goals", "assists"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "missing" in result.message.lower()
+
+    def test_with_negative_values(self, tmp_path):
         gold = _data_dir(tmp_path) / "gold" / "feature_store"
         gold.mkdir(parents=True)
+        df = pd.DataFrame(
+            {
+                "player_id": ["p1", "p2", "p3"],
+                "goals": [2, -1, 1],
+                "assists": [1, 1, -3],
+            }
+        )
+        df.to_parquet(gold / "neg_metrics.parquet")
+        result = validate_no_negative_values(
+            "gold/feature_store/neg_metrics.parquet",
+            ("goals", "assists"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Negative values" in result.message
+        assert "goals" in result.message
+        assert "assists" in result.message
 
-        # Minimal valid player_match and team_match parquets.
+    def test_without_negative_values(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame(
+            {
+                "player_id": ["p1", "p2"],
+                "goals": [2, 0],
+                "assists": [1, 0],
+            }
+        )
+        df.to_parquet(gold / "clean_metrics.parquet")
+        result = validate_no_negative_values(
+            "gold/feature_store/clean_metrics.parquet",
+            ("goals", "assists"),
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+        assert "No negative values" in result.message
+
+    def test_zero_values_are_valid(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame(
+            {"player_id": ["p1"], "goals": [0], "assists": [0]}
+        )
+        df.to_parquet(gold / "zero_metrics.parquet")
+        result = validate_no_negative_values(
+            "gold/feature_store/zero_metrics.parquet",
+            ("goals", "assists"),
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+
+    def test_missing_columns(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame({"player_id": ["p1"]})
+        df.to_parquet(gold / "no_goals_col.parquet")
+        result = validate_no_negative_values(
+            "gold/feature_store/no_goals_col.parquet",
+            ("goals", "assists"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Missing columns" in result.message
+
+
+class TestValidateUniqueKeys:
+    """Primary key uniqueness checks.
+
+    Duplicate rows in aggregated tables (e.g. one player-season
+    appearing twice) would double-count training samples or silently
+    merge incompatible identity resolution paths.
+    """
+
+    def test_missing_file(self, tmp_path):
+        result = validate_unique_keys(
+            "gold/feature_store/nonexistent.parquet",
+            ("player_id", "season_id"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "missing" in result.message.lower()
+
+    def test_with_duplicate_keys(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame(
+            {
+                "player_id": ["p1", "p1", "p2"],
+                "season_id": ["s1", "s1", "s1"],
+                "goals": [2, 3, 1],
+            }
+        )
+        df.to_parquet(gold / "dup_keys.parquet")
+        result = validate_unique_keys(
+            "gold/feature_store/dup_keys.parquet",
+            ("player_id", "season_id"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "duplicate" in result.message.lower()
+        assert "1" in result.message
+
+    def test_without_duplicate_keys(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame(
+            {
+                "player_id": ["p1", "p2", "p3"],
+                "season_id": ["s1", "s1", "s1"],
+                "goals": [2, 1, 0],
+            }
+        )
+        df.to_parquet(gold / "unique_keys.parquet")
+        result = validate_unique_keys(
+            "gold/feature_store/unique_keys.parquet",
+            ("player_id", "season_id"),
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+        assert "unique" in result.message.lower()
+
+    def test_missing_columns(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        df = pd.DataFrame({"player_id": ["p1"], "goals": [1]})
+        df.to_parquet(gold / "no_season_col.parquet")
+        result = validate_unique_keys(
+            "gold/feature_store/no_season_col.parquet",
+            ("player_id", "season_id"),
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Missing columns" in result.message
+
+
+class TestRunPreTrainingValidation:
+    """Verify run_pre_training_validation gates and coverage.
+
+    These checks are the pre-training defense-in-depth layer.  The
+    pipeline validates existence, row counts, key completeness, and
+    value integrity for core tables before any model training runs.
+    """
+
+    def _write_minimal_valid_store(self, gold):
+        """Write minimal parquets that pass all current checks."""
         pd.DataFrame(
-            {"match_id": [f"m{i}" for i in range(12)], "player_id": [f"p{i}" for i in range(12)]}
+            {
+                "match_id": [f"m{i}" for i in range(12)],
+                "player_id": [f"p{i}" for i in range(12)],
+                "goals": list(range(12)),
+                "assists": list(range(12)),
+                "minutes_played": [i * 90 for i in range(12)],
+            }
         ).to_parquet(gold / "player_match.parquet")
         pd.DataFrame(
             {
@@ -228,6 +390,20 @@ class TestRunPreTrainingValidation:
                 "goals_against": list(range(12)),
             }
         ).to_parquet(gold / "team_match.parquet")
+        pd.DataFrame(
+            {
+                "player_id": [f"p{i}" for i in range(12)],
+                "season_id": ["s2526"] * 12,
+            }
+        ).to_parquet(gold / "rating_feature_matrix.parquet")
+
+    def test_includes_team_match_goals_completeness_check(self, tmp_path):
+        """The goals_for/goals_against NaN check must be part of the
+        pre-training validation report so that source-filter regressions
+        are caught before model training."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
 
         report = run_pre_training_validation(_make_settings(tmp_path))
         check_names = [c.check_name for c in report.checks]
@@ -237,15 +413,43 @@ class TestRunPreTrainingValidation:
         )
         assert report.passed
 
+    def test_includes_player_match_core_metric_checks(self, tmp_path):
+        """Player-match goals/assists/minutes must be checked for both
+        nulls and negatives — these are the foundation of all rating
+        and projection features."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        check_names = [c.check_name for c in report.checks]
+        assert any("no_null_values" in name and "player_match" in name for name in check_names)
+        assert any("no_negative_values" in name and "player_match" in name for name in check_names)
+        assert any("no_negative_values" in name and "team_match" in name for name in check_names)
+        assert report.passed
+
+    def test_includes_rating_matrix_uniqueness_check(self, tmp_path):
+        """Rating feature matrix must have unique player-season rows;
+        duplicates would double-count training samples."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        check_names = [c.check_name for c in report.checks]
+        assert any(
+            "unique_keys" in name and "rating_feature_matrix" in name
+            for name in check_names
+        )
+        assert report.passed
+
     def test_fails_when_team_match_has_nan_goals(self, tmp_path):
         """If team_match.parquet contains NaN goals, validation must fail
         before training is allowed to proceed."""
         gold = _data_dir(tmp_path) / "gold" / "feature_store"
         gold.mkdir(parents=True)
-
-        pd.DataFrame(
-            {"match_id": [f"m{i}" for i in range(12)], "player_id": [f"p{i}" for i in range(12)]}
-        ).to_parquet(gold / "player_match.parquet")
+        self._write_minimal_valid_store(gold)
+        # Overwrite team_match with NaN goals.
         pd.DataFrame(
             {
                 "match_id": [f"m{i}" for i in range(12)],
@@ -261,6 +465,47 @@ class TestRunPreTrainingValidation:
         assert any("no_null_values" in name for name in failures), (
             f"NaN goals must trigger a no_null_values failure; got failures: {failures}"
         )
+
+    def test_fails_when_player_match_has_negative_minutes(self, tmp_path):
+        """Negative minutes in player_match must be caught before
+        any rating or projection features are computed."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+        # Overwrite player_match with negative minutes.
+        pd.DataFrame(
+            {
+                "match_id": [f"m{i}" for i in range(12)],
+                "player_id": [f"p{i}" for i in range(12)],
+                "goals": list(range(12)),
+                "assists": list(range(12)),
+                "minutes_played": [i * 90 if i != 3 else -100 for i in range(12)],
+            }
+        ).to_parquet(gold / "player_match.parquet")
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any("no_negative_values" in name and "player_match" in name for name in failures)
+
+    def test_fails_when_rating_matrix_has_duplicate_player_seasons(self, tmp_path):
+        """Duplicate player-season rows in rating_feature_matrix must
+        fail validation to prevent double-counting in training."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+        # Overwrite rating matrix with duplicate keys.
+        pd.DataFrame(
+            {
+                "player_id": ["p0", "p0", "p1", "p2"],
+                "season_id": ["s2526", "s2526", "s2526", "s2526"],
+            }
+        ).to_parquet(gold / "rating_feature_matrix.parquet")
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any("unique_keys" in name for name in failures)
 
 
 class TestCalibration:
