@@ -64,6 +64,7 @@ from optimizer.data import (
 from optimizer.optimization import _get_default_params_tensor, optimize
 from optimizer.scoring import build_feature_tensors, score_player_ratings_frame
 from optimizer.truth import build_truth_label_anchor
+from optimizer.validation_gate import add_force_flag, run_validation_gate
 
 
 def _sha256_file(path: Path) -> str:
@@ -149,6 +150,9 @@ def main():
                         help="快速模式：大幅降低种群/步数/耐心，适合 Mac CPU/MPS 本地快速迭代")
     parser.add_argument("--no-viz", action="store_true",
                         help="禁用实时可视化（适用于无 GUI 环境或远程服务器）")
+    # Pre-training validation gate (mirrors `train` and `train-rating-nn` CLI
+    # gates). Default: fail-closed; --force overrides at the maintainer's risk.
+    add_force_flag(parser)
     args = parser.parse_args()
 
     # Quick mode: Mac-friendly defaults
@@ -173,6 +177,19 @@ def main():
         args.prior_weight = args.prior_strength
 
     data_dir = Path(args.data_dir).resolve()
+
+    # Pre-training validation gate (parallel to `train` and `train-rating-nn`
+    # CLI gates). Without this, the GPU optimizer is a third ungated path that
+    # produces the same kind of candidate runs reviewed by `model-admission`.
+    # The gate runs before any data loading or device detection so it fails
+    # fastest on inconsistent data (NaN goals, stale manifests, broken
+    # source_lineage, duplicate keys, negative metrics, corrupted truth labels).
+    should_proceed, gate_msg = run_validation_gate(args, data_dir)
+    if gate_msg:
+        print(gate_msg)
+    if not should_proceed:
+        return
+
     print("=" * 80)
     print("球员评分权重优化器 (PyTorch GPU)")
     print("=" * 80)
