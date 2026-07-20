@@ -973,6 +973,24 @@ class TestRunPreTrainingValidation:
                 "prior_minutes_3": [0.0] * 12,
             }
         ).to_parquet(gold / "player_rolling.parquet")
+        # player_truth_labels: supervision target for
+        # train_player_rating_nn_from_files. Must pass
+        # validate_truth_labels (8-column schema, valid enum values,
+        # unique player_id+season+label_source keys) and the new
+        # pre-training checks (existence, row_count>=10, no null keys,
+        # no null label_value, schema).
+        pd.DataFrame(
+            {
+                "player_id": [f"p{i}" for i in range(12)],
+                "season": ["2526"] * 12,
+                "label_source": ["transfermarkt_value"] * 12,
+                "label_confidence": ["high"] * 12,
+                "label_value": [float(i) for i in range(12)],
+                "as_of_date": ["2025-05-31"] * 12,
+                "position_scope": ["all"] * 12,
+                "manual_review_flag": [False] * 12,
+            }
+        ).to_parquet(gold / "player_truth_labels.parquet")
 
         # New-schema manifests for all five artifacts. column_count
         # must match the actual parquet content so
@@ -1264,6 +1282,149 @@ class TestRunPreTrainingValidation:
         failures = {c.check_name for c in report.failures}
         assert any(
             "manifest_freshness" in name and "player_match" in name
+            for name in failures
+        )
+
+    def test_includes_player_truth_labels_checks(self, tmp_path):
+        """run_pre_training_validation must include existence, row_count,
+        no_null_keys, no_null_values, and schema checks for
+        player_truth_labels.parquet. This file is the supervision target
+        for train_player_rating_nn_from_files and was previously not
+        covered by any validation check despite being read directly by
+        the NN training pipeline."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        check_names = [c.check_name for c in report.checks]
+        assert any(
+            "parquet_exists" in name and "player_truth_labels" in name
+            for name in check_names
+        ), f"Missing parquet_exists:player_truth_labels in {check_names}"
+        assert any(
+            "row_count" in name and "player_truth_labels" in name
+            for name in check_names
+        )
+        assert any(
+            "no_null_keys" in name and "player_truth_labels" in name
+            for name in check_names
+        )
+        assert any(
+            "no_null_values" in name and "player_truth_labels" in name
+            for name in check_names
+        )
+        assert any(
+            "truth_labels_schema" in name and "player_truth_labels" in name
+            for name in check_names
+        )
+        assert report.passed, (
+            f"Minimal valid store must pass all checks; failures: "
+            f"{[(c.check_name, c.message) for c in report.failures]}"
+        )
+
+    def test_fails_when_player_truth_labels_missing(self, tmp_path):
+        """Missing player_truth_labels.parquet must fail validation so
+        the NN training pipeline does not silently fall through to
+        'skipped: missing player_truth_labels.parquet' without any
+        upstream signal."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+        (gold / "player_truth_labels.parquet").unlink()
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any(
+            "parquet_exists" in name and "player_truth_labels" in name
+            for name in failures
+        )
+
+    def test_fails_when_player_truth_labels_has_null_label_value(self, tmp_path):
+        """NaN label_value silently corrupts NN supervision targets —
+        the loss is finite but the gradient points at nothing. This
+        must be caught before training is allowed to proceed."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+        # Overwrite with one NaN label_value.
+        pd.DataFrame(
+            {
+                "player_id": [f"p{i}" for i in range(12)],
+                "season": ["2526"] * 12,
+                "label_source": ["transfermarkt_value"] * 12,
+                "label_confidence": ["high"] * 12,
+                "label_value": [float(i) if i != 3 else np.nan for i in range(12)],
+                "as_of_date": ["2025-05-31"] * 12,
+                "position_scope": ["all"] * 12,
+                "manual_review_flag": [False] * 12,
+            }
+        ).to_parquet(gold / "player_truth_labels.parquet")
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any(
+            "no_null_values" in name and "player_truth_labels" in name
+            for name in failures
+        )
+
+    def test_fails_when_player_truth_labels_has_invalid_source(self, tmp_path):
+        """Invalid label_source enum value breaks the
+        SUPERVISION_ELIGIBLE_SOURCES policy filter silently — the row
+        is excluded from supervision-eligible labels without any error,
+        which means the NN trains on a quietly smaller label set."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+        pd.DataFrame(
+            {
+                "player_id": [f"p{i}" for i in range(12)],
+                "season": ["2526"] * 12,
+                "label_source": ["invalid_source"] * 12,
+                "label_confidence": ["high"] * 12,
+                "label_value": [float(i) for i in range(12)],
+                "as_of_date": ["2025-05-31"] * 12,
+                "position_scope": ["all"] * 12,
+                "manual_review_flag": [False] * 12,
+            }
+        ).to_parquet(gold / "player_truth_labels.parquet")
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any(
+            "truth_labels_schema" in name and "player_truth_labels" in name
+            for name in failures
+        )
+
+    def test_fails_when_player_truth_labels_has_duplicate_keys(self, tmp_path):
+        """Duplicate player_id+season+label_source rows break the
+        schema's duplicate-key invariant and silently double-count
+        labels in NN training."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+        # 12 rows but two share the same (player_id, season, label_source).
+        pd.DataFrame(
+            {
+                "player_id": [f"p{i // 2}" for i in range(12)],
+                "season": ["2526"] * 12,
+                "label_source": ["transfermarkt_value"] * 12,
+                "label_confidence": ["high"] * 12,
+                "label_value": [float(i) for i in range(12)],
+                "as_of_date": ["2025-05-31"] * 12,
+                "position_scope": ["all"] * 12,
+                "manual_review_flag": [False] * 12,
+            }
+        ).to_parquet(gold / "player_truth_labels.parquet")
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any(
+            "truth_labels_schema" in name and "player_truth_labels" in name
             for name in failures
         )
 
