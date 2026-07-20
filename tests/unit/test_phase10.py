@@ -664,14 +664,13 @@ class TestRunPreTrainingValidation:
     def _write_minimal_valid_store(self, gold):
         """Write minimal parquets that pass all current checks.
 
-        Writes sidecar manifests for team_match, player_match and
-        rating_feature_matrix so the manifest_exists and
-        manifest_freshness checks added to run_pre_training_validation
-        also pass. Manifests use the new schema (artifact,
-        schema_version, source_lineage, ...) for team_match and
-        player_match, and the legacy schema (total_rows, columns,
-        input_hash, timestamp) for rating_feature_matrix — matching
-        what build-features currently writes on disk.
+        Writes sidecar manifests for team_match, player_match,
+        rating_feature_matrix, team_rolling and player_rolling so the
+        manifest_exists and manifest_freshness checks added to
+        run_pre_training_validation also pass. Manifests use the new
+        schema (artifact, schema_version, source_lineage, ...) for all
+        five artifacts — matching what build-features currently writes
+        on disk.
         """
         import json
         from datetime import UTC, datetime
@@ -699,15 +698,32 @@ class TestRunPreTrainingValidation:
                 "season_id": ["s2526"] * 12,
             }
         ).to_parquet(gold / "rating_feature_matrix.parquet")
+        # team_rolling inherits team_match columns and adds windowed
+        # aggregates. Same row count (12) as team_match.
+        pd.DataFrame(
+            {
+                "match_id": [f"m{i}" for i in range(12)],
+                "team_id": [f"t{i}" for i in range(12)],
+                "goals_for": list(range(12)),
+                "prior_matches_3": [0.0] * 12,
+            }
+        ).to_parquet(gold / "team_rolling.parquet")
+        # player_rolling inherits player_match columns and adds windowed
+        # aggregates. Same row count (12) as player_match.
+        pd.DataFrame(
+            {
+                "match_id": [f"m{i}" for i in range(12)],
+                "player_id": [f"p{i}" for i in range(12)],
+                "goals": list(range(12)),
+                "prior_minutes_3": [0.0] * 12,
+            }
+        ).to_parquet(gold / "player_rolling.parquet")
 
-        # New-schema manifests for team_match (4 cols), player_match
-        # (5 cols), and rating_feature_matrix (2 cols). column_count
+        # New-schema manifests for all five artifacts. column_count
         # must match the actual parquet content so
-        # validate_manifest_freshness passes. All three use the same
-        # schema (artifact, schema_version, total_rows, column_count,
-        # columns, input_hash, source_lineage, timestamp) now that
-        # write_feature_manifest has been upgraded to use
-        # build_manifest_payload.
+        # validate_manifest_freshness passes. All use the same schema
+        # (artifact, schema_version, total_rows, column_count, columns,
+        # input_hash, source_lineage, timestamp).
         new_schema_common = {
             "schema_version": "1.0",
             "columns": [],
@@ -742,6 +758,30 @@ class TestRunPreTrainingValidation:
                     "artifact": "rating_feature_matrix",
                     "total_rows": 12,
                     "column_count": 2,
+                    **new_schema_common,
+                },
+                f,
+            )
+        # team_rolling has 4 cols (match_id, team_id, goals_for,
+        # prior_matches_3).
+        with open(gold / "team_rolling_manifest.json", "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "artifact": "team_rolling",
+                    "total_rows": 12,
+                    "column_count": 4,
+                    **new_schema_common,
+                },
+                f,
+            )
+        # player_rolling has 4 cols (match_id, player_id, goals,
+        # prior_minutes_3).
+        with open(gold / "player_rolling_manifest.json", "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "artifact": "player_rolling",
+                    "total_rows": 12,
+                    "column_count": 4,
                     **new_schema_common,
                 },
                 f,
@@ -859,17 +899,18 @@ class TestRunPreTrainingValidation:
 
     def test_includes_manifest_exists_and_freshness_checks(self, tmp_path):
         """run_pre_training_validation must include manifest_exists and
-        manifest_freshness checks for all three core feature_store
-        parquets. Without these checks, a missing or stale manifest
-        would silently pass and consumers could not detect input drift
-        via the validation report."""
+        manifest_freshness checks for all five feature_store parquets
+        (team_match, player_match, rating_feature_matrix, team_rolling,
+        player_rolling). Without these checks, a missing or stale
+        manifest would silently pass and consumers could not detect
+        input drift via the validation report."""
         gold = _data_dir(tmp_path) / "gold" / "feature_store"
         gold.mkdir(parents=True)
         self._write_minimal_valid_store(gold)
 
         report = run_pre_training_validation(_make_settings(tmp_path))
         check_names = [c.check_name for c in report.checks]
-        # manifest_exists for all three artifacts.
+        # manifest_exists for all five artifacts.
         assert any(
             "manifest_exists" in name and "team_match" in name for name in check_names
         ), f"Missing manifest_exists:team_match in {check_names}"
@@ -880,7 +921,15 @@ class TestRunPreTrainingValidation:
             "manifest_exists" in name and "rating_feature_matrix" in name
             for name in check_names
         )
-        # manifest_freshness for all three artifacts.
+        assert any(
+            "manifest_exists" in name and "team_rolling" in name
+            for name in check_names
+        ), f"Missing manifest_exists:team_rolling in {check_names}"
+        assert any(
+            "manifest_exists" in name and "player_rolling" in name
+            for name in check_names
+        ), f"Missing manifest_exists:player_rolling in {check_names}"
+        # manifest_freshness for all five artifacts.
         assert any(
             "manifest_freshness" in name and "team_match" in name
             for name in check_names
@@ -891,6 +940,14 @@ class TestRunPreTrainingValidation:
         )
         assert any(
             "manifest_freshness" in name and "rating_feature_matrix" in name
+            for name in check_names
+        )
+        assert any(
+            "manifest_freshness" in name and "team_rolling" in name
+            for name in check_names
+        )
+        assert any(
+            "manifest_freshness" in name and "player_rolling" in name
             for name in check_names
         )
         assert report.passed, (

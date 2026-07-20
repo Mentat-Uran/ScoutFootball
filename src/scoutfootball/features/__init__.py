@@ -3,14 +3,18 @@
 from .manifest import (
     MANIFEST_SCHEMA_VERSION,
     PLAYER_MATCH_COLUMN_SOURCES,
+    PLAYER_ROLLING_COLUMN_SOURCES,
     TEAM_MATCH_COLUMN_SOURCES,
+    TEAM_ROLLING_COLUMN_SOURCES,
     SourceLineageEntry,
     count_parquet_rows,
     extract_lineage_attrs,
     hash_file,
     relative_to_data_root,
     write_player_match_manifest,
+    write_player_rolling_manifest,
     write_team_match_manifest,
+    write_team_rolling_manifest,
 )
 from .player_match import build_player_match_features
 from .player_rolling import build_player_rolling_features
@@ -28,9 +32,11 @@ from .understat_history import build_understat_season_proxy
 __all__ = [
     "MANIFEST_SCHEMA_VERSION",
     "PLAYER_MATCH_COLUMN_SOURCES",
+    "PLAYER_ROLLING_COLUMN_SOURCES",
     "RATING_MATRIX_COLUMN_SOURCES",
     "SourceLineageEntry",
     "TEAM_MATCH_COLUMN_SOURCES",
+    "TEAM_ROLLING_COLUMN_SOURCES",
     "build_player_match_features",
     "build_player_rolling_features",
     "build_rating_feature_matrix",
@@ -45,5 +51,7 @@ __all__ = [
     "relative_to_data_root",
     "write_feature_manifest",
     "write_player_match_manifest",
+    "write_player_rolling_manifest",
     "write_team_match_manifest",
+    "write_team_rolling_manifest",
 ]

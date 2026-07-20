@@ -19,7 +19,9 @@ from scoutfootball.features.manifest import (
     hash_file,
     relative_to_data_root,
     write_player_match_manifest,
+    write_player_rolling_manifest,
     write_team_match_manifest,
+    write_team_rolling_manifest,
 )
 from scoutfootball.features.player_match import build_player_match_features
 from scoutfootball.features.player_rolling import build_player_rolling_features
@@ -141,7 +143,29 @@ def run_build_features(
 
         team_rolling = build_team_rolling_features(team_match, windows=(3, 5))
         team_rolling_path = resolved.gold_root / "feature_store" / "team_rolling.parquet"
+        # Attach source lineage pointing at the direct upstream parquet
+        # (team_match). team_rolling is a leak-safe grouped rolling
+        # aggregate over team_match rows; recording the upstream lets the
+        # manifest trace team_rolling -> team_match -> raw football_data.
+        team_rolling.attrs["_source_lineage"] = [
+            _lineage_entry("team_match", team_match_path, resolved),
+        ]
+        # Pop lineage/hash attrs before to_parquet (same reason as
+        # team_match/player_match: pandas tries to JSON-serialize
+        # SourceLineageEntry dataclasses in attrs).
+        team_rolling_lineage, team_rolling_input_hash = extract_lineage_attrs(
+            team_rolling
+        )
         team_rolling.to_parquet(team_rolling_path, index=False)
+        try:
+            write_team_rolling_manifest(
+                team_rolling,
+                team_rolling_path,
+                source_lineage=team_rolling_lineage,
+                input_hash=team_rolling_input_hash,
+            )
+        except Exception as exc:
+            logger.warning("team_rolling manifest write failed: %s", exc)
         results["team_rolling"] = f"ok ({len(team_rolling)} rows -> {team_rolling_path.name})"
 
         # Combine StatsBomb per-match data with season proxies.  FBref stays
@@ -202,7 +226,30 @@ def run_build_features(
 
         player_rolling = build_player_rolling_features(player_match, windows=(2, 3))
         player_rolling_path = resolved.gold_root / "feature_store" / "player_rolling.parquet"
+        # Attach source lineage pointing at the direct upstream parquet
+        # (player_match). player_rolling is a leak-safe grouped rolling
+        # aggregate over player_match rows; recording the upstream lets
+        # the manifest trace player_rolling -> player_match -> raw
+        # (statsbomb_open + fbref + understat).
+        player_rolling.attrs["_source_lineage"] = [
+            _lineage_entry("player_match", player_match_path, resolved),
+        ]
+        # Pop lineage/hash attrs before to_parquet (same reason as
+        # team_match/player_match: pandas tries to JSON-serialize
+        # SourceLineageEntry dataclasses in attrs).
+        player_rolling_lineage, player_rolling_input_hash = extract_lineage_attrs(
+            player_rolling
+        )
         player_rolling.to_parquet(player_rolling_path, index=False)
+        try:
+            write_player_rolling_manifest(
+                player_rolling,
+                player_rolling_path,
+                source_lineage=player_rolling_lineage,
+                input_hash=player_rolling_input_hash,
+            )
+        except Exception as exc:
+            logger.warning("player_rolling manifest write failed: %s", exc)
         results["player_rolling"] = (
             f"ok ({len(player_rolling)} rows -> {player_rolling_path.name}; built from proxy)"
         )
