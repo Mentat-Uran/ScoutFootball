@@ -85,6 +85,14 @@ def inspect_raw_csv(
                 raise ValueError("csv_header_duplicate")
             row_count = 0
             for line_number, row in enumerate(reader, start=2):
+                # Tolerate completely empty lines (csv.reader returns [] for
+                # blank lines, including trailing newlines emitted by some
+                # upstream tools such as clubelo.com). A partial-width row
+                # (e.g. "a,,") still raises csv_row_width_mismatch; only
+                # truly empty rows are skipped so real data corruption
+                # remains detectable.
+                if not row:
+                    continue
                 if len(row) != len(headers):
                     raise ValueError(f"csv_row_width_mismatch:{line_number}")
                 row_count += 1
