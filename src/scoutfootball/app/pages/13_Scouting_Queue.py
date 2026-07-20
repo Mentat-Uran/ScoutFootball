@@ -15,6 +15,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from scoutfootball.api import get_review_queue, get_shortlist, get_watchlist
+from scoutfootball.storage.csv_safety import dataframe_to_csv
 
 st.header("球探队列")
 
@@ -154,7 +155,7 @@ def _render_table(title: str, payload: dict, queue_type: str) -> None:
     )
 
     # --- Export ---
-    csv = frame[present].to_csv(index=False)
+    csv = dataframe_to_csv(frame[present])
     st.download_button(
         f"导出 {title} CSV",
         csv,

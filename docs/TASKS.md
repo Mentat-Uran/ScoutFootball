@@ -66,6 +66,8 @@ C1 in_progress 期间 Understat 转会球员 team_name 逗号污染修复（2026
 
 C1 in_progress 期间 pre-training validation 第二轮扩展（2026-07-20）：将 `run_pre_training_validation` 从 7 项扩展到 11 项，补齐发布门禁的 defense-in-depth 缺口。新增两个基础检查函数：`validate_no_negative_values`（核心计数指标不能为负，负值意味符号翻转或导入损坏）和 `validate_unique_keys`（聚合表主键必须唯一，重复行导致训练样本重复计数）。在 `run_pre_training_validation` 中新增 4 项检查：`player_match.parquet` 的 goals/assists/minutes_played 非空检查、`player_match.parquet` 的 goals/assists/minutes_played 非负检查、`team_match.parquet` 的 goals_for/goals_against 非负检查、`rating_feature_matrix.parquet` 的 player_id+season_id 唯一性检查。14 个新增回归测试覆盖两个新函数的 10 个场景 + `run_pre_training_validation` 的 4 个集成场景。真实数据烟雾测试 11/11 PASS。该修复属于 G0-B 真实性范畴的发布门禁强化，不改变 C1 退出门槛状态。
 
+C1 in_progress 期间后端 CSV 公式注入防护（2026-07-20）：AGENTS.md 明确要求"CSV exports must guard against spreadsheet formula injection"。前端 `frontend/app.js` 的 `csvCell()` 已实现防护（对 `= + - @ tab CR` 开头的单元格加 `'` 前缀），但后端三个 CSV 导出路径均无防护：`api.py:_player_list_to_csv`（球员列表 API CSV 导出）、`app/pages/13_Scouting_Queue.py`（Streamlit 球探队列 CSV 导出）、`pipeline.py` 合成身价数据导出。新增 `storage/csv_safety.py` 模块，提供 `sanitize_csv_cell`/`sanitize_csv_row`/`write_csv`/`dataframe_to_csv` 四个函数，与前端 `csvCell()` 保持一致的防护策略。三个导出路径全部替换为使用安全函数。24 个新增单元测试覆盖 cell/row/write/dataframe/api 五个层级。该修复属于 G0-B 安全范畴，不改变 C1 退出门槛状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
