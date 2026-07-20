@@ -326,6 +326,33 @@ def run_build_features(
         results["features"] = f"failed: {exc}"
         logger.error("Feature build failed: %s", exc)
 
+    # Post-build validation: catch inconsistent state immediately rather
+    # than waiting for the maintainer to run `scoutfootball validate` or
+    # `scoutfootball train`. This is a defense-in-depth complement to the
+    # pre-training validation gate in run_weekly_train (Round 17 fixed the
+    # CLI train gate bypass; this closes the analogous build-features gap
+    # where a manifest write failure or partial rebuild leaves the disk
+    # inconsistent but build-features returns "ok").
+    try:
+        report = run_pre_training_validation(resolved)
+        passed = report.passed
+        total = len(report.checks)
+        failed = len(report.failures)
+        if passed:
+            results["validation"] = f"PASS ({total} checks)"
+        else:
+            results["validation"] = (
+                f"FAIL ({total - failed}/{total} checks passed)"
+            )
+            logger.warning(
+                "Post-build validation failed — run `scoutfootball validate` "
+                "for details:\n%s",
+                report.summary(),
+            )
+    except Exception as exc:
+        results["validation"] = f"skipped: {exc}"
+        logger.warning("Post-build validation could not run: %s", exc)
+
     return results
 
 
