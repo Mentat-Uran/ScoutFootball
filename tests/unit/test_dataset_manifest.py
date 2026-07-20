@@ -21,7 +21,10 @@ import pytest
 
 from scoutfootball.features.manifest import (
     MANIFEST_SCHEMA_VERSION,
+    PLAYER_MATCH_COLUMN_SOURCES,
+    PLAYER_ROLLING_COLUMN_SOURCES,
     TEAM_MATCH_COLUMN_SOURCES,
+    TEAM_ROLLING_COLUMN_SOURCES,
     SourceLineageEntry,
     build_manifest_payload,
     compute_dataframe_hash,
@@ -31,7 +34,9 @@ from scoutfootball.features.manifest import (
     load_manifest,
     relative_to_data_root,
     write_player_match_manifest,
+    write_player_rolling_manifest,
     write_team_match_manifest,
+    write_team_rolling_manifest,
 )
 
 # ---------------------------------------------------------------------------
@@ -516,6 +521,326 @@ class TestWritePlayerMatchManifest:
         assert sources["source_name"] == "meta"
         assert sources["data_granularity"] == "meta"
         assert sources["available_flag"] == "derived"
+
+
+# ---------------------------------------------------------------------------
+# write_team_rolling_manifest
+# ---------------------------------------------------------------------------
+
+
+class TestWriteTeamRollingManifest:
+    """team_rolling manifest writer.
+
+    team_rolling inherits all team_match columns plus windowed aggregates
+    (prior_matches_*, goals_for_*, points_per_match_*, etc.). The manifest
+    records team_match.parquet as the single upstream lineage entry,
+    closing the rating_feature_matrix -> team_rolling -> team_match ->
+    raw provenance chain.
+    """
+
+    def test_writes_manifest_next_to_parquet(self, tmp_path: Path) -> None:
+        """Manifest is written at {stem}_manifest.json next to the parquet."""
+        df = pd.DataFrame(
+            {
+                "match_id": ["m1", "m2"],
+                "team_id": ["t1", "t1"],
+                "goals_for": [1, 2],
+                "prior_matches_3": [0.0, 1.0],
+            }
+        )
+        output_path = tmp_path / "team_rolling.parquet"
+        df.to_parquet(output_path, index=False)
+        write_team_rolling_manifest(df, output_path)
+
+        manifest_path = tmp_path / "team_rolling_manifest.json"
+        assert manifest_path.exists()
+
+    def test_manifest_payload_aligned_with_shared_schema(
+        self, tmp_path: Path
+    ) -> None:
+        """team_rolling manifest uses the same schema as team_match:
+        artifact, schema_version, total_rows, column_count, columns,
+        input_hash, source_lineage, timestamp."""
+        df = pd.DataFrame(
+            {
+                "match_id": ["m1"],
+                "team_id": ["t1"],
+                "goals_for": [1],
+                "prior_matches_3": [0.0],
+            }
+        )
+        output_path = tmp_path / "team_rolling.parquet"
+        df.to_parquet(output_path, index=False)
+        write_team_rolling_manifest(df, output_path)
+
+        manifest = load_manifest(tmp_path / "team_rolling_manifest.json")
+        assert manifest["artifact"] == "team_rolling"
+        assert manifest["schema_version"] == MANIFEST_SCHEMA_VERSION
+        assert manifest["total_rows"] == 1
+        assert manifest["column_count"] == 4
+        assert isinstance(manifest["columns"], list)
+        assert len(manifest["columns"]) == 4
+        assert "input_hash" in manifest
+        assert isinstance(manifest["source_lineage"], list)
+        assert "timestamp" in manifest
+        # source_breakdown is NOT expected for team_rolling because
+        # team_match (its upstream) has no source_name column.
+        assert "source_breakdown" not in manifest
+
+    def test_reads_lineage_from_attrs_when_not_passed(
+        self, tmp_path: Path
+    ) -> None:
+        """When source_lineage is not explicitly passed, the writer
+        reads it from df.attrs['_source_lineage'].
+
+        Mirrors pipeline behavior: attrs are popped before to_parquet
+        (pandas JSON-serializes df.attrs into parquet metadata and
+        SourceLineageEntry is not JSON-serializable), then re-attached
+        so the writer's attrs fallback path is exercised. ``input_hash``
+        is passed explicitly to avoid ``compute_dataframe_hash`` calling
+        ``df.to_parquet()`` on a df whose attrs still contain non-serializable
+        ``SourceLineageEntry`` instances (which would emit a UserWarning).
+        """
+        df = pd.DataFrame({"match_id": ["m1"], "team_id": ["t1"]})
+        entry = SourceLineageEntry(
+            name="team_match",
+            relative_path="gold/feature_store/team_match.parquet",
+            rows_read=137904,
+            input_hash="abc123",
+        )
+        df.attrs["_source_lineage"] = [entry]
+        output_path = tmp_path / "team_rolling.parquet"
+        lineage, _ = extract_lineage_attrs(df)
+        df.to_parquet(output_path, index=False)
+        # Re-attach so the writer's attrs fallback is actually used.
+        df.attrs["_source_lineage"] = lineage
+        write_team_rolling_manifest(df, output_path, input_hash="test-hash")
+
+        manifest = load_manifest(tmp_path / "team_rolling_manifest.json")
+        assert len(manifest["source_lineage"]) == 1
+        assert manifest["source_lineage"][0]["name"] == "team_match"
+        assert manifest["source_lineage"][0]["input_hash"] == "abc123"
+
+    def test_explicit_lineage_overrides_attrs(self, tmp_path: Path) -> None:
+        """Explicitly passed source_lineage takes precedence over attrs."""
+        df = pd.DataFrame({"match_id": ["m1"], "team_id": ["t1"]})
+        df.attrs["_source_lineage"] = [
+            SourceLineageEntry("stale", "old/path.parquet", 1, "old")
+        ]
+        explicit_entry = SourceLineageEntry(
+            "team_match", "gold/feature_store/team_match.parquet", 100, "fresh"
+        )
+        output_path = tmp_path / "team_rolling.parquet"
+        # Pop attrs before to_parquet to avoid JSON serialization issues.
+        extract_lineage_attrs(df)
+        df.to_parquet(output_path, index=False)
+        write_team_rolling_manifest(
+            df, output_path, source_lineage=[explicit_entry]
+        )
+
+        manifest = load_manifest(tmp_path / "team_rolling_manifest.json")
+        assert len(manifest["source_lineage"]) == 1
+        assert manifest["source_lineage"][0]["name"] == "team_match"
+        assert manifest["source_lineage"][0]["input_hash"] == "fresh"
+
+    def test_windowed_columns_default_to_derived(self, tmp_path: Path) -> None:
+        """Windowed columns (prior_matches_*, points_per_match_*, etc.)
+        default to 'derived' via build_manifest_payload's fallback when
+        not explicitly listed in TEAM_ROLLING_COLUMN_SOURCES."""
+        df = pd.DataFrame(
+            {
+                "match_id": ["m1"],
+                "team_id": ["t1"],
+                "goals_for": [1],
+                # Windowed columns produced by build_team_rolling_features
+                "prior_matches_3": [0.0],
+                "prior_matches_5": [0.0],
+                "goals_for_3": [0.0],
+                "goals_for_5": [0.0],
+                "points_per_match_3": [0.0],
+                "points_per_match_5": [0.0],
+                "elo_pre_mean_3": [0.0],
+                "rest_days_mean_5": [0.0],
+            }
+        )
+        output_path = tmp_path / "team_rolling.parquet"
+        df.to_parquet(output_path, index=False)
+        write_team_rolling_manifest(df, output_path)
+
+        manifest = load_manifest(tmp_path / "team_rolling_manifest.json")
+        sources = {c["name"]: c["source"] for c in manifest["columns"]}
+        # Inherited columns keep their team_match categories.
+        assert sources["match_id"] == "identifier"
+        assert sources["team_id"] == "identifier"
+        assert sources["goals_for"] == "metric"
+        # Windowed columns default to "derived".
+        assert sources["prior_matches_3"] == "derived"
+        assert sources["prior_matches_5"] == "derived"
+        assert sources["goals_for_3"] == "derived"
+        assert sources["goals_for_5"] == "derived"
+        assert sources["points_per_match_3"] == "derived"
+        assert sources["points_per_match_5"] == "derived"
+        assert sources["elo_pre_mean_3"] == "derived"
+        assert sources["rest_days_mean_5"] == "derived"
+
+    def test_rolling_column_sources_inherits_team_match_categories(
+        self,
+    ) -> None:
+        """TEAM_ROLLING_COLUMN_SOURCES inherits all team_match categories
+        so inherited columns get meaningful source labels, not just
+        the 'derived' default."""
+        for col, category in TEAM_MATCH_COLUMN_SOURCES.items():
+            assert col in TEAM_ROLLING_COLUMN_SOURCES, (
+                f"team_match column {col!r} missing from TEAM_ROLLING_COLUMN_SOURCES"
+            )
+            assert TEAM_ROLLING_COLUMN_SOURCES[col] == category, (
+                f"team_match column {col!r} category mismatch: "
+                f"team_match={category!r}, team_rolling={TEAM_ROLLING_COLUMN_SOURCES[col]!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# write_player_rolling_manifest
+# ---------------------------------------------------------------------------
+
+
+class TestWritePlayerRollingManifest:
+    """player_rolling manifest writer.
+
+    player_rolling inherits all player_match columns plus windowed
+    aggregates. The manifest records player_match.parquet as the single
+    upstream lineage entry. Because the inherited ``source_name`` column
+    is preserved, ``source_breakdown`` is computed the same way as
+    player_match (per-source row counts).
+    """
+
+    def test_writes_manifest_with_source_breakdown(
+        self, tmp_path: Path
+    ) -> None:
+        """player_rolling manifest includes source_breakdown because
+        source_name is inherited from player_match (multi-source concat)."""
+        df = pd.DataFrame(
+            {
+                "match_id": ["m1", "m2", "m3"],
+                "player_id": ["p1", "p2", "p3"],
+                "goals": [1, 0, 2],
+                "prior_minutes_3": [0.0, 90.0, 180.0],
+                "source_name": ["fbref", "understat", "understat"],
+            }
+        )
+        output_path = tmp_path / "player_rolling.parquet"
+        df.to_parquet(output_path, index=False)
+        write_player_rolling_manifest(df, output_path)
+
+        manifest = load_manifest(tmp_path / "player_rolling_manifest.json")
+        assert manifest["artifact"] == "player_rolling"
+        assert manifest["source_breakdown"] == {"fbref": 1, "understat": 2}
+
+    def test_no_source_breakdown_when_source_name_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """When source_name column is absent, source_breakdown is omitted."""
+        df = pd.DataFrame(
+            {
+                "match_id": ["m1"],
+                "player_id": ["p1"],
+                "goals": [1],
+                "prior_minutes_3": [0.0],
+            }
+        )
+        output_path = tmp_path / "player_rolling.parquet"
+        df.to_parquet(output_path, index=False)
+        write_player_rolling_manifest(df, output_path)
+
+        manifest = load_manifest(tmp_path / "player_rolling_manifest.json")
+        assert "source_breakdown" not in manifest
+
+    def test_reads_lineage_from_attrs_when_not_passed(
+        self, tmp_path: Path
+    ) -> None:
+        """When source_lineage is not explicitly passed, the writer
+        reads it from df.attrs['_source_lineage'].
+
+        Mirrors pipeline behavior: attrs are popped before to_parquet
+        (pandas JSON-serializes df.attrs into parquet metadata and
+        SourceLineageEntry is not JSON-serializable), then re-attached
+        so the writer's attrs fallback path is exercised. ``input_hash``
+        is passed explicitly to avoid ``compute_dataframe_hash`` calling
+        ``df.to_parquet()`` on a df whose attrs still contain non-serializable
+        ``SourceLineageEntry`` instances (which would emit a UserWarning).
+        """
+        df = pd.DataFrame({"match_id": ["m1"], "player_id": ["p1"]})
+        entry = SourceLineageEntry(
+            name="player_match",
+            relative_path="gold/feature_store/player_match.parquet",
+            rows_read=27598,
+            input_hash="def456",
+        )
+        df.attrs["_source_lineage"] = [entry]
+        output_path = tmp_path / "player_rolling.parquet"
+        lineage, _ = extract_lineage_attrs(df)
+        df.to_parquet(output_path, index=False)
+        # Re-attach so the writer's attrs fallback is actually used.
+        df.attrs["_source_lineage"] = lineage
+        write_player_rolling_manifest(df, output_path, input_hash="test-hash")
+
+        manifest = load_manifest(tmp_path / "player_rolling_manifest.json")
+        assert len(manifest["source_lineage"]) == 1
+        assert manifest["source_lineage"][0]["name"] == "player_match"
+        assert manifest["source_lineage"][0]["input_hash"] == "def456"
+
+    def test_windowed_columns_default_to_derived(self, tmp_path: Path) -> None:
+        """Windowed columns (prior_minutes_*, goals_*, goals_p90_raw_*,
+        shrink_factor_*, sot_rate_*) default to 'derived'."""
+        df = pd.DataFrame(
+            {
+                "match_id": ["m1"],
+                "player_id": ["p1"],
+                "minutes_played": pd.array([90], dtype="Int64"),
+                "goals": pd.array([1], dtype="Int64"),
+                "prior_minutes_3": [0.0],
+                "prior_appearances_3": [0.0],
+                "shrink_factor_3": [0.0],
+                "goals_3": [0.0],
+                "goals_p90_raw_3": [0.0],
+                "goals_p90_shrunk_3": [0.0],
+                "sot_rate_3": [0.0],
+            }
+        )
+        output_path = tmp_path / "player_rolling.parquet"
+        df.to_parquet(output_path, index=False)
+        write_player_rolling_manifest(df, output_path)
+
+        manifest = load_manifest(tmp_path / "player_rolling_manifest.json")
+        sources = {c["name"]: c["source"] for c in manifest["columns"]}
+        # Inherited columns keep their player_match categories.
+        assert sources["match_id"] == "identifier"
+        assert sources["player_id"] == "identifier"
+        assert sources["minutes_played"] == "metric"
+        assert sources["goals"] == "metric"
+        # Windowed columns default to "derived".
+        assert sources["prior_minutes_3"] == "derived"
+        assert sources["prior_appearances_3"] == "derived"
+        assert sources["shrink_factor_3"] == "derived"
+        assert sources["goals_3"] == "derived"
+        assert sources["goals_p90_raw_3"] == "derived"
+        assert sources["goals_p90_shrunk_3"] == "derived"
+        assert sources["sot_rate_3"] == "derived"
+
+    def test_rolling_column_sources_inherits_player_match_categories(
+        self,
+    ) -> None:
+        """PLAYER_ROLLING_COLUMN_SOURCES inherits all player_match
+        categories so inherited columns get meaningful source labels."""
+        for col, category in PLAYER_MATCH_COLUMN_SOURCES.items():
+            assert col in PLAYER_ROLLING_COLUMN_SOURCES, (
+                f"player_match column {col!r} missing from PLAYER_ROLLING_COLUMN_SOURCES"
+            )
+            assert PLAYER_ROLLING_COLUMN_SOURCES[col] == category, (
+                f"player_match column {col!r} category mismatch: "
+                f"player_match={category!r}, "
+                f"player_rolling={PLAYER_ROLLING_COLUMN_SOURCES[col]!r}"
+            )
 
 
 # ---------------------------------------------------------------------------

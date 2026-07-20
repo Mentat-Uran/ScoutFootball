@@ -425,6 +425,24 @@ def run_pre_training_validation(
             settings,
         )
     )
+    # team_rolling and player_rolling manifests: these tables sit between
+    # team_match/player_match and rating_feature_matrix, and were previously
+    # the missing link in the provenance chain. Without manifests here,
+    # a partial rebuild of rolling (e.g. window change, aggregation bug
+    # fix) would silently change rating_feature_matrix inputs without any
+    # drift signal. The rating_feature_matrix_manifest.source_lineage
+    # references player_rolling.parquet, so its manifest must exist for
+    # chain-of-custody verification to be meaningful.
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/team_rolling.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/player_rolling.parquet", settings
+        )
+    )
     # Manifest freshness: detect stale manifests where the parquet was
     # rebuilt but the manifest was not (e.g. partial rebuild, manual edit,
     # failed run). A stale manifest misleads consumers about input hashes
@@ -442,6 +460,16 @@ def run_pre_training_validation(
     report.checks.append(
         validate_manifest_freshness(
             "gold/feature_store/rating_feature_matrix.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/team_rolling.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/player_rolling.parquet", settings
         )
     )
     return report

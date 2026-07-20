@@ -126,6 +126,30 @@ PLAYER_MATCH_COLUMN_SOURCES: dict[str, str] = {
 }
 
 
+# Team-rolling columns: inherits all team_match columns (the rolling
+# builder copies team_match_df and appends windowed aggregates). Windowed
+# columns (prior_matches_{w}, {stat}_{w}, points_per_match_{w},
+# elo_pre_mean_{w}, rest_days_mean_{w}, etc.) are all leak-safe aggregates
+# over prior matches and default to "derived" via build_manifest_payload's
+# fallback. Only the inherited columns need explicit categories here.
+TEAM_ROLLING_COLUMN_SOURCES: dict[str, str] = {
+    **TEAM_MATCH_COLUMN_SOURCES,
+}
+
+
+# Player-rolling columns: inherits all player_match columns (the rolling
+# builder copies player_match_df and appends windowed aggregates). The
+# inherited ``source_name`` column is preserved, so player_rolling still
+# carries multi-source attribution — ``source_breakdown`` is computed
+# the same way as player_match. Windowed columns (prior_minutes_{w},
+# {stat}_{w}, {stat}_p90_raw_{w}, {stat}_p90_shrunk_{w}, sot_rate_{w},
+# shrink_factor_{w}, etc.) all default to "derived" via
+# build_manifest_payload's fallback.
+PLAYER_ROLLING_COLUMN_SOURCES: dict[str, str] = {
+    **PLAYER_MATCH_COLUMN_SOURCES,
+}
+
+
 # ---------------------------------------------------------------------------
 # Source lineage
 # ---------------------------------------------------------------------------
@@ -406,6 +430,85 @@ def write_player_match_manifest(
         player_match,
         artifact_name="player_match",
         column_sources=PLAYER_MATCH_COLUMN_SOURCES,
+        source_lineage=lineage,
+        input_hash=hash_value,
+        extra=extra,
+    )
+    return write_manifest(payload, output_path)
+
+
+def write_team_rolling_manifest(
+    team_rolling: pd.DataFrame,
+    output_path: Path,
+    *,
+    source_lineage: list[SourceLineageEntry] | None = None,
+    input_hash: str | None = None,
+) -> Path:
+    """Write ``team_rolling_manifest.json`` next to *output_path*.
+
+    ``team_rolling`` is built from ``team_match`` via leak-safe grouped
+    rolling sums/means; its manifest records ``team_match.parquet`` as
+    the single upstream lineage entry, closing the
+    ``rating_feature_matrix -> team_rolling -> team_match -> raw``
+    provenance chain. Windowed columns default to ``"derived"`` via
+    ``build_manifest_payload``'s fallback.
+    """
+    lineage = source_lineage
+    if lineage is None:
+        lineage = team_rolling.attrs.get("_source_lineage", []) or []
+    hash_value = input_hash
+    if hash_value is None:
+        hash_value = team_rolling.attrs.get("_input_hash")
+
+    payload = build_manifest_payload(
+        team_rolling,
+        artifact_name="team_rolling",
+        column_sources=TEAM_ROLLING_COLUMN_SOURCES,
+        source_lineage=lineage,
+        input_hash=hash_value,
+    )
+    return write_manifest(payload, output_path)
+
+
+def write_player_rolling_manifest(
+    player_rolling: pd.DataFrame,
+    output_path: Path,
+    *,
+    source_lineage: list[SourceLineageEntry] | None = None,
+    input_hash: str | None = None,
+) -> Path:
+    """Write ``player_rolling_manifest.json`` next to *output_path*.
+
+    ``player_rolling`` is built from ``player_match`` via leak-safe
+    grouped rolling sums/means; its manifest records
+    ``player_match.parquet`` as the single upstream lineage entry,
+    closing the ``rating_feature_matrix -> player_rolling -> player_match
+    -> raw`` provenance chain. The inherited ``source_name`` column is
+    preserved, so ``source_breakdown`` is computed the same way as
+    ``player_match`` (per-source row counts).
+    """
+    lineage = source_lineage
+    if lineage is None:
+        lineage = player_rolling.attrs.get("_source_lineage", []) or []
+    hash_value = input_hash
+    if hash_value is None:
+        hash_value = player_rolling.attrs.get("_input_hash")
+
+    source_breakdown: dict[str, int] = {}
+    if "source_name" in player_rolling.columns:
+        counts = player_rolling["source_name"].value_counts(dropna=False)
+        for key, value in counts.items():
+            label = "unknown" if pd.isna(key) else str(key)
+            source_breakdown[label] = int(value)
+
+    extra: dict = {}
+    if source_breakdown:
+        extra["source_breakdown"] = source_breakdown
+
+    payload = build_manifest_payload(
+        player_rolling,
+        artifact_name="player_rolling",
+        column_sources=PLAYER_ROLLING_COLUMN_SOURCES,
         source_lineage=lineage,
         input_hash=hash_value,
         extra=extra,

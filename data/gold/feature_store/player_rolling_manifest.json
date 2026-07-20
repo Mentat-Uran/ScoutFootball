@@ -1,0 +1,534 @@
+{
+  "artifact": "player_rolling",
+  "schema_version": "1.0",
+  "total_rows": 27598,
+  "column_count": 85,
+  "columns": [
+    {
+      "name": "match_id",
+      "dtype": "object",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "player_id",
+      "dtype": "object",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "player_name",
+      "dtype": "object",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "team_id",
+      "dtype": "object",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "team_name",
+      "dtype": "object",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "minutes_played",
+      "dtype": "Int64",
+      "source": "metric",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "goals",
+      "dtype": "Int64",
+      "source": "metric",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "assists",
+      "dtype": "Int64",
+      "source": "metric",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "shots",
+      "dtype": "object",
+      "source": "metric",
+      "missing_rate": 0.3114
+    },
+    {
+      "name": "shots_on_target",
+      "dtype": "object",
+      "source": "metric",
+      "missing_rate": 0.9966
+    },
+    {
+      "name": "npxg",
+      "dtype": "object",
+      "source": "metric",
+      "missing_rate": 0.3135
+    },
+    {
+      "name": "xa",
+      "dtype": "float64",
+      "source": "metric",
+      "missing_rate": 0.3148
+    },
+    {
+      "name": "passes",
+      "dtype": "object",
+      "source": "metric",
+      "missing_rate": 0.9966
+    },
+    {
+      "name": "tackles",
+      "dtype": "object",
+      "source": "metric",
+      "missing_rate": 0.9966
+    },
+    {
+      "name": "xT_added",
+      "dtype": "object",
+      "source": "metric",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "match_date",
+      "dtype": "datetime64[ns]",
+      "source": "temporal",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "is_home",
+      "dtype": "object",
+      "source": "flag",
+      "missing_rate": 0.9966
+    },
+    {
+      "name": "opponent_team_id",
+      "dtype": "float64",
+      "source": "identifier",
+      "missing_rate": 0.9966
+    },
+    {
+      "name": "position_group",
+      "dtype": "object",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "started",
+      "dtype": "Int64",
+      "source": "flag",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "matches_played",
+      "dtype": "Int64",
+      "source": "metric",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "data_granularity",
+      "dtype": "object",
+      "source": "meta",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "source_name",
+      "dtype": "object",
+      "source": "meta",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "starts",
+      "dtype": "int64",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "available_flag",
+      "dtype": "int64",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "minutes_share",
+      "dtype": "Float64",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "has_expected_metrics",
+      "dtype": "bool",
+      "source": "flag",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "has_ball_value_data",
+      "dtype": "bool",
+      "source": "flag",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "competition_id",
+      "dtype": "object",
+      "source": "category",
+      "missing_rate": 0.0034
+    },
+    {
+      "name": "season_id",
+      "dtype": "object",
+      "source": "category",
+      "missing_rate": 0.0034
+    },
+    {
+      "name": "nation",
+      "dtype": "string",
+      "source": "meta",
+      "missing_rate": 0.6887
+    },
+    {
+      "name": "born",
+      "dtype": "Int64",
+      "source": "meta",
+      "missing_rate": 0.6886
+    },
+    {
+      "name": "multi_team_season",
+      "dtype": "boolean",
+      "source": "flag",
+      "missing_rate": 0.3148
+    },
+    {
+      "name": "prior_minutes_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "prior_appearances_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "prior_starts_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "shrink_factor_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "goals_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "goals_p90_raw_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "goals_p90_shrunk_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "assists_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "assists_p90_raw_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "assists_p90_shrunk_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "shots_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5794
+    },
+    {
+      "name": "shots_p90_raw_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5794
+    },
+    {
+      "name": "shots_p90_shrunk_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5794
+    },
+    {
+      "name": "shots_on_target_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.9991
+    },
+    {
+      "name": "shots_on_target_p90_raw_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.9991
+    },
+    {
+      "name": "shots_on_target_p90_shrunk_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.9991
+    },
+    {
+      "name": "npxg_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5797
+    },
+    {
+      "name": "npxg_p90_raw_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5797
+    },
+    {
+      "name": "npxg_p90_shrunk_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5797
+    },
+    {
+      "name": "xa_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5803
+    },
+    {
+      "name": "xa_p90_raw_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5803
+    },
+    {
+      "name": "xa_p90_shrunk_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5803
+    },
+    {
+      "name": "xT_added_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xT_added_p90_raw_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xT_added_p90_shrunk_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "sot_rate_2",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.9994
+    },
+    {
+      "name": "prior_minutes_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "prior_appearances_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "prior_starts_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "shrink_factor_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "goals_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "goals_p90_raw_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "goals_p90_shrunk_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "assists_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "assists_p90_raw_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "assists_p90_shrunk_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.4251
+    },
+    {
+      "name": "shots_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5794
+    },
+    {
+      "name": "shots_p90_raw_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5794
+    },
+    {
+      "name": "shots_p90_shrunk_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5794
+    },
+    {
+      "name": "shots_on_target_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.9991
+    },
+    {
+      "name": "shots_on_target_p90_raw_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.9991
+    },
+    {
+      "name": "shots_on_target_p90_shrunk_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.9991
+    },
+    {
+      "name": "npxg_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5797
+    },
+    {
+      "name": "npxg_p90_raw_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5797
+    },
+    {
+      "name": "npxg_p90_shrunk_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5797
+    },
+    {
+      "name": "xa_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5803
+    },
+    {
+      "name": "xa_p90_raw_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5803
+    },
+    {
+      "name": "xa_p90_shrunk_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.5803
+    },
+    {
+      "name": "xT_added_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xT_added_p90_raw_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xT_added_p90_shrunk_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "sot_rate_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.9994
+    }
+  ],
+  "input_hash": "f1dba47ad4516194",
+  "source_lineage": [
+    {
+      "name": "player_match",
+      "relative_path": "gold/feature_store/player_match.parquet",
+      "rows_read": 27598,
+      "input_hash": "5dce9f5050ea4172",
+      "notes": null
+    }
+  ],
+  "timestamp": "2026-07-20T05:55:50.337546+00:00",
+  "source_breakdown": {
+    "understat": 18909,
+    "fbref": 8595,
+    "statsbomb_open": 94
+  }
+}
