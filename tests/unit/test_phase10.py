@@ -1323,6 +1323,80 @@ class TestPipeline:
         )
         assert results.get("status") == "skipped"
 
+    def test_cli_train_defaults_to_skip_on_validation_failure(self, monkeypatch):
+        """CLI ``scoutfootball train`` must default to fail-closed.
+
+        Regression for a G0-B gate bypass: ``_cmd_train`` previously called
+        ``run_weekly_train(skip_if_validation_fails=False)``, explicitly
+        disabling the 26-check pre-training validation gate. The function
+        default (``True``) and WORKFLOW_LOG.md reference workflow 5 both
+        claim the gate is active, but the CLI override made it a no-op.
+        After the fix, the CLI defaults to ``skip_if_validation_fails=True``
+        and only ``--force`` overrides.
+        """
+        import argparse
+
+        from scoutfootball import __main__ as main_module
+
+        captured: dict[str, bool] = {}
+
+        def fake_run_weekly_train(*, skip_if_validation_fails: bool, **_kwargs):
+            captured["skip_if_validation_fails"] = skip_if_validation_fails
+            return {"validation": "Validation: PASS"}
+
+        monkeypatch.setattr(
+            main_module, "run_weekly_train", fake_run_weekly_train, raising=False
+        )
+        # The import inside _cmd_train looks up run_weekly_train on the
+        # pipeline module, so patch there too.
+        from scoutfootball import pipeline
+
+        monkeypatch.setattr(pipeline, "run_weekly_train", fake_run_weekly_train)
+
+        args = argparse.Namespace(force=False)
+        main_module._cmd_train(args)
+        assert captured["skip_if_validation_fails"] is True
+
+    def test_cli_train_force_flag_overrides_validation_gate(self, monkeypatch):
+        """``scoutfootball train --force`` explicitly overrides the gate.
+
+        The ``--force`` flag is the supported escape hatch for debugging or
+        for training on known-incomplete data at the maintainer's risk. It
+        must pass ``skip_if_validation_fails=False`` so the maintainer can
+        still train when validation fails for a known, accepted reason.
+        """
+        import argparse
+
+        from scoutfootball import __main__ as main_module
+        from scoutfootball import pipeline
+
+        captured: dict[str, bool] = {}
+
+        def fake_run_weekly_train(*, skip_if_validation_fails: bool, **_kwargs):
+            captured["skip_if_validation_fails"] = skip_if_validation_fails
+            return {"validation": "Validation: PASS"}
+
+        monkeypatch.setattr(
+            main_module, "run_weekly_train", fake_run_weekly_train, raising=False
+        )
+        monkeypatch.setattr(pipeline, "run_weekly_train", fake_run_weekly_train)
+
+        args = argparse.Namespace(force=True)
+        main_module._cmd_train(args)
+        assert captured["skip_if_validation_fails"] is False
+
+    def test_cli_train_subparser_parses_force_flag(self):
+        """The ``train`` subparser must accept ``--force`` and default to False."""
+        from scoutfootball.__main__ import build_parser
+
+        parser = build_parser()
+        # Default: no --force
+        args_no_force = parser.parse_args(["train"])
+        assert args_no_force.force is False
+        # Explicit --force
+        args_force = parser.parse_args(["train", "--force"])
+        assert args_force.force is True
+
     def test_build_team_match_filters_nan_goals_placeholder_rows(self, tmp_path):
         """Football-Data future-match placeholder rows (NaN FTHG/FTAG) must be
         filtered before entering team_match.parquet.

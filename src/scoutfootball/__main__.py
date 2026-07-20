@@ -159,10 +159,12 @@ def _cmd_build_features(_args: argparse.Namespace) -> None:
         print(f"  {feature_set}: {status}")
 
 
-def _cmd_train(_args: argparse.Namespace) -> None:
+def _cmd_train(args: argparse.Namespace) -> None:
     from scoutfootball.pipeline import run_weekly_train
 
-    results = run_weekly_train(skip_if_validation_fails=False)
+    # Default: skip training when pre-training validation fails (G0-B fail-closed).
+    # --force overrides for debugging/explicit override at the maintainer's risk.
+    results = run_weekly_train(skip_if_validation_fails=not args.force)
     for model, status in results.items():
         print(f"  {model}: {status}")
 
@@ -2159,7 +2161,7 @@ def _cmd_optimize_ensemble(args: argparse.Namespace) -> None:
     print(f"  Saved to {weights_path}")
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scoutfootball",
         description="ScoutFootball — local-first football data research platform",
@@ -2197,7 +2199,12 @@ def main() -> None:
     )
 
     sub.add_parser("build-features", help="Build feature store from raw data")
-    sub.add_parser("train", help="Run weekly model training")
+    train_p = sub.add_parser("train", help="Run weekly model training")
+    train_p.add_argument(
+        "--force",
+        action="store_true",
+        help="Train even if pre-training validation fails (default: skip on failure)",
+    )
     nn_p = sub.add_parser(
         "train-rating-nn",
         help="Train supervised player-rating neural-network candidate",
@@ -2857,6 +2864,11 @@ def main() -> None:
     tour_ko_clear.add_argument("match_id", type=str)
     tour_ko_clear.add_argument("--state-path", type=str, default=None)
 
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
 
     handlers = {
