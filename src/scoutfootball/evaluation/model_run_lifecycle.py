@@ -186,7 +186,7 @@ def _candidate_promotion_inputs(
     activation = meta.get("activation")
     if not isinstance(activation, dict) or activation.get("status") != "not_activated":
         raise ModelRunLifecycleError("candidate is not explicitly not_activated")
-    admission = evaluate_optimizer_run(directory)
+    admission = evaluate_optimizer_run(directory, settings=settings)
     if admission["status"] != "reviewable":
         raise ModelRunLifecycleError(
             "candidate is not reviewable: " + ", ".join(admission["failed_checks"])
