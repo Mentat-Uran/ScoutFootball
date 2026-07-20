@@ -458,6 +458,40 @@
 
 ---
 
+### 参考工作流 7：pre-training validation 第二轮扩展（3.1 数据导入 + 发布门禁子流程）
+
+- **是否在用**：是（发布门禁 defense-in-depth 补强）
+- **输入**：现有 `run_pre_training_validation`（7 项检查），真实数据 gold/feature_store 产物
+- **步骤**：
+  1. 完成 DC NaN 防御、team_name 逗号污染等数据真实性修复后，评估 pre-training validation 的覆盖缺口
+  2. 发现当前 validation 只检查 team_match 的 goals 非空，player_match 的核心指标（goals/assists/minutes）没有非空、非负检查
+  3. 发现 rating_feature_matrix 没有主键唯一性检查，重复行会导致训练样本重复计数
+  4. 新增 `validate_no_negative_values` 函数：检查核心计数指标不能为负，负值意味符号翻转或导入损坏
+  5. 新增 `validate_unique_keys` 函数：检查聚合表主键唯一性
+  6. 在 `run_pre_training_validation` 中新增 4 项检查：
+     - player_match: goals/assists/minutes_played 非空
+     - player_match: goals/assists/minutes_played 非负
+     - team_match: goals_for/goals_against 非负
+     - rating_feature_matrix: player_id+season_id 唯一
+  7. 新增 14 个回归测试（两个新函数各 5 个场景 + run_pre_training_validation 4 个集成场景）
+  8. 真实数据烟雾测试：validation 从 7/7 PASS 扩展到 11/11 PASS
+- **输出**：
+  - 新增 `validate_no_negative_values` 和 `validate_unique_keys` 两个基础检查函数
+  - `run_pre_training_validation` 从 7 项扩展到 11 项
+  - 14 个回归测试
+  - 真实数据 11/11 PASS
+- **现有替代工具**：无——之前只有 goals 非空检查，没有非负和唯一性检查
+- **错误和阻断**：
+  - **BUG-007（潜在）：player_match 核心指标可能含负值或重复行**：尚未在真实数据中发现，但 pipeline 中存在多处算术操作（如 diff、rolling），符号翻转或重复聚合可能引入负值或重复行。当前没有检查机制，问题会静默传播到评分训练。
+- **人工复盘**：
+  - **是否达到预期**：是。pre-training validation 从 7 项增加到 11 项，覆盖了非空、非负、唯一性三个维度的核心数据质量检查。
+  - **有什么问题**：检查范围仍然有限——只检查了最核心的 3-4 个指标，更多衍生指标（如 per-90、composite scores）没有检查。这些衍生指标由核心指标计算而来，如果核心指标没问题，衍生指标通常也没问题。
+  - **数据治理启示**：defense-in-depth 不是越多越好。每增加一项检查都有维护成本，且可能误报（比如某些列的 null 是合法的）。检查应该聚焦于"如果出错会导致不可恢复损坏"的核心指标。goals/assists/minutes 是所有评分和预测的基础，它们的非空、非负、唯一性是最低保障。
+  - **下一步改进**：可考虑增加 date_range 检查（比赛日期是否在合理范围内）、row_count 合理性检查（行数不应异常下降），但这些需要更复杂的基线设置，优先级较低。
+- **是否可重复使用**：是。两个新函数是通用的，可用于任何 parquet 文件的数据质量检查。检查模式（存在性 → 行数 → 键非空 → 值非空 → 值非负 → 键唯一）是一个渐进式的数据质量验证框架，可扩展到其他数据管道。
+
+---
+
 ## 更新规则
 
 - 维护者填写真实任务后，将对应"待填写"替换为真实内容。
