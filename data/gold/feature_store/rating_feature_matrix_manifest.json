@@ -246,6 +246,21 @@
     }
   ],
   "input_hash": "c451edbe28686715",
-  "source_lineage": [],
-  "timestamp": "2026-07-20T02:41:35.661045+00:00"
+  "source_lineage": [
+    {
+      "name": "player_match",
+      "relative_path": "gold/feature_store/player_match.parquet",
+      "rows_read": 27598,
+      "input_hash": "5dce9f5050ea4172",
+      "notes": null
+    },
+    {
+      "name": "player_rolling",
+      "relative_path": "gold/feature_store/player_rolling.parquet",
+      "rows_read": 27598,
+      "input_hash": "f1dba47ad4516194",
+      "notes": null
+    }
+  ],
+  "timestamp": "2026-07-20T02:55:55.634121+00:00"
 }

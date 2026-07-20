@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from scoutfootball.features.manifest import (
+    SourceLineageEntry,
     build_manifest_payload,
 )
 
@@ -413,6 +414,9 @@ def build_rating_feature_matrix(
 def write_feature_manifest(
     matrix: pd.DataFrame,
     output_path: Path,
+    *,
+    source_lineage: list[SourceLineageEntry] | None = None,
+    input_hash: str | None = None,
 ) -> None:
     """Write a JSON manifest alongside the rating feature matrix parquet.
 
@@ -433,6 +437,16 @@ def write_feature_manifest(
     output_path : Path
         Path where the parquet file was written. The manifest will be
         written as ``{stem}_manifest.json`` in the same directory.
+    source_lineage:
+        Per-input-file lineage entries. If None, reads from
+        ``matrix.attrs["_source_lineage"]`` (matching
+        ``write_team_match_manifest`` behavior). Pass explicitly when
+        the caller has popped attrs before ``to_parquet`` to avoid
+        pandas JSON-serialization of ``SourceLineageEntry`` dataclasses.
+    input_hash:
+        Combined input hash. If None, reads from
+        ``matrix.attrs["_input_hash"]``; falls back to
+        ``compute_dataframe_hash(matrix)`` when absent.
     """
     # Per-column source category. Precedence (matching the legacy
     # behavior callers may rely on): explicit suffix markers first, then
@@ -444,12 +458,16 @@ def write_feature_manifest(
         elif col.endswith("_source_covered"):
             column_sources[col] = "source_coverage"
 
-    input_hash = matrix.attrs.get("_input_hash")
+    if source_lineage is None:
+        source_lineage = matrix.attrs.get("_source_lineage", []) or []
+    if input_hash is None:
+        input_hash = matrix.attrs.get("_input_hash")
+
     payload = build_manifest_payload(
         matrix,
         artifact_name="rating_feature_matrix",
         column_sources=column_sources,
-        source_lineage=[],
+        source_lineage=source_lineage,
         input_hash=input_hash,
     )
     manifest_path = output_path.parent / f"{output_path.stem}_manifest.json"

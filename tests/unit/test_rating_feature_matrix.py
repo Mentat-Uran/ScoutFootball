@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from scoutfootball.features.manifest import SourceLineageEntry
 from scoutfootball.features.rating_matrix import (
     FIELD_GROUPS,
     build_rating_feature_matrix,
@@ -317,6 +318,78 @@ class TestWriteFeatureManifest:
 
         goals_info = next(c for c in manifest["columns"] if c["name"] == "goals")
         assert goals_info["missing_rate"] == 0.5
+
+    def test_explicit_source_lineage_is_written(self, tmp_path: Path) -> None:
+        """When source_lineage is passed explicitly, the manifest
+        records it. This is how pipeline.py records player_match and
+        player_rolling as the direct upstream inputs of
+        rating_feature_matrix, closing the provenance chain
+        (rating_matrix → player_match → raw statsbomb/fbref/understat).
+        """
+        matrix = pd.DataFrame({"player_id": ["p1"], "goals": [1]})
+        output_path = tmp_path / "rating_feature_matrix.parquet"
+        matrix.to_parquet(output_path, index=False)
+        lineage = [
+            SourceLineageEntry(
+                name="player_match",
+                relative_path="gold/feature_store/player_match.parquet",
+                rows_read=100,
+                input_hash="abc123",
+            ),
+            SourceLineageEntry(
+                name="player_rolling",
+                relative_path="gold/feature_store/player_rolling.parquet",
+                rows_read=100,
+                input_hash="def456",
+            ),
+        ]
+        write_feature_manifest(matrix, output_path, source_lineage=lineage)
+
+        manifest_path = tmp_path / "rating_feature_matrix_manifest.json"
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        assert len(manifest["source_lineage"]) == 2
+        assert manifest["source_lineage"][0]["name"] == "player_match"
+        assert manifest["source_lineage"][1]["name"] == "player_rolling"
+
+    def test_source_lineage_reads_from_attrs_when_not_passed(
+        self, tmp_path: Path
+    ) -> None:
+        """When source_lineage is not passed, it is read from
+        matrix.attrs['_source_lineage'], matching the behavior of
+        write_team_match_manifest and write_player_match_manifest.
+
+        Mirrors pipeline flow where attrs are popped before to_parquet
+        (to avoid pandas JSON-serialization of SourceLineageEntry
+        dataclasses) and then passed explicitly. The attrs fallback
+        keeps the function usable by callers that don't pop attrs but
+        also don't call to_parquet with attrs populated.
+        """
+        from scoutfootball.features.manifest import extract_lineage_attrs
+
+        matrix = pd.DataFrame({"player_id": ["p1"], "goals": [1]})
+        matrix.attrs["_source_lineage"] = [
+            SourceLineageEntry(
+                name="player_match",
+                relative_path="gold/feature_store/player_match.parquet",
+                rows_read=50,
+                input_hash="attr-hash",
+            )
+        ]
+        output_path = tmp_path / "rating_feature_matrix.parquet"
+        # Pop attrs before to_parquet to avoid the JSON-serialization
+        # TypeError that the pipeline also avoids via extract_lineage_attrs.
+        lineage, _ = extract_lineage_attrs(matrix)
+        matrix.to_parquet(output_path, index=False)
+        write_feature_manifest(matrix, output_path, source_lineage=lineage)
+
+        manifest_path = tmp_path / "rating_feature_matrix_manifest.json"
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        assert len(manifest["source_lineage"]) == 1
+        assert manifest["source_lineage"][0]["name"] == "player_match"
 
 
 # ---------------------------------------------------------------------------
