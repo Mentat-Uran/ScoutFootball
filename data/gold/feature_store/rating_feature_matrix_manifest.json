@@ -1,88 +1,91 @@
 {
+  "artifact": "rating_feature_matrix",
+  "schema_version": "1.0",
   "total_rows": 26678,
+  "column_count": 40,
   "columns": [
     {
       "name": "player_id",
       "dtype": "object",
-      "source": "derived",
+      "source": "identifier",
       "missing_rate": 0.0
     },
     {
       "name": "season_id",
       "dtype": "object",
-      "source": "category",
+      "source": "temporal",
       "missing_rate": 0.0
     },
     {
       "name": "goals",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "assists",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "shots",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "shots_on_target",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "minutes_played",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "starts",
       "dtype": "int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "npxg",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.3052
     },
     {
       "name": "xa",
       "dtype": "float64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.3052
     },
     {
       "name": "available_flag",
       "dtype": "float64",
-      "source": "player_stats",
+      "source": "flag",
       "missing_rate": 0.0
     },
     {
       "name": "tackles",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0681
     },
     {
       "name": "passes",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 1.0
     },
     {
       "name": "xT_added",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 1.0
     },
     {
@@ -142,61 +145,61 @@
     {
       "name": "tackles_won",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.5283
     },
     {
       "name": "interceptions",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.5283
     },
     {
       "name": "fouls_committed",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.5283
     },
     {
       "name": "fouls_drawn",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.5283
     },
     {
       "name": "crosses",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.5283
     },
     {
       "name": "own_goals",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.5283
     },
     {
       "name": "xt_total",
       "dtype": "float64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.9774
     },
     {
       "name": "xt_per_90",
       "dtype": "float64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.9774
     },
     {
       "name": "vaep_total",
       "dtype": "float64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.9139
     },
     {
       "name": "vaep_per_90",
       "dtype": "float64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.9139
     },
     {
@@ -242,6 +245,7 @@
       "missing_rate": 0.0
     }
   ],
-  "input_hash": "unknown",
-  "timestamp": "2026-07-20T01:53:36.578609+00:00"
+  "input_hash": "c451edbe28686715",
+  "source_lineage": [],
+  "timestamp": "2026-07-20T02:41:35.661045+00:00"
 }

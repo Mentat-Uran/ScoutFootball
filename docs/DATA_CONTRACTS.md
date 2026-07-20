@@ -338,27 +338,29 @@ they do not turn an unrecorded historical snapshot into an earlier `as_of`.
 
 ---
 
-## 7.1 team_match_manifest.json and player_match_manifest.json
+## 7.1 Manifests: team_match, player_match, rating_feature_matrix
 
-**Files**: `data/gold/feature_store/{team_match,player_match}_manifest.json`
+**Files**: `data/gold/feature_store/{team_match,player_match,rating_feature_matrix}_manifest.json`
 **Purpose**: Audit and reproducibility sidecars written next to the
 corresponding parquet artifact. They capture input file hashes, row and
 column counts, schema, and per-source lineage so consumers can detect
 input drift without re-reading the underlying raw parquet bytes. They
 are NOT uploaded anywhere and do not modify the parquet file itself.
 
-The schema aligns with `rating_feature_matrix_manifest.json` on the
-following fields and extends it with additional provenance metadata:
+All three manifests share the same schema (legacy
+`rating_feature_matrix_manifest.json` was upgraded to the new schema on
+2026-07-20; consumers that only read the aligned subset
+`total_rows`/`columns`/`input_hash`/`timestamp` remain forward-compatible):
 
 | Field | Type | Description |
 |---|---|---|
-| `artifact` | str | Logical name (`team_match` or `player_match`) |
+| `artifact` | str | Logical name (`team_match`, `player_match`, or `rating_feature_matrix`) |
 | `schema_version` | str | Manifest schema version (currently `"1.0"`) |
 | `total_rows` | int | Row count of the parquet file |
 | `column_count` | int | Column count of the parquet file |
 | `columns` | list | Per-column metadata, see below |
 | `input_hash` | str | sha256[:16] of the builder's combined input frames; falls back to a hash of the parquet content when the builder did not attach an explicit input hash |
-| `source_lineage` | list | Per-input-file lineage entries, see below |
+| `source_lineage` | list | Per-input-file lineage entries, see below; `rating_feature_matrix` currently writes `[]` (lineage is captured at the player_match level it is built from) |
 | `timestamp` | str | ISO 8601 UTC timestamp when the manifest was written |
 | `source_breakdown` | dict | (player_match only) Per-source row counts, since player_match is the concatenation of statsbomb_open + fbref + understat |
 

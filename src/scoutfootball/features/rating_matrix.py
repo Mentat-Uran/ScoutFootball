@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
+
+from scoutfootball.features.manifest import (
+    build_manifest_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,47 @@ RATING_CATEGORY_COLUMNS: list[str] = [
     "competition_id",
     "season_id",
 ]
+
+# Column source categories for rating_feature_matrix_manifest.json.
+# Mirrors the source-category approach in features.manifest for
+# team_match/player_match, so all three gold feature_store manifests
+# share a consistent column-source vocabulary. Columns not in this map
+# default to "derived" inside build_manifest_payload.
+RATING_MATRIX_COLUMN_SOURCES: dict[str, str] = {
+    # Identifiers and temporal keys.
+    "player_id": "identifier",
+    "season_id": "temporal",
+    "competition_id": "category",
+    # Player-profile categories.
+    "position_group": "category",
+    # Core match metrics (player_stats).
+    "goals": "metric",
+    "assists": "metric",
+    "shots": "metric",
+    "shots_on_target": "metric",
+    "npxg": "metric",
+    "xa": "metric",
+    "minutes_played": "metric",
+    "starts": "metric",
+    "available_flag": "flag",
+    # Defensive and possession metrics (FBref misc).
+    "tackles": "metric",
+    "passes": "metric",
+    "tackles_won": "metric",
+    "interceptions": "metric",
+    "fouls_committed": "metric",
+    "fouls_drawn": "metric",
+    "crosses": "metric",
+    "own_goals": "metric",
+    # Action-value metrics (xT/VAEP).
+    "xT_added": "metric",
+    "xt_total": "metric",
+    "xt_per_90": "metric",
+    "vaep_total": "metric",
+    "vaep_per_90": "metric",
+    # Missing-field and source-coverage flags written by the rating
+    # matrix builder itself (not read from any external source).
+}
 
 # Identifier columns for aggregation to player-season level.
 RATING_ID_COLUMNS: list[str] = [
@@ -372,8 +416,15 @@ def write_feature_manifest(
 ) -> None:
     """Write a JSON manifest alongside the rating feature matrix parquet.
 
-    The manifest contains column metadata, row count, input hashes, and
-    timestamp for reproducibility and audit purposes.
+    The manifest aligns with the new schema used by
+    ``features.manifest.write_team_match_manifest`` and
+    ``write_player_match_manifest``: ``artifact``, ``schema_version``,
+    ``total_rows``, ``column_count``, ``columns``, ``input_hash``,
+    ``source_lineage``, ``timestamp``. Legacy manifests written by
+    previous versions of this function (which lacked ``artifact``,
+    ``schema_version``, ``column_count`` and ``source_lineage``) are
+    forward-compatible — consumers that only read ``total_rows`` /
+    ``columns`` / ``input_hash`` / ``timestamp`` continue to work.
 
     Parameters
     ----------
@@ -383,41 +434,27 @@ def write_feature_manifest(
         Path where the parquet file was written. The manifest will be
         written as ``{stem}_manifest.json`` in the same directory.
     """
-    manifest_path = output_path.parent / f"{output_path.stem}_manifest.json"
-
-    columns_info = []
+    # Per-column source category. Precedence (matching the legacy
+    # behavior callers may rely on): explicit suffix markers first, then
+    # the RATING_MATRIX_COLUMN_SOURCES map, then fallback to "derived".
+    column_sources: dict[str, str] = dict(RATING_MATRIX_COLUMN_SOURCES)
     for col in matrix.columns:
-        dtype_str = str(matrix[col].dtype)
-        missing_rate = float(matrix[col].isna().mean()) if len(matrix) > 0 else 0.0
-
-        # Determine source category
         if col.endswith("_missing"):
-            source = "missing_marker"
+            column_sources[col] = "missing_marker"
         elif col.endswith("_source_covered"):
-            source = "source_coverage"
-        elif col in RATING_NUMERIC_COLUMNS:
-            source = "player_stats"
-        elif col in RATING_CATEGORY_COLUMNS:
-            source = "category"
-        else:
-            source = "derived"
+            column_sources[col] = "source_coverage"
 
-        columns_info.append({
-            "name": col,
-            "dtype": dtype_str,
-            "source": source,
-            "missing_rate": round(missing_rate, 4),
-        })
-
-    manifest = {
-        "total_rows": len(matrix),
-        "columns": columns_info,
-        "input_hash": matrix.attrs.get("_input_hash", "unknown"),
-        "timestamp": datetime.now(tz=UTC).isoformat(),
-    }
-
+    input_hash = matrix.attrs.get("_input_hash")
+    payload = build_manifest_payload(
+        matrix,
+        artifact_name="rating_feature_matrix",
+        column_sources=column_sources,
+        source_lineage=[],
+        input_hash=input_hash,
+    )
+    manifest_path = output_path.parent / f"{output_path.stem}_manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
+        json.dump(payload, f, indent=2, ensure_ascii=False)
 
     logger.info("Feature manifest written to %s", manifest_path)
 

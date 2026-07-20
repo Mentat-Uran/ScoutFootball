@@ -423,7 +423,6 @@ def run_pre_training_validation(
         validate_manifest_exists(
             "gold/feature_store/rating_feature_matrix.parquet",
             settings,
-            required_fields=("total_rows", "columns", "input_hash", "timestamp"),
         )
     )
     # Manifest freshness: detect stale manifests where the parquet was
