@@ -477,9 +477,11 @@ class TestValidateManifestExists:
         assert "schema=1.0" in result.message
 
     def test_legacy_schema_passes_with_reduced_required_fields(self, tmp_path):
-        """Legacy rating_feature_matrix_manifest.json schema (no
-        artifact/schema_version/source_lineage) passes when caller
-        passes reduced required_fields."""
+        """Legacy manifest schema (no artifact/schema_version/source_lineage)
+        passes when caller passes reduced required_fields. This keeps
+        the check usable on third-party parquet files that predate the
+        new manifest schema, even though all in-tree manifests now use
+        the new schema."""
         import json
 
         gold = _data_dir(tmp_path) / "gold" / "feature_store"
@@ -698,9 +700,14 @@ class TestRunPreTrainingValidation:
             }
         ).to_parquet(gold / "rating_feature_matrix.parquet")
 
-        # New-schema manifests for team_match (4 cols) and player_match
-        # (5 cols). column_count must match the actual parquet content
-        # so validate_manifest_freshness passes.
+        # New-schema manifests for team_match (4 cols), player_match
+        # (5 cols), and rating_feature_matrix (2 cols). column_count
+        # must match the actual parquet content so
+        # validate_manifest_freshness passes. All three use the same
+        # schema (artifact, schema_version, total_rows, column_count,
+        # columns, input_hash, source_lineage, timestamp) now that
+        # write_feature_manifest has been upgraded to use
+        # build_manifest_payload.
         new_schema_common = {
             "schema_version": "1.0",
             "columns": [],
@@ -728,14 +735,14 @@ class TestRunPreTrainingValidation:
                 },
                 f,
             )
-        # Legacy-schema manifest for rating_feature_matrix (2 cols).
+        # rating_feature_matrix.parquet has 2 cols (player_id, season_id).
         with open(gold / "rating_feature_matrix_manifest.json", "w", encoding="utf-8") as f:
             json.dump(
                 {
+                    "artifact": "rating_feature_matrix",
                     "total_rows": 12,
-                    "columns": [],
-                    "input_hash": "test-hash",
-                    "timestamp": datetime.now(tz=UTC).isoformat(),
+                    "column_count": 2,
+                    **new_schema_common,
                 },
                 f,
             )

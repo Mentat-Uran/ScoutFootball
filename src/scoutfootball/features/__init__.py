@@ -15,6 +15,7 @@ from .manifest import (
 from .player_match import build_player_match_features
 from .player_rolling import build_player_rolling_features
 from .rating_matrix import (
+    RATING_MATRIX_COLUMN_SOURCES,
     build_rating_feature_matrix,
     fill_missing_with_position_median,
     mark_missing_fields,
@@ -27,6 +28,7 @@ from .understat_history import build_understat_season_proxy
 __all__ = [
     "MANIFEST_SCHEMA_VERSION",
     "PLAYER_MATCH_COLUMN_SOURCES",
+    "RATING_MATRIX_COLUMN_SOURCES",
     "SourceLineageEntry",
     "TEAM_MATCH_COLUMN_SOURCES",
     "build_player_match_features",

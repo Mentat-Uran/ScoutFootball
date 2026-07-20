@@ -238,7 +238,15 @@ class TestBuildRatingFeatureMatrix:
 
 class TestWriteFeatureManifest:
     def test_manifest_has_required_fields(self, tmp_path: Path) -> None:
-        """Manifest JSON should contain total_rows, columns, input_hash, timestamp."""
+        """Manifest JSON should contain the new-schema fields:
+        artifact, schema_version, total_rows, column_count, columns,
+        input_hash, source_lineage, timestamp.
+
+        Upgraded from legacy schema (which only had total_rows/columns/
+        input_hash/timestamp) so the same validate_manifest_exists
+        check works uniformly across all three gold feature_store
+        manifests.
+        """
         matrix = pd.DataFrame({
             "player_id": ["p1", "p2"],
             "goals": [5, 3],
@@ -257,12 +265,18 @@ class TestWriteFeatureManifest:
         with open(manifest_path) as f:
             manifest = json.load(f)
 
+        # Aligned fields (present in both legacy and new schema).
         assert "total_rows" in manifest
         assert manifest["total_rows"] == 2
         assert "columns" in manifest
         assert "input_hash" in manifest
         assert manifest["input_hash"] == "abc123"
         assert "timestamp" in manifest
+        # New-schema fields added by build_manifest_payload.
+        assert manifest["artifact"] == "rating_feature_matrix"
+        assert manifest["schema_version"] == "1.0"
+        assert manifest["column_count"] == 4
+        assert manifest["source_lineage"] == []
 
     def test_manifest_columns_have_metadata(self, tmp_path: Path) -> None:
         """Each column entry should have name, dtype, source, missing_rate."""
