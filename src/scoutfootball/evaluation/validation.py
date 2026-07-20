@@ -315,6 +315,100 @@ def validate_manifest_freshness(
     )
 
 
+def validate_source_lineage_freshness(
+    parquet_relative_path: str,
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate that manifest source_lineage hashes still match upstream files.
+
+    ``validate_manifest_freshness`` checks that a parquet's own row/column
+    counts match its manifest. This companion check goes one level deeper:
+    for each ``source_lineage`` entry in the manifest, it re-hashes the
+    referenced upstream parquet and compares to the recorded
+    ``input_hash``. This catches the partial-rebuild scenario where an
+    upstream parquet is rebuilt (new content, new hash) but the downstream
+    parquet and its manifest are not — the downstream's own freshness
+    check passes, but its source_lineage is now stale.
+
+    Returns FAIL when:
+    - parquet file is missing (delegates freshness logic; existence is
+      validate_parquet_exists's responsibility)
+    - manifest is missing or unreadable
+    - any source_lineage entry's upstream file is missing
+    - any source_lineage entry's recorded input_hash differs from the
+      current upstream file's sha256[:16]
+
+    Entries with ``input_hash=None`` are skipped (the manifest already
+      records the gap; re-checking adds no signal).
+    Empty ``source_lineage`` lists PASS with a note that there are no
+      upstream entries to verify.
+    """
+    from scoutfootball.features.manifest import hash_file
+
+    resolved = (settings or PlatformSettings.from_root()).data_root / parquet_relative_path
+    name = f"source_lineage_freshness:{parquet_relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"Parquet missing: {resolved}")
+    manifest_path = resolved.parent / f"{resolved.stem}_manifest.json"
+    if not manifest_path.exists():
+        return ValidationCheckResult(
+            name, False, f"Manifest missing: {manifest_path.name}"
+        )
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        return ValidationCheckResult(name, False, f"Manifest unreadable: {exc}")
+
+    lineage = payload.get("source_lineage") or []
+    if not lineage:
+        return ValidationCheckResult(
+            name,
+            True,
+            "No source_lineage entries to verify",
+        )
+
+    settings_resolved = settings or PlatformSettings.from_root()
+    failures: list[str] = []
+    verified = 0
+    skipped = 0
+    for entry in lineage:
+        entry_name = entry.get("name", "<unnamed>")
+        recorded_hash = entry.get("input_hash")
+        if recorded_hash is None:
+            skipped += 1
+            continue
+        upstream_rel = entry.get("relative_path")
+        if not upstream_rel:
+            failures.append(f"{entry_name}: missing relative_path")
+            continue
+        upstream_path = settings_resolved.data_root / upstream_rel
+        if not upstream_path.exists():
+            failures.append(f"{entry_name}: upstream missing at {upstream_rel}")
+            continue
+        current_hash = hash_file(upstream_path)
+        if current_hash != recorded_hash:
+            failures.append(
+                f"{entry_name}: hash drift at {upstream_rel} "
+                f"(manifest={recorded_hash}, current={current_hash})"
+            )
+            continue
+        verified += 1
+
+    if failures:
+        return ValidationCheckResult(
+            name,
+            False,
+            f"{len(failures)} stale/missing upstream(s): {'; '.join(failures)}",
+        )
+    return ValidationCheckResult(
+        name,
+        True,
+        f"All {verified} upstream hash(es) match"
+        + (f", {skipped} skipped (None input_hash)" if skipped else ""),
+    )
+
+
 def run_pre_training_validation(
     settings: PlatformSettings | None = None,
 ) -> ValidationReport:
@@ -472,4 +566,24 @@ def run_pre_training_validation(
             "gold/feature_store/player_rolling.parquet", settings
         )
     )
+    # Source lineage freshness: detect partial rebuilds where an upstream
+    # parquet was rebuilt (new content, new hash) but the downstream
+    # parquet and its manifest were not. The downstream's own
+    # manifest_freshness check passes (its parquet is unchanged), but its
+    # source_lineage now points at a stale upstream hash. This closes the
+    # last provenance gap in the pre-training gate: full chain-of-custody
+    # from raw -> match -> rolling -> rating_feature_matrix is verifiable
+    # without re-running build-features end-to-end.
+    for artifact in (
+        "team_match",
+        "player_match",
+        "team_rolling",
+        "player_rolling",
+        "rating_feature_matrix",
+    ):
+        report.checks.append(
+            validate_source_lineage_freshness(
+                f"gold/feature_store/{artifact}.parquet", settings
+            )
+        )
     return report
