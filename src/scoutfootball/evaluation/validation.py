@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 
@@ -187,14 +186,27 @@ def validate_unique_keys(
 def validate_manifest_exists(
     parquet_relative_path: str,
     settings: PlatformSettings | None = None,
+    *,
+    required_fields: tuple[str, ...] = (
+        "artifact",
+        "schema_version",
+        "total_rows",
+        "column_count",
+        "columns",
+        "input_hash",
+        "source_lineage",
+        "timestamp",
+    ),
 ) -> ValidationCheckResult:
     """Validate that a parquet file has a sidecar manifest with required fields.
 
     Manifest is expected at ``{parquet_stem}_manifest.json`` next to the
     parquet file (matches ``features.manifest.write_manifest`` convention).
-    Required fields mirror the aligned schema in DATA_CONTRACTS.md 7.1:
-    ``artifact``, ``schema_version``, ``total_rows``, ``column_count``,
-    ``columns``, ``input_hash``, ``source_lineage``, ``timestamp``.
+    Default required fields mirror the new schema in DATA_CONTRACTS.md 7.1
+    (team_match/player_match manifests). For the legacy
+    ``rating_feature_matrix_manifest.json`` schema, pass
+    ``required_fields=("total_rows", "columns", "input_hash", "timestamp")``
+    until that manifest is upgraded to the new schema.
 
     Returns FAIL when:
     - parquet file is missing (cannot infer manifest path reliably)
@@ -219,26 +231,18 @@ def validate_manifest_exists(
             payload = json.load(f)
     except (json.JSONDecodeError, OSError) as exc:
         return ValidationCheckResult(name, False, f"Manifest unreadable: {exc}")
-    required = (
-        "artifact",
-        "schema_version",
-        "total_rows",
-        "column_count",
-        "columns",
-        "input_hash",
-        "source_lineage",
-        "timestamp",
-    )
-    missing = [f for f in required if f not in payload]
+    missing = [f for f in required_fields if f not in payload]
     if missing:
         return ValidationCheckResult(
             name, False, f"Manifest missing fields: {missing}"
         )
+    artifact = payload.get("artifact", "<unnamed>")
+    schema_ver = payload.get("schema_version", "<legacy>")
     return ValidationCheckResult(
         name,
         True,
-        f"Manifest OK ({manifest_path.name}, artifact={payload['artifact']}, "
-        f"schema={payload['schema_version']})",
+        f"Manifest OK ({manifest_path.name}, artifact={artifact}, "
+        f"schema={schema_ver})",
     )
 
 
@@ -281,9 +285,9 @@ def validate_manifest_freshness(
 
     manifest_rows = payload.get("total_rows")
     manifest_cols = payload.get("column_count")
-    if manifest_rows is None or manifest_cols is None:
+    if manifest_rows is None:
         return ValidationCheckResult(
-            name, False, "Manifest missing total_rows or column_count"
+            name, False, "Manifest missing total_rows"
         )
 
     df = pd.read_parquet(resolved)
@@ -295,7 +299,10 @@ def validate_manifest_freshness(
             False,
             f"Row count drift: manifest={manifest_rows}, parquet={actual_rows}",
         )
-    if int(manifest_cols) != actual_cols:
+    # column_count is optional: legacy rating_feature_matrix_manifest.json
+    # predates the new schema and does not include it. Only check when
+    # present so legacy manifests remain forward-compatible.
+    if manifest_cols is not None and int(manifest_cols) != actual_cols:
         return ValidationCheckResult(
             name,
             False,
@@ -392,6 +399,50 @@ def run_pre_training_validation(
             "gold/feature_store/rating_feature_matrix.parquet",
             ("player_id", "season_id"),
             settings,
+        )
+    )
+    # Manifest existence: each gold feature_store parquet must have a
+    # sidecar manifest recording input hashes, row/column counts and
+    # source lineage. Missing manifest means build-features did not run
+    # or failed silently; consumers cannot detect input drift without it.
+    # team_match and player_match use the new schema (artifact,
+    # schema_version, source_lineage, ...); rating_feature_matrix uses
+    # the legacy schema (total_rows, columns, input_hash, timestamp)
+    # until its writer is upgraded to features.manifest.build_manifest_payload.
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/team_match.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/player_match.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/rating_feature_matrix.parquet",
+            settings,
+            required_fields=("total_rows", "columns", "input_hash", "timestamp"),
+        )
+    )
+    # Manifest freshness: detect stale manifests where the parquet was
+    # rebuilt but the manifest was not (e.g. partial rebuild, manual edit,
+    # failed run). A stale manifest misleads consumers about input hashes
+    # and row counts even when the schema is present.
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/team_match.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/player_match.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/rating_feature_matrix.parquet", settings
         )
     )
     return report
