@@ -105,14 +105,28 @@ Test Spearman: mean=0.716, std=0.001
 - The current tracked label artifact has zero eligible rows, so no NN or
   truth-anchor holdout number may be presented as player-level validation.
 
-### Local optimizer admission evidence（2026-07-17）
+### Local optimizer admission evidence（updated 2026-07-20）
 
 - `scoutfootball model-admission` only marks a future optimizer run
   `reviewable` when its own metadata has recorded lineage, a time split,
   structured baseline/candidate holdout metrics, and same-run error cases.
-- The command is a read-only evidence screen. It does not promote a model,
-  switch the rating artifact used by the workbench, or turn a proxy team-points
-  result into player-ability validation.
+- **Chain-of-custody hard validation (2026-07-20):** when `settings` is
+  provided (the default in CLI, API, and `promote-model-run` call paths),
+  the `recorded_lineage` check additionally verifies that the training-time
+  `feature_manifest.hash` recorded in `meta.json` still matches the sha256[:16]
+  of the current on-disk `rating_feature_matrix_manifest.json`. If the
+  feature_store was rebuilt after training, the run flips from `reviewable`
+  to `not_reviewable` with a note explaining the hash drift; this prevents a
+  stale candidate from being reviewed or promoted against current data.
+  Legacy callers passing `settings=None` fall back to the prior behavior
+  (hash only needs to be non-empty).
+- `promote-model-run --confirm` enforces the same chain-of-custody check
+  before swapping active artifacts; a stale candidate cannot be promoted
+  even if its own metadata is otherwise complete.
+- The command remains a read-only evidence screen at the admission layer —
+  it does not switch the rating artifact used by the workbench or turn a
+  proxy team-points result into player-ability validation. Promotion and
+  rollback are separate confirmed metadata actions.
 - Historical run folders missing these records remain `not_reviewable`; their
   historical prose metrics are not reconstructed as machine-readable evidence.
 

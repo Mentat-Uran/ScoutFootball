@@ -305,7 +305,7 @@ PYTHONPATH=src uv run python -m scoutfootball validate   # Validate data
 PYTHONPATH=src uv run python -m scoutfootball preflight --target key --evidence-out data/reports/data_health/preflight-evidence.json
 PYTHONPATH=src uv run python -m scoutfootball ingest     # Ingest data
 PYTHONPATH=src uv run python -m scoutfootball build-features
-PYTHONPATH=src uv run python -m scoutfootball train      # Train ratings
+PYTHONPATH=src uv run python -m scoutfootball train      # Train ratings (fail-closed; --force to bypass validation)
 
 # Start the same-origin web UI and API
 PYTHONPATH=src uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
