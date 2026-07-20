@@ -14,6 +14,8 @@ from scoutfootball.evaluation.validation import (
     ValidationCheckResult,
     ValidationReport,
     run_pre_training_validation,
+    validate_manifest_exists,
+    validate_manifest_freshness,
     validate_no_negative_values,
     validate_no_null_keys,
     validate_no_null_values,
@@ -363,6 +365,292 @@ class TestValidateUniqueKeys:
         assert "Missing columns" in result.message
 
 
+class TestValidateManifestExists:
+    """Sidecar manifest existence and schema-field checks.
+
+    Validates that a parquet file has a ``{stem}_manifest.json`` next to
+    it with the required schema fields. Missing manifest means
+    build-features did not run or failed silently; consumers cannot
+    detect input drift without it.
+    """
+
+    def _write_parquet(self, gold, name="team_match.parquet"):
+        df = pd.DataFrame({"match_id": ["m1"], "team_id": ["t1"], "goals_for": [1]})
+        df.to_parquet(gold / name)
+
+    def test_fails_when_parquet_missing(self, tmp_path):
+        """Missing parquet cannot have a manifest path inferred."""
+        result = validate_manifest_exists(
+            "gold/feature_store/missing.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Parquet missing" in result.message
+
+    def test_fails_when_manifest_missing(self, tmp_path):
+        """Parquet exists but no sidecar manifest → build-features did
+        not run or manifest write failed."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+
+        result = validate_manifest_exists(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Manifest missing" in result.message
+
+    def test_fails_when_manifest_is_invalid_json(self, tmp_path):
+        """Corrupt manifest JSON is a FAIL, not a silent pass."""
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+        (gold / "team_match_manifest.json").write_text(
+            "{not valid json", encoding="utf-8"
+        )
+
+        result = validate_manifest_exists(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Manifest unreadable" in result.message
+
+    def test_fails_when_required_field_missing(self, tmp_path):
+        """Manifest exists but is missing required schema fields."""
+        import json
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+        # Missing source_lineage and timestamp.
+        (gold / "team_match_manifest.json").write_text(
+            json.dumps({
+                "artifact": "team_match",
+                "schema_version": "1.0",
+                "total_rows": 1,
+                "column_count": 3,
+                "columns": [],
+                "input_hash": "h",
+            }),
+            encoding="utf-8",
+        )
+
+        result = validate_manifest_exists(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Manifest missing fields" in result.message
+        assert "source_lineage" in result.message
+        assert "timestamp" in result.message
+
+    def test_passes_when_all_required_fields_present(self, tmp_path):
+        """New-schema manifest with all required fields passes."""
+        import json
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+        (gold / "team_match_manifest.json").write_text(
+            json.dumps({
+                "artifact": "team_match",
+                "schema_version": "1.0",
+                "total_rows": 1,
+                "column_count": 3,
+                "columns": [],
+                "input_hash": "h",
+                "source_lineage": [],
+                "timestamp": "2026-07-20T00:00:00Z",
+            }),
+            encoding="utf-8",
+        )
+
+        result = validate_manifest_exists(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+        assert "artifact=team_match" in result.message
+        assert "schema=1.0" in result.message
+
+    def test_legacy_schema_passes_with_reduced_required_fields(self, tmp_path):
+        """Legacy rating_feature_matrix_manifest.json schema (no
+        artifact/schema_version/source_lineage) passes when caller
+        passes reduced required_fields."""
+        import json
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold, "rating_feature_matrix.parquet")
+        (gold / "rating_feature_matrix_manifest.json").write_text(
+            json.dumps({
+                "total_rows": 1,
+                "columns": [],
+                "input_hash": "h",
+                "timestamp": "2026-07-20T00:00:00Z",
+            }),
+            encoding="utf-8",
+        )
+
+        result = validate_manifest_exists(
+            "gold/feature_store/rating_feature_matrix.parquet",
+            settings=_make_settings(tmp_path),
+            required_fields=("total_rows", "columns", "input_hash", "timestamp"),
+        )
+        assert result.passed
+        assert "schema=<legacy>" in result.message
+
+
+class TestValidateManifestFreshness:
+    """Detect stale manifests where parquet was rebuilt but manifest was not.
+
+    A stale manifest misleads consumers about input hashes and row counts
+    even when the schema is present. This is the cheap content-level
+    check (row/col count drift); full input-hash verification lives in
+    contract-quality.
+    """
+
+    def _write_parquet(self, gold, name="team_match.parquet", rows=5, cols=3):
+        df = pd.DataFrame(
+            {f"col{i}": list(range(rows)) for i in range(cols)}
+        )
+        df.to_parquet(gold / name)
+
+    def test_fails_when_parquet_missing(self, tmp_path):
+        result = validate_manifest_freshness(
+            "gold/feature_store/missing.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Parquet missing" in result.message
+
+    def test_fails_when_manifest_missing(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+
+        result = validate_manifest_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Manifest missing" in result.message
+
+    def test_fails_on_row_count_drift(self, tmp_path):
+        """Manifest says 5 rows, parquet has 10 → stale manifest."""
+        import json
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold, rows=10, cols=3)
+        (gold / "team_match_manifest.json").write_text(
+            json.dumps({
+                "total_rows": 5,
+                "column_count": 3,
+            }),
+            encoding="utf-8",
+        )
+
+        result = validate_manifest_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Row count drift" in result.message
+        assert "manifest=5" in result.message
+        assert "parquet=10" in result.message
+
+    def test_fails_on_column_count_drift(self, tmp_path):
+        """Manifest says 3 cols, parquet has 4 → schema drift."""
+        import json
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold, rows=5, cols=4)
+        (gold / "team_match_manifest.json").write_text(
+            json.dumps({
+                "total_rows": 5,
+                "column_count": 3,
+            }),
+            encoding="utf-8",
+        )
+
+        result = validate_manifest_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Column count drift" in result.message
+
+    def test_passes_when_manifest_matches_parquet(self, tmp_path):
+        """Manifest row/col counts match parquet content → fresh."""
+        import json
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold, rows=7, cols=4)
+        (gold / "team_match_manifest.json").write_text(
+            json.dumps({
+                "total_rows": 7,
+                "column_count": 4,
+            }),
+            encoding="utf-8",
+        )
+
+        result = validate_manifest_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+        assert "rows=7" in result.message
+        assert "cols=4" in result.message
+
+    def test_fails_when_manifest_missing_total_rows(self, tmp_path):
+        """Manifest JSON exists but lacks total_rows."""
+        import json
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+        (gold / "team_match_manifest.json").write_text(
+            json.dumps({"column_count": 3}),  # no total_rows
+            encoding="utf-8",
+        )
+
+        result = validate_manifest_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Manifest missing total_rows" in result.message
+
+    def test_legacy_manifest_without_column_count_passes(self, tmp_path):
+        """Legacy rating_feature_matrix_manifest.json schema has no
+        column_count field. validate_manifest_freshness must not fail
+        on its absence — only on row count drift or schema-field
+        corruption. This keeps the check forward-compatible with
+        manifests written before the new schema was introduced."""
+        import json
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold, rows=5, cols=3)
+        # No column_count field — legacy schema.
+        (gold / "team_match_manifest.json").write_text(
+            json.dumps({"total_rows": 5}),
+            encoding="utf-8",
+        )
+
+        result = validate_manifest_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+
+
 class TestRunPreTrainingValidation:
     """Verify run_pre_training_validation gates and coverage.
 
@@ -372,7 +660,20 @@ class TestRunPreTrainingValidation:
     """
 
     def _write_minimal_valid_store(self, gold):
-        """Write minimal parquets that pass all current checks."""
+        """Write minimal parquets that pass all current checks.
+
+        Writes sidecar manifests for team_match, player_match and
+        rating_feature_matrix so the manifest_exists and
+        manifest_freshness checks added to run_pre_training_validation
+        also pass. Manifests use the new schema (artifact,
+        schema_version, source_lineage, ...) for team_match and
+        player_match, and the legacy schema (total_rows, columns,
+        input_hash, timestamp) for rating_feature_matrix — matching
+        what build-features currently writes on disk.
+        """
+        import json
+        from datetime import UTC, datetime
+
         pd.DataFrame(
             {
                 "match_id": [f"m{i}" for i in range(12)],
@@ -396,6 +697,48 @@ class TestRunPreTrainingValidation:
                 "season_id": ["s2526"] * 12,
             }
         ).to_parquet(gold / "rating_feature_matrix.parquet")
+
+        # New-schema manifests for team_match (4 cols) and player_match
+        # (5 cols). column_count must match the actual parquet content
+        # so validate_manifest_freshness passes.
+        new_schema_common = {
+            "schema_version": "1.0",
+            "columns": [],
+            "input_hash": "test-hash",
+            "source_lineage": [],
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+        }
+        with open(gold / "team_match_manifest.json", "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "artifact": "team_match",
+                    "total_rows": 12,
+                    "column_count": 4,
+                    **new_schema_common,
+                },
+                f,
+            )
+        with open(gold / "player_match_manifest.json", "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "artifact": "player_match",
+                    "total_rows": 12,
+                    "column_count": 5,
+                    **new_schema_common,
+                },
+                f,
+            )
+        # Legacy-schema manifest for rating_feature_matrix (2 cols).
+        with open(gold / "rating_feature_matrix_manifest.json", "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "total_rows": 12,
+                    "columns": [],
+                    "input_hash": "test-hash",
+                    "timestamp": datetime.now(tz=UTC).isoformat(),
+                },
+                f,
+            )
 
     def test_includes_team_match_goals_completeness_check(self, tmp_path):
         """The goals_for/goals_against NaN check must be part of the
@@ -506,6 +849,89 @@ class TestRunPreTrainingValidation:
         assert not report.passed
         failures = {c.check_name for c in report.failures}
         assert any("unique_keys" in name for name in failures)
+
+    def test_includes_manifest_exists_and_freshness_checks(self, tmp_path):
+        """run_pre_training_validation must include manifest_exists and
+        manifest_freshness checks for all three core feature_store
+        parquets. Without these checks, a missing or stale manifest
+        would silently pass and consumers could not detect input drift
+        via the validation report."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        check_names = [c.check_name for c in report.checks]
+        # manifest_exists for all three artifacts.
+        assert any(
+            "manifest_exists" in name and "team_match" in name for name in check_names
+        ), f"Missing manifest_exists:team_match in {check_names}"
+        assert any(
+            "manifest_exists" in name and "player_match" in name for name in check_names
+        )
+        assert any(
+            "manifest_exists" in name and "rating_feature_matrix" in name
+            for name in check_names
+        )
+        # manifest_freshness for all three artifacts.
+        assert any(
+            "manifest_freshness" in name and "team_match" in name
+            for name in check_names
+        )
+        assert any(
+            "manifest_freshness" in name and "player_match" in name
+            for name in check_names
+        )
+        assert any(
+            "manifest_freshness" in name and "rating_feature_matrix" in name
+            for name in check_names
+        )
+        assert report.passed, (
+            f"Minimal valid store must pass all checks; failures: "
+            f"{[(c.check_name, c.message) for c in report.failures]}"
+        )
+
+    def test_fails_when_team_match_manifest_missing(self, tmp_path):
+        """Missing team_match_manifest.json must fail validation so
+        build-features regressions are caught before training."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+        (gold / "team_match_manifest.json").unlink()
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any(
+            "manifest_exists" in name and "team_match" in name for name in failures
+        )
+
+    def test_fails_when_player_match_manifest_stale(self, tmp_path):
+        """Stale player_match_manifest.json (row count drift) must fail
+        validation. Detects partial rebuilds where the parquet was
+        rewritten but the manifest was not refreshed."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_minimal_valid_store(gold)
+        # Rewrite player_match.parquet with a different row count, but
+        # leave the manifest untouched — simulates a partial rebuild.
+        pd.DataFrame(
+            {
+                "match_id": [f"m{i}" for i in range(20)],
+                "player_id": [f"p{i}" for i in range(20)],
+                "goals": list(range(20)),
+                "assists": list(range(20)),
+                "minutes_played": [i * 90 for i in range(20)],
+            }
+        ).to_parquet(gold / "player_match.parquet")
+
+        report = run_pre_training_validation(_make_settings(tmp_path))
+        assert not report.passed
+        failures = {c.check_name for c in report.failures}
+        assert any(
+            "manifest_freshness" in name and "player_match" in name
+            for name in failures
+        )
 
 
 class TestCalibration:
