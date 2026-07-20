@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -21,6 +23,7 @@ from scoutfootball.evaluation.validation import (
     validate_no_null_values,
     validate_parquet_exists,
     validate_row_count,
+    validate_source_lineage_freshness,
     validate_unique_keys,
 )
 
@@ -653,6 +656,258 @@ class TestValidateManifestFreshness:
         assert result.passed
 
 
+class TestValidateSourceLineageFreshness:
+    """Detect stale source_lineage entries where an upstream parquet was
+    rebuilt but the downstream manifest was not.
+
+    The companion ``validate_manifest_freshness`` checks a parquet's own
+    row/column counts against its manifest. This check goes one level
+    deeper: for each ``source_lineage`` entry, it re-hashes the upstream
+    parquet and compares to the recorded ``input_hash``. Catches the
+    partial-rebuild scenario that ``validate_manifest_freshness`` misses.
+    """
+
+    def _write_parquet(self, gold, name="team_match.parquet", rows=5, cols=3):
+        df = pd.DataFrame(
+            {f"col{i}": list(range(rows)) for i in range(cols)}
+        )
+        df.to_parquet(gold / name)
+
+    def _write_manifest(self, gold, name, source_lineage):
+        import json
+
+        manifest_path = gold / f"{Path(name).stem}_manifest.json"
+        manifest_path.write_text(
+            json.dumps({
+                "total_rows": 5,
+                "column_count": 3,
+                "source_lineage": source_lineage,
+            }),
+            encoding="utf-8",
+        )
+
+    def test_fails_when_parquet_missing(self, tmp_path):
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/missing.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Parquet missing" in result.message
+
+    def test_fails_when_manifest_missing(self, tmp_path):
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Manifest missing" in result.message
+
+    def test_passes_when_source_lineage_empty(self, tmp_path):
+        """Empty source_lineage → nothing to verify, PASS."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+        self._write_manifest(gold, "team_match.parquet", source_lineage=[])
+
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+        assert "No source_lineage entries" in result.message
+
+    def test_passes_when_upstream_hash_matches(self, tmp_path):
+        """Upstream parquet hash matches recorded input_hash → fresh."""
+        from scoutfootball.features.manifest import hash_file
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        # Upstream parquet (football_data raw).
+        raw_dir = _data_dir(tmp_path) / "raw" / "football_data"
+        raw_dir.mkdir(parents=True)
+        upstream_path = raw_dir / "combined_results.parquet"
+        pd.DataFrame({"x": list(range(20))}).to_parquet(upstream_path)
+        # Downstream parquet + manifest pointing at upstream.
+        self._write_parquet(gold)
+        self._write_manifest(
+            gold,
+            "team_match.parquet",
+            source_lineage=[{
+                "name": "football_data",
+                "relative_path": "raw/football_data/combined_results.parquet",
+                "rows_read": 20,
+                "input_hash": hash_file(upstream_path),
+                "notes": None,
+            }],
+        )
+
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+        assert "All 1 upstream hash(es) match" in result.message
+
+    def test_fails_on_upstream_hash_drift(self, tmp_path):
+        """Upstream rebuilt with new content → recorded hash stale."""
+        from scoutfootball.features.manifest import hash_file
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        raw_dir = _data_dir(tmp_path) / "raw" / "football_data"
+        raw_dir.mkdir(parents=True)
+        upstream_path = raw_dir / "combined_results.parquet"
+        # Write v1, hash it, then overwrite with v2 (different content).
+        pd.DataFrame({"x": list(range(20))}).to_parquet(upstream_path)
+        stale_hash = hash_file(upstream_path)
+        pd.DataFrame({"x": list(range(99))}).to_parquet(upstream_path)
+        # Manifest records the v1 hash; current upstream is v2.
+        self._write_parquet(gold)
+        self._write_manifest(
+            gold,
+            "team_match.parquet",
+            source_lineage=[{
+                "name": "football_data",
+                "relative_path": "raw/football_data/combined_results.parquet",
+                "rows_read": 20,
+                "input_hash": stale_hash,
+                "notes": None,
+            }],
+        )
+
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "hash drift" in result.message
+        assert "football_data" in result.message
+        assert stale_hash in result.message
+
+    def test_fails_when_upstream_file_missing(self, tmp_path):
+        """Upstream parquet deleted → cannot verify, FAIL."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+        self._write_manifest(
+            gold,
+            "team_match.parquet",
+            source_lineage=[{
+                "name": "football_data",
+                "relative_path": "raw/football_data/combined_results.parquet",
+                "rows_read": 20,
+                "input_hash": "abc123def456",
+                "notes": None,
+            }],
+        )
+
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "upstream missing" in result.message
+        assert "raw/football_data/combined_results.parquet" in result.message
+
+    def test_skips_entries_with_none_input_hash(self, tmp_path):
+        """Entries with input_hash=None are skipped (manifest already
+        records the gap; re-checking adds no signal)."""
+        from scoutfootball.features.manifest import hash_file
+
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        raw_dir = _data_dir(tmp_path) / "raw" / "football_data"
+        raw_dir.mkdir(parents=True)
+        upstream_path = raw_dir / "combined_results.parquet"
+        pd.DataFrame({"x": list(range(20))}).to_parquet(upstream_path)
+        self._write_parquet(gold)
+        self._write_manifest(
+            gold,
+            "team_match.parquet",
+            source_lineage=[
+                {
+                    "name": "football_data",
+                    "relative_path": "raw/football_data/combined_results.parquet",
+                    "rows_read": 20,
+                    "input_hash": hash_file(upstream_path),
+                    "notes": None,
+                },
+                {
+                    "name": "future_source",
+                    "relative_path": "raw/future/data.parquet",
+                    "rows_read": None,
+                    "input_hash": None,
+                    "notes": "not yet ingested",
+                },
+            ],
+        )
+
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert result.passed
+        assert "All 1 upstream hash(es) match" in result.message
+        assert "1 skipped" in result.message
+
+    def test_fails_on_unreadable_manifest(self, tmp_path):
+        """Manifest JSON corrupted → cannot parse, FAIL."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+        (gold / "team_match_manifest.json").write_text(
+            "{not valid json",
+            encoding="utf-8",
+        )
+
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "Manifest unreadable" in result.message
+
+    def test_reports_multiple_failures_in_one_message(self, tmp_path):
+        """Multiple stale/missing upstreams are aggregated into one
+        failure message so the maintainer sees the full picture."""
+        gold = _data_dir(tmp_path) / "gold" / "feature_store"
+        gold.mkdir(parents=True)
+        self._write_parquet(gold)
+        self._write_manifest(
+            gold,
+            "team_match.parquet",
+            source_lineage=[
+                {
+                    "name": "source_a",
+                    "relative_path": "raw/a/data.parquet",
+                    "rows_read": 10,
+                    "input_hash": "aaaa1111aaaa1111",
+                    "notes": None,
+                },
+                {
+                    "name": "source_b",
+                    "relative_path": "raw/b/data.parquet",
+                    "rows_read": 10,
+                    "input_hash": "bbbb2222bbbb2222",
+                    "notes": None,
+                },
+            ],
+        )
+
+        result = validate_source_lineage_freshness(
+            "gold/feature_store/team_match.parquet",
+            settings=_make_settings(tmp_path),
+        )
+        assert not result.passed
+        assert "2 stale/missing" in result.message
+        assert "source_a" in result.message
+        assert "source_b" in result.message
+
+
 class TestRunPreTrainingValidation:
     """Verify run_pre_training_validation gates and coverage.
 
@@ -898,12 +1153,13 @@ class TestRunPreTrainingValidation:
         assert any("unique_keys" in name for name in failures)
 
     def test_includes_manifest_exists_and_freshness_checks(self, tmp_path):
-        """run_pre_training_validation must include manifest_exists and
-        manifest_freshness checks for all five feature_store parquets
-        (team_match, player_match, rating_feature_matrix, team_rolling,
-        player_rolling). Without these checks, a missing or stale
-        manifest would silently pass and consumers could not detect
-        input drift via the validation report."""
+        """run_pre_training_validation must include manifest_exists,
+        manifest_freshness, and source_lineage_freshness checks for all
+        five feature_store parquets (team_match, player_match,
+        rating_feature_matrix, team_rolling, player_rolling). Without
+        these checks, a missing manifest, stale manifest, or stale
+        upstream reference would silently pass and consumers could not
+        detect input drift via the validation report."""
         gold = _data_dir(tmp_path) / "gold" / "feature_store"
         gold.mkdir(parents=True)
         self._write_minimal_valid_store(gold)
@@ -950,6 +1206,20 @@ class TestRunPreTrainingValidation:
             "manifest_freshness" in name and "player_rolling" in name
             for name in check_names
         )
+        # source_lineage_freshness for all five artifacts. The minimal
+        # store uses empty source_lineage lists, so each check passes
+        # with "No source_lineage entries to verify".
+        for artifact in (
+            "team_match",
+            "player_match",
+            "rating_feature_matrix",
+            "team_rolling",
+            "player_rolling",
+        ):
+            assert any(
+                "source_lineage_freshness" in name and artifact in name
+                for name in check_names
+            ), f"Missing source_lineage_freshness:{artifact} in {check_names}"
         assert report.passed, (
             f"Minimal valid store must pass all checks; failures: "
             f"{[(c.check_name, c.message) for c in report.failures]}"
