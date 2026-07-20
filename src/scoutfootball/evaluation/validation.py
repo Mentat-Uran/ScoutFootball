@@ -183,6 +183,38 @@ def validate_unique_keys(
     return ValidationCheckResult(name, True, f"Keys {list(key_columns)} are unique")
 
 
+def validate_truth_labels_schema(
+    relative_path: str,
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate player_truth_labels.parquet against its data contract.
+
+    Wires ``truth_labels.validate_truth_labels`` into the pre-training
+    gate so that schema regressions (missing columns, invalid
+    ``label_source``/``label_confidence`` enum values, duplicate
+    player+season+source keys) are caught before NN training reads the
+    file as supervision target. The NN training pipeline
+    (``train_player_rating_nn_from_files``) reads this parquet directly;
+    without this check, a corrupted label file would silently produce
+    wrong NN weights under the gate.
+    """
+    from scoutfootball.evaluation.truth_labels import validate_truth_labels
+
+    resolved = (settings or PlatformSettings.from_root()).data_root / relative_path
+    name = f"truth_labels_schema:{relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"File missing: {resolved}")
+    df = pd.read_parquet(resolved)
+    errors = validate_truth_labels(df)
+    if errors:
+        return ValidationCheckResult(name, False, "; ".join(errors))
+    return ValidationCheckResult(
+        name,
+        True,
+        f"Schema OK ({len(df)} rows, {len(df.columns)} columns)",
+    )
+
+
 def validate_manifest_exists(
     parquet_relative_path: str,
     settings: PlatformSettings | None = None,
@@ -493,6 +525,44 @@ def run_pre_training_validation(
             "gold/feature_store/rating_feature_matrix.parquet",
             ("player_id", "season_id"),
             settings,
+        )
+    )
+    # player_truth_labels.parquet: this is the supervision target for
+    # train_player_rating_nn_from_files, which reads it directly. Without
+    # these checks, a corrupted label file (missing rows, NaN label_value,
+    # invalid enum values, duplicate player+season+source keys, missing
+    # columns) would silently produce wrong NN weights under the gate.
+    # validate_truth_labels_schema wires in truth_labels.validate_truth_labels
+    # which enforces the schema contract defined in TRUTH_LABELS_SCHEMA.
+    report.checks.append(
+        validate_parquet_exists(
+            "gold/feature_store/player_truth_labels.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_row_count(
+            "gold/feature_store/player_truth_labels.parquet",
+            min_rows=10,
+            settings=settings,
+        )
+    )
+    report.checks.append(
+        validate_no_null_keys(
+            "gold/feature_store/player_truth_labels.parquet",
+            ("player_id", "season"),
+            settings,
+        )
+    )
+    report.checks.append(
+        validate_no_null_values(
+            "gold/feature_store/player_truth_labels.parquet",
+            ("label_value",),
+            settings,
+        )
+    )
+    report.checks.append(
+        validate_truth_labels_schema(
+            "gold/feature_store/player_truth_labels.parquet", settings
         )
     )
     # Manifest existence: each gold feature_store parquet must have a
