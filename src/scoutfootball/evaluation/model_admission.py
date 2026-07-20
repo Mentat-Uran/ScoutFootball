@@ -12,7 +12,7 @@ from typing import Any
 from scoutfootball.config import PlatformSettings
 from scoutfootball.evaluation.optimizer_preflight import REQUIRED_ARTIFACTS
 
-MODEL_ADMISSION_VERSION = "1.0.2"
+MODEL_ADMISSION_VERSION = "1.0.3"
 
 
 def _now() -> str:
@@ -33,6 +33,44 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _sha256_file_short(path: Path) -> str:
+    """Return sha256[:16] of *path*, matching the hash format written by
+    optimizer_preflight into ``meta.json.lineage.feature_manifest.hash``.
+
+    A 16-character prefix is what the rating-feature manifest writers use
+    for ``input_hash`` (see ``features.manifest.hash_file``); the same
+    prefix length is used here so meta.json hashes and on-disk manifest
+    hashes are directly comparable without slicing.
+    """
+    return _sha256_file(path)[:16]
+
+
+def _rating_feature_matrix_manifest_path(settings: PlatformSettings) -> Path:
+    """Return the absolute path to the on-disk rating_feature_matrix manifest."""
+    return (
+        settings.data_root
+        / "gold"
+        / "feature_store"
+        / "rating_feature_matrix_manifest.json"
+    )
+
+
+def _current_rating_manifest_hash(settings: PlatformSettings) -> str | None:
+    """Return sha256[:16] of the current on-disk rating_feature_matrix_manifest.json.
+
+    Returns ``None`` when the manifest is absent so callers can distinguish
+    'cannot verify chain of custody' (no on-disk manifest) from 'chain of
+    custody broken' (manifest present but hash differs). The pre-training
+    validation gate already fails when the manifest is missing, so admission
+    only hardens the case where the manifest exists but does not match the
+    training-time snapshot recorded in meta.json.
+    """
+    manifest_path = _rating_feature_matrix_manifest_path(settings)
+    if not manifest_path.is_file():
+        return None
+    return _sha256_file_short(manifest_path)
 
 
 def _evaluate_candidate_rating_artifact(
@@ -75,11 +113,76 @@ def _evaluate_candidate_rating_artifact(
     return "candidate rating artifact verified", True
 
 
-def evaluate_optimizer_run(run_dir: Path | str) -> dict[str, Any]:
+def _evaluate_recorded_lineage(
+    lineage: dict[str, Any], settings: PlatformSettings | None
+) -> tuple[str, bool]:
+    """Verify that meta.json.lineage records both required snapshots and that
+    the training-time ``feature_manifest.hash`` still matches the on-disk
+    rating_feature_matrix_manifest.json when *settings* is provided.
+
+    Returns a human-readable note and a boolean pass flag. The note explains
+    *why* the check failed so maintainers can decide between retraining on
+    the current feature_store, rolling back the feature_store to the
+    training-time snapshot, or treating the run as historical evidence only.
+    """
+    status_ok = lineage.get("status") == "recorded"
+    dataset_hash = (lineage.get("dataset_snapshot") or {}).get("input_hash")
+    manifest_hash = (lineage.get("feature_manifest") or {}).get("hash")
+    base_ok = status_ok and bool(dataset_hash) and bool(manifest_hash)
+    if not base_ok:
+        return "dataset snapshot and feature manifest must both be recorded", False
+
+    # When settings is None (legacy callers, unit tests without a real
+    # feature_store on disk) the chain-of-custody check is skipped — the
+    # pre-training validation gate already covers manifest existence and
+    # freshness, so admission only hardens the case where we can actually
+    # read the current on-disk manifest.
+    if settings is None:
+        return "dataset snapshot and feature manifest must both be recorded", True
+
+    current_manifest_hash = _current_rating_manifest_hash(settings)
+    if current_manifest_hash is None:
+        # On-disk manifest missing: pre-training validation gate covers this
+        # case (manifest_exists check fails), so admission does not duplicate
+        # the failure here. The run remains reviewable on its own evidence.
+        return (
+            "dataset snapshot and feature manifest recorded; on-disk "
+            "rating_feature_matrix_manifest.json missing, chain of custody "
+            "not verifiable by admission (covered by pre-training validation)",
+            True,
+        )
+    if manifest_hash == current_manifest_hash:
+        return (
+            f"dataset snapshot and feature manifest hash both verified against "
+            f"current on-disk manifest (hash={current_manifest_hash})",
+            True,
+        )
+    return (
+        f"training-time feature_manifest.hash={manifest_hash} differs from "
+        f"current on-disk rating_feature_matrix_manifest.json hash="
+        f"{current_manifest_hash}; rating_feature_matrix was rebuilt after "
+        f"training, so the candidate cannot be reviewed against current data",
+        False,
+    )
+
+
+def evaluate_optimizer_run(
+    run_dir: Path | str,
+    *,
+    settings: PlatformSettings | None = None,
+) -> dict[str, Any]:
     """Assess whether one run carries the minimum evidence for human review.
 
     Passing this report does not promote a model. It only establishes that the
     local candidate is complete enough for a maintainer to compare and decide.
+
+    When *settings* is provided, the ``recorded_lineage`` check additionally
+    verifies that the training-time ``feature_manifest.hash`` recorded in
+    meta.json still matches the sha256[:16] of the current on-disk
+    ``rating_feature_matrix_manifest.json``. This closes the chain-of-custody
+    gap where rebuilding ``feature_store`` after training would let a stale
+    candidate remain ``reviewable``. When *settings* is None the check
+    falls back to the legacy behavior (hash only needs to be non-empty).
     """
     directory = Path(run_dir).resolve()
     meta_path = directory / "meta.json"
@@ -127,19 +230,14 @@ def evaluate_optimizer_run(run_dir: Path | str) -> dict[str, Any]:
     candidate_rating_note, candidate_rating_ok = _evaluate_candidate_rating_artifact(
         meta, directory
     )
+    lineage_note, lineage_ok = _evaluate_recorded_lineage(lineage, settings)
     checks = [
         _check(
             "parameter_artifact",
             (directory / "optimized_params.npy").exists(),
             "candidate parameters",
         ),
-        _check(
-            "recorded_lineage",
-            lineage.get("status") == "recorded"
-            and bool((lineage.get("dataset_snapshot") or {}).get("input_hash"))
-            and bool((lineage.get("feature_manifest") or {}).get("hash")),
-            "dataset snapshot and feature manifest must both be recorded",
-        ),
+        _check("recorded_lineage", lineage_ok, lineage_note),
         _check(
             "time_split",
             isinstance(train, list) and bool(train) and isinstance(test, list) and bool(test),
@@ -203,7 +301,7 @@ def build_model_admission_report(
     )
     if run_id is not None:
         available = [runs_dir / run_id]
-    runs = [evaluate_optimizer_run(path) for path in available]
+    runs = [evaluate_optimizer_run(path, settings=resolved) for path in available]
     return {
         "report_type": "scoutfootball.model_admission",
         "report_version": MODEL_ADMISSION_VERSION,
