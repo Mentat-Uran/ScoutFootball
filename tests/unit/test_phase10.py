@@ -1496,6 +1496,119 @@ class TestPipeline:
         with pytest.raises(ValueError, match="future-match placeholders"):
             _build_team_match_from_football_data(settings)
 
+    def test_load_team_match_from_gold_reads_gold_parquet(self, monkeypatch):
+        """``_load_team_match_from_gold`` must read the gold parquet and return
+        only the columns required by backtest/tune/optimize commands.
+
+        Regression for the dual-source-of-truth gap: ``backtest``,
+        ``tune-predictions``, and ``optimize-ensemble`` previously rebuilt a
+        separate team_match frame from raw ``combined_results.parquet`` with
+        different ``match_id`` format (``{home}_{away}_{date}`` vs gold's
+        ``fd-match-{N}``) and different ``team_id`` values
+        (``normalize_team_name(HomeTeam)`` vs raw ``HomeTeam``). That meant
+        decay values tuned by ``tune-predictions`` and ensemble weights
+        computed by ``optimize-ensemble`` were optimized on a different frame
+        than ``train`` actually uses. The fix unifies on the gold artifact.
+        """
+        from pathlib import Path
+
+        from scoutfootball import __main__ as main_module
+
+        # Controlled gold parquet content with required columns + extras.
+        fake_gold = pd.DataFrame(
+            {
+                "match_id": [
+                    "fd-match-1", "fd-match-1", "fd-match-2", "fd-match-2",
+                ],
+                "match_date": pd.to_datetime(
+                    ["2025-01-01", "2025-01-01", "2025-01-08", "2025-01-08"]
+                ),
+                "team_id": ["Arsenal", "Chelsea", "Liverpool", "Man City"],
+                "is_home": [True, False, True, False],
+                "goals_for": [2, 1, 1, 1],
+                "goals_against": [1, 2, 1, 1],
+                # Extra columns must be filtered out by the function.
+                "competition_id": ["EPL", "EPL", "EPL", "EPL"],
+                "team_name": ["Arsenal", "Chelsea", "Liverpool", "Man City"],
+            }
+        )
+
+        def fake_read_parquet(path, **_kwargs):
+            return fake_gold.copy()
+
+        monkeypatch.setattr(main_module.pd, "read_parquet", fake_read_parquet)
+        monkeypatch.setattr(Path, "exists", lambda self: True)
+
+        result = main_module._load_team_match_from_gold()
+
+        # Must return ONLY the 6 required columns (extras filtered out).
+        expected_cols = {
+            "match_id", "match_date", "team_id", "is_home",
+            "goals_for", "goals_against",
+        }
+        assert set(result.columns) == expected_cols
+        assert len(result) == 4
+        # Verify match_id format matches gold (fd-match-{N}), not the old
+        # raw format ({home}_{away}_{date}).
+        assert all(mid.startswith("fd-match-") for mid in result["match_id"])
+
+    def test_load_team_match_from_gold_exits_when_parquet_missing(
+        self, monkeypatch, capsys
+    ):
+        """If the gold team_match.parquet does not exist, the function must
+        exit with code 1 and print a helpful message telling the maintainer
+        to run ``scoutfootball build-features``.
+
+        Without this guard, the backtest/tune/optimize commands would later
+        crash with an opaque FileNotFoundError deep inside the model code.
+        """
+        from pathlib import Path
+
+        from scoutfootball import __main__ as main_module
+
+        monkeypatch.setattr(Path, "exists", lambda self: False)
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_module._load_team_match_from_gold()
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "gold team_match.parquet not found" in captured.out
+        assert "build-features" in captured.out
+
+    def test_load_team_match_from_gold_exits_when_required_columns_missing(
+        self, monkeypatch, capsys
+    ):
+        """If the gold parquet exists but is missing required columns (e.g.,
+        a partial rebuild or schema drift), the function must exit with code 1
+        rather than passing a malformed frame to the model code.
+        """
+        from pathlib import Path
+
+        from scoutfootball import __main__ as main_module
+
+        # Missing is_home, goals_for, goals_against.
+        fake_gold = pd.DataFrame(
+            {
+                "match_id": ["fd-match-1"],
+                "match_date": pd.to_datetime(["2025-01-01"]),
+                "team_id": ["Arsenal"],
+            }
+        )
+
+        def fake_read_parquet(path, **_kwargs):
+            return fake_gold.copy()
+
+        monkeypatch.setattr(main_module.pd, "read_parquet", fake_read_parquet)
+        monkeypatch.setattr(Path, "exists", lambda self: True)
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_module._load_team_match_from_gold()
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "missing required columns" in captured.out
+
 
 class TestAPI:
     def test_health_check(self):

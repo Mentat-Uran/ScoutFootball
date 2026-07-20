@@ -1725,45 +1725,11 @@ def _cmd_backtest(args: argparse.Namespace) -> None:
     from scoutfootball.models import TimeSplitConfig
 
     project_root = Path(__file__).resolve().parents[2]
-    raw_path = project_root / "data" / "raw" / "football_data" / "combined_results.parquet"
     out_dir = Path(args.output_dir).resolve() if args.output_dir else (
         project_root / "data" / "reports" / "calibration_backtest"
     )
 
-    if not raw_path.exists():
-        print(f"Error: Football-Data file not found: {raw_path}")
-        sys.exit(1)
-
-    raw = pd.read_parquet(raw_path)
-    print(f"  Loaded {len(raw)} matches from {raw_path.name}")
-
-    # Convert to team_match format
-    from scoutfootball.entities.normalize import normalize_team_name
-
-    df = raw[["HomeTeam", "AwayTeam", "FTHG", "FTAG", "Date", "season", "league"]].copy()
-    df["match_date"] = pd.to_datetime(df["Date"], format="mixed", dayfirst=True, errors="coerce")
-    df = df.dropna(subset=["match_date"])
-    df["home_team"] = df["HomeTeam"].apply(normalize_team_name)
-    df["away_team"] = df["AwayTeam"].apply(normalize_team_name)
-    df = df.dropna(subset=["FTHG", "FTAG"])
-    df["FTHG"] = df["FTHG"].astype(int)
-    df["FTAG"] = df["FTAG"].astype(int)
-    df["match_id"] = (
-        df["home_team"] + "_v_" + df["away_team"] + "_" + df["match_date"].dt.strftime("%Y%m%d")
-    )
-
-    home_rows = pd.DataFrame({
-        "match_id": df["match_id"], "match_date": df["match_date"],
-        "team_id": df["home_team"], "is_home": True,
-        "goals_for": df["FTHG"], "goals_against": df["FTAG"],
-    })
-    away_rows = pd.DataFrame({
-        "match_id": df["match_id"], "match_date": df["match_date"],
-        "team_id": df["away_team"], "is_home": False,
-        "goals_for": df["FTAG"], "goals_against": df["FTHG"],
-    })
-    team_match = pd.concat([home_rows, away_rows], ignore_index=True)
-    team_match = team_match.sort_values(["match_date", "match_id"]).reset_index(drop=True)
+    team_match = _load_team_match_from_gold()
     print(f"  team_match: {len(team_match)} rows, {team_match['match_id'].nunique()} matches")
 
     n_splits = args.n_splits
@@ -1868,45 +1834,45 @@ def _cmd_backtest(args: argparse.Namespace) -> None:
     print(f"\nResults saved to {out_dir}")
 
 
-def _load_team_match_from_raw() -> pd.DataFrame:
-    """Load and prepare team_match frame from combined_results.parquet.
+def _load_team_match_from_gold() -> pd.DataFrame:
+    """Load team_match frame from gold feature_store.
 
-    Shared by ``backtest`` and ``tune-predictions`` commands.
+    Reads ``data/gold/feature_store/team_match.parquet`` (the same artifact
+    that ``scoutfootball train`` uses via ``run_weekly_train``) and selects
+    the columns required by the backtest/tune/optimize commands. This
+    closes a dual-source-of-truth gap where ``_load_team_match_from_raw``
+    previously built a SEPARATE team_match frame from
+    ``data/raw/football_data/combined_results.parquet`` with different
+    ``match_id`` format (``{home}_{away}_{date}`` vs gold's
+    ``fd-match-{idx+1}``) and different ``team_id`` values
+    (``normalize_team_name(HomeTeam)`` vs raw ``HomeTeam``). That divergence
+    meant decay values tuned by ``tune-predictions`` and ensemble weights
+    computed by ``optimize-ensemble`` were optimized on a different frame
+    than ``train`` actually uses.
+
+    Shared by ``backtest``, ``tune-predictions`` and ``optimize-ensemble``
+    commands. Errors with exit code 1 if gold parquet is missing — run
+    ``scoutfootball build-features`` first.
     """
     project_root = Path(__file__).resolve().parents[2]
-    raw_path = project_root / "data" / "raw" / "football_data" / "combined_results.parquet"
-    if not raw_path.exists():
-        print(f"Error: Football-Data file not found: {raw_path}")
+    gold_path = project_root / "data" / "gold" / "feature_store" / "team_match.parquet"
+    if not gold_path.exists():
+        print(
+            f"Error: gold team_match.parquet not found at {gold_path}. "
+            "Run `scoutfootball build-features` first."
+        )
         sys.exit(1)
 
-    raw = pd.read_parquet(raw_path)
-    from scoutfootball.entities.normalize import normalize_team_name
-
-    df = raw[["HomeTeam", "AwayTeam", "FTHG", "FTAG", "Date", "season", "league"]].copy()
-    df["match_date"] = pd.to_datetime(df["Date"], format="mixed", dayfirst=True, errors="coerce")
-    df = df.dropna(subset=["match_date"])
-    df["home_team"] = df["HomeTeam"].apply(normalize_team_name)
-    df["away_team"] = df["AwayTeam"].apply(normalize_team_name)
-    df = df.dropna(subset=["FTHG", "FTAG"])
-    df["FTHG"] = df["FTHG"].astype(int)
-    df["FTAG"] = df["FTAG"].astype(int)
-    df["match_id"] = (
-        df["home_team"] + "_v_" + df["away_team"] + "_" + df["match_date"].dt.strftime("%Y%m%d")
-    )
-
-    home_rows = pd.DataFrame({
-        "match_id": df["match_id"], "match_date": df["match_date"],
-        "team_id": df["home_team"], "is_home": True,
-        "goals_for": df["FTHG"], "goals_against": df["FTAG"],
-    })
-    away_rows = pd.DataFrame({
-        "match_id": df["match_id"], "match_date": df["match_date"],
-        "team_id": df["away_team"], "is_home": False,
-        "goals_for": df["FTAG"], "goals_against": df["FTHG"],
-    })
-    team_match = pd.concat([home_rows, away_rows], ignore_index=True)
-    team_match = team_match.sort_values(["match_date", "match_id"]).reset_index(drop=True)
-    return team_match
+    team_match = pd.read_parquet(gold_path)
+    required = ["match_id", "match_date", "team_id", "is_home", "goals_for", "goals_against"]
+    missing = [c for c in required if c not in team_match.columns]
+    if missing:
+        print(
+            f"Error: gold team_match.parquet is missing required columns: {missing}. "
+            "Run `scoutfootball build-features` to rebuild."
+        )
+        sys.exit(1)
+    return team_match[required].copy()
 
 
 def _cmd_tune_predictions(args: argparse.Namespace) -> None:
@@ -1920,7 +1886,7 @@ def _cmd_tune_predictions(args: argparse.Namespace) -> None:
     )
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    team_match = _load_team_match_from_raw()
+    team_match = _load_team_match_from_gold()
     print(f"  Loaded {len(team_match)} rows, {team_match['match_id'].nunique()} matches")
 
     split_cfg = TimeSplitConfig(n_splits=args.n_splits, gap=0)
@@ -2071,7 +2037,7 @@ def _cmd_optimize_ensemble(args: argparse.Namespace) -> None:
     )
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    team_match = _load_team_match_from_raw()
+    team_match = _load_team_match_from_gold()
     print(f"  Loaded {len(team_match)} rows, {team_match['match_id'].nunique()} matches")
 
     split_cfg = TimeSplitConfig(n_splits=args.n_splits, gap=0)
