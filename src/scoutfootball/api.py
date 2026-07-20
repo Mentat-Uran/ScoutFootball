@@ -676,7 +676,7 @@ def _world_cup_briefing_input_snapshot() -> dict[str, Any]:
         "status": "recorded" if input_hash else "not_recorded",
         "rating_model_run_id": latest_run.get("run_id", "") if isinstance(latest_run, dict) else "",
         "rating_input_hash": input_hash,
-        "feature_manifest_hash": manifest.get("sha256", ""),
+        "feature_manifest_hash": manifest.get("hash") or "",
         "strength_model": {
             "type": "world_cup_strength_ratio_poisson",
             "version": "wc-1.0",
