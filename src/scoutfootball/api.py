@@ -8,7 +8,10 @@ import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from scoutfootball.config import PlatformSettings
 
 import numpy as np
 import pandas as pd
@@ -6561,11 +6564,21 @@ def _model_run_lineage(meta: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _model_run_admission(run_dir: Path) -> dict[str, Any]:
-    """Expose a compact, read-only admission summary for one local run."""
+def _model_run_admission(
+    run_dir: Path, settings: PlatformSettings | None = None
+) -> dict[str, Any]:
+    """Expose a compact, read-only admission summary for one local run.
+
+    Forwards *settings* to evaluate_optimizer_run so the recorded_lineage
+    chain-of-custody check compares meta.json.lineage.feature_manifest.hash
+    against the current on-disk rating_feature_matrix_manifest.json. When
+    *settings* is None the function falls back to PlatformSettings.from_root
+    so the API endpoints behave consistently with the CLI model-admission.
+    """
     from scoutfootball.evaluation.model_admission import evaluate_optimizer_run
 
-    report = evaluate_optimizer_run(run_dir)
+    resolved = settings if settings is not None else _settings()
+    report = evaluate_optimizer_run(run_dir, settings=resolved)
     return {
         "status": report["status"],
         "failed_checks": report.get("failed_checks", []),
@@ -6591,7 +6604,7 @@ def get_model_runs() -> dict:
                 meta["updated_at"] = meta_path.stat().st_mtime
                 meta["data_source"] = ds_label
                 meta["lineage"] = _model_run_lineage(meta)
-                meta["admission"] = _model_run_admission(run_dir)
+                meta["admission"] = _model_run_admission(run_dir, settings=settings)
                 # Build reproduce command from stored args
                 run_args = meta.get("args", {})
                 meta["reproduce_command"] = _build_reproduce_command(
@@ -6655,7 +6668,7 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
             meta["updated_at"] = meta_path.stat().st_mtime
             meta["data_source"] = ds_label
             meta["lineage"] = _model_run_lineage(meta)
-            meta["admission"] = _model_run_admission(run_dir)
+            meta["admission"] = _model_run_admission(run_dir, settings=settings)
 
             # Build reproduce command from stored args
             run_args = meta.get("args", {})

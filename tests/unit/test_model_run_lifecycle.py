@@ -249,3 +249,43 @@ def test_promotion_fails_closed_when_candidate_artifact_hash_changes(tmp_path) -
             decision="review accepted",
             confirm=True,
         )
+
+
+def test_promotion_fails_closed_when_training_manifest_hash_differs_from_disk(
+    tmp_path,
+) -> None:
+    """When meta.json.lineage.feature_manifest.hash differs from the current
+    on-disk rating_feature_matrix_manifest.json hash, promote must fail closed
+    even though the candidate's own rating/params sha256 still match. This is
+    the chain-of-custody guarantee: a candidate trained on feature_store v1
+    cannot be promoted against feature_store v2 without the maintainer noticing
+    the provenance drift.
+    """
+    _write_active(tmp_path)
+    _write_reviewable_candidate(tmp_path, "candidate")
+    # Write an on-disk rating_feature_matrix_manifest.json whose sha256[:16]
+    # will not match the "manifest" placeholder in the candidate meta.
+    manifest_path = (
+        tmp_path / "data" / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
+    )
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps({"artifact": "rating_feature_matrix", "total_rows": 1}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ModelRunLifecycleError, match="candidate is not reviewable"
+    ):
+        promote_optimizer_run(
+            PlatformSettings.from_root(tmp_path),
+            "candidate",
+            decision="review accepted",
+            confirm=True,
+        )
+
+    # Active artifacts must be untouched and no backup created when promotion
+    # fails closed at the admission stage.
+    store = tmp_path / "data" / "gold" / "feature_store"
+    assert (store / "player_ratings_optimized.parquet").exists()
+    assert not (tmp_path / "data" / "models" / "backups").exists()
