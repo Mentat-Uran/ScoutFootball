@@ -22,6 +22,7 @@ from scoutfootball.models.match_prediction import (
     fit_dixon_coles,
     fit_independent_poisson,
 )
+from scoutfootball.storage.csv_safety import dataframe_to_csv
 
 logger = logging.getLogger(__name__)
 
@@ -1304,7 +1305,7 @@ def _generate_synthetic_market_values(player_rolling: pd.DataFrame) -> pd.DataFr
         )
         with open(output_path, "w") as f:
             f.write(header_comment)
-            result.to_csv(f, index=False)
+            f.write(dataframe_to_csv(result))
 
     return result
 

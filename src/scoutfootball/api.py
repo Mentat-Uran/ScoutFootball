@@ -36,6 +36,7 @@ from scoutfootball.app.data_loader import (
 from scoutfootball.evaluation.scouting_queue import build_scouting_queues
 from scoutfootball.head_to_head import get_head_to_head as _compute_head_to_head
 from scoutfootball.head_to_head import load_match_results as _load_match_results
+from scoutfootball.storage.csv_safety import sanitize_csv_row
 from scoutfootball.worldcup.data import (
     BIG5_LEAGUES,
     GROUPS,
@@ -6730,7 +6731,11 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
 
 
 def _player_list_to_csv(player_list: list[dict]) -> str:
-    """Convert a list of player dicts to CSV text."""
+    """Convert a list of player dicts to CSV text.
+
+    All cells are sanitized through :func:`sanitize_csv_row` to guard
+    against spreadsheet formula injection (AGENTS.md requirement).
+    """
     import csv
     import io
 
@@ -6738,10 +6743,10 @@ def _player_list_to_csv(player_list: list[dict]) -> str:
         return ""
     buf = io.StringIO()
     fieldnames = list(player_list[0].keys())
-    writer = csv.DictWriter(buf, fieldnames=fieldnames)
-    writer.writeheader()
+    writer = csv.writer(buf)
+    writer.writerow(sanitize_csv_row(fieldnames))
     for row in player_list:
-        writer.writerow(row)
+        writer.writerow(sanitize_csv_row(row.get(f, "") for f in fieldnames))
     return buf.getvalue()
 
 
