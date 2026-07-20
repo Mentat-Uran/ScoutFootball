@@ -338,6 +338,59 @@ they do not turn an unrecorded historical snapshot into an earlier `as_of`.
 
 ---
 
+## 7.1 team_match_manifest.json and player_match_manifest.json
+
+**Files**: `data/gold/feature_store/{team_match,player_match}_manifest.json`
+**Purpose**: Audit and reproducibility sidecars written next to the
+corresponding parquet artifact. They capture input file hashes, row and
+column counts, schema, and per-source lineage so consumers can detect
+input drift without re-reading the underlying raw parquet bytes. They
+are NOT uploaded anywhere and do not modify the parquet file itself.
+
+The schema aligns with `rating_feature_matrix_manifest.json` on the
+following fields and extends it with additional provenance metadata:
+
+| Field | Type | Description |
+|---|---|---|
+| `artifact` | str | Logical name (`team_match` or `player_match`) |
+| `schema_version` | str | Manifest schema version (currently `"1.0"`) |
+| `total_rows` | int | Row count of the parquet file |
+| `column_count` | int | Column count of the parquet file |
+| `columns` | list | Per-column metadata, see below |
+| `input_hash` | str | sha256[:16] of the builder's combined input frames; falls back to a hash of the parquet content when the builder did not attach an explicit input hash |
+| `source_lineage` | list | Per-input-file lineage entries, see below |
+| `timestamp` | str | ISO 8601 UTC timestamp when the manifest was written |
+| `source_breakdown` | dict | (player_match only) Per-source row counts, since player_match is the concatenation of statsbomb_open + fbref + understat |
+
+`columns` entries:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | str | Column name |
+| `dtype` | str | pandas dtype string |
+| `source` | str | Category: `identifier`, `temporal`, `category`, `metric`, `derived`, `flag`, or `meta` |
+| `missing_rate` | float | Fraction of NaN values, rounded to 4 decimals |
+
+`source_lineage` entries:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | str | Logical source name (e.g. `football_data`, `statsbomb_open`, `fbref`, `understat`) |
+| `relative_path` | str | Path relative to `settings.data_root`, forward-slashed for cross-platform stability |
+| `rows_read` | int or null | Row count of the input file as observed during this build; `null` when the file was missing or unreadable |
+| `input_hash` | str or null | sha256[:16] of the input file bytes; `null` when the file was missing |
+| `notes` | str or null | Optional free-form note (e.g. filter applied before join, excluded seasons) |
+
+The manifest is regenerated on every `scoutfootball build-features` run.
+Manifest write failures are logged as warnings but do not block the main
+pipeline; a missing or stale manifest is a signal for manual review, not
+a hard failure. Consumers MUST NOT treat the absence of a manifest as
+evidence that the parquet artifact itself is invalid; the parquet file is
+the source of truth for content, the manifest is the source of truth for
+provenance.
+
+---
+
 ## 8. player_value_metrics.parquet
 
 **File**: `data/gold/feature_store/player_value_metrics.parquet`
