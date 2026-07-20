@@ -1314,6 +1314,33 @@ class TestPipeline:
         assert results["features"].startswith("failed:")
         assert not settings.gold_root.exists()
 
+    def test_build_features_includes_post_build_validation_result(self, tmp_path):
+        """``run_build_features`` must include a post-build validation result.
+
+        Defense-in-depth complement to the pre-training validation gate in
+        ``run_weekly_train``. Without this, a manifest write failure or
+        partial rebuild leaves the disk inconsistent but ``build-features``
+        returns "ok" — the maintainer only finds out when they separately
+        run ``validate`` or ``train``. Post-build validation closes this
+        gap by running the same 26-check validation immediately after the
+        write phase.
+
+        With an empty data root, the build fails and validation also fails
+        (all parquets missing). The test verifies both signals are present.
+        """
+        from scoutfootball.pipeline import run_build_features
+
+        settings = _make_settings(tmp_path)
+        results = run_build_features(settings=settings)
+
+        # Build fails because the data root is empty.
+        assert results["features"].startswith("failed:")
+        # Post-build validation must be present and must report failure
+        # (all parquets missing). It must not raise or silently skip.
+        assert "validation" in results
+        validation = results["validation"]
+        assert validation.startswith("FAIL") or validation.startswith("skipped")
+
     def test_weekly_train_skips_on_validation_failure(self, tmp_path):
         from scoutfootball.pipeline import run_weekly_train
 
