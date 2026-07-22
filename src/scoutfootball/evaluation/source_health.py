@@ -29,6 +29,7 @@ DEFAULT_SOURCE_POLICY_LEDGER_FILENAME = "source_policy_ledger.jsonl"
 DEFAULT_SOURCE_SNAPSHOT_LEDGER_FILENAME = "source_snapshot_ledger.jsonl"
 DEFAULT_QUALITY_AUDIT_LEDGER_FILENAME = "quality_audit_ledger.jsonl"
 DEFAULT_QUALITY_THRESHOLD_LEDGER_FILENAME = "quality_threshold_ledger.jsonl"
+DEFAULT_PREFLIGHT_EVIDENCE_FILENAME = "preflight_evidence.json"
 
 
 def resolve_local_ledger_path(

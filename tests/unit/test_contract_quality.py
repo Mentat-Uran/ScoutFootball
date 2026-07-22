@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from scoutfootball.config import PlatformSettings
@@ -14,6 +16,7 @@ from scoutfootball.evaluation.quality_audit_ledger import (
 )
 from scoutfootball.evaluation.source_health import (
     DEFAULT_DATA_HEALTH_DIR,
+    DEFAULT_PREFLIGHT_EVIDENCE_FILENAME,
     DEFAULT_QUALITY_AUDIT_LEDGER_FILENAME,
     DEFAULT_QUALITY_THRESHOLD_LEDGER_FILENAME,
     DEFAULT_SOURCE_POLICY_LEDGER_FILENAME,
@@ -397,6 +400,8 @@ def test_contract_quality_empty_default_workspace_keeps_baseline_required(tmp_pa
     assert report["scope"]["snapshot_ledger_supplied"] is False
     assert report["scope"]["audit_ledger_supplied"] is False
     assert report["scope"]["threshold_ledger_supplied"] is False
+    assert report["scope"]["preflight_evidence_supplied"] is False
+    assert report["scope"]["preflight_evidence_source"] == "not_recorded"
     policy = _check(report, "source_retention_and_deletion_policies")
     assert policy["status"] == "baseline_required"
     assert policy["sources_with_complete_policy"] == 0
@@ -447,3 +452,79 @@ def test_contract_quality_explicit_ledger_overrides_auto_discovered_default(tmp_
         "transfermarkt_manual",
         "understat",
     }
+
+
+def test_contract_quality_auto_discovers_default_preflight_evidence(tmp_path) -> None:
+    """Preflight evidence at the canonical default path must be visible without --evidence."""
+    settings = PlatformSettings.from_root(tmp_path)
+    evidence_dir = settings.report_root / DEFAULT_DATA_HEALTH_DIR
+    evidence_dir.mkdir(parents=True)
+    evidence_path = evidence_dir / DEFAULT_PREFLIGHT_EVIDENCE_FILENAME
+    evidence_path.write_text(json.dumps(_evidence()), encoding="utf-8")
+
+    report = build_contract_quality_report(settings)
+
+    assert report["scope"]["preflight_evidence_supplied"] is True
+    assert report["scope"]["preflight_evidence_source"] == "auto_discovered"
+    preflight = _check(report, "preflight_content_readability")
+    assert preflight["status"] == "pass"
+    assert preflight["passing_artifact_count"] == 1
+
+
+def test_contract_quality_explicit_evidence_dict_overrides_auto_discovery(tmp_path) -> None:
+    """An explicit preflight_evidence dict takes precedence over the auto-discovered default."""
+    settings = PlatformSettings.from_root(tmp_path)
+    evidence_dir = settings.report_root / DEFAULT_DATA_HEALTH_DIR
+    evidence_dir.mkdir(parents=True)
+    # Place an unreadable default file to prove the explicit dict wins.
+    bad_path = evidence_dir / DEFAULT_PREFLIGHT_EVIDENCE_FILENAME
+    bad_path.write_text("{not valid json", encoding="utf-8")
+
+    report = build_contract_quality_report(settings, preflight_evidence=_evidence())
+
+    assert report["scope"]["preflight_evidence_supplied"] is True
+    assert report["scope"]["preflight_evidence_source"] == "supplied"
+    preflight = _check(report, "preflight_content_readability")
+    assert preflight["status"] == "pass"
+
+
+def test_contract_quality_explicit_evidence_path_overrides_auto_discovered_default(
+    tmp_path,
+) -> None:
+    """An explicit preflight_evidence_path must override the auto-discovered default file."""
+    settings = PlatformSettings.from_root(tmp_path)
+    evidence_dir = settings.report_root / DEFAULT_DATA_HEALTH_DIR
+    evidence_dir.mkdir(parents=True)
+    default_path = evidence_dir / DEFAULT_PREFLIGHT_EVIDENCE_FILENAME
+    default_path.write_text(
+        json.dumps(_evidence(ok=False)),
+        encoding="utf-8",
+    )
+    override_path = tmp_path / "override_evidence.json"
+    override_path.write_text(json.dumps(_evidence(ok=True)), encoding="utf-8")
+
+    report = build_contract_quality_report(
+        settings, preflight_evidence_path=str(override_path)
+    )
+
+    assert report["scope"]["preflight_evidence_supplied"] is True
+    assert report["scope"]["preflight_evidence_source"] == "supplied"
+    preflight = _check(report, "preflight_content_readability")
+    assert preflight["status"] == "pass"
+    assert preflight["passing_artifact_count"] == 1
+
+
+def test_contract_quality_unreadable_default_evidence_is_not_a_failure(tmp_path) -> None:
+    """A corrupt default preflight evidence file is treated as no evidence, not a failure."""
+    settings = PlatformSettings.from_root(tmp_path)
+    evidence_dir = settings.report_root / DEFAULT_DATA_HEALTH_DIR
+    evidence_dir.mkdir(parents=True)
+    bad_path = evidence_dir / DEFAULT_PREFLIGHT_EVIDENCE_FILENAME
+    bad_path.write_text("{not valid json", encoding="utf-8")
+
+    report = build_contract_quality_report(settings)
+
+    assert report["scope"]["preflight_evidence_supplied"] is False
+    assert report["scope"]["preflight_evidence_source"] == "unreadable"
+    preflight = _check(report, "preflight_content_readability")
+    assert preflight["status"] == "not_recorded"

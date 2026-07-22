@@ -2229,7 +2229,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     contract_quality_p.add_argument("--json", action="store_true", help="Emit JSON")
     contract_quality_p.add_argument(
-        "--evidence", help="Optional local preflight evidence JSON"
+        "--evidence",
+        help=(
+            "Optional local preflight evidence JSON; auto-discovered at "
+            "data/reports/data_health/preflight_evidence.json when omitted."
+        ),
     )
     contract_quality_p.add_argument(
         "--snapshot-ledger",
