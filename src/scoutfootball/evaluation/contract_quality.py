@@ -7,7 +7,9 @@ infer an upstream snapshot date from local file timestamps.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from scoutfootball.architecture import build_data_contract_registry
@@ -19,6 +21,7 @@ from scoutfootball.evaluation.quality_audit_ledger import (
     summarize_quality_audits,
 )
 from scoutfootball.evaluation.source_health import (
+    DEFAULT_PREFLIGHT_EVIDENCE_FILENAME,
     DEFAULT_QUALITY_AUDIT_LEDGER_FILENAME,
     DEFAULT_QUALITY_THRESHOLD_LEDGER_FILENAME,
     DEFAULT_SOURCE_POLICY_LEDGER_FILENAME,
@@ -37,7 +40,7 @@ from scoutfootball.evaluation.source_snapshot_ledger import (
     read_source_snapshot_ledger,
 )
 
-CONTRACT_QUALITY_VERSION = "1.6.0"
+CONTRACT_QUALITY_VERSION = "1.7.0"
 
 
 def _now_iso() -> str:
@@ -162,6 +165,7 @@ def build_contract_quality_report(
     settings: PlatformSettings | None = None,
     *,
     preflight_evidence: dict[str, Any] | None = None,
+    preflight_evidence_path: str | None = None,
     snapshot_ledger_path: str | None = None,
     policy_ledger_path: str | None = None,
     audit_ledger_path: str | None = None,
@@ -170,6 +174,39 @@ def build_contract_quality_report(
     """Build a baseline for C1 quality SLOs without inventing thresholds."""
     settings = settings or PlatformSettings.from_root()
     registry = build_data_contract_registry()
+    # Auto-discover preflight evidence the same way ledgers are auto-discovered:
+    # when no explicit dict or path is supplied, look for the canonical default
+    # file at <report_root>/data_health/preflight_evidence.json.  This keeps the
+    # default ``contract-quality`` invocation truthful (the report reflects
+    # locally recorded evidence instead of hiding it behind a flag) without
+    # inventing evidence that does not exist.
+    resolved_preflight_evidence = preflight_evidence
+    preflight_evidence_source = "supplied"
+    if resolved_preflight_evidence is None:
+        if preflight_evidence_path:
+            resolved_path = preflight_evidence_path
+            source_label = "supplied"
+        else:
+            resolved_path = resolve_local_ledger_path(
+                settings,
+                None,
+                DEFAULT_PREFLIGHT_EVIDENCE_FILENAME,
+            )
+            source_label = "auto_discovered"
+        if resolved_path:
+            try:
+                resolved_preflight_evidence = json.loads(
+                    Path(resolved_path).resolve().read_text(encoding="utf-8")
+                )
+                preflight_evidence_source = source_label
+            except (OSError, json.JSONDecodeError):
+                # A corrupt or unreadable evidence file is treated as no
+                # evidence rather than a hard failure, matching the
+                # ledger-auto-discovery contract where a missing default is
+                # an empty ledger, never a failure.
+                preflight_evidence_source = "unreadable"
+        else:
+            preflight_evidence_source = "not_recorded"
     raw_contracts = [contract for contract in registry.contracts if contract.layer == "raw"]
     raw_without_license = [
         contract.artifact_id for contract in raw_contracts if contract.license is None
@@ -268,7 +305,7 @@ def build_contract_quality_report(
                 "This check does not invent terms from external license names."
             ),
         ),
-        _preflight_check(preflight_evidence),
+        _preflight_check(resolved_preflight_evidence),
         _status(
             "explicit_source_snapshots",
             "baseline_required" if not recorded_snapshot_ids else "observed",
@@ -318,11 +355,14 @@ def build_contract_quality_report(
             "policy_ledger_supplied": bool(resolved_policy_ledger),
             "audit_ledger_supplied": bool(resolved_audit_ledger),
             "threshold_ledger_supplied": bool(resolved_threshold_ledger),
-            "preflight_evidence_supplied": preflight_evidence is not None,
+            "preflight_evidence_supplied": resolved_preflight_evidence is not None,
+            "preflight_evidence_source": preflight_evidence_source,
             "ledger_resolution": (
                 "When a ledger path is not supplied, the canonical default at "
                 "<data_root>/reports/data_health/<filename> is auto-discovered; "
-                "explicit --*-ledger arguments always override the default."
+                "explicit --*-ledger arguments always override the default. "
+                "Preflight evidence is auto-discovered the same way at "
+                "<data_root>/reports/data_health/preflight_evidence.json."
             ),
         },
         "overall_status": "fail" if failures else ("incomplete" if pending else "pass"),
