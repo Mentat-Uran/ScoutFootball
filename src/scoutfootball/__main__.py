@@ -2142,6 +2142,215 @@ def _cmd_optimize_ensemble(args: argparse.Namespace) -> None:
     print(f"  Saved to {weights_path}")
 
 
+# ── Recruitment brief CLI ────────────────────────────────────────────────
+
+
+def _brief_store():
+    """Build a BriefStore rooted at the platform report_root/recruitment/briefs."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.recruitment.store import BriefStore
+
+    settings = PlatformSettings.from_root()
+    return BriefStore(settings.report_root / "recruitment" / "briefs")
+
+
+def _cmd_create_brief(args: argparse.Namespace) -> None:
+    """Create a new recruitment brief from CLI flags or a JSON file."""
+    import json
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    from scoutfootball.recruitment.brief import (
+        BriefValidationError,
+        validate_brief_id,
+    )
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    if args.from_json:
+        path = Path(args.from_json)
+        if path.is_symlink() or not path.is_file():
+            print(f"error: brief JSON must be a regular local file: {path}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            print(f"error: cannot read brief JSON: {type(exc).__name__}: {exc}", file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(payload, dict):
+            print("error: brief JSON must be an object", file=sys.stderr)
+            sys.exit(1)
+        # If brief_id is missing, generate one.
+        if not payload.get("brief_id"):
+            date_part = datetime.now(tz=UTC).strftime("%Y%m%d")
+            uuid_part = _uuid.uuid4().hex[:8]
+            payload["brief_id"] = f"brief-{date_part}-{uuid_part}"
+    else:
+        # Build from CLI flags.
+        if not args.title:
+            print("error: --title is required when not using --from-json", file=sys.stderr)
+            sys.exit(2)
+        if not args.position_group:
+            print(
+                "error: --position-group is required when not using --from-json",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        date_part = datetime.now(tz=UTC).strftime("%Y%m%d")
+        uuid_part = _uuid.uuid4().hex[:8]
+        brief_id = args.brief_id or f"brief-{date_part}-{uuid_part}"
+        validate_brief_id(brief_id)
+        now = datetime.now(tz=UTC).isoformat()
+        payload = {
+            "schema": "scoutfootball.recruitment-brief",
+            "version": "1.0.0",
+            "brief_id": brief_id,
+            "revision": 1,
+            "created_at": now,
+            "updated_at": now,
+            "author": args.author or "maintainer",
+            "title": args.title,
+            "team": args.team or "",
+            "position_group": args.position_group,
+            "position_detail": args.position_detail or "",
+            "role": args.role or "",
+            "budget_eur": args.budget_eur,
+            "age_min": args.age_min,
+            "age_max": args.age_max,
+            "contract_years_min": args.contract_years_min,
+            "league_preferences": args.league_preferences or [],
+            "language_preferences": args.language_preferences or [],
+            "risk_tolerance": args.risk_tolerance or "medium",
+            "minimum_minutes": args.minimum_minutes,
+            "notes": args.notes or "",
+            "limitations": [
+                "Brief is a personal local object; not an external fact.",
+                (
+                    "Candidate coverage depends on the rating snapshot; "
+                    "low-coverage leagues may be under-represented."
+                ),
+            ],
+        }
+
+    try:
+        store = _brief_store()
+        record = store.save(payload["brief_id"], payload, expected_revision=0)
+    except BriefValidationError as exc:
+        print(f"error: brief validation failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except BriefStoreError as exc:
+        print(f"error: brief store failed: {exc.code} (HTTP {exc.http_status})", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(record, ensure_ascii=False, indent=2))
+    else:
+        brief = record["brief"]
+        print(f"Created brief: {brief['brief_id']} (revision {brief['revision']})")
+        print(f"  title: {brief['title']}")
+        print(f"  team: {brief.get('team', '') or '(none)'}")
+        print(f"  position: {brief['position_group']}/{brief.get('position_detail', '') or '-'}")
+        print(f"  role: {brief.get('role', '') or '(unspecified)'}")
+        print(f"  stored at: {store.root / (brief['brief_id'] + '.json')}")
+
+
+def _cmd_list_briefs(args: argparse.Namespace) -> None:
+    """List stored recruitment briefs."""
+    import json
+
+    store = _brief_store()
+    records = store.list_records(limit=args.limit)
+    if args.json:
+        print(json.dumps({"count": len(records), "briefs": records}, ensure_ascii=False, indent=2))
+    else:
+        if not records:
+            print("No briefs found.")
+            return
+        print(f"Found {len(records)} brief(s):")
+        for rec in records:
+            print(
+                f"  {rec['brief_id']}  rev={rec['server_revision']}  "
+                f"{rec.get('title', '')}  "
+                f"team={rec.get('team', '') or '-'}  "
+                f"pos={rec.get('position_group', '') or '-'}"
+            )
+
+
+def _cmd_show_brief(args: argparse.Namespace) -> None:
+    """Show one stored recruitment brief."""
+    import json
+
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    try:
+        store = _brief_store()
+        record = store.load(args.brief_id)
+    except BriefStoreError as exc:
+        print(f"error: {exc.code} (HTTP {exc.http_status})", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(record, ensure_ascii=False, indent=2))
+    else:
+        brief = record["brief"]
+        print(f"Brief: {brief['brief_id']}")
+        print(f"  schema: {brief['schema']} v{brief['version']}")
+        print(f"  revision: {brief['revision']} (server_revision: {record['server_revision']})")
+        print(f"  title: {brief['title']}")
+        print(f"  team: {brief.get('team', '') or '(none)'}")
+        print(f"  position: {brief['position_group']}/{brief.get('position_detail', '') or '-'}")
+        print(f"  role: {brief.get('role', '') or '(unspecified)'}")
+        if brief.get("budget_eur") is not None:
+            print(f"  budget: €{brief['budget_eur']:,}")
+        if brief.get("age_min") is not None or brief.get("age_max") is not None:
+            print(f"  age: {brief.get('age_min', '-')}–{brief.get('age_max', '-')}")
+        if brief.get("contract_years_min") is not None:
+            print(f"  contract min years: {brief['contract_years_min']}")
+        if brief.get("league_preferences"):
+            print(f"  leagues: {', '.join(brief['league_preferences'])}")
+        if brief.get("language_preferences"):
+            print(f"  languages: {', '.join(brief['language_preferences'])}")
+        print(f"  risk tolerance: {brief.get('risk_tolerance', 'medium')}")
+        if brief.get("minimum_minutes") is not None:
+            print(f"  minimum minutes: {brief['minimum_minutes']}")
+        if brief.get("notes"):
+            print(f"  notes: {brief['notes']}")
+        print(f"  created: {brief.get('created_at', '?')}")
+        print(f"  updated: {brief.get('updated_at', '?')}")
+        print(f"  stored: {record.get('stored_at', '?')}")
+
+
+def _cmd_validate_brief(args: argparse.Namespace) -> None:
+    """Validate a local brief JSON file without saving it."""
+    import json
+
+    from scoutfootball.recruitment.brief import (
+        BriefValidationError,
+        validate_brief_payload,
+    )
+
+    path = Path(args.path)
+    if path.is_symlink() or not path.is_file():
+        print(f"error: brief file must be a regular local file: {path}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(f"error: cannot read brief JSON: {type(exc).__name__}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        brief = validate_brief_payload(payload)
+    except BriefValidationError as exc:
+        print(f"INVALID: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        result = {"status": "valid", "brief_id": brief.brief_id}
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"VALID: {brief.brief_id} (schema={brief.schema} v{brief.version})")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scoutfootball",
@@ -2854,6 +3063,86 @@ def build_parser() -> argparse.ArgumentParser:
     tour_ko_clear.add_argument("match_id", type=str)
     tour_ko_clear.add_argument("--state-path", type=str, default=None)
 
+    # ── recruitment brief ──
+    brief_create = sub.add_parser(
+        "create-brief",
+        help="Create a versioned recruitment brief (local personal object)",
+    )
+    brief_create.add_argument(
+        "--title", type=str, default=None,
+        help="Brief title (required unless --from-json)",
+    )
+    brief_create.add_argument("--team", type=str, default="", help="Target team name")
+    brief_create.add_argument(
+        "--position-group", type=str, default=None,
+        choices=["DF", "MF", "FW", "GK"],
+        help="Coarse position group (required unless --from-json)",
+    )
+    brief_create.add_argument(
+        "--position-detail", type=str, default="",
+        help="Detailed position (e.g. LB, RW)",
+    )
+    brief_create.add_argument(
+        "--role", type=str, default="",
+        help="Role name (e.g. attacking_fullback)",
+    )
+    brief_create.add_argument("--budget-eur", type=int, default=None, help="Budget in EUR")
+    brief_create.add_argument("--age-min", type=int, default=None, help="Minimum age")
+    brief_create.add_argument("--age-max", type=int, default=None, help="Maximum age")
+    brief_create.add_argument(
+        "--contract-years-min", type=int, default=None,
+        help="Minimum contract years",
+    )
+    brief_create.add_argument(
+        "--league-preferences", nargs="+", default=None,
+        help="Preferred leagues (space-separated)",
+    )
+    brief_create.add_argument(
+        "--language-preferences", nargs="+", default=None,
+        help="Preferred languages (space-separated)",
+    )
+    brief_create.add_argument(
+        "--risk-tolerance", type=str, default="medium",
+        choices=["low", "medium", "high"],
+        help="Risk tolerance (default: medium)",
+    )
+    brief_create.add_argument(
+        "--minimum-minutes", type=int, default=None,
+        help="Minimum minutes played",
+    )
+    brief_create.add_argument("--notes", type=str, default="", help="Free-form notes")
+    brief_create.add_argument("--author", type=str, default="maintainer", help="Author name")
+    brief_create.add_argument(
+        "--brief-id", type=str, default=None,
+        help="Explicit brief ID (auto-generated if omitted)",
+    )
+    brief_create.add_argument(
+        "--from-json", type=str, default=None,
+        help="Load brief payload from a local JSON file instead of CLI flags",
+    )
+    brief_create.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    list_briefs_p = sub.add_parser(
+        "list-briefs",
+        help="List stored recruitment briefs (most recent first)",
+    )
+    list_briefs_p.add_argument("--limit", type=int, default=100, help="Max results (default 100)")
+    list_briefs_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    show_brief_p = sub.add_parser(
+        "show-brief",
+        help="Show one stored recruitment brief by ID",
+    )
+    show_brief_p.add_argument("brief_id", type=str, help="Brief ID to show")
+    show_brief_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    validate_brief_p = sub.add_parser(
+        "validate-brief",
+        help="Validate a local brief JSON file without saving it",
+    )
+    validate_brief_p.add_argument("path", type=str, help="Path to local brief JSON file")
+    validate_brief_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
     return parser
 
 
@@ -2899,6 +3188,10 @@ def main() -> None:
         "optimize-ensemble": _cmd_optimize_ensemble,
         "serve": _cmd_serve,
         "tournament": _cmd_tournament,
+        "create-brief": _cmd_create_brief,
+        "list-briefs": _cmd_list_briefs,
+        "show-brief": _cmd_show_brief,
+        "validate-brief": _cmd_validate_brief,
     }
 
     handler = handlers.get(args.command)

@@ -19,6 +19,7 @@ from scoutfootball.api import (
     apply_wc_tournament_result,
     clear_wc_knockout_result,
     clear_wc_tournament_result,
+    create_recruitment_brief,
     export_wc_tournament_state,
     generate_wc_knockout_bracket,
     get_action_based_position_similarity,
@@ -100,6 +101,9 @@ from scoutfootball.api import (
     get_probability_heatmap,
     get_profit_loss_simulation,
     get_ratings_meta,
+    get_recruitment_brief,
+    get_recruitment_briefs,
+    get_recruitment_contracts,
     get_reliability_diagram,
     get_review_queue,
     get_riser_decliner_watchlist,
@@ -129,6 +133,7 @@ from scoutfootball.api import (
     get_value_bet_analysis,
     get_value_summary,
     get_watchlist,
+    get_wc_contracts,
     get_wc_group_stage_simulation,
     get_wc_group_tiebreak_diagnostics,
     get_wc_groups,
@@ -159,7 +164,6 @@ from scoutfootball.api import (
     get_wc_tournament_standings_probabilities,
     get_wc_tournament_summary,
     get_wc_tournament_top_matches,
-    get_wc_contracts,
     get_world_cup_match_briefing,
     get_world_cup_match_prediction,
     health_check,
@@ -1750,6 +1754,43 @@ def create_app() -> FastAPI:
         if not encoded:
             raise HTTPException(status_code=400, detail={"code": "missing_encoded"})
         return preview_wc_tournament_import(encoded)
+
+    # ── Recruitment Pack endpoints ──────────────────────────────────
+    @app.get("/recruitment/contracts")
+    def recruitment_contracts():
+        return get_recruitment_contracts()
+
+    @app.get("/recruitment/briefs")
+    def recruitment_briefs(limit: int = Query(100, ge=1, le=100)):
+        return get_recruitment_briefs(limit=limit)
+
+    @app.get("/recruitment/briefs/{brief_id}")
+    def recruitment_brief(brief_id: str):
+        return get_recruitment_brief(brief_id)
+
+    @app.post("/recruitment/briefs")
+    async def recruitment_create_brief(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+        result = create_recruitment_brief(payload)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")
