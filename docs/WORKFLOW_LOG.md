@@ -492,6 +492,123 @@
 
 ---
 
+### 参考工作流 8：World Cup Pack Core 契约参考化与可复现 demo 快照（2.2 世界杯赛程子流程 + 3.x 数据/模型研究工作流）
+
+- **选择的工作流**：P1 6.3 World Cup Pack 参考化（满足 P1 退出门槛第 4 条"世界杯包与招募/比赛包复用 Core，没有复制身份、快照或导出逻辑"）
+- **执行日期**：2026-07-23
+- **执行环境**：Windows, Python 3.12.11, uv, 工作目录 `c:\football\scoutlab`，分支 `codex/integration`，HEAD `5caaa9c`
+- **真实输入**：本地仓库已有的 World Cup pack（`src/scoutfootball/worldcup/{data,tournament}.py`、`api.py` 的 7 个 `get_wc_*` 端点、`api_server.py` 的 `/world-cup/*` 路由）+ Core `schemas/storage.py` 类型（`DataContract`/`SnapshotInfo`/`LineageEntry`/`CoverageInfo`/`SourceLicense`）+ 静态 `SQUADS`（24 队 × 52 = 1248 players）+ `OPTA_WIN_PROBABILITY` priors + `data/models/artifacts/player_ratings_optimized.parquet`
+- **问题背景**：
+  - P1 退出门槛第 4 条要求"世界杯包与招募/比赛包复用 Core，没有复制身份、快照或导出逻辑"，但 World Cup pack 此前完全没有接入 Core `DataContract` 类型——7 个 API 端点返回的 JSON 不带 `contract` 字段，无法区分 official_roster/expected_callup/injury_report/rating_coverage/model_probability 五类事实的来源、许可和覆盖
+  - 路线图 6.3 还要求"发布一套可复现公开 demo 快照和教学脚本，作为适配器与证据包参考实现"，但仓库没有可复现的 World Cup snapshot 脚本——API 端点的 `generated_at`/`recorded_at`/`as_of` 等时间戳字段每次调用都不同，无法做 hash 比对
+- **修复与实现**：
+  - 新建 `src/scoutfootball/worldcup/contracts.py`：作为 World Cup pack 与 Core `schemas/storage.py` 类型的唯一复用层，不引入并行类型。`WorldCupFactType(StrEnum)` 区分 5 类事实：`official_roster`/`expected_callup`/`injury_report`/`rating_coverage`/`model_probability`。每类事实有对应 `SourceLicense`/`SnapshotInfo`/`LineageEntry`/`CoverageInfo` builder，最后汇成 5 个 `DataContract` builder + 2 个 stub builder（`official_roster` 标 `status="missing"`，`injury_report` 标 `status="not_tracked"`），不静默缺失。`build_worldcup_contract_registry()` 汇总为 `DataContractRegistry`；`contract_to_dict()`/`contracts_to_dict()` 提供序列化；`fact_type_for_artifact()` 提供 artifact_id → fact_type 映射。
+  - 修改 `src/scoutfootball/worldcup/data.py`：暴露 `count_expected_callups()`（返回 1248）、`SQUADS_FACT_TYPE`/`OPTA_PRIORS_FACT_TYPE` 常量、`get_*_contract()` 入口函数，让 contracts.py 不重复实现这些常量。
+  - 修改 `src/scoutfootball/worldcup/tournament.py`：`SCHEMA_VERSION` 升级到 `"1.1.0"`，新增 `TournamentState.contract` 字段，新增 `attach_tournament_state_contract()`/`get_tournament_state_contract()` helpers；1.0.0 状态向后兼容（无 contract 字段或 null 时返回 None，invalid type 抛错，unsupported schema 抛错）。
+  - 修改 `src/scoutfootball/api.py`：8 个端点（`get_wc_schedule`/`get_wc_teams`/`get_wc_groups`/`get_wc_predictions`/`get_wc_tournament_summary`/`get_world_cup_match_briefing`/`get_world_cup_tactical_plan`/`get_tournament_state`）注入 contract 字段；新增 `get_wc_contracts()` registry 端点。
+  - 修改 `src/scoutfootball/api_server.py`：新增 `/world-cup/contracts` 路由。
+  - 修改 `scripts/export_static_frontend_data.py`：导出 `frontend/data/worldcup/contracts.json`。
+  - 新建 `scripts/demo_snapshot/export_worldcup_demo_snapshot.py`：
+    - `_VOLATILE_KEYS = frozenset({"generated_at", "updated_at", "created_at", "recorded_at", "as_of"})`：剥离这 5 个 key 后计算 SHA-256，让快照可复现
+    - `_collect_artifacts()`：调用 6 个 API 端点（contracts/schedule/teams/groups/predictions/tournament_summary）收集 artifacts
+    - `_build_manifest()`：构建含 per-file SHA-256 + contract registry metadata 的 manifest
+    - `_write_readme()`：生成人类可读的 README.md，含 contract registry 表格
+    - `export_snapshot()`：完整导出（6 JSON + manifest.json + README.md）
+    - `check_snapshot()`：可复现性验证（exit 0=ok, 1=drift）
+    - `main()`：CLI with `--check` and `--output` flags
+- **回归测试**：
+  - `tests/unit/test_worldcup_contracts.py`（116 测试，935 行）：
+    - `TestWorldCupFactType`（3 tests）：枚举值数量、值匹配、str enum 安全性
+    - `TestFactTypeForArtifact`（10 tests）：7 个已知 artifact 映射 + 2 个错误路径 + 1 个全量验证
+    - `TestScheduleContract`/`TestExpectedCallupsContract`/`TestRatingCoverageContract`/`TestModelProbabilityContract`/`TestTournamentStateContract`（31 tests）：artifact_id、layer、status、record_count 传播、snapshot as_of、coverage team_count=48、primary_keys、license、lineage upstream、disallows/allows commercial_use
+    - `TestOfficialRosterStub`/`TestInjuryReportStub`（8 tests）：status=missing/not_tracked、no license/snapshot/coverage、not recorded、artifact_id
+    - `TestBuildWorldcupContractRegistry`（7 tests）：7 contracts with stubs、5 without、unique IDs、worldcup layer、live counts propagation、defaults、stubs last
+    - `TestContractToDict`/`TestContractsToDict`（11 tests）：returns dict、required fields、includes/omits license/snapshot/coverage/lineage、JSON serializable、list of dicts、empty iterable
+    - `TestDataModuleBindings`（9 tests）：count_expected_callups=1248、matches SQUADS total、get_*_contract helpers、SQUADS_FACT_TYPE、OPTA_PRIORS_FACT_TYPE
+    - `TestAttachTournamentStateContract`/`TestGetTournamentStateContract`（9 tests）：sets contract field、returns same object、default count=0、explicit count、JSON serializable、builds on demand、no mutation
+    - `TestTournamentStateContractRoundTrip`/`TestTournamentStateBackwardCompat`（9 tests）：state_to_dict includes/omits contract、round-trip preserves contract、schema_version 1.1.0、1.0.0 without contract→None、1.0.0 with null→None、invalid type raises、unsupported schema raises
+    - `TestGetWcContractsEndpoint`（10 tests）：status=ok、schema、version、7 contracts、fact_types length、unique IDs、live count 1248、JSON serializable、disclaimer、every contract has fact_type
+    - `TestEndpointsEmitContracts`（9 tests）：8 个端点各 emit 正确 contract + 1 个交叉验证所有 emitted contract 可解析 fact_type
+  - `tests/unit/test_demo_snapshot_script.py`（11 静态分析测试）：script exists、valid Python、`--check` flag、`--output` flag、strips volatile timestamps、references core contract registry、writes manifest with sha256、writes README、calls multiple endpoints、main returns exit code、check mode returns nonzero on drift
+- **执行步骤与命令**：
+  ```bash
+  # 1. lint
+  uv run ruff check src/scoutfootball/worldcup/contracts.py \
+      src/scoutfootball/worldcup/data.py \
+      src/scoutfootball/worldcup/tournament.py \
+      src/scoutfootball/api.py src/scoutfootball/api_server.py \
+      scripts/export_static_frontend_data.py \
+      scripts/demo_snapshot/export_worldcup_demo_snapshot.py \
+      tests/unit/test_worldcup_contracts.py \
+      tests/unit/test_demo_snapshot_script.py
+
+  # 2. 单元测试
+  uv run pytest tests/unit/test_worldcup_contracts.py tests/unit/test_demo_snapshot_script.py -v
+
+  # 3. 全量回归
+  uv run pytest tests/unit/ tests/integration/ -q
+
+  # 4. 端到端：导出 demo snapshot
+  PYTHONPATH=src uv run python scripts/demo_snapshot/export_worldcup_demo_snapshot.py \
+      --output data/reports/worldcup/demo_snapshot
+
+  # 5. 端到端：可复现性验证（exit 0 = ok）
+  PYTHONPATH=src uv run python scripts/demo_snapshot/export_worldcup_demo_snapshot.py --check
+  ```
+- **执行结果**：
+  - ruff check 通过（修复 UP035/UP042/UP017/I001/F401/F541/E501 违规）
+  - test_worldcup_contracts.py：116/116 通过
+  - test_demo_snapshot_script.py：11/11 通过
+  - 全量 unit + integration：297 测试通过（含新增 127 测试）
+  - demo snapshot export 输出：
+    ```
+    Exporting World Cup demo snapshot to C:\football\scoutlab\data\reports\worldcup\demo_snapshot ...
+      6 files written
+      contract registry: 7 contracts
+      contracts.json: a45d2206a94ac15f...
+      groups.json: 94a50125c86b528f...
+      predictions.json: d384f25fd658d3bb...
+      schedule.json: 9f5013ce32776b7f...
+      teams.json: 807a35dcde6662b0...
+      tournament_summary.json: 169a10e319dc4ad8...
+    ```
+  - `--check` 可复现性验证：
+    ```
+      = contracts.json: ok
+      = groups.json: ok
+      = predictions.json: ok
+      = schedule.json: ok
+      = teams.json: ok
+      = tournament_summary.json: ok
+
+    OK: 6 files match committed manifest.
+    ```
+- **修复记录**（执行过程中发现并修复的真实问题）：
+  - **contracts.py ruff UP 规则违规**：
+    - UP035：`from typing import Iterable` 应改为 `from collections.abc import Iterable`（ruff --fix 自动修复）
+    - UP042：`class WorldCupFactType(str, Enum)` 应继承 `StrEnum`（手动修复：`from enum import Enum` → `from enum import StrEnum`，`class WorldCupFactType(str, Enum)` → `class WorldCupFactType(StrEnum)`）
+    - UP017：`timezone.utc` 应改为 `datetime.UTC`（8 处，ruff --fix 自动修复，`from datetime import datetime, timezone` → `from datetime import UTC, datetime`）
+  - **demo snapshot `--check` DRIFT DETECTED**：首次运行 `--check` 时 5/6 文件 hash 不匹配
+    - 根因：`recorded_at`（lineage entries 的时间戳字段）未被加入 `_VOLATILE_KEYS`，每次运行 `_now_utc()` 产生不同值
+    - 修复：将 `"recorded_at"` 加入 `_VOLATILE_KEYS` frozenset，重新导出后 `--check` 全部通过
+  - **README fact_type 查找 bug**：`_write_readme()` 中使用 `next(ft for ft in registry["fact_types"])` 总是返回第一个 fact_type
+    - 修复：改用 `zip(registry["contracts"], registry["fact_types"], strict=True)` 按位置对齐
+- **人工复盘**：
+  - **是否达到预期**：是。P1 退出门槛第 4 条满足——World Cup pack 不再绕过 Core 类型系统，所有 artifact 通过 contracts.py 复用 `DataContract`/`SnapshotInfo`/`LineageEntry`；没有复制身份/快照/导出逻辑。可复现 demo 快照让外部实现可以验证 World Cup pack 的 contract registry 输出，作为适配器与证据包的参考实现。
+  - **有什么问题**：
+    - `official_roster` 和 `injury_report` 当前是 stub（`status="missing"`/`"not_tracked"`），因为 2026 世界杯官方名单尚未发布且项目不本地追踪伤停。这是诚实标注而非能力缺失——consumer 看到 `status="missing"` 知道这是预期缺失，而非导出 bug。
+    - demo snapshot 的 `--check` 依赖 `_VOLATILE_KEYS` 正确性。当前覆盖 5 个时间戳字段（`generated_at`/`updated_at`/`created_at`/`recorded_at`/`as_of`），但若未来新增带时间戳的字段，需要同步加入 `_VOLATILE_KEYS` 否则 `--check` 会误报 drift。这是已知 trade-off：严格 hash 比对需要明确剥离所有 volatile 字段，否则可复现性失效。
+    - TournamentState schema 从 1.0.0 升级到 1.1.0 是向后兼容的（1.0.0 状态仍可解析为 None contract），但向前不兼容（1.1.0 状态无法降级到 1.0.0 而保留 contract）。这是预期行为——schema 升级应单向。
+  - **数据治理启示**：Core 类型复用不是"包装一下"——需要为每类事实定义清晰的 license/snapshot/coverage/lineage 配置，否则 contract 字段会变成空壳。`WorldCupFactType` 的 5 类区分让 consumer 可以基于事实类型做不同决策（如 official_roster 可作为 ground truth，expected_callup 只能作为假设，model_probability 必须显示不确定性）。这种事实类型分类是适配器与证据包协议的核心——E1 开放证据协议节点可以复用这套分类模式。
+  - **下一步改进**：
+    - 6.1 Recruitment Pack 和 6.2 Opposition & Match Pack 分支未启动——它们应复用同一套 Core 类型，不重复实现 contracts.py 的模式
+    - 当 2026 世界杯官方名单发布时，`official_roster` stub 应升级为真实 contract（status="recorded"）
+    - 当项目开始追踪伤停时，`injury_report` stub 应升级为真实 contract
+    - 可考虑为 demo snapshot 增加 `--validate` flag，除了 hash 比对外还验证每个 JSON 文件的 contract 字段可被 `contract_to_dict()` 解析
+- **是否可重复使用**：是。维护者每次 World Cup pack 数据或 contract 变更后，可运行 `export_worldcup_demo_snapshot.py` 重新导出快照并 `--check` 验证可复现性；外部实现可以加载快照的 contracts.json 验证自己的 contract registry 解析器是否兼容。`worldcup/contracts.py` 的设计模式（fact_type 枚举 + per-fact contract builder + stub for missing data）可被 Recruitment Pack 和 Opposition & Match Pack 复用。
+
+---
+
 ## 更新规则
 
 - 维护者填写真实任务后，将对应"待填写"替换为真实内容。

@@ -206,11 +206,13 @@ source license、snapshot 与 lineage；缺失元数据保持 `not_recorded`。�
 - 情景树连接战术板：领先/落后、不同阵型、人员缺席和定位球。
 - 赛后对照“假设—计划—执行—结果”，记录被证伪的模式和新问题。
 
-#### 6.3 World Cup Pack 参考化
+#### 6.3 World Cup Pack 参考化 — `verified`（2026-07-23）
 
 - 将现有赛程、阵容、概率、淘汰路径、简报和战术计划迁移到 Core 契约。
 - 对正式名单、预计征召、伤停、阵容评分覆盖和模型概率使用不同事实类型。
 - 发布一套可复现公开 demo 快照和教学脚本，作为适配器与证据包参考实现。
+
+退出证据：`src/scoutfootball/worldcup/contracts.py` 作为 World Cup pack 与 Core `schemas/storage.py` 类型的唯一复用层，为全部 7 个 artifact 构建 `DataContract`/`SnapshotInfo`/`LineageEntry`，不复制身份、快照或导出逻辑。`WorldCupFactType` 枚举区分 5 类事实（`official_roster`/`expected_callup`/`injury_report`/`rating_coverage`/`model_probability`），每类有对应 license/snapshot/coverage 配置；`official_roster` 与 `injury_report` 显式登记为 `status="missing"`/`"not_tracked"` 而非静默缺失。8 个 API 端点（schedule/teams/groups/predictions/tournament_summary/match_briefing/tactical_plan/tournament_state）注入 contract 字段；新增 `GET /world-cup/contracts` registry 端点；`TournamentState` schema 升级到 1.1.0 嵌入 contract，1.0.0 状态向后兼容（无 contract 字段时返回 None）。`scripts/demo_snapshot/export_worldcup_demo_snapshot.py` 提供可复现 demo 快照：剥离 volatile timestamp keys（`generated_at`/`updated_at`/`created_at`/`recorded_at`/`as_of`）后计算 SHA-256，`--check` 模式验证 manifest 一致性。端到端验证：导出 6 个 JSON 文件 + 7 contracts manifest + README，`--check` 全部通过（6/6 文件 hash 一致）。测试覆盖：`tests/unit/test_worldcup_contracts.py` 116 测试（fact_type 标注、contract builders、registry、serialization、data.py bindings、tournament state round-trip、1.0.0 向后兼容、8 个 API 端点 contract emission）+ `tests/unit/test_demo_snapshot_script.py` 11 静态分析测试。全量 297 测试通过；ruff clean。满足 P1 退出门槛第 4 条"世界杯包与招募/比赛包复用 Core，没有复制身份、快照或导出逻辑"。Recruitment Pack（6.1）和 Opposition & Match Pack（6.2）分支不要求同时完成，维护者先解锁自己实际重复使用的分支。
 
 #### 6.4 产品体验
 

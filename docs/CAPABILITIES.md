@@ -56,6 +56,8 @@
 | 战术板 | 本地工程、对象/图层/帧、动画、导入清洗、多格式导出、可选 ffmpeg | 已交付的本地工具 | 浏览器下载不等于服务器保存；本地视频叠画/追踪导入有研究门槛，实时云协作不在当前章程范围内 |
 | 世界杯赛程/阵容 | 赛程、球队、比较、概率、淘汰赛/赛事分析 | 部分交付 | 数据快照和覆盖必须显示；预计征召不等于官方最终名单 |
 | 世界杯赛前简报 | 从赛程打开来源受限简报、JSON/安全 CSV 下载、战术计划联动 | 已交付的本地/静态流程 | `recorded/not_recorded`、输入快照和模型边界必须端到端保留 |
+| 世界杯 Core 契约复用 | 7 个 artifact 通过 `worldcup/contracts.py` 复用 Core `DataContract`/`SnapshotInfo`/`LineageEntry`；5 类事实类型（official_roster/expected_callup/injury_report/rating_coverage/model_probability）；`GET /world-cup/contracts` registry 端点；`TournamentState` 1.1.0 嵌入 contract，1.0.0 向后兼容 | 已交付 | 满足 P1 退出门槛第 4 条"世界杯包与招募/比赛包复用 Core，没有复制身份/快照/导出逻辑"；6.1/6.2 分支未启动 |
+| 世界杯可复现 demo 快照 | `scripts/demo_snapshot/export_worldcup_demo_snapshot.py` 导出 6 JSON + manifest + README，`--check` 验证 hash 一致性 | 已交付的本地流程 | 剥离 volatile timestamp keys（`generated_at`/`updated_at`/`created_at`/`recorded_at`/`as_of`）后计算 SHA-256；当前 6/6 文件 hash 一致；维护者数据变更后需重新导出 |
 | 静态前端 | 22 个顶层视图、API/静态 fallback、离线状态 | 部分交付 | 静态路径映射不是全路由覆盖；静态 manifest 陈旧度和契约一致性需自动门禁 |
 | API | 只读分析接口及有限、显式开启的本地工作区写入 | 已交付/部分交付 | 163 个路由装饰器过宽；需要分域、schema registry、弃用策略和 API/静态一致性 |
 | Streamlit | 15 页研究/运维工作台 | 已交付 | 与主静态产品的职责需要收敛，避免双重产品真源 |
