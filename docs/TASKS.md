@@ -176,7 +176,7 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 - demo snapshot `--check` DRIFT DETECTED：首次运行 5/6 文件 hash 不匹配，根因是 `recorded_at`（lineage entries 的时间戳字段）未被加入 `_VOLATILE_KEYS`，每次运行 `_now_utc()` 产生不同值。修复：将 `"recorded_at"` 加入 `_VOLATILE_KEYS` frozenset。
 - README fact_type 查找 bug：`_write_readme()` 中使用 `next(ft for ft in registry["fact_types"])` 总是返回第一个 fact_type。修复：改用 `zip(registry["contracts"], registry["fact_types"], strict=True)` 按位置对齐。
 
-完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 8。该工作不改变 P1 节点整体状态（仍 `in_progress`，6.1 Recruitment Pack 和 6.2 Opposition & Match Pack 分支未启动）；6.4 产品体验分支也未启动。
+完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 8。该工作不改变 P1 节点整体状态（仍 `in_progress`，6.2 Opposition & Match Pack 和 6.4 产品体验分支未启动）；6.1 Recruitment Pack brief 层已 `verified`（2026-07-23）。
 
 ## 后续依赖表
 

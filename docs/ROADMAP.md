@@ -191,13 +191,15 @@ source license、snapshot 与 lineage；缺失元数据保持 `not_recorded`。�
 
 ### 具体交付
 
-#### 6.1 Recruitment Pack v1
+#### 6.1 Recruitment Pack v1 — brief 层 `verified`（2026-07-23）
 
 - 版本化需求 brief：球队、位置、角色、预算、年龄、合同、联赛、语言/资格、时间和风险偏好。
 - 角色本体：用户可编辑职责和指标，不把固定位置权重包装成普适真理。
 - 长名单与敏感性：展示推荐如何随权重、最低分钟、联赛和覆盖阈值变化。
 - 决策档案：候选、支持证据、反证、视频时间码、比较对象、风险、人工意见和最终建议。
 - 结果回灌：试训、签约/未签、出场和人工复盘；反馈先作为独立事实，不自动训练。
+
+退出证据（brief 层）：`src/scoutfootball/recruitment/contracts.py` 作为 Recruitment pack 与 Core `schemas/storage.py` 类型的唯一复用层，为 3 类 artifact（`brief`/`role_profile`/`decision_dossier`）构建 `DataContract`/`SnapshotInfo`/`LineageEntry`，不复制身份、快照或导出逻辑。`RecruitmentFactType` 枚举区分 3 类事实（`scouting_requirement`/`role_profile`/`decision_dossier`），每类有对应 license（maintainer-local MIT）/snapshot/coverage 配置；`role_profile` 显式标为 `status="provisional"`（角色定义非普适真理）。`brief.py` 定义 `RecruitmentBrief` Pydantic 模型（frozen, extra=forbid），字段校验覆盖 position_group/risk_tolerance/age_range。`store.py` 实现本地 JSON 存储：原子写（temp file → fsync → replace）、备份（更新/删除前 copy2）、乐观并发（`expected_revision` If-Match 语义，409 conflict / 428 precondition_required）、record envelope（`scoutfootball.recruitment-brief-record` v1.0.0）。CLI 4 命令（`create-brief`/`list-briefs`/`show-brief`/`validate-brief`）支持 `--from-json`、`--json` 输出和 `SCOUTFOOTBALL_DATA_ROOT` 隔离。API 4 端点（`GET /recruitment/contracts` registry、`GET /recruitment/briefs` list、`GET /recruitment/briefs/{brief_id}` single、`POST /recruitment/briefs` create）在 `api_server.py` 注册。`architecture.py` 登记 `recruitment` 模块边界和 `recruitment.briefs` 能力。测试覆盖：`test_recruitment_contracts.py` 47 测试（fact_type 标注、contract builders、registry、serialization）+ `test_recruitment_brief.py` 56 测试（model 校验、id 安全、save/load/list/count/delete、乐观并发、备份、损坏记录、round-trip）+ `test_recruitment_cli.py` 17 测试（create/list/show/validate 全路径含错误退出）。全量 417 测试通过；ruff clean。brief 层满足 P1 退出门槛第 2 条"需求 brief 到有人工结论的证据包可 round-trip，冲突和本地边界清晰"的 brief 侧；role_profile/decision_dossier/结果回灌层待后续迭代。
 
 #### 6.2 Opposition & Match Pack v1
 

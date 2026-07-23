@@ -75,6 +75,14 @@ def build_default_architecture() -> ProjectArchitecture:
                 purpose="Streamlit views that only read local artifacts.",
                 planned_components=("player_compare_page", "market_value_page", "match_page"),
             ),
+            ModuleBoundary(
+                name="recruitment",
+                purpose=(
+                    "Versioned recruitment briefs, role profiles and decision "
+                    "dossiers.  Personal local objects, not external facts."
+                ),
+                planned_components=("brief", "role_profile", "decision_dossier"),
+            ),
         ),
         data_directories=(
             DataDirectorySpec(
@@ -232,6 +240,10 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball optimize-ensemble",
             "uv run python -m scoutfootball serve",
             "uv run python -m scoutfootball tournament",
+            "uv run python -m scoutfootball create-brief",
+            "uv run python -m scoutfootball list-briefs",
+            "uv run python -m scoutfootball show-brief <brief_id>",
+            "uv run python -m scoutfootball validate-brief <path>",
             "uv run streamlit run src/scoutfootball/app/streamlit_app.py",
         ),
     )
@@ -536,6 +548,27 @@ def build_capability_registry() -> CapabilityRegistry:
                 "/scouting-workspaces/{id} (PUT)",
             ),
             frontend_views=("scouting",),
+        ),
+        Capability(
+            id="recruitment.briefs",
+            name="招募需求 brief",
+            description=(
+                "版本化招募需求 brief：球队、位置、角色、预算、年龄、合同、"
+                "联赛、语言和风险偏好。维护者本地对象，非外部事实。"
+                "支持原子写、备份、乐观并发和 Core 契约复用。"
+            ),
+            domain="recruitment",
+            cli_commands=(
+                "create-brief",
+                "list-briefs",
+                "show-brief",
+                "validate-brief",
+            ),
+            api_paths=(
+                "/recruitment/briefs",
+                "/recruitment/briefs/{brief_id}",
+                "/recruitment/contracts",
+            ),
         ),
         Capability(
             id="worldcup.tournament",

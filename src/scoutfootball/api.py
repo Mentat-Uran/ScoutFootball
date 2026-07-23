@@ -9593,6 +9593,143 @@ def get_wc_contracts() -> dict:
     })
 
 
+# ── Recruitment Pack API ─────────────────────────────────────────────────
+
+
+def _brief_store():
+    """Build a BriefStore rooted at the platform report_root/recruitment/briefs."""
+    from scoutfootball.recruitment.store import BriefStore
+
+    return BriefStore(_settings().report_root / "recruitment" / "briefs")
+
+
+def get_recruitment_contracts() -> dict:
+    """Return the Core DataContract registry for the Recruitment pack.
+
+    Enumerates recruitment artifacts (briefs, role profiles, decision
+    dossiers) that currently have at least one stored record.  Counts
+    are derived from live store state so the registry is reproducible.
+    """
+    from scoutfootball.recruitment.contracts import (
+        build_recruitment_contract_registry,
+        contracts_to_dict,
+        fact_type_for_artifact,
+    )
+
+    store = _brief_store()
+    brief_count = store.count()
+
+    registry = build_recruitment_contract_registry(
+        brief_count=brief_count,
+        role_profile_count=0,
+        decision_dossier_count=0,
+    )
+    contracts = contracts_to_dict(registry)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-contract-registry",
+        "version": "1.0.0",
+        "count": len(contracts),
+        "contracts": contracts,
+        "fact_types": [
+            fact_type_for_artifact(c["artifact_id"]).value for c in contracts
+        ],
+        "disclaimer": (
+            "Registry enumerates recruitment artifacts reusing the Core "
+            "DataContract type.  Only artifacts with at least one stored "
+            "record are included; absent artifacts are omitted, not stubbed, "
+            "because recruitment data is maintainer-authored on demand."
+        ),
+    })
+
+
+def get_recruitment_briefs(limit: int = 100) -> dict:
+    """List stored recruitment briefs (most recent first)."""
+    store = _brief_store()
+    records = store.list_records(limit=limit)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-list",
+        "version": "1.0.0",
+        "count": len(records),
+        "briefs": records,
+    })
+
+
+def get_recruitment_brief(brief_id: str) -> dict:
+    """Load one stored recruitment brief by ID."""
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    store = _brief_store()
+    try:
+        record = store.load(brief_id)
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def create_recruitment_brief(payload: dict) -> dict:
+    """Create a new recruitment brief from a JSON payload.
+
+    The payload must be a valid ``scoutfootball.recruitment-brief`` v1.0.0
+    object.  Returns the stored record envelope on success.
+    """
+    from scoutfootball.recruitment.brief import BriefValidationError
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    if not isinstance(payload, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "payload must be a JSON object",
+            "http_status": 400,
+        })
+
+    brief_id = payload.get("brief_id")
+    if not isinstance(brief_id, str) or not brief_id:
+        return _clean_json_value({
+            "status": "error",
+            "code": "missing_brief_id",
+            "message": "brief_id is required",
+            "http_status": 400,
+        })
+
+    store = _brief_store()
+    try:
+        record = store.save(brief_id, payload, expected_revision=0)
+    except BriefValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
 def get_wc_tournament_standings(group: str | None = None) -> dict:
     """Return standings for one or all groups."""
     from dataclasses import asdict
