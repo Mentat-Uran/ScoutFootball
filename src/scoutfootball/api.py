@@ -8975,6 +8975,27 @@ def get_wc_groups() -> dict:
             "teams": group_teams,
         })
 
+    # Core DataContracts: groups combine expected_callup (squad lists) +
+    # rating_coverage (per-player rating join) + model_probability (strength).
+    from scoutfootball.worldcup.contracts import (
+        build_expected_callups_contract,
+        build_model_probability_contract,
+        build_rating_coverage_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+    from scoutfootball.worldcup.data import count_expected_callups
+
+    expected_contract = build_expected_callups_contract(
+        record_count=count_expected_callups()
+    )
+    total_rated = sum(
+        1 for s in enriched.values() for p in s if p.has_rating
+    )
+    rating_contract = build_rating_coverage_contract(record_count=total_rated)
+    model_contract = build_model_probability_contract(
+        record_count=len(strengths)
+    )
     return _clean_json_value({
         "status": "ok",
         "source_attribution": (
@@ -8986,6 +9007,16 @@ def get_wc_groups() -> dict:
             "not national team matches. Non-Big5 league players "
             "may lack rating data."
         ),
+        "contracts": [
+            contract_to_dict(expected_contract),
+            contract_to_dict(rating_contract),
+            contract_to_dict(model_contract),
+        ],
+        "fact_types": [
+            fact_type_for_artifact(expected_contract.artifact_id).value,
+            fact_type_for_artifact(rating_contract.artifact_id).value,
+            fact_type_for_artifact(model_contract.artifact_id).value,
+        ],
         "groups": groups_data,
     })
 
@@ -9015,6 +9046,16 @@ def get_wc_schedule(
             "stage": m.stage,
         })
 
+    # Core DataContract: the full 72-match schedule is the artifact; group
+    # and matchday filters are view-level, so the contract always reports
+    # the full-schedule record count.
+    from scoutfootball.worldcup.contracts import (
+        build_schedule_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+
+    schedule_contract = build_schedule_contract(record_count=len(matches))
     return _clean_json_value({
         "status": "ok",
         "count": len(match_dicts),
@@ -9022,6 +9063,8 @@ def get_wc_schedule(
             "Schedule generated from official FIFA fixture pattern; "
             "dates/venues are approximate"
         ),
+        "contracts": [contract_to_dict(schedule_contract)],
+        "fact_types": [fact_type_for_artifact(schedule_contract.artifact_id).value],
         "matches": match_dicts,
     })
 
@@ -9054,6 +9097,29 @@ def get_wc_squad(team: str) -> dict:
     # Sort: rated players first, then by rating desc
     players.sort(key=lambda p: (not p["has_rating"], -(p["rating"] or 0)))
 
+    # Core DataContracts: the squad payload combines expected_callup
+    # (static SQUADS table) with rating_coverage (per-player rating join).
+    # The contract record counts cover all 48 teams so consumers can
+    # verify the artifact identity regardless of which team they inspect.
+    from scoutfootball.worldcup.contracts import (
+        build_expected_callups_contract,
+        build_rating_coverage_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+    from scoutfootball.worldcup.data import count_expected_callups
+
+    expected_contract = build_expected_callups_contract(
+        record_count=count_expected_callups()
+    )
+    # rating_coverage record_count uses the global rated-player count
+    # across all 48 teams, not just this team, so the artifact identity
+    # is stable across per-team views.
+    all_enriched = enriched
+    total_rated = sum(
+        1 for s in all_enriched.values() for p in s if p.has_rating
+    )
+    rating_contract = build_rating_coverage_contract(record_count=total_rated)
     return _clean_json_value({
         "status": "ok",
         "team": team,
@@ -9073,6 +9139,14 @@ def get_wc_squad(team: str) -> dict:
             "squads not yet announced. Ratings from domestic league "
             "performance only."
         ),
+        "contracts": [
+            contract_to_dict(expected_contract),
+            contract_to_dict(rating_contract),
+        ],
+        "fact_types": [
+            fact_type_for_artifact(expected_contract.artifact_id).value,
+            fact_type_for_artifact(rating_contract.artifact_id).value,
+        ],
         "players": players,
     })
 
@@ -9269,6 +9343,16 @@ def get_wc_predictions() -> dict:
             third_place.append(third)
     third_place.sort(key=lambda x: x["strength"], reverse=True)
 
+    # Core DataContract: model_probability (Bradley-Terry + Opta priors).
+    from scoutfootball.worldcup.contracts import (
+        build_model_probability_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+
+    model_contract = build_model_probability_contract(
+        record_count=len(strengths)
+    )
     return _clean_json_value({
         "status": "ok",
         "source_attribution": (
@@ -9280,6 +9364,8 @@ def get_wc_predictions() -> dict:
             "strength-ratio model. Non-Big5 league team strengths "
             "may be underestimated. Not a real match prediction."
         ),
+        "contracts": [contract_to_dict(model_contract)],
+        "fact_types": [fact_type_for_artifact(model_contract.artifact_id).value],
         "groups": group_preds,
         "ranking": ranking,
         "best_third_place": third_place[:8],
@@ -9299,6 +9385,22 @@ def get_wc_knockout() -> dict:
 
     group_preds = compute_group_predictions(strengths)
     bracket = _simulate_knockout(strengths, group_preds, num_simulations=10000)
+
+    # Core DataContract: model_probability (Monte Carlo knockout sim).
+    from scoutfootball.worldcup.contracts import (
+        build_model_probability_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+
+    model_contract = build_model_probability_contract(
+        record_count=len(strengths)
+    )
+    if isinstance(bracket, dict):
+        bracket["contracts"] = [contract_to_dict(model_contract)]
+        bracket["fact_types"] = [
+            fact_type_for_artifact(model_contract.artifact_id).value
+        ]
     return _clean_json_value(bracket)
 
 
@@ -9364,6 +9466,27 @@ def get_wc_teams() -> dict:
                 "big5_score": details.get("big5_score"),
             })
 
+    # Core DataContracts: teams payload combines expected_callup +
+    # rating_coverage + model_probability (strength).
+    from scoutfootball.worldcup.contracts import (
+        build_expected_callups_contract,
+        build_model_probability_contract,
+        build_rating_coverage_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+    from scoutfootball.worldcup.data import count_expected_callups
+
+    expected_contract = build_expected_callups_contract(
+        record_count=count_expected_callups()
+    )
+    total_rated = sum(
+        1 for s in enriched.values() for p in s if p.has_rating
+    )
+    rating_contract = build_rating_coverage_contract(record_count=total_rated)
+    model_contract = build_model_probability_contract(
+        record_count=len(strengths)
+    )
     return _clean_json_value({
         "status": "ok",
         "count": len(teams_data),
@@ -9376,6 +9499,16 @@ def get_wc_teams() -> dict:
             "not national team matches. Non-Big5 league players "
             "may lack rating data."
         ),
+        "contracts": [
+            contract_to_dict(expected_contract),
+            contract_to_dict(rating_contract),
+            contract_to_dict(model_contract),
+        ],
+        "fact_types": [
+            fact_type_for_artifact(expected_contract.artifact_id).value,
+            fact_type_for_artifact(rating_contract.artifact_id).value,
+            fact_type_for_artifact(model_contract.artifact_id).value,
+        ],
         "teams": teams_data,
     })
 
@@ -9393,12 +9526,71 @@ def _wc_tournament_state():
 
 def get_wc_tournament_summary() -> dict:
     """Return a comprehensive summary of the current tournament state."""
-    from scoutfootball.worldcup.tournament import tournament_summary
+    from scoutfootball.worldcup.tournament import (
+        get_tournament_state_contract,
+        tournament_summary,
+    )
 
     state = _wc_tournament_state()
     summary = tournament_summary(state)
     summary["status"] = "ok"
+    # Core DataContract: tournament_state (maintainer-recorded results).
+    summary["contracts"] = [get_tournament_state_contract(state)]
+    summary["fact_types"] = ["expected_callup"]
     return _clean_json_value(summary)
+
+
+def get_wc_contracts() -> dict:
+    """Return the full Core DataContract registry for the World Cup pack.
+
+    Enumerates every World Cup artifact (schedule, expected_callups,
+    rating_coverage, model_probability, tournament_state, plus the
+    official_roster and injury_report stubs) so consumers can audit
+    the full provenance graph in one request.  Counts are derived from
+    live state so the registry is reproducible at any time.
+    """
+    from scoutfootball.worldcup.contracts import (
+        build_worldcup_contract_registry,
+        contracts_to_dict,
+        fact_type_for_artifact,
+    )
+    from scoutfootball.worldcup.data import count_expected_callups
+
+    enriched, strengths = _get_wc_enriched_squads()
+    total_rated = sum(
+        1 for s in enriched.values() for p in s if p.has_rating
+    )
+    state = _wc_tournament_state()
+    knockout_matches = state.knockout.get("matches", []) if state.knockout else []
+    completed_knockout = sum(
+        1 for m in knockout_matches if m.get("status") == "completed"
+    )
+    tournament_state_result_count = len(state.results) + completed_knockout
+
+    registry = build_worldcup_contract_registry(
+        schedule_match_count=72,
+        expected_callups_player_count=count_expected_callups(),
+        rating_coverage_player_count=total_rated,
+        model_probability_team_count=len(strengths),
+        tournament_state_result_count=tournament_state_result_count,
+        include_stubs=True,
+    )
+    contracts = contracts_to_dict(registry)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.world-cup-contract-registry",
+        "version": "1.0.0",
+        "count": len(contracts),
+        "contracts": contracts,
+        "fact_types": [
+            fact_type_for_artifact(c["artifact_id"]).value for c in contracts
+        ],
+        "disclaimer": (
+            "Registry enumerates all World Cup artifacts reusing the Core "
+            "DataContract type.  Stubs (official_roster, injury_report) are "
+            "included so consumers can see what is intentionally absent."
+        ),
+    })
 
 
 def get_wc_tournament_standings(group: str | None = None) -> dict:
@@ -10790,11 +10982,17 @@ def reset_wc_tournament() -> dict:
 
 def get_wc_knockout_bracket() -> dict:
     """Return the current knockout bracket state."""
-    from scoutfootball.worldcup.tournament import get_knockout_overview
+    from scoutfootball.worldcup.tournament import (
+        get_knockout_overview,
+        get_tournament_state_contract,
+    )
 
     state = _wc_tournament_state()
     overview = get_knockout_overview(state)
     overview["status"] = "ok"
+    # Core DataContract: tournament_state (knockout bracket is part of state).
+    overview["contracts"] = [get_tournament_state_contract(state)]
+    overview["fact_types"] = ["expected_callup"]
     return _clean_json_value(overview)
 
 

@@ -144,6 +144,40 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 验证：`contract-quality` 8 项检查全部 pass（`overall_status=pass`，`failed_checks=[]`，`incomplete_checks=[]`）：registered_contracts、raw_source_licenses、unregistered_raw_directories、source_retention_and_deletion_policies、preflight_content_readability、explicit_source_snapshots（7/7 sources，status=observed）、identity_conflict_error_rate（40 samples，0 errors，threshold met）、source_claim_error_rate（150 samples，0 errors，threshold met）。C1 退出门槛 4 条全部满足：(1) 外部事实/provenance 经 registry 且有人工复核；(2) 新来源必须有许可/快照/身份/删除策略（7/7 sources 全部有 snapshot）；(3) 模型候选可复算+回滚（2026-07-19 验证）；(4) 身份冲突不静默选择（identity audit 40 samples，0 errors）。
 
+## P1 子任务进展
+
+### 6.3 World Cup Pack 参考化 — `verified`（2026-07-23）
+
+满足 P1 退出门槛第 4 条"世界杯包与招募/比赛包复用 Core，没有复制身份、快照或导出逻辑"。
+
+**核心交付**：
+
+- 新建 `src/scoutfootball/worldcup/contracts.py` 作为 World Cup pack 与 Core `schemas/storage.py` 类型（`DataContract`/`SnapshotInfo`/`LineageEntry`/`CoverageInfo`/`SourceLicense`）的唯一复用层，不引入并行类型。`WorldCupFactType(StrEnum)` 区分 5 类事实：`official_roster`/`expected_callup`/`injury_report`/`rating_coverage`/`model_probability`。
+- 7 个 artifact 通过 contract builders 生成：schedule、expected_callups（1248 players）、rating_coverage、model_probability、tournament_state；`official_roster` 与 `injury_report` 显式登记为 stub（`status="missing"`/`"not_tracked"`），不静默缺失。
+- 8 个 API 端点（schedule/teams/groups/predictions/tournament_summary/match_briefing/tactical_plan/tournament_state）注入 contract 字段；新增 `GET /world-cup/contracts` registry 端点和 `api_server.py:/world-cup/contracts` 路由。
+- `TournamentState` schema 升级到 1.1.0，新增 `contract` 字段；1.0.0 状态向后兼容（缺 contract 字段或 null 时返回 None，invalid 类型抛错，unsupported schema 抛错）。
+- `scripts/export_static_frontend_data.py` 导出 `frontend/data/worldcup/contracts.json`。
+
+**可复现 demo 快照**：
+
+- 新建 `scripts/demo_snapshot/export_worldcup_demo_snapshot.py`：调用 6 个 API 端点收集 artifacts，构建含 per-file SHA-256 + contract registry metadata 的 manifest，生成人类可读 README.md。
+- 可复现性设计：剥离 volatile timestamp keys（`generated_at`/`updated_at`/`created_at`/`recorded_at`/`as_of`）后计算 SHA-256；`--check` 模式验证 manifest 一致性，drift 时 exit 1。
+- 端到端验证：导出 6 个 JSON 文件 + 7 contracts manifest + README 到 `data/reports/worldcup/demo_snapshot/`，`--check` 全部通过（6/6 文件 hash 一致）。
+
+**测试覆盖**：
+
+- `tests/unit/test_worldcup_contracts.py`：116 测试，覆盖 `WorldCupFactType` 枚举、`fact_type_for_artifact` 映射（7 已知 + 2 错误路径 + 1 全量）、5 个 contract builders（schedule/expected_callups/rating_coverage/model_probability/tournament_state）、2 个 stubs（official_roster/injury_report）、`build_worldcup_contract_registry`（7 contracts with stubs、5 without、unique IDs、worldcup layer、live counts propagation、stubs last）、`contract_to_dict`/`contracts_to_dict` 序列化、`data.py` bindings（`count_expected_callups=1248`、`SQUADS_FACT_TYPE`/`OPTA_PRIORS_FACT_TYPE` 常量、`get_*_contract` helpers）、`attach_tournament_state_contract`/`get_tournament_state_contract`、tournament state round-trip（schema_version 1.1.0、JSON serializable）、1.0.0 向后兼容（无 contract→None、null→None、invalid type raises、unsupported schema raises）、`GET /world-cup/contracts` endpoint（10 assertions）、8 个 API 端点 contract emission（9 assertions 含 cross-validation）。
+- `tests/unit/test_demo_snapshot_script.py`：11 静态分析测试，覆盖 script exists、valid Python、`--check` flag、`--output` flag、strips volatile timestamps、references core contract registry、writes manifest with sha256、writes README、calls multiple endpoints、main returns exit code、check mode returns nonzero on drift。
+- 全量 297 测试通过（含新增 127 测试）；ruff clean（修复 UP035/UP042/UP017/I001/F401/F541/E501 违规）。
+
+**修复记录**：
+
+- contracts.py ruff UP 规则违规：`from typing import Iterable` → `from collections.abc import Iterable`（UP035），`class WorldCupFactType(str, Enum)` → `class WorldCupFactType(StrEnum)`（UP042），`timezone.utc` → `datetime.UTC`（UP017，8 处）。
+- demo snapshot `--check` DRIFT DETECTED：首次运行 5/6 文件 hash 不匹配，根因是 `recorded_at`（lineage entries 的时间戳字段）未被加入 `_VOLATILE_KEYS`，每次运行 `_now_utc()` 产生不同值。修复：将 `"recorded_at"` 加入 `_VOLATILE_KEYS` frozenset。
+- README fact_type 查找 bug：`_write_readme()` 中使用 `next(ft for ft in registry["fact_types"])` 总是返回第一个 fact_type。修复：改用 `zip(registry["contracts"], registry["fact_types"], strict=True)` 按位置对齐。
+
+完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 8。该工作不改变 P1 节点整体状态（仍 `in_progress`，6.1 Recruitment Pack 和 6.2 Opposition & Match Pack 分支未启动）；6.4 产品体验分支也未启动。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
