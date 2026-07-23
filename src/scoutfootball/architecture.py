@@ -83,6 +83,20 @@ def build_default_architecture() -> ProjectArchitecture:
                 ),
                 planned_components=("brief", "role_profile", "decision_dossier"),
             ),
+            ModuleBoundary(
+                name="opposition",
+                purpose=(
+                    "Source-limited match briefings, pattern cards, scenario "
+                    "trees and post-match reviews.  Personal local objects; "
+                    "each fact section carries an explicit fact_tier."
+                ),
+                planned_components=(
+                    "briefing",
+                    "pattern_card",
+                    "scenario_tree",
+                    "post_match_review",
+                ),
+            ),
         ),
         data_directories=(
             DataDirectorySpec(
@@ -244,6 +258,10 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball list-briefs",
             "uv run python -m scoutfootball show-brief <brief_id>",
             "uv run python -m scoutfootball validate-brief <path>",
+            "uv run python -m scoutfootball create-briefing",
+            "uv run python -m scoutfootball list-briefings",
+            "uv run python -m scoutfootball show-briefing <briefing_id>",
+            "uv run python -m scoutfootball validate-briefing <path>",
             "uv run streamlit run src/scoutfootball/app/streamlit_app.py",
         ),
     )
@@ -568,6 +586,28 @@ def build_capability_registry() -> CapabilityRegistry:
                 "/recruitment/briefs",
                 "/recruitment/briefs/{brief_id}",
                 "/recruitment/contracts",
+            ),
+        ),
+        Capability(
+            id="opposition.briefings",
+            name="比赛对手简报",
+            description=(
+                "来源受限的比赛对手简报：每条事实段携带 fact_tier "
+                "(official/recorded/estimated/unknown)，区分官方、记录、"
+                "估计和未知。维护者本地对象，非外部事实。"
+                "支持原子写、备份、乐观并发和 Core 契约复用。"
+            ),
+            domain="opposition",
+            cli_commands=(
+                "create-briefing",
+                "list-briefings",
+                "show-briefing",
+                "validate-briefing",
+            ),
+            api_paths=(
+                "/opposition/briefings",
+                "/opposition/briefings/{briefing_id}",
+                "/opposition/contracts",
             ),
         ),
         Capability(

@@ -2154,6 +2154,15 @@ def _brief_store():
     return BriefStore(settings.report_root / "recruitment" / "briefs")
 
 
+def _briefing_store():
+    """Build a BriefingStore rooted at report_root/opposition/briefings."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.opposition.store import BriefingStore
+
+    settings = PlatformSettings.from_root()
+    return BriefingStore(settings.report_root / "opposition" / "briefings")
+
+
 def _cmd_create_brief(args: argparse.Namespace) -> None:
     """Create a new recruitment brief from CLI flags or a JSON file."""
     import json
@@ -2349,6 +2358,324 @@ def _cmd_validate_brief(args: argparse.Namespace) -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"VALID: {brief.brief_id} (schema={brief.schema} v{brief.version})")
+
+
+# ── Opposition briefing CLI ──────────────────────────────────────────────
+
+
+def _cmd_create_briefing(args: argparse.Namespace) -> None:
+    """Create a new source-limited match briefing from CLI flags or JSON."""
+    import json
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    from scoutfootball.opposition.briefing import (
+        BriefingValidationError,
+        validate_briefing_id,
+    )
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    if args.from_json:
+        path = Path(args.from_json)
+        if path.is_symlink() or not path.is_file():
+            print(
+                f"error: briefing JSON must be a regular local file: {path}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            print(
+                f"error: cannot read briefing JSON: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if not isinstance(payload, dict):
+            print("error: briefing JSON must be an object", file=sys.stderr)
+            sys.exit(1)
+        if not payload.get("briefing_id"):
+            date_part = datetime.now(tz=UTC).strftime("%Y%m%d")
+            uuid_part = _uuid.uuid4().hex[:8]
+            payload["briefing_id"] = f"briefing-{date_part}-{uuid_part}"
+    else:
+        if not args.title:
+            print(
+                "error: --title is required when not using --from-json",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        date_part = datetime.now(tz=UTC).strftime("%Y%m%d")
+        uuid_part = _uuid.uuid4().hex[:8]
+        briefing_id = args.briefing_id or f"briefing-{date_part}-{uuid_part}"
+        validate_briefing_id(briefing_id)
+        now = datetime.now(tz=UTC).isoformat()
+        sections = []
+        # Build sections from CLI flags.  Each section flag has the form
+        # "<section_id>:<fact_tier>:<summary>"; evidence_refs are appended
+        # via repeated --section-evidence "<section_id>:<ref>" flags.
+        # Custom section IDs of the form "custom:<tail>" themselves contain
+        # a colon, so the parser must treat "custom:" as a prefix when
+        # locating the field separator.
+        def _split_section_field(entry: str) -> tuple[str, str, str]:
+            if entry.startswith("custom:"):
+                rest = entry[len("custom:"):]
+                colon = rest.find(":")
+                if colon == -1:
+                    raise ValueError(
+                        "--section must be '<section_id>:<fact_tier>:<summary>'"
+                    )
+                sid = f"custom:{rest[:colon]}"
+                remainder = rest[colon + 1:]
+                tier_colon = remainder.find(":")
+                if tier_colon == -1:
+                    raise ValueError(
+                        "--section must be '<section_id>:<fact_tier>:<summary>'"
+                    )
+                return sid, remainder[:tier_colon], remainder[tier_colon + 1:]
+            parts = entry.split(":", 2)
+            if len(parts) != 3:
+                raise ValueError(
+                    "--section must be '<section_id>:<fact_tier>:<summary>'"
+                )
+            return parts[0], parts[1], parts[2]
+
+        def _split_evidence_field(entry: str) -> tuple[str, str]:
+            if entry.startswith("custom:"):
+                rest = entry[len("custom:"):]
+                colon = rest.find(":")
+                if colon == -1:
+                    raise ValueError("--section-evidence must be '<section_id>:<ref>'")
+                return f"custom:{rest[:colon]}", rest[colon + 1:]
+            if ":" not in entry:
+                raise ValueError("--section-evidence must be '<section_id>:<ref>'")
+            sid, ref = entry.split(":", 1)
+            return sid, ref
+
+        section_evidence: dict[str, list[str]] = {}
+        for entry in args.section_evidence or []:
+            try:
+                sid, ref = _split_evidence_field(entry)
+            except ValueError:
+                print(
+                    f"error: --section-evidence must be '<section_id>:<ref>', got: {entry}",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            section_evidence.setdefault(sid, []).append(ref)
+        for entry in args.section or []:
+            try:
+                sid, tier, summary = _split_section_field(entry)
+            except ValueError:
+                print(
+                    f"error: --section must be '<section_id>:<fact_tier>:<summary>', got: {entry}",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            sections.append({
+                "section_id": sid,
+                "fact_tier": tier,
+                "summary": summary,
+                "evidence_refs": section_evidence.get(sid, []),
+            })
+        kickoff = args.kickoff_at if args.kickoff_at else None
+        payload = {
+            "schema": "scoutfootball.opposition-briefing",
+            "version": "1.0.0",
+            "briefing_id": briefing_id,
+            "revision": 1,
+            "created_at": now,
+            "updated_at": now,
+            "author": args.author or "maintainer",
+            "title": args.title,
+            "match_id": args.match_id or "",
+            "home_team": args.home_team or "",
+            "away_team": args.away_team or "",
+            "kickoff_at": kickoff,
+            "competition": args.competition or "",
+            "season": args.season or "",
+            "sections": sections,
+            "linked_pattern_card_ids": args.linked_pattern_card_ids or [],
+            "linked_scenario_tree_id": args.linked_scenario_tree_id,
+            "linked_post_match_review_id": args.linked_post_match_review_id,
+            "notes": args.notes or "",
+            "limitations": [
+                "Briefing is a personal local object; not an external fact.",
+                "fact_tier is the maintainer's honest classification, not automated.",
+            ],
+        }
+
+    try:
+        store = _briefing_store()
+        record = store.save(payload["briefing_id"], payload, expected_revision=0)
+    except BriefingValidationError as exc:
+        print(f"error: briefing validation failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except BriefingStoreError as exc:
+        print(
+            f"error: briefing store failed: {exc.code} (HTTP {exc.http_status})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(record, ensure_ascii=False, indent=2))
+    else:
+        briefing = record["briefing"]
+        print(
+            f"Created briefing: {briefing['briefing_id']} (revision {briefing['revision']})"
+        )
+        print(f"  title: {briefing['title']}")
+        print(
+            f"  match: {briefing.get('home_team', '')} vs "
+            f"{briefing.get('away_team', '') or '(unknown)'}"
+        )
+        if briefing.get("kickoff_at"):
+            print(f"  kickoff: {briefing['kickoff_at']}")
+        if briefing.get("competition"):
+            print(f"  competition: {briefing['competition']}")
+        print(f"  sections: {len(briefing.get('sections', []))}")
+        for sec in briefing.get("sections", []):
+            print(
+                f"    - {sec['section_id']} [{sec.get('fact_tier', 'unknown')}] "
+                f"({len(sec.get('evidence_refs', []))} refs)"
+            )
+        print(f"  stored at: {store.root / (briefing['briefing_id'] + '.json')}")
+
+
+def _cmd_list_briefings(args: argparse.Namespace) -> None:
+    """List stored source-limited match briefings."""
+    import json
+
+    store = _briefing_store()
+    records = store.list_records(limit=args.limit)
+    if args.json:
+        print(
+            json.dumps(
+                {"count": len(records), "briefings": records},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        if not records:
+            print("No briefings found.")
+            return
+        print(f"Found {len(records)} briefing(s):")
+        for rec in records:
+            print(
+                f"  {rec['briefing_id']}  rev={rec['server_revision']}  "
+                f"{rec.get('title', '')}  "
+                f"{rec.get('home_team', '') or '-'} vs "
+                f"{rec.get('away_team', '') or '-'}  "
+                f"comp={rec.get('competition', '') or '-'}"
+            )
+
+
+def _cmd_show_briefing(args: argparse.Namespace) -> None:
+    """Show one stored source-limited match briefing."""
+    import json
+
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    try:
+        store = _briefing_store()
+        record = store.load(args.briefing_id)
+    except BriefingStoreError as exc:
+        print(f"error: {exc.code} (HTTP {exc.http_status})", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(record, ensure_ascii=False, indent=2))
+    else:
+        briefing = record["briefing"]
+        print(f"Briefing: {briefing['briefing_id']}")
+        print(f"  schema: {briefing['schema']} v{briefing['version']}")
+        print(
+            f"  revision: {briefing['revision']} "
+            f"(server_revision: {record['server_revision']})"
+        )
+        print(f"  title: {briefing['title']}")
+        print(
+            f"  match: {briefing.get('home_team', '') or '(none)'} vs "
+            f"{briefing.get('away_team', '') or '(unknown)'}"
+        )
+        if briefing.get("kickoff_at"):
+            print(f"  kickoff: {briefing['kickoff_at']}")
+        if briefing.get("competition"):
+            print(f"  competition: {briefing['competition']}")
+        if briefing.get("season"):
+            print(f"  season: {briefing['season']}")
+        if briefing.get("match_id"):
+            print(f"  match_id: {briefing['match_id']}")
+        if briefing.get("sections"):
+            print(f"  sections ({len(briefing['sections'])}):")
+            for sec in briefing["sections"]:
+                print(
+                    f"    - {sec['section_id']} [{sec.get('fact_tier', 'unknown')}]"
+                )
+                if sec.get("summary"):
+                    summary = sec["summary"]
+                    if len(summary) > 100:
+                        summary = summary[:97] + "..."
+                    print(f"        {summary}")
+                if sec.get("evidence_refs"):
+                    print(f"        evidence: {len(sec['evidence_refs'])} ref(s)")
+        if briefing.get("linked_pattern_card_ids"):
+            print(
+                f"  linked pattern cards: {', '.join(briefing['linked_pattern_card_ids'])}"
+            )
+        if briefing.get("linked_scenario_tree_id"):
+            print(f"  linked scenario tree: {briefing['linked_scenario_tree_id']}")
+        if briefing.get("linked_post_match_review_id"):
+            print(
+                f"  linked post-match review: {briefing['linked_post_match_review_id']}"
+            )
+        if briefing.get("notes"):
+            print(f"  notes: {briefing['notes']}")
+        print(f"  created: {briefing.get('created_at', '?')}")
+        print(f"  updated: {briefing.get('updated_at', '?')}")
+        print(f"  stored: {record.get('stored_at', '?')}")
+
+
+def _cmd_validate_briefing(args: argparse.Namespace) -> None:
+    """Validate a local briefing JSON file without saving it."""
+    import json
+
+    from scoutfootball.opposition.briefing import (
+        BriefingValidationError,
+        validate_briefing_payload,
+    )
+
+    path = Path(args.path)
+    if path.is_symlink() or not path.is_file():
+        print(
+            f"error: briefing file must be a regular local file: {path}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(
+            f"error: cannot read briefing JSON: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        briefing = validate_briefing_payload(payload)
+    except BriefingValidationError as exc:
+        print(f"INVALID: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        result = {"status": "valid", "briefing_id": briefing.briefing_id}
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(
+            f"VALID: {briefing.briefing_id} (schema={briefing.schema} v{briefing.version})"
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -3143,6 +3470,86 @@ def build_parser() -> argparse.ArgumentParser:
     validate_brief_p.add_argument("path", type=str, help="Path to local brief JSON file")
     validate_brief_p.add_argument("--json", action="store_true", help="Emit JSON output")
 
+    # ── opposition briefing ──
+    briefing_create = sub.add_parser(
+        "create-briefing",
+        help="Create a source-limited match briefing (local personal object)",
+    )
+    briefing_create.add_argument(
+        "--title", type=str, default=None,
+        help="Briefing title (required unless --from-json)",
+    )
+    briefing_create.add_argument("--home-team", type=str, default="", help="Home team name")
+    briefing_create.add_argument("--away-team", type=str, default="", help="Away team name")
+    briefing_create.add_argument(
+        "--kickoff-at", type=str, default=None,
+        help="Kickoff ISO datetime (e.g. 2026-08-15T15:00:00+00:00)",
+    )
+    briefing_create.add_argument("--competition", type=str, default="", help="Competition name")
+    briefing_create.add_argument(
+        "--season", type=str, default="", help="Season label (e.g. 2026-27)"
+    )
+    briefing_create.add_argument("--match-id", type=str, default="", help="External match id")
+    briefing_create.add_argument(
+        "--section", action="append", default=None,
+        help=(
+            "Briefing section as '<section_id>:<fact_tier>:<summary>'; "
+            "section_id is one of opponent_strength/recent_form/key_players/"
+            "set_pieces/injuries/tactical_notes or 'custom:<tail>'; "
+            "fact_tier is one of official/recorded/estimated/unknown"
+        ),
+    )
+    briefing_create.add_argument(
+        "--section-evidence", action="append", default=None,
+        help="Evidence ref as '<section_id>:<ref>' (may be repeated)",
+    )
+    briefing_create.add_argument(
+        "--linked-pattern-card-ids", nargs="+", default=None,
+        help="Linked pattern card IDs (space-separated)",
+    )
+    briefing_create.add_argument(
+        "--linked-scenario-tree-id", type=str, default=None,
+        help="Linked scenario tree ID",
+    )
+    briefing_create.add_argument(
+        "--linked-post-match-review-id", type=str, default=None,
+        help="Linked post-match review ID",
+    )
+    briefing_create.add_argument("--notes", type=str, default="", help="Free-form notes")
+    briefing_create.add_argument("--author", type=str, default="maintainer", help="Author name")
+    briefing_create.add_argument(
+        "--briefing-id", type=str, default=None,
+        help="Explicit briefing ID (auto-generated if omitted)",
+    )
+    briefing_create.add_argument(
+        "--from-json", type=str, default=None,
+        help="Load briefing payload from a local JSON file instead of CLI flags",
+    )
+    briefing_create.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    list_briefings_p = sub.add_parser(
+        "list-briefings",
+        help="List stored match briefings (most recent first)",
+    )
+    list_briefings_p.add_argument(
+        "--limit", type=int, default=100, help="Max results (default 100)"
+    )
+    list_briefings_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    show_briefing_p = sub.add_parser(
+        "show-briefing",
+        help="Show one stored match briefing by ID",
+    )
+    show_briefing_p.add_argument("briefing_id", type=str, help="Briefing ID to show")
+    show_briefing_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    validate_briefing_p = sub.add_parser(
+        "validate-briefing",
+        help="Validate a local briefing JSON file without saving it",
+    )
+    validate_briefing_p.add_argument("path", type=str, help="Path to local briefing JSON file")
+    validate_briefing_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
     return parser
 
 
@@ -3192,6 +3599,10 @@ def main() -> None:
         "list-briefs": _cmd_list_briefs,
         "show-brief": _cmd_show_brief,
         "validate-brief": _cmd_validate_brief,
+        "create-briefing": _cmd_create_briefing,
+        "list-briefings": _cmd_list_briefings,
+        "show-briefing": _cmd_show_briefing,
+        "validate-briefing": _cmd_validate_briefing,
     }
 
     handler = handlers.get(args.command)

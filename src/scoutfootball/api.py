@@ -9730,6 +9730,135 @@ def create_recruitment_brief(payload: dict) -> dict:
     })
 
 
+# ── Opposition & Match Pack API ─────────────────────────────────────────
+
+
+def _briefing_store():
+    """Build a BriefingStore rooted at report_root/opposition/briefings."""
+    from scoutfootball.opposition.store import BriefingStore
+
+    return BriefingStore(_settings().report_root / "opposition" / "briefings")
+
+
+def get_opposition_contracts() -> dict:
+    """Return the Core DataContract registry for the Opposition pack."""
+    from scoutfootball.opposition.contracts import (
+        build_opposition_contract_registry,
+        contracts_to_dict,
+        fact_type_for_artifact,
+    )
+
+    store = _briefing_store()
+    briefing_count = store.count()
+
+    registry = build_opposition_contract_registry(briefing_count=briefing_count)
+    contracts = contracts_to_dict(registry)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-contract-registry",
+        "version": "1.0.0",
+        "count": len(contracts),
+        "contracts": contracts,
+        "fact_types": [
+            fact_type_for_artifact(c["artifact_id"]).value for c in contracts
+        ],
+        "disclaimer": (
+            "Registry enumerates opposition & match artifacts reusing the "
+            "Core DataContract type.  Only artifacts with at least one "
+            "stored record are included; absent artifacts are omitted, not "
+            "stubbed, because opposition data is maintainer-authored on "
+            "demand."
+        ),
+    })
+
+
+def get_opposition_briefings(limit: int = 100) -> dict:
+    """List stored source-limited match briefings (most recent first)."""
+    store = _briefing_store()
+    records = store.list_records(limit=limit)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-list",
+        "version": "1.0.0",
+        "count": len(records),
+        "briefings": records,
+    })
+
+
+def get_opposition_briefing(briefing_id: str) -> dict:
+    """Load one stored match briefing by ID."""
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    store = _briefing_store()
+    try:
+        record = store.load(briefing_id)
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def create_opposition_briefing(payload: dict) -> dict:
+    """Create a new source-limited match briefing from a JSON payload.
+
+    The payload must be a valid ``scoutfootball.opposition-briefing``
+    v1.0.0 object.  Returns the stored record envelope on success.
+    """
+    from scoutfootball.opposition.briefing import BriefingValidationError
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    if not isinstance(payload, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "payload must be a JSON object",
+            "http_status": 400,
+        })
+
+    briefing_id = payload.get("briefing_id")
+    if not isinstance(briefing_id, str) or not briefing_id:
+        return _clean_json_value({
+            "status": "error",
+            "code": "missing_briefing_id",
+            "message": "briefing_id is required",
+            "http_status": 400,
+        })
+
+    store = _briefing_store()
+    try:
+        record = store.save(briefing_id, payload, expected_revision=0)
+    except BriefingValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
 def get_wc_tournament_standings(group: str | None = None) -> dict:
     """Return standings for one or all groups."""
     from dataclasses import asdict

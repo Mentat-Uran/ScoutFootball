@@ -19,6 +19,7 @@ from scoutfootball.api import (
     apply_wc_tournament_result,
     clear_wc_knockout_result,
     clear_wc_tournament_result,
+    create_opposition_briefing,
     create_recruitment_brief,
     export_wc_tournament_state,
     generate_wc_knockout_bracket,
@@ -73,6 +74,9 @@ from scoutfootball.api import (
     get_model_comparison,
     get_model_run_detail,
     get_model_runs,
+    get_opposition_briefing,
+    get_opposition_briefings,
+    get_opposition_contracts,
     get_outcome_distribution,
     get_player_career_trajectory,
     get_player_comparison,
@@ -1785,6 +1789,49 @@ def create_app() -> FastAPI:
                 detail={"code": "invalid_json", "message": str(exc)},
             ) from exc
         result = create_recruitment_brief(payload)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    # ── Opposition & Match briefings ──────────────────────────────
+    @app.get("/opposition/contracts")
+    def opposition_contracts():
+        return get_opposition_contracts()
+
+    @app.get("/opposition/briefs")
+    def opposition_briefs(limit: int = Query(100, ge=1, le=100)):
+        return get_opposition_briefings(limit=limit)
+
+    @app.get("/opposition/briefs/{briefing_id}")
+    def opposition_brief(briefing_id: str):
+        result = get_opposition_briefing(briefing_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/opposition/briefs")
+    async def opposition_create_brief(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+        result = create_opposition_briefing(payload)
         if result.get("status") == "error":
             raise HTTPException(
                 status_code=int(result.get("http_status", 400)),
