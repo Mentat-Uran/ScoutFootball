@@ -19,9 +19,13 @@ from scoutfootball.api import (
     apply_wc_tournament_result,
     clear_wc_knockout_result,
     clear_wc_tournament_result,
+    create_decision_dossier,
     create_opposition_briefing,
+    create_post_match_review,
     create_recruitment_brief,
+    diff_decision_dossier_versions,
     diff_opposition_briefing_versions,
+    diff_post_match_review_versions,
     diff_recruitment_brief_versions,
     export_local_pack,
     export_wc_tournament_state,
@@ -51,6 +55,8 @@ from scoutfootball.api import (
     get_cumulative_trajectory,
     get_data_drift,
     get_decay_tuning,
+    get_decision_dossier,
+    get_decision_dossiers,
     get_difficulty_stratification,
     get_ensemble_attribution,
     get_ensemble_attribution_ci,
@@ -96,6 +102,8 @@ from scoutfootball.api import (
     get_position_style_drift_neighbors,
     get_position_style_evolution,
     get_position_trend_overlay,
+    get_post_match_review,
+    get_post_match_reviews,
     get_prediction_anomalies,
     get_prediction_attribution,
     get_prediction_attribution_ci,
@@ -175,15 +183,21 @@ from scoutfootball.api import (
     get_world_cup_match_prediction,
     health_check,
     import_wc_tournament_state,
+    list_decision_dossier_backups,
     list_opposition_briefing_backups,
     list_players,
+    list_post_match_review_backups,
     list_recruitment_brief_backups,
     list_teams,
+    load_decision_dossier_backup,
     load_opposition_briefing_backup,
+    load_post_match_review_backup,
     load_recruitment_brief_backup,
     preview_wc_tournament_import,
     reset_wc_tournament,
+    restore_decision_dossier_from_backup,
     restore_opposition_briefing_from_backup,
+    restore_post_match_review_from_backup,
     restore_recruitment_brief_from_backup,
     search_players_and_teams,
 )
@@ -1990,6 +2004,248 @@ def create_app() -> FastAPI:
                 ) from exc
         result = restore_opposition_briefing_from_backup(
             briefing_id,
+            backup_filename,
+            expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    # ── Recruitment decision dossiers ────────────────────────────
+    @app.get("/recruitment/dossiers")
+    def recruitment_dossiers(limit: int = Query(100, ge=1, le=100)):
+        return get_decision_dossiers(limit=limit)
+
+    @app.get("/recruitment/dossiers/{dossier_id}")
+    def recruitment_dossier(dossier_id: str):
+        result = get_decision_dossier(dossier_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/recruitment/dossiers")
+    async def recruitment_create_dossier(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+        result = create_decision_dossier(payload)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    @app.get("/recruitment/dossiers/{dossier_id}/backups")
+    def recruitment_dossier_backups(dossier_id: str):
+        result = list_decision_dossier_backups(dossier_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/dossiers/{dossier_id}/backups/{backup_filename}")
+    def recruitment_dossier_backup(dossier_id: str, backup_filename: str):
+        result = load_decision_dossier_backup(dossier_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/dossiers/{dossier_id}/diff")
+    def recruitment_dossier_diff(
+        dossier_id: str,
+        backup_filename: str = Query(..., description="backup filename to diff against current"),
+    ):
+        result = diff_decision_dossier_versions(dossier_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/recruitment/dossiers/{dossier_id}/restore")
+    async def recruitment_dossier_restore(dossier_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        payload: dict = {}
+        if raw:
+            try:
+                payload = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_json", "message": str(exc)},
+                ) from exc
+        backup_filename = payload.get("backup_filename")
+        if not isinstance(backup_filename, str) or not backup_filename:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_backup_filename"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is not None:
+            try:
+                expected_revision = int(expected_revision)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_expected_revision"},
+                ) from exc
+        result = restore_decision_dossier_from_backup(
+            dossier_id,
+            backup_filename,
+            expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    # ── Opposition post-match reviews ────────────────────────────
+    @app.get("/opposition/reviews")
+    def opposition_reviews(limit: int = Query(100, ge=1, le=100)):
+        return get_post_match_reviews(limit=limit)
+
+    @app.get("/opposition/reviews/{review_id}")
+    def opposition_review(review_id: str):
+        result = get_post_match_review(review_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/opposition/reviews")
+    async def opposition_create_review(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+        result = create_post_match_review(payload)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    @app.get("/opposition/reviews/{review_id}/backups")
+    def opposition_review_backups(review_id: str):
+        result = list_post_match_review_backups(review_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/opposition/reviews/{review_id}/backups/{backup_filename}")
+    def opposition_review_backup(review_id: str, backup_filename: str):
+        result = load_post_match_review_backup(review_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/opposition/reviews/{review_id}/diff")
+    def opposition_review_diff(
+        review_id: str,
+        backup_filename: str = Query(..., description="backup filename to diff against current"),
+    ):
+        result = diff_post_match_review_versions(review_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/opposition/reviews/{review_id}/restore")
+    async def opposition_review_restore(review_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        payload: dict = {}
+        if raw:
+            try:
+                payload = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_json", "message": str(exc)},
+                ) from exc
+        backup_filename = payload.get("backup_filename")
+        if not isinstance(backup_filename, str) or not backup_filename:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_backup_filename"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is not None:
+            try:
+                expected_revision = int(expected_revision)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_expected_revision"},
+                ) from exc
+        result = restore_post_match_review_from_backup(
+            review_id,
             backup_filename,
             expected_revision=expected_revision,
         )

@@ -263,6 +263,30 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 完整证据：本地烟雾测试 `create-review`（flags + `--decision confirmed` 强制 finalized）、`list-reviews`（text）、`create-review --json`（envelope 含 server_revision=1）全部通过。该工作关闭 P1 退出门槛第 2 条"需求 brief 到有人工结论的证据包可 round-trip"的 opposition 侧缺口——Opposition & Match Pack 现可从 briefing（赛前假设）→ post_match_review（赛后假设-计划-执行-结果对照 + 人工结论）完整 round-trip，冲突由乐观并发 `expected_revision` 控制，本地边界由 `limitations` 字段诚实呈现，事实分层由 `fact_tier` 贯穿 briefing 与 review。6.2 Opposition & Match Pack briefing 层 + 赛后复盘层现已 `verified`。
 
+### 6.5 P1 决策闭环 API + 前端入口 — `verified`（2026-07-24）
+
+满足 P1 退出门槛第 1 条"维护者能够从真实输入独立完成至少一个参考工作流"的 API + 前端入口层。6.1 dossier 层与 6.2 review 层此前只有 CLI 与 store 入口；本轮把两类决策档案接入 API、版本视图与工作流导航，让维护者可在浏览器中完成 brief → dossier 与 briefing → review 的完整决策 round-trip，不再依赖 CLI。
+
+**核心交付**：
+
+- `src/scoutfootball/api.py` 新增 14 个端点：`recruitment/dossiers` 与 `opposition/reviews` 各 7 个（list / get / create / list_backups / load_backup / diff / restore），与现有 `recruitment/briefs` 和 `opposition/briefs` 端点同构。`_dossier_store()` 与 `_review_store()` helper 按 `<report_root>/recruitment/dossiers/` 与 `<report_root>/opposition/reviews/` 路径构造 store。`get_recruitment_contracts()` 与 `get_opposition_contracts()` 同步上报 dossier / review 的实时条数。
+- `src/scoutfootball/api_server.py` 注册全部新路由，错误路径按现有 brief / briefing 端点模式映射 `http_status` 到 HTTPException。
+- `frontend/app.js` 版本视图重构为配置驱动：`_VERSION_ARTIFACT_TYPES` 登记表统一描述 brief / briefing / dossier / review 的 list / item / backups / backup / diff / restore 路径、id 字段、list key、state 字段、error 字段与 i18n label key。`_fetchVersionRecords` / `_fetchVersionBackups` / `_versionStatusLabel` / `_renderVersionRecordOptions` 等函数按配置遍历，新增 artifact 类型只需追加一条配置项。
+- `frontend/app.js` 工作流视图扩展：`workflowState` 新增 `dossiers` / `reviews` 列表与离线错误字段；`_fetchWorkflowDossiers` / `_fetchWorkflowReviews` 与 brief / briefing fetcher 同构；`_workflowStatusSummary` 上报四类 artifact 计数；`_workflowInferSteps` 新增 dossier / review 推断（API 离线 → 阻断；有 brief 无 dossier / 有 briefing 无 review → 建议起草；draft 状态 → 提示补全证据后标记 decided / finalized），形成 brief → dossier 与 briefing → review 的导航闭环。
+- `frontend/index.html` 版本视图类型选择器新增 `dossier` / `review` 两个 `<option>`，i18n key 与配置表 `labelKey` 对齐。
+
+**测试覆盖**：
+
+- `tests/unit/test_decision_dossier_and_review_api.py`：35 个 API 测试，覆盖全部 14 个端点的成功路径、错误路径（404 unknown id、422 missing query、400 invalid backup filename、409 revision conflict、428 precondition_required）与端到端 round-trip（create → get → list → backup → diff → restore），并验证 contracts 端点上报的 dossier / review 实时条数。
+- 全量单元测试 + 集成测试通过；ruff clean；`node --check frontend/app.js` 通过。
+
+**修复记录**：
+
+- 测试期望与端点契约对齐：unknown backup list 返回 200 + 空列表而非 404；missing query 参数由 FastAPI 返回 422 而非 400；invalid backup filename 返回 400。
+- ruff F841 未用变量：contracts count 测试中的 `before_ids` 改为参与断言（`assert "recruitment.decision_dossier" not in before_ids`）。
+
+**遗留**：dossier / review 的编辑 UI（创建表单、证据条目增删）尚未实现，当前仍需通过 CLI 或 `POST` raw JSON 创建；版本视图仅支持浏览 / 加载备份 / diff / 恢复。这与现有 brief / briefing 的前端处理范围一致，留待后续产品体验迭代。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |

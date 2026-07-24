@@ -9619,10 +9619,13 @@ def get_recruitment_contracts() -> dict:
     store = _brief_store()
     brief_count = store.count()
 
+    dossier_store = _dossier_store()
+    dossier_count = dossier_store.count()
+
     registry = build_recruitment_contract_registry(
         brief_count=brief_count,
         role_profile_count=0,
-        decision_dossier_count=0,
+        decision_dossier_count=dossier_count,
     )
     contracts = contracts_to_dict(registry)
     return _clean_json_value({
@@ -9866,6 +9869,242 @@ def restore_recruitment_brief_from_backup(
     })
 
 
+# ── Recruitment decision dossier API ─────────────────────────────────────
+
+
+def _dossier_store():
+    """Build a DossierStore rooted at report_root/recruitment/dossiers."""
+    from scoutfootball.recruitment.dossier_store import DossierStore
+
+    return DossierStore(_settings().report_root / "recruitment" / "dossiers")
+
+
+def get_decision_dossiers(limit: int = 100) -> dict:
+    """List stored decision dossiers (most recent first)."""
+    store = _dossier_store()
+    records = store.list_records(limit=limit)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-list",
+        "version": "1.0.0",
+        "count": len(records),
+        "dossiers": records,
+    })
+
+
+def get_decision_dossier(dossier_id: str) -> dict:
+    """Load one stored decision dossier by ID."""
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    store = _dossier_store()
+    try:
+        record = store.load(dossier_id)
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def create_decision_dossier(payload: dict) -> dict:
+    """Create a new decision dossier from a JSON payload.
+
+    The payload must be a valid ``scoutfootball.recruitment-decision-dossier``
+    v1.0.0 object.  Returns the stored record envelope on success.
+    """
+    from scoutfootball.recruitment.dossier import DossierValidationError
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    if not isinstance(payload, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "payload must be a JSON object",
+            "http_status": 400,
+        })
+
+    dossier_id = payload.get("dossier_id")
+    if not isinstance(dossier_id, str) or not dossier_id:
+        return _clean_json_value({
+            "status": "error",
+            "code": "missing_dossier_id",
+            "message": "dossier_id is required",
+            "http_status": 400,
+        })
+
+    store = _dossier_store()
+    try:
+        record = store.save(dossier_id, payload, expected_revision=0)
+    except DossierValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def list_decision_dossier_backups(dossier_id: str) -> dict:
+    """List on-disk backups for one decision dossier."""
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    store = _dossier_store()
+    try:
+        backups = store.list_backups(dossier_id)
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-backup-list",
+        "version": "1.0.0",
+        "dossier_id": dossier_id,
+        "count": len(backups),
+        "backups": backups,
+    })
+
+
+def load_decision_dossier_backup(dossier_id: str, backup_filename: str) -> dict:
+    """Load one backup record for a decision dossier."""
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    store = _dossier_store()
+    try:
+        record = store.load_backup(dossier_id, backup_filename)
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def diff_decision_dossier_versions(
+    dossier_id: str,
+    backup_filename: str | None = None,
+) -> dict:
+    """Diff the current dossier against a backup.
+
+    If the current record is missing (e.g. the dossier was deleted and
+    only a deletion backup remains), the diff is ``added`` from None to
+    the backup payload.
+    """
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+    from scoutfootball.storage.record_diff import diff_records
+
+    store = _dossier_store()
+    try:
+        backup_record = (
+            store.load_backup(dossier_id, backup_filename) if backup_filename else None
+        )
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_record: dict | None
+    try:
+        current_record = store.load(dossier_id)
+    except DossierStoreError as exc:
+        if exc.code != "dossier_not_found":
+            return _clean_json_value({
+                "status": "error",
+                "code": exc.code,
+                "message": exc.code,
+                "http_status": exc.http_status,
+            })
+        current_record = None
+
+    if backup_record is None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "backup_filename_required",
+            "message": "backup_filename query parameter is required",
+            "http_status": 400,
+        })
+
+    changes = diff_records(current_record, backup_record)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-diff",
+        "version": "1.0.0",
+        "dossier_id": dossier_id,
+        "current_revision": (
+            current_record.get("server_revision") if current_record else None
+        ),
+        "backup_revision": backup_record.get("server_revision"),
+        "change_count": len(changes),
+        "changes": changes,
+    })
+
+
+def restore_decision_dossier_from_backup(
+    dossier_id: str,
+    backup_filename: str,
+    *,
+    expected_revision: int | None = None,
+) -> dict:
+    """Restore a decision dossier from a backup, creating a new revision."""
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    store = _dossier_store()
+    try:
+        record = store.restore_from_backup(
+            dossier_id, backup_filename, expected_revision=expected_revision,
+        )
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "restored_from": backup_filename,
+        "record": record,
+    })
+
+
 # ── Opposition & Match Pack API ─────────────────────────────────────────
 
 
@@ -9887,7 +10126,13 @@ def get_opposition_contracts() -> dict:
     store = _briefing_store()
     briefing_count = store.count()
 
-    registry = build_opposition_contract_registry(briefing_count=briefing_count)
+    review_store = _review_store()
+    review_count = review_store.count()
+
+    registry = build_opposition_contract_registry(
+        briefing_count=briefing_count,
+        post_match_review_count=review_count,
+    )
     contracts = contracts_to_dict(registry)
     return _clean_json_value({
         "status": "ok",
@@ -10121,6 +10366,242 @@ def restore_opposition_briefing_from_backup(
     return _clean_json_value({
         "status": "ok",
         "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "restored_from": backup_filename,
+        "record": record,
+    })
+
+
+# ── Opposition post-match review API ─────────────────────────────────────
+
+
+def _review_store():
+    """Build a ReviewStore rooted at report_root/opposition/reviews."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStore
+
+    return ReviewStore(_settings().report_root / "opposition" / "reviews")
+
+
+def get_post_match_reviews(limit: int = 100) -> dict:
+    """List stored post-match reviews (most recent first)."""
+    store = _review_store()
+    records = store.list_records(limit=limit)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-list",
+        "version": "1.0.0",
+        "count": len(records),
+        "reviews": records,
+    })
+
+
+def get_post_match_review(review_id: str) -> dict:
+    """Load one stored post-match review by ID."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    store = _review_store()
+    try:
+        record = store.load(review_id)
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def create_post_match_review(payload: dict) -> dict:
+    """Create a new post-match review from a JSON payload.
+
+    The payload must be a valid ``scoutfootball.opposition-post-match-review``
+    v1.0.0 object.  Returns the stored record envelope on success.
+    """
+    from scoutfootball.opposition.post_match_review import ReviewValidationError
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    if not isinstance(payload, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "payload must be a JSON object",
+            "http_status": 400,
+        })
+
+    review_id = payload.get("review_id")
+    if not isinstance(review_id, str) or not review_id:
+        return _clean_json_value({
+            "status": "error",
+            "code": "missing_review_id",
+            "message": "review_id is required",
+            "http_status": 400,
+        })
+
+    store = _review_store()
+    try:
+        record = store.save(review_id, payload, expected_revision=0)
+    except ReviewValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def list_post_match_review_backups(review_id: str) -> dict:
+    """List on-disk backups for one post-match review."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    store = _review_store()
+    try:
+        backups = store.list_backups(review_id)
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-backup-list",
+        "version": "1.0.0",
+        "review_id": review_id,
+        "count": len(backups),
+        "backups": backups,
+    })
+
+
+def load_post_match_review_backup(review_id: str, backup_filename: str) -> dict:
+    """Load one backup record for a post-match review."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    store = _review_store()
+    try:
+        record = store.load_backup(review_id, backup_filename)
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def diff_post_match_review_versions(
+    review_id: str,
+    backup_filename: str | None = None,
+) -> dict:
+    """Diff the current review against a backup.
+
+    If the current record is missing (e.g. the review was deleted and
+    only a deletion backup remains), the diff is ``added`` from None to
+    the backup payload.
+    """
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+    from scoutfootball.storage.record_diff import diff_records
+
+    store = _review_store()
+    try:
+        backup_record = (
+            store.load_backup(review_id, backup_filename) if backup_filename else None
+        )
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_record: dict | None
+    try:
+        current_record = store.load(review_id)
+    except ReviewStoreError as exc:
+        if exc.code != "review_not_found":
+            return _clean_json_value({
+                "status": "error",
+                "code": exc.code,
+                "message": exc.code,
+                "http_status": exc.http_status,
+            })
+        current_record = None
+
+    if backup_record is None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "backup_filename_required",
+            "message": "backup_filename query parameter is required",
+            "http_status": 400,
+        })
+
+    changes = diff_records(current_record, backup_record)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-diff",
+        "version": "1.0.0",
+        "review_id": review_id,
+        "current_revision": (
+            current_record.get("server_revision") if current_record else None
+        ),
+        "backup_revision": backup_record.get("server_revision"),
+        "change_count": len(changes),
+        "changes": changes,
+    })
+
+
+def restore_post_match_review_from_backup(
+    review_id: str,
+    backup_filename: str,
+    *,
+    expected_revision: int | None = None,
+) -> dict:
+    """Restore a post-match review from a backup, creating a new revision."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    store = _review_store()
+    try:
+        record = store.restore_from_backup(
+            review_id, backup_filename, expected_revision=expected_revision,
+        )
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
         "version": "1.0.0",
         "restored_from": backup_filename,
         "record": record,
