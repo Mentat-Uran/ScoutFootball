@@ -27,6 +27,14 @@
                     <span class="nav-icon">◎</span>
                     <span data-i18n="nav_overview">总览</span>
                 </button>
+                <button class="nav-action" data-view="workflow" type="button">
+                    <span class="nav-icon">⇢</span>
+                    <span data-i18n="nav_workflow">工作流</span>
+                </button>
+                <button class="nav-action" data-view="versions" type="button">
+                    <span class="nav-icon">⇆</span>
+                    <span data-i18n="nav_versions">版本</span>
+                </button>
                 <button class="nav-action" data-view="players" type="button">
                     <span class="nav-icon">◇</span>
                     <span data-i18n="nav_players">球员</span>
@@ -221,6 +229,115 @@
                         <p data-i18n="card_match_body">胜平负、比分矩阵、模型覆盖和校准入口。</p>
                     </article>
                 </div>
+            </section>
+
+            <section class="view" id="view-workflow" aria-label="workflow">
+                <article class="liquid-panel feature-hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="workflow_kicker">工作流导航</p>
+                        <h2 data-i18n="workflow_title">下一步、缺失证据与阻断原因</h2>
+                        <p class="feature-note" data-i18n="workflow_boundary">本地优先：基于已加载的 brief / briefing / 复核队列状态推断可执行的下一步；标注缺失证据和阻断原因。</p>
+                    </div>
+                    <div class="feature-metric-strip" aria-label="Workflow summary">
+                        <div><span class="metric-value" id="wf-next-count">0</span><span data-i18n="workflow_metric_next">可执行下一步</span></div>
+                        <div><span class="metric-value" id="wf-blocker-count">0</span><span data-i18n="workflow_metric_blocker">阻断项</span></div>
+                        <div><span class="metric-value" id="wf-evidence-gap-count">0</span><span data-i18n="workflow_metric_evidence_gap">缺失证据</span></div>
+                    </div>
+                </article>
+                <div class="workspace-status-rail" id="wf-status-rail" aria-live="polite"></div>
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="workflow_next_steps">下一步</h3>
+                            <span class="status-pill status-high" id="wf-next-pill">0</span>
+                        </div>
+                        <ol id="wf-next-list" class="wf-step-list" aria-live="polite"></ol>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="workflow_blockers">阻断原因</h3>
+                            <span class="status-pill status-low" id="wf-blocker-pill">0</span>
+                        </div>
+                        <ul id="wf-blocker-list" class="wf-step-list" aria-live="polite"></ul>
+                    </article>
+                </div>
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="workflow_evidence_gaps">缺失证据</h3>
+                        <span class="status-pill status-medium" id="wf-evidence-gap-pill">0</span>
+                    </div>
+                    <ul id="wf-evidence-gap-list" class="wf-step-list" aria-live="polite"></ul>
+                </article>
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="workflow_sources">数据来源</h3>
+                    </div>
+                    <p class="feature-note" id="wf-sources-note" style="padding:0.5rem 0.8rem"></p>
+                </article>
+            </section>
+
+            <section class="view" id="view-versions" aria-label="versions">
+                <article class="liquid-panel feature-hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="versions_kicker">版本与备份</p>
+                        <h2 data-i18n="versions_title">版本时间线、diff 与恢复</h2>
+                        <p class="feature-note" data-i18n="versions_boundary">本地优先：列出每个 brief / briefing 的备份时间线，查看任意两个版本的字段级 diff，并从备份恢复（遵守 If-Match 乐观并发）。</p>
+                    </div>
+                    <div class="feature-metric-strip" aria-label="Versions summary">
+                        <div><span class="metric-value" id="ver-brief-count">0</span><span data-i18n="versions_metric_briefs">Recruitment briefs</span></div>
+                        <div><span class="metric-value" id="ver-briefing-count">0</span><span data-i18n="versions_metric_briefings">Opposition briefings</span></div>
+                        <div><span class="metric-value" id="ver-backup-count">0</span><span data-i18n="versions_metric_backups">备份总数</span></div>
+                    </div>
+                </article>
+                <div class="workspace-status-rail" id="ver-status-rail" aria-live="polite"></div>
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="versions_select">选择记录</h3>
+                        </div>
+                        <div style="padding:0 0.8rem 0.8rem;display:grid;gap:10px">
+                            <label style="display:grid;gap:4px;font-size:0.74rem;color:var(--text-muted)">
+                                <span data-i18n="versions_type">类型</span>
+                                <select id="ver-type-select" class="glass-control">
+                                    <option value="brief" data-i18n="versions_type_brief">Recruitment brief</option>
+                                    <option value="briefing" data-i18n="versions_type_briefing">Opposition briefing</option>
+                                </select>
+                            </label>
+                            <label style="display:grid;gap:4px;font-size:0.74rem;color:var(--text-muted)">
+                                <span data-i18n="versions_record">记录</span>
+                                <select id="ver-record-select" class="glass-control"></select>
+                            </label>
+                        </div>
+                        <div class="panel-head" style="padding:0 0.8rem">
+                            <h3 data-i18n="versions_timeline">时间线</h3>
+                            <span class="status-pill status-medium" id="ver-timeline-pill">0</span>
+                        </div>
+                        <ul id="ver-timeline" class="wf-step-list" style="padding:0 0.8rem 0.8rem" aria-live="polite"></ul>
+                        <div style="padding:0 0.8rem 0.8rem;display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="text-button" id="ver-refresh" type="button">↻ <span data-i18n="versions_refresh">刷新</span></button>
+                            <button class="text-button" id="ver-load-backup" type="button" disabled>⬇ <span data-i18n="versions_load_backup">加载备份</span></button>
+                            <button class="text-button" id="ver-diff-backup" type="button" disabled>⇆ <span data-i18n="versions_diff_vs_current">与当前 diff</span></button>
+                            <button class="text-button" id="ver-restore-backup" type="button" disabled>⇧ <span data-i18n="versions_restore">恢复</span></button>
+                        </div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="versions_diff">字段级 diff</h3>
+                            <span class="status-pill status-high" id="ver-diff-pill">0</span>
+                        </div>
+                        <div id="ver-diff-output" style="padding:0 0.8rem 0.8rem;font-size:0.78rem;line-height:1.5" aria-live="polite"></div>
+                    </article>
+                </div>
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="versions_portable_pack">可移植离线包</h3>
+                    </div>
+                    <div style="padding:0 0.8rem 0.8rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                        <button class="text-button" id="ver-export-pack" type="button">⬇ <span data-i18n="versions_export_pack">导出 portable pack JSON</span></button>
+                        <span class="toolbar-status" id="ver-pack-status" aria-live="polite"></span>
+                    </div>
+                    <p class="feature-note" style="padding:0 0.8rem 0.8rem" data-i18n="versions_pack_note">便携包包含所有本地产物（recruitment briefs、opposition briefings），并附带每节的 sha256 哈希用于完整性校验。</p>
+                </article>
             </section>
 
             <section class="view" id="view-players" aria-label="players">
@@ -1556,6 +1673,10 @@
 
             <!-- Tactical Board -->
             <section class="view" id="view-tactical" aria-label="tactical">
+                <div class="tactical-desktop-notice" id="tactical-desktop-notice" hidden>
+                    <span class="wf-step-marker wf-marker-blocker">!</span>
+                    <span data-i18n="tactical_desktop_only">战术编辑为桌面限定：屏幕窄于 760px 时仅可阅读，编辑控件已禁用。</span>
+                </div>
                 <div class="layout-2">
                     <article class="liquid-panel chart-panel">
                         <div class="panel-head">

@@ -718,6 +718,8 @@ def build_capability_registry() -> CapabilityRegistry:
                 "calibration",
                 "backtest",
                 "help",
+                "workflow",
+                "versions",
             ),
             data_artifacts=("frontend/data/",),
         ),

@@ -2,6 +2,7 @@ const APP_VERSION = "1.0.3";
 const i18n = {
     zh: {
         nav_overview: "总览",
+        nav_workflow: "工作流",
         nav_players: "球员",
         nav_compare: "对比",
         nav_value: "身价",
@@ -1234,9 +1235,65 @@ const i18n = {
         compare_multi_err_not_found: "未找到球员",
         compare_multi_err_no_data: "无评分数据",
         compare_multi_loading: "加载中...",
+        workflow_kicker: "工作流导航",
+        workflow_title: "下一步、缺失证据与阻断原因",
+        workflow_boundary: "本地优先：基于已加载的 brief / briefing / 复核队列状态推断可执行的下一步；标注缺失证据和阻断原因。",
+        workflow_metric_next: "可执行下一步",
+        workflow_metric_blocker: "阻断项",
+        workflow_metric_evidence_gap: "缺失证据",
+        workflow_next_steps: "下一步",
+        workflow_blockers: "阻断原因",
+        workflow_evidence_gaps: "缺失证据",
+        workflow_sources: "数据来源",
+        workflow_empty_next: "暂无可执行下一步；完成 brief / briefing 创建后会出现推荐步骤。",
+        workflow_empty_blocker: "暂无阻断项。",
+        workflow_empty_evidence: "暂无缺失证据标注。",
+        workflow_action_goto: "前往",
+        workflow_action_create: "新建",
+        workflow_sources_local: "本地产物：复核队列、watchlist、shortlist、本地 API 的 recruitment brief 与 opposition briefing。",
+        workflow_sources_offline: "（离线模式：使用浏览器内存状态推断；启用本地 API 后可看到 brief / briefing 状态。）",
+        tactical_desktop_only: "战术编辑为桌面限定：屏幕窄于 760px 时仅可阅读，编辑控件已禁用。",
+        nav_versions: "版本",
+        versions_kicker: "版本与备份",
+        versions_title: "版本时间线、diff 与恢复",
+        versions_boundary: "本地优先：列出每个 brief / briefing 的备份时间线，查看任意两个版本的字段级 diff，并从备份恢复（遵守 If-Match 乐观并发）。",
+        versions_metric_briefs: "Recruitment briefs",
+        versions_metric_briefings: "Opposition briefings",
+        versions_metric_backups: "备份总数",
+        versions_select: "选择记录",
+        versions_type: "类型",
+        versions_type_brief: "Recruitment brief",
+        versions_type_briefing: "Opposition briefing",
+        versions_record: "记录",
+        versions_timeline: "时间线",
+        versions_refresh: "刷新",
+        versions_load_backup: "加载备份",
+        versions_diff_vs_current: "与当前 diff",
+        versions_restore: "恢复",
+        versions_diff: "字段级 diff",
+        versions_portable_pack: "可移植离线包",
+        versions_export_pack: "导出 portable pack JSON",
+        versions_pack_note: "便携包包含所有本地产物（recruitment briefs、opposition briefings），并附带每节的 sha256 哈希用于完整性校验。",
+        versions_empty_timeline: "暂无备份；对该记录进行更新或删除后会出现备份。",
+        versions_empty_records: "暂无记录；先在球探/比赛视图创建 brief / briefing。",
+        versions_offline: "本地 API 不可用，无法读取版本信息。",
+        versions_diff_empty: "选择一个备份后点击“与当前 diff”查看字段差异。",
+        versions_diff_no_change: "无字段差异。",
+        versions_restore_confirm: "确认从该备份恢复？将基于备份内容创建一个新版本（需要当前版本号）。",
+        versions_restore_missing_revision: "无法恢复：需要当前记录的 server_revision（请在球探/比赛视图加载后重试）。",
+        versions_restore_success: "恢复成功，新版本号：",
+        versions_restore_failed: "恢复失败：",
+        versions_pack_exported: "已导出便携包（共",
+        versions_pack_failed: "导出失败：",
+        versions_current_revision: "当前版本",
+        versions_backup_revision: "备份版本",
+        versions_backup_deletion: "删除备份",
+        versions_kind_revision: "版本",
+        versions_kind_deletion: "删除",
     },
     en: {
         nav_overview: "Overview",
+        nav_workflow: "Workflow",
         nav_players: "Players",
         nav_compare: "Compare",
         nav_value: "Value",
@@ -2469,6 +2526,61 @@ const i18n = {
         compare_multi_err_not_found: "Players not found",
         compare_multi_err_no_data: "No rating data available",
         compare_multi_loading: "Loading...",
+        workflow_kicker: "Workflow navigation",
+        workflow_title: "Next steps, missing evidence and blockers",
+        workflow_boundary: "Local-first: infers actionable next steps from loaded brief / briefing / review queue state; flags missing evidence and blockers.",
+        workflow_metric_next: "Next steps",
+        workflow_metric_blocker: "Blockers",
+        workflow_metric_evidence_gap: "Evidence gaps",
+        workflow_next_steps: "Next steps",
+        workflow_blockers: "Blockers",
+        workflow_evidence_gaps: "Missing evidence",
+        workflow_sources: "Sources",
+        workflow_empty_next: "No actionable next step yet; create a brief / briefing to surface recommended steps.",
+        workflow_empty_blocker: "No blockers detected.",
+        workflow_empty_evidence: "No evidence gaps flagged.",
+        workflow_action_goto: "Open",
+        workflow_action_create: "New",
+        workflow_sources_local: "Local artifacts: review queue, watchlist, shortlist, and local-API recruitment briefs and opposition briefings.",
+        workflow_sources_offline: "(Offline mode: inferred from in-browser state; enable local API to see brief / briefing status.)",
+        tactical_desktop_only: "Tactical editing is desktop-only: below 760px the board is read-only and editing controls are disabled.",
+        nav_versions: "Versions",
+        versions_kicker: "Versions & backups",
+        versions_title: "Version timeline, diff and restore",
+        versions_boundary: "Local-first: lists the backup timeline for each brief / briefing, shows field-level diff between any two versions, and restores from a backup (respecting If-Match optimistic concurrency).",
+        versions_metric_briefs: "Recruitment briefs",
+        versions_metric_briefings: "Opposition briefings",
+        versions_metric_backups: "Total backups",
+        versions_select: "Select record",
+        versions_type: "Type",
+        versions_type_brief: "Recruitment brief",
+        versions_type_briefing: "Opposition briefing",
+        versions_record: "Record",
+        versions_timeline: "Timeline",
+        versions_refresh: "Refresh",
+        versions_load_backup: "Load backup",
+        versions_diff_vs_current: "Diff vs current",
+        versions_restore: "Restore",
+        versions_diff: "Field-level diff",
+        versions_portable_pack: "Portable offline pack",
+        versions_export_pack: "Export portable pack JSON",
+        versions_pack_note: "The pack bundles all local artifacts (recruitment briefs, opposition briefings) with a sha256 hash per section for integrity checks.",
+        versions_empty_timeline: "No backups yet; updating or deleting the record will create one.",
+        versions_empty_records: "No records yet; create a brief / briefing in Scouting / Matches first.",
+        versions_offline: "Local API unavailable; cannot read version information.",
+        versions_diff_empty: "Select a backup and click \"Diff vs current\" to see field-level changes.",
+        versions_diff_no_change: "No field differences.",
+        versions_restore_confirm: "Restore from this backup? A new revision will be created from the backup payload (current revision required).",
+        versions_restore_missing_revision: "Cannot restore: current server_revision is required (load the record in Scouting / Matches first).",
+        versions_restore_success: "Restore succeeded, new revision: ",
+        versions_restore_failed: "Restore failed: ",
+        versions_pack_exported: "Portable pack exported (",
+        versions_pack_failed: "Export failed: ",
+        versions_current_revision: "Current revision",
+        versions_backup_revision: "Backup revision",
+        versions_backup_deletion: "Deletion backup",
+        versions_kind_revision: "Revision",
+        versions_kind_deletion: "Deletion",
     },
 };
 
@@ -16156,6 +16268,8 @@ function renderData() {
 
 async function renderActiveView() {
     if (appState.view === "overview") renderOverview();
+    if (appState.view === "workflow") await renderWorkflow();
+    if (appState.view === "versions") await renderVersions();
     if (appState.view === "players") await renderPlayers();
     if (appState.view === "compare") await renderCompare();
     if (appState.view === "value") renderValue();
@@ -16197,6 +16311,773 @@ async function renderActiveView() {
             try { chart.resize(); } catch(e) { /* ignore disposed charts */ }
         });
     });
+}
+
+// ── Workflow navigation view ─────────────────────────────────────────
+// Local-first inference of next steps / blockers / evidence gaps based
+// on already-loaded state: review queue, watchlist, shortlist, and any
+// local-API recruitment briefs and opposition briefings.
+//
+// Sources are read-only here; no state is mutated. Each step is rendered
+// with a clear marker, reason, and an action button that jumps to the
+// relevant view (no inline editing, keeping the workflow view as a
+// navigation hub rather than another editing surface).
+
+const workflowState = {
+    briefs: [],
+    briefings: [],
+    briefsLoadedAt: 0,
+    briefingsLoadedAt: 0,
+    briefsError: null,
+    briefingsError: null,
+};
+
+async function _fetchWorkflowBriefs() {
+    try {
+        const data = await fetchJson("/recruitment/briefs", { params: "limit=100" });
+        workflowState.briefs = Array.isArray(data?.briefs) ? data.briefs : [];
+        workflowState.briefsLoadedAt = Date.now();
+        workflowState.briefsError = null;
+    } catch (err) {
+        workflowState.briefsError = err?.message || String(err);
+        workflowState.briefs = [];
+    }
+}
+
+async function _fetchWorkflowBriefings() {
+    try {
+        const data = await fetchJson("/opposition/briefs", { params: "limit=100" });
+        workflowState.briefings = Array.isArray(data?.briefings) ? data.briefings : [];
+        workflowState.briefingsLoadedAt = Date.now();
+        workflowState.briefingsError = null;
+    } catch (err) {
+        workflowState.briefingsError = err?.message || String(err);
+        workflowState.briefings = [];
+    }
+}
+
+function _workflowStatusSummary() {
+    const zT = appState.lang === "zh";
+    const parts = [];
+    parts.push(zT
+        ? `复核队列：${reviewQueue.length} 条`
+        : `Review queue: ${reviewQueue.length}`);
+    parts.push(zT
+        ? `Watchlist：${watchlistData.length}`
+        : `Watchlist: ${watchlistData.length}`);
+    parts.push(zT
+        ? `Shortlist：${shortlistData.length}`
+        : `Shortlist: ${shortlistData.length}`);
+    if (workflowState.briefsError) {
+        parts.push(zT
+            ? `Recruitment brief：离线（${workflowState.briefsError}）`
+            : `Recruitment briefs: offline (${workflowState.briefsError})`);
+    } else {
+        parts.push(zT
+            ? `Recruitment brief：${workflowState.briefs.length}`
+            : `Recruitment briefs: ${workflowState.briefs.length}`);
+    }
+    if (workflowState.briefingsError) {
+        parts.push(zT
+            ? `Opposition briefing：离线（${workflowState.briefingsError}）`
+            : `Opposition briefings: offline (${workflowState.briefingsError})`);
+    } else {
+        parts.push(zT
+            ? `Opposition briefing：${workflowState.briefings.length}`
+            : `Opposition briefings: ${workflowState.briefings.length}`);
+    }
+    return parts;
+}
+
+function _workflowInferSteps() {
+    const zT = appState.lang === "zh";
+    const next = [];
+    const blockers = [];
+    const evidenceGaps = [];
+
+    const pendingReviews = reviewQueue.filter((item) => {
+        const status = (item.status || "pending").toLowerCase();
+        return status === "pending" || status === "reviewing";
+    });
+
+    if (pendingReviews.length > 0) {
+        next.push({
+            id: "review-pending",
+            title: zT
+                ? `复核 ${pendingReviews.length} 条待处理候选`
+                : `Review ${pendingReviews.length} pending candidate(s)`,
+            reason: zT
+                ? "存在待复核候选；先在球探视图给出决策再进入 brief 阶段。"
+                : "Pending candidates exist; decide them in Scouting before moving to the brief stage.",
+            action: "scouting",
+            actionLabel: zT ? "前往球探" : "Open Scouting",
+        });
+    } else if (reviewQueue.length === 0) {
+        evidenceGaps.push({
+            id: "no-review-queue",
+            title: zT ? "复核队列为空" : "Review queue empty",
+            reason: zT
+                ? "尚未导入或生成候选；可在球员/身价视图将候选加入 watchlist。"
+                : "No candidates imported yet; add players to the watchlist from Players / Value.",
+            action: "players",
+            actionLabel: zT ? "前往球员" : "Open Players",
+        });
+    }
+
+    if (shortlistData.length === 0 && watchlistData.length > 0) {
+        next.push({
+            id: "promote-shortlist",
+            title: zT ? "将 Watchlist 推进为 Shortlist" : "Promote Watchlist to Shortlist",
+            reason: zT
+                ? "Watchlist 已有候选但 Shortlist 仍为空；在球探视图标记目标后再创建 brief。"
+                : "Watchlist has candidates but Shortlist is empty; mark targets in Scouting before creating a brief.",
+            action: "scouting",
+            actionLabel: zT ? "前往球探" : "Open Scouting",
+        });
+    }
+
+    // Recruitment briefs
+    if (workflowState.briefsError) {
+        blockers.push({
+            id: "brief-api-offline",
+            title: zT ? "Recruitment brief API 离线" : "Recruitment brief API offline",
+            reason: zT
+                ? "本地 API 不可用或未启用；仅可基于浏览器状态推断。"
+                : "Local API unavailable or disabled; inference limited to in-browser state.",
+            action: "data",
+            actionLabel: zT ? "查看数据视图" : "Open Data",
+        });
+    } else if (workflowState.briefs.length === 0) {
+        next.push({
+            id: "create-brief",
+            title: zT ? "创建第一个 Recruitment brief" : "Create your first recruitment brief",
+            reason: zT
+                ? "已有 Shortlist 即可起草需求 brief（位置、角色、预算、年龄、风险）。"
+                : "With a Shortlist in place, draft a requirement brief (position, role, budget, age, risk).",
+            action: "scouting",
+            actionLabel: zT ? "前往球探" : "Open Scouting",
+        });
+        evidenceGaps.push({
+            id: "brief-missing",
+            title: zT ? "缺少 Recruitment brief" : "Missing recruitment brief",
+            reason: zT
+                ? "无 brief 时无法生成 decision dossier；候选推荐会缺少覆盖与来源标注。"
+                : "Without a brief no decision dossier can be produced; recommendations lack coverage and source flags.",
+            action: null,
+            actionLabel: "",
+        });
+    } else {
+        // Check briefs that lack minimum_minutes or budget
+        const incompleteBriefs = workflowState.briefs.filter((b) => {
+            const payload = b.brief || b;
+            const hasBudget = payload.budget_eur != null && payload.budget_eur > 0;
+            const hasMinutes = payload.minimum_minutes != null && payload.minimum_minutes > 0;
+            return !hasBudget || !hasMinutes;
+        });
+        for (const brief of incompleteBriefs.slice(0, 5)) {
+            const payload = brief.brief || brief;
+            const missing = [];
+            if (!payload.budget_eur) missing.push(zT ? "预算" : "budget");
+            if (!payload.minimum_minutes) missing.push(zT ? "最低出场分钟" : "minimum minutes");
+            evidenceGaps.push({
+                id: `brief-gap-${payload.brief_id || "unknown"}`,
+                title: zT
+                    ? `Brief ${payload.brief_id || "?"} 缺少 ${missing.join("、")}`
+                    : `Brief ${payload.brief_id || "?"} missing ${missing.join(", ")}`,
+                reason: zT
+                    ? "未填写的字段会降低候选排序的可解释性；回到球探视图补全。"
+                    : "Unfilled fields reduce explainability of candidate ranking; complete them in Scouting.",
+                action: "scouting",
+                actionLabel: zT ? "前往球探" : "Open Scouting",
+            });
+        }
+    }
+
+    // Opposition briefings
+    if (workflowState.briefingsError) {
+        blockers.push({
+            id: "briefing-api-offline",
+            title: zT ? "Opposition briefing API 离线" : "Opposition briefing API offline",
+            reason: zT
+                ? "本地 API 不可用或未启用；无法读取已保存的 briefing。"
+                : "Local API unavailable or disabled; cannot read saved briefings.",
+            action: "data",
+            actionLabel: zT ? "查看数据视图" : "Open Data",
+        });
+    } else if (workflowState.briefings.length === 0) {
+        next.push({
+            id: "create-briefing",
+            title: zT ? "创建第一个 Opposition briefing" : "Create your first opposition briefing",
+            reason: zT
+                ? "从比赛预测视图选定对手后，起草源受限 briefing（含 fact_tier 标注）。"
+                : "Pick an opponent from Match Prediction, then draft a source-limited briefing with fact_tier labels.",
+            action: "matches",
+            actionLabel: zT ? "前往预测" : "Open Matches",
+        });
+        evidenceGaps.push({
+            id: "briefing-missing",
+            title: zT ? "缺少 Opposition briefing" : "Missing opposition briefing",
+            reason: zT
+                ? "无 briefing 时 pattern card / scenario tree / post-match review 都无法挂载。"
+                : "Without a briefing, pattern cards / scenario trees / post-match reviews cannot be attached.",
+            action: null,
+            actionLabel: "",
+        });
+    } else {
+        // Flag briefings whose sections all have fact_tier = unknown
+        const unclassified = workflowState.briefings.filter((b) => {
+            const payload = b.briefing || b;
+            const sections = Array.isArray(payload.sections) ? payload.sections : [];
+            if (sections.length === 0) return true;
+            return sections.every((s) => (s.fact_tier || "unknown") === "unknown");
+        });
+        for (const briefing of unclassified.slice(0, 5)) {
+            const payload = briefing.briefing || briefing;
+            evidenceGaps.push({
+                id: `briefing-tier-${payload.briefing_id || "unknown"}`,
+                title: zT
+                    ? `Briefing ${payload.briefing_id || "?"} 的 fact_tier 全部为 unknown`
+                    : `Briefing ${payload.briefing_id || "?"} has all fact_tier = unknown`,
+                reason: zT
+                    ? "未分类的 section 无法区分 official / recorded / estimated；建议人工标注。"
+                    : "Unclassified sections cannot distinguish official / recorded / estimated; label them manually.",
+                action: "matches",
+                actionLabel: zT ? "前往预测" : "Open Matches",
+            });
+        }
+    }
+
+    return { next, blockers, evidenceGaps };
+}
+
+function _renderWorkflowStep(step, index, kind) {
+    const zT = appState.lang === "zh";
+    const markerClass = kind === "blocker"
+        ? "wf-marker-blocker"
+        : (kind === "evidence" ? "wf-marker-evidence" : "");
+    const itemClass = kind === "blocker"
+        ? "wf-step-blocker"
+        : (kind === "evidence" ? "wf-step-evidence" : "");
+    const markerText = kind === "blocker" ? "!" : String(index + 1);
+    const actionHtml = step.action
+        ? `<button class="wf-step-action" type="button" data-wf-jump="${escapeAttr(step.action)}">${escapeHtml(step.actionLabel || t("workflow_action_goto"))}</button>`
+        : `<button class="wf-step-action" type="button" disabled>${escapeHtml(zT ? "—" : "—")}</button>`;
+    return `
+        <li class="${itemClass}">
+            <span class="wf-step-marker ${markerClass}">${escapeHtml(markerText)}</span>
+            <div class="wf-step-body">
+                <span class="wf-step-title">${escapeHtml(step.title)}</span>
+                <span class="wf-step-reason">${escapeHtml(step.reason)}</span>
+            </div>
+            ${actionHtml}
+        </li>`;
+}
+
+async function renderWorkflow() {
+    // Refresh briefs / briefings (fire-and-forget; render with whatever we have).
+    const briefsPromise = _fetchWorkflowBriefs();
+    const briefingsPromise = _fetchWorkflowBriefings();
+
+    // Render status rail immediately with in-browser state, then update after fetch.
+    _renderWorkflowBody();
+    await Promise.all([briefsPromise, briefingsPromise]);
+    _renderWorkflowBody();
+}
+
+function _renderWorkflowBody() {
+    const zT = appState.lang === "zh";
+    const statusRail = document.getElementById("wf-status-rail");
+    if (statusRail) {
+        const summary = _workflowStatusSummary();
+        const offlineNote = (workflowState.briefsError || workflowState.briefingsError)
+            ? ` <strong>${t("workflow_sources_offline")}</strong>`
+            : "";
+        statusRail.innerHTML = summary
+            .map((part) => `<span>${escapeHtml(part)}</span>`)
+            .join("") + offlineNote;
+    }
+
+    const { next, blockers, evidenceGaps } = _workflowInferSteps();
+
+    const nextCount = document.getElementById("wf-next-count");
+    const blockerCount = document.getElementById("wf-blocker-count");
+    const evidenceGapCount = document.getElementById("wf-evidence-gap-count");
+    if (nextCount) nextCount.textContent = String(next.length);
+    if (blockerCount) blockerCount.textContent = String(blockers.length);
+    if (evidenceGapCount) evidenceGapCount.textContent = String(evidenceGaps.length);
+
+    const nextPill = document.getElementById("wf-next-pill");
+    const blockerPill = document.getElementById("wf-blocker-pill");
+    const evidenceGapPill = document.getElementById("wf-evidence-gap-pill");
+    if (nextPill) nextPill.textContent = String(next.length);
+    if (blockerPill) blockerPill.textContent = String(blockers.length);
+    if (evidenceGapPill) evidenceGapPill.textContent = String(evidenceGaps.length);
+
+    const nextList = document.getElementById("wf-next-list");
+    const blockerList = document.getElementById("wf-blocker-list");
+    const evidenceGapList = document.getElementById("wf-evidence-gap-list");
+    if (nextList) {
+        nextList.innerHTML = next.length
+            ? next.map((s, i) => _renderWorkflowStep(s, i, "next")).join("")
+            : `<li style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("workflow_empty_next"))}</li>`;
+    }
+    if (blockerList) {
+        blockerList.innerHTML = blockers.length
+            ? blockers.map((s, i) => _renderWorkflowStep(s, i, "blocker")).join("")
+            : `<li style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("workflow_empty_blocker"))}</li>`;
+    }
+    if (evidenceGapList) {
+        evidenceGapList.innerHTML = evidenceGaps.length
+            ? evidenceGaps.map((s, i) => _renderWorkflowStep(s, i, "evidence")).join("")
+            : `<li style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("workflow_empty_evidence"))}</li>`;
+    }
+
+    const sourcesNote = document.getElementById("wf-sources-note");
+    if (sourcesNote) {
+        sourcesNote.textContent = t("workflow_sources_local");
+    }
+
+    // Wire up jump buttons.
+    document.querySelectorAll("#view-workflow .wf-step-action[data-wf-jump]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const target = btn.getAttribute("data-wf-jump");
+            if (target) setView(target);
+        });
+    });
+}
+
+// ── Versions / backups / diff / portable pack ────────────────────────
+// Read-only views over the local-API backup endpoints. Editing (restore)
+// goes through POST /restore with an If-Match-style expected_revision.
+
+const versionsState = {
+    type: "brief", // "brief" | "briefing"
+    briefs: [],
+    briefings: [],
+    briefsError: null,
+    briefingsError: null,
+    selectedId: "",
+    backups: [],
+    backupsError: null,
+    selectedBackup: null, // full record from load_backup
+    diff: null,
+    diffError: null,
+    currentRevision: null, // server_revision of the live record
+};
+
+async function _fetchVersionRecords() {
+    try {
+        const data = await fetchJson("/recruitment/briefs", { params: "limit=100" });
+        versionsState.briefs = Array.isArray(data?.briefs) ? data.briefs : [];
+        versionsState.briefsError = null;
+    } catch (err) {
+        versionsState.briefsError = err?.message || String(err);
+        versionsState.briefs = [];
+    }
+    try {
+        const data = await fetchJson("/opposition/briefs", { params: "limit=100" });
+        versionsState.briefings = Array.isArray(data?.briefings) ? data.briefings : [];
+        versionsState.briefingsError = null;
+    } catch (err) {
+        versionsState.briefingsError = err?.message || String(err);
+        versionsState.briefings = [];
+    }
+}
+
+async function _fetchVersionBackups(id) {
+    versionsState.backups = [];
+    versionsState.backupsError = null;
+    versionsState.selectedBackup = null;
+    versionsState.diff = null;
+    if (!id) return;
+    const path = versionsState.type === "brief"
+        ? `/recruitment/briefs/${encodeURIComponent(id)}/backups`
+        : `/opposition/briefs/${encodeURIComponent(id)}/backups`;
+    try {
+        const data = await fetchJson(path);
+        const key = versionsState.type === "brief" ? "backups" : "backups";
+        versionsState.backups = Array.isArray(data?.[key]) ? data[key] : [];
+    } catch (err) {
+        versionsState.backupsError = err?.message || String(err);
+    }
+    // Also fetch the live record to know the current server_revision.
+    const livePath = versionsState.type === "brief"
+        ? `/recruitment/briefs/${encodeURIComponent(id)}`
+        : `/opposition/briefs/${encodeURIComponent(id)}`;
+    try {
+        const live = await fetchJson(livePath);
+        versionsState.currentRevision = live?.server_revision ?? null;
+    } catch (err) {
+        // Record may have been deleted (only a deletion backup remains).
+        versionsState.currentRevision = null;
+    }
+}
+
+async function _loadVersionBackup(id, backupFilename) {
+    const path = versionsState.type === "brief"
+        ? `/recruitment/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(backupFilename)}`
+        : `/opposition/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(backupFilename)}`;
+    try {
+        versionsState.selectedBackup = await fetchJson(path);
+    } catch (err) {
+        versionsState.selectedBackup = null;
+        throw err;
+    }
+}
+
+async function _diffVersionBackup(id, backupFilename) {
+    const path = versionsState.type === "brief"
+        ? `/recruitment/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(backupFilename)}`
+        : `/opposition/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(backupFilename)}`;
+    try {
+        const data = await fetchJson(path);
+        versionsState.diff = Array.isArray(data?.diff) ? data.diff : [];
+        versionsState.diffError = null;
+    } catch (err) {
+        versionsState.diff = null;
+        versionsState.diffError = err?.message || String(err);
+    }
+}
+
+async function _restoreVersionBackup(id, backupFilename, expectedRevision) {
+    const path = versionsState.type === "brief"
+        ? `/recruitment/briefs/${encodeURIComponent(id)}/restore`
+        : `/opposition/briefs/${encodeURIComponent(id)}/restore`;
+    const resp = await fetch(API_BASE + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backup_filename: backupFilename, expected_revision: expectedRevision }),
+    });
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+    return resp.json();
+}
+
+async function _exportPortablePack() {
+    const resp = await fetch(API_BASE + "/local-pack/export");
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+    return resp.json();
+}
+
+function _versionStatusLabel() {
+    const zT = appState.lang === "zh";
+    const parts = [];
+    if (versionsState.briefsError) {
+        parts.push(zT ? `Brief API 离线（${versionsState.briefsError}）` : `Brief API offline (${versionsState.briefsError})`);
+    } else {
+        parts.push(zT ? `Briefs：${versionsState.briefs.length}` : `Briefs: ${versionsState.briefs.length}`);
+    }
+    if (versionsState.briefingsError) {
+        parts.push(zT ? `Briefing API 离线（${versionsState.briefingsError}）` : `Briefing API offline (${versionsState.briefingsError})`);
+    } else {
+        parts.push(zT ? `Briefings：${versionsState.briefings.length}` : `Briefings: ${versionsState.briefings.length}`);
+    }
+    if (versionsState.selectedId) {
+        parts.push(zT
+            ? `当前 ${t(versionsState.type === "brief" ? "versions_type_brief" : "versions_type_briefing")}：${versionsState.selectedId}`
+            : `Selected ${versionsState.type}: ${versionsState.selectedId}`);
+        if (versionsState.currentRevision != null) {
+            parts.push(zT
+                ? `${t("versions_current_revision")}：${versionsState.currentRevision}`
+                : `${t("versions_current_revision")}: ${versionsState.currentRevision}`);
+        }
+    }
+    return parts;
+}
+
+function _renderVersionRecordOptions() {
+    const select = document.getElementById("ver-record-select");
+    if (!select) return;
+    const list = versionsState.type === "brief" ? versionsState.briefs : versionsState.briefings;
+    const zT = appState.lang === "zh";
+    const error = versionsState.type === "brief" ? versionsState.briefsError : versionsState.briefingsError;
+    if (error) {
+        select.innerHTML = `<option value="" disabled selected>${escapeHtml(t("versions_offline"))}</option>`;
+        return;
+    }
+    if (list.length === 0) {
+        select.innerHTML = `<option value="" disabled selected>${escapeHtml(t("versions_empty_records"))}</option>`;
+        return;
+    }
+    select.innerHTML = list.map((rec) => {
+        const id = rec.brief_id || rec.briefing_id || "";
+        const title = rec.title || "";
+        const rev = rec.server_revision ?? "?";
+        return `<option value="${escapeAttr(id)}">rev ${rev} · ${escapeHtml(title || id)}</option>`;
+    }).join("");
+    if (versionsState.selectedId && list.some((r) => (r.brief_id || r.briefing_id) === versionsState.selectedId)) {
+        select.value = versionsState.selectedId;
+    } else {
+        versionsState.selectedId = list[0].brief_id || list[0].briefing_id || "";
+        select.value = versionsState.selectedId;
+    }
+}
+
+function _renderVersionTimeline() {
+    const ul = document.getElementById("ver-timeline");
+    const pill = document.getElementById("ver-timeline-pill");
+    if (pill) pill.textContent = String(versionsState.backups.length);
+    if (!ul) return;
+    const zT = appState.lang === "zh";
+    if (versionsState.backupsError) {
+        ul.innerHTML = `<li style="padding:0.6rem;color:var(--danger);font-size:0.78rem">${escapeHtml(versionsState.backupsError)}</li>`;
+        return;
+    }
+    if (versionsState.backups.length === 0) {
+        ul.innerHTML = `<li style="padding:0.6rem;color:var(--text-muted);font-size:0.78rem">${escapeHtml(t("versions_empty_timeline"))}</li>`;
+        return;
+    }
+    ul.innerHTML = versionsState.backups.map((b, i) => {
+        const kind = b.kind === "deletion" ? "deletion" : "revision";
+        const markerClass = kind === "deletion" ? "wf-marker-blocker" : "";
+        const itemClass = kind === "deletion" ? "wf-step-blocker" : "";
+        const markerText = kind === "deletion" ? "!" : String(i + 1);
+        const kindLabel = kind === "deletion"
+            ? t("versions_kind_deletion")
+            : `${t("versions_kind_revision")} ${b.revision ?? "?"}`;
+        const stored = b.stored_at || "";
+        const size = b.size_bytes != null ? ` · ${b.size_bytes} B` : "";
+        const title = kind === "deletion"
+            ? (zT ? "删除备份" : "Deletion backup")
+            : (zT ? `版本 ${b.revision ?? "?"} 的备份` : `Backup of revision ${b.revision ?? "?"}`);
+        return `
+            <li class="${itemClass}" data-backup-filename="${escapeAttr(b.backup_filename || "")}">
+                <span class="wf-step-marker ${markerClass}">${escapeHtml(markerText)}</span>
+                <div class="wf-step-body">
+                    <span class="wf-step-title">${escapeHtml(title)}</span>
+                    <span class="wf-step-reason">${escapeHtml(kindLabel)} · ${escapeHtml(stored)}${escapeHtml(size)}</span>
+                </div>
+                <button class="wf-step-action" type="button" data-backup-select="${escapeAttr(b.backup_filename || "")}">${escapeHtml(t("workflow_action_goto"))}</button>
+            </li>`;
+    }).join("");
+
+    // Wire selection
+    ul.querySelectorAll("button[data-backup-select]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const fn = btn.getAttribute("data-backup-select");
+            _selectBackup(fn);
+        });
+    });
+}
+
+function _selectBackup(backupFilename) {
+    versionsState.selectedBackupFilename = backupFilename;
+    versionsState.selectedBackup = null;
+    versionsState.diff = null;
+    _updateVersionActionButtons();
+    _renderVersionDiff();
+}
+
+function _updateVersionActionButtons() {
+    const hasBackup = !!versionsState.selectedBackupFilename;
+    const loadBtn = document.getElementById("ver-load-backup");
+    const diffBtn = document.getElementById("ver-diff-backup");
+    const restoreBtn = document.getElementById("ver-restore-backup");
+    if (loadBtn) loadBtn.disabled = !hasBackup;
+    if (diffBtn) diffBtn.disabled = !hasBackup;
+    if (restoreBtn) restoreBtn.disabled = !hasBackup;
+}
+
+function _renderVersionDiff() {
+    const out = document.getElementById("ver-diff-output");
+    const pill = document.getElementById("ver-diff-pill");
+    if (!out) return;
+    if (versionsState.diffError) {
+        out.innerHTML = `<div style="color:var(--danger);padding:0.5rem 0">${escapeHtml(versionsState.diffError)}</div>`;
+        if (pill) pill.textContent = "!";
+        return;
+    }
+    if (!versionsState.diff) {
+        out.innerHTML = `<div style="color:var(--text-muted);padding:0.5rem 0">${escapeHtml(t("versions_diff_empty"))}</div>`;
+        if (pill) pill.textContent = "0";
+        return;
+    }
+    if (versionsState.diff.length === 0) {
+        out.innerHTML = `<div style="color:var(--text-muted);padding:0.5rem 0">${escapeHtml(t("versions_diff_no_change"))}</div>`;
+        if (pill) pill.textContent = "0";
+        return;
+    }
+    if (pill) pill.textContent = String(versionsState.diff.length);
+    const rows = versionsState.diff.map((entry) => {
+        const path = entry.path || "";
+        const change = entry.change || "";
+        const oldVal = entry.old == null ? "null" : (typeof entry.old === "object" ? JSON.stringify(entry.old) : String(entry.old));
+        const newVal = entry.new == null ? "null" : (typeof entry.new === "object" ? JSON.stringify(entry.new) : String(entry.new));
+        const changeClass = change === "added" ? "status-high"
+            : (change === "removed" ? "status-low" : "status-medium");
+        return `
+            <div style="display:grid;grid-template-columns:1fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--glass-border)">
+                <div>
+                    <div style="font-weight:650;color:var(--text-primary);word-break:break-all">${escapeHtml(path)}</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);word-break:break-all">
+                        <span style="color:var(--danger)">− ${escapeHtml(oldVal)}</span><br>
+                        <span style="color:var(--success)">+ ${escapeHtml(newVal)}</span>
+                    </div>
+                </div>
+                <span class="status-pill ${changeClass}">${escapeHtml(change)}</span>
+            </div>`;
+    }).join("");
+    out.innerHTML = rows;
+}
+
+async function renderVersions() {
+    _wireVersionControlsOnce();
+    // Sync type selector
+    const typeSelect = document.getElementById("ver-type-select");
+    if (typeSelect && typeSelect.value !== versionsState.type) {
+        versionsState.type = typeSelect.value;
+    }
+    await _fetchVersionRecords();
+    _renderVersionRecordOptions();
+    if (versionsState.selectedId) {
+        await _fetchVersionBackups(versionsState.selectedId);
+    }
+    _renderVersionSummary();
+    _renderVersionTimeline();
+    _renderVersionDiff();
+    _updateVersionActionButtons();
+    _renderVersionStatusRail();
+}
+
+function _renderVersionSummary() {
+    const briefCount = document.getElementById("ver-brief-count");
+    const briefingCount = document.getElementById("ver-briefing-count");
+    const backupCount = document.getElementById("ver-backup-count");
+    if (briefCount) briefCount.textContent = String(versionsState.briefs.length);
+    if (briefingCount) briefingCount.textContent = String(versionsState.briefings.length);
+    if (backupCount) backupCount.textContent = String(versionsState.backups.length);
+}
+
+function _renderVersionStatusRail() {
+    const rail = document.getElementById("ver-status-rail");
+    if (!rail) return;
+    const parts = _versionStatusLabel();
+    const offline = (versionsState.briefsError || versionsState.briefingsError)
+        ? ` <strong>${escapeHtml(t("versions_offline"))}</strong>`
+        : "";
+    rail.innerHTML = parts.map((p) => `<span>${escapeHtml(p)}</span>`).join("") + offline;
+}
+
+let _versionControlsWired = false;
+function _wireVersionControlsOnce() {
+    if (_versionControlsWired) return;
+    _versionControlsWired = true;
+    const typeSelect = document.getElementById("ver-type-select");
+    const recordSelect = document.getElementById("ver-record-select");
+    const refreshBtn = document.getElementById("ver-refresh");
+    const loadBtn = document.getElementById("ver-load-backup");
+    const diffBtn = document.getElementById("ver-diff-backup");
+    const restoreBtn = document.getElementById("ver-restore-backup");
+    const exportPackBtn = document.getElementById("ver-export-pack");
+
+    if (typeSelect) {
+        typeSelect.addEventListener("change", async () => {
+            versionsState.type = typeSelect.value;
+            versionsState.selectedId = "";
+            versionsState.backups = [];
+            versionsState.selectedBackup = null;
+            versionsState.diff = null;
+            await renderVersions();
+        });
+    }
+    if (recordSelect) {
+        recordSelect.addEventListener("change", async () => {
+            versionsState.selectedId = recordSelect.value;
+            versionsState.selectedBackup = null;
+            versionsState.diff = null;
+            if (versionsState.selectedId) {
+                await _fetchVersionBackups(versionsState.selectedId);
+            }
+            _renderVersionSummary();
+            _renderVersionTimeline();
+            _renderVersionDiff();
+            _updateVersionActionButtons();
+            _renderVersionStatusRail();
+        });
+    }
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => renderVersions());
+    }
+    if (loadBtn) {
+        loadBtn.addEventListener("click", async () => {
+            if (!versionsState.selectedId || !versionsState.selectedBackupFilename) return;
+            try {
+                await _loadVersionBackup(versionsState.selectedId, versionsState.selectedBackupFilename);
+                _renderVersionStatusRail();
+            } catch (err) {
+                versionsState.selectedBackup = null;
+                _renderVersionStatusRail();
+            }
+        });
+    }
+    if (diffBtn) {
+        diffBtn.addEventListener("click", async () => {
+            if (!versionsState.selectedId || !versionsState.selectedBackupFilename) return;
+            await _diffVersionBackup(versionsState.selectedId, versionsState.selectedBackupFilename);
+            _renderVersionDiff();
+        });
+    }
+    if (restoreBtn) {
+        restoreBtn.addEventListener("click", async () => {
+            if (!versionsState.selectedId || !versionsState.selectedBackupFilename) return;
+            if (versionsState.currentRevision == null) {
+                alert(t("versions_restore_missing_revision"));
+                return;
+            }
+            if (!confirm(t("versions_restore_confirm"))) return;
+            const statusEls = document.querySelectorAll("#view-versions .toolbar-status");
+            try {
+                const result = await _restoreVersionBackup(
+                    versionsState.selectedId,
+                    versionsState.selectedBackupFilename,
+                    versionsState.currentRevision,
+                );
+                const newRev = result?.server_revision ?? "?";
+                // Refresh state
+                await _fetchVersionRecords();
+                _renderVersionRecordOptions();
+                await _fetchVersionBackups(versionsState.selectedId);
+                _renderVersionSummary();
+                _renderVersionTimeline();
+                _renderVersionDiff();
+                _updateVersionActionButtons();
+                _renderVersionStatusRail();
+                alert(`${t("versions_restore_success")}${newRev}`);
+            } catch (err) {
+                alert(`${t("versions_restore_failed")}${err?.message || err}`);
+            }
+        });
+    }
+    if (exportPackBtn) {
+        exportPackBtn.addEventListener("click", async () => {
+            const statusEl = document.getElementById("ver-pack-status");
+            if (statusEl) statusEl.textContent = "…";
+            try {
+                const pack = await _exportPortablePack();
+                const briefCount = pack?.pack?.sections?.recruitment_briefs?.count ?? 0;
+                const briefingCount = pack?.pack?.sections?.opposition_briefings?.count ?? 0;
+                const total = briefCount + briefingCount;
+                const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                const ts = new Date().toISOString().replace(/[:.]/g, "-");
+                a.download = `scoutfootball-portable-pack-${ts}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                if (statusEl) statusEl.textContent = `${t("versions_pack_exported")}${total} 条）`;
+            } catch (err) {
+                if (statusEl) statusEl.textContent = `${t("versions_pack_failed")}${err?.message || err}`;
+            }
+        });
+    }
 }
 
 async function renderCalibration() {
@@ -23816,6 +24697,7 @@ function syncObjectPropertyUI(obj) {
 }
 
 function renderTactical() {
+    _syncTacticalDesktopNotice();
     if (!tacticalProject) {
         tacticalProject = TACTICAL_BOARD.createProject("ScoutFootball 战术板");
         // Load default formation
@@ -23929,6 +24811,58 @@ function buildPrematchDecisionPack(match) {
         ],
     });
 }
+
+// ── Tactical board: desktop-only editing gate ────────────────────────
+// Below 760px the board stays visible for reading but editing controls
+// (formations, pitch type, drawing tools, save, export) are disabled so
+// users on phones do not accidentally mutate a dense tactical canvas.
+
+const TACTICAL_DESKTOP_BREAKPOINT = 760;
+
+function _tacticalEditingControls() {
+    const ids = [
+        "tactical-formation",
+        "tactical-pitch-type",
+        "tactical-display-mode",
+        "tactical-tool",
+        "tactical-color",
+        "tactical-save",
+        "tactical-export",
+        "tactical-clear",
+        "tactical-undo",
+        "tactical-redo",
+        "tactical-add-text",
+        "tactical-add-arrow",
+        "tactical-play",
+    ];
+    const out = [];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) out.push(el);
+    }
+    return out;
+}
+
+function _syncTacticalDesktopNotice() {
+    const notice = document.getElementById("tactical-desktop-notice");
+    if (!notice) return;
+    const narrow = window.innerWidth < TACTICAL_DESKTOP_BREAKPOINT;
+    notice.hidden = !narrow;
+    const controls = _tacticalEditingControls();
+    for (const el of controls) {
+        if (narrow) {
+            el.setAttribute("disabled", "disabled");
+            el.setAttribute("aria-disabled", "true");
+        } else {
+            el.removeAttribute("disabled");
+            el.removeAttribute("aria-disabled");
+        }
+    }
+}
+
+window.addEventListener("resize", () => {
+    if (appState.view === "tactical") _syncTacticalDesktopNotice();
+});
 
 function renderTacticalDecisionPack() {
     const el = document.getElementById("tactical-decision-pack");

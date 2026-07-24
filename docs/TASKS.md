@@ -178,6 +178,37 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 8。该工作不改变 P1 节点整体状态（仍 `in_progress`，6.2 Opposition & Match Pack 和 6.4 产品体验分支未启动）；6.1 Recruitment Pack brief 层已 `verified`（2026-07-23）。
 
+### 6.4 产品体验 — `verified`（2026-07-24）
+
+满足 P1 退出门槛第 1 条"维护者能够从真实输入独立完成至少一个参考工作流"的产品体验层。
+
+**核心交付**：
+
+- `frontend/index.html` 新增两个顶层视图：`view-workflow`（工作流导航：下一步、缺失证据与阻断原因）和 `view-versions`（版本与备份：时间线、字段级 diff、If-Match 恢复、可移植离线包），side-nav 注册 `data-view="workflow"` 和 `data-view="versions"` 入口；战术板视图在窄屏显示桌面限定提示。
+- `frontend/app.js` 实现 `renderWorkflow`（基于本地 review-queue / watchlist / shortlist / briefs / briefings 状态推断可执行下一步、阻断项和证据缺失）与 `renderVersions`（按 brief/briefing 列出备份时间线、字段级 diff、按 If-Match 语义恢复、portable pack 导出含 SHA-256 哈希校验）。
+- `frontend/style.css` 增加 `.wf-step-list`、版本时间线、diff 显示样式，并在 `@media (max-width: 760px)` 下调整 padding/字号/`feature-metric-strip` 折行；战术板编辑控件在窄屏禁用并显示桌面限定提示。
+- `src/scoutfootball/storage/record_diff.py` 提供 `diff_records` 字段级比较（处理嵌套 dict、list 和 envelope 元数据），作为版本 diff 与备份恢复的核心复用模块。
+- `recruitment/store.py` 与 `opposition/store.py` 修复 `_read_record` 接受 `expected_id` 以支持备份文件名解析（含 revision 后缀），`list_backups` 排序键修正为 `-(b.get("revision") or 0)` 以正确处理 None 值。
+- API 端扩展（`api.py` 实现 + `api_server.py` 注册）：`/recruitment/briefs/{brief_id}/backups`（list）、`/recruitment/briefs/{brief_id}/backups/{filename}`（load）、`/recruitment/briefs/{brief_id}/diff`（field-level diff）、`/recruitment/portable-pack`（含 SHA-256）；opposition 端点同构（`/opposition/briefings/{briefing_id}/backups` 等）。
+- `architecture.py` 的 `frontend.analyst_console` 能力追加 `workflow` 和 `versions` 视图，与 `tests/unit/test_capability_registry.py::test_every_frontend_view_has_capability_reference` 契约对齐。
+
+**测试覆盖**：
+
+- `tests/unit/test_brief_backup_restore.py`：23 测试，覆盖 `BriefStore` + `BriefingStore` 共享备份文件命名约定的 list/load/restore/cross-store 隔离（recruitment 备份不能被 opposition store 读取，反之亦然）。
+- `tests/unit/test_record_diff.py`：23 测试，覆盖字段级 diff（嵌套 dict、list、envelope metadata、None 处理）。
+- `tests/unit/test_capability_registry.py`：9 测试，验证前端视图与能力登记表一致性。
+- 全量 4133 单元测试 + 23 集成测试通过（2 skipped）；ruff clean；`node --check` 通过 `app.js` 与 `scouting-workspace.js`。
+
+**修复记录**：
+
+- `test_every_frontend_view_has_capability_reference` 失败：根因是新增 `versions` 和 `workflow` 视图未登记到 `frontend.analyst_console` 能力的 `frontend_views`。修复：在 `architecture.py` 第 720 行后追加 `"workflow"` 和 `"versions"`。
+- `_read_record` backup 文件名解析失败：备份文件名形如 `brief-001.rev-1.<random>.json`，原实现用 `path.stem` 作为 `briefing_id` 校验，但 stem 包含 `.rev-1.<random>` 后缀导致不匹配。修复：`_read_record` 接受 `expected_id` 参数，调用方传入真正的 brief/briefing id 进行校验。
+- `list_backups` 排序键运算符优先级 bug：`-b.get("revision") or 0` 在 Python 中等价于 `(-b.get("revision")) or 0`，当 revision 为 None 时 `-None` 抛 TypeError。修复：改为 `-(b.get("revision") or 0)`。
+- `test_brief_backup_restore.py` 测试 payload 与 schema 不一致：`section_id="opp_shape"` 不是有效枚举值；`venue` 字段在 `OppositionBriefing` 中不存在（extra=forbid）。修复：使用 `section_id="opponent_strength"`，移除 `venue`。
+- `test_invalid_brief_id_rejected` 期望错误类型与实际不符：`BriefStore` 在 `list_backups` 路径上抛 `BriefValidationError`（来自 brief_id 校验），而非 `BriefStoreError`。修复：更新期望。
+
+**遗留**：冲突合并 UI 层未实现，留待后续迭代（当前 diff 仅展示字段差异，不提供交互式合并）。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
