@@ -2482,6 +2482,158 @@ a:focus-visible,
     font-size: 1.18rem;
 }
 
+/* ── Workflow navigation view ──────────────────────────────────────── */
+
+.wf-step-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.wf-step-list li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--glass-bg) 80%, transparent);
+}
+
+.wf-step-list li.wf-step-blocker {
+    border-color: color-mix(in srgb, var(--danger) 38%, var(--glass-border));
+}
+
+.wf-step-list li.wf-step-evidence {
+    border-color: color-mix(in srgb, var(--accent) 32%, var(--glass-border));
+}
+
+.wf-step-marker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--surface-ink);
+    background: color-mix(in srgb, var(--accent-soft) 64%, transparent);
+}
+
+.wf-step-marker.wf-marker-blocker {
+    color: #fff;
+    background: color-mix(in srgb, var(--danger) 72%, transparent);
+}
+
+.wf-step-marker.wf-marker-evidence {
+    color: var(--surface-ink);
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.wf-step-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.wf-step-title {
+    font-size: 0.86rem;
+    font-weight: 650;
+    color: var(--text-primary);
+}
+
+.wf-step-reason {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.wf-step-action {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: color-mix(in srgb, var(--accent-soft) 42%, transparent);
+    color: var(--surface-ink);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.wf-step-action:hover {
+    background: color-mix(in srgb, var(--accent-soft) 72%, transparent);
+}
+
+.wf-step-action[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+    .wf-step-list li {
+        grid-template-columns: auto 1fr;
+        grid-template-rows: auto auto;
+    }
+    .wf-step-action {
+        grid-column: 1 / -1;
+        justify-self: stretch;
+        text-align: center;
+    }
+    /* Reading / review optimizations on narrow screens: keep tables
+       horizontally scrollable, increase line-height for legibility,
+       and shrink dense metric strips so a single column still fits. */
+    .feature-metric-strip {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .feature-metric-strip .metric-value {
+        font-size: 1.05rem;
+    }
+    .liquid-panel {
+        padding: 14px;
+    }
+    .panel-head {
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .panel-head h2 { font-size: 1.05rem; }
+    .panel-head h3 { font-size: 0.92rem; }
+    .feature-note {
+        font-size: 0.76rem;
+        line-height: 1.5;
+    }
+    .table-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Desktop-only notice for the tactical board. Shown only when viewport
+   drops below the 760px reading threshold; the board itself remains
+   visible but editing controls are disabled via JS. */
+.tactical-desktop-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: var(--space);
+    border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--glass-border));
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--danger) 8%, var(--glass-bg));
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.tactical-desktop-notice[hidden] {
+    display: none;
+}
+
 .top-bar {
     min-height: 92px;
     border-radius: 24px;

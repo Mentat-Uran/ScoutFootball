@@ -21,6 +21,9 @@ from scoutfootball.api import (
     clear_wc_tournament_result,
     create_opposition_briefing,
     create_recruitment_brief,
+    diff_opposition_briefing_versions,
+    diff_recruitment_brief_versions,
+    export_local_pack,
     export_wc_tournament_state,
     generate_wc_knockout_bracket,
     get_action_based_position_similarity,
@@ -172,10 +175,16 @@ from scoutfootball.api import (
     get_world_cup_match_prediction,
     health_check,
     import_wc_tournament_state,
+    list_opposition_briefing_backups,
     list_players,
+    list_recruitment_brief_backups,
     list_teams,
+    load_opposition_briefing_backup,
+    load_recruitment_brief_backup,
     preview_wc_tournament_import,
     reset_wc_tournament,
+    restore_opposition_briefing_from_backup,
+    restore_recruitment_brief_from_backup,
     search_players_and_teams,
 )
 from scoutfootball.storage.scouting_workspace import (
@@ -1796,6 +1805,84 @@ def create_app() -> FastAPI:
             )
         return result
 
+    @app.get("/recruitment/briefs/{brief_id}/backups")
+    def recruitment_brief_backups(brief_id: str):
+        result = list_recruitment_brief_backups(brief_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/briefs/{brief_id}/backups/{backup_filename}")
+    def recruitment_brief_backup(brief_id: str, backup_filename: str):
+        result = load_recruitment_brief_backup(brief_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/briefs/{brief_id}/diff")
+    def recruitment_brief_diff(
+        brief_id: str,
+        backup_filename: str = Query(..., description="backup filename to diff against current"),
+    ):
+        result = diff_recruitment_brief_versions(brief_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/recruitment/briefs/{brief_id}/restore")
+    async def recruitment_brief_restore(brief_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        payload: dict = {}
+        if raw:
+            try:
+                payload = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_json", "message": str(exc)},
+                ) from exc
+        backup_filename = payload.get("backup_filename")
+        if not isinstance(backup_filename, str) or not backup_filename:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_backup_filename"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is not None:
+            try:
+                expected_revision = int(expected_revision)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_expected_revision"},
+                ) from exc
+        result = restore_recruitment_brief_from_backup(
+            brief_id,
+            backup_filename,
+            expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
     # ── Opposition & Match briefings ──────────────────────────────
     @app.get("/opposition/contracts")
     def opposition_contracts():
@@ -1838,6 +1925,90 @@ def create_app() -> FastAPI:
                 detail={"code": result.get("code"), "message": result.get("message")},
             )
         return result
+
+    @app.get("/opposition/briefs/{briefing_id}/backups")
+    def opposition_briefing_backups(briefing_id: str):
+        result = list_opposition_briefing_backups(briefing_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/opposition/briefs/{briefing_id}/backups/{backup_filename}")
+    def opposition_briefing_backup(briefing_id: str, backup_filename: str):
+        result = load_opposition_briefing_backup(briefing_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/opposition/briefs/{briefing_id}/diff")
+    def opposition_briefing_diff(
+        briefing_id: str,
+        backup_filename: str = Query(..., description="backup filename to diff against current"),
+    ):
+        result = diff_opposition_briefing_versions(briefing_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/opposition/briefs/{briefing_id}/restore")
+    async def opposition_briefing_restore(briefing_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        payload: dict = {}
+        if raw:
+            try:
+                payload = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_json", "message": str(exc)},
+                ) from exc
+        backup_filename = payload.get("backup_filename")
+        if not isinstance(backup_filename, str) or not backup_filename:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_backup_filename"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is not None:
+            try:
+                expected_revision = int(expected_revision)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_expected_revision"},
+                ) from exc
+        result = restore_opposition_briefing_from_backup(
+            briefing_id,
+            backup_filename,
+            expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    # ── Portable offline pack ─────────────────────────────────────
+    @app.get("/local-pack/export")
+    def local_pack_export():
+        """Export all local personal artifacts as a portable offline pack."""
+        return export_local_pack()
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")

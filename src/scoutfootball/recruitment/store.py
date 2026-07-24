@@ -80,7 +80,9 @@ class BriefStore:
     def _path(self, brief_id: str) -> Path:
         return self.root / f"{validate_brief_id(brief_id)}.json"
 
-    def _read_record(self, path: Path) -> dict[str, Any]:
+    def _read_record(
+        self, path: Path, *, expected_id: str | None = None,
+    ) -> dict[str, Any]:
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
@@ -97,9 +99,12 @@ class BriefStore:
             validate_brief_payload(record.get("brief"))
         except BriefValidationError as exc:
             raise BriefStoreError("brief_record_invalid", http_status=500) from exc
-        # The on-disk brief_id must match the filename.
+        # The on-disk brief_id must match the filename (or the explicitly
+        # provided expected_id, used when reading backup files whose
+        # filename includes the revision suffix).
         brief = record.get("brief", {})
-        if not isinstance(brief, dict) or brief.get("brief_id") != path.stem:
+        reference_id = expected_id if expected_id is not None else path.stem
+        if not isinstance(brief, dict) or brief.get("brief_id") != reference_id:
             raise BriefStoreError("brief_record_invalid", http_status=500)
         return record
 
@@ -293,6 +298,135 @@ class BriefStore:
             return 0
         with _STORE_LOCK:
             return sum(1 for _ in self.root.glob("*.json"))
+
+    # ── Backup listing, diff and restore ──────────────────────────────
+
+    _BACKUP_REV_PREFIX = "rev-"
+    _BACKUP_DELETED_PREFIX = "deleted-"
+
+    def _is_rev_backup(self, name: str, brief_id: str) -> bool:
+        return name.startswith(f"{brief_id}.{self._BACKUP_REV_PREFIX}")
+
+    def _parse_rev_backup(self, name: str, brief_id: str) -> dict[str, Any] | None:
+        """Parse ``<brief_id>.rev-<N>.<uuid>.json`` into a summary dict."""
+        if not self._is_rev_backup(name, brief_id):
+            return None
+        tail = name[len(f"{brief_id}.{self._BACKUP_REV_PREFIX}"):]
+        if not tail.endswith(".json"):
+            return None
+        core = tail[:-len(".json")]
+        # core = "<N>.<uuid>"
+        if "." not in core:
+            return None
+        rev_str, _uuid = core.split(".", 1)
+        try:
+            revision = int(rev_str)
+        except ValueError:
+            return None
+        return {
+            "brief_id": brief_id,
+            "backup_filename": name,
+            "kind": "revision",
+            "revision": revision,
+        }
+
+    def list_backups(self, brief_id: str) -> list[dict[str, Any]]:
+        """List on-disk backups for a brief, newest revision first.
+
+        Backups come in two kinds:
+
+        * ``revision`` — a snapshot taken before an update, named
+          ``<brief_id>.rev-<N>.<uuid>.json``.  ``revision`` is the
+          server_revision that was about to be overwritten.
+        * ``deletion`` — a snapshot taken before a delete, named
+          ``<brief_id>.deleted-<uuid>.json``.
+
+        Each entry carries ``backup_filename`` (basename only), ``kind``,
+        ``revision`` (for revision backups), ``stored_at`` (the backup
+        file's mtime in ISO format) and ``size_bytes``.  The list is
+        sorted so the newest revision comes first, then deletions.
+        """
+        brief_id = validate_brief_id(brief_id)
+        if not self.backup_root.exists():
+            return []
+        backups: list[dict[str, Any]] = []
+        with _STORE_LOCK:
+            for path in self.backup_root.glob(f"{brief_id}.*.json"):
+                name = path.name
+                parsed = self._parse_rev_backup(name, brief_id)
+                if parsed is not None:
+                    stat = path.stat()
+                    parsed["stored_at"] = datetime.fromtimestamp(
+                        stat.st_mtime, tz=UTC,
+                    ).isoformat()
+                    parsed["size_bytes"] = stat.st_size
+                    backups.append(parsed)
+                    continue
+                if name.startswith(f"{brief_id}.{self._BACKUP_DELETED_PREFIX}"):
+                    stat = path.stat()
+                    backups.append({
+                        "brief_id": brief_id,
+                        "backup_filename": name,
+                        "kind": "deletion",
+                        "revision": None,
+                        "stored_at": datetime.fromtimestamp(
+                            stat.st_mtime, tz=UTC,
+                        ).isoformat(),
+                        "size_bytes": stat.st_size,
+                    })
+        # Newest revision first; deletions last (sorted by stored_at).
+        backups.sort(key=lambda b: (b["kind"] != "revision", -(b.get("revision") or 0)))
+        return backups
+
+    def load_backup(self, brief_id: str, backup_filename: str) -> dict[str, Any]:
+        """Load a backup record by filename.
+
+        ``backup_filename`` must be the basename returned by
+        :meth:`list_backups`; path traversal is rejected.  The returned
+        value is the full record envelope that was on disk at backup
+        time, re-validated so corrupted backups are caught early.
+        """
+        brief_id = validate_brief_id(brief_id)
+        if not backup_filename or "/" in backup_filename or "\\" in backup_filename:
+            raise BriefStoreError("backup_filename_invalid", http_status=400)
+        if not backup_filename.endswith(".json"):
+            raise BriefStoreError("backup_filename_invalid", http_status=400)
+        # Filename must start with the brief_id and be a known kind.
+        if not (
+            self._is_rev_backup(backup_filename, brief_id)
+            or backup_filename.startswith(
+                f"{brief_id}.{self._BACKUP_DELETED_PREFIX}"
+            )
+        ):
+            raise BriefStoreError("backup_filename_invalid", http_status=400)
+
+        path = self.backup_root / backup_filename
+        if not path.exists():
+            raise BriefStoreError("backup_not_found", http_status=404)
+        with _STORE_LOCK:
+            return self._read_record(path, expected_id=brief_id)
+
+    def restore_from_backup(
+        self,
+        brief_id: str,
+        backup_filename: str,
+        *,
+        expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        """Restore a brief from a backup, creating a new revision.
+
+        The backup's payload is written back as a new server_revision on
+        top of the current record (or as revision 1 if the current
+        record is missing).  The backup itself is left in place so the
+        restore is itself reversible.  ``expected_revision`` follows the
+        same ``If-Match`` semantics as :meth:`save`.
+        """
+        backup_record = self.load_backup(brief_id, backup_filename)
+        # ``brief`` is the payload key for recruitment records.
+        payload = backup_record.get("brief")
+        if not isinstance(payload, dict):
+            raise BriefStoreError("backup_record_invalid", http_status=500)
+        return self.save(brief_id, payload, expected_revision=expected_revision)
 
 
 __all__ = [

@@ -9730,6 +9730,142 @@ def create_recruitment_brief(payload: dict) -> dict:
     })
 
 
+def list_recruitment_brief_backups(brief_id: str) -> dict:
+    """List on-disk backups for one recruitment brief."""
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    store = _brief_store()
+    try:
+        backups = store.list_backups(brief_id)
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-backup-list",
+        "version": "1.0.0",
+        "brief_id": brief_id,
+        "count": len(backups),
+        "backups": backups,
+    })
+
+
+def load_recruitment_brief_backup(brief_id: str, backup_filename: str) -> dict:
+    """Load one backup record for a recruitment brief."""
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    store = _brief_store()
+    try:
+        record = store.load_backup(brief_id, backup_filename)
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def diff_recruitment_brief_versions(
+    brief_id: str,
+    backup_filename: str | None = None,
+) -> dict:
+    """Diff the current brief against a backup (or two backups).
+
+    If ``backup_filename`` is provided, the backup is diffed against the
+    current on-disk record.  If the current record is missing (e.g. the
+    brief was deleted and only a deletion backup remains), the diff is
+    ``added`` from None to the backup payload.
+    """
+    from scoutfootball.recruitment.store import BriefStoreError
+    from scoutfootball.storage.record_diff import diff_records
+
+    store = _brief_store()
+    try:
+        backup_record = store.load_backup(brief_id, backup_filename) if backup_filename else None
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_record: dict | None
+    try:
+        current_record = store.load(brief_id)
+    except BriefStoreError as exc:
+        if exc.code != "brief_not_found":
+            return _clean_json_value({
+                "status": "error",
+                "code": exc.code,
+                "message": exc.code,
+                "http_status": exc.http_status,
+            })
+        current_record = None
+
+    if backup_record is None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "backup_filename_required",
+            "message": "backup_filename query parameter is required",
+            "http_status": 400,
+        })
+
+    changes = diff_records(current_record, backup_record)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-diff",
+        "version": "1.0.0",
+        "brief_id": brief_id,
+        "current_revision": current_record.get("server_revision") if current_record else None,
+        "backup_revision": backup_record.get("server_revision"),
+        "change_count": len(changes),
+        "changes": changes,
+    })
+
+
+def restore_recruitment_brief_from_backup(
+    brief_id: str,
+    backup_filename: str,
+    *,
+    expected_revision: int | None = None,
+) -> dict:
+    """Restore a recruitment brief from a backup, creating a new revision."""
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    store = _brief_store()
+    try:
+        record = store.restore_from_backup(
+            brief_id, backup_filename, expected_revision=expected_revision,
+        )
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-record",
+        "version": "1.0.0",
+        "restored_from": backup_filename,
+        "record": record,
+    })
+
+
 # ── Opposition & Match Pack API ─────────────────────────────────────────
 
 
@@ -9857,6 +9993,254 @@ def create_opposition_briefing(payload: dict) -> dict:
         "version": "1.0.0",
         "record": record,
     })
+
+
+def list_opposition_briefing_backups(briefing_id: str) -> dict:
+    """List on-disk backups for one match briefing."""
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    store = _briefing_store()
+    try:
+        backups = store.list_backups(briefing_id)
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-backup-list",
+        "version": "1.0.0",
+        "briefing_id": briefing_id,
+        "count": len(backups),
+        "backups": backups,
+    })
+
+
+def load_opposition_briefing_backup(briefing_id: str, backup_filename: str) -> dict:
+    """Load one backup record for a match briefing."""
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    store = _briefing_store()
+    try:
+        record = store.load_backup(briefing_id, backup_filename)
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def diff_opposition_briefing_versions(
+    briefing_id: str,
+    backup_filename: str | None = None,
+) -> dict:
+    """Diff the current briefing against a backup."""
+    from scoutfootball.opposition.store import BriefingStoreError
+    from scoutfootball.storage.record_diff import diff_records
+
+    store = _briefing_store()
+    try:
+        backup_record = (
+            store.load_backup(briefing_id, backup_filename) if backup_filename else None
+        )
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_record: dict | None
+    try:
+        current_record = store.load(briefing_id)
+    except BriefingStoreError as exc:
+        if exc.code != "briefing_not_found":
+            return _clean_json_value({
+                "status": "error",
+                "code": exc.code,
+                "message": exc.code,
+                "http_status": exc.http_status,
+            })
+        current_record = None
+
+    if backup_record is None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "backup_filename_required",
+            "message": "backup_filename query parameter is required",
+            "http_status": 400,
+        })
+
+    changes = diff_records(current_record, backup_record)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-diff",
+        "version": "1.0.0",
+        "briefing_id": briefing_id,
+        "current_revision": current_record.get("server_revision") if current_record else None,
+        "backup_revision": backup_record.get("server_revision"),
+        "change_count": len(changes),
+        "changes": changes,
+    })
+
+
+def restore_opposition_briefing_from_backup(
+    briefing_id: str,
+    backup_filename: str,
+    *,
+    expected_revision: int | None = None,
+) -> dict:
+    """Restore a match briefing from a backup, creating a new revision."""
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    store = _briefing_store()
+    try:
+        record = store.restore_from_backup(
+            briefing_id, backup_filename, expected_revision=expected_revision,
+        )
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "restored_from": backup_filename,
+        "record": record,
+    })
+
+
+def export_local_pack() -> dict:
+    """Bundle all local personal artifacts into a portable offline pack.
+
+    The pack is a single JSON document with a manifest, hashes and the
+    full records for every recruitment brief and opposition briefing
+    stored under ``report_root``.  It is intended for offline backup,
+    migration to a new machine, or hand-off to another reviewer via
+    file transfer.  No cloud, no account, no telemetry.
+
+    The pack schema is ``scoutfootball.portable-pack`` v1.0.0.  Each
+    section carries its own schema/version so consumers can validate
+    individual sections without parsing the whole pack.
+    """
+    import hashlib
+    import json
+
+    brief_store = _brief_store()
+    briefing_store = _briefing_store()
+
+    brief_records = brief_store.list_records(limit=100)
+    briefing_records = briefing_store.list_records(limit=100)
+
+    # Pull full records for each summary entry, skipping any that fail
+    # to load (corrupted records are reported in ``skipped`` but do not
+    # abort the export).
+    full_briefs: list[dict] = []
+    skipped_briefs: list[dict] = []
+    for summary in brief_records:
+        try:
+            full_briefs.append(brief_store.load(summary["brief_id"]))
+        except Exception as exc:  # noqa: BLE001 — report, don't crash export
+            skipped_briefs.append({
+                "brief_id": summary.get("brief_id"),
+                "reason": str(exc) or type(exc).__name__,
+            })
+
+    full_briefings: list[dict] = []
+    skipped_briefings: list[dict] = []
+    for summary in briefing_records:
+        try:
+            full_briefings.append(briefing_store.load(summary["briefing_id"]))
+        except Exception as exc:  # noqa: BLE001 — report, don't crash export
+            skipped_briefings.append({
+                "briefing_id": summary.get("briefing_id"),
+                "reason": str(exc) or type(exc).__name__,
+            })
+
+    sections = {
+        "recruitment_briefs": {
+            "schema": "scoutfootball.recruitment-brief-record",
+            "version": "1.0.0",
+            "count": len(full_briefs),
+            "records": full_briefs,
+        },
+        "opposition_briefings": {
+            "schema": "scoutfootball.opposition-briefing-record",
+            "version": "1.0.0",
+            "count": len(full_briefings),
+            "records": full_briefings,
+        },
+    }
+
+    # Stable per-section SHA-256 over the canonical JSON of each section
+    # (sorted keys, no ASCII escaping, 2-space indent).  Used by
+    # importers to detect in-transit corruption.
+    section_hashes: dict[str, str] = {}
+    for name, section in sections.items():
+        canonical = json.dumps(section, ensure_ascii=False, sort_keys=True, indent=2)
+        section_hashes[name] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    pack = {
+        "schema": "scoutfootball.portable-pack",
+        "version": "1.0.0",
+        "exported_at": _utc_now_iso_helper(),
+        "app_version": _app_version_helper(),
+        "sections": sections,
+        "section_hashes": section_hashes,
+        "skipped": {
+            "recruitment_briefs": skipped_briefs,
+            "opposition_briefings": skipped_briefings,
+        },
+        "license_summary": _portable_pack_license_summary(),
+    }
+    return _clean_json_value({
+        "status": "ok",
+        "pack": pack,
+    })
+
+
+def _utc_now_iso_helper() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(tz=UTC).isoformat()
+
+
+def _app_version_helper() -> str:
+    from scoutfootball import __version__
+
+    return __version__
+
+
+def _portable_pack_license_summary() -> dict:
+    """Return a compact license summary for the portable pack header."""
+    artifacts = get_artifacts_summary()
+    return {
+        "default": "maintainer-local MIT",
+        "note": (
+            "All records in this pack are personal local objects authored "
+            "by the maintainer.  Derived metrics reusing public StatsBomb "
+            "Open Data retain that source's CC-BY-SA-4.0 attribution "
+            "requirement; raw event data is NOT included in this pack."
+        ),
+        "sources_attribution": artifacts.get("license_attribution", {}),
+    }
 
 
 def get_wc_tournament_standings(group: str | None = None) -> dict:
