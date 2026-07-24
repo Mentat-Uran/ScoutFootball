@@ -139,3 +139,80 @@ def test_registry_includes_core_domains() -> None:
     }
     missing = expected_domains - set(registry.domains)
     assert not missing, f"Missing core domains: {sorted(missing)}"
+
+
+# ── API route drift gate ──────────────────────────────────────────────
+
+# Route prefixes that are owned by the capability registry.  Routes under
+# these prefixes must be declared in some capability's ``api_paths``; routes
+# outside them (health, static, world-cup, data, etc.) are out of scope for
+# this drift gate because they are covered by other capabilities or are
+# infrastructure.
+_CAPABILITY_ROUTE_PREFIXES = ("/recruitment/", "/opposition/")
+
+
+def _extract_fastapi_paths() -> set[str]:
+    """Return the set of route paths declared on the FastAPI app."""
+    from scoutfootball.api_server import create_app
+
+    app = create_app()
+    paths: set[str] = set()
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        if isinstance(path, str) and path:
+            paths.add(path)
+    return paths
+
+
+def _capability_api_paths() -> set[str]:
+    """Return every api_path declared across all capabilities."""
+    registry = build_capability_registry()
+    paths: set[str] = set()
+    for cap in registry.capabilities:
+        paths.update(cap.api_paths)
+    return paths
+
+
+def test_capability_api_paths_exist_as_routes() -> None:
+    """Every /recruitment/ and /opposition/ api_path must be a real route.
+
+    Catches drift where someone declares a path in the capability registry
+    but never wires it in ``api_server.py`` (or renames the route and forgets
+    to update the registry).  Scoped to recruitment/opposition because other
+    capabilities use a legacy path convention (e.g. ``/path (PUT)``) that does
+    not map 1:1 to FastAPI route paths.
+    """
+    registered = {
+        p for p in _capability_api_paths()
+        if any(p.startswith(prefix) for prefix in _CAPABILITY_ROUTE_PREFIXES)
+    }
+    actual = _extract_fastapi_paths()
+    missing = registered - actual
+    assert not missing, (
+        f"Capability api_paths not found as FastAPI routes: {sorted(missing)}. "
+        f"Either wire the route in api_server.py or remove the stale path "
+        f"from architecture.py."
+    )
+
+
+def test_recruitment_opposition_routes_are_registered() -> None:
+    """Every /recruitment/ and /opposition/ route must be in the registry.
+
+    Catches drift where someone adds a new recruitment or opposition API
+    endpoint in ``api_server.py`` but forgets to declare it in the capability
+    registry's ``api_paths``.
+    """
+    actual = {
+        p for p in _extract_fastapi_paths()
+        if any(p.startswith(prefix) for prefix in _CAPABILITY_ROUTE_PREFIXES)
+    }
+    registered = {
+        p for p in _capability_api_paths()
+        if any(p.startswith(prefix) for prefix in _CAPABILITY_ROUTE_PREFIXES)
+    }
+    missing = actual - registered
+    assert not missing, (
+        f"FastAPI routes under /recruitment/ or /opposition/ missing from "
+        f"capability registry api_paths: {sorted(missing)}. "
+        f"Add them to the relevant capability in build_capability_registry()."
+    )
