@@ -50,7 +50,7 @@
 
 C1 可信证据内核 — `verified`（2026-07-23）。退出门槛 4 条全部满足：(1) 外部事实/provenance 经 registry 且有人工复核（190 条 AI 辅助审计 + 190 条 maintainer_human_review 确认）；(2) 新来源必须有许可/快照/身份/删除策略（7/7 sources 全部有 snapshot 日期 + until_manual_deletion 政策）；(3) 模型候选可复算+回滚（2026-07-19 端到端验证 promote/rollback 字节级还原）；(4) 身份冲突不静默选择（identity audit 40 samples，0 errors）。`contract-quality` 8 项检查全部 pass。C1 期间交付的核心能力包括：内容级 Parquet preflight 证据报告、append-only source policy/snapshot/quality_audit/quality_threshold ledger、`record-source-snapshot` 只接受维护者显式日期+证据、`inspect-raw-source` 为 CSV 生成结构哈希证据、`model-admission` 8 项 evidence 检查、`promote/reject/rollback-model-run` 带哈希备份的原子操作、Transfermarkt 身份复核的撤销和 reconcile 预览、`validate-decision-package` 失败关闭验证、`record-quality-audit/threshold` 只记录维护者决策、source_claim audit 覆盖 3 个来源 150 样本（football_data/understat/fbref）、identity_resolution audit 覆盖 2 个来源 40 样本（fbref/understat）。G1 后置维护项（TASKS.md 历史归档、模块边界 ADR、最小文档生成与陈旧度报告）均已完成。
 
-**P1/I1/R1/E1 已解锁**。P1（个人决策闭环）是下一个推荐节点，其三个分支（Recruitment Pack、Opposition & Match Pack、World Cup Pack 参考化）不要求同时完成，维护者先解锁自己实际重复使用的分支。
+**P1/I1/R1/E1 已解锁**。P1（个人决策闭环）四个分支现已全部 `verified`：6.1 Recruitment Pack（brief + dossier，2026-07-24）、6.2 Opposition & Match Pack（briefing + post_match_review，2026-07-24）、6.3 World Cup Pack 参考化（2026-07-23）、6.4 产品体验（2026-07-24）。P1 退出门槛 4 条全部满足：(1) 维护者可从真实输入独立完成参考工作流（6.4 工作流导航 + 版本/备份层）；(2) 需求 brief 到有人工结论的证据包可 round-trip（6.1 brief→dossier、6.2 briefing→review 双侧闭环）；(3) 可行动推荐显示覆盖/来源/敏感性/可检查证据（dossier 与 review 的 evidence 携带 fact_tier，decision/status 一致性阻断无结论的行动建议）；(4) 世界杯包与招募/比赛包复用 Core（6.3 contracts.py 唯一复用层）。I1/R1/E1 待维护者选择实际工作流作为验收载体后启动。
 
 当前 C1 证据补充：`validate-decision-package` 已以当前静态世界杯简报集合完成内容级验证；它对下载的简报导出和短名单决策包同样失败关闭。该验证只证明本地合同与已记录字段完整，不替代来源、快照或身份的人工审计。`record-quality-audit` 现在可将维护者实际复核的身份解析或来源主张样本追加到本地账本；`record-quality-threshold` 只在维护者明确给出最大错误率、最小有效样本数和决策文本后追加阈值。`contract-quality --audit-ledger --threshold-ledger` 只汇总有效样本，并在阈值缺失或样本不足时保持 `baseline_required`、在超过维护者设置阈值时失败，绝不自动设定阈值。`inspect-raw-source` 现在为已登记目录内的本地 UTF-8 CSV 生成不含单元格值的内容哈希、结构和完整可读性证据，使它们能与现有 Parquet preflight 一样登记不可变来源快照，并被 `contract-quality --evidence` 作为局部内容可读性证据消费。2026-07-17 Reep `people.csv` 已在 Git 忽略的 `data/raw/reep/` 本地保留，按上游 `meta.json` 明示的 `2026-06-21` 生成时间写入快照账本，并记录 `until_manual_deletion` 政策；同日用户授权后其余 6 个已登记来源也写入各自的 `until_manual_deletion` 本地政策。`reep-identity-lookup` 现可按精确 Transfermarkt、FBref 或 Wikidata ID 只读检索这份本地快照，并返回限量的交叉标识供人工复核；它不读取 Transfermarkt 文件，也不创建项目 canonical ID、身价、评分、阵容或真值标签。它们不会由此产生上游快照日期或来源正确性的声明。`contract-quality` 现在也会拒绝任何未注册 raw 目录。2026-07-19 遗留的 `data/raw/transfermarkt/` 目录（3 个 CSV，~53MB，被 `pipeline.py` 和 `fill_truth_labels.py` 实际读取但未登记）已对齐：3 个 CSV 通过 `git mv` 移动到已登记的 `data/raw/transfermarkt_manual/` 目录，`pipeline.py:1171` 和 `fill_truth_labels.py:79` 的路径同步更新，空目录删除。`contract-quality` 的 `unregistered_raw_directories` 检查从 `fail` 转为 `pass`，`overall_status` 从 `fail` 转为 `incomplete`（剩余 incomplete 项均为需要维护者审计数据的 `baseline_required` 检查）。`transfermarkt_manual` 的 `until_manual_deletion` 政策现已实际覆盖真实数据。
 
@@ -208,6 +208,60 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 - `test_invalid_brief_id_rejected` 期望错误类型与实际不符：`BriefStore` 在 `list_backups` 路径上抛 `BriefValidationError`（来自 brief_id 校验），而非 `BriefStoreError`。修复：更新期望。
 
 **遗留**：冲突合并 UI 层未实现，留待后续迭代（当前 diff 仅展示字段差异，不提供交互式合并）。
+
+### 6.1 Recruitment Pack 决策档案层 — `verified`（2026-07-24）
+
+满足 P1 退出门槛第 2 条"需求 brief 到有人工结论的证据包可 round-trip，冲突和本地边界清晰"。
+
+**核心交付**：
+
+- 新建 `src/scoutfootball/recruitment/dossier.py`：`DecisionDossier` Pydantic 模型（schema=`scoutfootball.recruitment-decision-dossier` v1.0.0），整合支持证据（`supporting_evidence`）、反证（`counter_evidence`）、对比（`comparisons`）、风险（`risks`）、人工意见（`human_opinion`）和最终建议（`recommendation`）。状态机 `draft → decided/rejected/superseded` 与决策字段 `proceed/hold/reject/defer` 通过 `model_validator` 强制一致性：`status=decided` 必须携带 `decision`，非 `decided` 状态不得设置 `decision`。每条证据/对比/风险携带 `fact_tier`（`official/recorded/estimated/unknown`），继承 Core 事实分层。`limitations` 默认包含"Dossier is a personal local object; not an external fact."和"Decision is the maintainer's honest judgment, not an automated recommendation."，诚实呈现本地边界。
+- 新建 `src/scoutfootball/recruitment/dossier_store.py`：`DossierStore` 提供原子写、备份、乐观并发（`expected_revision` If-Match 语义）和 cross-store 隔离，与 `BriefStore`/`BriefingStore` 共享同一持久化模式。记录 envelope schema=`scoutfootball.recruitment-decision-dossier-record` v1.0.0，包含 `server_revision`/`stored_at`/`dossier` 三层。备份文件命名 `<dossier_id>.rev-<N>.<uuid>.json` 和 `<dossier_id>.deleted-<uuid>.json`，支持 `list_backups`/`load_backup`/`restore_from_backup` round-trip。
+- `src/scoutfootball/recruitment/__init__.py` 导出 `DecisionDossier`/`DossierStore`/`DossierValidationError`/`DossierStoreError`/`validate_dossier_id`/`validate_dossier_payload` 等公开 API。
+- `src/scoutfootball/__main__.py` 新增 4 个 CLI 命令：`create-dossier`（从 flags 或 `--from-json` 创建，`--decision` 自动强制 `status=decided`）、`list-dossiers`（文本/JSON）、`show-dossier`（文本/JSON，展示证据/对比/风险/人工意见/建议全字段）、`validate-dossier`（本地文件校验，不写入 store）。
+- `src/scoutfootball/architecture.py` 注册 `recruitment.dossiers` 能力（4 个 CLI 命令）和 CLI 示例，与 `test_supported_commands_covers_all_cli_subparsers` 契约对齐。
+
+**测试覆盖**：
+
+- `tests/unit/test_recruitment_dossier.py`：模型与 store 单元测试，覆盖 valid construction、status/decision 一致性验证、fact_tier 枚举、evidence/comparison/risk id 唯一性、`validate_dossier_id` filename-safe 校验、`DossierStore` save/load/list/count/delete round-trip、原子写 temp file 清理、备份创建与恢复、乐观并发冲突（`precondition_required`/`revision_conflict`）、cross-store 隔离（BriefStore 不能读取 DossierStore 备份）。
+- `tests/unit/test_recruitment_dossier_cli.py`：25 个 CLI 测试，覆盖 `create-dossier`（flags/JSON/`--from-json`/`--decision` 强制 decided/`--dossier-id`/`--linked-artifacts`/missing title/invalid id）、`list-dossiers`（空 store/非空/text+JSON/status+decision 显示）、`show-dossier`（text/JSON/evidence+risks 显示/nonexistent 404）、`validate-dossier`（valid/invalid/semantic error/missing file/不写入 store）、create→list→show 端到端 round-trip。
+- recruitment 全部 203 测试通过（dossier + dossier_cli + cli + brief + contracts）；ruff clean；capability registry 29 测试通过；architecture commands 5 测试通过。
+
+**修复记录**：
+
+- CLI `validate_dossier_id(dossier_id)` 调用在 try/except 块外，无效 ID 触发未捕获 `DossierValidationError` 导致 traceback。修复：包裹在独立 try/except 中，输出 clean error 并 exit 1。
+- `test_recruitment_dossier.py` 错误地从 `scoutfootball.recruitment.brief` 导入 `BriefStore`（实际在 `store.py`）。修复 import 路径。
+- `test_save_rejects_invalid_payload` 期望 `DossierStoreError`，但 `save()` 直接抛出 `DossierValidationError`（与 `BriefStore` 行为一致——验证错误是调用方 bug，不是 store 错误）。修复测试期望。
+- ruff E501 长行修复：`__main__.py` 4 处 print 语句、`dossier.py` 2 处 list comprehension、`dossier_store.py` 2 处 metadata dict、`test_recruitment_dossier.py` 3 处 pytest.raises 断言。ruff I001 import 排序和 F401 未用 import 自动修复。
+
+完整证据：本地烟雾测试 `create-dossier`（flags + `--decision`）、`list-dossiers`（text + JSON）、`show-dossier`（全字段显示）、`show-dossier nonexistent`（404 exit 1）全部通过。该工作关闭 P1 退出门槛第 2 条"需求 brief 到有人工结论的证据包可 round-trip"的核心缺口——Recruitment Pack 现可从 brief（需求）→ dossier（证据+人工结论）完整 round-trip，冲突由乐观并发 `expected_revision` 控制，本地边界由 `limitations` 字段诚实呈现。6.1 Recruitment Pack brief 层 + 决策档案层现已 `verified`。
+
+### 6.2 Opposition & Match Pack 赛后复盘层 — `verified`（2026-07-24）
+
+满足 P1 退出门槛第 2 条"需求 brief 到有人工结论的证据包可 round-trip，冲突和本地边界清晰"的 opposition 侧——Opposition & Match Pack 现可从 briefing（赛前假设）→ post_match_review（赛后假设-计划-执行-结果对照 + 人工结论）完整 round-trip，与 Recruitment Pack（brief → dossier）形成对称闭环。
+
+**核心交付**：
+
+- 新建 `src/scoutfootball/opposition/post_match_review.py`：`PostMatchReview` Pydantic 模型（schema=`scoutfootball.opposition-post-match-review` v1.0.0，frozen, extra=forbid），整合假设结果（`hypothesis_results`：planned vs observed + outcome）、被证伪模式（`falsified_patterns`）、新问题（`new_questions`）、支持证据（`supporting_evidence`）、反证（`counter_evidence`）、人工意见（`human_opinion`）和最终建议（`recommendation`）。状态机 `draft → finalized/superseded` 与决策字段 `confirmed/falsified/partial/inconclusive` 通过 `model_validator` 强制一致性：`status=finalized` 必须携带 `decision`，非 `finalized` 状态不得设置 `decision`。每条假设结果/被证伪模式/新问题/证据携带 `fact_tier`（`official/recorded/estimated/unknown`），复用 `briefing.py` 的事实分层词汇，让 opposition pack 共享一套诚实来源词汇——官方比分（official）不会被误读为维护者估计（estimated）。`limitations` 默认包含"Review is a personal local object; not an external fact."和"Decision is the maintainer's honest judgment, not an automated recommendation."，诚实呈现本地边界，与 `DecisionDossier` 对称。
+- 新建 `src/scoutfootball/opposition/post_match_review_store.py`：`ReviewStore` 提供原子写（temp file → fsync → replace）、备份（更新/删除前 copy2）、乐观并发（`expected_revision` If-Match 语义，409 conflict / 428 precondition_required / 404 not_found）和 cross-store 隔离，与 `BriefingStore`/`DossierStore`/`BriefStore` 共享同一持久化模式。记录 envelope schema=`scoutfootball.opposition-post-match-review-record` v1.0.0，包含 `server_revision`/`stored_at`/`review` 三层。备份文件命名 `<review_id>.rev-<N>.<uuid>.json` 和 `<review_id>.deleted-<uuid>.json`，支持 `list_backups`/`load_backup`/`restore_from_backup` round-trip。存储路径 `<report_root>/opposition/reviews/`，与 briefings 目录并列。
+- `src/scoutfootball/opposition/__init__.py` 导出 `PostMatchReview`/`ReviewStore`/`ReviewStoreError`/`ReviewValidationError`/`validate_review_id`/`validate_review_payload` 及 `REVIEW_SCHEMA`/`REVIEW_VERSION`/`REVIEW_RECORD_SCHEMA`/`REVIEW_RECORD_VERSION`/`MAX_REVIEW_BYTES`/`MAX_REVIEW_RECORD_BYTES`/`VALID_FACT_TIERS`/`VALID_HYPOTHESIS_OUTCOMES`/`VALID_REVIEW_DECISIONS`/`VALID_REVIEW_STATUS`/`VALID_RISK_SEVERITY` 等公开 API 和常量。
+- `src/scoutfootball/__main__.py` 新增 4 个 CLI 命令：`create-review`（从 flags 或 `--from-json` 创建，`--decision` 自动强制 `status=finalized`，支持 `--briefing-id`/`--match-id`/`--home-team`/`--away-team`/`--kickoff-at`/`--competition`/`--season`/`--final-score-home`/`--final-score-away`/`--human-opinion`/`--recommendation`/`--linked-artifacts`/`--notes`/`--review-id`）、`list-reviews`（文本/JSON）、`show-review`（文本/JSON，展示假设结果/被证伪模式/新问题/证据/人工意见/建议全字段）、`validate-review`（本地文件校验，不写入 store）。
+- `src/scoutfootball/architecture.py` 注册 `opposition.post_match_reviews` 能力（4 个 CLI 命令：create-review/list-reviews/show-review/validate-review）和 CLI 示例，与 `test_supported_commands_covers_all_cli_subparsers` 契约对齐；`opposition` 模块边界的 `planned_components` 已包含 `post_match_review`。
+
+**测试覆盖**：
+
+- `tests/unit/test_opposition_post_match_review.py`：模型与 store 单元测试，覆盖 valid construction、status/decision 一致性验证（finalized 要求 decision、非 finalized 不得设置 decision）、hypothesis outcome 枚举（confirmed/falsified/partial/inconclusive）、fact_tier 四档、evidence/hypothesis/falsified_pattern/new_question id 唯一性、`validate_review_id` filename-safe 校验、`ReviewStore` save/load/list/count/delete round-trip、原子写 temp file 清理、备份创建与恢复、乐观并发冲突（`precondition_required`/`revision_conflict`）、cross-store 隔离（BriefingStore 不能读取 ReviewStore 备份）、serialization round-trip（tuple↔list 转换）。
+- `tests/unit/test_opposition_post_match_review_cli.py`：25 个 CLI 测试，覆盖 `create-review`（flags/JSON/`--from-json`/`--decision` 强制 finalized/`--review-id`/`--linked-artifacts`/missing title/invalid id）、`list-reviews`（空 store/非空/text+JSON/status+decision 显示）、`show-review`（text/JSON/hypothesis+evidence 显示/nonexistent 404）、`validate-review`（valid/invalid/missing file/不写入 store）、create→list→show 端到端 round-trip。
+- opposition 全部 91 测试通过（post_match_review + post_match_review_cli）；ruff clean；capability registry 与 architecture commands 契约测试通过。
+
+**修复记录**：
+
+- ruff E501 长行修复：`__main__.py` 的 `--status` help 文本拆为多行字符串。
+- ruff I001 import 排序：`opposition/__init__.py` 新增 import 自动排序。
+
+**遗留**：`pattern_card` 与 `scenario_tree` 实体层未实现（`opposition/contracts.py` 已登记 4 类 artifact 的 contract，`briefing` 与 `post_match_review` 现已 `status=delivered`，`pattern_card` 与 `scenario_tree` 仍 `status=provisional`）。它们是 briefing 与 review 之间的中间分析工具，不阻断 briefing → review 的 round-trip；待维护者实际使用后再迭代。
+
+完整证据：本地烟雾测试 `create-review`（flags + `--decision confirmed` 强制 finalized）、`list-reviews`（text）、`create-review --json`（envelope 含 server_revision=1）全部通过。该工作关闭 P1 退出门槛第 2 条"需求 brief 到有人工结论的证据包可 round-trip"的 opposition 侧缺口——Opposition & Match Pack 现可从 briefing（赛前假设）→ post_match_review（赛后假设-计划-执行-结果对照 + 人工结论）完整 round-trip，冲突由乐观并发 `expected_revision` 控制，本地边界由 `limitations` 字段诚实呈现，事实分层由 `fact_tier` 贯穿 briefing 与 review。6.2 Opposition & Match Pack briefing 层 + 赛后复盘层现已 `verified`。
 
 ## 后续依赖表
 

@@ -32,6 +32,20 @@ from scoutfootball.recruitment.contracts import (
     contracts_to_dict,
     fact_type_for_artifact,
 )
+from scoutfootball.recruitment.dossier import (
+    DOSSIER_SCHEMA,
+    DOSSIER_VERSION,
+    DecisionDossier,
+    DossierValidationError,
+    validate_dossier_id,
+    validate_dossier_payload,
+)
+from scoutfootball.recruitment.dossier_store import (
+    DOSSIER_RECORD_SCHEMA,
+    DOSSIER_RECORD_VERSION,
+    DossierStore,
+    DossierStoreError,
+)
 from scoutfootball.recruitment.store import (
     BRIEF_RECORD_SCHEMA,
     BRIEF_RECORD_VERSION,
@@ -42,13 +56,21 @@ from scoutfootball.recruitment.store import (
 __all__ = [
     "RecruitmentFactType",
     "RecruitmentBrief",
+    "DecisionDossier",
     "BriefStore",
+    "DossierStore",
     "BriefStoreError",
+    "DossierStoreError",
     "BriefValidationError",
+    "DossierValidationError",
     "BRIEF_SCHEMA",
     "BRIEF_VERSION",
     "BRIEF_RECORD_SCHEMA",
     "BRIEF_RECORD_VERSION",
+    "DOSSIER_SCHEMA",
+    "DOSSIER_VERSION",
+    "DOSSIER_RECORD_SCHEMA",
+    "DOSSIER_RECORD_VERSION",
     "build_brief_contract",
     "build_decision_dossier_contract",
     "build_recruitment_contract_registry",
@@ -58,4 +80,6 @@ __all__ = [
     "fact_type_for_artifact",
     "validate_brief_id",
     "validate_brief_payload",
+    "validate_dossier_id",
+    "validate_dossier_payload",
 ]

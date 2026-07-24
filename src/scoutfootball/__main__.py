@@ -2163,6 +2163,15 @@ def _briefing_store():
     return BriefingStore(settings.report_root / "opposition" / "briefings")
 
 
+def _review_store():
+    """Build a ReviewStore rooted at report_root/opposition/reviews."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.opposition.post_match_review_store import ReviewStore
+
+    settings = PlatformSettings.from_root()
+    return ReviewStore(settings.report_root / "opposition" / "reviews")
+
+
 def _cmd_create_brief(args: argparse.Namespace) -> None:
     """Create a new recruitment brief from CLI flags or a JSON file."""
     import json
@@ -2358,6 +2367,262 @@ def _cmd_validate_brief(args: argparse.Namespace) -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"VALID: {brief.brief_id} (schema={brief.schema} v{brief.version})")
+
+
+# ── Recruitment decision dossier CLI ─────────────────────────────────────
+
+
+def _dossier_store():
+    """Build a DossierStore rooted at the platform report_root/recruitment/dossiers."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.recruitment.dossier_store import DossierStore
+
+    settings = PlatformSettings.from_root()
+    return DossierStore(settings.report_root / "recruitment" / "dossiers")
+
+
+def _cmd_create_dossier(args: argparse.Namespace) -> None:
+    """Create a new decision dossier from CLI flags or a JSON file."""
+    import json
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    from scoutfootball.recruitment.dossier import (
+        DossierValidationError,
+        validate_dossier_id,
+    )
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    if args.from_json:
+        path = Path(args.from_json)
+        if path.is_symlink() or not path.is_file():
+            print(f"error: dossier JSON must be a regular local file: {path}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            print(f"error: cannot read dossier JSON: {type(exc).__name__}: {exc}", file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(payload, dict):
+            print("error: dossier JSON must be an object", file=sys.stderr)
+            sys.exit(1)
+        if not payload.get("dossier_id"):
+            date_part = datetime.now(tz=UTC).strftime("%Y%m%d")
+            uuid_part = _uuid.uuid4().hex[:8]
+            payload["dossier_id"] = f"dossier-{date_part}-{uuid_part}"
+    else:
+        if not args.title:
+            print("error: --title is required when not using --from-json", file=sys.stderr)
+            sys.exit(2)
+        date_part = datetime.now(tz=UTC).strftime("%Y%m%d")
+        uuid_part = _uuid.uuid4().hex[:8]
+        dossier_id = args.dossier_id or f"dossier-{date_part}-{uuid_part}"
+        try:
+            validate_dossier_id(dossier_id)
+        except DossierValidationError as exc:
+            print(f"error: invalid dossier id: {exc}", file=sys.stderr)
+            sys.exit(1)
+        now = datetime.now(tz=UTC).isoformat()
+        # Status/decision consistency: when --decision is given we force
+        # status="decided"; otherwise default to "draft" with decision=null.
+        decision_value = args.decision or None
+        status_value = "decided" if decision_value else (args.status or "draft")
+        if decision_value and status_value != "decided":
+            print(
+                f"error: --decision requires --status decided (got {status_value!r})",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        payload = {
+            "schema": "scoutfootball.recruitment-decision-dossier",
+            "version": "1.0.0",
+            "dossier_id": dossier_id,
+            "revision": 1,
+            "created_at": now,
+            "updated_at": now,
+            "author": args.author or "maintainer",
+            "title": args.title,
+            "brief_id": args.brief_id or "",
+            "candidate_player_id": args.candidate_player_id or "",
+            "candidate_player_name": args.candidate_player_name or "",
+            "candidate_team_name": args.candidate_team_name or "",
+            "candidate_season_id": args.candidate_season_id or "",
+            "status": status_value,
+            "decision": decision_value,
+            "decision_note": args.decision_note or "",
+            "supporting_evidence": [],
+            "counter_evidence": [],
+            "comparisons": [],
+            "risks": [],
+            "human_opinion": args.human_opinion or "",
+            "recommendation": args.recommendation or "",
+            "linked_artifacts": args.linked_artifacts or [],
+            "notes": args.notes or "",
+            "limitations": [
+                "Dossier is a personal local object; not an external fact.",
+                "Decision is the maintainer's honest judgment, not an automated recommendation.",
+            ],
+        }
+
+    try:
+        store = _dossier_store()
+        record = store.save(payload["dossier_id"], payload, expected_revision=0)
+    except DossierValidationError as exc:
+        print(f"error: dossier validation failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except DossierStoreError as exc:
+        print(f"error: dossier store failed: {exc.code} (HTTP {exc.http_status})", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(record, ensure_ascii=False, indent=2))
+    else:
+        dossier = record["dossier"]
+        print(f"Created dossier: {dossier['dossier_id']} (revision {dossier['revision']})")
+        print(f"  title: {dossier['title']}")
+        print(f"  brief: {dossier.get('brief_id', '') or '(none)'}")
+        print(
+            f"  candidate: {dossier.get('candidate_player_name', '') or '-'} "
+            f"({dossier.get('candidate_player_id', '') or '-'})"
+        )
+        print(f"  status: {dossier.get('status', 'draft')}")
+        if dossier.get("decision"):
+            print(f"  decision: {dossier['decision']}")
+        print(f"  stored at: {store.root / (dossier['dossier_id'] + '.json')}")
+
+
+def _cmd_list_dossiers(args: argparse.Namespace) -> None:
+    """List stored decision dossiers."""
+    import json
+
+    store = _dossier_store()
+    records = store.list_records(limit=args.limit)
+    if args.json:
+        print(json.dumps(
+            {"count": len(records), "dossiers": records},
+            ensure_ascii=False, indent=2,
+        ))
+    else:
+        if not records:
+            print("No dossiers found.")
+            return
+        print(f"Found {len(records)} dossier(s):")
+        for rec in records:
+            decision_str = f" decision={rec['decision']}" if rec.get("decision") else ""
+            print(
+                f"  {rec['dossier_id']}  rev={rec['server_revision']}  "
+                f"{rec.get('title', '')}  "
+                f"candidate={rec.get('candidate_player_name', '') or '-'}  "
+                f"status={rec.get('status', '')}{decision_str}"
+            )
+
+
+def _cmd_show_dossier(args: argparse.Namespace) -> None:
+    """Show one stored decision dossier."""
+    import json
+
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    try:
+        store = _dossier_store()
+        record = store.load(args.dossier_id)
+    except DossierStoreError as exc:
+        print(f"error: {exc.code} (HTTP {exc.http_status})", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(record, ensure_ascii=False, indent=2))
+    else:
+        dossier = record["dossier"]
+        print(f"Dossier: {dossier['dossier_id']}")
+        print(f"  schema: {dossier['schema']} v{dossier['version']}")
+        print(f"  revision: {dossier['revision']} (server_revision: {record['server_revision']})")
+        print(f"  title: {dossier['title']}")
+        print(f"  brief: {dossier.get('brief_id', '') or '(none)'}")
+        print(
+            f"  candidate: {dossier.get('candidate_player_name', '') or '-'} "
+            f"({dossier.get('candidate_player_id', '') or '-'})"
+        )
+        if dossier.get("candidate_team_name"):
+            print(f"  candidate team: {dossier['candidate_team_name']}")
+        if dossier.get("candidate_season_id"):
+            print(f"  candidate season: {dossier['candidate_season_id']}")
+        print(f"  status: {dossier.get('status', 'draft')}")
+        if dossier.get("decision"):
+            print(f"  decision: {dossier['decision']}")
+        if dossier.get("decision_note"):
+            print(f"  decision note: {dossier['decision_note']}")
+        if dossier.get("supporting_evidence"):
+            print(f"  supporting evidence ({len(dossier['supporting_evidence'])}):")
+            for ev in dossier["supporting_evidence"]:
+                print(
+                    f"    [{ev.get('evidence_id')}] "
+                    f"{ev.get('fact_tier')}: {ev.get('summary', '')}"
+                )
+        if dossier.get("counter_evidence"):
+            print(f"  counter evidence ({len(dossier['counter_evidence'])}):")
+            for ev in dossier["counter_evidence"]:
+                print(
+                    f"    [{ev.get('evidence_id')}] "
+                    f"{ev.get('fact_tier')}: {ev.get('summary', '')}"
+                )
+        if dossier.get("comparisons"):
+            print(f"  comparisons ({len(dossier['comparisons'])}):")
+            for cmp in dossier["comparisons"]:
+                print(
+                    f"    [{cmp.get('comparison_id')}] {cmp.get('comparison_player_name', '')} "
+                    f"({cmp.get('comparison_player_id', '')})"
+                )
+        if dossier.get("risks"):
+            print(f"  risks ({len(dossier['risks'])}):")
+            for risk in dossier["risks"]:
+                print(
+                    f"    [{risk.get('risk_id')}] "
+                    f"severity={risk.get('severity')}: {risk.get('summary', '')}"
+                )
+        if dossier.get("human_opinion"):
+            print(f"  human opinion: {dossier['human_opinion']}")
+        if dossier.get("recommendation"):
+            print(f"  recommendation: {dossier['recommendation']}")
+        if dossier.get("linked_artifacts"):
+            print(f"  linked artifacts: {', '.join(dossier['linked_artifacts'])}")
+        if dossier.get("notes"):
+            print(f"  notes: {dossier['notes']}")
+        print(f"  created: {dossier.get('created_at', '?')}")
+        print(f"  updated: {dossier.get('updated_at', '?')}")
+        print(f"  stored: {record.get('stored_at', '?')}")
+
+
+def _cmd_validate_dossier(args: argparse.Namespace) -> None:
+    """Validate a local dossier JSON file without saving it."""
+    import json
+
+    from scoutfootball.recruitment.dossier import (
+        DossierValidationError,
+        validate_dossier_payload,
+    )
+
+    path = Path(args.path)
+    if path.is_symlink() or not path.is_file():
+        print(f"error: dossier file must be a regular local file: {path}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(f"error: cannot read dossier JSON: {type(exc).__name__}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        dossier = validate_dossier_payload(payload)
+    except DossierValidationError as exc:
+        print(f"INVALID: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        result = {"status": "valid", "dossier_id": dossier.dossier_id}
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"VALID: {dossier.dossier_id} (schema={dossier.schema} v={dossier.version})")
 
 
 # ── Opposition briefing CLI ──────────────────────────────────────────────
@@ -2674,7 +2939,348 @@ def _cmd_validate_briefing(args: argparse.Namespace) -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(
-            f"VALID: {briefing.briefing_id} (schema={briefing.schema} v{briefing.version})"
+            f"VALID: {briefing.briefing_id} (schema={briefing.schema} v={briefing.version})"
+        )
+
+
+# ── Opposition post-match review CLI ─────────────────────────────────────
+
+
+def _cmd_create_review(args: argparse.Namespace) -> None:
+    """Create a new post-match review from CLI flags or a JSON file."""
+    import json
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    from scoutfootball.opposition.post_match_review import (
+        ReviewValidationError,
+        validate_review_id,
+    )
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    if args.from_json:
+        path = Path(args.from_json)
+        if path.is_symlink() or not path.is_file():
+            print(
+                f"error: review JSON must be a regular local file: {path}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            print(
+                f"error: cannot read review JSON: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if not isinstance(payload, dict):
+            print("error: review JSON must be an object", file=sys.stderr)
+            sys.exit(1)
+        if not payload.get("review_id"):
+            date_part = datetime.now(tz=UTC).strftime("%Y%m%d")
+            uuid_part = _uuid.uuid4().hex[:8]
+            payload["review_id"] = f"review-{date_part}-{uuid_part}"
+    else:
+        if not args.title:
+            print(
+                "error: --title is required when not using --from-json",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        date_part = datetime.now(tz=UTC).strftime("%Y%m%d")
+        uuid_part = _uuid.uuid4().hex[:8]
+        review_id = args.review_id or f"review-{date_part}-{uuid_part}"
+        try:
+            validate_review_id(review_id)
+        except ReviewValidationError as exc:
+            print(f"error: invalid review id: {exc}", file=sys.stderr)
+            sys.exit(1)
+        now = datetime.now(tz=UTC).isoformat()
+        # Status/decision consistency: when --decision is given we force
+        # status="finalized"; otherwise default to "draft" with decision=null.
+        decision_value = args.decision or None
+        status_value = (
+            "finalized" if decision_value else (args.status or "draft")
+        )
+        if decision_value and status_value != "finalized":
+            print(
+                f"error: --decision requires --status finalized (got {status_value!r})",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        kickoff = args.kickoff_at if args.kickoff_at else None
+        final_score_home = args.final_score_home
+        if final_score_home is not None and final_score_home < 0:
+            print("error: --final-score-home must be >= 0", file=sys.stderr)
+            sys.exit(2)
+        final_score_away = args.final_score_away
+        if final_score_away is not None and final_score_away < 0:
+            print("error: --final-score-away must be >= 0", file=sys.stderr)
+            sys.exit(2)
+        payload = {
+            "schema": "scoutfootball.opposition-post-match-review",
+            "version": "1.0.0",
+            "review_id": review_id,
+            "revision": 1,
+            "created_at": now,
+            "updated_at": now,
+            "author": args.author or "maintainer",
+            "title": args.title,
+            "briefing_id": args.briefing_id or "",
+            "match_id": args.match_id or "",
+            "home_team": args.home_team or "",
+            "away_team": args.away_team or "",
+            "kickoff_at": kickoff,
+            "competition": args.competition or "",
+            "season": args.season or "",
+            "final_score_home": final_score_home,
+            "final_score_away": final_score_away,
+            "status": status_value,
+            "decision": decision_value,
+            "decision_note": args.decision_note or "",
+            "hypothesis_results": [],
+            "falsified_patterns": [],
+            "new_questions": [],
+            "supporting_evidence": [],
+            "counter_evidence": [],
+            "human_opinion": args.human_opinion or "",
+            "recommendation": args.recommendation or "",
+            "linked_artifacts": args.linked_artifacts or [],
+            "notes": args.notes or "",
+            "limitations": [
+                "PostMatchReview is a personal local object; not an external fact.",
+                "Decision is the maintainer's honest judgment, not an automated recommendation.",
+            ],
+        }
+
+    try:
+        store = _review_store()
+        record = store.save(payload["review_id"], payload, expected_revision=0)
+    except ReviewValidationError as exc:
+        print(f"error: review validation failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except ReviewStoreError as exc:
+        print(
+            f"error: review store failed: {exc.code} (HTTP {exc.http_status})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(record, ensure_ascii=False, indent=2))
+    else:
+        review = record["review"]
+        print(
+            f"Created review: {review['review_id']} (revision {review['revision']})"
+        )
+        print(f"  title: {review['title']}")
+        print(
+            f"  match: {review.get('home_team', '')} vs "
+            f"{review.get('away_team', '') or '(unknown)'}"
+        )
+        if review.get("kickoff_at"):
+            print(f"  kickoff: {review['kickoff_at']}")
+        if review.get("competition"):
+            print(f"  competition: {review['competition']}")
+        if review.get("final_score_home") is not None:
+            print(
+                f"  final score: {review['final_score_home']} - "
+                f"{review.get('final_score_away')}"
+            )
+        print(f"  status: {review.get('status', 'draft')}")
+        if review.get("decision"):
+            print(f"  decision: {review['decision']}")
+        print(f"  stored at: {store.root / (review['review_id'] + '.json')}")
+
+
+def _cmd_list_reviews(args: argparse.Namespace) -> None:
+    """List stored post-match reviews."""
+    import json
+
+    store = _review_store()
+    records = store.list_records(limit=args.limit)
+    if args.json:
+        print(
+            json.dumps(
+                {"count": len(records), "reviews": records},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        if not records:
+            print("No reviews found.")
+            return
+        print(f"Found {len(records)} review(s):")
+        for rec in records:
+            decision_str = (
+                f" decision={rec['decision']}" if rec.get("decision") else ""
+            )
+            print(
+                f"  {rec['review_id']}  rev={rec['server_revision']}  "
+                f"{rec.get('title', '')}  "
+                f"{rec.get('home_team', '') or '-'} vs "
+                f"{rec.get('away_team', '') or '-'}  "
+                f"status={rec.get('status', '')}{decision_str}"
+            )
+
+
+def _cmd_show_review(args: argparse.Namespace) -> None:
+    """Show one stored post-match review."""
+    import json
+
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    try:
+        store = _review_store()
+        record = store.load(args.review_id)
+    except ReviewStoreError as exc:
+        print(f"error: {exc.code} (HTTP {exc.http_status})", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(record, ensure_ascii=False, indent=2))
+    else:
+        review = record["review"]
+        print(f"Review: {review['review_id']}")
+        print(f"  schema: {review['schema']} v{review['version']}")
+        print(
+            f"  revision: {review['revision']} "
+            f"(server_revision: {record['server_revision']})"
+        )
+        print(f"  title: {review['title']}")
+        if review.get("briefing_id"):
+            print(f"  briefing: {review['briefing_id']}")
+        if review.get("match_id"):
+            print(f"  match_id: {review['match_id']}")
+        print(
+            f"  match: {review.get('home_team', '') or '(none)'} vs "
+            f"{review.get('away_team', '') or '(unknown)'}"
+        )
+        if review.get("kickoff_at"):
+            print(f"  kickoff: {review['kickoff_at']}")
+        if review.get("competition"):
+            print(f"  competition: {review['competition']}")
+        if review.get("season"):
+            print(f"  season: {review['season']}")
+        if review.get("final_score_home") is not None:
+            print(
+                f"  final score: {review['final_score_home']} - "
+                f"{review.get('final_score_away')}"
+            )
+        print(f"  status: {review.get('status', 'draft')}")
+        if review.get("decision"):
+            print(f"  decision: {review['decision']}")
+        if review.get("decision_note"):
+            print(f"  decision note: {review['decision_note']}")
+        if review.get("hypothesis_results"):
+            print(
+                f"  hypothesis results ({len(review['hypothesis_results'])}):"
+            )
+            for h in review["hypothesis_results"]:
+                print(
+                    f"    [{h.get('hypothesis_id')}] outcome={h.get('outcome')} "
+                    f"tier={h.get('fact_tier')}"
+                )
+                if h.get("planned"):
+                    planned = h["planned"]
+                    if len(planned) > 100:
+                        planned = planned[:97] + "..."
+                    print(f"        planned: {planned}")
+                if h.get("observed"):
+                    observed = h["observed"]
+                    if len(observed) > 100:
+                        observed = observed[:97] + "..."
+                    print(f"        observed: {observed}")
+        if review.get("falsified_patterns"):
+            print(
+                f"  falsified patterns ({len(review['falsified_patterns'])}):"
+            )
+            for p in review["falsified_patterns"]:
+                print(
+                    f"    [{p.get('pattern_id')}] severity={p.get('severity')} "
+                    f"tier={p.get('fact_tier')}"
+                )
+        if review.get("new_questions"):
+            print(f"  new questions ({len(review['new_questions'])}):")
+            for q in review["new_questions"]:
+                print(
+                    f"    [{q.get('question_id')}] scope={q.get('scope', '') or '-'} "
+                    f"tier={q.get('fact_tier')}"
+                )
+        if review.get("supporting_evidence"):
+            print(
+                f"  supporting evidence ({len(review['supporting_evidence'])}):"
+            )
+            for ev in review["supporting_evidence"]:
+                print(
+                    f"    [{ev.get('evidence_id')}] "
+                    f"{ev.get('fact_tier')}: {ev.get('summary', '')}"
+                )
+        if review.get("counter_evidence"):
+            print(
+                f"  counter evidence ({len(review['counter_evidence'])}):"
+            )
+            for ev in review["counter_evidence"]:
+                print(
+                    f"    [{ev.get('evidence_id')}] "
+                    f"{ev.get('fact_tier')}: {ev.get('summary', '')}"
+                )
+        if review.get("human_opinion"):
+            print(f"  human opinion: {review['human_opinion']}")
+        if review.get("recommendation"):
+            print(f"  recommendation: {review['recommendation']}")
+        if review.get("linked_artifacts"):
+            print(
+                f"  linked artifacts: {', '.join(review['linked_artifacts'])}"
+            )
+        if review.get("notes"):
+            print(f"  notes: {review['notes']}")
+        if review.get("limitations"):
+            print(f"  limitations: {len(review['limitations'])} item(s)")
+        print(f"  created: {review.get('created_at', '?')}")
+        print(f"  updated: {review.get('updated_at', '?')}")
+        print(f"  stored: {record.get('stored_at', '?')}")
+
+
+def _cmd_validate_review(args: argparse.Namespace) -> None:
+    """Validate a local review JSON file without saving it."""
+    import json
+
+    from scoutfootball.opposition.post_match_review import (
+        ReviewValidationError,
+        validate_review_payload,
+    )
+
+    path = Path(args.path)
+    if path.is_symlink() or not path.is_file():
+        print(
+            f"error: review file must be a regular local file: {path}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(
+            f"error: cannot read review JSON: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        review = validate_review_payload(payload)
+    except ReviewValidationError as exc:
+        print(f"INVALID: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        result = {"status": "valid", "review_id": review.review_id}
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(
+            f"VALID: {review.review_id} (schema={review.schema} v={review.version})"
         )
 
 
@@ -3470,6 +4076,94 @@ def build_parser() -> argparse.ArgumentParser:
     validate_brief_p.add_argument("path", type=str, help="Path to local brief JSON file")
     validate_brief_p.add_argument("--json", action="store_true", help="Emit JSON output")
 
+    # ── recruitment decision dossier ──
+    dossier_create = sub.add_parser(
+        "create-dossier",
+        help="Create a versioned decision dossier (local personal object)",
+    )
+    dossier_create.add_argument(
+        "--title", type=str, default=None,
+        help="Dossier title (required unless --from-json)",
+    )
+    dossier_create.add_argument(
+        "--brief-id", type=str, default="",
+        help="ID of the linked recruitment brief",
+    )
+    dossier_create.add_argument(
+        "--candidate-player-id", type=str, default="",
+        help="Candidate player ID (e.g. understat|1234)",
+    )
+    dossier_create.add_argument(
+        "--candidate-player-name", type=str, default="",
+        help="Candidate player display name",
+    )
+    dossier_create.add_argument(
+        "--candidate-team-name", type=str, default="",
+        help="Candidate's current team name",
+    )
+    dossier_create.add_argument(
+        "--candidate-season-id", type=str, default="",
+        help="Candidate season ID (e.g. 2425)",
+    )
+    dossier_create.add_argument(
+        "--status", type=str, default="draft",
+        choices=["draft", "decided", "rejected", "superseded"],
+        help="Dossier workflow status (default: draft; forced to 'decided' when --decision is set)",
+    )
+    dossier_create.add_argument(
+        "--decision", type=str, default=None,
+        choices=["proceed", "hold", "reject", "defer"],
+        help="Final decision; requires status='decided' (forces status to 'decided' if set)",
+    )
+    dossier_create.add_argument(
+        "--decision-note", type=str, default="",
+        help="Free-form note explaining the decision",
+    )
+    dossier_create.add_argument(
+        "--human-opinion", type=str, default="",
+        help="Maintainer free-form opinion text",
+    )
+    dossier_create.add_argument(
+        "--recommendation", type=str, default="",
+        help="Final actionable recommendation",
+    )
+    dossier_create.add_argument(
+        "--linked-artifacts", nargs="+", default=None,
+        help="Additional linked artifact IDs (space-separated)",
+    )
+    dossier_create.add_argument("--notes", type=str, default="", help="Free-form notes")
+    dossier_create.add_argument("--author", type=str, default="maintainer", help="Author name")
+    dossier_create.add_argument(
+        "--dossier-id", type=str, default=None,
+        help="Explicit dossier ID (auto-generated if omitted)",
+    )
+    dossier_create.add_argument(
+        "--from-json", type=str, default=None,
+        help="Load dossier payload from a local JSON file instead of CLI flags",
+    )
+    dossier_create.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    list_dossiers_p = sub.add_parser(
+        "list-dossiers",
+        help="List stored decision dossiers (most recent first)",
+    )
+    list_dossiers_p.add_argument("--limit", type=int, default=100, help="Max results (default 100)")
+    list_dossiers_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    show_dossier_p = sub.add_parser(
+        "show-dossier",
+        help="Show one stored decision dossier by ID",
+    )
+    show_dossier_p.add_argument("dossier_id", type=str, help="Dossier ID to show")
+    show_dossier_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    validate_dossier_p = sub.add_parser(
+        "validate-dossier",
+        help="Validate a local dossier JSON file without saving it",
+    )
+    validate_dossier_p.add_argument("path", type=str, help="Path to local dossier JSON file")
+    validate_dossier_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
     # ── opposition briefing ──
     briefing_create = sub.add_parser(
         "create-briefing",
@@ -3550,6 +4244,100 @@ def build_parser() -> argparse.ArgumentParser:
     validate_briefing_p.add_argument("path", type=str, help="Path to local briefing JSON file")
     validate_briefing_p.add_argument("--json", action="store_true", help="Emit JSON output")
 
+    # ── opposition post-match review ──
+    review_create = sub.add_parser(
+        "create-review",
+        help="Create a versioned post-match review (local personal object)",
+    )
+    review_create.add_argument(
+        "--title", type=str, default=None,
+        help="Review title (required unless --from-json)",
+    )
+    review_create.add_argument(
+        "--briefing-id", type=str, default="",
+        help="ID of the linked opposition briefing",
+    )
+    review_create.add_argument("--match-id", type=str, default="", help="External match id")
+    review_create.add_argument("--home-team", type=str, default="", help="Home team name")
+    review_create.add_argument("--away-team", type=str, default="", help="Away team name")
+    review_create.add_argument(
+        "--kickoff-at", type=str, default=None,
+        help="Kickoff ISO datetime (e.g. 2026-08-15T15:00:00+00:00)",
+    )
+    review_create.add_argument("--competition", type=str, default="", help="Competition name")
+    review_create.add_argument(
+        "--season", type=str, default="", help="Season label (e.g. 2026-27)"
+    )
+    review_create.add_argument(
+        "--final-score-home", type=int, default=None,
+        help="Final home score (non-negative integer)",
+    )
+    review_create.add_argument(
+        "--final-score-away", type=int, default=None,
+        help="Final away score (non-negative integer)",
+    )
+    review_create.add_argument(
+        "--status", type=str, default="draft",
+        choices=["draft", "finalized", "superseded"],
+        help=(
+            "Review workflow status (default: draft; forced to 'finalized' "
+            "when --decision is set)"
+        ),
+    )
+    review_create.add_argument(
+        "--decision", type=str, default=None,
+        choices=["confirmed", "falsified", "partial", "inconclusive"],
+        help="Final decision; requires status='finalized' (forces status to 'finalized' if set)",
+    )
+    review_create.add_argument(
+        "--decision-note", type=str, default="",
+        help="Free-form note explaining the decision",
+    )
+    review_create.add_argument(
+        "--human-opinion", type=str, default="",
+        help="Maintainer free-form opinion text",
+    )
+    review_create.add_argument(
+        "--recommendation", type=str, default="",
+        help="Final actionable recommendation",
+    )
+    review_create.add_argument(
+        "--linked-artifacts", nargs="+", default=None,
+        help="Additional linked artifact IDs (space-separated)",
+    )
+    review_create.add_argument("--notes", type=str, default="", help="Free-form notes")
+    review_create.add_argument("--author", type=str, default="maintainer", help="Author name")
+    review_create.add_argument(
+        "--review-id", type=str, default=None,
+        help="Explicit review ID (auto-generated if omitted)",
+    )
+    review_create.add_argument(
+        "--from-json", type=str, default=None,
+        help="Load review payload from a local JSON file instead of CLI flags",
+    )
+    review_create.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    list_reviews_p = sub.add_parser(
+        "list-reviews",
+        help="List stored post-match reviews (most recent first)",
+    )
+    list_reviews_p.add_argument("--limit", type=int, default=100, help="Max results (default 100)")
+    list_reviews_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    show_review_p = sub.add_parser(
+        "show-review",
+        help="Show one stored post-match review by ID",
+    )
+    show_review_p.add_argument("review_id", type=str, help="Review ID to show")
+    show_review_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    validate_review_p = sub.add_parser(
+        "validate-review",
+        help="Validate a local review JSON file without saving it",
+    )
+    validate_review_p.add_argument("path", type=str, help="Path to local review JSON file")
+    validate_review_p.add_argument("--json", action="store_true", help="Emit JSON output")
+
     return parser
 
 
@@ -3599,10 +4387,18 @@ def main() -> None:
         "list-briefs": _cmd_list_briefs,
         "show-brief": _cmd_show_brief,
         "validate-brief": _cmd_validate_brief,
+        "create-dossier": _cmd_create_dossier,
+        "list-dossiers": _cmd_list_dossiers,
+        "show-dossier": _cmd_show_dossier,
+        "validate-dossier": _cmd_validate_dossier,
         "create-briefing": _cmd_create_briefing,
         "list-briefings": _cmd_list_briefings,
         "show-briefing": _cmd_show_briefing,
         "validate-briefing": _cmd_validate_briefing,
+        "create-review": _cmd_create_review,
+        "list-reviews": _cmd_list_reviews,
+        "show-review": _cmd_show_review,
+        "validate-review": _cmd_validate_review,
     }
 
     handler = handlers.get(args.command)
