@@ -1264,6 +1264,8 @@ const i18n = {
         versions_type: "类型",
         versions_type_brief: "Recruitment brief",
         versions_type_briefing: "Opposition briefing",
+        versions_type_dossier: "球探决策档案",
+        versions_type_review: "赛后复盘",
         versions_record: "记录",
         versions_timeline: "时间线",
         versions_refresh: "刷新",
@@ -2555,6 +2557,8 @@ const i18n = {
         versions_type: "Type",
         versions_type_brief: "Recruitment brief",
         versions_type_briefing: "Opposition briefing",
+        versions_type_dossier: "Recruitment decision dossier",
+        versions_type_review: "Opposition post-match review",
         versions_record: "Record",
         versions_timeline: "Timeline",
         versions_refresh: "Refresh",
@@ -16326,10 +16330,16 @@ async function renderActiveView() {
 const workflowState = {
     briefs: [],
     briefings: [],
+    dossiers: [],
+    reviews: [],
     briefsLoadedAt: 0,
     briefingsLoadedAt: 0,
+    dossiersLoadedAt: 0,
+    reviewsLoadedAt: 0,
     briefsError: null,
     briefingsError: null,
+    dossiersError: null,
+    reviewsError: null,
 };
 
 async function _fetchWorkflowBriefs() {
@@ -16353,6 +16363,30 @@ async function _fetchWorkflowBriefings() {
     } catch (err) {
         workflowState.briefingsError = err?.message || String(err);
         workflowState.briefings = [];
+    }
+}
+
+async function _fetchWorkflowDossiers() {
+    try {
+        const data = await fetchJson("/recruitment/dossiers", { params: "limit=100" });
+        workflowState.dossiers = Array.isArray(data?.dossiers) ? data.dossiers : [];
+        workflowState.dossiersLoadedAt = Date.now();
+        workflowState.dossiersError = null;
+    } catch (err) {
+        workflowState.dossiersError = err?.message || String(err);
+        workflowState.dossiers = [];
+    }
+}
+
+async function _fetchWorkflowReviews() {
+    try {
+        const data = await fetchJson("/opposition/reviews", { params: "limit=100" });
+        workflowState.reviews = Array.isArray(data?.reviews) ? data.reviews : [];
+        workflowState.reviewsLoadedAt = Date.now();
+        workflowState.reviewsError = null;
+    } catch (err) {
+        workflowState.reviewsError = err?.message || String(err);
+        workflowState.reviews = [];
     }
 }
 
@@ -16385,6 +16419,24 @@ function _workflowStatusSummary() {
         parts.push(zT
             ? `Opposition briefing：${workflowState.briefings.length}`
             : `Opposition briefings: ${workflowState.briefings.length}`);
+    }
+    if (workflowState.dossiersError) {
+        parts.push(zT
+            ? `Decision dossier：离线（${workflowState.dossiersError}）`
+            : `Decision dossiers: offline (${workflowState.dossiersError})`);
+    } else {
+        parts.push(zT
+            ? `Decision dossier：${workflowState.dossiers.length}`
+            : `Decision dossiers: ${workflowState.dossiers.length}`);
+    }
+    if (workflowState.reviewsError) {
+        parts.push(zT
+            ? `Post-match review：离线（${workflowState.reviewsError}）`
+            : `Post-match reviews: offline (${workflowState.reviewsError})`);
+    } else {
+        parts.push(zT
+            ? `Post-match review：${workflowState.reviews.length}`
+            : `Post-match reviews: ${workflowState.reviews.length}`);
     }
     return parts;
 }
@@ -16547,6 +16599,106 @@ function _workflowInferSteps() {
         }
     }
 
+    // Decision dossiers (closing artifact of the recruitment workflow).
+    if (workflowState.dossiersError) {
+        blockers.push({
+            id: "dossier-api-offline",
+            title: zT ? "Decision dossier API 离线" : "Decision dossier API offline",
+            reason: zT
+                ? "本地 API 不可用或未启用；无法读取已保存的 dossier。"
+                : "Local API unavailable or disabled; cannot read saved dossiers.",
+            action: "data",
+            actionLabel: zT ? "查看数据视图" : "Open Data",
+        });
+    } else if (workflowState.briefs.length > 0 && workflowState.dossiers.length === 0) {
+        next.push({
+            id: "create-dossier",
+            title: zT ? "为候选起草第一个 decision dossier" : "Draft the first decision dossier for a candidate",
+            reason: zT
+                ? "已有 Recruitment brief 即可整理候选证据、对照、风险与人工判断，形成可追溯的决策档案。"
+                : "With a brief in place, collect evidence, comparisons, risks and human judgment into a traceable dossier.",
+            action: "versions",
+            actionLabel: zT ? "前往版本视图" : "Open Versions",
+        });
+        evidenceGaps.push({
+            id: "dossier-missing",
+            title: zT ? "缺少 Decision dossier" : "Missing decision dossier",
+            reason: zT
+                ? "没有 dossier 时候选决策无法回溯；brief → dossier 的闭环未形成。"
+                : "Without a dossier candidate decisions are not traceable; the brief → dossier loop is open.",
+            action: null,
+            actionLabel: "",
+        });
+    } else if (workflowState.dossiers.length > 0) {
+        const draftDossiers = workflowState.dossiers.filter((d) => {
+            const status = (d.status || "draft").toLowerCase();
+            return status === "draft";
+        });
+        for (const dossier of draftDossiers.slice(0, 5)) {
+            evidenceGaps.push({
+                id: `dossier-draft-${dossier.dossier_id || "unknown"}`,
+                title: zT
+                    ? `Dossier ${dossier.dossier_id || "?"} 仍为 draft`
+                    : `Dossier ${dossier.dossier_id || "?"} is still in draft`,
+                reason: zT
+                    ? "draft 状态的 dossier 尚未给出最终 decision；建议补全证据后标记为 decided / rejected。"
+                    : "Draft dossiers have no final decision yet; complete the evidence and mark them decided / rejected.",
+                action: "versions",
+                actionLabel: zT ? "前往版本视图" : "Open Versions",
+            });
+        }
+    }
+
+    // Post-match reviews (closing artifact of the opposition workflow).
+    if (workflowState.reviewsError) {
+        blockers.push({
+            id: "review-api-offline",
+            title: zT ? "Post-match review API 离线" : "Post-match review API offline",
+            reason: zT
+                ? "本地 API 不可用或未启用；无法读取已保存的 review。"
+                : "Local API unavailable or disabled; cannot read saved reviews.",
+            action: "data",
+            actionLabel: zT ? "查看数据视图" : "Open Data",
+        });
+    } else if (workflowState.briefings.length > 0 && workflowState.reviews.length === 0) {
+        next.push({
+            id: "create-review",
+            title: zT ? "为已踢比赛起草第一个 post-match review" : "Draft the first post-match review for a played match",
+            reason: zT
+                ? "已有 Opposition briefing 即可对照假设-计划-执行-结果，记录确认/证伪的模式与新问题。"
+                : "With a briefing in place, compare hypothesis-plan-execution-result and record confirmed/falsified patterns and new questions.",
+            action: "versions",
+            actionLabel: zT ? "前往版本视图" : "Open Versions",
+        });
+        evidenceGaps.push({
+            id: "review-missing",
+            title: zT ? "缺少 Post-match review" : "Missing post-match review",
+            reason: zT
+                ? "没有 review 时假设-结果对照无法沉淀；briefing → review 的闭环未形成。"
+                : "Without a review the hypothesis-result comparison is lost; the briefing → review loop is open.",
+            action: null,
+            actionLabel: "",
+        });
+    } else if (workflowState.reviews.length > 0) {
+        const draftReviews = workflowState.reviews.filter((r) => {
+            const status = (r.status || "draft").toLowerCase();
+            return status === "draft";
+        });
+        for (const review of draftReviews.slice(0, 5)) {
+            evidenceGaps.push({
+                id: `review-draft-${review.review_id || "unknown"}`,
+                title: zT
+                    ? `Review ${review.review_id || "?"} 仍为 draft`
+                    : `Review ${review.review_id || "?"} is still in draft`,
+                reason: zT
+                    ? "draft 状态的 review 尚未给出最终 decision；建议补全假设结果后标记为 finalized。"
+                    : "Draft reviews have no final decision yet; complete the hypothesis results and mark them finalized.",
+                action: "versions",
+                actionLabel: zT ? "前往版本视图" : "Open Versions",
+            });
+        }
+    }
+
     return { next, blockers, evidenceGaps };
 }
 
@@ -16574,13 +16726,15 @@ function _renderWorkflowStep(step, index, kind) {
 }
 
 async function renderWorkflow() {
-    // Refresh briefs / briefings (fire-and-forget; render with whatever we have).
+    // Refresh briefs / briefings / dossiers / reviews (fire-and-forget; render with whatever we have).
     const briefsPromise = _fetchWorkflowBriefs();
     const briefingsPromise = _fetchWorkflowBriefings();
+    const dossiersPromise = _fetchWorkflowDossiers();
+    const reviewsPromise = _fetchWorkflowReviews();
 
     // Render status rail immediately with in-browser state, then update after fetch.
     _renderWorkflowBody();
-    await Promise.all([briefsPromise, briefingsPromise]);
+    await Promise.all([briefsPromise, briefingsPromise, dossiersPromise, reviewsPromise]);
     _renderWorkflowBody();
 }
 
@@ -16589,7 +16743,12 @@ function _renderWorkflowBody() {
     const statusRail = document.getElementById("wf-status-rail");
     if (statusRail) {
         const summary = _workflowStatusSummary();
-        const offlineNote = (workflowState.briefsError || workflowState.briefingsError)
+        const offlineNote = (
+            workflowState.briefsError
+            || workflowState.briefingsError
+            || workflowState.dossiersError
+            || workflowState.reviewsError
+        )
             ? ` <strong>${t("workflow_sources_offline")}</strong>`
             : "";
         statusRail.innerHTML = summary
@@ -16650,12 +16809,78 @@ function _renderWorkflowBody() {
 // Read-only views over the local-API backup endpoints. Editing (restore)
 // goes through POST /restore with an If-Match-style expected_revision.
 
+// Configuration-driven artifact type registry for the versions view.
+// Adding a new versioned artifact type only requires extending this table;
+// all downstream functions (fetch/list/diff/restore) read from it.
+const _VERSION_ARTIFACT_TYPES = {
+    brief: {
+        listPath: "/recruitment/briefs",
+        itemPath: (id) => `/recruitment/briefs/${encodeURIComponent(id)}`,
+        backupsPath: (id) => `/recruitment/briefs/${encodeURIComponent(id)}/backups`,
+        backupPath: (id, fn) => `/recruitment/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
+        diffPath: (id, fn) => `/recruitment/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
+        restorePath: (id) => `/recruitment/briefs/${encodeURIComponent(id)}/restore`,
+        idField: "brief_id",
+        listKey: "briefs",
+        stateField: "briefs",
+        errorField: "briefsError",
+        labelKey: "versions_type_brief",
+    },
+    briefing: {
+        listPath: "/opposition/briefs",
+        itemPath: (id) => `/opposition/briefs/${encodeURIComponent(id)}`,
+        backupsPath: (id) => `/opposition/briefs/${encodeURIComponent(id)}/backups`,
+        backupPath: (id, fn) => `/opposition/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
+        diffPath: (id, fn) => `/opposition/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
+        restorePath: (id) => `/opposition/briefs/${encodeURIComponent(id)}/restore`,
+        idField: "briefing_id",
+        listKey: "briefings",
+        stateField: "briefings",
+        errorField: "briefingsError",
+        labelKey: "versions_type_briefing",
+    },
+    dossier: {
+        listPath: "/recruitment/dossiers",
+        itemPath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}`,
+        backupsPath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}/backups`,
+        backupPath: (id, fn) => `/recruitment/dossiers/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
+        diffPath: (id, fn) => `/recruitment/dossiers/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
+        restorePath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}/restore`,
+        idField: "dossier_id",
+        listKey: "dossiers",
+        stateField: "dossiers",
+        errorField: "dossiersError",
+        labelKey: "versions_type_dossier",
+    },
+    review: {
+        listPath: "/opposition/reviews",
+        itemPath: (id) => `/opposition/reviews/${encodeURIComponent(id)}`,
+        backupsPath: (id) => `/opposition/reviews/${encodeURIComponent(id)}/backups`,
+        backupPath: (id, fn) => `/opposition/reviews/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
+        diffPath: (id, fn) => `/opposition/reviews/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
+        restorePath: (id) => `/opposition/reviews/${encodeURIComponent(id)}/restore`,
+        idField: "review_id",
+        listKey: "reviews",
+        stateField: "reviews",
+        errorField: "reviewsError",
+        labelKey: "versions_type_review",
+    },
+};
+
+function _versionTypeConfig(type) {
+    return _VERSION_ARTIFACT_TYPES[type] || _VERSION_ARTIFACT_TYPES.brief;
+}
+
 const versionsState = {
-    type: "brief", // "brief" | "briefing"
+    type: "brief", // "brief" | "briefing" | "dossier" | "review"
     briefs: [],
     briefings: [],
+    dossiers: [],
+    reviews: [],
     briefsError: null,
     briefingsError: null,
+    dossiersError: null,
+    reviewsError: null,
     selectedId: "",
     backups: [],
     backupsError: null,
@@ -16666,22 +16891,18 @@ const versionsState = {
 };
 
 async function _fetchVersionRecords() {
-    try {
-        const data = await fetchJson("/recruitment/briefs", { params: "limit=100" });
-        versionsState.briefs = Array.isArray(data?.briefs) ? data.briefs : [];
-        versionsState.briefsError = null;
-    } catch (err) {
-        versionsState.briefsError = err?.message || String(err);
-        versionsState.briefs = [];
-    }
-    try {
-        const data = await fetchJson("/opposition/briefs", { params: "limit=100" });
-        versionsState.briefings = Array.isArray(data?.briefings) ? data.briefings : [];
-        versionsState.briefingsError = null;
-    } catch (err) {
-        versionsState.briefingsError = err?.message || String(err);
-        versionsState.briefings = [];
-    }
+    const fetches = Object.values(_VERSION_ARTIFACT_TYPES).map(async (cfg) => {
+        try {
+            const data = await fetchJson(cfg.listPath, { params: "limit=100" });
+            const records = Array.isArray(data?.[cfg.listKey]) ? data[cfg.listKey] : [];
+            versionsState[cfg.stateField] = records;
+            versionsState[cfg.errorField] = null;
+        } catch (err) {
+            versionsState[cfg.errorField] = err?.message || String(err);
+            versionsState[cfg.stateField] = [];
+        }
+    });
+    await Promise.all(fetches);
 }
 
 async function _fetchVersionBackups(id) {
@@ -16690,23 +16911,17 @@ async function _fetchVersionBackups(id) {
     versionsState.selectedBackup = null;
     versionsState.diff = null;
     if (!id) return;
-    const path = versionsState.type === "brief"
-        ? `/recruitment/briefs/${encodeURIComponent(id)}/backups`
-        : `/opposition/briefs/${encodeURIComponent(id)}/backups`;
+    const cfg = _versionTypeConfig(versionsState.type);
     try {
-        const data = await fetchJson(path);
-        const key = versionsState.type === "brief" ? "backups" : "backups";
-        versionsState.backups = Array.isArray(data?.[key]) ? data[key] : [];
+        const data = await fetchJson(cfg.backupsPath(id));
+        versionsState.backups = Array.isArray(data?.backups) ? data.backups : [];
     } catch (err) {
         versionsState.backupsError = err?.message || String(err);
     }
     // Also fetch the live record to know the current server_revision.
-    const livePath = versionsState.type === "brief"
-        ? `/recruitment/briefs/${encodeURIComponent(id)}`
-        : `/opposition/briefs/${encodeURIComponent(id)}`;
     try {
-        const live = await fetchJson(livePath);
-        versionsState.currentRevision = live?.server_revision ?? null;
+        const live = await fetchJson(cfg.itemPath(id));
+        versionsState.currentRevision = live?.record?.server_revision ?? live?.server_revision ?? null;
     } catch (err) {
         // Record may have been deleted (only a deletion backup remains).
         versionsState.currentRevision = null;
@@ -16714,9 +16929,8 @@ async function _fetchVersionBackups(id) {
 }
 
 async function _loadVersionBackup(id, backupFilename) {
-    const path = versionsState.type === "brief"
-        ? `/recruitment/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(backupFilename)}`
-        : `/opposition/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(backupFilename)}`;
+    const cfg = _versionTypeConfig(versionsState.type);
+    const path = cfg.backupPath(id, backupFilename);
     try {
         versionsState.selectedBackup = await fetchJson(path);
     } catch (err) {
@@ -16726,12 +16940,11 @@ async function _loadVersionBackup(id, backupFilename) {
 }
 
 async function _diffVersionBackup(id, backupFilename) {
-    const path = versionsState.type === "brief"
-        ? `/recruitment/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(backupFilename)}`
-        : `/opposition/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(backupFilename)}`;
+    const cfg = _versionTypeConfig(versionsState.type);
+    const path = cfg.diffPath(id, backupFilename);
     try {
         const data = await fetchJson(path);
-        versionsState.diff = Array.isArray(data?.diff) ? data.diff : [];
+        versionsState.diff = Array.isArray(data?.changes) ? data.changes : (Array.isArray(data?.diff) ? data.diff : []);
         versionsState.diffError = null;
     } catch (err) {
         versionsState.diff = null;
@@ -16740,9 +16953,8 @@ async function _diffVersionBackup(id, backupFilename) {
 }
 
 async function _restoreVersionBackup(id, backupFilename, expectedRevision) {
-    const path = versionsState.type === "brief"
-        ? `/recruitment/briefs/${encodeURIComponent(id)}/restore`
-        : `/opposition/briefs/${encodeURIComponent(id)}/restore`;
+    const cfg = _versionTypeConfig(versionsState.type);
+    const path = cfg.restorePath(id);
     const resp = await fetch(API_BASE + path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -16767,20 +16979,21 @@ async function _exportPortablePack() {
 function _versionStatusLabel() {
     const zT = appState.lang === "zh";
     const parts = [];
-    if (versionsState.briefsError) {
-        parts.push(zT ? `Brief API 离线（${versionsState.briefsError}）` : `Brief API offline (${versionsState.briefsError})`);
-    } else {
-        parts.push(zT ? `Briefs：${versionsState.briefs.length}` : `Briefs: ${versionsState.briefs.length}`);
-    }
-    if (versionsState.briefingsError) {
-        parts.push(zT ? `Briefing API 离线（${versionsState.briefingsError}）` : `Briefing API offline (${versionsState.briefingsError})`);
-    } else {
-        parts.push(zT ? `Briefings：${versionsState.briefings.length}` : `Briefings: ${versionsState.briefings.length}`);
+    for (const cfg of Object.values(_VERSION_ARTIFACT_TYPES)) {
+        const count = versionsState[cfg.stateField]?.length ?? 0;
+        const error = versionsState[cfg.errorField];
+        const label = t(cfg.labelKey);
+        if (error) {
+            parts.push(zT ? `${label} API 离线（${error}）` : `${label} API offline (${error})`);
+        } else {
+            parts.push(zT ? `${label}：${count}` : `${label}: ${count}`);
+        }
     }
     if (versionsState.selectedId) {
+        const cfg = _versionTypeConfig(versionsState.type);
         parts.push(zT
-            ? `当前 ${t(versionsState.type === "brief" ? "versions_type_brief" : "versions_type_briefing")}：${versionsState.selectedId}`
-            : `Selected ${versionsState.type}: ${versionsState.selectedId}`);
+            ? `当前 ${t(cfg.labelKey)}：${versionsState.selectedId}`
+            : `Selected ${t(cfg.labelKey)}: ${versionsState.selectedId}`);
         if (versionsState.currentRevision != null) {
             parts.push(zT
                 ? `${t("versions_current_revision")}：${versionsState.currentRevision}`
@@ -16793,9 +17006,9 @@ function _versionStatusLabel() {
 function _renderVersionRecordOptions() {
     const select = document.getElementById("ver-record-select");
     if (!select) return;
-    const list = versionsState.type === "brief" ? versionsState.briefs : versionsState.briefings;
-    const zT = appState.lang === "zh";
-    const error = versionsState.type === "brief" ? versionsState.briefsError : versionsState.briefingsError;
+    const cfg = _versionTypeConfig(versionsState.type);
+    const list = versionsState[cfg.stateField] || [];
+    const error = versionsState[cfg.errorField];
     if (error) {
         select.innerHTML = `<option value="" disabled selected>${escapeHtml(t("versions_offline"))}</option>`;
         return;
@@ -16805,15 +17018,15 @@ function _renderVersionRecordOptions() {
         return;
     }
     select.innerHTML = list.map((rec) => {
-        const id = rec.brief_id || rec.briefing_id || "";
+        const id = rec[cfg.idField] || "";
         const title = rec.title || "";
         const rev = rec.server_revision ?? "?";
         return `<option value="${escapeAttr(id)}">rev ${rev} · ${escapeHtml(title || id)}</option>`;
     }).join("");
-    if (versionsState.selectedId && list.some((r) => (r.brief_id || r.briefing_id) === versionsState.selectedId)) {
+    if (versionsState.selectedId && list.some((r) => r[cfg.idField] === versionsState.selectedId)) {
         select.value = versionsState.selectedId;
     } else {
-        versionsState.selectedId = list[0].brief_id || list[0].briefing_id || "";
+        versionsState.selectedId = list[0][cfg.idField] || "";
         select.value = versionsState.selectedId;
     }
 }
