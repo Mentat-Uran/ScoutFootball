@@ -262,6 +262,14 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball list-briefings",
             "uv run python -m scoutfootball show-briefing <briefing_id>",
             "uv run python -m scoutfootball validate-briefing <path>",
+            "uv run python -m scoutfootball create-dossier",
+            "uv run python -m scoutfootball list-dossiers",
+            "uv run python -m scoutfootball show-dossier <dossier_id>",
+            "uv run python -m scoutfootball validate-dossier <path>",
+            "uv run python -m scoutfootball create-review",
+            "uv run python -m scoutfootball list-reviews",
+            "uv run python -m scoutfootball show-review <review_id>",
+            "uv run python -m scoutfootball validate-review <path>",
             "uv run streamlit run src/scoutfootball/app/streamlit_app.py",
         ),
     )
@@ -589,6 +597,24 @@ def build_capability_registry() -> CapabilityRegistry:
             ),
         ),
         Capability(
+            id="recruitment.dossiers",
+            name="决策档案",
+            description=(
+                "版本化决策档案：整合支持证据、反证、对比、风险和人工判断，"
+                "形成从需求 brief 到人工结论的可追溯 round-trip。"
+                "维护者本地对象，非外部事实。"
+                "支持原子写、备份、乐观并发和 Core 契约复用。"
+            ),
+            domain="recruitment",
+            cli_commands=(
+                "create-dossier",
+                "list-dossiers",
+                "show-dossier",
+                "validate-dossier",
+            ),
+            api_paths=(),
+        ),
+        Capability(
             id="opposition.briefings",
             name="比赛对手简报",
             description=(
@@ -609,6 +635,25 @@ def build_capability_registry() -> CapabilityRegistry:
                 "/opposition/briefings/{briefing_id}",
                 "/opposition/contracts",
             ),
+        ),
+        Capability(
+            id="opposition.post_match_reviews",
+            name="赛后复盘",
+            description=(
+                "版本化赛后复盘：比较假设-计划-执行-结果，记录被证伪的模式、"
+                "新问题和支持/反对证据，形成从赛前简报到赛后结论的可追溯 "
+                "round-trip。每条证据携带 fact_tier，区分官方、记录、估计和"
+                "未知。维护者本地对象，非外部事实。"
+                "支持原子写、备份、乐观并发和 Core 契约复用。"
+            ),
+            domain="opposition",
+            cli_commands=(
+                "create-review",
+                "list-reviews",
+                "show-review",
+                "validate-review",
+            ),
+            api_paths=(),
         ),
         Capability(
             id="worldcup.tournament",
