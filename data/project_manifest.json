@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-17T15:18:22.063367+00:00",
+  "generated_at": "2026-07-24T17:40:44.857782+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -79,6 +79,25 @@
           "player_compare_page",
           "market_value_page",
           "match_page"
+        ]
+      },
+      {
+        "name": "recruitment",
+        "purpose": "Versioned recruitment briefs, role profiles and decision dossiers.  Personal local objects, not external facts.",
+        "planned_components": [
+          "brief",
+          "role_profile",
+          "decision_dossier"
+        ]
+      },
+      {
+        "name": "opposition",
+        "purpose": "Source-limited match briefings, pattern cards, scenario trees and post-match reviews.  Personal local objects; each fact section carries an explicit fact_tier.",
+        "planned_components": [
+          "briefing",
+          "pattern_card",
+          "scenario_tree",
+          "post_match_review"
         ]
       }
     ],
@@ -297,19 +316,37 @@
       "uv run python -m scoutfootball optimize-ensemble",
       "uv run python -m scoutfootball serve",
       "uv run python -m scoutfootball tournament",
+      "uv run python -m scoutfootball create-brief",
+      "uv run python -m scoutfootball list-briefs",
+      "uv run python -m scoutfootball show-brief <brief_id>",
+      "uv run python -m scoutfootball validate-brief <path>",
+      "uv run python -m scoutfootball create-briefing",
+      "uv run python -m scoutfootball list-briefings",
+      "uv run python -m scoutfootball show-briefing <briefing_id>",
+      "uv run python -m scoutfootball validate-briefing <path>",
+      "uv run python -m scoutfootball create-dossier",
+      "uv run python -m scoutfootball list-dossiers",
+      "uv run python -m scoutfootball show-dossier <dossier_id>",
+      "uv run python -m scoutfootball validate-dossier <path>",
+      "uv run python -m scoutfootball create-review",
+      "uv run python -m scoutfootball list-reviews",
+      "uv run python -m scoutfootball show-review <review_id>",
+      "uv run python -m scoutfootball validate-review <path>",
       "uv run streamlit run src/scoutfootball/app/streamlit_app.py"
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-17T15:18:22.063367+00:00",
+    "generated_at": "2026-07-24T17:40:44.856280+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
       "data_pipeline",
       "infrastructure",
       "match_predictions",
+      "opposition",
       "player_analysis",
       "player_ratings",
+      "recruitment",
       "scouting",
       "team_analysis",
       "world_cup"
@@ -739,6 +776,104 @@
         "notes": ""
       },
       {
+        "id": "recruitment.briefs",
+        "name": "招募需求 brief",
+        "description": "版本化招募需求 brief：球队、位置、角色、预算、年龄、合同、联赛、语言和风险偏好。维护者本地对象，非外部事实。支持原子写、备份、乐观并发和 Core 契约复用。",
+        "domain": "recruitment",
+        "status": "delivered",
+        "api_paths": [
+          "/recruitment/briefs",
+          "/recruitment/briefs/{brief_id}",
+          "/recruitment/briefs/{brief_id}/backups",
+          "/recruitment/briefs/{brief_id}/backups/{backup_filename}",
+          "/recruitment/briefs/{brief_id}/diff",
+          "/recruitment/briefs/{brief_id}/restore",
+          "/recruitment/contracts"
+        ],
+        "cli_commands": [
+          "create-brief",
+          "list-briefs",
+          "show-brief",
+          "validate-brief"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "recruitment.dossiers",
+        "name": "决策档案",
+        "description": "版本化决策档案：整合支持证据、反证、对比、风险和人工判断，形成从需求 brief 到人工结论的可追溯 round-trip。维护者本地对象，非外部事实。支持原子写、备份、乐观并发和 Core 契约复用。",
+        "domain": "recruitment",
+        "status": "delivered",
+        "api_paths": [
+          "/recruitment/dossiers",
+          "/recruitment/dossiers/{dossier_id}",
+          "/recruitment/dossiers/{dossier_id}/backups",
+          "/recruitment/dossiers/{dossier_id}/backups/{backup_filename}",
+          "/recruitment/dossiers/{dossier_id}/diff",
+          "/recruitment/dossiers/{dossier_id}/restore"
+        ],
+        "cli_commands": [
+          "create-dossier",
+          "list-dossiers",
+          "show-dossier",
+          "validate-dossier"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "opposition.briefings",
+        "name": "比赛对手简报",
+        "description": "来源受限的比赛对手简报：每条事实段携带 fact_tier (official/recorded/estimated/unknown)，区分官方、记录、估计和未知。维护者本地对象，非外部事实。支持原子写、备份、乐观并发和 Core 契约复用。",
+        "domain": "opposition",
+        "status": "delivered",
+        "api_paths": [
+          "/opposition/briefs",
+          "/opposition/briefs/{briefing_id}",
+          "/opposition/briefs/{briefing_id}/backups",
+          "/opposition/briefs/{briefing_id}/backups/{backup_filename}",
+          "/opposition/briefs/{briefing_id}/diff",
+          "/opposition/briefs/{briefing_id}/restore",
+          "/opposition/contracts"
+        ],
+        "cli_commands": [
+          "create-briefing",
+          "list-briefings",
+          "show-briefing",
+          "validate-briefing"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "opposition.post_match_reviews",
+        "name": "赛后复盘",
+        "description": "版本化赛后复盘：比较假设-计划-执行-结果，记录被证伪的模式、新问题和支持/反对证据，形成从赛前简报到赛后结论的可追溯 round-trip。每条证据携带 fact_tier，区分官方、记录、估计和未知。维护者本地对象，非外部事实。支持原子写、备份、乐观并发和 Core 契约复用。",
+        "domain": "opposition",
+        "status": "delivered",
+        "api_paths": [
+          "/opposition/reviews",
+          "/opposition/reviews/{review_id}",
+          "/opposition/reviews/{review_id}/backups",
+          "/opposition/reviews/{review_id}/backups/{backup_filename}",
+          "/opposition/reviews/{review_id}/diff",
+          "/opposition/reviews/{review_id}/restore"
+        ],
+        "cli_commands": [
+          "create-review",
+          "list-reviews",
+          "show-review",
+          "validate-review"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
         "id": "worldcup.tournament",
         "name": "世界杯锦标赛管理",
         "description": "2026 世界杯 48 队锦标赛状态管理：积分榜、晋级计算、淘汰赛生成。",
@@ -881,7 +1016,9 @@
           "data",
           "calibration",
           "backtest",
-          "help"
+          "help",
+          "workflow",
+          "versions"
         ],
         "data_artifacts": [
           "frontend/data/"
@@ -914,7 +1051,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-17T15:18:22.063367+00:00",
+    "generated_at": "2026-07-24T17:40:44.857782+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -1840,5 +1977,5 @@
       }
     ]
   },
-  "content_sha256": "dd6720581fe0ae0e7791cfc744b3c93805a77dbd998b7c1fae0576908fea4f52"
+  "content_sha256": "f07a8956a897665a9e28b70ab05700957490ae47120a388aac567757c9a3d739"
 }
