@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-17T15:18:22.063367+00:00`
-- content SHA-256：`dd6720581fe0ae0e7791cfc744b3c93805a77dbd998b7c1fae0576908fea4f52`
+- manifest generated_at：`2026-07-24T17:40:44.857782+00:00`
+- content SHA-256：`f07a8956a897665a9e28b70ab05700957490ae47120a388aac567757c9a3d739`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -52,6 +52,22 @@
 - `uv run python -m scoutfootball optimize-ensemble`
 - `uv run python -m scoutfootball serve`
 - `uv run python -m scoutfootball tournament`
+- `uv run python -m scoutfootball create-brief`
+- `uv run python -m scoutfootball list-briefs`
+- `uv run python -m scoutfootball show-brief <brief_id>`
+- `uv run python -m scoutfootball validate-brief <path>`
+- `uv run python -m scoutfootball create-briefing`
+- `uv run python -m scoutfootball list-briefings`
+- `uv run python -m scoutfootball show-briefing <briefing_id>`
+- `uv run python -m scoutfootball validate-briefing <path>`
+- `uv run python -m scoutfootball create-dossier`
+- `uv run python -m scoutfootball list-dossiers`
+- `uv run python -m scoutfootball show-dossier <dossier_id>`
+- `uv run python -m scoutfootball validate-dossier <path>`
+- `uv run python -m scoutfootball create-review`
+- `uv run python -m scoutfootball list-reviews`
+- `uv run python -m scoutfootball show-review <review_id>`
+- `uv run python -m scoutfootball validate-review <path>`
 - `uv run streamlit run src/scoutfootball/app/streamlit_app.py`
 
 ## 能力登记
@@ -78,12 +94,16 @@
 | scouting.targets | scouting | delivered | /teams/{team}/scouting-targets, /teams/{team}/scouting-style-match/{position}, /teams/{team}/scouting-dashboard, /teams/{team}/position-gap-report, /teams/style-clusters/recruits | — | scouting |
 | scouting.watchlist | scouting | delivered | /scouting/risers-decliners, /watchlist, /shortlist, /review-queue | — | scouting |
 | scouting.workspace | scouting | delivered | /scouting-workspaces, /scouting-workspaces/capabilities, /scouting-workspaces/latest, /scouting-workspaces/{id}, /scouting-workspaces/{id} (PUT) | — | scouting |
+| recruitment.briefs | recruitment | delivered | /recruitment/briefs, /recruitment/briefs/{brief_id}, /recruitment/briefs/{brief_id}/backups, /recruitment/briefs/{brief_id}/backups/{backup_filename}, /recruitment/briefs/{brief_id}/diff, /recruitment/briefs/{brief_id}/restore, /recruitment/contracts | create-brief, list-briefs, show-brief, validate-brief | — |
+| recruitment.dossiers | recruitment | delivered | /recruitment/dossiers, /recruitment/dossiers/{dossier_id}, /recruitment/dossiers/{dossier_id}/backups, /recruitment/dossiers/{dossier_id}/backups/{backup_filename}, /recruitment/dossiers/{dossier_id}/diff, /recruitment/dossiers/{dossier_id}/restore | create-dossier, list-dossiers, show-dossier, validate-dossier | — |
+| opposition.briefings | opposition | delivered | /opposition/briefs, /opposition/briefs/{briefing_id}, /opposition/briefs/{briefing_id}/backups, /opposition/briefs/{briefing_id}/backups/{backup_filename}, /opposition/briefs/{briefing_id}/diff, /opposition/briefs/{briefing_id}/restore, /opposition/contracts | create-briefing, list-briefings, show-briefing, validate-briefing | — |
+| opposition.post_match_reviews | opposition | delivered | /opposition/reviews, /opposition/reviews/{review_id}, /opposition/reviews/{review_id}/backups, /opposition/reviews/{review_id}/backups/{backup_filename}, /opposition/reviews/{review_id}/diff, /opposition/reviews/{review_id}/restore | create-review, list-reviews, show-review, validate-review | — |
 | worldcup.tournament | world_cup | delivered | /world-cup/groups, /world-cup/schedule, /world-cup/teams, /world-cup/tournament-summary, /world-cup/tournament-standings, /world-cup/tournament-matches, /world-cup/tournament-scenarios | tournament, tournament show, tournament standings, tournament apply, tournament matches, tournament scenarios | wc_schedule, wc_knockout, wc_tournament |
 | worldcup.knockout | world_cup | delivered | /world-cup/knockout, /world-cup/knockout-bracket, /world-cup/knockout-probabilities, /world-cup/knockout-scenarios | tournament knockout, tournament knockout generate, tournament knockout show, tournament knockout apply | wc_knockout, wc_tournament |
 | worldcup.predictions | world_cup | delivered | /world-cup/predictions, /world-cup/standings-probabilities, /world-cup/qualification-impact, /world-cup/tournament-match-predictions, /world-cup/match-prediction | — | wc_probability, wc_compare |
 | worldcup.squads | world_cup | delivered | /world-cup/squads/{team}, /world-cup/squad-balance-comparison/{a}/{b}, /world-cup/squads/{team}/scouting-needs | — | wc_squads, wc_compare |
 | api.server | infrastructure | delivered | /health, /license | serve | — |
-| frontend.analyst_console | infrastructure | delivered | — | — | overview, players, compare, value, matches, teams, league, scouting, actions, reports, tactical, wc_schedule, wc_squads, wc_compare, wc_probability, wc_knockout, wc_tournament, license, data, calibration, backtest, help |
+| frontend.analyst_console | infrastructure | delivered | — | — | overview, players, compare, value, matches, teams, league, scouting, actions, reports, tactical, wc_schedule, wc_squads, wc_compare, wc_probability, wc_knockout, wc_tournament, license, data, calibration, backtest, help, workflow, versions |
 | data.artifacts | infrastructure | delivered | /artifacts, /model-runs, /reports/model-runs, /reports/model-runs/{run_id} | info, capabilities, data-contracts | data |
 
 ## 数据契约登记
