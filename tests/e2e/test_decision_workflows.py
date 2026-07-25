@@ -9,6 +9,14 @@ and the four end-to-end decision round-trips they expose:
 - **Workflow view smoke**: the view shell renders, the metric strip
   counters are present, and the three step lists (next / blockers /
   evidence gaps) are in the DOM.
+- **Workflow view OFFLINE state**: the four workflow API endpoints are
+  route-aborted; the view must surface one blocker per artifact family
+  (brief / briefing / dossier / review) and must NOT offer the online
+  create-* next-steps.
+- **Workflow view LIVE contract**: an adaptive contract test that fetches
+  the live counts from the four list endpoints and asserts the
+  bidirectional implications between store state and the inferred
+  create-* / *-missing steps for all four artifact families.
 - **Recruitment decision round-trip (brief)**: a brief with two
   revisions is seeded through the store; the browser then loads the
   versions view, selects the brief, loads the backup timeline, diffs a
@@ -473,6 +481,243 @@ def test_workflow_view_renders_shell(page, live_server_url: str) -> None:
     # The status rail and sources note must be present.
     assert page.locator("#wf-status-rail").count() == 1
     assert page.locator("#wf-sources-note").count() == 1
+
+
+# ── Workflow view state inference (OFFLINE + LIVE contract) ────────
+
+
+def test_workflow_view_offline_state_shows_api_blockers(
+    page, live_server_url: str
+) -> None:
+    """When the four workflow API endpoints are unreachable, the workflow
+    view must surface one blocker per artifact family (brief / briefing /
+    dossier / review) and must NOT offer the create-* next-steps that
+    belong to the online branches.
+
+    This is the OFFLINE / failure-state coverage for the decision layer
+    of the golden workflows.  It is fully deterministic because route
+    interception does not depend on existing store contents.
+
+    Catches regressions where:
+    - a fetch error is swallowed instead of being surfaced as a blocker
+    - the offline branch falls through to the empty-state branch and
+      pretends the store is empty rather than unreachable
+    - a blocker is added for one artifact but dropped for another
+    """
+    # Abort the four endpoints the workflow view fetches.  We scope each
+    # pattern to the list path so we do not disturb the initial /artifacts
+    # load or other views.
+    for pattern in (
+        "**/recruitment/briefs*",
+        "**/opposition/briefs*",
+        "**/recruitment/dossiers*",
+        "**/opposition/reviews*",
+    ):
+        page.route(pattern, lambda route: route.abort())
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+    page.locator("#view-workflow").wait_for(state="visible", timeout=10_000)
+
+    # Each offline blocker is rendered as <li data-wf-step-id="...">.
+    # Wait for all four to attach; if any is missing the locator wait
+    # will time out and the test will fail with a clear message.
+    for blocker_id in (
+        "brief-api-offline",
+        "briefing-api-offline",
+        "dossier-api-offline",
+        "review-api-offline",
+    ):
+        page.locator(
+            f"#wf-blocker-list li[data-wf-step-id='{blocker_id}']"
+        ).wait_for(state="attached", timeout=10_000)
+
+    # Collect the full blocker list to assert completeness in one shot.
+    blockers = page.evaluate(
+        """() => [...document.querySelectorAll(
+            "#wf-blocker-list li[data-wf-step-id]"
+        )].map(li => li.dataset.wfStepId)"""
+    )
+    assert set(blockers) == {
+        "brief-api-offline",
+        "briefing-api-offline",
+        "dossier-api-offline",
+        "review-api-offline",
+    }, f"Expected exactly the 4 offline blockers, got {blockers!r}"
+
+    # The online create-* next-steps must NOT appear when the API is
+    # offline (they live in the else-if-no-error branch).
+    next_ids = page.evaluate(
+        """() => [...document.querySelectorAll(
+            "#wf-next-list li[data-wf-step-id]"
+        )].map(li => li.dataset.wfStepId)"""
+    )
+    for online_step in ("create-brief", "create-briefing", "create-dossier", "create-review"):
+        assert online_step not in next_ids, (
+            f"{online_step} appeared in next-list while API is offline: {next_ids!r}"
+        )
+
+
+def test_workflow_view_inference_matches_api_state(
+    page, live_server_url: str
+) -> None:
+    """The workflow view's inferred steps must match the actual API state.
+
+    This is an adaptive contract test between the four list endpoints
+    (/recruitment/briefs, /opposition/briefs, /recruitment/dossiers,
+    /opposition/reviews) and the frontend ``_workflowInferSteps`` logic.
+    It is deterministic regardless of how many records the maintainer
+    currently has in the store: it fetches the live counts and asserts
+    the bidirectional implications for each artifact family.
+
+    For each artifact family the inference rule under test is:
+
+        create-<x> in next   IFF   ( precursor count > 0 AND own count == 0 )
+        <x>-missing in gaps  IFF   ( precursor count > 0 AND own count == 0 )
+        create-<first> in next  IFF   own count == 0   (no precursor needed)
+        <first>-missing in gaps  IFF   own count == 0
+
+    Brief and briefing are the "first" artifacts (no precursor); dossier
+    requires briefs > 0, review requires briefings > 0.
+
+    Catches regressions where:
+    - the workflow view shows create-brief even though briefs exist
+    - the workflow view shows create-dossier even though a dossier exists
+    - the workflow view offers a create-* step while an offline blocker
+      is also shown (the blocker must short-circuit the create step)
+    """
+    open_loaded_app(page, live_server_url)
+
+    # 1. Fetch the actual store state via the four list endpoints.  We
+    #    read counts (not contents) so the assertion is independent of
+    #    record shape and stays robust as the schema evolves.
+    counts = page.evaluate(
+        """async (baseUrl) => {
+            const safe = async (path, key) => {
+                try {
+                    const r = await fetch(baseUrl + path);
+                    if (!r.ok) return { count: 0, error: true };
+                    const d = await r.json();
+                    return { count: Array.isArray(d[key]) ? d[key].length : 0, error: false };
+                } catch (e) {
+                    return { count: 0, error: true };
+                }
+            };
+            return {
+                briefs:    await safe("/recruitment/briefs?limit=100", "briefs"),
+                briefings: await safe("/opposition/briefs?limit=100", "briefings"),
+                dossiers:  await safe("/recruitment/dossiers?limit=100", "dossiers"),
+                reviews:   await safe("/opposition/reviews?limit=100", "reviews"),
+            };
+        }""",
+        live_server_url,
+    )
+
+    # If any endpoint errored at the API level the contract test cannot
+    # run cleanly; surface that as an explicit failure rather than letting
+    # the implications below pass vacuously.
+    for name, info in counts.items():
+        assert not info["error"], (
+            f"API endpoint for {name} returned an error; cannot run contract test: {info}"
+        )
+
+    briefs_n = counts["briefs"]["count"]
+    briefings_n = counts["briefings"]["count"]
+    dossiers_n = counts["dossiers"]["count"]
+    reviews_n = counts["reviews"]["count"]
+
+    # 2. Navigate to the workflow view.  renderWorkflow() fires the four
+    #    fetches and re-renders after they settle.  We wait for the
+    #    second render by polling until the next-list step IDs are stable
+    #    across two reads 400ms apart; this avoids a hardcoded sleep
+    #    while tolerating localhost fetch latency.
+    page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+    page.locator("#view-workflow").wait_for(state="visible", timeout=10_000)
+
+    def _collect_step_ids() -> dict:
+        return page.evaluate(
+            """() => {
+                const ids = (sel) => [...document.querySelectorAll(
+                    sel + " li[data-wf-step-id]"
+                )].map(li => li.dataset.wfStepId);
+                return {
+                    next: ids("#wf-next-list"),
+                    blockers: ids("#wf-blocker-list"),
+                    gaps: ids("#wf-evidence-gap-list"),
+                };
+            }"""
+        )
+
+    # Poll until stable.  20 iterations × 400ms = 8s max, well within
+    # the localhost fetch latency budget.
+    prev = None
+    for _ in range(20):
+        cur = _collect_step_ids()
+        if cur == prev and cur is not None:
+            break
+        prev = cur
+        page.wait_for_timeout(400)
+    assert cur is not None, "workflow view step IDs never became readable"
+    assert cur == prev, (
+        "workflow view step IDs did not stabilize within 8s; "
+        f"last two reads differed:\n  {prev!r}\n  {cur!r}"
+    )
+
+    next_ids = set(cur["next"])
+    blocker_ids = set(cur["blockers"])
+    gap_ids = set(cur["gaps"])
+
+    # 3. No offline blockers should be present when the API is up.
+    for offline_blocker in (
+        "brief-api-offline",
+        "briefing-api-offline",
+        "dossier-api-offline",
+        "review-api-offline",
+    ):
+        assert offline_blocker not in blocker_ids, (
+            f"{offline_blocker} shown while API is reachable: {blocker_ids!r}"
+        )
+
+    # 4. Bidirectional implications for each artifact family.
+    #    Brief / briefing (first artifacts, no precursor).
+    assert ("create-brief" in next_ids) == (briefs_n == 0), (
+        f"create-brief presence mismatch: in_next={'create-brief' in next_ids}, "
+        f"briefs_n={briefs_n}"
+    )
+    assert ("brief-missing" in gap_ids) == (briefs_n == 0), (
+        f"brief-missing presence mismatch: in_gaps={'brief-missing' in gap_ids}, "
+        f"briefs_n={briefs_n}"
+    )
+    assert ("create-briefing" in next_ids) == (briefings_n == 0), (
+        f"create-briefing presence mismatch: in_next={'create-briefing' in next_ids}, "
+        f"briefings_n={briefings_n}"
+    )
+    assert ("briefing-missing" in gap_ids) == (briefings_n == 0), (
+        f"briefing-missing presence mismatch: in_gaps={'briefing-missing' in gap_ids}, "
+        f"briefings_n={briefings_n}"
+    )
+
+    #    Dossier (requires briefs > 0 as precursor).
+    dossier_should_suggest = (briefs_n > 0 and dossiers_n == 0)
+    assert ("create-dossier" in next_ids) == dossier_should_suggest, (
+        f"create-dossier presence mismatch: in_next={'create-dossier' in next_ids}, "
+        f"briefs_n={briefs_n}, dossiers_n={dossiers_n}"
+    )
+    assert ("dossier-missing" in gap_ids) == dossier_should_suggest, (
+        f"dossier-missing presence mismatch: in_gaps={'dossier-missing' in gap_ids}, "
+        f"briefs_n={briefs_n}, dossiers_n={dossiers_n}"
+    )
+
+    #    Review (requires briefings > 0 as precursor).
+    review_should_suggest = (briefings_n > 0 and reviews_n == 0)
+    assert ("create-review" in next_ids) == review_should_suggest, (
+        f"create-review presence mismatch: in_next={'create-review' in next_ids}, "
+        f"briefings_n={briefings_n}, reviews_n={reviews_n}"
+    )
+    assert ("review-missing" in gap_ids) == review_should_suggest, (
+        f"review-missing presence mismatch: in_gaps={'review-missing' in gap_ids}, "
+        f"briefings_n={briefings_n}, reviews_n={reviews_n}"
+    )
 
 
 # ── Recruitment decision round-trip E2E ──────────────────────────────

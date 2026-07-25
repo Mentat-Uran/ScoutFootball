@@ -304,6 +304,24 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 **遗留**：dossier / review 的编辑 UI 仍未实现（与 6.5 一致）；三个黄金工作流的静态/低覆盖 E2E 路径仍未覆盖，留待后续 E2E 扩展轮。
 
+### 6.7 工作流视图状态推断 E2E（OFFLINE + LIVE 契约） — `verified`（2026-07-25）
+
+关闭 6.6 遗留的部分缺口：工作流视图（`renderWorkflow` / `_workflowInferSteps`）此前只有 shell 冒烟测试，OFFLINE 失败状态与 LIVE 状态推断逻辑（create-* / *-missing 与 API 计数的关系）无真实浏览器覆盖。本轮把决策层的 OFFLINE blocker 推断与 LIVE 状态契约纳入 E2E，三个黄金工作流的决策导航层在静态/失败状态下有可验证证据。
+
+**核心交付**：
+
+- `frontend/app.js` `_renderWorkflowStep`：为 `<li>` 新增非行为性 `data-wf-step-id="${escapeAttr(step.id)}"` 属性，使工作流步骤可按稳定 ID 断言，避免依赖 i18n 文本。`node --check` 通过。
+- `tests/e2e/test_decision_workflows.py` 新增 `test_workflow_view_offline_state_shows_api_blockers`：通过 `page.route` 中断四个工作流端点（`/recruitment/briefs`、`/opposition/briefs`、`/recruitment/dossiers`、`/opposition/reviews`），断言 `#wf-blocker-list` 恰好包含 `brief-api-offline` / `briefing-api-offline` / `dossier-api-offline` / `review-api-offline` 四个 blocker，且 `#wf-next-list` 不出现任何 `create-*` 在线分支步骤。完全确定性，不依赖 store 内容。
+- 新增 `test_workflow_view_inference_matches_api_state`：自适应契约测试。先通过 `fetch` 读取四个 list 端点的实时计数，再导航到工作流视图，轮询直至步骤 ID 稳定（两次读取一致，400ms 间隔，8s 上限），然后断言四类 artifact 的双向蕴含：`create-brief`/`brief-missing` 出现当且仅当 `briefs_n == 0`；`create-briefing`/`briefing-missing` 当且仅当 `briefings_n == 0`；`create-dossier`/`dossier-missing` 当且仅当 `briefs_n > 0 且 dossiers_n == 0`；`create-review`/`review-missing` 当且仅当 `briefings_n > 0 且 reviews_n == 0`；且 API 可达时无 offline blocker。确定性，与维护者当前 store 内容无关。
+- 模块 docstring 同步更新，登记 OFFLINE + LIVE 契约两项新覆盖。
+
+**测试覆盖**：
+
+- `uv run pytest tests/e2e/test_decision_workflows.py -m e2e -v`：8 个测试全部通过（2 smoke + 2 工作流状态推断 + 4 round-trip），耗时约 176s。`uv run ruff check` 通过；`node --check frontend/app.js` 通过。
+- CAPABILITIES.md"工程与发布缺口"E2E 行与"可以陈述"条目同步：工作流视图 OFFLINE blocker 与 LIVE 状态契约纳入当前观察，目标状态收敛为"三个黄金工作流完整导航路径在静态和低覆盖路径运行"。
+
+**遗留**：三个黄金工作流的完整导航路径（球探决策 brief→dossier、比赛准备 briefing→review、数据与模型发布）在浏览器中的端到端步骤串联仍未覆盖；dossier / review 编辑 UI 仍未实现（与 6.5 一致）。本轮覆盖的是决策导航层的状态推断，不是完整工作流串联。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |

@@ -107,7 +107,7 @@ row-group、hash 和最小复现，只有完成备份及行数、schema、统计
 - 球探工作区支持版本化本地导入导出与冲突预览。
 - 世界杯赛程可以进入赛前简报，并将有来源的输入交给战术计划。
 - 模型与导出已有部分来源、覆盖、快照和 lineage 字段。
-- 招募 brief/dossier 和对手 briefing/review 四类决策记录有版本化本地存储、备份/恢复/diff 端点，且四类 artifact 的 diff+restore 往返均已通过真实浏览器 E2E（2026-07-25）。
+- 招募 brief/dossier 和对手 briefing/review 四类决策记录有版本化本地存储、备份/恢复/diff 端点，且四类 artifact 的 diff+restore 往返均已通过真实浏览器 E2E（2026-07-25）。工作流视图的 OFFLINE blocker 推断与 LIVE 状态契约（四类 artifact 的 create-*/*-missing 推断与 API 计数双向一致）也已通过真实浏览器 E2E（2026-07-25）。
 
 ### 必须带限定词
 
@@ -129,7 +129,7 @@ row-group、hash 和最小复现，只有完成备份及行数、schema、统计
 
 | 缺口 | 当前观察 | 目标状态 |
 | --- | --- | --- |
-| 真实浏览器 E2E | 2026-07-25 起 `tests/e2e/` 提供 Playwright + 系统 Chrome 的 smoke + workflow + decision-workflow 覆盖（LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全/versions 冒烟/workflow 冒烟/recruitment brief diff+restore 往返/opposition briefing diff+restore 往返/recruitment dossier diff+restore 往返/opposition review diff+restore 往返），通过 `-m e2e` 显式运行 | 三个黄金工作流在静态和低覆盖路径运行 |
+| 真实浏览器 E2E | 2026-07-25 起 `tests/e2e/` 提供 Playwright + 系统 Chrome 的 smoke + workflow + decision-workflow 覆盖（LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全/versions 冒烟/workflow 冒烟/workflow OFFLINE blocker/workflow LIVE 状态契约/recruitment brief diff+restore 往返/opposition briefing diff+restore 往返/recruitment dossier diff+restore 往返/opposition review diff+restore 往返），通过 `-m e2e` 显式运行 | 三个黄金工作流完整导航路径在静态和低覆盖路径运行 |
 | 发布 fail-open | 2026-07-17 G0-B 已清理关键发布/数据 workflow 的 `continue-on-error`、`|| true` 和成功 placeholder | 关键验证失败即停止；仅非关键上传可明确容错 |
 | 签名与跨平台 | 签名发现被禁用，平台状态在文档间有漂移 | 每个平台独立构建、签名/未签名声明、安装与回滚证据 |
 | 静态新鲜度 | 已以本地 release 导出刷新 `frontend/data_manifest.json`；检查器同时核对文件清单、大小、去重和汇总元数据。`npm run build:sites` 与 CI 在复制 STATIC 快照前均会失败关闭 | 自动重新生成、来源/快照 SLO 与跨产物一致性仍留给 C1；门禁不会把旧快照写成新数据 |
