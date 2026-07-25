@@ -1395,14 +1395,12 @@ def test_opposition_review_diff_and_restore_round_trip(
 def test_versions_view_create_button_visibility(
     page, live_server_url: str
 ) -> None:
-    """The create button must be hidden for brief/briefing and visible
-    for dossier/review.
+    """The create button must be visible for all four artifact types
+    (brief, briefing, dossier, review).
 
     Catches regressions where:
-    - the create button is shown for brief/briefing (which have their own
-      create flows in Scouting / Matches and must not be creatable here)
-    - the create button is missing for dossier/review (the closing
-      artifacts whose only create path used to be the CLI)
+    - the create button is hidden for any of the four types (each must
+      have a create flow reachable from the versions toolbar)
     - the create hint text is missing or not localised
     """
     open_loaded_app(page, live_server_url)
@@ -1414,21 +1412,24 @@ def test_versions_view_create_button_visibility(
     create_btn = page.locator("#ver-create")
     create_hint = page.locator("#ver-create-hint")
 
-    # brief: not creatable here → button hidden, hint explains.
+    # brief: creatable here → button visible, hint localised.
     type_select.select_option("brief")
     page.wait_for_timeout(150)
-    assert create_btn.get_attribute("hidden") is not None, (
-        "Create button should be hidden for brief type"
+    assert create_btn.get_attribute("hidden") is None, (
+        "Create button should be visible for brief type"
     )
     assert create_hint.inner_text().strip() != "", (
-        "Create hint should not be empty when create is disabled"
+        "Create hint should not be empty for brief type"
     )
 
-    # briefing: not creatable here → button hidden.
+    # briefing: creatable here → button visible.
     type_select.select_option("briefing")
     page.wait_for_timeout(150)
-    assert create_btn.get_attribute("hidden") is not None, (
-        "Create button should be hidden for briefing type"
+    assert create_btn.get_attribute("hidden") is None, (
+        "Create button should be visible for briefing type"
+    )
+    assert create_hint.inner_text().strip() != "", (
+        "Create hint should not be empty for briefing type"
     )
 
     # dossier: creatable → button visible, hint localised.
@@ -1684,6 +1685,304 @@ def test_versions_view_create_review_round_trip(
                 f.unlink(missing_ok=True)
 
 
+# ── Versions view: create brief round-trip ───────────────────────────
+
+
+def test_versions_view_create_brief_round_trip(
+    page, live_server_url: str
+) -> None:
+    """End-to-end create flow for a recruitment brief via the browser.
+
+    Same shape as the dossier create test but exercises the
+    ``/recruitment/briefs`` endpoint family and the brief form fields
+    (including the required ``position_group`` select). Catches
+    regressions where:
+    - the brief create dialog does not open from the toolbar
+    - required-field validation (title, position_group) is missing
+    - the auto-generated ID does not match the brief- prefix pattern
+    - the brief-specific defaults (risk_tolerance, schema, version) are
+      not applied by _buildCreatePayload
+    - the created record is not persisted (list / fetch fails)
+    """
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("brief")
+    page.wait_for_timeout(200)
+
+    before_count = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/recruitment/briefs?limit=100');
+            const d = await r.json();
+            return Array.isArray(d.briefs) ? d.briefs.length : 0;
+        }""",
+        live_server_url,
+    )
+
+    page.locator("#ver-create").click()
+    page.locator("#ver-create-dialog").wait_for(state="visible", timeout=5_000)
+
+    # The dialog must contain the brief form fields, including the
+    # position_group <select> rendered as select-options (not select).
+    assert page.locator("#ver-create-input-title").count() == 1
+    assert page.locator("#ver-create-input-brief_id").count() == 1
+    assert page.locator("#ver-create-input-position_group").count() == 1
+    assert page.locator("#ver-create-input-budget_eur").count() == 1
+    assert page.locator("#ver-create-input-risk_tolerance").count() == 1
+
+    # Submit with an empty title — must be rejected client-side.
+    # position_group is a required select-options field; with `required: true`
+    # the first real option becomes the default, so the position validation
+    # should already pass. Title is the only field that's empty by default.
+    page.locator("#ver-create-submit").click()
+    page.wait_for_timeout(200)
+    is_still_open = page.evaluate(
+        "() => !!document.getElementById('ver-create-dialog').open"
+    )
+    assert is_still_open, (
+        "Dialog should still be open after submitting with empty title"
+    )
+
+    # Fill in a title and submit. ID is blank (auto-generated), and
+    # position_group already defaults to DF (first option) for the
+    # required select. Add a budget to verify the number → int conversion.
+    page.locator("#ver-create-input-title").fill("E2E created brief")
+    page.locator("#ver-create-input-budget_eur").fill("25000000")
+    page.locator("#ver-create-input-minimum_minutes").fill("1500")
+    page.locator("#ver-create-submit").click()
+
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-create-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, "Create dialog did not close after successful submit"
+
+    after_count = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/recruitment/briefs?limit=100');
+            const d = await r.json();
+            return Array.isArray(d.briefs) ? d.briefs.length : 0;
+        }""",
+        live_server_url,
+    )
+    assert after_count == before_count + 1, (
+        f"Expected brief count {before_count + 1} after create, got {after_count}"
+    )
+
+    new_records = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/recruitment/briefs?limit=100');
+            const d = await r.json();
+            return (Array.isArray(d.briefs) ? d.briefs : [])
+                .map(x => x.brief_id || '');
+        }""",
+        live_server_url,
+    )
+    assert any(rid.startswith("brief-") for rid in new_records), (
+        f"Expected a brief- prefixed ID in new records: {new_records!r}"
+    )
+
+    # The newly created brief must carry the entered budget_eur (as int)
+    # and the default risk_tolerance / position_group applied by
+    # _buildCreatePayload.  The list endpoint returns a summary (no
+    # full payload), so fetch the individual record by id.
+    new_brief_id = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/recruitment/briefs?limit=100');
+            const d = await r.json();
+            const items = Array.isArray(d.briefs) ? d.briefs : [];
+            const hit = items.find(x => (x.brief_id || '').startsWith('brief-'));
+            return hit ? hit.brief_id : null;
+        }""",
+        live_server_url,
+    )
+    assert new_brief_id, "Newly created brief id not found in list"
+
+    payload = page.evaluate(
+        """async ({baseUrl, briefId}) => {
+            const r = await fetch(baseUrl + '/recruitment/briefs/' + encodeURIComponent(briefId));
+            if (!r.ok) return null;
+            const d = await r.json();
+            return d.brief || d.record?.brief || d;
+        }""",
+        {"baseUrl": live_server_url, "briefId": new_brief_id},
+    )
+    assert payload is not None, f"Failed to fetch brief {new_brief_id}"
+    assert payload.get("budget_eur") == 25_000_000, (
+        f"Expected budget_eur=25000000, got {payload.get('budget_eur')!r}"
+    )
+    assert payload.get("minimum_minutes") == 1500, (
+        f"Expected minimum_minutes=1500, got {payload.get('minimum_minutes')!r}"
+    )
+    assert payload.get("risk_tolerance") == "medium", (
+        f"Expected default risk_tolerance=medium, got {payload.get('risk_tolerance')!r}"
+    )
+    assert payload.get("position_group") == "DF", (
+        f"Expected default position_group=DF, got {payload.get('position_group')!r}"
+    )
+    assert payload.get("schema") == "scoutfootball.recruitment-brief", (
+        f"Expected schema scoutfootball.recruitment-brief, got {payload.get('schema')!r}"
+    )
+
+    # Cleanup.
+    from scoutfootball.api import _brief_store
+
+    store = _brief_store()
+    for bid in new_records:
+        if not bid.startswith("brief-"):
+            continue
+        try:
+            store.delete(bid, expected_revision=None)
+        except Exception:
+            pass
+        record_path = store.root / f"{bid}.json"
+        record_path.unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for f in backup_dir.glob(f"{bid}.*.json"):
+                f.unlink(missing_ok=True)
+
+
+# ── Versions view: create briefing round-trip ────────────────────────
+
+
+def test_versions_view_create_briefing_round_trip(
+    page, live_server_url: str
+) -> None:
+    """End-to-end create flow for an opposition briefing via the browser.
+
+    Catches regressions where:
+    - the briefing create dialog does not open from the toolbar
+    - required-field validation (title) is missing
+    - the auto-generated ID does not match the briefing- prefix pattern
+    - the briefing-specific defaults (sections=[], schema, version) are
+      not applied by _buildCreatePayload
+    - the created record is not persisted (list / fetch fails)
+    """
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("briefing")
+    page.wait_for_timeout(200)
+
+    before_count = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/opposition/briefs?limit=100');
+            const d = await r.json();
+            return Array.isArray(d.briefings) ? d.briefings.length : 0;
+        }""",
+        live_server_url,
+    )
+
+    page.locator("#ver-create").click()
+    page.locator("#ver-create-dialog").wait_for(state="visible", timeout=5_000)
+
+    assert page.locator("#ver-create-input-title").count() == 1
+    assert page.locator("#ver-create-input-briefing_id").count() == 1
+    assert page.locator("#ver-create-input-home_team").count() == 1
+    assert page.locator("#ver-create-input-away_team").count() == 1
+
+    # Submit with empty title — must be rejected client-side.
+    page.locator("#ver-create-submit").click()
+    page.wait_for_timeout(200)
+    is_still_open = page.evaluate(
+        "() => !!document.getElementById('ver-create-dialog').open"
+    )
+    assert is_still_open, (
+        "Dialog should still be open after submitting with empty title"
+    )
+
+    page.locator("#ver-create-input-title").fill("E2E created briefing")
+    page.locator("#ver-create-input-home_team").fill("E2E Home FC")
+    page.locator("#ver-create-input-away_team").fill("E2E Away FC")
+    page.locator("#ver-create-submit").click()
+
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-create-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, "Create dialog did not close after successful submit"
+
+    after_count = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/opposition/briefs?limit=100');
+            const d = await r.json();
+            return Array.isArray(d.briefings) ? d.briefings.length : 0;
+        }""",
+        live_server_url,
+    )
+    assert after_count == before_count + 1, (
+        f"Expected briefing count {before_count + 1} after create, got {after_count}"
+    )
+
+    new_records = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/opposition/briefs?limit=100');
+            const d = await r.json();
+            return (Array.isArray(d.briefings) ? d.briefings : [])
+                .map(x => x.briefing_id || '');
+        }""",
+        live_server_url,
+    )
+    assert any(rid.startswith("briefing-") for rid in new_records), (
+        f"Expected a briefing- prefixed ID in new records: {new_records!r}"
+    )
+
+    # The new briefing must carry the entered home/away team names and
+    # an empty sections array (the create form intentionally omits
+    # sections; the maintainer adds them through a dedicated editor).
+    new_briefing = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/opposition/briefs?limit=100');
+            const d = await r.json();
+            const items = Array.isArray(d.briefings) ? d.briefings : [];
+            return items.find(x => (x.briefing_id || '').startsWith('briefing-')) || null;
+        }""",
+        live_server_url,
+    )
+    assert new_briefing is not None, "Newly created briefing not found in list"
+    payload = new_briefing.get("briefing") or new_briefing
+    assert payload.get("home_team") == "E2E Home FC", (
+        f"Expected home_team='E2E Home FC', got {payload.get('home_team')!r}"
+    )
+    assert payload.get("away_team") == "E2E Away FC", (
+        f"Expected away_team='E2E Away FC', got {payload.get('away_team')!r}"
+    )
+    assert payload.get("sections") == [], (
+        f"Expected empty sections list, got {payload.get('sections')!r}"
+    )
+
+    # Cleanup.
+    from scoutfootball.api import _briefing_store
+
+    store = _briefing_store()
+    for bid in new_records:
+        if not bid.startswith("briefing-"):
+            continue
+        try:
+            store.delete(bid, expected_revision=None)
+        except Exception:
+            pass
+        record_path = store.root / f"{bid}.json"
+        record_path.unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for f in backup_dir.glob(f"{bid}.*.json"):
+                f.unlink(missing_ok=True)
+
+
 # ── Workflow → versions create jump with pre-fill ────────────────────
 
 
@@ -1804,6 +2103,146 @@ def test_workflow_create_dossier_jump_prefills_brief_id(
             if backup_dir:
                 for bf in backup_dir.glob(f"{cid}.*.json"):
                     bf.unlink(missing_ok=True)
+
+
+def test_workflow_create_brief_jump_opens_dialog(
+    page, live_server_url: str
+) -> None:
+    """Clicking the workflow's create-brief step must jump to the
+    versions view and auto-open the create dialog for a brief.
+
+    Catches regressions where:
+    - the create-brief step uses a plain jump (action: "scouting") that
+      leads to a dead-end view with no creation form
+    - the create dialog does not auto-open on arrival
+    - the type selector is not synced to "brief" before the dialog opens
+    """
+    # Ensure the store has no briefs so the create-brief step appears.
+    from scoutfootball.api import _brief_store
+
+    store = _brief_store()
+    existing_brief_ids: list[str] = []
+    for f in store.root.glob("*.json"):
+        existing_brief_ids.append(f.stem)
+    for bid in existing_brief_ids:
+        try:
+            store.delete(bid, expected_revision=None)
+        except Exception:
+            pass
+        (store.root / f"{bid}.json").unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for bf in backup_dir.glob(f"{bid}.*.json"):
+                bf.unlink(missing_ok=True)
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+    page.locator("#view-workflow").wait_for(state="visible", timeout=10_000)
+
+    create_step_btn = None
+    for _ in range(25):
+        btn = page.locator(
+            "#wf-next-list button[data-wf-create='brief']"
+        )
+        if btn.count() > 0:
+            create_step_btn = btn.first
+            break
+        page.wait_for_timeout(200)
+    assert create_step_btn is not None, (
+        "create-brief step did not appear in workflow next-list "
+        "(requires an empty briefs store)"
+    )
+
+    # Click the step → must jump to versions view and auto-open dialog.
+    create_step_btn.click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+    page.locator("#ver-create-dialog").wait_for(
+        state="visible", timeout=5_000
+    )
+
+    # The brief form must be active (type selector synced).
+    assert page.locator("#ver-type-select").input_value() == "brief", (
+        "Expected type selector to be synced to 'brief' after workflow jump"
+    )
+
+    # The brief form must contain the required position_group select.
+    assert page.locator("#ver-create-input-position_group").count() == 1, (
+        "Expected position_group select in the brief create form"
+    )
+
+    # Close the dialog without creating anything.
+    page.locator("#ver-create-cancel").click()
+    page.wait_for_timeout(200)
+
+
+def test_workflow_create_briefing_jump_opens_dialog(
+    page, live_server_url: str
+) -> None:
+    """Clicking the workflow's create-briefing step must jump to the
+    versions view and auto-open the create dialog for a briefing.
+
+    Catches regressions where:
+    - the create-briefing step uses a plain jump (action: "matches") that
+      leads to a dead-end view with no creation form
+    - the create dialog does not auto-open on arrival
+    - the type selector is not synced to "briefing" before the dialog opens
+    """
+    # Ensure the store has no briefings so the create-briefing step appears.
+    from scoutfootball.api import _briefing_store
+
+    store = _briefing_store()
+    existing_briefing_ids: list[str] = []
+    for f in store.root.glob("*.json"):
+        existing_briefing_ids.append(f.stem)
+    for bid in existing_briefing_ids:
+        try:
+            store.delete(bid, expected_revision=None)
+        except Exception:
+            pass
+        (store.root / f"{bid}.json").unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for bf in backup_dir.glob(f"{bid}.*.json"):
+                bf.unlink(missing_ok=True)
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+    page.locator("#view-workflow").wait_for(state="visible", timeout=10_000)
+
+    create_step_btn = None
+    for _ in range(25):
+        btn = page.locator(
+            "#wf-next-list button[data-wf-create='briefing']"
+        )
+        if btn.count() > 0:
+            create_step_btn = btn.first
+            break
+        page.wait_for_timeout(200)
+    assert create_step_btn is not None, (
+        "create-briefing step did not appear in workflow next-list "
+        "(requires an empty briefings store)"
+    )
+
+    # Click the step → must jump to versions view and auto-open dialog.
+    create_step_btn.click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+    page.locator("#ver-create-dialog").wait_for(
+        state="visible", timeout=5_000
+    )
+
+    # The briefing form must be active (type selector synced).
+    assert page.locator("#ver-type-select").input_value() == "briefing", (
+        "Expected type selector to be synced to 'briefing' after workflow jump"
+    )
+
+    # The briefing form must contain the required title input.
+    assert page.locator("#ver-create-input-title").count() == 1, (
+        "Expected title input in the briefing create form"
+    )
+
+    # Close the dialog without creating anything.
+    page.locator("#ver-create-cancel").click()
+    page.wait_for_timeout(200)
 
 
 # ── Versions view: edit-button visibility ────────────────────────────

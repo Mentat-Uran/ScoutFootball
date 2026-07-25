@@ -185,22 +185,51 @@ class TestCSP:
         assert "unsafe-eval" not in snippet
 
 
-# ===== 6. SRI on echarts CDN ===============================================
+# ===== 6. echarts / gif.js vendored locally (no CDN) =======================
 
-class TestSRI:
-    def test_echarts_script_has_integrity(self):
+class TestVendoredScripts:
+    """Verify echarts and gif.js are vendored locally, not loaded from a CDN.
+
+    Commit 0b25517 dropped the CDN dependency in favour of local
+    ``vendor/echarts.min.js`` and ``vendor/gif.js`` so the app stays
+    offline-capable and the CSP can keep ``script-src 'self'``.
+    SRI attributes (``integrity=`` / ``crossorigin=``) are therefore
+    no longer expected on these script tags.
+    """
+
+    def test_echarts_script_is_vendored_locally(self):
         content = _read_index()
-        # Find the echarts script tag
         assert "echarts" in content
         idx = content.index("echarts")
         snippet = content[max(0, idx - 100) : idx + 200]
-        assert "integrity=" in snippet
+        assert 'src="vendor/echarts.min.js"' in snippet
+        # No CDN host should remain for echarts.
+        assert "cdn" not in snippet.lower()
+        assert "jsdelivr" not in snippet.lower()
+        assert "unpkg" not in snippet.lower()
 
-    def test_echarts_script_has_crossorigin(self):
+    def test_gif_script_is_vendored_locally(self):
+        content = _read_index()
+        assert "gif.js" in content
+        idx = content.index("gif.js")
+        snippet = content[max(0, idx - 100) : idx + 200]
+        assert 'src="vendor/gif.js"' in snippet
+        assert "cdn" not in snippet.lower()
+        assert "jsdelivr" not in snippet.lower()
+        assert "unpkg" not in snippet.lower()
+
+    def test_vendored_scripts_do_not_use_sri(self):
+        """Local scripts must not carry SRI / crossorigin attributes.
+
+        SRI is meaningless for same-origin vendored files and adds
+        maintenance burden without security benefit; the CSP already
+        restricts ``script-src`` to ``'self'``.
+        """
         content = _read_index()
         idx = content.index("echarts")
         snippet = content[max(0, idx - 100) : idx + 200]
-        assert "crossorigin=" in snippet
+        assert "integrity=" not in snippet
+        assert "crossorigin=" not in snippet
 
 
 # ===== 7. X-Content-Type-Options ============================================

@@ -1293,11 +1293,15 @@ const i18n = {
         versions_kind_revision: "版本",
         versions_kind_deletion: "删除",
         versions_create: "创建",
+        versions_create_brief: "创建 Recruitment brief",
+        versions_create_briefing: "创建 Opposition briefing",
         versions_create_dossier: "创建 Decision dossier",
         versions_create_review: "创建 Post-match review",
+        versions_create_hint_brief: "从工具栏直接起草新的需求 brief（位置、角色、预算、年龄、风险）。",
+        versions_create_hint_briefing: "从工具栏直接起草新的源受限赛前 briefing（空 sections，可在创建后追加）。",
         versions_create_hint_dossier: "从工具栏直接起草新的决策档案（draft 状态）。",
         versions_create_hint_review: "从工具栏直接起草新的赛后复盘（draft 状态）。",
-        versions_create_hint_disabled: "该类型通过球探/比赛视图创建；此处仅 dossier / review 可直接起草。",
+        versions_create_hint_disabled: "该类型暂不支持在此处创建。",
         versions_create_note: "本地优先：新记录以 draft 状态写入本地存储；证据、对比、风险等子项可在创建后追加。",
         versions_create_cancel: "取消",
         versions_create_submit: "创建",
@@ -1305,6 +1309,10 @@ const i18n = {
         versions_create_required_missing: "必填字段缺失：",
         versions_create_failed: "创建失败：",
         versions_create_success: "创建成功，新记录 ID：",
+        versions_create_field_brief_id: "Brief ID",
+        versions_create_field_brief_id_ph: "留空将自动生成 brief-YYYYMMDD-xxxxxxxx",
+        versions_create_field_briefing_id: "Briefing ID",
+        versions_create_field_briefing_id_ph: "留空将自动生成 briefing-YYYYMMDD-xxxxxxxx",
         versions_create_field_dossier_id: "Dossier ID",
         versions_create_field_dossier_id_ph: "留空将自动生成 dossier-YYYYMMDD-xxxxxxxx",
         versions_create_field_review_id: "Review ID",
@@ -1312,8 +1320,36 @@ const i18n = {
         versions_create_field_id_note: "留空时自动生成；可自定义（字母、数字、-、_，1-128 字符）。",
         versions_create_field_title: "标题",
         versions_create_field_title_ph: "如：Decision dossier: Player X for Arsenal LB",
-        versions_create_field_brief_id: "关联的 Recruitment brief",
-        versions_create_field_briefing_id: "关联的 Opposition briefing",
+        versions_create_field_title_ph_brief: "如：Recruitment brief: Arsenal LB backup",
+        versions_create_field_title_ph_briefing: "如：Opposition briefing: Arsenal vs Chelsea",
+        versions_create_field_link_brief_id: "关联的 Recruitment brief",
+        versions_create_field_link_briefing_id: "关联的 Opposition briefing",
+        versions_create_field_team: "目标球队",
+        versions_create_field_team_ph: "如：Arsenal",
+        versions_create_field_position_group: "位置组",
+        versions_create_pos_df: "后卫（DF）",
+        versions_create_pos_mf: "中场（MF）",
+        versions_create_pos_fw: "前锋（FW）",
+        versions_create_pos_gk: "门将（GK）",
+        versions_create_field_role: "角色",
+        versions_create_field_role_ph: "如：attacking_fullback",
+        versions_create_field_budget_eur: "预算（EUR）",
+        versions_create_field_budget_eur_ph: "如：30000000",
+        versions_create_field_minimum_minutes: "最低出场分钟",
+        versions_create_field_minimum_minutes_ph: "如：1500",
+        versions_create_field_age_min: "年龄下限",
+        versions_create_field_age_max: "年龄上限",
+        versions_create_field_risk_tolerance: "风险偏好",
+        versions_create_risk_low: "低（low）",
+        versions_create_risk_medium: "中（medium）",
+        versions_create_risk_high: "高（high）",
+        versions_create_field_match_id: "比赛 ID",
+        versions_create_field_match_id_ph: "如：wc_2026_final",
+        versions_create_field_competition: "赛事",
+        versions_create_field_competition_ph: "如：World Cup 2026",
+        versions_create_field_season: "赛季",
+        versions_create_field_season_ph: "如：2026",
+        versions_create_field_notes: "备注",
         versions_create_field_candidate_name: "候选球员姓名",
         versions_create_field_candidate_name_ph: "如：Player X",
         versions_create_field_candidate_team: "候选球员当前球队",
@@ -2657,11 +2693,15 @@ const i18n = {
         versions_kind_revision: "Revision",
         versions_kind_deletion: "Deletion",
         versions_create: "Create",
+        versions_create_brief: "Create recruitment brief",
+        versions_create_briefing: "Create opposition briefing",
         versions_create_dossier: "Create decision dossier",
         versions_create_review: "Create post-match review",
+        versions_create_hint_brief: "Draft a new requirement brief (position, role, budget, age, risk) from the toolbar.",
+        versions_create_hint_briefing: "Draft a new source-limited pre-match briefing (empty sections; can be added after creation) from the toolbar.",
         versions_create_hint_dossier: "Draft a new decision dossier (draft status) from the toolbar.",
         versions_create_hint_review: "Draft a new post-match review (draft status) from the toolbar.",
-        versions_create_hint_disabled: "This type is created from Scouting / Matches; only dossier / review can be drafted here.",
+        versions_create_hint_disabled: "This type cannot be created here yet.",
         versions_create_note: "Local-first: the new record is saved locally in draft status; evidence, comparisons and risks can be added after creation.",
         versions_create_cancel: "Cancel",
         versions_create_submit: "Create",
@@ -2669,6 +2709,10 @@ const i18n = {
         versions_create_required_missing: "Required field missing: ",
         versions_create_failed: "Create failed: ",
         versions_create_success: "Created, new record ID: ",
+        versions_create_field_brief_id: "Brief ID",
+        versions_create_field_brief_id_ph: "Leave blank to auto-generate brief-YYYYMMDD-xxxxxxxx",
+        versions_create_field_briefing_id: "Briefing ID",
+        versions_create_field_briefing_id_ph: "Leave blank to auto-generate briefing-YYYYMMDD-xxxxxxxx",
         versions_create_field_dossier_id: "Dossier ID",
         versions_create_field_dossier_id_ph: "Leave blank to auto-generate dossier-YYYYMMDD-xxxxxxxx",
         versions_create_field_review_id: "Review ID",
@@ -2676,8 +2720,36 @@ const i18n = {
         versions_create_field_id_note: "Auto-generated when blank; custom values allowed (alphanumeric, -, _, 1-128 chars).",
         versions_create_field_title: "Title",
         versions_create_field_title_ph: "e.g. Decision dossier: Player X for Arsenal LB",
-        versions_create_field_brief_id: "Linked recruitment brief",
-        versions_create_field_briefing_id: "Linked opposition briefing",
+        versions_create_field_title_ph_brief: "e.g. Recruitment brief: Arsenal LB backup",
+        versions_create_field_title_ph_briefing: "e.g. Opposition briefing: Arsenal vs Chelsea",
+        versions_create_field_link_brief_id: "Linked recruitment brief",
+        versions_create_field_link_briefing_id: "Linked opposition briefing",
+        versions_create_field_team: "Target team",
+        versions_create_field_team_ph: "e.g. Arsenal",
+        versions_create_field_position_group: "Position group",
+        versions_create_pos_df: "Defender (DF)",
+        versions_create_pos_mf: "Midfielder (MF)",
+        versions_create_pos_fw: "Forward (FW)",
+        versions_create_pos_gk: "Goalkeeper (GK)",
+        versions_create_field_role: "Role",
+        versions_create_field_role_ph: "e.g. attacking_fullback",
+        versions_create_field_budget_eur: "Budget (EUR)",
+        versions_create_field_budget_eur_ph: "e.g. 30000000",
+        versions_create_field_minimum_minutes: "Minimum minutes",
+        versions_create_field_minimum_minutes_ph: "e.g. 1500",
+        versions_create_field_age_min: "Age min",
+        versions_create_field_age_max: "Age max",
+        versions_create_field_risk_tolerance: "Risk tolerance",
+        versions_create_risk_low: "Low",
+        versions_create_risk_medium: "Medium",
+        versions_create_risk_high: "High",
+        versions_create_field_match_id: "Match ID",
+        versions_create_field_match_id_ph: "e.g. wc_2026_final",
+        versions_create_field_competition: "Competition",
+        versions_create_field_competition_ph: "e.g. World Cup 2026",
+        versions_create_field_season: "Season",
+        versions_create_field_season_ph: "e.g. 2026",
+        versions_create_field_notes: "Notes",
         versions_create_field_candidate_name: "Candidate player name",
         versions_create_field_candidate_name_ph: "e.g. Player X",
         versions_create_field_candidate_team: "Candidate player's current club",
@@ -16642,14 +16714,22 @@ function _workflowInferSteps() {
             actionLabel: zT ? "查看数据视图" : "Open Data",
         });
     } else if (workflowState.briefs.length === 0) {
+        // Jump straight to the versions view's create-brief dialog. Brief
+        // has no upstream closing-artifact linkage, so no pre-fill is
+        // staged. This closes the workflow breakpoint where the previous
+        // "Open Scouting" jump led to a view with no creation form.
         next.push({
             id: "create-brief",
             title: zT ? "创建第一个 Recruitment brief" : "Create your first recruitment brief",
             reason: zT
                 ? "已有 Shortlist 即可起草需求 brief（位置、角色、预算、年龄、风险）。"
                 : "With a Shortlist in place, draft a requirement brief (position, role, budget, age, risk).",
-            action: "scouting",
-            actionLabel: zT ? "前往球探" : "Open Scouting",
+            action: "versions",
+            actionLabel: zT ? "起草 brief" : "Draft brief",
+            create: {
+                type: "brief",
+                fields: {},
+            },
         });
         evidenceGaps.push({
             id: "brief-missing",
@@ -16699,14 +16779,23 @@ function _workflowInferSteps() {
             actionLabel: zT ? "查看数据视图" : "Open Data",
         });
     } else if (workflowState.briefings.length === 0) {
+        // Jump straight to the versions view's create-briefing dialog.
+        // Like brief, briefing has no upstream closing-artifact linkage,
+        // so no pre-fill is staged. This closes the workflow breakpoint
+        // where the previous "Open Matches" jump led to a view with no
+        // creation form.
         next.push({
             id: "create-briefing",
             title: zT ? "创建第一个 Opposition briefing" : "Create your first opposition briefing",
             reason: zT
                 ? "从比赛预测视图选定对手后，起草源受限 briefing（含 fact_tier 标注）。"
                 : "Pick an opponent from Match Prediction, then draft a source-limited briefing with fact_tier labels.",
-            action: "matches",
-            actionLabel: zT ? "前往预测" : "Open Matches",
+            action: "versions",
+            actionLabel: zT ? "起草 briefing" : "Draft briefing",
+            create: {
+                type: "briefing",
+                fields: {},
+            },
         });
         evidenceGaps.push({
             id: "briefing-missing",
@@ -17007,11 +17096,47 @@ const _VERSION_ARTIFACT_TYPES = {
         backupPath: (id, fn) => `/recruitment/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
         diffPath: (id, fn) => `/recruitment/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
         restorePath: (id) => `/recruitment/briefs/${encodeURIComponent(id)}/restore`,
+        createPath: "/recruitment/briefs",
         idField: "brief_id",
         listKey: "briefs",
         stateField: "briefs",
         errorField: "briefsError",
         labelKey: "versions_type_brief",
+        createLabelKey: "versions_create_brief",
+        createHintKey: "versions_create_hint_brief",
+        // Brief has no upstream closing-artifact linkage (it IS the
+        // upstream artifact of the recruitment workflow). Empty linkField
+        // disables the link <select> in the create form.
+        idPrefix: "brief-",
+        linkField: "",
+        linkListKey: "",
+        linkIdField: "",
+        // Field definitions for the create form. position_group is
+        // required (Pydantic rejects empty strings). budget_eur /
+        // minimum_minutes / age_min / age_max are optional integers;
+        // empty inputs are converted to null in _collectCreateForm.
+        formFields: [
+            { name: "brief_id", type: "text", required: false, labelKey: "versions_create_field_brief_id", placeholderKey: "versions_create_field_brief_id_ph", noteKey: "versions_create_field_id_note" },
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph_brief" },
+            { name: "team", type: "text", required: false, labelKey: "versions_create_field_team", placeholderKey: "versions_create_field_team_ph" },
+            { name: "position_group", type: "select-options", required: true, labelKey: "versions_create_field_position_group", options: [
+                { value: "DF", labelKey: "versions_create_pos_df" },
+                { value: "MF", labelKey: "versions_create_pos_mf" },
+                { value: "FW", labelKey: "versions_create_pos_fw" },
+                { value: "GK", labelKey: "versions_create_pos_gk" },
+            ] },
+            { name: "role", type: "text", required: false, labelKey: "versions_create_field_role", placeholderKey: "versions_create_field_role_ph" },
+            { name: "budget_eur", type: "number", required: false, labelKey: "versions_create_field_budget_eur", placeholderKey: "versions_create_field_budget_eur_ph" },
+            { name: "minimum_minutes", type: "number", required: false, labelKey: "versions_create_field_minimum_minutes", placeholderKey: "versions_create_field_minimum_minutes_ph" },
+            { name: "age_min", type: "number", required: false, labelKey: "versions_create_field_age_min" },
+            { name: "age_max", type: "number", required: false, labelKey: "versions_create_field_age_max" },
+            { name: "risk_tolerance", type: "select-options", required: false, labelKey: "versions_create_field_risk_tolerance", options: [
+                { value: "low", labelKey: "versions_create_risk_low" },
+                { value: "medium", labelKey: "versions_create_risk_medium" },
+                { value: "high", labelKey: "versions_create_risk_high" },
+            ] },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_create_field_notes" },
+        ],
     },
     briefing: {
         listPath: "/opposition/briefs",
@@ -17020,11 +17145,34 @@ const _VERSION_ARTIFACT_TYPES = {
         backupPath: (id, fn) => `/opposition/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
         diffPath: (id, fn) => `/opposition/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
         restorePath: (id) => `/opposition/briefs/${encodeURIComponent(id)}/restore`,
+        createPath: "/opposition/briefs",
         idField: "briefing_id",
         listKey: "briefings",
         stateField: "briefings",
         errorField: "briefingsError",
         labelKey: "versions_type_briefing",
+        createLabelKey: "versions_create_briefing",
+        createHintKey: "versions_create_hint_briefing",
+        // Briefing has no upstream closing-artifact linkage (it IS the
+        // upstream artifact of the opposition workflow).
+        idPrefix: "briefing-",
+        linkField: "",
+        linkListKey: "",
+        linkIdField: "",
+        // Sections are intentionally NOT in the small create form: they
+        // require fact_tier classification and evidence_refs, which are
+        // better added through a dedicated editor later. The Pydantic
+        // model accepts an empty sections tuple.
+        formFields: [
+            { name: "briefing_id", type: "text", required: false, labelKey: "versions_create_field_briefing_id", placeholderKey: "versions_create_field_briefing_id_ph", noteKey: "versions_create_field_id_note" },
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph_briefing" },
+            { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
+            { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
+            { name: "match_id", type: "text", required: false, labelKey: "versions_create_field_match_id", placeholderKey: "versions_create_field_match_id_ph" },
+            { name: "competition", type: "text", required: false, labelKey: "versions_create_field_competition", placeholderKey: "versions_create_field_competition_ph" },
+            { name: "season", type: "text", required: false, labelKey: "versions_create_field_season", placeholderKey: "versions_create_field_season_ph" },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_create_field_notes" },
+        ],
     },
     dossier: {
         listPath: "/recruitment/dossiers",
@@ -17057,7 +17205,7 @@ const _VERSION_ARTIFACT_TYPES = {
         formFields: [
             { name: "dossier_id", type: "text", required: false, labelKey: "versions_create_field_dossier_id", placeholderKey: "versions_create_field_dossier_id_ph", noteKey: "versions_create_field_id_note" },
             { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
-            { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_brief_id", prefill: true },
+            { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_link_brief_id", prefill: true },
             { name: "candidate_player_name", type: "text", required: false, labelKey: "versions_create_field_candidate_name", placeholderKey: "versions_create_field_candidate_name_ph" },
             { name: "candidate_team_name", type: "text", required: false, labelKey: "versions_create_field_candidate_team", placeholderKey: "versions_create_field_candidate_team_ph" },
             { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion", prefill: true },
@@ -17070,7 +17218,7 @@ const _VERSION_ARTIFACT_TYPES = {
         // have their own lifecycle.
         editFormFields: [
             { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
-            { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_brief_id" },
+            { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_link_brief_id" },
             { name: "candidate_player_name", type: "text", required: false, labelKey: "versions_create_field_candidate_name", placeholderKey: "versions_create_field_candidate_name_ph" },
             { name: "candidate_team_name", type: "text", required: false, labelKey: "versions_create_field_candidate_team", placeholderKey: "versions_create_field_candidate_team_ph" },
             { name: "status", type: "select-status", required: true, labelKey: "versions_edit_field_status" },
@@ -17115,7 +17263,7 @@ const _VERSION_ARTIFACT_TYPES = {
         formFields: [
             { name: "review_id", type: "text", required: false, labelKey: "versions_create_field_review_id", placeholderKey: "versions_create_field_review_id_ph", noteKey: "versions_create_field_id_note" },
             { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
-            { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_briefing_id", prefill: true },
+            { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_link_briefing_id", prefill: true },
             { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
             { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
             { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion", prefill: true },
@@ -17128,7 +17276,7 @@ const _VERSION_ARTIFACT_TYPES = {
         // not editable here.
         editFormFields: [
             { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
-            { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_briefing_id" },
+            { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_link_briefing_id" },
             { name: "match_id", type: "text", required: false, labelKey: "versions_edit_field_match_id" },
             { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
             { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
@@ -17519,6 +17667,24 @@ function _renderCreateField(field, value) {
                 return `<option value="${escapeAttr(lid)}">${escapeHtml(lid ? `${lid} · ${title}` : title)}</option>`;
             }));
         control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options.join("")}</select>`;
+    } else if (field.type === "select-options") {
+        // Enumerated options dropdown (position_group, risk_tolerance).
+        // `field.options` is an array of {value, labelKey}. The optional
+        // `required` flag controls whether a blank placeholder is offered;
+        // for required selects, no placeholder is rendered so the first
+        // real option becomes the default.
+        const opts = Array.isArray(field.options) ? field.options : [];
+        const placeholderOpt = required
+            ? ""
+            : `<option value="">— ${escapeHtml(t("versions_create_no_link"))} —</option>`;
+        const optionsHtml = [placeholderOpt].concat(opts.map((o) =>
+            `<option value="${escapeAttr(o.value)}">${escapeHtml(t(o.labelKey) || o.value)}</option>`,
+        )).join("");
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${optionsHtml}</select>`;
+    } else if (field.type === "number") {
+        const placeholder = field.placeholderKey ? ` placeholder="${escapeAttr(t(field.placeholderKey))}"` : "";
+        const val = value || "";
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="number" min="0" step="1" value="${escapeAttr(val)}"${placeholder} class="glass-control" style="width:100%">`;
     } else {
         const placeholder = field.placeholderKey ? ` placeholder="${escapeAttr(t(field.placeholderKey))}"` : "";
         const val = value || "";
@@ -17579,6 +17745,7 @@ function _collectCreateForm() {
     const form = document.getElementById("ver-create-form");
     if (!form) return { ok: false, error: "form_missing" };
     const data = {};
+    const fieldTypes = {};
     let firstMissing = null;
     for (const field of cfg.formFields) {
         const el = document.getElementById(`ver-create-input-${field.name}`);
@@ -17591,6 +17758,7 @@ function _collectCreateForm() {
             el.style.borderColor = "";
         }
         data[field.name] = raw;
+        fieldTypes[field.name] = field.type;
     }
     if (firstMissing) {
         return { ok: false, error: "required_missing", field: firstMissing };
@@ -17600,10 +17768,10 @@ function _collectCreateForm() {
     if (!data[idField]) {
         data[idField] = _generateArtifactId(cfg.idPrefix);
     }
-    return { ok: true, data };
+    return { ok: true, data, fieldTypes };
 }
 
-function _buildCreatePayload(data) {
+function _buildCreatePayload(data, fieldTypes) {
     const cfg = _versionTypeConfig(versionsState.type);
     const now = new Date().toISOString();
     // Start from the maintainer-entered fields, then add server-side defaults
@@ -17611,7 +17779,57 @@ function _buildCreatePayload(data) {
     // The store will re-validate via the model, so this is not a security
     // boundary — it's a convenience so the form stays small.
     const payload = { ...data };
-    if (versionsState.type === "dossier") {
+    // Convert empty number inputs to null (Pydantic int|None rejects "").
+    // Empty string for non-number fields is left for the model to validate.
+    if (fieldTypes) {
+        for (const [name, type] of Object.entries(fieldTypes)) {
+            if (type === "number" && payload[name] === "") {
+                payload[name] = null;
+            } else if (type === "number" && payload[name] != null && payload[name] !== "") {
+                const asInt = Number.parseInt(payload[name], 10);
+                if (Number.isFinite(asInt)) payload[name] = asInt;
+            }
+        }
+    }
+    if (versionsState.type === "brief") {
+        payload.schema = "scoutfootball.recruitment-brief";
+        payload.version = "1.0.0";
+        payload.revision = 1;
+        payload.created_at = now;
+        payload.updated_at = now;
+        payload.author = "maintainer";
+        // Optional fields not in the small form: keep model defaults by
+        // sending the empty equivalents the Pydantic model accepts.
+        if (!Object.prototype.hasOwnProperty.call(payload, "position_detail")) payload.position_detail = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "contract_years_min")) payload.contract_years_min = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "league_preferences")) payload.league_preferences = [];
+        if (!Object.prototype.hasOwnProperty.call(payload, "language_preferences")) payload.language_preferences = [];
+        if (!Object.prototype.hasOwnProperty.call(payload, "risk_tolerance") || !payload.risk_tolerance) {
+            payload.risk_tolerance = "medium";
+        }
+        if (!Object.prototype.hasOwnProperty.call(payload, "notes")) payload.notes = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "limitations")) payload.limitations = [
+            "Brief is a personal local object; not an external fact.",
+            "Role and weights are working assumptions, not universal truth.",
+        ];
+    } else if (versionsState.type === "briefing") {
+        payload.schema = "scoutfootball.opposition-briefing";
+        payload.version = "1.0.0";
+        payload.revision = 1;
+        payload.created_at = now;
+        payload.updated_at = now;
+        payload.author = "maintainer";
+        if (!Object.prototype.hasOwnProperty.call(payload, "sections")) payload.sections = [];
+        if (!Object.prototype.hasOwnProperty.call(payload, "linked_pattern_card_ids")) payload.linked_pattern_card_ids = [];
+        if (!Object.prototype.hasOwnProperty.call(payload, "linked_scenario_tree_id")) payload.linked_scenario_tree_id = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "linked_post_match_review_id")) payload.linked_post_match_review_id = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "kickoff_at")) payload.kickoff_at = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "notes")) payload.notes = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "limitations")) payload.limitations = [
+            "Briefing is a personal local object; not an official team news source.",
+            "fact_tier is the maintainer's honest classification, not automated.",
+        ];
+    } else if (versionsState.type === "dossier") {
         payload.schema = "scoutfootball.recruitment-decision-dossier";
         payload.version = "1.0.0";
         payload.revision = 1;
@@ -17678,7 +17896,7 @@ async function _submitCreateForm() {
         return;
     }
     if (submitBtn) submitBtn.disabled = true;
-    const payload = _buildCreatePayload(result.data);
+    const payload = _buildCreatePayload(result.data, result.fieldTypes);
     try {
         const resp = await fetch(API_BASE + cfg.createPath, {
             method: "POST",
