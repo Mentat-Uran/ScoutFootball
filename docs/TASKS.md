@@ -396,6 +396,34 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 **遗留**：三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 一致）；dossier / review 的证据/比较/风险条目级 UI（增删单条 evidence、comparator、risk）仍未实现，当前编辑只覆盖顶层字段与状态推进，条目级编辑仍需通过 CLI 或 restore-from-backup。本轮补的是顶层编辑路径，不改变 P1 节点整体状态。
 
+### 6.11 P1 决策闭环创建路径对称补齐（versions 视图起草 brief / briefing） — `verified`（2026-07-25）
+
+关闭 6.9 / 6.10 反复遗留的"四类决策档案中只有 dossier / review 在 versions 视图有创建入口"不对称断点。6.9 在 versions 视图为 dossier / review 接入了创建路径（含工作流跳转 pre-fill），6.10 接入了编辑路径，但 brief / briefing 仍只能通过球探视图与比赛视图的专用入口创建；工作流视图的 `create-brief` / `create-briefing` 步骤跳转到 scouting / matches 视图后落到无创建表单的死路。本轮把 brief / briefing 的起草入口对称接入 versions 视图，让维护者可在同一个工作台完成四类决策档案的起草、编辑、版本回溯，且与 6.9 / 6.10 的配置驱动模式一致。
+
+**核心交付**：
+
+- `frontend/app.js`：扩展 `_VERSION_ARTIFACT_TYPES` 配置表，为 `brief` / `briefing` 增加 `createPath` / `createLabelKey` / `createHintKey` / `idPrefix` / `formFields` 字段。brief 表单包含 `brief_id`（text，留空自动生成）/ `title`（text，必填）/ `team` / `position_group`（select-options：DF/MF/FW/GK，必填）/ `role` / `budget_eur`（number）/ `minimum_minutes`（number）/ `age_min`（number）/ `age_max`（number）/ `risk_tolerance`（select-options：low/medium/high）/ `notes`（textarea）。briefing 表单包含 `briefing_id`（text，留空自动生成）/ `title`（text，必填）/ `home_team` / `away_team` / `match_id` / `competition` / `season` / `notes`（textarea）。`_renderCreateField` 新增 `select-options` 与 `number` 类型支持：`select-options` 渲染纯选项下拉（无关联 artifact 需求，与 `select` 的关联列表渲染区分），`number` 渲染 `<input type="number" min="0" step="1">`。`_collectCreateForm` 同时记录字段类型供提交时使用。`_buildCreatePayload` 为 brief / briefing 填充 schema 默认值（`schema` / `version` / `revision=1` / `created_at` / `updated_at` / `author="maintainer"`）与模型层 `extra="forbid"` 要求的可选字段默认（brief 的 `position_detail` / `contract_years_min` / `league_preferences` / `language_preferences` / `risk_tolerance` / `notes` / `limitations`，briefing 的 `sections` / `linked_pattern_card_ids` / `linked_scenario_tree_id` / `linked_post_match_review_id` / `kickoff_at` / `notes` / `limitations`）；空 number 输入转 `null`，非空 number 输入转 int。`_isCreateableType` / `_updateCreateButtonVisibility` / `_handlePendingCreate` 已在 6.9 实现，本轮通过配置扩展自动覆盖 brief / briefing。
+- `frontend/index.html`：无需改动，6.9 已有的 `#ver-create` 按钮 / `#ver-create-dialog` 模态对话框 / `#ver-create-hint` 提示文本通过配置驱动复用。
+- `frontend/style.css`：无需改动，6.9 已落地的 `--danger: var(--bad);` 别名继续覆盖必填星号与校验高亮。
+- `tests/unit/test_frontend_security.py`：修复 0b25517（echarts / gif.js 本地化）后遗留的 stale SRI 测试。`TestSRI` 类检查 `integrity=` / `crossorigin=` 属性，但本地化后这两个属性已正确移除（CSP `script-src 'self'` 已提供等价保护）。重构为 `TestVendoredScripts` 类：验证 echarts / gif.js 通过 `vendor/` 路径本地加载、不含 CDN 主机名（cdn / jsdelivr / unpkg）、且不携带 SRI 属性。把"满足本地化后的安全契约"作为正断言，避免 stale 测试继续误报。
+- `tests/e2e/test_decision_workflows.py`：新增 2 个 E2E 测试。`test_versions_view_create_brief_round_trip` 验证 brief 创建路径：选中 brief 类型 → 创建按钮可见 → 对话框打开 → 表单字段齐全（title / brief_id / position_group / budget_eur / risk_tolerance）→ 空标题提交被客户端校验阻断（对话框保持打开）→ 填入 title + budget_eur=25000000 + minimum_minutes=1500 提交 → 对话框关闭 → 列表计数 +1 → 新 ID 含 `brief-` 前缀 → 通过 GET `/recruitment/briefs/{id}` 取完整 payload 验证 budget_eur=25000000、minimum_minutes=1500、默认 risk_tolerance=medium、默认 position_group=DF、schema=`scoutfootball.recruitment-brief` → cleanup 删除新建记录与备份。`test_versions_view_create_briefing_round_trip` 验证 briefing 创建路径：选中 briefing 类型 → 创建按钮可见 → 对话框打开 → 表单字段齐全（title / briefing_id / home_team / away_team）→ 空标题提交被客户端校验阻断 → 填入 title + home_team + away_team 提交 → 对话框关闭 → 列表计数 +1 → 新 ID 含 `briefing-` 前缀 → 列表 summary 验证 home_team / away_team / sections=[]（summary 投影已包含这些字段，无需取完整 payload）→ cleanup 删除新建记录与备份。
+- `docs/CAPABILITIES.md`：与 E2E 覆盖行同步：versions 视图支持起草全部四类决策档案（brief / briefing / dossier / review），与 6.9 / 6.10 形成对称的创建 + 编辑工作台。
+
+**测试覆盖**：
+
+- `uv run ruff check .`：All checks passed。
+- `node --check frontend/app.js`：通过。
+- `uv run pytest tests/ -q --ignore=tests/e2e`：全部通过（含重构后的 `test_frontend_security.py::TestVendoredScripts`）。
+- `uv run pytest tests/e2e/test_decision_workflows.py -m e2e -v`：24 通过（2 smoke + 2 工作流状态推断 + 1 字段级 evidence gap + 4 diff+restore 往返 + 6 创建路径（4 dossier/review + 2 brief/briefing）+ 7 编辑路径 + 2 工作流跳转 pre-fill），约 120s。
+
+**关键修复**：
+
+- `test_versions_view_create_brief_round_trip` 首次失败，断言 `risk_tolerance=medium` 得到 `None`。诊断：测试从 `/recruitment/briefs?limit=100` 列表端点取新建记录，但 `BriefStore.list_records` 在 6.8 已固化为返回 summary（只含 `brief_id` / `server_revision` / `brief_revision` / `title` / `team` / `position_group` / `budget_eur` / `minimum_minutes` / `updated_at` / `stored_at`），不含 `risk_tolerance` 与 `schema`。修复：先从列表端点取新建记录 ID，再通过 `GET /recruitment/briefs/{id}` 取完整 payload 验证 `risk_tolerance` / `position_group` / `schema`，与同文件中既有 `async ({baseUrl, briefId}) => {...}` 模式一致。briefing 测试不需要类似修复，因为 `BriefingStore.list_records` 的 summary 投影已包含 `home_team` / `away_team` / `sections`（最小投影 `[{section_id, fact_tier}, ...]`，空 sections 投影为空列表）。
+- 修复 stale SRI 测试：`tests/unit/test_frontend_security.py::TestSRI::test_echarts_script_has_integrity` 与 `test_echarts_script_has_crossorigin` 自 commit 0b25517（echarts / gif.js 本地化）起就持续失败，但被忽略。本轮重构为 `TestVendoredScripts` 类，把"本地化脚本不应携带 SRI"作为正断言，并额外验证本地化路径与 CDN 主机名缺失。
+- E2E 测试 `test_versions_view_create_brief_round_trip` 单次运行出现 `TargetClosedError: BrowserType.launch: Target page, context or browser has been closed`，与 6.9 / 6.10 中观察到的 flaky 浏览器基础设施一致（长时间连续运行后的资源耗尽）。单独重跑该测试在 23s 通过，确认不是测试逻辑或代码缺陷。
+
+**遗留**：四类决策档案的"创建 + 编辑 + 版本回溯"对称路径已全部接入 versions 视图，但条目级 UI（dossier / review 的 evidence / comparator / risk 单条增删、briefing 的 sections 单条编辑）仍未实现，仍需通过 CLI 或 restore-from-backup；三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 / 6.10 一致）。本轮补的是 brief / briefing 的顶层创建路径，让四类档案在 versions 视图形成对称工作台，不改变 P1 节点整体状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
