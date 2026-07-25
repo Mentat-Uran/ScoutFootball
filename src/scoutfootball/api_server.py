@@ -200,6 +200,8 @@ from scoutfootball.api import (
     restore_post_match_review_from_backup,
     restore_recruitment_brief_from_backup,
     search_players_and_teams,
+    update_decision_dossier,
+    update_post_match_review,
 )
 from scoutfootball.storage.scouting_workspace import (
     MAX_WORKSPACE_BYTES,
@@ -2061,6 +2063,63 @@ def create_app() -> FastAPI:
             )
         return result
 
+    @app.put("/recruitment/dossiers/{dossier_id}")
+    async def recruitment_update_dossier(dossier_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+
+        # Body shape: {"fields": {...}, "expected_revision": <int>}
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_payload", "message": "body must be a JSON object"},
+            )
+        fields = payload.get("fields")
+        if not isinstance(fields, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_fields", "message": "fields must be a JSON object"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_expected_revision"},
+            )
+        try:
+            expected_revision = int(expected_revision)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_expected_revision"},
+            ) from exc
+
+        result = update_decision_dossier(
+            dossier_id, fields, expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
     @app.get("/recruitment/dossiers/{dossier_id}/backups")
     def recruitment_dossier_backups(dossier_id: str):
         result = list_decision_dossier_backups(dossier_id)
@@ -2174,6 +2233,63 @@ def create_app() -> FastAPI:
         if result.get("status") == "error":
             raise HTTPException(
                 status_code=int(result.get("http_status", 400)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    @app.put("/opposition/reviews/{review_id}")
+    async def opposition_update_review(review_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+
+        # Body shape: {"fields": {...}, "expected_revision": <int>}
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_payload", "message": "body must be a JSON object"},
+            )
+        fields = payload.get("fields")
+        if not isinstance(fields, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_fields", "message": "fields must be a JSON object"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_expected_revision"},
+            )
+        try:
+            expected_revision = int(expected_revision)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_expected_revision"},
+            ) from exc
+
+        result = update_post_match_review(
+            review_id, fields, expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
                 detail={
                     "code": result.get("code"),
                     "message": result.get("message"),

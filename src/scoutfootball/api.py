@@ -16,6 +16,19 @@ if TYPE_CHECKING:
 import numpy as np
 import pandas as pd
 
+# Preload the recruitment and opposition packs so their parent-package
+# ``__init__.py`` runs single-threaded at module load time.  The store
+# helpers below (``_brief_store``, ``_dossier_store``, ``_briefing_store``,
+# ``_review_store``) still use local ``from ... import ...`` statements
+# for symmetry, but those become no-ops once the parent package is in
+# ``sys.modules``.  Without this preload, two concurrent FastAPI request
+# threads can trigger the parent package's first import simultaneously
+# and deadlock on the module lock (one thread holds
+# ``scoutfootball.opposition`` and waits for ``scoutfootball.opposition.store``;
+# the other holds ``scoutfootball.opposition.store`` and waits for
+# ``scoutfootball.opposition``).
+import scoutfootball.opposition  # noqa: E402,F401
+import scoutfootball.recruitment  # noqa: E402,F401
 from scoutfootball.action_value.evidence import (
     get_action_value_evidence as _get_action_value_evidence,
 )
@@ -10105,6 +10118,175 @@ def restore_decision_dossier_from_backup(
     })
 
 
+# Editable fields for a decision dossier. The update API only accepts keys
+# in this set; everything else (schema, version, dossier_id, evidence,
+# comparisons, risks, etc.) is preserved from the current revision and
+# cannot be mutated through this endpoint. Evidence / comparisons / risks
+# have their own lifecycle and will get dedicated endpoints when needed.
+_DOSSIER_EDITABLE_FIELDS = frozenset({
+    "title",
+    "brief_id",
+    "candidate_player_name",
+    "candidate_team_name",
+    "human_opinion",
+    "recommendation",
+    "status",
+    "decision",
+    "decision_note",
+    "notes",
+})
+
+
+def update_decision_dossier(
+    dossier_id: str,
+    fields: dict,
+    *,
+    expected_revision: int,
+) -> dict:
+    """Apply a partial update to a decision dossier, creating a new revision.
+
+    ``fields`` may contain any subset of :data:`_DOSSIER_EDITABLE_FIELDS`.
+    Keys outside that set are rejected with ``invalid_field`` so the
+    endpoint cannot be used to mutate schema/version/dossier_id/evidence/
+    comparisons/risks/limitations/linked_artifacts/etc.
+
+    The current record is loaded, the editable fields are merged in, the
+    ``revision`` is bumped and ``updated_at`` is refreshed, then the
+    merged payload is saved with ``expected_revision`` (If-Match style).
+    The store handles backup creation and atomic write.
+    """
+    from scoutfootball.recruitment.dossier import (
+        VALID_DECISION_VALUES,
+        VALID_DOSSIER_STATUS,
+        DossierValidationError,
+    )
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    if not isinstance(fields, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "fields must be a JSON object",
+            "http_status": 400,
+        })
+
+    # Reject any field the update API does not own. This keeps the
+    # endpoint's surface explicit and prevents callers from silently
+    # mutating schema/version/evidence through merge.
+    invalid_keys = set(fields.keys()) - _DOSSIER_EDITABLE_FIELDS
+    if invalid_keys:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_field",
+            "message": (
+                "fields must be a subset of: "
+                + ", ".join(sorted(_DOSSIER_EDITABLE_FIELDS))
+            ),
+            "http_status": 400,
+            "metadata": {"invalid_fields": sorted(invalid_keys)},
+        })
+
+    # Validate status / decision enum values before loading the current
+    # record so callers get fast, specific feedback.
+    if "status" in fields:
+        if fields["status"] not in VALID_DOSSIER_STATUS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_status",
+                "message": (
+                    f"invalid status: {fields['status']!r} "
+                    f"(must be one of {sorted(VALID_DOSSIER_STATUS)})"
+                ),
+                "http_status": 400,
+            })
+    if "decision" in fields and fields["decision"] is not None:
+        if fields["decision"] not in VALID_DECISION_VALUES:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_decision",
+                "message": (
+                    f"invalid decision: {fields['decision']!r} "
+                    f"(must be one of {sorted(VALID_DECISION_VALUES)} or null)"
+                ),
+                "http_status": 400,
+            })
+
+    store = _dossier_store()
+    try:
+        current_record = store.load(dossier_id)
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_dossier = current_record["dossier"]
+    merged = dict(current_dossier)
+    merged.update(fields)
+
+    # The DecisionDossier model_validator requires:
+    #   - status='decided' => decision != null
+    #   - status != 'decided' => decision is null
+    # If the caller moves status to 'decided' without providing a
+    # decision, reject early with a clear code. If the caller moves
+    # status away from 'decided' but leaves a decision, also reject.
+    merged_status = merged.get("status")
+    merged_decision = merged.get("decision")
+    if merged_status == "decided" and not merged_decision:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decision_required",
+            "message": (
+                "decision is required when status is 'decided' "
+                f"(one of: {sorted(VALID_DECISION_VALUES)})"
+            ),
+            "http_status": 400,
+        })
+    if merged_status != "decided" and merged_decision is not None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decision_not_allowed",
+            "message": (
+                f"decision can only be set when status='decided' "
+                f"(got status={merged_status!r}, decision={merged_decision!r})"
+            ),
+            "http_status": 400,
+        })
+
+    # Bump revision + updated_at. The store re-validates via the model,
+    # so this is convenience, not a security boundary.
+    merged["revision"] = int(current_dossier.get("revision", 1)) + 1
+    merged["updated_at"] = _utc_now_iso_helper()
+
+    try:
+        record = store.save(
+            dossier_id, merged, expected_revision=expected_revision,
+        )
+    except DossierValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
 # ── Opposition & Match Pack API ─────────────────────────────────────────
 
 
@@ -10604,6 +10786,198 @@ def restore_post_match_review_from_backup(
         "schema": "scoutfootball.opposition-post-match-review-record",
         "version": "1.0.0",
         "restored_from": backup_filename,
+        "record": record,
+    })
+
+
+# Editable fields for a post-match review. The update API only accepts
+# keys in this set; everything else (schema, version, review_id,
+# hypothesis_results, falsified_patterns, new_questions, evidence,
+# linked_artifacts, limitations, etc.) is preserved from the current
+# revision and cannot be mutated through this endpoint. Sub-objects
+# like hypothesis_results / evidence have their own lifecycle and will
+# get dedicated endpoints when needed.
+_REVIEW_EDITABLE_FIELDS = frozenset({
+    "title",
+    "briefing_id",
+    "match_id",
+    "home_team",
+    "away_team",
+    "competition",
+    "season",
+    "final_score_home",
+    "final_score_away",
+    "human_opinion",
+    "recommendation",
+    "status",
+    "decision",
+    "decision_note",
+    "notes",
+})
+
+
+def update_post_match_review(
+    review_id: str,
+    fields: dict,
+    *,
+    expected_revision: int,
+) -> dict:
+    """Apply a partial update to a post-match review, creating a new revision.
+
+    ``fields`` may contain any subset of :data:`_REVIEW_EDITABLE_FIELDS`.
+    Keys outside that set are rejected with ``invalid_field`` so the
+    endpoint cannot be used to mutate schema/version/review_id/
+    hypothesis_results/evidence/limitations/linked_artifacts/etc.
+
+    The current record is loaded, the editable fields are merged in, the
+    ``revision`` is bumped and ``updated_at`` is refreshed, then the
+    merged payload is saved with ``expected_revision`` (If-Match style).
+    The store handles backup creation and atomic write.
+    """
+    from scoutfootball.opposition.post_match_review import (
+        VALID_REVIEW_DECISIONS,
+        VALID_REVIEW_STATUS,
+        ReviewValidationError,
+    )
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    if not isinstance(fields, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "fields must be a JSON object",
+            "http_status": 400,
+        })
+
+    # Reject any field the update API does not own. This keeps the
+    # endpoint's surface explicit and prevents callers from silently
+    # mutating schema/version/evidence through merge.
+    invalid_keys = set(fields.keys()) - _REVIEW_EDITABLE_FIELDS
+    if invalid_keys:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_field",
+            "message": (
+                "fields must be a subset of: "
+                + ", ".join(sorted(_REVIEW_EDITABLE_FIELDS))
+            ),
+            "http_status": 400,
+            "metadata": {"invalid_fields": sorted(invalid_keys)},
+        })
+
+    # Validate status / decision enum values before loading the current
+    # record so callers get fast, specific feedback.
+    if "status" in fields:
+        if fields["status"] not in VALID_REVIEW_STATUS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_status",
+                "message": (
+                    f"invalid status: {fields['status']!r} "
+                    f"(must be one of {sorted(VALID_REVIEW_STATUS)})"
+                ),
+                "http_status": 400,
+            })
+    if "decision" in fields and fields["decision"] is not None:
+        if fields["decision"] not in VALID_REVIEW_DECISIONS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_decision",
+                "message": (
+                    f"invalid decision: {fields['decision']!r} "
+                    f"(must be one of {sorted(VALID_REVIEW_DECISIONS)} or null)"
+                ),
+                "http_status": 400,
+            })
+    if "final_score_home" in fields and fields["final_score_home"] is not None:
+        if not isinstance(fields["final_score_home"], int) or fields["final_score_home"] < 0:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_score",
+                "message": "final_score_home must be a non-negative integer or null",
+                "http_status": 400,
+            })
+    if "final_score_away" in fields and fields["final_score_away"] is not None:
+        if not isinstance(fields["final_score_away"], int) or fields["final_score_away"] < 0:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_score",
+                "message": "final_score_away must be a non-negative integer or null",
+                "http_status": 400,
+            })
+
+    store = _review_store()
+    try:
+        current_record = store.load(review_id)
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_review = current_record["review"]
+    merged = dict(current_review)
+    merged.update(fields)
+
+    # The PostMatchReview model_validator requires:
+    #   - status='finalized' => decision != null
+    #   - status != 'finalized' => decision is null
+    # If the caller moves status to 'finalized' without providing a
+    # decision, reject early with a clear code. If the caller moves
+    # status away from 'finalized' but leaves a decision, also reject.
+    merged_status = merged.get("status")
+    merged_decision = merged.get("decision")
+    if merged_status == "finalized" and not merged_decision:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decision_required",
+            "message": (
+                "decision is required when status is 'finalized' "
+                "(one of: confirmed, falsified, partial, inconclusive)"
+            ),
+            "http_status": 400,
+        })
+    if merged_status != "finalized" and merged_decision is not None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decision_not_allowed",
+            "message": (
+                f"decision can only be set when status='finalized' "
+                f"(got status={merged_status!r}, decision={merged_decision!r})"
+            ),
+            "http_status": 400,
+        })
+
+    # Bump revision + updated_at. The store re-validates via the model,
+    # so this is convenience, not a security boundary.
+    merged["revision"] = int(current_review.get("revision", 1)) + 1
+    merged["updated_at"] = _utc_now_iso_helper()
+
+    try:
+        record = store.save(
+            review_id, merged, expected_revision=expected_revision,
+        )
+    except ReviewValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
         "record": record,
     })
 

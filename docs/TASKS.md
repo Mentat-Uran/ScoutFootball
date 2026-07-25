@@ -367,6 +367,35 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 **遗留**：dossier / review 的"编辑" UI 仍未实现（创建后修改仍需通过 restore-from-backup 间接进行）；三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 一致）。本轮只补创建路径，不改变 P1 节点整体状态。
 
+### 6.10 P1 决策闭环编辑路径补齐（versions 视图编辑 dossier / review） — `verified`（2026-07-25）
+
+关闭 6.5 / 6.9 反复遗留的"dossier / review 创建后修改仍需通过 restore-from-backup 间接进行"断点。6.9 补齐了创建路径，但维护者发现 dossier / review 字段错误或想推进状态（draft → decided / finalized）时只能通过 CLI 重新创建或 restore-from-backup 间接绕路。本轮把两类决策档案的编辑入口接入 versions 视图，与创建路径对称，让维护者可在浏览器中完成字段修改、状态推进和决策确认。
+
+**核心交付**：
+
+- `src/scoutfootball/api.py`：新增 `update_decision_dossier(dossier_id, fields, *, expected_revision)` 与 `update_post_match_review(review_id, fields, *, expected_revision)` 两个服务函数。`fields` 字典按白名单过滤：dossier 的 `DOSSIER_EDITABLE_FIELDS`（title / notes / human_opinion / recommendation / status / decision / decision_note）和 review 的 `_REVIEW_EDITABLE_FIELDS`（title / notes / human_opinion / recommendation / status / decision / decision_note）。状态推进校验沿用模型层 `model_validator`：dossier 的 `status=decided` 必须配 `decision` 非 null；review 的 `status=finalized` 必须配 `decision` 非 null。`expected_revision` 与 store 的 `save` 乐观并发语义一致，冲突抛 `revision_conflict`。修复 `_now_iso` 未定义 bug → 替换为 `_utc_now_iso_helper`；预先 `import scoutfootball.opposition / recruitment` 防止 FastAPI 多请求线程下的模块锁死锁。
+- `src/scoutfootball/api_server.py`：注册 `PUT /recruitment/dossiers/{dossier_id}` 与 `PUT /opposition/reviews/{review_id}` 两个端点，请求体 `{"fields": ..., "expected_revision": N}`，响应沿用 `{"record": ..., "status": "ok"}` 形状，错误路径（400 missing_payload / invalid_json / validation_error / decision_not_allowed、404 not_found、409 revision_conflict、428 precondition_required）按现有 brief / briefing 端点模式映射 HTTPException。
+- `frontend/app.js`：扩展 `_VERSION_ARTIFACT_TYPES` 配置表，为 `dossier` / `review` 增加 `editPath` / `editFormFields` / `validStatuses` / `decisionRequiredStatus` / `validDecisions` 字段。新增 `_isEditableType` / `_updateEditButtonVisibility` / `_renderEditField` / `_openEditDialog` / `_closeEditDialog` / `_collectEditForm` / `_submitEditForm` 函数：编辑对话框沿用 `workspace-dialog` 模式，表单按配置驱动渲染（text / textarea / select 类型），打开时从当前选中记录预填字段，提交时客户端校验 decision/status 一致性（`decisionRequiredStatus` 下 `decision` 不能为空字符串），`fetch` PUT 请求体 `{"fields": ..., "expected_revision": ctx.serverRevision}`，409 冲突时显示 `#ver-edit-conflict` 内联提示并保持对话框打开让维护者刷新后重试，成功后对话框关闭并刷新列表。`renderVersions` 末尾调用 `_updateEditButtonVisibility`，编辑按钮仅 dossier / review 类型且选中记录时显示。
+- `frontend/index.html`：versions 视图工具栏新增 `#ver-edit` 按钮（默认 `hidden`）与 `#ver-edit-dialog` 模态对话框（沿用 `workspace-dialog` 模式，含 kicker / title / fields 容器 / 冲突提示 / 取消-提交按钮）。
+- `frontend/style.css`：`--danger: var(--bad);` 别名在 6.9 已落地，本轮复用。
+- `tests/unit/test_decision_dossier_and_review_api.py`：新增 `TestDecisionDossierUpdate` 与 `TestPostMatchReviewUpdate` 两个测试类，覆盖 title 更新创建备份并递增 server_revision、revision 冲突 409、字段白名单过滤（不可编辑字段被忽略）、status/decision 一致性校验（decided/finalized 必须配 decision、非 decided/finalized 时 decision 必须为 null）、decision 词汇校验。共 26 个新测试。
+- `tests/e2e/test_decision_workflows.py`：新增 `seeded_dossier_for_edit` / `seeded_review_for_edit` 两个 fixture（单轮 save 产生 draft 记录，cleanup 删除记录与备份目录）和 7 个 E2E 测试：`test_versions_view_edit_button_visibility`（按钮可见性按类型与选中状态切换）、`test_versions_view_edit_dossier_round_trip`（编辑 title → 提交 → 对话框关闭 → server_revision=2 + title 持久化 + 1 个备份）、`test_versions_view_edit_dossier_status_transition_to_decided`（draft → decided + proceed 合法转换）、`test_versions_view_edit_dossier_decided_without_decision_blocks`（客户端校验阻断无效提交、对话框保持打开、server_revision 仍为 1）、`test_versions_view_edit_dossier_conflict_recovery`（out-of-band 推进 rev 2 后 stale 提交触发 409、对话框保持打开、关闭重开加载 rev 2 的最新 title、冲突提示清除）、`test_versions_view_edit_review_round_trip`（review 编辑 title + final_score_home → server_revision=2 + 字段持久化）、`test_versions_view_edit_review_status_transition_to_finalized`（draft → finalized + confirmed 合法转换）。
+- `docs/CAPABILITIES.md`：可以陈述与 E2E 覆盖行同步：versions 视图支持编辑 dossier / review 字段与状态推进；E2E 覆盖编辑按钮可见性、dossier / review 编辑往返、状态推进、客户端校验阻断、冲突恢复五类。
+
+**测试覆盖**：
+
+- `uv run ruff check .`：All checks passed（修复 `api.py` I001 导入排序）。
+- `uv run pytest tests/unit/test_decision_dossier_and_review_api.py -q`：61 通过。
+- `uv run pytest tests/e2e/test_decision_workflows.py -m e2e -v`：20 通过（2 smoke + 2 工作流状态推断 + 1 字段级 evidence gap + 4 diff+restore 往返 + 4 创建路径 + 7 编辑路径），约 232s。
+
+**关键修复**：
+
+- E2E 测试 `test_versions_view_edit_dossier_round_trip` 首次失败，断言 `server_revision=2` 得到 `None`。诊断：`page.evaluate(expression, arg)` 在 Playwright Python 中只把 `arg` 作为单一参数传给 JS 函数的第一个参数，而测试代码用 `async (baseUrl, dossierId) => {...}` 接收两个参数，导致 `baseUrl` 实际是整个对象 `{baseUrl, dossierId}`，`dossierId` 为 `undefined`，fetch URL 退化为 `[object Object]/recruitment/dossiers/undefined` 返回 404，`d.record` 不存在所以 `server_revision` 为 `None`。修复：把 JS 函数签名改为对象解构 `async ({baseUrl, dossierId}) => {...}`，与同文件中既有的 `async ({ baseUrl, briefId, ... }) => {...}` 模式一致。修复 5 处（3 处 dossier、2 处 review）。
+- `api.py` `update_decision_dossier` 初版使用未定义的 `_now_iso()`，替换为模块内既有的 `_utc_now_iso_helper()`。
+- `api.py` 顶部预先 `import scoutfootball.opposition` / `import scoutfootball.recruitment`，避免两个 FastAPI 请求线程同时首次触发父包 `__init__.py` 的模块锁死锁（一个线程持有 `scoutfootball.opposition` 等待 `scoutfootball.opposition.store`，另一个反过来）。
+
+**遗留**：三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 一致）；dossier / review 的证据/比较/风险条目级 UI（增删单条 evidence、comparator、risk）仍未实现，当前编辑只覆盖顶层字段与状态推进，条目级编辑仍需通过 CLI 或 restore-from-backup。本轮补的是顶层编辑路径，不改变 P1 节点整体状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
