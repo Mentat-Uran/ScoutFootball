@@ -842,6 +842,336 @@ class TestDecisionDossierUpdate:
         assert dossier["schema"] == "scoutfootball.recruitment-decision-dossier"
 
 
+class TestDecisionDossierEntryListUpdate:
+    """Cover PUT /recruitment/dossiers/{id} entry-list field updates.
+
+    The entry-list fields (supporting_evidence, counter_evidence,
+    comparisons, risks) use full-list replacement semantics: the caller
+    sends the complete new list and the model re-validates each entry.
+    These tests cover the round-trip plus the early shape/enum checks
+    added in ``_validate_entry_list``.
+    """
+
+    def test_replace_supporting_evidence_round_trip(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-ev-rt"),
+        )
+        new_evidence = [
+            {
+                "evidence_id": "ev-new-1",
+                "fact_tier": "official",
+                "summary": "Official squad list confirms availability.",
+                "evidence_refs": ["official/squad-2025"],
+            },
+            {
+                "evidence_id": "ev-new-2",
+                "fact_tier": "estimated",
+                "summary": "Model projects 0.42 xA p90.",
+                "evidence_refs": ["models/rating-v2"],
+            },
+        ]
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-rt",
+            json={
+                "fields": {"supporting_evidence": new_evidence},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        dossier = response.json()["record"]["dossier"]
+        # Old evidence (ev-1) is gone; the new list replaces it wholesale.
+        assert [e["evidence_id"] for e in dossier["supporting_evidence"]] == [
+            "ev-new-1", "ev-new-2",
+        ]
+        assert dossier["supporting_evidence"][0]["fact_tier"] == "official"
+
+    def test_replace_risks_round_trip(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-risk-rt"),
+        )
+        new_risks = [
+            {
+                "risk_id": "risk-new",
+                "summary": "Contract expires in 6 months.",
+                "severity": "high",
+                "fact_tier": "official",
+                "evidence_refs": [],
+            },
+        ]
+        response = api_client.put(
+            "/recruitment/dossiers/dos-risk-rt",
+            json={
+                "fields": {"risks": new_risks},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        dossier = response.json()["record"]["dossier"]
+        assert [r["risk_id"] for r in dossier["risks"]] == ["risk-new"]
+        assert dossier["risks"][0]["severity"] == "high"
+
+    def test_replace_comparisons_round_trip(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-cmp-rt"),
+        )
+        new_comparisons = [
+            {
+                "comparison_id": "cmp-1",
+                "comparison_player_id": "ply-99",
+                "comparison_player_name": "Other Player",
+                "fact_tier": "recorded",
+                "summary": "Better p90 xA but worse defensive duels.",
+                "evidence_refs": ["player_match.parquet"],
+            },
+        ]
+        response = api_client.put(
+            "/recruitment/dossiers/dos-cmp-rt",
+            json={
+                "fields": {"comparisons": new_comparisons},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        dossier = response.json()["record"]["dossier"]
+        assert [c["comparison_id"] for c in dossier["comparisons"]] == ["cmp-1"]
+
+    def test_replace_with_empty_list_clears_field(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-ev-clear"),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-clear",
+            json={
+                "fields": {"supporting_evidence": [], "risks": []},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        dossier = response.json()["record"]["dossier"]
+        assert dossier["supporting_evidence"] == []
+        assert dossier["risks"] == []
+
+    def test_invalid_fact_tier_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-ev-bad-tier"),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-bad-tier",
+            json={
+                "fields": {
+                    "supporting_evidence": [
+                        {
+                            "evidence_id": "ev-x",
+                            "fact_tier": "bogus_tier",
+                            "summary": "Bad tier.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "supporting_evidence"
+        assert detail["sub_field"] == "fact_tier"
+
+    def test_invalid_severity_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-risk-bad-sev"),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-risk-bad-sev",
+            json={
+                "fields": {
+                    "risks": [
+                        {
+                            "risk_id": "risk-x",
+                            "summary": "Bad severity.",
+                            "severity": "catastrophic",
+                            "fact_tier": "unknown",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "risks"
+        assert detail["sub_field"] == "severity"
+
+    def test_non_list_value_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-ev-nonlist"),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-nonlist",
+            json={
+                "fields": {"supporting_evidence": "not-a-list"},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "supporting_evidence"
+
+    def test_non_dict_entry_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-ev-nondict"),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-nondict",
+            json={
+                "fields": {"supporting_evidence": ["not-an-object"]},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "supporting_evidence"
+        assert detail["index"] == 0
+
+    def test_missing_evidence_id_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-ev-noid"),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-noid",
+            json={
+                "fields": {
+                    "supporting_evidence": [
+                        {
+                            # evidence_id missing
+                            "fact_tier": "recorded",
+                            "summary": "No id.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "supporting_evidence"
+        assert detail["sub_field"] == "evidence_id"
+
+    def test_duplicate_evidence_ids_returns_400(self, api_client: TestClient):
+        """Duplicate ids are caught by the Pydantic model re-validation."""
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-ev-dupid"),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-dupid",
+            json={
+                "fields": {
+                    "supporting_evidence": [
+                        {
+                            "evidence_id": "dup",
+                            "fact_tier": "recorded",
+                            "summary": "First.",
+                            "evidence_refs": [],
+                        },
+                        {
+                            "evidence_id": "dup",
+                            "fact_tier": "recorded",
+                            "summary": "Second.",
+                            "evidence_refs": [],
+                        },
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        # The model re-validation raises DossierValidationError, which the
+        # API surfaces as validation_error (not invalid_field, because the
+        # early shape check passes — both entries are dicts with valid ids
+        # and valid enums — and the duplicate-id check is a model-level
+        # constraint enforced by the _ensure_unique_ids field validator).
+        assert detail["code"] == "validation_error"
+
+    def test_decision_consistency_with_evidence_present(
+        self, api_client: TestClient,
+    ):
+        """A draft → decided transition can carry evidence in the same PUT."""
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload(
+                "dos-ev-dec", status="draft", decision=None,
+            ),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-dec",
+            json={
+                "fields": {
+                    "status": "decided",
+                    "decision": "proceed",
+                    "supporting_evidence": [
+                        {
+                            "evidence_id": "ev-final",
+                            "fact_tier": "official",
+                            "summary": "Medical cleared.",
+                            "evidence_refs": [],
+                        }
+                    ],
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        dossier = response.json()["record"]["dossier"]
+        assert dossier["status"] == "decided"
+        assert dossier["decision"] == "proceed"
+        assert [e["evidence_id"] for e in dossier["supporting_evidence"]] == [
+            "ev-final"
+        ]
+
+    def test_entry_list_update_creates_backup(self, api_client: TestClient):
+        api_client.post(
+            "/recruitment/dossiers",
+            json=_valid_dossier_payload("dos-ev-backup"),
+        )
+        response = api_client.put(
+            "/recruitment/dossiers/dos-ev-backup",
+            json={
+                "fields": {
+                    "supporting_evidence": [
+                        {
+                            "evidence_id": "ev-backup-1",
+                            "fact_tier": "recorded",
+                            "summary": "Backup test.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        backups = api_client.get("/recruitment/dossiers/dos-ev-backup/backups")
+        assert backups.status_code == 200
+        assert backups.json()["count"] == 1
+
+
 class TestPostMatchReviewUpdate:
     """Cover PUT /opposition/reviews/{review_id}.
 
@@ -905,7 +1235,12 @@ class TestPostMatchReviewUpdate:
         response = api_client.put(
             "/opposition/reviews/rev-upd-field",
             json={
-                "fields": {"review_id": "hijacked", "hypothesis_results": []},
+                # review_id and schema are not editable; the update API
+                # must refuse to mutate identity/schema/version through merge.
+                # Note: hypothesis_results/supporting_evidence/etc. ARE
+                # editable now (full-list replacement), so they cannot be
+                # used to assert invalid_field behaviour.
+                "fields": {"review_id": "hijacked", "schema": "evil"},
                 "expected_revision": 1,
             },
         )
@@ -913,7 +1248,7 @@ class TestPostMatchReviewUpdate:
         detail = response.json()["detail"]
         assert detail["code"] == "invalid_field"
         assert "review_id" in detail["invalid_fields"]
-        assert "hypothesis_results" in detail["invalid_fields"]
+        assert "schema" in detail["invalid_fields"]
 
     def test_update_with_invalid_status_returns_400(self, api_client: TestClient):
         api_client.post(
@@ -1032,6 +1367,357 @@ class TestPostMatchReviewUpdate:
         # Non-editable fields are untouched
         assert review["review_id"] == "rev-upd-keep"
         assert review["schema"] == "scoutfootball.opposition-post-match-review"
+
+
+class TestPostMatchReviewEntryListUpdate:
+    """Cover PUT /opposition/reviews/{id} entry-list field updates.
+
+    The review entry-list fields (hypothesis_results, falsified_patterns,
+    new_questions, supporting_evidence, counter_evidence) use full-list
+    replacement semantics. These tests cover the round-trip plus the
+    early shape/enum checks for review-specific enums (outcome).
+    """
+
+    def test_replace_hypothesis_results_round_trip(
+        self, api_client: TestClient,
+    ):
+        api_client.post(
+            "/opposition/reviews", json=_valid_review_payload("rev-hyp-rt"),
+        )
+        new_hypotheses = [
+            {
+                "hypothesis_id": "hyp-new",
+                "planned": "Defend deep.",
+                "observed": "Defended deep, conceded 0.",
+                "outcome": "confirmed",
+                "fact_tier": "recorded",
+                "evidence_refs": ["team_match.parquet"],
+            },
+        ]
+        response = api_client.put(
+            "/opposition/reviews/rev-hyp-rt",
+            json={
+                "fields": {"hypothesis_results": new_hypotheses},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        review = response.json()["record"]["review"]
+        assert [h["hypothesis_id"] for h in review["hypothesis_results"]] == [
+            "hyp-new"
+        ]
+        assert review["hypothesis_results"][0]["outcome"] == "confirmed"
+
+    def test_replace_falsified_patterns_round_trip(
+        self, api_client: TestClient,
+    ):
+        api_client.post(
+            "/opposition/reviews", json=_valid_review_payload("rev-fp-rt"),
+        )
+        new_patterns = [
+            {
+                "pattern_id": "fp-1",
+                "summary": "High line was exposed.",
+                "severity": "high",
+                "fact_tier": "recorded",
+                "evidence_refs": ["events/2025/final-third"],
+            },
+        ]
+        response = api_client.put(
+            "/opposition/reviews/rev-fp-rt",
+            json={
+                "fields": {"falsified_patterns": new_patterns},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        review = response.json()["record"]["review"]
+        assert [p["pattern_id"] for p in review["falsified_patterns"]] == [
+            "fp-1"
+        ]
+        assert review["falsified_patterns"][0]["severity"] == "high"
+
+    def test_replace_new_questions_round_trip(
+        self, api_client: TestClient,
+    ):
+        api_client.post(
+            "/opposition/reviews", json=_valid_review_payload("rev-nq-rt"),
+        )
+        new_questions = [
+            {
+                "question_id": "q-1",
+                "summary": "Why did the press break down after 60min?",
+                "scope": "in-game adaptation",
+                "fact_tier": "estimated",
+                "evidence_refs": [],
+            },
+        ]
+        response = api_client.put(
+            "/opposition/reviews/rev-nq-rt",
+            json={
+                "fields": {"new_questions": new_questions},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        review = response.json()["record"]["review"]
+        assert [q["question_id"] for q in review["new_questions"]] == ["q-1"]
+        assert review["new_questions"][0]["scope"] == "in-game adaptation"
+
+    def test_replace_supporting_evidence_round_trip(
+        self, api_client: TestClient,
+    ):
+        api_client.post(
+            "/opposition/reviews", json=_valid_review_payload("rev-ev-rt"),
+        )
+        new_evidence = [
+            {
+                "evidence_id": "ev-rev-1",
+                "fact_tier": "official",
+                "summary": "Official match report confirms scoreline.",
+                "evidence_refs": ["official/match-report"],
+            },
+        ]
+        response = api_client.put(
+            "/opposition/reviews/rev-ev-rt",
+            json={
+                "fields": {"supporting_evidence": new_evidence},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        review = response.json()["record"]["review"]
+        assert [e["evidence_id"] for e in review["supporting_evidence"]] == [
+            "ev-rev-1"
+        ]
+
+    def test_invalid_outcome_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/reviews", json=_valid_review_payload("rev-hyp-bad"),
+        )
+        response = api_client.put(
+            "/opposition/reviews/rev-hyp-bad",
+            json={
+                "fields": {
+                    "hypothesis_results": [
+                        {
+                            "hypothesis_id": "hyp-bad",
+                            "planned": "X",
+                            "observed": "Y",
+                            "outcome": "bogus_outcome",
+                            "fact_tier": "recorded",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "hypothesis_results"
+        assert detail["sub_field"] == "outcome"
+
+    def test_invalid_fact_tier_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/reviews",
+            json=_valid_review_payload("rev-ev-bad-tier"),
+        )
+        response = api_client.put(
+            "/opposition/reviews/rev-ev-bad-tier",
+            json={
+                "fields": {
+                    "supporting_evidence": [
+                        {
+                            "evidence_id": "ev-x",
+                            "fact_tier": "bogus_tier",
+                            "summary": "Bad tier.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "supporting_evidence"
+        assert detail["sub_field"] == "fact_tier"
+
+    def test_invalid_severity_in_falsified_patterns_returns_400(
+        self, api_client: TestClient,
+    ):
+        api_client.post(
+            "/opposition/reviews", json=_valid_review_payload("rev-fp-bad"),
+        )
+        response = api_client.put(
+            "/opposition/reviews/rev-fp-bad",
+            json={
+                "fields": {
+                    "falsified_patterns": [
+                        {
+                            "pattern_id": "fp-bad",
+                            "summary": "Bad severity.",
+                            "severity": "catastrophic",
+                            "fact_tier": "unknown",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "falsified_patterns"
+        assert detail["sub_field"] == "severity"
+
+    def test_non_list_value_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/reviews",
+            json=_valid_review_payload("rev-ev-nonlist"),
+        )
+        response = api_client.put(
+            "/opposition/reviews/rev-ev-nonlist",
+            json={
+                "fields": {"hypothesis_results": "not-a-list"},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "hypothesis_results"
+
+    def test_missing_hypothesis_id_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/reviews",
+            json=_valid_review_payload("rev-ev-noid"),
+        )
+        response = api_client.put(
+            "/opposition/reviews/rev-ev-noid",
+            json={
+                "fields": {
+                    "hypothesis_results": [
+                        {
+                            # hypothesis_id missing
+                            "planned": "X",
+                            "observed": "Y",
+                            "outcome": "confirmed",
+                            "fact_tier": "recorded",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "hypothesis_results"
+        assert detail["sub_field"] == "hypothesis_id"
+
+    def test_duplicate_hypothesis_ids_returns_400(self, api_client: TestClient):
+        """Duplicate ids are caught by the Pydantic model re-validation."""
+        api_client.post(
+            "/opposition/reviews",
+            json=_valid_review_payload("rev-ev-dupid"),
+        )
+        response = api_client.put(
+            "/opposition/reviews/rev-ev-dupid",
+            json={
+                "fields": {
+                    "hypothesis_results": [
+                        {
+                            "hypothesis_id": "dup",
+                            "planned": "X",
+                            "observed": "Y",
+                            "outcome": "confirmed",
+                            "fact_tier": "recorded",
+                            "evidence_refs": [],
+                        },
+                        {
+                            "hypothesis_id": "dup",
+                            "planned": "X2",
+                            "observed": "Y2",
+                            "outcome": "falsified",
+                            "fact_tier": "recorded",
+                            "evidence_refs": [],
+                        },
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "validation_error"
+
+    def test_finalized_with_evidence_round_trip(
+        self, api_client: TestClient,
+    ):
+        """A draft → finalized transition can carry evidence in the same PUT."""
+        api_client.post(
+            "/opposition/reviews",
+            json=_valid_review_payload(
+                "rev-ev-fin", status="draft", decision=None,
+            ),
+        )
+        response = api_client.put(
+            "/opposition/reviews/rev-ev-fin",
+            json={
+                "fields": {
+                    "status": "finalized",
+                    "decision": "confirmed",
+                    "supporting_evidence": [
+                        {
+                            "evidence_id": "ev-fin",
+                            "fact_tier": "official",
+                            "summary": "Official scoreline confirms plan.",
+                            "evidence_refs": [],
+                        }
+                    ],
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        review = response.json()["record"]["review"]
+        assert review["status"] == "finalized"
+        assert review["decision"] == "confirmed"
+        assert [e["evidence_id"] for e in review["supporting_evidence"]] == [
+            "ev-fin"
+        ]
+
+    def test_entry_list_update_creates_backup(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/reviews",
+            json=_valid_review_payload("rev-ev-backup"),
+        )
+        response = api_client.put(
+            "/opposition/reviews/rev-ev-backup",
+            json={
+                "fields": {
+                    "supporting_evidence": [
+                        {
+                            "evidence_id": "ev-backup-1",
+                            "fact_tier": "recorded",
+                            "summary": "Backup test.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        backups = api_client.get("/opposition/reviews/rev-ev-backup/backups")
+        assert backups.status_code == 200
+        assert backups.json()["count"] == 1
 
 
 # ── Contracts endpoints report live counts ─────────────────────────────
