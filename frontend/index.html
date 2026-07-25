@@ -311,6 +311,7 @@
                             </label>
                             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                                 <button class="text-button" id="ver-create" type="button" hidden>＋ <span data-i18n="versions_create">创建</span></button>
+                                <button class="text-button" id="ver-edit" type="button" hidden>✎ <span data-i18n="versions_edit">编辑</span></button>
                                 <span class="toolbar-status" id="ver-create-hint" aria-live="polite" style="font-size:0.72rem;color:var(--text-muted)"></span>
                             </div>
                         </div>
@@ -359,6 +360,26 @@
                             <div class="workspace-dialog-actions">
                                 <button class="text-button" id="ver-create-cancel" type="button" data-i18n="versions_create_cancel">取消</button>
                                 <button class="text-button" id="ver-create-submit" type="submit" data-i18n="versions_create_submit">创建</button>
+                            </div>
+                        </form>
+                    </div>
+                </dialog>
+                <dialog class="workspace-dialog" id="ver-edit-dialog" aria-labelledby="ver-edit-title">
+                    <div class="workspace-dialog-shell">
+                        <div class="workspace-dialog-head">
+                            <div>
+                                <p class="eyebrow" id="ver-edit-kicker">Edit</p>
+                                <h3 id="ver-edit-title">Edit record</h3>
+                            </div>
+                            <button class="icon-button workspace-dialog-close" id="ver-edit-close" type="button" aria-label="Close">×</button>
+                        </div>
+                        <form id="ver-edit-form" autocomplete="off" novalidate>
+                            <div id="ver-edit-fields" style="display:grid;gap:12px"></div>
+                            <p class="workspace-conflict-note" id="ver-edit-note" data-i18n="versions_edit_note">本地优先：编辑会写入本地存储并创建备份；evidence、comparisons、risks 等子项不在编辑范围内。</p>
+                            <p class="workspace-conflict-note" id="ver-edit-conflict" hidden style="color:var(--danger)"></p>
+                            <div class="workspace-dialog-actions">
+                                <button class="text-button" id="ver-edit-cancel" type="button" data-i18n="versions_edit_cancel">取消</button>
+                                <button class="text-button" id="ver-edit-submit" type="submit" data-i18n="versions_edit_submit">保存</button>
                             </div>
                         </form>
                     </div>

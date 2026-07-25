@@ -1324,6 +1324,45 @@ const i18n = {
         versions_create_field_away_team_ph: "如：Chelsea",
         versions_create_field_human_opinion: "人工意见",
         versions_create_field_recommendation: "建议",
+        versions_edit: "编辑",
+        versions_edit_dossier: "编辑 Decision dossier",
+        versions_edit_review: "编辑 Post-match review",
+        versions_edit_note: "本地优先：编辑会写入本地存储并创建备份；evidence、comparisons、risks 等子项不在编辑范围内。",
+        versions_edit_cancel: "取消",
+        versions_edit_submit: "保存",
+        versions_edit_required_missing: "必填字段缺失：",
+        versions_edit_failed: "保存失败：",
+        versions_edit_success: "已保存，新版本号：",
+        versions_edit_load_failed: "加载当前记录失败：",
+        versions_edit_no_record: "请先在上方选择要编辑的记录。",
+        versions_edit_conflict: "版本冲突：当前已变更，请刷新后重试。",
+        versions_edit_decision_required: "状态为 decided 时必须填写 decision。",
+        versions_edit_decision_required_finalized: "状态为 finalized 时必须填写 decision。",
+        versions_edit_decision_not_allowed: "非 decided 状态不能设置 decision；请先将状态改为 decided。",
+        versions_edit_decision_not_allowed_review: "非 finalized 状态不能设置 decision；请先将状态改为 finalized。",
+        versions_edit_field_status: "状态",
+        versions_edit_field_decision: "决策",
+        versions_edit_field_decision_note: "决策说明",
+        versions_edit_field_notes: "备注",
+        versions_edit_field_match_id: "比赛 ID",
+        versions_edit_field_competition: "赛事",
+        versions_edit_field_season: "赛季",
+        versions_edit_field_final_score_home: "主队终场进球",
+        versions_edit_field_final_score_away: "客队终场进球",
+        versions_edit_status_draft: "草稿",
+        versions_edit_status_decided: "已决策",
+        versions_edit_status_rejected: "已拒绝",
+        versions_edit_status_superseded: "已废弃",
+        versions_edit_status_finalized: "已定稿",
+        versions_edit_decision_proceed: "推进（proceed）",
+        versions_edit_decision_hold: "搁置（hold）",
+        versions_edit_decision_reject: "否决（reject）",
+        versions_edit_decision_defer: "延后（defer）",
+        versions_edit_decision_confirmed: "确认（confirmed）",
+        versions_edit_decision_falsified: "证伪（falsified）",
+        versions_edit_decision_partial: "部分确认（partial）",
+        versions_edit_decision_inconclusive: "无法定论（inconclusive）",
+        versions_edit_decision_none: "（无）",
     },
     en: {
         nav_overview: "Overview",
@@ -2649,6 +2688,45 @@ const i18n = {
         versions_create_field_away_team_ph: "e.g. Chelsea",
         versions_create_field_human_opinion: "Human opinion",
         versions_create_field_recommendation: "Recommendation",
+        versions_edit: "Edit",
+        versions_edit_dossier: "Edit decision dossier",
+        versions_edit_review: "Edit post-match review",
+        versions_edit_note: "Local-first: edits are saved locally with a backup; evidence, comparisons and risks are not editable here.",
+        versions_edit_cancel: "Cancel",
+        versions_edit_submit: "Save",
+        versions_edit_required_missing: "Required field missing: ",
+        versions_edit_failed: "Save failed: ",
+        versions_edit_success: "Saved, new revision: ",
+        versions_edit_load_failed: "Failed to load current record: ",
+        versions_edit_no_record: "Please pick a record to edit above first.",
+        versions_edit_conflict: "Revision conflict: the record changed. Please refresh and retry.",
+        versions_edit_decision_required: "decision is required when status is 'decided'.",
+        versions_edit_decision_required_finalized: "decision is required when status is 'finalized'.",
+        versions_edit_decision_not_allowed: "decision can only be set when status='decided'; switch status first.",
+        versions_edit_decision_not_allowed_review: "decision can only be set when status='finalized'; switch status first.",
+        versions_edit_field_status: "Status",
+        versions_edit_field_decision: "Decision",
+        versions_edit_field_decision_note: "Decision note",
+        versions_edit_field_notes: "Notes",
+        versions_edit_field_match_id: "Match ID",
+        versions_edit_field_competition: "Competition",
+        versions_edit_field_season: "Season",
+        versions_edit_field_final_score_home: "Final score (home)",
+        versions_edit_field_final_score_away: "Final score (away)",
+        versions_edit_status_draft: "Draft",
+        versions_edit_status_decided: "Decided",
+        versions_edit_status_rejected: "Rejected",
+        versions_edit_status_superseded: "Superseded",
+        versions_edit_status_finalized: "Finalized",
+        versions_edit_decision_proceed: "Proceed",
+        versions_edit_decision_hold: "Hold",
+        versions_edit_decision_reject: "Reject",
+        versions_edit_decision_defer: "Defer",
+        versions_edit_decision_confirmed: "Confirmed",
+        versions_edit_decision_falsified: "Falsified",
+        versions_edit_decision_partial: "Partial",
+        versions_edit_decision_inconclusive: "Inconclusive",
+        versions_edit_decision_none: "(none)",
     },
 };
 
@@ -16956,6 +17034,7 @@ const _VERSION_ARTIFACT_TYPES = {
         diffPath: (id, fn) => `/recruitment/dossiers/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
         restorePath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}/restore`,
         createPath: "/recruitment/dossiers",
+        editPath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}`,
         idField: "dossier_id",
         listKey: "dossiers",
         stateField: "dossiers",
@@ -16963,6 +17042,7 @@ const _VERSION_ARTIFACT_TYPES = {
         labelKey: "versions_type_dossier",
         createLabelKey: "versions_create_dossier",
         createHintKey: "versions_create_hint_dossier",
+        editLabelKey: "versions_edit_dossier",
         // ID prefix used when the maintainer leaves the ID field blank.
         idPrefix: "dossier-",
         // Linked artifact field used for workflow pre-fill (which brief this
@@ -16983,6 +17063,33 @@ const _VERSION_ARTIFACT_TYPES = {
             { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion", prefill: true },
             { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation", prefill: true },
         ],
+        // Editable fields for the PUT /recruitment/dossiers/{id} endpoint.
+        // Kept in sync with _DOSSIER_EDITABLE_FIELDS in api.py. The ID
+        // field, schema, version, evidence, comparisons, risks,
+        // limitations and linked_artifacts are not editable here — they
+        // have their own lifecycle.
+        editFormFields: [
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
+            { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_brief_id" },
+            { name: "candidate_player_name", type: "text", required: false, labelKey: "versions_create_field_candidate_name", placeholderKey: "versions_create_field_candidate_name_ph" },
+            { name: "candidate_team_name", type: "text", required: false, labelKey: "versions_create_field_candidate_team", placeholderKey: "versions_create_field_candidate_team_ph" },
+            { name: "status", type: "select-status", required: true, labelKey: "versions_edit_field_status" },
+            { name: "decision", type: "select-decision-dossier", required: false, labelKey: "versions_edit_field_decision" },
+            { name: "decision_note", type: "text", required: false, labelKey: "versions_edit_field_decision_note" },
+            { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion" },
+            { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation" },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_edit_field_notes" },
+        ],
+        // Status values valid for this artifact type. Used to populate the
+        // status dropdown in the edit dialog. Must match the Pydantic
+        // VALID_DOSSIER_STATUS / VALID_REVIEW_STATUS sets exactly.
+        validStatuses: ["draft", "decided", "rejected", "superseded"],
+        // The status value that requires a non-null decision. Used for
+        // client-side validation and server-error mapping.
+        decisionRequiredStatus: "decided",
+        // Decision values valid for this artifact type. The first entry
+        // is the "no decision" placeholder when status != decisionRequiredStatus.
+        validDecisions: ["proceed", "hold", "reject", "defer"],
     },
     review: {
         listPath: "/opposition/reviews",
@@ -16992,6 +17099,7 @@ const _VERSION_ARTIFACT_TYPES = {
         diffPath: (id, fn) => `/opposition/reviews/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
         restorePath: (id) => `/opposition/reviews/${encodeURIComponent(id)}/restore`,
         createPath: "/opposition/reviews",
+        editPath: (id) => `/opposition/reviews/${encodeURIComponent(id)}`,
         idField: "review_id",
         listKey: "reviews",
         stateField: "reviews",
@@ -16999,6 +17107,7 @@ const _VERSION_ARTIFACT_TYPES = {
         labelKey: "versions_type_review",
         createLabelKey: "versions_create_review",
         createHintKey: "versions_create_hint_review",
+        editLabelKey: "versions_edit_review",
         idPrefix: "review-",
         linkField: "briefing_id",
         linkListKey: "briefings",
@@ -17012,6 +17121,31 @@ const _VERSION_ARTIFACT_TYPES = {
             { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion", prefill: true },
             { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation", prefill: true },
         ],
+        // Editable fields for the PUT /opposition/reviews/{id} endpoint.
+        // Kept in sync with _REVIEW_EDITABLE_FIELDS in api.py. The ID
+        // field, schema, version, hypothesis_results, falsified_patterns,
+        // new_questions, evidence, limitations and linked_artifacts are
+        // not editable here.
+        editFormFields: [
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
+            { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_briefing_id" },
+            { name: "match_id", type: "text", required: false, labelKey: "versions_edit_field_match_id" },
+            { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
+            { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
+            { name: "competition", type: "text", required: false, labelKey: "versions_edit_field_competition" },
+            { name: "season", type: "text", required: false, labelKey: "versions_edit_field_season" },
+            { name: "final_score_home", type: "number", required: false, labelKey: "versions_edit_field_final_score_home" },
+            { name: "final_score_away", type: "number", required: false, labelKey: "versions_edit_field_final_score_away" },
+            { name: "status", type: "select-status", required: true, labelKey: "versions_edit_field_status" },
+            { name: "decision", type: "select-decision-review", required: false, labelKey: "versions_edit_field_decision" },
+            { name: "decision_note", type: "text", required: false, labelKey: "versions_edit_field_decision_note" },
+            { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion" },
+            { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation" },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_edit_field_notes" },
+        ],
+        validStatuses: ["draft", "finalized", "superseded"],
+        decisionRequiredStatus: "finalized",
+        validDecisions: ["confirmed", "falsified", "partial", "inconclusive"],
     },
 };
 
@@ -17042,6 +17176,12 @@ const versionsState = {
     // Shape: { type: "dossier"|"review", linkId: string, fields: {name: value} }
     // Cleared after the dialog opens or is dismissed.
     pendingCreate: null,
+    // Edit-dialog context: the id + server_revision of the record the
+    // maintainer is currently editing. Set by _openEditDialog, read by
+    // _submitEditForm to send expected_revision (If-Match), cleared by
+    // _closeEditDialog.
+    // Shape: { id: string, serverRevision: int, type: "dossier"|"review" }
+    editContext: null,
 };
 
 async function _fetchVersionRecords() {
@@ -17310,6 +17450,7 @@ async function renderVersions() {
     _updateVersionActionButtons();
     _renderVersionStatusRail();
     _updateCreateButtonVisibility();
+    _updateEditButtonVisibility();
     // Auto-open the create dialog when the maintainer jumped here from the
     // workflow view with pre-fill context. This closes the workflow breakpoint
     // where creating a dossier/review previously required the CLI.
@@ -17576,6 +17717,319 @@ async function _submitCreateForm() {
     }
 }
 
+// ── Edit dialog ────────────────────────────────────────────────────────
+// The edit dialog reuses the same field-rendering pattern as the create
+// dialog but loads the current record's values into the form and submits
+// via PUT /recruitment/dossiers/{id} or PUT /opposition/reviews/{id}.
+//
+// The PUT body is `{"fields": {...}, "expected_revision": <int>}`. The
+// server merges the partial fields onto the current record, bumps
+// server_revision, creates a backup, and returns the new record envelope.
+// 409 (revision_conflict) is surfaced inline so the maintainer can
+// refresh and retry without losing the form.
+
+function _isEditableType(type) {
+    const cfg = _versionTypeConfig(type);
+    return Array.isArray(cfg.editFormFields) && cfg.editFormFields.length > 0 && typeof cfg.editPath === "function";
+}
+
+function _updateEditButtonVisibility() {
+    const editBtn = document.getElementById("ver-edit");
+    if (!editBtn) return;
+    // The edit button is only visible when the current type is editable
+    // AND a specific record is selected in the record dropdown. With no
+    // record selected, we hide it so the maintainer gets a clear signal
+    // that they need to pick something to edit.
+    const isEditable = _isEditableType(versionsState.type);
+    const hasSelection = !!versionsState.selectedId;
+    editBtn.hidden = !(isEditable && hasSelection);
+}
+
+function _statusOptionLabel(status) {
+    // Map a status value to its localized label. Falls back to the raw
+    // value when no translation exists.
+    const key = `versions_edit_status_${status}`;
+    const translated = t(key);
+    return translated === key ? status : translated;
+}
+
+function _decisionOptionLabel(decision) {
+    // Map a decision value to its localized label.
+    const key = `versions_edit_decision_${decision}`;
+    const translated = t(key);
+    return translated === key ? decision : translated;
+}
+
+function _renderEditField(field, currentValue, cfg) {
+    const id = `ver-edit-input-${field.name}`;
+    const labelTxt = t(field.labelKey);
+    const required = !!field.required;
+    const requiredMark = required ? ' <span style="color:var(--danger)">*</span>' : "";
+    let control = "";
+    if (field.type === "textarea") {
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="3" style="width:100%;min-height:64px;resize:vertical;font-family:inherit;font-size:0.82rem;padding:8px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(currentValue || "")}</textarea>`;
+    } else if (field.type === "select") {
+        // Linked-artifact dropdown (brief_id / briefing_id). Reuses the
+        // versionsState[cfg.linkListKey] list so the maintainer can
+        // re-pick the link without leaving the dialog.
+        const linkList = versionsState[cfg.linkListKey] || [];
+        const linkIdField = cfg.linkIdField;
+        const options = [`<option value="">— ${escapeHtml(t("versions_create_no_link"))} —</option>`]
+            .concat(linkList.map((rec) => {
+                const lid = rec[linkIdField] || rec.payload?.[linkIdField] || "";
+                const title = rec.title || rec.payload?.title || lid;
+                return `<option value="${escapeAttr(lid)}">${escapeHtml(lid ? `${lid} · ${title}` : title)}</option>`;
+            }));
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options.join("")}</select>`;
+    } else if (field.type === "select-status") {
+        const options = cfg.validStatuses.map((s) =>
+            `<option value="${escapeAttr(s)}">${escapeHtml(_statusOptionLabel(s))}</option>`,
+        ).join("");
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options}</select>`;
+    } else if (field.type === "select-decision-dossier" || field.type === "select-decision-review") {
+        // The "no decision" option uses an empty string value; the
+        // submit step converts "" to null before sending to the API.
+        const noneLabel = t("versions_edit_decision_none");
+        const options = [`<option value="">${escapeHtml(noneLabel)}</option>`]
+            .concat(cfg.validDecisions.map((d) =>
+                `<option value="${escapeAttr(d)}">${escapeHtml(_decisionOptionLabel(d))}</option>`,
+            ))
+            .join("");
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options}</select>`;
+    } else if (field.type === "number") {
+        const val = (currentValue === null || currentValue === undefined) ? "" : String(currentValue);
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="number" min="0" step="1" value="${escapeAttr(val)}" class="glass-control" style="width:100%">`;
+    } else {
+        const placeholder = field.placeholderKey ? ` placeholder="${escapeAttr(t(field.placeholderKey))}"` : "";
+        const val = currentValue || "";
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="text" value="${escapeAttr(val)}"${placeholder} class="glass-control" style="width:100%">`;
+    }
+    return `
+        <label style="display:grid;gap:4px;font-size:0.74rem;color:var(--text-muted)">
+            <span>${escapeHtml(labelTxt)}${requiredMark}</span>
+            ${control}
+        </label>`;
+}
+
+function _showEditConflict(message) {
+    const el = document.getElementById("ver-edit-conflict");
+    if (!el) return;
+    el.textContent = message || t("versions_edit_conflict");
+    el.hidden = false;
+}
+
+function _clearEditConflict() {
+    const el = document.getElementById("ver-edit-conflict");
+    if (!el) return;
+    el.textContent = "";
+    el.hidden = true;
+}
+
+async function _openEditDialog() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!_isEditableType(versionsState.type)) return;
+    if (!versionsState.selectedId) {
+        alert(t("versions_edit_no_record"));
+        return;
+    }
+    const dialog = document.getElementById("ver-edit-dialog");
+    const titleEl = document.getElementById("ver-edit-title");
+    const kickerEl = document.getElementById("ver-edit-kicker");
+    const fieldsEl = document.getElementById("ver-edit-fields");
+    if (!dialog || !fieldsEl) return;
+    _clearEditConflict();
+
+    // Fetch the current record so the form is initialized from the
+    // server's view of truth, not from the list summary. This also
+    // gives us the server_revision we'll send as expected_revision.
+    let currentRecord = null;
+    let serverRevision = null;
+    try {
+        const resp = await fetch(API_BASE + cfg.itemPath(versionsState.selectedId));
+        const text = await resp.text();
+        let body = null;
+        try { body = JSON.parse(text); } catch { body = null; }
+        if (!resp.ok || body?.status !== "ok") {
+            const msg = body?.message || body?.code || `HTTP ${resp.status}`;
+            alert(`${t("versions_edit_load_failed")}${msg}`);
+            return;
+        }
+        currentRecord = body.record;
+        serverRevision = body.record.server_revision;
+    } catch (err) {
+        alert(`${t("versions_edit_load_failed")}${err?.message || err}`);
+        return;
+    }
+
+    // Stash the loaded revision so the submit step can send it as
+    // expected_revision (If-Match). This is read by _submitEditForm.
+    versionsState.editContext = {
+        id: versionsState.selectedId,
+        serverRevision,
+        type: versionsState.type,
+    };
+
+    if (titleEl) titleEl.textContent = t(cfg.editLabelKey);
+    if (kickerEl) kickerEl.textContent = t(cfg.labelKey);
+
+    // The record envelope wraps the artifact under a type-specific key
+    // (dossier / review). Pull the inner artifact so field lookups work.
+    const artifact = currentRecord[cfg.stateField.replace(/s$/, "")] || currentRecord.dossier || currentRecord.review || {};
+    const fieldsHtml = cfg.editFormFields.map((field) => {
+        const currentValue = artifact[field.name];
+        return _renderEditField(field, currentValue, cfg);
+    }).join("");
+    fieldsEl.innerHTML = fieldsHtml;
+
+    // Set select values after render (innerHTML doesn't honour selected
+    // when the value isn't in the options at parse time).
+    cfg.editFormFields.forEach((field) => {
+        const el = document.getElementById(`ver-edit-input-${field.name}`);
+        if (!el) return;
+        const v = artifact[field.name];
+        if (field.type === "select-status") {
+            el.value = v || cfg.validStatuses[0];
+        } else if (field.type === "select-decision-dossier" || field.type === "select-decision-review") {
+            el.value = v || "";
+        } else if (field.type === "select") {
+            el.value = v || "";
+        }
+    });
+
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+}
+
+function _closeEditDialog() {
+    const dialog = document.getElementById("ver-edit-dialog");
+    if (!dialog) return;
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+    _clearEditConflict();
+    versionsState.editContext = null;
+}
+
+function _collectEditForm() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const form = document.getElementById("ver-edit-form");
+    if (!form) return { ok: false, error: "form_missing" };
+    const data = {};
+    let firstMissing = null;
+    for (const field of cfg.editFormFields) {
+        const el = document.getElementById(`ver-edit-input-${field.name}`);
+        if (!el) continue;
+        const raw = (el.value || "").trim();
+        if (field.required && !raw) {
+            firstMissing = firstMissing || field;
+            el.style.borderColor = "var(--danger)";
+        } else {
+            el.style.borderColor = "";
+        }
+        // Coerce types so the API receives the right shape:
+        //  - decision "" -> null (no decision)
+        //  - final_score_* "" -> null (unknown score)
+        //  - number fields "" -> null
+        if (field.name === "decision" && raw === "") {
+            data[field.name] = null;
+        } else if (field.type === "number" && raw === "") {
+            data[field.name] = null;
+        } else if (field.type === "number") {
+            const n = Number(raw);
+            data[field.name] = Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+        } else {
+            data[field.name] = raw;
+        }
+    }
+    if (firstMissing) {
+        return { ok: false, error: "required_missing", field: firstMissing };
+    }
+    // Client-side decision consistency check. The server re-checks, but
+    // surfacing it here gives the maintainer a faster, localized error.
+    const status = data.status;
+    const decision = data.decision;
+    if (status === cfg.decisionRequiredStatus && !decision) {
+        const msgKey = cfg.decisionRequiredStatus === "finalized"
+            ? "versions_edit_decision_required_finalized"
+            : "versions_edit_decision_required";
+        return { ok: false, error: "decision_required", message: t(msgKey) };
+    }
+    if (status !== cfg.decisionRequiredStatus && decision !== null) {
+        const msgKey = cfg.decisionRequiredStatus === "finalized"
+            ? "versions_edit_decision_not_allowed_review"
+            : "versions_edit_decision_not_allowed";
+        return { ok: false, error: "decision_not_allowed", message: t(msgKey) };
+    }
+    return { ok: true, data };
+}
+
+async function _submitEditForm() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const submitBtn = document.getElementById("ver-edit-submit");
+    const ctx = versionsState.editContext;
+    if (!ctx || ctx.type !== versionsState.type || ctx.id !== versionsState.selectedId) {
+        // The maintainer changed the type/record selection while the
+        // dialog was open. Bail out and let them re-open.
+        _closeEditDialog();
+        return;
+    }
+    const result = _collectEditForm();
+    if (!result.ok) {
+        if (result.error === "required_missing" && result.field) {
+            alert(t("versions_edit_required_missing") + (result.field.labelKey ? t(result.field.labelKey) : result.field.name));
+        } else if (result.message) {
+            alert(result.message);
+        }
+        return;
+    }
+    if (submitBtn) submitBtn.disabled = true;
+    _clearEditConflict();
+    try {
+        const resp = await fetch(API_BASE + cfg.editPath(ctx.id), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                fields: result.data,
+                expected_revision: ctx.serverRevision,
+            }),
+        });
+        const text = await resp.text();
+        let body = null;
+        try { body = JSON.parse(text); } catch { body = null; }
+        if (resp.status === 409) {
+            // Revision conflict: the record changed since we loaded it.
+            // Surface inline and keep the dialog open so the maintainer
+            // can refresh (close + re-open) without losing their input.
+            const code = body?.detail?.code || body?.code || "revision_conflict";
+            _showEditConflict(`${t("versions_edit_conflict")} (${code})`);
+            return;
+        }
+        if (!resp.ok || body?.status !== "ok") {
+            const msg = body?.detail?.message || body?.message || body?.code || `HTTP ${resp.status}`;
+            alert(`${t("versions_edit_failed")}${msg}`);
+            return;
+        }
+        // Success: close the dialog, refresh state, surface the new rev.
+        const newRev = body.record?.server_revision ?? "?";
+        _closeEditDialog();
+        await _fetchVersionRecords();
+        _renderVersionRecordOptions();
+        if (versionsState.selectedId) {
+            await _fetchVersionBackups(versionsState.selectedId);
+        }
+        _renderVersionSummary();
+        _renderVersionTimeline();
+        _renderVersionDiff();
+        _updateVersionActionButtons();
+        _renderVersionStatusRail();
+        _updateEditButtonVisibility();
+        alert(`${t("versions_edit_success")}${newRev}`);
+    } catch (err) {
+        alert(`${t("versions_edit_failed")}${err?.message || err}`);
+    } finally {
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
 function _renderVersionSummary() {
     const briefCount = document.getElementById("ver-brief-count");
     const briefingCount = document.getElementById("ver-briefing-count");
@@ -17610,6 +18064,10 @@ function _wireVersionControlsOnce() {
     const createCloseBtn = document.getElementById("ver-create-close");
     const createCancelBtn = document.getElementById("ver-create-cancel");
     const createForm = document.getElementById("ver-create-form");
+    const editBtn = document.getElementById("ver-edit");
+    const editCloseBtn = document.getElementById("ver-edit-close");
+    const editCancelBtn = document.getElementById("ver-edit-cancel");
+    const editForm = document.getElementById("ver-edit-form");
 
     if (typeSelect) {
         typeSelect.addEventListener("change", async () => {
@@ -17640,6 +18098,27 @@ function _wireVersionControlsOnce() {
             void _submitCreateForm();
         });
     }
+    if (editBtn) {
+        editBtn.addEventListener("click", () => {
+            // No pre-fill when the maintainer opens the dialog directly from
+            // the versions view toolbar. The current record is loaded
+            // inside _openEditDialog so the form is initialised from the
+            // server's view of truth, not from the list summary.
+            void _openEditDialog();
+        });
+    }
+    if (editCloseBtn) {
+        editCloseBtn.addEventListener("click", () => _closeEditDialog());
+    }
+    if (editCancelBtn) {
+        editCancelBtn.addEventListener("click", () => _closeEditDialog());
+    }
+    if (editForm) {
+        editForm.addEventListener("submit", (ev) => {
+            ev.preventDefault();
+            void _submitEditForm();
+        });
+    }
     if (recordSelect) {
         recordSelect.addEventListener("change", async () => {
             versionsState.selectedId = recordSelect.value;
@@ -17648,6 +18127,7 @@ function _wireVersionControlsOnce() {
             if (versionsState.selectedId) {
                 await _fetchVersionBackups(versionsState.selectedId);
             }
+            _updateEditButtonVisibility();
             _renderVersionSummary();
             _renderVersionTimeline();
             _renderVersionDiff();
