@@ -1387,3 +1387,420 @@ def test_opposition_review_diff_and_restore_round_trip(
     assert result["backupCountAfterRestore"] == 2, (
         f"Expected 2 backups after restore, got {result['backupCountAfterRestore']}"
     )
+
+
+# ── Versions view: create-dialog visibility ─────────────────────────
+
+
+def test_versions_view_create_button_visibility(
+    page, live_server_url: str
+) -> None:
+    """The create button must be hidden for brief/briefing and visible
+    for dossier/review.
+
+    Catches regressions where:
+    - the create button is shown for brief/briefing (which have their own
+      create flows in Scouting / Matches and must not be creatable here)
+    - the create button is missing for dossier/review (the closing
+      artifacts whose only create path used to be the CLI)
+    - the create hint text is missing or not localised
+    """
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    create_btn = page.locator("#ver-create")
+    create_hint = page.locator("#ver-create-hint")
+
+    # brief: not creatable here → button hidden, hint explains.
+    type_select.select_option("brief")
+    page.wait_for_timeout(150)
+    assert create_btn.get_attribute("hidden") is not None, (
+        "Create button should be hidden for brief type"
+    )
+    assert create_hint.inner_text().strip() != "", (
+        "Create hint should not be empty when create is disabled"
+    )
+
+    # briefing: not creatable here → button hidden.
+    type_select.select_option("briefing")
+    page.wait_for_timeout(150)
+    assert create_btn.get_attribute("hidden") is not None, (
+        "Create button should be hidden for briefing type"
+    )
+
+    # dossier: creatable → button visible, hint localised.
+    type_select.select_option("dossier")
+    page.wait_for_timeout(150)
+    assert create_btn.get_attribute("hidden") is None, (
+        "Create button should be visible for dossier type"
+    )
+    assert create_hint.inner_text().strip() != "", (
+        "Create hint should not be empty for dossier type"
+    )
+
+    # review: creatable → button visible.
+    type_select.select_option("review")
+    page.wait_for_timeout(150)
+    assert create_btn.get_attribute("hidden") is None, (
+        "Create button should be visible for review type"
+    )
+    assert create_hint.inner_text().strip() != "", (
+        "Create hint should not be empty for review type"
+    )
+
+
+# ── Versions view: create dossier round-trip ─────────────────────────
+
+
+def test_versions_view_create_dossier_round_trip(
+    page, live_server_url: str
+) -> None:
+    """End-to-end create flow for a decision dossier via the browser.
+
+    Drives the full UI flow:
+    1. Open the versions view, switch to dossier type.
+    2. Click the create button → dialog opens with a small form.
+    3. Fill in a title (required) and leave the ID blank (auto-generated).
+    4. Submit → the dialog closes, the new dossier appears in the list,
+       and the live record can be fetched via the API.
+
+    Catches regressions where:
+    - the create dialog does not open from the toolbar button
+    - required-field validation is missing (empty title accepted)
+    - the auto-generated ID does not match the dossier- prefix pattern
+    - the created record is not persisted (list / fetch fails)
+    - the dialog does not close on success
+    """
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("dossier")
+    page.wait_for_timeout(200)
+
+    # Snapshot dossier count before create.
+    before_count = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/recruitment/dossiers?limit=100');
+            const d = await r.json();
+            return Array.isArray(d.dossiers) ? d.dossiers.length : 0;
+        }""",
+        live_server_url,
+    )
+
+    # Open the create dialog.
+    page.locator("#ver-create").click()
+    page.locator("#ver-create-dialog").wait_for(state="visible", timeout=5_000)
+
+    # The dialog must contain the dossier form fields.
+    assert page.locator("#ver-create-input-title").count() == 1
+    assert page.locator("#ver-create-input-dossier_id").count() == 1
+    assert page.locator("#ver-create-input-brief_id").count() == 1
+
+    # Submit with an empty title — must be rejected client-side.
+    page.locator("#ver-create-submit").click()
+    # The dialog must still be open (validation failed).
+    page.wait_for_timeout(200)
+    is_still_open = page.evaluate(
+        "() => !!document.getElementById('ver-create-dialog').open"
+    )
+    assert is_still_open, (
+        "Dialog should still be open after submitting with empty title"
+    )
+
+    # Fill in a title and submit. The ID field is left blank so the
+    # frontend auto-generates a dossier-YYYYMMDD-xxxxxxxx value.
+    title_input = page.locator("#ver-create-input-title")
+    title_input.fill("E2E created dossier")
+    page.locator("#ver-create-submit").click()
+
+    # The dialog must close on success. Poll for up to 5s.
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-create-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, "Create dialog did not close after successful submit"
+
+    # The new dossier must appear in the versions view record list.
+    record_select = page.locator("#ver-record-select")
+    for _ in range(25):
+        options = record_select.locator("option").evaluate_all(
+            "opts => opts.map(o => o.value)"
+        )
+        if any(o for o in options):
+            break
+        page.wait_for_timeout(200)
+    assert any(o for o in options), (
+        f"No dossier records in selector after create: {options!r}"
+    )
+
+    # The newly created record must be fetchable via the API.
+    after_count = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/recruitment/dossiers?limit=100');
+            const d = await r.json();
+            return Array.isArray(d.dossiers) ? d.dossiers.length : 0;
+        }""",
+        live_server_url,
+    )
+    assert after_count == before_count + 1, (
+        f"Expected dossier count {before_count + 1} after create, got {after_count}"
+    )
+
+    # The new record must carry the auto-generated dossier- prefix.
+    new_records = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/recruitment/dossiers?limit=100');
+            const d = await r.json();
+            return (Array.isArray(d.dossiers) ? d.dossiers : [])
+                .map(x => x.dossier_id || '');
+        }""",
+        live_server_url,
+    )
+    assert any(rid.startswith("dossier-") for rid in new_records), (
+        f"Expected a dossier- prefixed ID in new records: {new_records!r}"
+    )
+
+    # Cleanup: delete the created dossier(s) via the store so no test
+    # artifacts remain.
+    from scoutfootball.api import _dossier_store
+
+    store = _dossier_store()
+    for cid in new_records:
+        if not cid.startswith("dossier-"):
+            continue
+        try:
+            store.delete(cid, expected_revision=None)
+        except Exception:
+            pass
+        record_path = store.root / f"{cid}.json"
+        record_path.unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for f in backup_dir.glob(f"{cid}.*.json"):
+                f.unlink(missing_ok=True)
+
+
+# ── Versions view: create review round-trip ──────────────────────────
+
+
+def test_versions_view_create_review_round_trip(
+    page, live_server_url: str
+) -> None:
+    """End-to-end create flow for a post-match review via the browser.
+
+    Same shape as the dossier create test but exercises the
+    ``/opposition/reviews`` endpoint family and the review form fields.
+    Catches regressions where the review create path diverges from the
+    dossier path (e.g. wrong schema, missing fields, wrong ID prefix).
+    """
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("review")
+    page.wait_for_timeout(200)
+
+    before_count = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/opposition/reviews?limit=100');
+            const d = await r.json();
+            return Array.isArray(d.reviews) ? d.reviews.length : 0;
+        }""",
+        live_server_url,
+    )
+
+    page.locator("#ver-create").click()
+    page.locator("#ver-create-dialog").wait_for(state="visible", timeout=5_000)
+
+    assert page.locator("#ver-create-input-title").count() == 1
+    assert page.locator("#ver-create-input-review_id").count() == 1
+    assert page.locator("#ver-create-input-briefing_id").count() == 1
+
+    title_input = page.locator("#ver-create-input-title")
+    title_input.fill("E2E created review")
+    page.locator("#ver-create-submit").click()
+
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-create-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, "Create dialog did not close after successful submit"
+
+    after_count = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/opposition/reviews?limit=100');
+            const d = await r.json();
+            return Array.isArray(d.reviews) ? d.reviews.length : 0;
+        }""",
+        live_server_url,
+    )
+    assert after_count == before_count + 1, (
+        f"Expected review count {before_count + 1} after create, got {after_count}"
+    )
+
+    new_records = page.evaluate(
+        """async (baseUrl) => {
+            const r = await fetch(baseUrl + '/opposition/reviews?limit=100');
+            const d = await r.json();
+            return (Array.isArray(d.reviews) ? d.reviews : [])
+                .map(x => x.review_id || '');
+        }""",
+        live_server_url,
+    )
+    assert any(rid.startswith("review-") for rid in new_records), (
+        f"Expected a review- prefixed ID in new records: {new_records!r}"
+    )
+
+    # Cleanup.
+    from scoutfootball.api import _review_store
+
+    store = _review_store()
+    for rid in new_records:
+        if not rid.startswith("review-"):
+            continue
+        try:
+            store.delete(rid, expected_revision=None)
+        except Exception:
+            pass
+        record_path = store.root / f"{rid}.json"
+        record_path.unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for f in backup_dir.glob(f"{rid}.*.json"):
+                f.unlink(missing_ok=True)
+
+
+# ── Workflow → versions create jump with pre-fill ────────────────────
+
+
+@pytest.fixture()
+def seeded_brief_for_create_jump():
+    """Seed a single brief so the workflow's create-dossier step
+    becomes available and the dossier create form has a brief_id to
+    pre-fill.
+
+    Cleanup removes the seeded brief and its backups.
+    """
+    from scoutfootball.api import _brief_store
+
+    brief_id = f"e2e-wfjump-brief-{uuid.uuid4().hex[:8]}"
+    store = _brief_store()
+    store.save(
+        brief_id,
+        _valid_brief_payload(brief_id, title="E2E workflow jump brief"),
+        expected_revision=0,
+    )
+
+    yield {"brief_id": brief_id}
+
+    try:
+        store.delete(brief_id, expected_revision=None)
+    except Exception:
+        pass
+    record_path = store.root / f"{brief_id}.json"
+    record_path.unlink(missing_ok=True)
+    backup_dir = getattr(store, "backup_root", None)
+    if backup_dir:
+        for f in backup_dir.glob(f"{brief_id}.*.json"):
+            f.unlink(missing_ok=True)
+
+
+def test_workflow_create_dossier_jump_prefills_brief_id(
+    page, live_server_url: str, seeded_brief_for_create_jump
+) -> None:
+    """Clicking the workflow's create-dossier step must jump to the
+    versions view and auto-open the create dialog with the brief_id
+    pre-filled.
+
+    Catches regressions where:
+    - the create-dossier step uses a plain jump instead of staging
+      pendingCreate context
+    - the pre-fill value is lost between the workflow view and the
+      versions view
+    - the create dialog does not auto-open on arrival
+    - the brief_id <select> does not honour the pre-fill value
+    """
+    brief_id = seeded_brief_for_create_jump["brief_id"]
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+    page.locator("#view-workflow").wait_for(state="visible", timeout=10_000)
+
+    # Wait for the workflow fetches to settle and the create-dossier step
+    # to appear (it requires briefs > 0 and dossiers == 0).
+    create_step_btn = None
+    for _ in range(25):
+        btn = page.locator(
+            "#wf-next-list button[data-wf-create='dossier']"
+        )
+        if btn.count() > 0:
+            create_step_btn = btn.first
+            break
+        page.wait_for_timeout(200)
+    assert create_step_btn is not None, (
+        "create-dossier step did not appear in workflow next-list "
+        "(requires a seeded brief and no existing dossiers)"
+    )
+
+    # The pre-fill payload must be carried via the data-wf-prefill attr.
+    prefill_attr = create_step_btn.get_attribute("data-wf-prefill") or "{}"
+    import json as _json
+
+    try:
+        prefill = _json.loads(prefill_attr)
+    except Exception:
+        prefill = {}
+    assert prefill.get("brief_id") == brief_id, (
+        f"Expected prefill brief_id={brief_id!r}, got {prefill!r}"
+    )
+
+    # Click the step → must jump to versions view and auto-open dialog.
+    create_step_btn.click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+    page.locator("#ver-create-dialog").wait_for(
+        state="visible", timeout=5_000
+    )
+
+    # The dossier form must be active (type selector synced).
+    assert page.locator("#ver-type-select").input_value() == "dossier"
+
+    # The brief_id <select> must be pre-filled with the seeded brief.
+    brief_select = page.locator("#ver-create-input-brief_id")
+    assert brief_select.input_value() == brief_id, (
+        f"Expected brief_id select to be pre-filled with {brief_id!r}, "
+        f"got {brief_select.input_value()!r}"
+    )
+
+    # Close the dialog and clean up any dossier that might have been
+    # created by an earlier partial run.
+    page.locator("#ver-create-cancel").click()
+    page.wait_for_timeout(200)
+    from scoutfootball.api import _dossier_store
+
+    store = _dossier_store()
+    for pattern in ("dossier-2026*.json", "dossier-2025*.json"):
+        for f in store.root.glob(pattern):
+            cid = f.stem
+            try:
+                store.delete(cid, expected_revision=None)
+            except Exception:
+                pass
+            f.unlink(missing_ok=True)
+            backup_dir = getattr(store, "backup_root", None)
+            if backup_dir:
+                for bf in backup_dir.glob(f"{cid}.*.json"):
+                    bf.unlink(missing_ok=True)

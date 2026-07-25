@@ -16,6 +16,7 @@
     --good: #168a5b;
     --warn: #b77616;
     --bad: #c74455;
+    --danger: var(--bad);
     --blue: #287db7;
     --focus-ring: #0b8d64;
     --surface-ink: #0d3025;
@@ -44,6 +45,7 @@ body.dark-mode {
     --good: #6fe0a0;
     --warn: #f2c46c;
     --bad: #ff8793;
+    --danger: var(--bad);
     --blue: #86c9ff;
     --focus-ring: #86e7ae;
     --surface-ink: #d7f0df;

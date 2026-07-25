@@ -309,6 +309,10 @@
                                 <span data-i18n="versions_record">记录</span>
                                 <select id="ver-record-select" class="glass-control"></select>
                             </label>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                                <button class="text-button" id="ver-create" type="button" hidden>＋ <span data-i18n="versions_create">创建</span></button>
+                                <span class="toolbar-status" id="ver-create-hint" aria-live="polite" style="font-size:0.72rem;color:var(--text-muted)"></span>
+                            </div>
                         </div>
                         <div class="panel-head" style="padding:0 0.8rem">
                             <h3 data-i18n="versions_timeline">时间线</h3>
@@ -340,6 +344,25 @@
                     </div>
                     <p class="feature-note" style="padding:0 0.8rem 0.8rem" data-i18n="versions_pack_note">便携包包含所有本地产物（recruitment briefs、opposition briefings），并附带每节的 sha256 哈希用于完整性校验。</p>
                 </article>
+                <dialog class="workspace-dialog" id="ver-create-dialog" aria-labelledby="ver-create-title">
+                    <div class="workspace-dialog-shell">
+                        <div class="workspace-dialog-head">
+                            <div>
+                                <p class="eyebrow" id="ver-create-kicker">Create</p>
+                                <h3 id="ver-create-title">New record</h3>
+                            </div>
+                            <button class="icon-button workspace-dialog-close" id="ver-create-close" type="button" aria-label="Close">×</button>
+                        </div>
+                        <form id="ver-create-form" autocomplete="off" novalidate>
+                            <div id="ver-create-fields" style="display:grid;gap:12px"></div>
+                            <p class="workspace-conflict-note" id="ver-create-note" data-i18n="versions_create_note">本地优先：新记录以 draft 状态写入本地存储；证据、对比、风险等子项可在创建后追加。</p>
+                            <div class="workspace-dialog-actions">
+                                <button class="text-button" id="ver-create-cancel" type="button" data-i18n="versions_create_cancel">取消</button>
+                                <button class="text-button" id="ver-create-submit" type="submit" data-i18n="versions_create_submit">创建</button>
+                            </div>
+                        </form>
+                    </div>
+                </dialog>
             </section>
 
             <section class="view" id="view-players" aria-label="players">
