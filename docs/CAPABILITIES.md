@@ -1,6 +1,6 @@
 # ScoutFootball 能力真相表
 
-> 审计快照：2026-07-17，分支 `codex/integration`。本文只描述本地仓库可核验状态，不证明线上部署当前可达，也不把计划、样例或估算写成生产能力。工程与发布缺口表已更新到 2026-07-17，反映 G0-B 修复和 G1 子任务3（真实浏览器 E2E）落地。
+> 审计快照：2026-07-25，分支 `codex/integration`。本文只描述本地仓库可核验状态，不证明线上部署当前可达，也不把计划、样例或估算写成生产能力。工程与发布缺口表已更新到 2026-07-25，反映 G0-B 修复、G1 子任务3（真实浏览器 E2E）和 P1（决策工作流闭环 E2E）落地。
 
 项目属性以 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) 为准：本地优先、MIT 开放源代码、个人维护、非盈利。本表中的桌面、容器、API 或可选协作能力不代表 SaaS、商业版、企业支持或营收计划。
 
@@ -18,17 +18,17 @@
 ## 一页结论
 
 - 仓库已经是一个跨数据、模型、API、静态前端、桌面包装和世界杯场景的完整原型，不是空壳。
-- 产品宽度显著超过旧文档的“7 个分析视图 + 4 个世界杯视图”：当前 HTML 中可见 22 个顶层 `data-view` 目标。
-- 关键缺口不再是“有没有更多功能”，而是统一契约、能力登记、真实浏览器 E2E、发布门禁、完整可读数据和三个端到端决策闭环。
+- 产品宽度显著超过旧文档的"7 个分析视图 + 4 个世界杯视图"：当前 HTML 中可见 24 个顶层 `data-view` 目标（含 P1 新增的 `workflow` 和 `versions`）。
+- 关键缺口不再是"有没有更多功能"，而是统一契约、能力登记、真实浏览器 E2E 覆盖面、发布门禁、完整可读数据和三个端到端决策闭环的持续验证。
 - 浏览器球探工作区、战术工程和部分世界杯输入仍是本地状态；动作价值下钻仍只有 3 场比赛、94 条球员—比赛证据记录，并非 tracking；预计名单和模拟结果不是官方实时事实。
-- 2026-07-17 在当前锁定 `uv` 运行时执行 `scoutfootball preflight --target key`，21 个关键 Parquet 均完成内容级解码、schema 检查和抽样校验。该结果只覆盖本次本地检查的文件，不证明来源权利、快照新鲜度或未来运行时持续可读。
+- 2026-07-25 在当前锁定 `uv` 运行时执行 `scoutfootball preflight --target key`，21 个关键 Parquet 均完成内容级解码、schema 检查和抽样校验。该结果只覆盖本次本地检查的文件，不证明来源权利、快照新鲜度或未来运行时持续可读。
 
 ## 仓库规模快照
 
 | 对象 | 本地观察 | 判断 |
 | --- | ---: | --- |
 | FastAPI 路由装饰器 | 163 | 产品契约面较宽，必须自动盘点和分域 |
-| 静态前端顶层视图 | 22 | 旧 README 的 7+4 口径已过时 |
+| 静态前端顶层视图 | 24 | 旧 README 的 7+4 口径已过时；P1 新增 `workflow` + `versions` |
 | Python 测试文件 | 94（93 个 `test_*.py` + `conftest.py`） | 单元/集成基础较强，但不替代真实浏览器测试 |
 | 前端 Node 测试文件 | 4 | 有纯 JS 回归基础，覆盖面仍有限 |
 | `frontend/app.js` | 26,490 个物理行 / 1.35 MiB | 高变更耦合风险，应按领域拆分 |
@@ -56,18 +56,24 @@
 | 战术板 | 本地工程、对象/图层/帧、动画、导入清洗、多格式导出、可选 ffmpeg | 已交付的本地工具 | 浏览器下载不等于服务器保存；本地视频叠画/追踪导入有研究门槛，实时云协作不在当前章程范围内 |
 | 世界杯赛程/阵容 | 赛程、球队、比较、概率、淘汰赛/赛事分析 | 部分交付 | 数据快照和覆盖必须显示；预计征召不等于官方最终名单 |
 | 世界杯赛前简报 | 从赛程打开来源受限简报、JSON/安全 CSV 下载、战术计划联动 | 已交付的本地/静态流程 | `recorded/not_recorded`、输入快照和模型边界必须端到端保留 |
-| 世界杯 Core 契约复用 | 7 个 artifact 通过 `worldcup/contracts.py` 复用 Core `DataContract`/`SnapshotInfo`/`LineageEntry`；5 类事实类型（official_roster/expected_callup/injury_report/rating_coverage/model_probability）；`GET /world-cup/contracts` registry 端点；`TournamentState` 1.1.0 嵌入 contract，1.0.0 向后兼容 | 已交付 | 满足 P1 退出门槛第 4 条"世界杯包与招募/比赛包复用 Core，没有复制身份/快照/导出逻辑"；6.1/6.2 分支未启动 |
+| 世界杯 Core 契约复用 | 7 个 artifact 通过 `worldcup/contracts.py` 复用 Core `DataContract`/`SnapshotInfo`/`LineageEntry`；5 类事实类型（official_roster/expected_callup/injury_report/rating_coverage/model_probability）；`GET /world-cup/contracts` registry 端点；`TournamentState` 1.1.0 嵌入 contract，1.0.0 向后兼容 | 已交付 | 满足 P1 退出门槛第 4 条"世界杯包与招募/比赛包复用 Core，没有复制身份/快照/导出逻辑" |
+| 招募决策简报（Recruitment Brief） | `scoutfootball.recruitment-brief` v1.0.0 schema、BriefStore 版本化本地存储（`If-Match` 乐观并发）、备份/恢复/diff、`POST /recruitment/briefs`（create）、`GET /recruitment/briefs/{id}/backups`/`/diff`/`/restore`、前端 `versions` 视图时间线 | 已交付的本地工作流 | 默认浏览器本地 + 同机 loopback 文件持久化；不是组织云协作；API 仅暴露 create（`expected_revision=0`），更新/删除走 store 直连或 CLI |
+| 招募决策档案（Decision Dossier） | `scoutfootball.recruitment-decision-dossier` v1.0.0 schema、DossierStore 版本化存储、状态机（draft→decided/rejected/superseded）、证据/反证/比较/风险条目、`POST /recruitment/dossiers`、备份/恢复/diff 端点 | 已交付的本地工作流 | 与 brief 共享 Core 契约；决策只能由维护者带决策文本确认后切换；不是自动评分晋级 |
+| 对手赛前简报（Opposition Briefing） | `scoutfootball.opposition-briefing` v1.0.0 schema、BriefingStore 版本化存储、分节事实分级（official/recorded/estimated/unknown）、`POST /opposition/briefs`、备份/恢复/diff 端点 | 已交付的本地工作流 | 从赛程打开来源受限简报；`recorded/not_recorded` 边界必须端到端保留；不是官方实时球队新闻 |
+| 对手赛后复盘（Post-Match Review） | `scoutfootball.opposition-post-match-review` v1.0.0 schema、ReviewStore 版本化存储、假设验证/证伪模式/新问题、`POST /opposition/reviews`、备份/恢复/diff 端点 | 已交付的本地工作流 | 与 briefing 共享 Core 契约；复盘结论必须标注事实分级和证据来源；不是自动视频分析 |
+| 决策工作流导航 + 版本恢复 | 前端 `workflow` 视图：基于已加载 brief/briefing/dossier/review 状态推断可执行下一步、阻断原因和缺失证据；前端 `versions` 视图：四类记录的备份时间线、字段级 diff、`If-Match` 恢复、可移植离线包导出 | 已交付的本地工作流 | P1 E2E 覆盖 versions 视图冒烟、workflow 视图冒烟、recruitment brief diff+restore 往返、opposition briefing diff+restore 往返（2026-07-25）；dossier/review 的 diff+restore 往返仍待补 |
 | 世界杯可复现 demo 快照 | `scripts/demo_snapshot/export_worldcup_demo_snapshot.py` 导出 6 JSON + manifest + README，`--check` 验证 hash 一致性 | 已交付的本地流程 | 剥离 volatile timestamp keys（`generated_at`/`updated_at`/`created_at`/`recorded_at`/`as_of`）后计算 SHA-256；当前 6/6 文件 hash 一致；维护者数据变更后需重新导出 |
-| 静态前端 | 22 个顶层视图、API/静态 fallback、离线状态 | 部分交付 | 静态路径映射不是全路由覆盖；静态 manifest 陈旧度和契约一致性需自动门禁 |
+| 静态前端 | 24 个顶层视图、API/静态 fallback、离线状态 | 部分交付 | 静态路径映射不是全路由覆盖；静态 manifest 陈旧度和契约一致性需自动门禁 |
 | API | 只读分析接口及有限、显式开启的本地工作区写入 | 已交付/部分交付 | 163 个路由装饰器过宽；需要分域、schema registry、弃用策略和 API/静态一致性 |
 | Streamlit | 15 页研究/运维工作台 | 已交付 | 与主静态产品的职责需要收敛，避免双重产品真源 |
 | 桌面/容器 | Electron/PyInstaller、Docker/GHCR/发布配置 | 部分交付 | 跨平台构建、签名、回滚和最终资产需在每次发布中独立确认 |
 | 云部署 | README 记录 Vercel/Render 路径 | 未核验 | 本次不把文档 URL 当成当前可达证明；发布需要实际健康检查和访问确认 |
 
-## 当前 22 个静态前端视图
+## 当前 24 个静态前端视图
 
 | 组 | 视图 |
 | --- | --- |
+| 决策工作流 | 工作流导航、版本与备份 |
 | 核心分析 | 总览、球员、对比、身价、比赛、球队、联赛、球探、动作价值、报告、战术板 |
 | 世界杯 | 赛程、阵容、球队对比、概率、淘汰赛、赛事中心 |
 | 质量与治理 | 许可、数据、校准、回测、帮助 |
@@ -101,6 +107,7 @@ row-group、hash 和最小复现，只有完成备份及行数、schema、统计
 - 球探工作区支持版本化本地导入导出与冲突预览。
 - 世界杯赛程可以进入赛前简报，并将有来源的输入交给战术计划。
 - 模型与导出已有部分来源、覆盖、快照和 lineage 字段。
+- 招募 brief/dossier 和对手 briefing/review 四类决策记录有版本化本地存储、备份/恢复/diff 端点，且 recruitment brief 和 opposition briefing 的 diff+restore 往返已通过真实浏览器 E2E（2026-07-25）。
 
 ### 必须带限定词
 
@@ -122,7 +129,7 @@ row-group、hash 和最小复现，只有完成备份及行数、schema、统计
 
 | 缺口 | 当前观察 | 目标状态 |
 | --- | --- | --- |
-| 真实浏览器 E2E | 2026-07-17 起 `tests/e2e/` 提供 Playwright + 系统 Chrome 的 smoke + workflow 覆盖（LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全），通过 `-m e2e` 显式运行 | 三个黄金工作流在 API、静态和低覆盖路径运行 |
+| 真实浏览器 E2E | 2026-07-25 起 `tests/e2e/` 提供 Playwright + 系统 Chrome 的 smoke + workflow + decision-workflow 覆盖（LIVE/STATIC/OFFLINE/空数据/低覆盖/字段缺失/移动阅读/导入安全/versions 冒烟/workflow 冒烟/recruitment brief diff+restore 往返/opposition briefing diff+restore 往返），通过 `-m e2e` 显式运行 | dossier/review 的 diff+restore 往返、三个黄金工作流在静态和低覆盖路径运行 |
 | 发布 fail-open | 2026-07-17 G0-B 已清理关键发布/数据 workflow 的 `continue-on-error`、`|| true` 和成功 placeholder | 关键验证失败即停止；仅非关键上传可明确容错 |
 | 签名与跨平台 | 签名发现被禁用，平台状态在文档间有漂移 | 每个平台独立构建、签名/未签名声明、安装与回滚证据 |
 | 静态新鲜度 | 已以本地 release 导出刷新 `frontend/data_manifest.json`；检查器同时核对文件清单、大小、去重和汇总元数据。`npm run build:sites` 与 CI 在复制 STATIC 快照前均会失败关闭 | 自动重新生成、来源/快照 SLO 与跨产物一致性仍留给 C1；门禁不会把旧快照写成新数据 |
