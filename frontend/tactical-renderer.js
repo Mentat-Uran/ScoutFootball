@@ -3012,7 +3012,7 @@ const TacticalRenderer = {
                 quality: 10,
                 width: this.canvas.width,
                 height: this.canvas.height,
-                workerScript: "https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js",
+                workerScript: "vendor/gif.worker.js",
             });
 
             // Capture each frame
