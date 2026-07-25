@@ -1292,6 +1292,38 @@ const i18n = {
         versions_backup_deletion: "删除备份",
         versions_kind_revision: "版本",
         versions_kind_deletion: "删除",
+        versions_create: "创建",
+        versions_create_dossier: "创建 Decision dossier",
+        versions_create_review: "创建 Post-match review",
+        versions_create_hint_dossier: "从工具栏直接起草新的决策档案（draft 状态）。",
+        versions_create_hint_review: "从工具栏直接起草新的赛后复盘（draft 状态）。",
+        versions_create_hint_disabled: "该类型通过球探/比赛视图创建；此处仅 dossier / review 可直接起草。",
+        versions_create_note: "本地优先：新记录以 draft 状态写入本地存储；证据、对比、风险等子项可在创建后追加。",
+        versions_create_cancel: "取消",
+        versions_create_submit: "创建",
+        versions_create_no_link: "不关联",
+        versions_create_required_missing: "必填字段缺失：",
+        versions_create_failed: "创建失败：",
+        versions_create_success: "创建成功，新记录 ID：",
+        versions_create_field_dossier_id: "Dossier ID",
+        versions_create_field_dossier_id_ph: "留空将自动生成 dossier-YYYYMMDD-xxxxxxxx",
+        versions_create_field_review_id: "Review ID",
+        versions_create_field_review_id_ph: "留空将自动生成 review-YYYYMMDD-xxxxxxxx",
+        versions_create_field_id_note: "留空时自动生成；可自定义（字母、数字、-、_，1-128 字符）。",
+        versions_create_field_title: "标题",
+        versions_create_field_title_ph: "如：Decision dossier: Player X for Arsenal LB",
+        versions_create_field_brief_id: "关联的 Recruitment brief",
+        versions_create_field_briefing_id: "关联的 Opposition briefing",
+        versions_create_field_candidate_name: "候选球员姓名",
+        versions_create_field_candidate_name_ph: "如：Player X",
+        versions_create_field_candidate_team: "候选球员当前球队",
+        versions_create_field_candidate_team_ph: "如：Current Club Y",
+        versions_create_field_home_team: "主队",
+        versions_create_field_home_team_ph: "如：Arsenal",
+        versions_create_field_away_team: "客队",
+        versions_create_field_away_team_ph: "如：Chelsea",
+        versions_create_field_human_opinion: "人工意见",
+        versions_create_field_recommendation: "建议",
     },
     en: {
         nav_overview: "Overview",
@@ -2585,6 +2617,38 @@ const i18n = {
         versions_backup_deletion: "Deletion backup",
         versions_kind_revision: "Revision",
         versions_kind_deletion: "Deletion",
+        versions_create: "Create",
+        versions_create_dossier: "Create decision dossier",
+        versions_create_review: "Create post-match review",
+        versions_create_hint_dossier: "Draft a new decision dossier (draft status) from the toolbar.",
+        versions_create_hint_review: "Draft a new post-match review (draft status) from the toolbar.",
+        versions_create_hint_disabled: "This type is created from Scouting / Matches; only dossier / review can be drafted here.",
+        versions_create_note: "Local-first: the new record is saved locally in draft status; evidence, comparisons and risks can be added after creation.",
+        versions_create_cancel: "Cancel",
+        versions_create_submit: "Create",
+        versions_create_no_link: "No link",
+        versions_create_required_missing: "Required field missing: ",
+        versions_create_failed: "Create failed: ",
+        versions_create_success: "Created, new record ID: ",
+        versions_create_field_dossier_id: "Dossier ID",
+        versions_create_field_dossier_id_ph: "Leave blank to auto-generate dossier-YYYYMMDD-xxxxxxxx",
+        versions_create_field_review_id: "Review ID",
+        versions_create_field_review_id_ph: "Leave blank to auto-generate review-YYYYMMDD-xxxxxxxx",
+        versions_create_field_id_note: "Auto-generated when blank; custom values allowed (alphanumeric, -, _, 1-128 chars).",
+        versions_create_field_title: "Title",
+        versions_create_field_title_ph: "e.g. Decision dossier: Player X for Arsenal LB",
+        versions_create_field_brief_id: "Linked recruitment brief",
+        versions_create_field_briefing_id: "Linked opposition briefing",
+        versions_create_field_candidate_name: "Candidate player name",
+        versions_create_field_candidate_name_ph: "e.g. Player X",
+        versions_create_field_candidate_team: "Candidate player's current club",
+        versions_create_field_candidate_team_ph: "e.g. Current Club Y",
+        versions_create_field_home_team: "Home team",
+        versions_create_field_home_team_ph: "e.g. Arsenal",
+        versions_create_field_away_team: "Away team",
+        versions_create_field_away_team_ph: "e.g. Chelsea",
+        versions_create_field_human_opinion: "Human opinion",
+        versions_create_field_recommendation: "Recommendation",
     },
 };
 
@@ -16611,6 +16675,12 @@ function _workflowInferSteps() {
             actionLabel: zT ? "查看数据视图" : "Open Data",
         });
     } else if (workflowState.briefs.length > 0 && workflowState.dossiers.length === 0) {
+        // Pre-fill the dossier form with the first available brief_id so the
+        // maintainer can close the brief → dossier loop in one jump. The
+        // brief_id field is a <select> in the create form, so the pre-fill
+        // value must match a brief_id in versionsState.briefs.
+        const firstBrief = workflowState.briefs[0];
+        const firstBriefId = firstBrief?.brief_id || firstBrief?.payload?.brief_id || "";
         next.push({
             id: "create-dossier",
             title: zT ? "为候选起草第一个 decision dossier" : "Draft the first decision dossier for a candidate",
@@ -16618,7 +16688,11 @@ function _workflowInferSteps() {
                 ? "已有 Recruitment brief 即可整理候选证据、对照、风险与人工判断，形成可追溯的决策档案。"
                 : "With a brief in place, collect evidence, comparisons, risks and human judgment into a traceable dossier.",
             action: "versions",
-            actionLabel: zT ? "前往版本视图" : "Open Versions",
+            actionLabel: zT ? "起草 dossier" : "Draft dossier",
+            create: {
+                type: "dossier",
+                fields: firstBriefId ? { brief_id: firstBriefId } : {},
+            },
         });
         evidenceGaps.push({
             id: "dossier-missing",
@@ -16661,6 +16735,10 @@ function _workflowInferSteps() {
             actionLabel: zT ? "查看数据视图" : "Open Data",
         });
     } else if (workflowState.briefings.length > 0 && workflowState.reviews.length === 0) {
+        // Pre-fill the review form with the first available briefing_id so
+        // the maintainer can close the briefing → review loop in one jump.
+        const firstBriefing = workflowState.briefings[0];
+        const firstBriefingId = firstBriefing?.briefing_id || firstBriefing?.payload?.briefing_id || "";
         next.push({
             id: "create-review",
             title: zT ? "为已踢比赛起草第一个 post-match review" : "Draft the first post-match review for a played match",
@@ -16668,7 +16746,11 @@ function _workflowInferSteps() {
                 ? "已有 Opposition briefing 即可对照假设-计划-执行-结果，记录确认/证伪的模式与新问题。"
                 : "With a briefing in place, compare hypothesis-plan-execution-result and record confirmed/falsified patterns and new questions.",
             action: "versions",
-            actionLabel: zT ? "前往版本视图" : "Open Versions",
+            actionLabel: zT ? "起草 review" : "Draft review",
+            create: {
+                type: "review",
+                fields: firstBriefingId ? { briefing_id: firstBriefingId } : {},
+            },
         });
         evidenceGaps.push({
             id: "review-missing",
@@ -16711,9 +16793,18 @@ function _renderWorkflowStep(step, index, kind) {
         ? "wf-step-blocker"
         : (kind === "evidence" ? "wf-step-evidence" : "");
     const markerText = kind === "blocker" ? "!" : String(index + 1);
-    const actionHtml = step.action
-        ? `<button class="wf-step-action" type="button" data-wf-jump="${escapeAttr(step.action)}">${escapeHtml(step.actionLabel || t("workflow_action_goto"))}</button>`
-        : `<button class="wf-step-action" type="button" disabled>${escapeHtml(zT ? "—" : "—")}</button>`;
+    let actionHtml;
+    if (step.create) {
+        // A "create" step jumps to the versions view but first stages a
+        // pendingCreate payload so the create dialog auto-opens with the
+        // right pre-fill (e.g. the brief_id this dossier closes).
+        const prefillJson = JSON.stringify(step.create.fields || {});
+        actionHtml = `<button class="wf-step-action" type="button" data-wf-create="${escapeAttr(step.create.type)}" data-wf-prefill="${escapeAttr(prefillJson)}">${escapeHtml(step.actionLabel || t("workflow_action_goto"))}</button>`;
+    } else if (step.action) {
+        actionHtml = `<button class="wf-step-action" type="button" data-wf-jump="${escapeAttr(step.action)}">${escapeHtml(step.actionLabel || t("workflow_action_goto"))}</button>`;
+    } else {
+        actionHtml = `<button class="wf-step-action" type="button" disabled>${escapeHtml(zT ? "—" : "—")}</button>`;
+    }
     return `
         <li class="${itemClass}" data-wf-step-id="${escapeAttr(step.id)}">
             <span class="wf-step-marker ${markerClass}">${escapeHtml(markerText)}</span>
@@ -16803,6 +16894,24 @@ function _renderWorkflowBody() {
             if (target) setView(target);
         });
     });
+    // Wire up "create" jump buttons: these stage a pendingCreate payload on
+    // versionsState (so the create dialog auto-opens with pre-fill) and then
+    // jump to the versions view. This closes the workflow breakpoint where
+    // creating a closing artifact (dossier / review) required the CLI.
+    document.querySelectorAll("#view-workflow .wf-step-action[data-wf-create]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const createType = btn.getAttribute("data-wf-create");
+            if (!createType) return;
+            let prefill = {};
+            try {
+                prefill = JSON.parse(btn.getAttribute("data-wf-prefill") || "{}");
+            } catch {
+                prefill = {};
+            }
+            versionsState.pendingCreate = { type: createType, fields: prefill };
+            setView("versions");
+        });
+    });
 }
 
 // ── Versions / backups / diff / portable pack ────────────────────────
@@ -16846,11 +16955,34 @@ const _VERSION_ARTIFACT_TYPES = {
         backupPath: (id, fn) => `/recruitment/dossiers/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
         diffPath: (id, fn) => `/recruitment/dossiers/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
         restorePath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}/restore`,
+        createPath: "/recruitment/dossiers",
         idField: "dossier_id",
         listKey: "dossiers",
         stateField: "dossiers",
         errorField: "dossiersError",
         labelKey: "versions_type_dossier",
+        createLabelKey: "versions_create_dossier",
+        createHintKey: "versions_create_hint_dossier",
+        // ID prefix used when the maintainer leaves the ID field blank.
+        idPrefix: "dossier-",
+        // Linked artifact field used for workflow pre-fill (which brief this
+        // dossier closes). Empty string means no linkage pre-fill.
+        linkField: "brief_id",
+        linkListKey: "briefs",
+        linkIdField: "brief_id",
+        // Field definitions for the create form. Order is preserved.
+        // `type` ∈ {text, textarea, select}. `required` triggers client-side
+        // validation. `prefill: true` marks fields eligible for workflow
+        // pre-fill (the link field plus free-form maintainer notes).
+        formFields: [
+            { name: "dossier_id", type: "text", required: false, labelKey: "versions_create_field_dossier_id", placeholderKey: "versions_create_field_dossier_id_ph", noteKey: "versions_create_field_id_note" },
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
+            { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_brief_id", prefill: true },
+            { name: "candidate_player_name", type: "text", required: false, labelKey: "versions_create_field_candidate_name", placeholderKey: "versions_create_field_candidate_name_ph" },
+            { name: "candidate_team_name", type: "text", required: false, labelKey: "versions_create_field_candidate_team", placeholderKey: "versions_create_field_candidate_team_ph" },
+            { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion", prefill: true },
+            { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation", prefill: true },
+        ],
     },
     review: {
         listPath: "/opposition/reviews",
@@ -16859,11 +16991,27 @@ const _VERSION_ARTIFACT_TYPES = {
         backupPath: (id, fn) => `/opposition/reviews/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
         diffPath: (id, fn) => `/opposition/reviews/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
         restorePath: (id) => `/opposition/reviews/${encodeURIComponent(id)}/restore`,
+        createPath: "/opposition/reviews",
         idField: "review_id",
         listKey: "reviews",
         stateField: "reviews",
         errorField: "reviewsError",
         labelKey: "versions_type_review",
+        createLabelKey: "versions_create_review",
+        createHintKey: "versions_create_hint_review",
+        idPrefix: "review-",
+        linkField: "briefing_id",
+        linkListKey: "briefings",
+        linkIdField: "briefing_id",
+        formFields: [
+            { name: "review_id", type: "text", required: false, labelKey: "versions_create_field_review_id", placeholderKey: "versions_create_field_review_id_ph", noteKey: "versions_create_field_id_note" },
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
+            { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_briefing_id", prefill: true },
+            { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
+            { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
+            { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion", prefill: true },
+            { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation", prefill: true },
+        ],
     },
 };
 
@@ -16888,6 +17036,12 @@ const versionsState = {
     diff: null,
     diffError: null,
     currentRevision: null, // server_revision of the live record
+    // When the maintainer jumps from the workflow view to create a closing
+    // artifact (dossier/review), this field carries pre-fill context so the
+    // create dialog can auto-open with the right brief_id / briefing_id.
+    // Shape: { type: "dossier"|"review", linkId: string, fields: {name: value} }
+    // Cleared after the dialog opens or is dismissed.
+    pendingCreate: null,
 };
 
 async function _fetchVersionRecords() {
@@ -17155,6 +17309,271 @@ async function renderVersions() {
     _renderVersionDiff();
     _updateVersionActionButtons();
     _renderVersionStatusRail();
+    _updateCreateButtonVisibility();
+    // Auto-open the create dialog when the maintainer jumped here from the
+    // workflow view with pre-fill context. This closes the workflow breakpoint
+    // where creating a dossier/review previously required the CLI.
+    _handlePendingCreate();
+}
+
+function _isCreateableType(type) {
+    const cfg = _versionTypeConfig(type);
+    return Array.isArray(cfg.formFields) && cfg.formFields.length > 0 && typeof cfg.createPath === "string";
+}
+
+function _updateCreateButtonVisibility() {
+    const createBtn = document.getElementById("ver-create");
+    const createHint = document.getElementById("ver-create-hint");
+    if (!createBtn) return;
+    const isCreateable = _isCreateableType(versionsState.type);
+    createBtn.hidden = !isCreateable;
+    if (!createHint) return;
+    if (!isCreateable) {
+        createHint.textContent = t("versions_create_hint_disabled");
+        return;
+    }
+    const cfg = _versionTypeConfig(versionsState.type);
+    createHint.textContent = t(cfg.createHintKey);
+}
+
+function _handlePendingCreate() {
+    const pending = versionsState.pendingCreate;
+    if (!pending) return;
+    versionsState.pendingCreate = null;
+    if (!_isCreateableType(pending.type)) return;
+    // Sync the type selector so the dialog reads from the right config.
+    const typeSelect = document.getElementById("ver-type-select");
+    if (typeSelect) typeSelect.value = pending.type;
+    versionsState.type = pending.type;
+    _updateCreateButtonVisibility();
+    _openCreateDialog(pending.fields || {});
+}
+
+function _generateArtifactId(prefix) {
+    const now = new Date();
+    const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const rand = Math.random().toString(36).slice(2, 10);
+    return `${prefix}${datePart}-${rand}`;
+}
+
+function _renderCreateField(field, value) {
+    const id = `ver-create-input-${field.name}`;
+    const labelTxt = t(field.labelKey);
+    const required = !!field.required;
+    const requiredMark = required ? ' <span style="color:var(--danger)">*</span>' : "";
+    const note = field.noteKey
+        ? `<span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t(field.noteKey))}</span>`
+        : "";
+    let control = "";
+    if (field.type === "textarea") {
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="3" style="width:100%;min-height:64px;resize:vertical;font-family:inherit;font-size:0.82rem;padding:8px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(value || "")}</textarea>`;
+    } else if (field.type === "select") {
+        const cfg = _versionTypeConfig(versionsState.type);
+        const linkList = versionsState[cfg.linkListKey] || [];
+        const linkIdField = cfg.linkIdField;
+        const options = [`<option value="">— ${escapeHtml(t("versions_create_no_link"))} —</option>`]
+            .concat(linkList.map((rec) => {
+                const lid = rec[linkIdField] || rec.payload?.[linkIdField] || "";
+                const title = rec.title || rec.payload?.title || lid;
+                return `<option value="${escapeAttr(lid)}">${escapeHtml(lid ? `${lid} · ${title}` : title)}</option>`;
+            }));
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options.join("")}</select>`;
+    } else {
+        const placeholder = field.placeholderKey ? ` placeholder="${escapeAttr(t(field.placeholderKey))}"` : "";
+        const val = value || "";
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="text" value="${escapeAttr(val)}"${placeholder} class="glass-control" style="width:100%">`;
+    }
+    return `
+        <label style="display:grid;gap:4px;font-size:0.74rem;color:var(--text-muted)">
+            <span>${escapeHtml(labelTxt)}${requiredMark}</span>
+            ${control}
+            ${note}
+        </label>`;
+}
+
+function _openCreateDialog(prefill = {}) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!_isCreateableType(versionsState.type)) return;
+    const dialog = document.getElementById("ver-create-dialog");
+    const titleEl = document.getElementById("ver-create-title");
+    const kickerEl = document.getElementById("ver-create-kicker");
+    const fieldsEl = document.getElementById("ver-create-fields");
+    if (!dialog || !fieldsEl) return;
+    if (titleEl) titleEl.textContent = t(cfg.createLabelKey);
+    if (kickerEl) kickerEl.textContent = t(cfg.labelKey);
+
+    // Render fields, applying pre-fill where the field is eligible and a value
+    // is provided. The ID field is auto-generated when the maintainer leaves
+    // it blank on submit, so we don't pre-fill it.
+    const fieldsHtml = cfg.formFields.map((field) => {
+        let value = "";
+        if (field.prefill && Object.prototype.hasOwnProperty.call(prefill, field.name)) {
+            value = prefill[field.name] || "";
+        }
+        return _renderCreateField(field, value);
+    }).join("");
+    fieldsEl.innerHTML = fieldsHtml;
+
+    // Apply pre-fill to select fields (they need .value set after render).
+    cfg.formFields.forEach((field) => {
+        if (field.type === "select" && field.prefill && Object.prototype.hasOwnProperty.call(prefill, field.name)) {
+            const el = document.getElementById(`ver-create-input-${field.name}`);
+            if (el) el.value = prefill[field.name] || "";
+        }
+    });
+
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+}
+
+function _closeCreateDialog() {
+    const dialog = document.getElementById("ver-create-dialog");
+    if (!dialog) return;
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+}
+
+function _collectCreateForm() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const form = document.getElementById("ver-create-form");
+    if (!form) return { ok: false, error: "form_missing" };
+    const data = {};
+    let firstMissing = null;
+    for (const field of cfg.formFields) {
+        const el = document.getElementById(`ver-create-input-${field.name}`);
+        if (!el) continue;
+        const raw = (el.value || "").trim();
+        if (field.required && !raw) {
+            firstMissing = firstMissing || field;
+            el.style.borderColor = "var(--danger)";
+        } else {
+            el.style.borderColor = "";
+        }
+        data[field.name] = raw;
+    }
+    if (firstMissing) {
+        return { ok: false, error: "required_missing", field: firstMissing };
+    }
+    // Auto-generate ID if the maintainer left it blank.
+    const idField = cfg.idField;
+    if (!data[idField]) {
+        data[idField] = _generateArtifactId(cfg.idPrefix);
+    }
+    return { ok: true, data };
+}
+
+function _buildCreatePayload(data) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const now = new Date().toISOString();
+    // Start from the maintainer-entered fields, then add server-side defaults
+    // that the Pydantic model requires (created_at/updated_at/author/schema).
+    // The store will re-validate via the model, so this is not a security
+    // boundary — it's a convenience so the form stays small.
+    const payload = { ...data };
+    if (versionsState.type === "dossier") {
+        payload.schema = "scoutfootball.recruitment-decision-dossier";
+        payload.version = "1.0.0";
+        payload.revision = 1;
+        payload.created_at = now;
+        payload.updated_at = now;
+        payload.author = "maintainer";
+        payload.status = "draft";
+        payload.decision = null;
+        payload.decision_note = "";
+        payload.supporting_evidence = [];
+        payload.counter_evidence = [];
+        payload.comparisons = [];
+        payload.risks = [];
+        payload.linked_artifacts = [];
+        payload.notes = "";
+        payload.limitations = [
+            "Dossier is a personal local object; not an external fact.",
+            "Decision is the maintainer's honest judgment, not an automated recommendation.",
+        ];
+        // candidate_player_id / candidate_season_id are not in the small form;
+        // send empty strings so the model's max_length defaults are honoured.
+        if (!Object.prototype.hasOwnProperty.call(payload, "candidate_player_id")) payload.candidate_player_id = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "candidate_season_id")) payload.candidate_season_id = "";
+    } else if (versionsState.type === "review") {
+        payload.schema = "scoutfootball.opposition-post-match-review";
+        payload.version = "1.0.0";
+        payload.revision = 1;
+        payload.created_at = now;
+        payload.updated_at = now;
+        payload.author = "maintainer";
+        payload.status = "draft";
+        payload.decision = null;
+        payload.decision_note = "";
+        payload.hypothesis_results = [];
+        payload.falsified_patterns = [];
+        payload.new_questions = [];
+        payload.supporting_evidence = [];
+        payload.counter_evidence = [];
+        payload.linked_artifacts = [];
+        payload.notes = "";
+        payload.limitations = [
+            "Review is a personal local object; not an external fact.",
+            "Decision is the maintainer's honest judgment, not an automated recommendation.",
+        ];
+        // Optional match context fields not in the small form.
+        if (!Object.prototype.hasOwnProperty.call(payload, "match_id")) payload.match_id = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "competition")) payload.competition = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "season")) payload.season = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "final_score_home")) payload.final_score_home = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "final_score_away")) payload.final_score_away = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "kickoff_at")) payload.kickoff_at = null;
+    }
+    return payload;
+}
+
+async function _submitCreateForm() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const submitBtn = document.getElementById("ver-create-submit");
+    const result = _collectCreateForm();
+    if (!result.ok) {
+        if (result.field) {
+            alert(t("versions_create_required_missing") + (result.field.labelKey ? t(result.field.labelKey) : result.field.name));
+        }
+        return;
+    }
+    if (submitBtn) submitBtn.disabled = true;
+    const payload = _buildCreatePayload(result.data);
+    try {
+        const resp = await fetch(API_BASE + cfg.createPath, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const text = await resp.text();
+        let body = null;
+        try { body = JSON.parse(text); } catch { body = null; }
+        if (!resp.ok || body?.status !== "ok") {
+            const msg = body?.message || body?.code || `HTTP ${resp.status}`;
+            alert(`${t("versions_create_failed")}${msg}`);
+            return;
+        }
+        // Success: close the dialog, refresh the list, and select the new
+        // record so the maintainer can immediately see its timeline.
+        _closeCreateDialog();
+        await _fetchVersionRecords();
+        versionsState.type = versionsState.type; // keep current type
+        versionsState.selectedId = payload[cfg.idField];
+        _renderVersionRecordOptions();
+        if (versionsState.selectedId) {
+            await _fetchVersionBackups(versionsState.selectedId);
+        }
+        _renderVersionSummary();
+        _renderVersionTimeline();
+        _renderVersionDiff();
+        _updateVersionActionButtons();
+        _renderVersionStatusRail();
+        _updateCreateButtonVisibility();
+        alert(`${t("versions_create_success")}${payload[cfg.idField]}`);
+    } catch (err) {
+        alert(`${t("versions_create_failed")}${err?.message || err}`);
+    } finally {
+        if (submitBtn) submitBtn.disabled = false;
+    }
 }
 
 function _renderVersionSummary() {
@@ -17187,6 +17606,10 @@ function _wireVersionControlsOnce() {
     const diffBtn = document.getElementById("ver-diff-backup");
     const restoreBtn = document.getElementById("ver-restore-backup");
     const exportPackBtn = document.getElementById("ver-export-pack");
+    const createBtn = document.getElementById("ver-create");
+    const createCloseBtn = document.getElementById("ver-create-close");
+    const createCancelBtn = document.getElementById("ver-create-cancel");
+    const createForm = document.getElementById("ver-create-form");
 
     if (typeSelect) {
         typeSelect.addEventListener("change", async () => {
@@ -17196,6 +17619,25 @@ function _wireVersionControlsOnce() {
             versionsState.selectedBackup = null;
             versionsState.diff = null;
             await renderVersions();
+        });
+    }
+    if (createBtn) {
+        createBtn.addEventListener("click", () => {
+            // No pre-fill when the maintainer opens the dialog directly from
+            // the versions view toolbar.
+            _openCreateDialog({});
+        });
+    }
+    if (createCloseBtn) {
+        createCloseBtn.addEventListener("click", () => _closeCreateDialog());
+    }
+    if (createCancelBtn) {
+        createCancelBtn.addEventListener("click", () => _closeCreateDialog());
+    }
+    if (createForm) {
+        createForm.addEventListener("submit", (ev) => {
+            ev.preventDefault();
+            void _submitCreateForm();
         });
     }
     if (recordSelect) {

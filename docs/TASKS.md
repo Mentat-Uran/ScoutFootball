@@ -346,6 +346,27 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 **遗留**：dossier / review 编辑 UI 仍未实现（与 6.5 / 6.7 一致）；三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 一致）。本轮修的是 6.7 LIVE 契约下的字段级假阳性回归，不改变 P1 节点整体状态。
 
+### 6.9 P1 决策闭环创建路径补齐（versions 视图起草 dossier / review） — `verified`（2026-07-25）
+
+关闭 6.5 / 6.6 / 6.7 / 6.8 反复遗留的"dossier / review 创建仍依赖 CLI"断点。此前四类决策档案中只有 brief / briefing 有 UI 创建入口（球探视图与比赛视图），dossier / review 只能通过 `POST /recruitment/dossiers` / `POST /opposition/reviews` 配合手写 JSON 调用，维护者无法在浏览器中完成 brief → dossier 与 briefing → review 的最后一步。本轮把两类决策档案的起草入口接入 versions 视图，并支持从工作流视图跳转时携带 pre-fill。
+
+**核心交付**：
+
+- `frontend/index.html`：versions 视图工具栏新增 `#ver-create` 按钮（默认 `hidden`，仅 dossier / review 类型显示）与 `#ver-create-hint` 提示文本；新增 `#ver-create-dialog` 模态对话框（沿用 `workspace-dialog` 模式，含 kicker / title / fields 容器 / 本地优先说明 / 取消-提交按钮）。
+- `frontend/app.js`：扩展 `_VERSION_ARTIFACT_TYPES` 配置表，为 `dossier` / `review` 增加 `createPath` / `createLabelKey` / `createHintKey` / `idPrefix` / `linkField` / `linkListKey` / `linkIdField` / `formFields`（text/textarea/select 类型，标 `required` 与 `prefill` 标志）。新增 `_isCreateableType` / `_updateCreateButtonVisibility` / `_handlePendingCreate` / `_renderCreateField` / `_openCreateDialog` / `_closeCreateDialog` / `_collectCreateForm` / `_buildCreatePayload` / `_submitCreateForm` / `_generateArtifactId` 函数：表单按配置驱动渲染，必填字段客户端校验，ID 留空自动生成 `dossier-YYYYMMDD-xxxxxxxx` / `review-YYYYMMDD-xxxxxxxx`，提交后刷新列表并选中新建记录。`renderVersions` 末尾调用 `_updateCreateButtonVisibility` 与 `_handlePendingCreate`，让从工作流视图跳转过来的请求能自动打开对话框并应用 pre-fill。`_renderWorkflowStep` 在 `step.create` 存在时渲染 `data-wf-create` / `data-wf-prefill` 按钮，并在 `bindWorkflowView` 中绑定点击事件，把 `{type, fields}` 写入 `versionsState.pendingCreate` 后切到 versions 视图。中英文 i18n 同步补齐 30+ 个新键（label / hint / field / placeholder / note / cancel / submit / success / failed）。
+- `frontend/style.css`：在 `:root` 与 `body.dark-mode` 增加 `--danger: var(--bad);` 别名。新表单的必填星号、必填缺失高亮与若干既有 `var(--danger)` 引用此前 fallback 失效（变量未定义），本轮统一为 `--bad` 的别名，避免必填标记在浏览器中颜色丢失。
+- `tests/e2e/test_decision_workflows.py`：新增 `seeded_brief_for_create_jump` fixture 与 4 个测试：`test_versions_view_create_button_visibility`（brief / briefing 类型按钮隐藏且提示非空、dossier / review 类型按钮可见且提示非空）、`test_versions_view_create_dossier_round_trip`（验证必填校验、提交后对话框关闭、列表计数 +1、新 ID 含 `dossier-` 前缀、清理新建记录）、`test_versions_view_create_review_round_trip`（同形，验证 review 路径与 `review-` 前缀）、`test_workflow_create_dossier_jump_prefills_brief_id`（验证工作流 create-dossier 步骤携带 pre-fill、跳转后对话框自动打开、type 选择器同步、`brief_id` select 预选）。
+- `docs/CAPABILITIES.md`：可以陈述与 E2E 覆盖行同步：versions 视图支持起草 dossier / review；从工作流视图跳转携带 pre-fill；E2E 覆盖创建按钮可见性、dossier / review 创建往返、工作流跳转 pre-fill 三类。
+
+**测试覆盖**：
+
+- `uv run ruff check .`：All checks passed。
+- `node --check frontend/app.js`：通过。
+- `uv run pytest tests/unit/test_decision_dossier_and_review_api.py tests/unit/test_recruitment_dossier.py tests/unit/test_opposition_post_match_review.py tests/unit/test_recruitment_brief.py tests/unit/test_opposition_briefing.py tests/unit/test_brief_backup_restore.py tests/unit/test_decision_package.py tests/unit/test_frontend_feature_contracts.py --tb=short`：346 通过。
+- `uv run pytest tests/e2e/test_decision_workflows.py -m e2e -v`：13 个测试 12 通过；失败的 `test_workflow_create_dossier_jump_prefills_brief_id` 在 5:49 长时间连续运行后因浏览器 `initial-load` 超时；单独 `pytest tests/e2e/test_decision_workflows.py::test_workflow_create_dossier_jump_prefills_brief_id -m e2e` 在 39s 通过，确认是 flaky 测试基础设施（资源耗尽），不是测试逻辑或代码缺陷。
+
+**遗留**：dossier / review 的"编辑" UI 仍未实现（创建后修改仍需通过 restore-from-backup 间接进行）；三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 一致）。本轮只补创建路径，不改变 P1 节点整体状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
