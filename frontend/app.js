@@ -1399,6 +1399,44 @@ const i18n = {
         versions_edit_decision_partial: "部分确认（partial）",
         versions_edit_decision_inconclusive: "无法定论（inconclusive）",
         versions_edit_decision_none: "（无）",
+        versions_edit_list_supporting_evidence: "支持证据",
+        versions_edit_list_counter_evidence: "反证",
+        versions_edit_list_comparisons: "对比对象",
+        versions_edit_list_risks: "风险",
+        versions_edit_list_hypothesis_results: "假设对照",
+        versions_edit_list_falsified_patterns: "被证伪的模式",
+        versions_edit_list_new_questions: "新问题",
+        versions_edit_field_evidence_id: "证据 ID",
+        versions_edit_field_comparison_id: "对比 ID",
+        versions_edit_field_risk_id: "风险 ID",
+        versions_edit_field_hypothesis_id: "假设 ID",
+        versions_edit_field_pattern_id: "模式 ID",
+        versions_edit_field_question_id: "问题 ID",
+        versions_edit_field_fact_tier: "事实层级",
+        versions_edit_field_severity: "严重度",
+        versions_edit_field_outcome: "结果",
+        versions_edit_field_summary: "摘要",
+        versions_edit_field_comparison_player_id: "对比球员 ID",
+        versions_edit_field_comparison_player_name: "对比球员姓名",
+        versions_edit_field_planned: "计划",
+        versions_edit_field_observed: "实际观察",
+        versions_edit_field_scope: "范围",
+        versions_edit_field_evidence_refs: "证据引用（每行一条）",
+        versions_edit_fact_tier_official: "官方（official）",
+        versions_edit_fact_tier_recorded: "已记录（recorded）",
+        versions_edit_fact_tier_estimated: "估算（estimated）",
+        versions_edit_fact_tier_unknown: "未知（unknown）",
+        versions_edit_severity_low: "低（low）",
+        versions_edit_severity_medium: "中（medium）",
+        versions_edit_severity_high: "高（high）",
+        versions_edit_outcome_confirmed: "确认（confirmed）",
+        versions_edit_outcome_falsified: "证伪（falsified）",
+        versions_edit_outcome_partial: "部分（partial）",
+        versions_edit_list_add: "新增条目",
+        versions_edit_list_remove: "移除",
+        versions_edit_list_empty: "（暂无条目）",
+        versions_edit_list_required: "每个条目必须填写 ID 和必填字段；枚举值必须合法。",
+        versions_edit_list_dup_id: "存在重复 ID：",
     },
     en: {
         nav_overview: "Overview",
@@ -2799,6 +2837,44 @@ const i18n = {
         versions_edit_decision_partial: "Partial",
         versions_edit_decision_inconclusive: "Inconclusive",
         versions_edit_decision_none: "(none)",
+        versions_edit_list_supporting_evidence: "Supporting evidence",
+        versions_edit_list_counter_evidence: "Counter evidence",
+        versions_edit_list_comparisons: "Comparisons",
+        versions_edit_list_risks: "Risks",
+        versions_edit_list_hypothesis_results: "Hypothesis results",
+        versions_edit_list_falsified_patterns: "Falsified patterns",
+        versions_edit_list_new_questions: "New questions",
+        versions_edit_field_evidence_id: "Evidence ID",
+        versions_edit_field_comparison_id: "Comparison ID",
+        versions_edit_field_risk_id: "Risk ID",
+        versions_edit_field_hypothesis_id: "Hypothesis ID",
+        versions_edit_field_pattern_id: "Pattern ID",
+        versions_edit_field_question_id: "Question ID",
+        versions_edit_field_fact_tier: "Fact tier",
+        versions_edit_field_severity: "Severity",
+        versions_edit_field_outcome: "Outcome",
+        versions_edit_field_summary: "Summary",
+        versions_edit_field_comparison_player_id: "Comparison player ID",
+        versions_edit_field_comparison_player_name: "Comparison player name",
+        versions_edit_field_planned: "Planned",
+        versions_edit_field_observed: "Observed",
+        versions_edit_field_scope: "Scope",
+        versions_edit_field_evidence_refs: "Evidence refs (one per line)",
+        versions_edit_fact_tier_official: "Official",
+        versions_edit_fact_tier_recorded: "Recorded",
+        versions_edit_fact_tier_estimated: "Estimated",
+        versions_edit_fact_tier_unknown: "Unknown",
+        versions_edit_severity_low: "Low",
+        versions_edit_severity_medium: "Medium",
+        versions_edit_severity_high: "High",
+        versions_edit_outcome_confirmed: "Confirmed",
+        versions_edit_outcome_falsified: "Falsified",
+        versions_edit_outcome_partial: "Partial",
+        versions_edit_list_add: "Add entry",
+        versions_edit_list_remove: "Remove",
+        versions_edit_list_empty: "(no entries)",
+        versions_edit_list_required: "Each entry must have an ID and required fields; enum values must be valid.",
+        versions_edit_list_dup_id: "Duplicate ID: ",
     },
 };
 
@@ -17213,9 +17289,11 @@ const _VERSION_ARTIFACT_TYPES = {
         ],
         // Editable fields for the PUT /recruitment/dossiers/{id} endpoint.
         // Kept in sync with _DOSSIER_EDITABLE_FIELDS in api.py. The ID
-        // field, schema, version, evidence, comparisons, risks,
-        // limitations and linked_artifacts are not editable here — they
-        // have their own lifecycle.
+        // field, schema, version, limitations and linked_artifacts are
+        // not editable here — they have their own lifecycle. The
+        // entry-list fields (supporting_evidence, counter_evidence,
+        // comparisons, risks) ARE editable and are described by
+        // `entryLists` below; they use full-list replacement semantics.
         editFormFields: [
             { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
             { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_link_brief_id" },
@@ -17227,6 +17305,63 @@ const _VERSION_ARTIFACT_TYPES = {
             { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion" },
             { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation" },
             { name: "notes", type: "textarea", required: false, labelKey: "versions_edit_field_notes" },
+        ],
+        // Entry-list fields rendered as config-driven list editors in
+        // the edit dialog. Each list uses full-list replacement: the
+        // caller sends the complete new list and the server re-validates
+        // each entry's schema, id uniqueness and enum values.
+        entryLists: [
+            {
+                fieldName: "supporting_evidence",
+                labelKey: "versions_edit_list_supporting_evidence",
+                idField: "evidence_id",
+                idPrefix: "ev-",
+                fields: [
+                    { name: "evidence_id", type: "text", required: true, labelKey: "versions_edit_field_evidence_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "counter_evidence",
+                labelKey: "versions_edit_list_counter_evidence",
+                idField: "evidence_id",
+                idPrefix: "cev-",
+                fields: [
+                    { name: "evidence_id", type: "text", required: true, labelKey: "versions_edit_field_evidence_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "comparisons",
+                labelKey: "versions_edit_list_comparisons",
+                idField: "comparison_id",
+                idPrefix: "cmp-",
+                fields: [
+                    { name: "comparison_id", type: "text", required: true, labelKey: "versions_edit_field_comparison_id" },
+                    { name: "comparison_player_id", type: "text", required: false, labelKey: "versions_edit_field_comparison_player_id" },
+                    { name: "comparison_player_name", type: "text", required: false, labelKey: "versions_edit_field_comparison_player_name" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "risks",
+                labelKey: "versions_edit_list_risks",
+                idField: "risk_id",
+                idPrefix: "risk-",
+                fields: [
+                    { name: "risk_id", type: "text", required: true, labelKey: "versions_edit_field_risk_id" },
+                    { name: "summary", type: "textarea", required: true, labelKey: "versions_edit_field_summary" },
+                    { name: "severity", type: "select-enum", required: true, labelKey: "versions_edit_field_severity", options: ["low", "medium", "high"] },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
         ],
         // Status values valid for this artifact type. Used to populate the
         // status dropdown in the edit dialog. Must match the Pydantic
@@ -17271,9 +17406,11 @@ const _VERSION_ARTIFACT_TYPES = {
         ],
         // Editable fields for the PUT /opposition/reviews/{id} endpoint.
         // Kept in sync with _REVIEW_EDITABLE_FIELDS in api.py. The ID
-        // field, schema, version, hypothesis_results, falsified_patterns,
-        // new_questions, evidence, limitations and linked_artifacts are
-        // not editable here.
+        // field, schema, version, limitations and linked_artifacts are
+        // not editable here. The entry-list fields (hypothesis_results,
+        // falsified_patterns, new_questions, supporting_evidence,
+        // counter_evidence) ARE editable and are described by
+        // `entryLists` below; they use full-list replacement semantics.
         editFormFields: [
             { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
             { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_link_briefing_id" },
@@ -17290,6 +17427,77 @@ const _VERSION_ARTIFACT_TYPES = {
             { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion" },
             { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation" },
             { name: "notes", type: "textarea", required: false, labelKey: "versions_edit_field_notes" },
+        ],
+        // Entry-list fields rendered as config-driven list editors.
+        // Each list uses full-list replacement: the caller sends the
+        // complete new list and the server re-validates each entry's
+        // schema, id uniqueness and enum values (fact_tier / severity /
+        // outcome).
+        entryLists: [
+            {
+                fieldName: "hypothesis_results",
+                labelKey: "versions_edit_list_hypothesis_results",
+                idField: "hypothesis_id",
+                idPrefix: "hyp-",
+                fields: [
+                    { name: "hypothesis_id", type: "text", required: true, labelKey: "versions_edit_field_hypothesis_id" },
+                    { name: "planned", type: "text", required: false, labelKey: "versions_edit_field_planned" },
+                    { name: "observed", type: "text", required: false, labelKey: "versions_edit_field_observed" },
+                    { name: "outcome", type: "select-enum", required: true, labelKey: "versions_edit_field_outcome", options: ["confirmed", "falsified", "partial"] },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "falsified_patterns",
+                labelKey: "versions_edit_list_falsified_patterns",
+                idField: "pattern_id",
+                idPrefix: "fp-",
+                fields: [
+                    { name: "pattern_id", type: "text", required: true, labelKey: "versions_edit_field_pattern_id" },
+                    { name: "summary", type: "textarea", required: true, labelKey: "versions_edit_field_summary" },
+                    { name: "severity", type: "select-enum", required: true, labelKey: "versions_edit_field_severity", options: ["low", "medium", "high"] },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "new_questions",
+                labelKey: "versions_edit_list_new_questions",
+                idField: "question_id",
+                idPrefix: "q-",
+                fields: [
+                    { name: "question_id", type: "text", required: true, labelKey: "versions_edit_field_question_id" },
+                    { name: "summary", type: "textarea", required: true, labelKey: "versions_edit_field_summary" },
+                    { name: "scope", type: "text", required: false, labelKey: "versions_edit_field_scope" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "supporting_evidence",
+                labelKey: "versions_edit_list_supporting_evidence",
+                idField: "evidence_id",
+                idPrefix: "ev-",
+                fields: [
+                    { name: "evidence_id", type: "text", required: true, labelKey: "versions_edit_field_evidence_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "counter_evidence",
+                labelKey: "versions_edit_list_counter_evidence",
+                idField: "evidence_id",
+                idPrefix: "cev-",
+                fields: [
+                    { name: "evidence_id", type: "text", required: true, labelKey: "versions_edit_field_evidence_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
         ],
         validStatuses: ["draft", "finalized", "superseded"],
         decisionRequiredStatus: "finalized",
@@ -18029,6 +18237,180 @@ function _renderEditField(field, currentValue, cfg) {
         </label>`;
 }
 
+// ─ Entry-list editor (supporting_evidence, risks, hypothesis_results, etc.) ─
+//
+// The entry-list editor renders a config-driven list of entries (each
+// with its own sub-fields) inside the edit dialog. The config comes from
+// `cfg.entryLists` (see _VERSION_ARTIFACT_TYPES). The DOM is the single
+// source of truth: add/remove re-reads the current entries from the DOM
+// and re-renders the section, so no separate JS-side state is needed.
+
+function _enumOptionLabel(enumName, value) {
+    // Map (enumName, value) to an i18n key like
+    // versions_edit_fact_tier_official / versions_edit_severity_low /
+    // versions_edit_outcome_confirmed. Falls back to the raw value if
+    // no key is defined.
+    const key = `versions_edit_${enumName}_${value}`;
+    const lbl = t(key);
+    return lbl === key ? value : lbl;
+}
+
+function _renderEditEntryField(field, currentValue, listFieldName, entryIdx) {
+    const id = `ver-edit-entry-${listFieldName}-${entryIdx}-${field.name}`;
+    const labelTxt = t(field.labelKey);
+    const required = !!field.required;
+    const requiredMark = required ? ' <span style="color:var(--danger)">*</span>' : "";
+    let control = "";
+    if (field.type === "textarea") {
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="2" style="width:100%;min-height:48px;resize:vertical;font-family:inherit;font-size:0.8rem;padding:6px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(currentValue || "")}</textarea>`;
+    } else if (field.type === "select-enum") {
+        // Enum dropdown. The option label uses the i18n key pattern
+        // versions_edit_<enumName>_<value> (e.g. versions_edit_fact_tier_official).
+        const enumName = field.name;
+        const options = field.options.map((opt) =>
+            `<option value="${escapeAttr(opt)}">${escapeHtml(_enumOptionLabel(enumName, opt))}</option>`,
+        ).join("");
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options}</select>`;
+    } else if (field.type === "list-strings") {
+        // evidence_refs: one string per line. The collect step splits
+        // by newline, trims and drops empty lines.
+        const val = Array.isArray(currentValue) ? currentValue.join("\n") : (currentValue || "");
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="2" style="width:100%;min-height:48px;resize:vertical;font-family:inherit;font-size:0.8rem;padding:6px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(val)}</textarea>`;
+    } else {
+        const val = currentValue || "";
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="text" value="${escapeAttr(val)}" class="glass-control" style="width:100%">`;
+    }
+    return `
+        <label style="display:grid;gap:3px;font-size:0.72rem;color:var(--text-muted)">
+            <span>${escapeHtml(labelTxt)}${requiredMark}</span>
+            ${control}
+        </label>`;
+}
+
+function _renderEditEntryList(listCfg, entries, cfg) {
+    const fieldName = listCfg.fieldName;
+    const headerTxt = t(listCfg.labelKey);
+    const addBtnTxt = t("versions_edit_list_add");
+    const removeBtnTxt = t("versions_edit_list_remove");
+    const emptyTxt = t("versions_edit_list_empty");
+    const safeEntries = Array.isArray(entries) ? entries : [];
+
+    const itemsHtml = safeEntries.length === 0
+        ? `<div style="font-size:0.74rem;color:var(--text-muted);padding:6px 0">${escapeHtml(emptyTxt)}</div>`
+        : safeEntries.map((entry, idx) => {
+            const fieldsHtml = listCfg.fields.map((field) => {
+                const v = entry?.[field.name];
+                return _renderEditEntryField(field, v, fieldName, idx);
+            }).join("");
+            return `
+                <div class="ver-edit-entry" data-entry-idx="${idx}" style="border:1px solid var(--glass-border);border-radius:var(--radius-md);padding:8px;display:grid;gap:6px;background:var(--glass-bg)">
+                    <div class="ver-edit-entry-fields" style="display:grid;gap:6px">${fieldsHtml}</div>
+                    <button type="button" onclick="_removeEditEntry('${escapeAttr(fieldName)}', ${idx})" style="justify-self:start;font-size:0.72rem;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-muted);cursor:pointer">${escapeHtml(removeBtnTxt)}</button>
+                </div>`;
+        }).join("");
+
+    return `
+        <div class="ver-edit-entry-list" data-entry-list="${escapeAttr(fieldName)}" style="border-top:1px solid var(--glass-border);padding-top:10px;margin-top:10px;display:grid;gap:6px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:0.8rem;font-weight:600;color:var(--text-primary)">${escapeHtml(headerTxt)}</span>
+                <button type="button" onclick="_addEditEntry('${escapeAttr(fieldName)}')" style="font-size:0.74rem;padding:4px 12px;border-radius:var(--radius-sm);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary);cursor:pointer">${escapeHtml(addBtnTxt)}</button>
+            </div>
+            <div class="ver-edit-entry-list-items" style="display:grid;gap:6px">${itemsHtml}</div>
+        </div>`;
+}
+
+function _readEditEntryListFromDom(listCfg) {
+    // Read all entries from the DOM. The DOM is the source of truth:
+    // add/remove calls this before re-rendering so no edits are lost.
+    const fieldName = listCfg.fieldName;
+    const container = document.querySelector(`.ver-edit-entry-list[data-entry-list="${fieldName}"] .ver-edit-entry-list-items`);
+    if (!container) return [];
+    const entryEls = container.querySelectorAll(".ver-edit-entry");
+    const entries = [];
+    entryEls.forEach((entryEl) => {
+        const entry = {};
+        listCfg.fields.forEach((field) => {
+            const el = document.getElementById(`ver-edit-entry-${fieldName}-${entryEl.dataset.entryIdx}-${field.name}`);
+            if (!el) {
+                entry[field.name] = field.type === "list-strings" ? [] : "";
+                return;
+            }
+            if (field.type === "list-strings") {
+                // Split by newline, trim, drop empty lines.
+                entry[field.name] = el.value.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+            } else {
+                entry[field.name] = el.value;
+            }
+        });
+        entries.push(entry);
+    });
+    return entries;
+}
+
+function _rerenderEditEntryList(fieldName) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!cfg.entryLists) return;
+    const listCfg = cfg.entryLists.find((l) => l.fieldName === fieldName);
+    if (!listCfg) return;
+    const entries = _readEditEntryListFromDom(listCfg);
+    const wrapper = document.querySelector(`.ver-edit-entry-list[data-entry-list="${fieldName}"]`);
+    if (!wrapper) return;
+    // Replace the whole entry-list section with a fresh render.
+    const newHtml = _renderEditEntryList(listCfg, entries, cfg);
+    wrapper.outerHTML = newHtml;
+}
+
+function _addEditEntry(fieldName) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!cfg.entryLists) return;
+    const listCfg = cfg.entryLists.find((l) => l.fieldName === fieldName);
+    if (!listCfg) return;
+    const entries = _readEditEntryListFromDom(listCfg);
+    // Build a new empty entry. Defaults: empty strings for text/textarea,
+    // first option for select-enum, empty list for list-strings. The id
+    // field gets a prefix-based placeholder so the maintainer can tell
+    // multiple new entries apart.
+    const newEntry = {};
+    listCfg.fields.forEach((field) => {
+        if (field.name === listCfg.idField) {
+            // Suggest a unique id using the prefix + entry count. The
+            // maintainer can edit it. Use the current length + 1 so it
+            // does not collide with existing indices.
+            newEntry[field.name] = `${listCfg.idPrefix || ""}${entries.length + 1}`;
+        } else if (field.type === "select-enum") {
+            newEntry[field.name] = field.options[0];
+        } else if (field.type === "list-strings") {
+            newEntry[field.name] = [];
+        } else {
+            newEntry[field.name] = "";
+        }
+    });
+    entries.push(newEntry);
+    // Re-render with the new entry list.
+    const wrapper = document.querySelector(`.ver-edit-entry-list[data-entry-list="${fieldName}"]`);
+    if (!wrapper) return;
+    const newHtml = _renderEditEntryList(listCfg, entries, cfg);
+    wrapper.outerHTML = newHtml;
+}
+
+function _removeEditEntry(fieldName, idx) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!cfg.entryLists) return;
+    const listCfg = cfg.entryLists.find((l) => l.fieldName === fieldName);
+    if (!listCfg) return;
+    const entries = _readEditEntryListFromDom(listCfg);
+    if (idx < 0 || idx >= entries.length) return;
+    entries.splice(idx, 1);
+    const wrapper = document.querySelector(`.ver-edit-entry-list[data-entry-list="${fieldName}"]`);
+    if (!wrapper) return;
+    const newHtml = _renderEditEntryList(listCfg, entries, cfg);
+    wrapper.outerHTML = newHtml;
+}
+
+// Expose entry-list editor handlers to inline onclick handlers.
+window._addEditEntry = _addEditEntry;
+window._removeEditEntry = _removeEditEntry;
+
 function _showEditConflict(message) {
     const el = document.getElementById("ver-edit-conflict");
     if (!el) return;
@@ -18097,7 +18479,14 @@ async function _openEditDialog() {
         const currentValue = artifact[field.name];
         return _renderEditField(field, currentValue, cfg);
     }).join("");
-    fieldsEl.innerHTML = fieldsHtml;
+    // Append entry-list editors (supporting_evidence, risks, etc.) after
+    // the regular fields. The entry-list config is optional; brief and
+    // briefing do not have entryLists.
+    const entryListsHtml = (cfg.entryLists || []).map((listCfg) => {
+        const entries = artifact[listCfg.fieldName] || [];
+        return _renderEditEntryList(listCfg, entries, cfg);
+    }).join("");
+    fieldsEl.innerHTML = fieldsHtml + entryListsHtml;
 
     // Set select values after render (innerHTML doesn't honour selected
     // when the value isn't in the options at parse time).
@@ -18112,6 +18501,23 @@ async function _openEditDialog() {
         } else if (field.type === "select") {
             el.value = v || "";
         }
+    });
+
+    // Set select-enum values inside entry-list entries after render.
+    // Each entry field id is ver-edit-entry-<listField>-<idx>-<subField>.
+    (cfg.entryLists || []).forEach((listCfg) => {
+        const entries = artifact[listCfg.fieldName] || [];
+        entries.forEach((entry, idx) => {
+            listCfg.fields.forEach((field) => {
+                if (field.type !== "select-enum") return;
+                const el = document.getElementById(`ver-edit-entry-${listCfg.fieldName}-${idx}-${field.name}`);
+                if (!el) return;
+                const v = entry?.[field.name];
+                if (v && field.options.includes(v)) {
+                    el.value = v;
+                }
+            });
+        });
     });
 
     if (typeof dialog.showModal === "function") dialog.showModal();
@@ -18160,6 +18566,67 @@ function _collectEditForm() {
     }
     if (firstMissing) {
         return { ok: false, error: "required_missing", field: firstMissing };
+    }
+    // Collect entry-list fields (supporting_evidence, risks, etc.).
+    // Each list uses full-list replacement: the caller sends the
+    // complete new list. The server re-validates each entry's schema,
+    // id uniqueness and enum values; here we only catch the most common
+    // caller mistakes (missing id, missing required fields, invalid
+    // enum) so the maintainer gets fast, localized feedback.
+    if (Array.isArray(cfg.entryLists)) {
+        for (const listCfg of cfg.entryLists) {
+            const entries = _readEditEntryListFromDom(listCfg);
+            // Validate each entry: id must be non-empty, required fields
+            // must be non-empty, enum values must be in the options set.
+            let entryInvalid = false;
+            const seenIds = new Set();
+            const dupIds = [];
+            for (const entry of entries) {
+                const idVal = (entry[listCfg.idField] || "").trim();
+                if (!idVal) {
+                    entryInvalid = true;
+                    break;
+                }
+                if (seenIds.has(idVal)) {
+                    dupIds.push(idVal);
+                }
+                seenIds.add(idVal);
+                for (const field of listCfg.fields) {
+                    const v = entry[field.name];
+                    if (field.type === "select-enum") {
+                        if (field.required && !field.options.includes(v)) {
+                            entryInvalid = true;
+                            break;
+                        }
+                        if (v && !field.options.includes(v)) {
+                            entryInvalid = true;
+                            break;
+                        }
+                    } else if (field.required && field.type !== "list-strings") {
+                        if (!v || !String(v).trim()) {
+                            entryInvalid = true;
+                            break;
+                        }
+                    }
+                }
+                if (entryInvalid) break;
+            }
+            if (entryInvalid) {
+                return {
+                    ok: false,
+                    error: "entry_list_invalid",
+                    message: t("versions_edit_list_required"),
+                };
+            }
+            if (dupIds.length > 0) {
+                return {
+                    ok: false,
+                    error: "entry_list_dup_id",
+                    message: t("versions_edit_list_dup_id") + dupIds.join(", "),
+                };
+            }
+            data[listCfg.fieldName] = entries;
+        }
     }
     // Client-side decision consistency check. The server re-checks, but
     // surfacing it here gives the maintainer a faster, localized error.

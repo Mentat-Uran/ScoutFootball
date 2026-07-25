@@ -2972,3 +2972,1013 @@ def test_versions_view_edit_review_status_transition_to_finalized(
     assert result["decision"] == "confirmed", (
         f"Expected decision='confirmed', got {result['decision']!r}"
     )
+
+
+# ── Versions view: entry-list editors (dossier / review) ─────────────
+
+
+@pytest.fixture()
+def seeded_dossier_with_evidence():
+    """Seed a draft dossier with one supporting_evidence entry.
+
+    Used by the entry-list remove and edit round-trip tests, which need
+    a pre-existing entry to manipulate in the edit dialog.  Cleanup
+    removes the record and any backups.
+    """
+    from scoutfootball.api import _dossier_store
+
+    dossier_id = f"e2e-ev-dos-{uuid.uuid4().hex[:8]}"
+    payload = _valid_dossier_payload(dossier_id, title="E2E evidence dossier")
+    payload["supporting_evidence"] = [
+        {
+            "evidence_id": "ev-seed-1",
+            "fact_tier": "recorded",
+            "summary": "Seeded evidence for round-trip.",
+            "evidence_refs": ["player_match.parquet"],
+        }
+    ]
+    store = _dossier_store()
+    store.save(dossier_id, payload, expected_revision=0)
+
+    yield dossier_id
+
+    try:
+        store.delete(dossier_id, expected_revision=None)
+    except Exception:
+        pass
+    record_path = store.root / f"{dossier_id}.json"
+    record_path.unlink(missing_ok=True)
+    backup_dir = getattr(store, "backup_root", None)
+    if backup_dir:
+        for f in backup_dir.glob(f"{dossier_id}.*.json"):
+            f.unlink(missing_ok=True)
+
+
+@pytest.fixture()
+def seeded_review_with_hypothesis():
+    """Seed a draft review with one hypothesis_result entry.
+
+    Used by the entry-list round-trip tests for the review's
+    ``hypothesis_results`` list.  Cleanup removes the record and any
+    backups.
+    """
+    from scoutfootball.api import _review_store
+
+    review_id = f"e2e-hyp-rev-{uuid.uuid4().hex[:8]}"
+    payload = _valid_review_payload(review_id, title="E2E hypothesis review")
+    payload["hypothesis_results"] = [
+        {
+            "hypothesis_id": "hyp-seed-1",
+            "planned": "Press high in 4-2-3-1.",
+            "observed": "Pressed high, won 8 turnovers.",
+            "outcome": "confirmed",
+            "fact_tier": "recorded",
+            "evidence_refs": ["team_match.parquet"],
+        }
+    ]
+    store = _review_store()
+    store.save(review_id, payload, expected_revision=0)
+
+    yield review_id
+
+    try:
+        store.delete(review_id, expected_revision=None)
+    except Exception:
+        pass
+    record_path = store.root / f"{review_id}.json"
+    record_path.unlink(missing_ok=True)
+    backup_dir = getattr(store, "backup_root", None)
+    if backup_dir:
+        for f in backup_dir.glob(f"{review_id}.*.json"):
+            f.unlink(missing_ok=True)
+
+
+def _select_record_in_versions_view(page, record_id: str) -> None:
+    """Shared helper: refresh the versions view's record list and pick
+    the given ``record_id`` in the record selector.
+
+    Used by the entry-list tests so they don't repeat the wait-for-option
+    + select-option dance.  Assumes the versions view is already visible
+    and the type selector has already been set to the right artifact
+    type.
+    """
+    page.locator("#ver-refresh").click()
+    page.wait_for_timeout(300)
+    record_select = page.locator("#ver-record-select")
+    for _ in range(20):
+        opts = record_select.locator("option").evaluate_all(
+            "opts => opts.map(o => o.value)"
+        )
+        if record_id in opts:
+            break
+        page.wait_for_timeout(200)
+    record_select.select_option(record_id)
+    page.wait_for_timeout(200)
+
+
+def _dismiss_alerts(page) -> None:
+    """Dismiss any alert() dialogs that fire during validation failures.
+
+    The entry-list validation path uses ``alert()`` to surface client-
+    side rejections (missing ID, duplicate ID, invalid enum).  Without a
+    handler, Playwright blocks on the dialog and the test times out.
+    """
+    page.on("dialog", lambda d: d.dismiss())
+
+
+def test_versions_view_edit_dossier_add_supporting_evidence_round_trip(
+    page, live_server_url: str, seeded_dossier_for_edit
+) -> None:
+    """Entry-list round-trip: add a supporting_evidence entry via the
+    UI and verify it persists through the PUT endpoint.
+
+    Drives the flow:
+    1. Open the edit dialog on a draft dossier (no evidence).
+    2. Click the "Add entry" button in the supporting_evidence list.
+    3. Fill in evidence_id + summary (fact_tier defaults to "official").
+    4. Submit. The dialog must close and the new revision must persist.
+    5. Re-open the edit dialog; the entry must be pre-filled.
+
+    Catches regressions where:
+    - the "Add entry" button does not append a new entry to the DOM
+    - ``_collectEditForm`` does not serialize entry-list fields into the
+      PUT body
+    - the server-side ``_validate_entry_list`` rejects a valid entry
+    - the edit dialog does not re-load entry-list fields on re-open
+    """
+    dossier_id = seeded_dossier_for_edit
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("dossier")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, dossier_id)
+
+    # Open the edit dialog.
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    # The supporting_evidence list section must be present, with no
+    # entries yet (the seeded dossier has an empty list).
+    ev_list = page.locator(
+        ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
+    )
+    assert ev_list.count() == 1, "supporting_evidence entry-list section missing"
+    initial_entries = ev_list.locator(".ver-edit-entry").count()
+    assert initial_entries == 0, (
+        f"Expected 0 entries initially, got {initial_entries}"
+    )
+
+    # Click "Add entry" — must append a new entry to the DOM.
+    ev_list.locator("button", has_text="Add entry").click()
+    page.wait_for_timeout(150)
+    assert ev_list.locator(".ver-edit-entry").count() == 1, (
+        "Add entry button did not append a new entry"
+    )
+
+    # Fill in the new entry. The id field is at index 0.
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-0-evidence_id"
+    ).fill("ev-ui-1")
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-0-summary"
+    ).fill("UI-added supporting evidence.")
+    # fact_tier defaults to the first option ("official"); leave it.
+    # evidence_refs is a textarea (one ref per line); add one.
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-0-evidence_refs"
+    ).fill("player_match.parquet")
+
+    page.locator("#ver-edit-submit").click()
+
+    # The dialog must close on success.
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-edit-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, (
+        "Edit dialog did not close after submitting a valid new entry"
+    )
+
+    # Verify the entry persisted via the API.
+    result = page.evaluate(
+        """async ({baseUrl, dossierId}) => {
+            const r = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId),
+                { cache: 'no-store' }
+            );
+            const d = await r.json();
+            const ev = d.record?.dossier?.supporting_evidence || [];
+            return {
+                serverRevision: d.record?.server_revision,
+                evidenceCount: ev.length,
+                firstEvidence: ev[0] || null,
+            };
+        }""",
+        {"baseUrl": live_server_url, "dossierId": dossier_id},
+    )
+    assert result["serverRevision"] == 2, (
+        f"Expected revision 2 after entry add, got {result['serverRevision']}"
+    )
+    assert result["evidenceCount"] == 1, (
+        f"Expected 1 supporting_evidence entry, got {result['evidenceCount']}"
+    )
+    ev = result["firstEvidence"]
+    assert ev is not None, "supporting_evidence entry was not persisted"
+    assert ev["evidence_id"] == "ev-ui-1", (
+        f"Expected evidence_id 'ev-ui-1', got {ev['evidence_id']!r}"
+    )
+    assert ev["fact_tier"] == "official", (
+        f"Expected fact_tier 'official' (default), got {ev['fact_tier']!r}"
+    )
+    assert ev["summary"] == "UI-added supporting evidence.", (
+        f"Expected summary text, got {ev['summary']!r}"
+    )
+    assert ev["evidence_refs"] == ["player_match.parquet"], (
+        f"Expected evidence_refs list, got {ev['evidence_refs']!r}"
+    )
+
+    # Re-open the edit dialog; the entry must be pre-filled.
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    assert ev_list.locator(".ver-edit-entry").count() == 1, (
+        "Re-opened dialog should show 1 supporting_evidence entry"
+    )
+    assert page.locator(
+        "#ver-edit-entry-supporting_evidence-0-evidence_id"
+    ).input_value() == "ev-ui-1", (
+        "Re-opened dialog should pre-fill evidence_id"
+    )
+    assert page.locator(
+        "#ver-edit-entry-supporting_evidence-0-summary"
+    ).input_value() == "UI-added supporting evidence.", (
+        "Re-opened dialog should pre-fill summary"
+    )
+
+    # Close the dialog without submitting to leave the record clean.
+    page.locator("#ver-edit-cancel").click()
+
+
+def test_versions_view_edit_dossier_remove_supporting_evidence_round_trip(
+    page, live_server_url: str, seeded_dossier_with_evidence
+) -> None:
+    """Entry-list round-trip: remove an existing supporting_evidence
+    entry via the UI and verify the empty list persists.
+
+    Drives the flow:
+    1. Open the edit dialog on a dossier that has one evidence entry.
+    2. Click "Remove" on the entry.
+    3. Submit. The dialog must close and the entry list must be empty.
+
+    Catches regressions where:
+    - the "Remove" button does not actually drop the entry from the DOM
+    - ``_collectEditForm`` re-serializes the removed entry anyway
+    - the server-side full-list replacement does not honour an empty list
+    """
+    dossier_id = seeded_dossier_with_evidence
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("dossier")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, dossier_id)
+
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    ev_list = page.locator(
+        ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
+    )
+    assert ev_list.locator(".ver-edit-entry").count() == 1, (
+        "Seeded dossier should have 1 supporting_evidence entry in the dialog"
+    )
+
+    # Click the "Remove" button on the first entry.
+    ev_list.locator(".ver-edit-entry").first.locator(
+        "button", has_text="Remove"
+    ).click()
+    page.wait_for_timeout(150)
+
+    # The entry must be gone from the DOM.
+    assert ev_list.locator(".ver-edit-entry").count() == 0, (
+        "Remove button did not drop the entry from the DOM"
+    )
+
+    page.locator("#ver-edit-submit").click()
+
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-edit-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, (
+        "Edit dialog did not close after removing the entry"
+    )
+
+    result = page.evaluate(
+        """async ({baseUrl, dossierId}) => {
+            const r = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId),
+                { cache: 'no-store' }
+            );
+            const d = await r.json();
+            return {
+                serverRevision: d.record?.server_revision,
+                evidenceCount: (d.record?.dossier?.supporting_evidence || []).length,
+            };
+        }""",
+        {"baseUrl": live_server_url, "dossierId": dossier_id},
+    )
+    assert result["serverRevision"] == 2, (
+        f"Expected revision 2 after remove, got {result['serverRevision']}"
+    )
+    assert result["evidenceCount"] == 0, (
+        f"Expected 0 entries after remove, got {result['evidenceCount']}"
+    )
+
+
+def test_versions_view_edit_dossier_edit_existing_evidence_round_trip(
+    page, live_server_url: str, seeded_dossier_with_evidence
+) -> None:
+    """Entry-list round-trip: edit an existing supporting_evidence
+    entry's summary and fact_tier via the UI and verify the change
+    persists.
+
+    Catches regressions where:
+    - the edit dialog does not pre-fill existing entry-list values
+    - editing a field and submitting does not flush the change (e.g. the
+      collect step reads from a stale cache)
+    - the fact_tier <select> value is not honoured on re-render
+    """
+    dossier_id = seeded_dossier_with_evidence
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("dossier")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, dossier_id)
+
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    # The seeded entry must be pre-filled.
+    ev_id_input = page.locator(
+        "#ver-edit-entry-supporting_evidence-0-evidence_id"
+    )
+    ev_summary_input = page.locator(
+        "#ver-edit-entry-supporting_evidence-0-summary"
+    )
+    ev_fact_tier_select = page.locator(
+        "#ver-edit-entry-supporting_evidence-0-fact_tier"
+    )
+    assert ev_id_input.input_value() == "ev-seed-1", (
+        f"Expected pre-filled evidence_id 'ev-seed-1', "
+        f"got {ev_id_input.input_value()!r}"
+    )
+    assert ev_summary_input.input_value() == "Seeded evidence for round-trip.", (
+        f"Expected pre-filled summary, got {ev_summary_input.input_value()!r}"
+    )
+    assert ev_fact_tier_select.input_value() == "recorded", (
+        f"Expected pre-filled fact_tier 'recorded', "
+        f"got {ev_fact_tier_select.input_value()!r}"
+    )
+
+    # Edit summary + fact_tier.
+    ev_summary_input.fill("Edited summary via UI.")
+    ev_fact_tier_select.select_option("estimated")
+
+    page.locator("#ver-edit-submit").click()
+
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-edit-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, "Edit dialog did not close after editing the entry"
+
+    result = page.evaluate(
+        """async ({baseUrl, dossierId}) => {
+            const r = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId),
+                { cache: 'no-store' }
+            );
+            const d = await r.json();
+            const ev = (d.record?.dossier?.supporting_evidence || [])[0] || null;
+            return {
+                serverRevision: d.record?.server_revision,
+                evidence: ev,
+            };
+        }""",
+        {"baseUrl": live_server_url, "dossierId": dossier_id},
+    )
+    assert result["serverRevision"] == 2, (
+        f"Expected revision 2 after edit, got {result['serverRevision']}"
+    )
+    ev = result["evidence"]
+    assert ev is not None, "supporting_evidence entry missing after edit"
+    assert ev["summary"] == "Edited summary via UI.", (
+        f"Expected edited summary, got {ev['summary']!r}"
+    )
+    assert ev["fact_tier"] == "estimated", (
+        f"Expected edited fact_tier 'estimated', got {ev['fact_tier']!r}"
+    )
+    # evidence_id must be unchanged.
+    assert ev["evidence_id"] == "ev-seed-1", (
+        f"Expected unchanged evidence_id, got {ev['evidence_id']!r}"
+    )
+
+
+def test_versions_view_edit_dossier_missing_evidence_id_blocks_submit(
+    page, live_server_url: str, seeded_dossier_for_edit
+) -> None:
+    """Client-side guard: a new entry with an empty evidence_id must
+    block the submit and keep the dialog open.
+
+    Catches regressions where the ``_collectEditForm`` entry-list
+    validation does not catch empty required id fields, letting an
+    invalid payload reach the server.
+    """
+    dossier_id = seeded_dossier_for_edit
+    _dismiss_alerts(page)
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("dossier")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, dossier_id)
+
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    ev_list = page.locator(
+        ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
+    )
+    ev_list.locator("button", has_text="Add entry").click()
+    page.wait_for_timeout(150)
+
+    # Clear the auto-suggested evidence_id so the required field is empty.
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-0-evidence_id"
+    ).fill("")
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-0-summary"
+    ).fill("Entry with missing ID.")
+
+    page.locator("#ver-edit-submit").click()
+    page.wait_for_timeout(500)
+
+    # The dialog must still be open (validation blocked the submit).
+    is_open = page.evaluate(
+        "() => !!document.getElementById('ver-edit-dialog').open"
+    )
+    assert is_open, (
+        "Dialog should stay open when an entry has an empty required id"
+    )
+
+    # Confirm the server-side revision is unchanged (no PUT went through).
+    result = page.evaluate(
+        """async ({baseUrl, dossierId}) => {
+            const r = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId)
+            );
+            const d = await r.json();
+            return {
+                serverRevision: d.record?.server_revision,
+                evidenceCount: (d.record?.dossier?.supporting_evidence || []).length,
+            };
+        }""",
+        {"baseUrl": live_server_url, "dossierId": dossier_id},
+    )
+    assert result["serverRevision"] == 1, (
+        f"Revision should still be 1 (no commit); got {result['serverRevision']}"
+    )
+    assert result["evidenceCount"] == 0, (
+        f"No evidence should have been persisted; got {result['evidenceCount']}"
+    )
+
+    page.locator("#ver-edit-cancel").click()
+
+
+def test_versions_view_edit_dossier_duplicate_evidence_ids_block_submit(
+    page, live_server_url: str, seeded_dossier_with_evidence
+) -> None:
+    """Client-side guard: two entries with the same evidence_id must
+    block the submit and keep the dialog open.
+
+    Catches regressions where the duplicate-id check is missing or
+    bypassed.  The seeded dossier already has ``ev-seed-1``; we add a
+    second entry with the same id and verify the submit is blocked.
+    """
+    dossier_id = seeded_dossier_with_evidence
+    _dismiss_alerts(page)
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("dossier")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, dossier_id)
+
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    ev_list = page.locator(
+        ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
+    )
+    # Add a second entry; the seeded entry (idx 0) keeps ev-seed-1.
+    ev_list.locator("button", has_text="Add entry").click()
+    page.wait_for_timeout(150)
+
+    # Set the new entry's id to collide with the seeded entry's id.
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-1-evidence_id"
+    ).fill("ev-seed-1")
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-1-summary"
+    ).fill("Duplicate id attempt.")
+
+    page.locator("#ver-edit-submit").click()
+    page.wait_for_timeout(500)
+
+    is_open = page.evaluate(
+        "() => !!document.getElementById('ver-edit-dialog').open"
+    )
+    assert is_open, (
+        "Dialog should stay open when two entries share an evidence_id"
+    )
+
+    result = page.evaluate(
+        """async ({baseUrl, dossierId}) => {
+            const r = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId)
+            );
+            const d = await r.json();
+            return {
+                serverRevision: d.record?.server_revision,
+                evidenceCount: (d.record?.dossier?.supporting_evidence || []).length,
+            };
+        }""",
+        {"baseUrl": live_server_url, "dossierId": dossier_id},
+    )
+    assert result["serverRevision"] == 1, (
+        f"Revision should still be 1 (no commit); got {result['serverRevision']}"
+    )
+    assert result["evidenceCount"] == 1, (
+        f"Original 1 entry only; got {result['evidenceCount']}"
+    )
+
+    page.locator("#ver-edit-cancel").click()
+
+
+def test_versions_view_edit_dossier_invalid_fact_tier_blocks_submit(
+    page, live_server_url: str, seeded_dossier_for_edit
+) -> None:
+    """Client-side guard: an invalid fact_tier value (set via DOM
+    tampering) must be caught by the entry-list enum validation and
+    block the submit.
+
+    The select-enum control renders as a ``<select>`` with predefined
+    options, so the user cannot normally pick an invalid value.  This
+    test simulates a tampered or buggy state by directly setting the
+    select's value via JS to a value not in the options list, then
+    verifies the client-side enum validation rejects it.
+
+    Catches regressions where the ``_collectEditForm`` enum validation
+    is removed (the server-side ``_validate_entry_list`` would still
+    catch it, but the client-side check gives the maintainer faster
+    feedback).
+    """
+    dossier_id = seeded_dossier_for_edit
+    _dismiss_alerts(page)
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("dossier")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, dossier_id)
+
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    ev_list = page.locator(
+        ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
+    )
+    ev_list.locator("button", has_text="Add entry").click()
+    page.wait_for_timeout(150)
+
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-0-evidence_id"
+    ).fill("ev-tamper-1")
+    page.locator(
+        "#ver-edit-entry-supporting_evidence-0-summary"
+    ).fill("Tampered fact_tier.")
+
+    # Tamper with the select value via JS so it holds an invalid value
+    # not present in the options list.  This simulates a buggy extension
+    # or a programmatic edit; the client-side enum check must catch it.
+    page.evaluate(
+        """() => {
+            const sel = document.getElementById(
+                'ver-edit-entry-supporting_evidence-0-fact_tier'
+            );
+            if (!sel) return;
+            // Force an out-of-band value into the select.  Setting
+            // ``value`` to something not in options leaves the DOM
+            // value as the empty string on most browsers, so we set
+            // ``value`` and also append a fake <option> to make the
+            // value stick.  The collect step reads ``el.value``, which
+            // now returns "fabricated".
+            const opt = document.createElement('option');
+            opt.value = 'fabricated';
+            opt.textContent = 'fabricated';
+            sel.appendChild(opt);
+            sel.value = 'fabricated';
+        }"""
+    )
+
+    page.locator("#ver-edit-submit").click()
+    page.wait_for_timeout(500)
+
+    is_open = page.evaluate(
+        "() => !!document.getElementById('ver-edit-dialog').open"
+    )
+    assert is_open, (
+        "Dialog should stay open when an entry has an invalid fact_tier"
+    )
+
+    result = page.evaluate(
+        """async ({baseUrl, dossierId}) => {
+            const r = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId)
+            );
+            const d = await r.json();
+            return {
+                serverRevision: d.record?.server_revision,
+                evidenceCount: (d.record?.dossier?.supporting_evidence || []).length,
+            };
+        }""",
+        {"baseUrl": live_server_url, "dossierId": dossier_id},
+    )
+    assert result["serverRevision"] == 1, (
+        f"Revision should still be 1 (no commit); got {result['serverRevision']}"
+    )
+    assert result["evidenceCount"] == 0, (
+        f"No evidence should have been persisted; got {result['evidenceCount']}"
+    )
+
+    page.locator("#ver-edit-cancel").click()
+
+
+def test_versions_view_edit_review_hypothesis_results_round_trip(
+    page, live_server_url: str, seeded_review_for_edit
+) -> None:
+    """Entry-list round-trip for the review's hypothesis_results list.
+
+    Drives the flow:
+    1. Open the edit dialog on a draft review (no hypothesis_results).
+    2. Click "Add entry" in the hypothesis_results list.
+    3. Fill in hypothesis_id, planned, observed (outcome defaults to
+       "confirmed", fact_tier defaults to "official").
+    4. Submit. The dialog must close and the entry must persist.
+    5. Re-open the edit dialog; the entry must be pre-filled.
+
+    Catches regressions where:
+    - the review entry-list config is missing or misnamed
+    - the outcome / fact_tier selects are not honoured on submit
+    - the server-side ``_validate_entry_list`` for reviews rejects a
+      valid hypothesis_result
+    """
+    review_id = seeded_review_for_edit
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("review")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, review_id)
+
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    hyp_list = page.locator(
+        ".ver-edit-entry-list[data-entry-list='hypothesis_results']"
+    )
+    assert hyp_list.count() == 1, (
+        "hypothesis_results entry-list section missing"
+    )
+    assert hyp_list.locator(".ver-edit-entry").count() == 0, (
+        "Seeded review should have 0 hypothesis_results in the dialog"
+    )
+
+    hyp_list.locator("button", has_text="Add entry").click()
+    page.wait_for_timeout(150)
+
+    page.locator(
+        "#ver-edit-entry-hypothesis_results-0-hypothesis_id"
+    ).fill("hyp-ui-1")
+    page.locator(
+        "#ver-edit-entry-hypothesis_results-0-planned"
+    ).fill("Press high in 4-2-3-1.")
+    page.locator(
+        "#ver-edit-entry-hypothesis_results-0-observed"
+    ).fill("Pressed high, won 7 turnovers.")
+    # outcome defaults to "confirmed", fact_tier defaults to "official".
+
+    page.locator("#ver-edit-submit").click()
+
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-edit-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, (
+        "Edit dialog did not close after submitting a valid hypothesis"
+    )
+
+    result = page.evaluate(
+        """async ({baseUrl, reviewId}) => {
+            const r = await fetch(
+                baseUrl + '/opposition/reviews/' + encodeURIComponent(reviewId),
+                { cache: 'no-store' }
+            );
+            const d = await r.json();
+            const hyps = d.record?.review?.hypothesis_results || [];
+            return {
+                serverRevision: d.record?.server_revision,
+                hypCount: hyps.length,
+                firstHyp: hyps[0] || null,
+            };
+        }""",
+        {"baseUrl": live_server_url, "reviewId": review_id},
+    )
+    assert result["serverRevision"] == 2, (
+        f"Expected revision 2 after hypothesis add, got {result['serverRevision']}"
+    )
+    assert result["hypCount"] == 1, (
+        f"Expected 1 hypothesis_result, got {result['hypCount']}"
+    )
+    hyp = result["firstHyp"]
+    assert hyp is not None, "hypothesis_result was not persisted"
+    assert hyp["hypothesis_id"] == "hyp-ui-1", (
+        f"Expected hypothesis_id 'hyp-ui-1', got {hyp['hypothesis_id']!r}"
+    )
+    assert hyp["outcome"] == "confirmed", (
+        f"Expected outcome 'confirmed' (default), got {hyp['outcome']!r}"
+    )
+    assert hyp["fact_tier"] == "official", (
+        f"Expected fact_tier 'official' (default), got {hyp['fact_tier']!r}"
+    )
+    assert hyp["planned"] == "Press high in 4-2-3-1.", (
+        f"Expected planned text, got {hyp['planned']!r}"
+    )
+    assert hyp["observed"] == "Pressed high, won 7 turnovers.", (
+        f"Expected observed text, got {hyp['observed']!r}"
+    )
+
+    # Re-open the edit dialog; the hypothesis must be pre-filled.
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    assert hyp_list.locator(".ver-edit-entry").count() == 1, (
+        "Re-opened dialog should show 1 hypothesis_result"
+    )
+    assert page.locator(
+        "#ver-edit-entry-hypothesis_results-0-hypothesis_id"
+    ).input_value() == "hyp-ui-1", (
+        "Re-opened dialog should pre-fill hypothesis_id"
+    )
+    assert page.locator(
+        "#ver-edit-entry-hypothesis_results-0-outcome"
+    ).input_value() == "confirmed", (
+        "Re-opened dialog should pre-fill outcome"
+    )
+
+    page.locator("#ver-edit-cancel").click()
+
+
+def test_versions_view_edit_review_remove_hypothesis_results_round_trip(
+    page, live_server_url: str, seeded_review_with_hypothesis
+) -> None:
+    """Entry-list round-trip: remove an existing hypothesis_result
+    from a review via the UI and verify the empty list persists.
+
+    Catches regressions where:
+    - the review entry-list "Remove" button does not drop the entry
+    - the server-side ``_validate_entry_list`` for reviews rejects an
+      empty list (it should accept it)
+    """
+    review_id = seeded_review_with_hypothesis
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("review")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, review_id)
+
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    hyp_list = page.locator(
+        ".ver-edit-entry-list[data-entry-list='hypothesis_results']"
+    )
+    assert hyp_list.locator(".ver-edit-entry").count() == 1, (
+        "Seeded review should have 1 hypothesis_result in the dialog"
+    )
+
+    hyp_list.locator(".ver-edit-entry").first.locator(
+        "button", has_text="Remove"
+    ).click()
+    page.wait_for_timeout(150)
+
+    assert hyp_list.locator(".ver-edit-entry").count() == 0, (
+        "Remove button did not drop the hypothesis from the DOM"
+    )
+
+    page.locator("#ver-edit-submit").click()
+
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-edit-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, (
+        "Edit dialog did not close after removing the hypothesis"
+    )
+
+    result = page.evaluate(
+        """async ({baseUrl, reviewId}) => {
+            const r = await fetch(
+                baseUrl + '/opposition/reviews/' + encodeURIComponent(reviewId),
+                { cache: 'no-store' }
+            );
+            const d = await r.json();
+            return {
+                serverRevision: d.record?.server_revision,
+                hypCount: (d.record?.review?.hypothesis_results || []).length,
+            };
+        }""",
+        {"baseUrl": live_server_url, "reviewId": review_id},
+    )
+    assert result["serverRevision"] == 2, (
+        f"Expected revision 2 after remove, got {result['serverRevision']}"
+    )
+    assert result["hypCount"] == 0, (
+        f"Expected 0 hypotheses after remove, got {result['hypCount']}"
+    )
+
+
+def test_versions_view_edit_dossier_risks_round_trip(
+    page, live_server_url: str, seeded_dossier_for_edit
+) -> None:
+    """Entry-list round-trip for the dossier's risks list.
+
+    Covers the risks entry-list which has a different schema than
+    supporting_evidence: ``risk_id`` (required), ``summary`` (required),
+    ``severity`` (enum: low/medium/high), ``fact_tier`` (enum), and
+    ``evidence_refs``.  This test verifies the full add + submit +
+    re-open + verify cycle for risks, catching regressions where:
+    - the risks entry-list config is missing or misnamed
+    - the severity / fact_tier selects are not honoured on submit
+    - the required ``summary`` field is not validated client-side
+    """
+    dossier_id = seeded_dossier_for_edit
+
+    open_loaded_app(page, live_server_url)
+    page.locator(".nav-stack .nav-action[data-view='versions']").click()
+    page.locator("#view-versions").wait_for(state="visible", timeout=10_000)
+
+    type_select = page.locator("#ver-type-select")
+    type_select.wait_for(state="visible", timeout=10_000)
+    type_select.select_option("dossier")
+    page.wait_for_timeout(200)
+
+    _select_record_in_versions_view(page, dossier_id)
+
+    page.locator("#ver-edit").click()
+    page.locator("#ver-edit-dialog").wait_for(state="visible", timeout=5_000)
+
+    risk_list = page.locator(
+        ".ver-edit-entry-list[data-entry-list='risks']"
+    )
+    assert risk_list.count() == 1, "risks entry-list section missing"
+    assert risk_list.locator(".ver-edit-entry").count() == 0, (
+        "Seeded dossier should have 0 risks in the dialog"
+    )
+
+    risk_list.locator("button", has_text="Add entry").click()
+    page.wait_for_timeout(150)
+
+    page.locator(
+        "#ver-edit-entry-risks-0-risk_id"
+    ).fill("risk-ui-1")
+    page.locator(
+        "#ver-edit-entry-risks-0-summary"
+    ).fill("Recurring hamstring injury.")
+    # severity defaults to "low"; pick "high" explicitly.
+    page.locator(
+        "#ver-edit-entry-risks-0-severity"
+    ).select_option("high")
+    # fact_tier defaults to "official"; leave it.
+
+    page.locator("#ver-edit-submit").click()
+
+    for _ in range(25):
+        is_open = page.evaluate(
+            "() => !!document.getElementById('ver-edit-dialog').open"
+        )
+        if not is_open:
+            break
+        page.wait_for_timeout(200)
+    assert not is_open, (
+        "Edit dialog did not close after submitting a valid risk"
+    )
+
+    result = page.evaluate(
+        """async ({baseUrl, dossierId}) => {
+            const r = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId),
+                { cache: 'no-store' }
+            );
+            const d = await r.json();
+            const risks = d.record?.dossier?.risks || [];
+            return {
+                serverRevision: d.record?.server_revision,
+                riskCount: risks.length,
+                firstRisk: risks[0] || null,
+            };
+        }""",
+        {"baseUrl": live_server_url, "dossierId": dossier_id},
+    )
+    assert result["serverRevision"] == 2, (
+        f"Expected revision 2 after risk add, got {result['serverRevision']}"
+    )
+    assert result["riskCount"] == 1, (
+        f"Expected 1 risk, got {result['riskCount']}"
+    )
+    risk = result["firstRisk"]
+    assert risk is not None, "risk was not persisted"
+    assert risk["risk_id"] == "risk-ui-1", (
+        f"Expected risk_id 'risk-ui-1', got {risk['risk_id']!r}"
+    )
+    assert risk["severity"] == "high", (
+        f"Expected severity 'high', got {risk['severity']!r}"
+    )
+    assert risk["fact_tier"] == "official", (
+        f"Expected fact_tier 'official' (default), got {risk['fact_tier']!r}"
+    )
+    assert risk["summary"] == "Recurring hamstring injury.", (
+        f"Expected summary, got {risk['summary']!r}"
+    )
+
+    page.locator("#ver-edit-cancel").click()
+

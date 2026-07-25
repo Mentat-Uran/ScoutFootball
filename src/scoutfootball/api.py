@@ -10118,11 +10118,88 @@ def restore_decision_dossier_from_backup(
     })
 
 
+def _validate_entry_list(field_name, value, *, entry_id_field, valid_enums=None):
+    """Validate the shape and enum values of an entry-list field.
+
+    Returns an error dict (without ``_clean_json_value`` wrapping) if
+    early shape checks fail, or ``None`` if the value passes. Detailed
+    schema validation (required string fields, id uniqueness, max
+    length, evidence_refs shape) is left to the Pydantic model
+    re-validation in the store; this helper only catches the most
+    common caller mistakes (non-list value, non-dict entry, missing
+    id, invalid enum) so callers get fast, specific feedback before
+    the current record is loaded.
+    """
+    if not isinstance(value, list):
+        return {
+            "status": "error",
+            "code": "invalid_field",
+            "message": (
+                f"{field_name} must be a list of objects "
+                f"(got {type(value).__name__})"
+            ),
+            "http_status": 400,
+            "metadata": {"invalid_field": field_name},
+        }
+    for idx, entry in enumerate(value):
+        if not isinstance(entry, dict):
+            return {
+                "status": "error",
+                "code": "invalid_field",
+                "message": (
+                    f"{field_name}[{idx}] must be an object "
+                    f"(got {type(entry).__name__})"
+                ),
+                "http_status": 400,
+                "metadata": {"invalid_field": field_name, "index": idx},
+            }
+        entry_id = entry.get(entry_id_field)
+        if not isinstance(entry_id, str) or not entry_id.strip():
+            return {
+                "status": "error",
+                "code": "invalid_field",
+                "message": (
+                    f"{field_name}[{idx}].{entry_id_field} must be a "
+                    f"non-empty string"
+                ),
+                "http_status": 400,
+                "metadata": {
+                    "invalid_field": field_name,
+                    "index": idx,
+                    "sub_field": entry_id_field,
+                },
+            }
+        if valid_enums:
+            for enum_field, allowed in valid_enums.items():
+                enum_value = entry.get(enum_field)
+                if enum_value is None:
+                    continue
+                if enum_value not in allowed:
+                    return {
+                        "status": "error",
+                        "code": "invalid_field",
+                        "message": (
+                            f"{field_name}[{idx}].{enum_field}="
+                            f"{enum_value!r} is not one of "
+                            f"{sorted(allowed)}"
+                        ),
+                        "http_status": 400,
+                        "metadata": {
+                            "invalid_field": field_name,
+                            "index": idx,
+                            "sub_field": enum_field,
+                        },
+                    }
+    return None
+
+
 # Editable fields for a decision dossier. The update API only accepts keys
-# in this set; everything else (schema, version, dossier_id, evidence,
-# comparisons, risks, etc.) is preserved from the current revision and
-# cannot be mutated through this endpoint. Evidence / comparisons / risks
-# have their own lifecycle and will get dedicated endpoints when needed.
+# in this set; everything else (schema, version, dossier_id, limitations,
+# linked_artifacts, etc.) is preserved from the current revision and cannot
+# be mutated through this endpoint. The entry-list fields (supporting_evidence,
+# counter_evidence, comparisons, risks) use full-list replacement semantics:
+# the caller sends the complete new list and the model re-validates each
+# entry's schema, id uniqueness and enum values (fact_tier / severity).
 _DOSSIER_EDITABLE_FIELDS = frozenset({
     "title",
     "brief_id",
@@ -10134,6 +10211,10 @@ _DOSSIER_EDITABLE_FIELDS = frozenset({
     "decision",
     "decision_note",
     "notes",
+    "supporting_evidence",
+    "counter_evidence",
+    "comparisons",
+    "risks",
 })
 
 
@@ -10147,8 +10228,12 @@ def update_decision_dossier(
 
     ``fields`` may contain any subset of :data:`_DOSSIER_EDITABLE_FIELDS`.
     Keys outside that set are rejected with ``invalid_field`` so the
-    endpoint cannot be used to mutate schema/version/dossier_id/evidence/
-    comparisons/risks/limitations/linked_artifacts/etc.
+    endpoint cannot be used to mutate schema/version/dossier_id/
+    limitations/linked_artifacts/etc. The entry-list fields
+    (supporting_evidence, counter_evidence, comparisons, risks) ARE
+    editable and use full-list replacement semantics: the caller sends
+    the complete new list and the model re-validates each entry's
+    schema, id uniqueness and enum values (fact_tier / severity).
 
     The current record is loaded, the editable fields are merged in, the
     ``revision`` is bumped and ``updated_at`` is refreshed, then the
@@ -10159,6 +10244,12 @@ def update_decision_dossier(
         VALID_DECISION_VALUES,
         VALID_DOSSIER_STATUS,
         DossierValidationError,
+    )
+    from scoutfootball.recruitment.dossier import (
+        VALID_FACT_TIERS as DOSSIER_VALID_FACT_TIERS,
+    )
+    from scoutfootball.recruitment.dossier import (
+        VALID_RISK_SEVERITY as DOSSIER_VALID_RISK_SEVERITY,
     )
     from scoutfootball.recruitment.dossier_store import DossierStoreError
 
@@ -10210,6 +10301,41 @@ def update_decision_dossier(
                 ),
                 "http_status": 400,
             })
+
+    # Early shape/enum validation for entry-list fields. The Pydantic
+    # model re-validates each entry's full schema (required fields, id
+    # uniqueness, max length, evidence_refs shape) when the store saves;
+    # these checks just give callers fast, specific feedback for the
+    # most common mistakes (non-list value, non-dict entry, missing id,
+    # invalid enum) before the current record is loaded.
+    _dossier_entry_list_specs = {
+        "supporting_evidence": (
+            "evidence_id", {"fact_tier": DOSSIER_VALID_FACT_TIERS},
+        ),
+        "counter_evidence": (
+            "evidence_id", {"fact_tier": DOSSIER_VALID_FACT_TIERS},
+        ),
+        "comparisons": (
+            "comparison_id", {"fact_tier": DOSSIER_VALID_FACT_TIERS},
+        ),
+        "risks": (
+            "risk_id",
+            {
+                "fact_tier": DOSSIER_VALID_FACT_TIERS,
+                "severity": DOSSIER_VALID_RISK_SEVERITY,
+            },
+        ),
+    }
+    for list_field, (id_field, enum_map) in _dossier_entry_list_specs.items():
+        if list_field in fields:
+            err = _validate_entry_list(
+                list_field,
+                fields[list_field],
+                entry_id_field=id_field,
+                valid_enums=enum_map,
+            )
+            if err is not None:
+                return _clean_json_value(err)
 
     store = _dossier_store()
     try:
@@ -10794,9 +10920,12 @@ def restore_post_match_review_from_backup(
 # keys in this set; everything else (schema, version, review_id,
 # hypothesis_results, falsified_patterns, new_questions, evidence,
 # linked_artifacts, limitations, etc.) is preserved from the current
-# revision and cannot be mutated through this endpoint. Sub-objects
-# like hypothesis_results / evidence have their own lifecycle and will
-# get dedicated endpoints when needed.
+# revision and cannot be mutated through this endpoint. The entry-list
+# fields (hypothesis_results, falsified_patterns, new_questions,
+# supporting_evidence, counter_evidence) use full-list replacement
+# semantics: the caller sends the complete new list and the model
+# re-validates each entry's schema, id uniqueness and enum values
+# (fact_tier / severity / outcome).
 _REVIEW_EDITABLE_FIELDS = frozenset({
     "title",
     "briefing_id",
@@ -10813,6 +10942,11 @@ _REVIEW_EDITABLE_FIELDS = frozenset({
     "decision",
     "decision_note",
     "notes",
+    "hypothesis_results",
+    "falsified_patterns",
+    "new_questions",
+    "supporting_evidence",
+    "counter_evidence",
 })
 
 
@@ -10827,7 +10961,12 @@ def update_post_match_review(
     ``fields`` may contain any subset of :data:`_REVIEW_EDITABLE_FIELDS`.
     Keys outside that set are rejected with ``invalid_field`` so the
     endpoint cannot be used to mutate schema/version/review_id/
-    hypothesis_results/evidence/limitations/linked_artifacts/etc.
+    limitations/linked_artifacts/etc. The entry-list fields
+    (hypothesis_results, falsified_patterns, new_questions,
+    supporting_evidence, counter_evidence) ARE editable and use
+    full-list replacement semantics: the caller sends the complete new
+    list and the model re-validates each entry's schema, id uniqueness
+    and enum values (fact_tier / severity / outcome).
 
     The current record is loaded, the editable fields are merged in, the
     ``revision`` is bumped and ``updated_at`` is refreshed, then the
@@ -10835,9 +10974,16 @@ def update_post_match_review(
     The store handles backup creation and atomic write.
     """
     from scoutfootball.opposition.post_match_review import (
+        VALID_FACT_TIERS as REVIEW_VALID_FACT_TIERS,
+    )
+    from scoutfootball.opposition.post_match_review import (
+        VALID_HYPOTHESIS_OUTCOMES,
         VALID_REVIEW_DECISIONS,
         VALID_REVIEW_STATUS,
         ReviewValidationError,
+    )
+    from scoutfootball.opposition.post_match_review import (
+        VALID_RISK_SEVERITY as REVIEW_VALID_RISK_SEVERITY,
     )
     from scoutfootball.opposition.post_match_review_store import ReviewStoreError
 
@@ -10905,6 +11051,48 @@ def update_post_match_review(
                 "message": "final_score_away must be a non-negative integer or null",
                 "http_status": 400,
             })
+
+    # Early shape/enum validation for entry-list fields. The Pydantic
+    # model re-validates each entry's full schema (required fields, id
+    # uniqueness, max length, evidence_refs shape) when the store saves;
+    # these checks just give callers fast, specific feedback for the
+    # most common mistakes (non-list value, non-dict entry, missing id,
+    # invalid enum) before the current record is loaded.
+    _review_entry_list_specs = {
+        "hypothesis_results": (
+            "hypothesis_id",
+            {
+                "outcome": VALID_HYPOTHESIS_OUTCOMES,
+                "fact_tier": REVIEW_VALID_FACT_TIERS,
+            },
+        ),
+        "falsified_patterns": (
+            "pattern_id",
+            {
+                "severity": REVIEW_VALID_RISK_SEVERITY,
+                "fact_tier": REVIEW_VALID_FACT_TIERS,
+            },
+        ),
+        "new_questions": (
+            "question_id", {"fact_tier": REVIEW_VALID_FACT_TIERS},
+        ),
+        "supporting_evidence": (
+            "evidence_id", {"fact_tier": REVIEW_VALID_FACT_TIERS},
+        ),
+        "counter_evidence": (
+            "evidence_id", {"fact_tier": REVIEW_VALID_FACT_TIERS},
+        ),
+    }
+    for list_field, (id_field, enum_map) in _review_entry_list_specs.items():
+        if list_field in fields:
+            err = _validate_entry_list(
+                list_field,
+                fields[list_field],
+                entry_id_field=id_field,
+                valid_enums=enum_map,
+            )
+            if err is not None:
+                return _clean_json_value(err)
 
     store = _review_store()
     try:
