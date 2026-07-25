@@ -287,6 +287,23 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 **遗留**：dossier / review 的编辑 UI（创建表单、证据条目增删）尚未实现，当前仍需通过 CLI 或 `POST` raw JSON 创建；版本视图仅支持浏览 / 加载备份 / diff / 恢复。这与现有 brief / briefing 的前端处理范围一致，留待后续产品体验迭代。
 
+### 6.6 P1 决策闭环 E2E 覆盖补齐 — `verified`（2026-07-25）
+
+关闭 G1 子任务 3（真实浏览器 E2E）与 P1（决策工作流闭环 E2E）残留缺口：6.5 之前 `tests/e2e/test_decision_workflows.py` 只覆盖 recruitment brief 与 opposition briefing 的 diff+restore 往返，dossier 与 review 的同类往返只在单元测试层验证。本轮把四类 artifact 的浏览器往返对齐，P1 退出门槛第 2 条"可 round-trip"在四类 artifact 上均有真实浏览器证据。
+
+**核心交付**：
+
+- `tests/e2e/test_decision_workflows.py` 新增 `_valid_dossier_payload` / `_valid_review_payload` 两个 seed helper（与 `_valid_brief_payload` / `_valid_briefing_payload` 同构，draft 状态以合法地省略 `decision`），以及 `seeded_dossier_with_backup` / `seeded_review_with_backup` 两个 fixture（按 `seeded_brief_with_backup` 模式两轮 save 产生一个备份，cleanup 删除记录与备份目录避免 `data/reports/` 残留）。
+- 新增 `test_recruitment_dossier_diff_and_restore_round_trip` 与 `test_opposition_review_diff_and_restore_round_trip`：浏览器对 `/recruitment/dossiers/{id}/backups`、`/diff`、`/restore` 与 `/opposition/reviews/{id}/backups`、`/diff`、`/restore` 端点族执行 list → diff → restore → 再 list 的完整往返，断言备份计数、diff 变更包含 title 字段、恢复后 `server_revision` 递增、恢复后标题回退到备份版本、恢复后再产生一个新备份。
+- 模块 docstring 同步更新为"四个 end-to-end decision round-trips"，与实际测试集合对齐。
+
+**测试覆盖**：
+
+- `uv run pytest tests/e2e/test_decision_workflows.py -m e2e -v`：6 个测试全部通过（2 smoke + 4 round-trip：brief / briefing / dossier / review），耗时约 34s。
+- CAPABILITIES.md"工程与发布缺口"表的 E2E 行已同步：四类 artifact 的 diff+restore 往返均移入"当前观察"，目标状态收敛为"三个黄金工作流在静态和低覆盖路径运行"。
+
+**遗留**：dossier / review 的编辑 UI 仍未实现（与 6.5 一致）；三个黄金工作流的静态/低覆盖 E2E 路径仍未覆盖，留待后续 E2E 扩展轮。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |

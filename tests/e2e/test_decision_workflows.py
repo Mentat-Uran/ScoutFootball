@@ -1,7 +1,7 @@
 """E2E coverage for the P1 decision-workflow views and round-trips.
 
 This module covers the two new P1 views (``workflow`` and ``versions``)
-and the two end-to-end decision round-trips they expose:
+and the four end-to-end decision round-trips they expose:
 
 - **Versions view smoke**: the view shell renders, the type selector
   offers all four artifact types (brief / briefing / dossier / review),
@@ -9,19 +9,26 @@ and the two end-to-end decision round-trips they expose:
 - **Workflow view smoke**: the view shell renders, the metric strip
   counters are present, and the three step lists (next / blockers /
   evidence gaps) are in the DOM.
-- **Recruitment decision round-trip**: a brief with two revisions is
-  seeded through the store; the browser then loads the versions view,
-  selects the brief, loads the backup timeline, diffs a backup against
-  the current record, and restores from the backup — verifying the
-  new revision appears and the restored payload matches.
-- **Opposition decision round-trip**: same shape as above but for an
-  opposition briefing, exercising the parallel store path.
+- **Recruitment decision round-trip (brief)**: a brief with two
+  revisions is seeded through the store; the browser then loads the
+  versions view, selects the brief, loads the backup timeline, diffs a
+  backup against the current record, and restores from the backup —
+  verifying the new revision appears and the restored payload matches.
+- **Opposition decision round-trip (briefing)**: same shape as above
+  but for an opposition briefing, exercising the parallel store path.
+- **Recruitment decision round-trip (dossier)**: same shape as the
+  brief round-trip but for a decision dossier, exercising the
+  ``/recruitment/dossiers/{id}/...`` endpoint family.
+- **Opposition decision round-trip (review)**: same shape as the
+  briefing round-trip but for a post-match review, exercising the
+  ``/opposition/reviews/{id}/...`` endpoint family.
 
 The round-trip tests seed data through the store directly (not via the
 API) because the public API only exposes ``POST /recruitment/briefs``
-for creating new records (``expected_revision=0``); there is no
-``PUT`` / ``PATCH`` endpoint for updates.  The store-level update path
-is already covered by unit tests (``test_brief_backup_restore.py``);
+(and the symmetric dossier / briefing / review create endpoints) for
+creating new records (``expected_revision=0``); there is no ``PUT`` /
+``PATCH`` endpoint for updates.  The store-level update path is
+already covered by unit tests (``test_brief_backup_restore.py``);
 the E2E tests focus on what the *browser* does with the resulting
 backup / diff / restore endpoints.
 
@@ -104,6 +111,90 @@ def _valid_briefing_payload(briefing_id: str, *, title: str = "E2E briefing") ->
             },
         ],
         "limitations": ["E2E test artifact; not a real match briefing."],
+    }
+
+
+def _valid_dossier_payload(dossier_id: str, *, title: str = "E2E dossier") -> dict:
+    """Return a minimal valid decision-dossier payload for E2E seeding.
+
+    The dossier stays in ``draft`` status so we can omit ``decision``
+    (the model_validator requires ``decision`` only when
+    ``status == "decided"``).
+    """
+    from scoutfootball.recruitment.dossier import DOSSIER_SCHEMA, DOSSIER_VERSION
+
+    return {
+        "schema": DOSSIER_SCHEMA,
+        "version": DOSSIER_VERSION,
+        "dossier_id": dossier_id,
+        "revision": 1,
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+        "author": "e2e-test",
+        "title": title,
+        "brief_id": "",
+        "candidate_player_id": "understat|1234",
+        "candidate_player_name": "E2E Player",
+        "candidate_team_name": "E2E Club",
+        "candidate_season_id": "2425",
+        "status": "draft",
+        "decision": None,
+        "decision_note": "",
+        "supporting_evidence": [],
+        "counter_evidence": [],
+        "comparisons": [],
+        "risks": [],
+        "human_opinion": "",
+        "recommendation": "",
+        "linked_artifacts": [],
+        "notes": "E2E seeded dossier for versions-view round-trip.",
+        "limitations": ["E2E test artifact; not a real scouting dossier."],
+    }
+
+
+def _valid_review_payload(review_id: str, *, title: str = "E2E review") -> dict:
+    """Return a minimal valid post-match-review payload for E2E seeding.
+
+    The review stays in ``draft`` status so we can omit ``decision``
+    (the model_validator requires ``decision`` only when
+    ``status == "finalized"``).
+    """
+    from scoutfootball.opposition.post_match_review import (
+        REVIEW_SCHEMA,
+        REVIEW_VERSION,
+    )
+
+    return {
+        "schema": REVIEW_SCHEMA,
+        "version": REVIEW_VERSION,
+        "review_id": review_id,
+        "revision": 1,
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+        "author": "e2e-test",
+        "title": title,
+        "briefing_id": "",
+        "match_id": "fd-match-e2e",
+        "home_team": "E2E Home FC",
+        "away_team": "E2E Away FC",
+        "kickoff_at": "2026-08-15T15:00:00+00:00",
+        "competition": "E2E Cup",
+        "season": "2526",
+        "final_score_home": 2,
+        "final_score_away": 1,
+        "status": "draft",
+        "decision": None,
+        "decision_note": "",
+        "hypothesis_results": [],
+        "falsified_patterns": [],
+        "new_questions": [],
+        "supporting_evidence": [],
+        "counter_evidence": [],
+        "human_opinion": "",
+        "recommendation": "",
+        "linked_artifacts": [],
+        "notes": "E2E seeded review for versions-view round-trip.",
+        "limitations": ["E2E test artifact; not a real post-match review."],
     }
 
 
@@ -203,6 +294,100 @@ def seeded_briefing_with_backup():
     record_path.unlink(missing_ok=True)
     if backup_dir:
         for f in backup_dir.glob(f"{briefing_id}.*.json"):
+            f.unlink(missing_ok=True)
+
+
+@pytest.fixture()
+def seeded_dossier_with_backup():
+    """Seed a decision dossier with two revisions (one backup) through the store.
+
+    Same structure as ``seeded_brief_with_backup`` but for the
+    decision-dossier store.  Cleanup removes the dossier record and its
+    backup directory so the E2E run does not leave test artifacts in
+    ``data/reports/``.
+    """
+    from scoutfootball.api import _dossier_store
+
+    dossier_id = f"e2e-dossier-{uuid.uuid4().hex[:8]}"
+    store = _dossier_store()
+
+    store.save(
+        dossier_id,
+        _valid_dossier_payload(dossier_id, title="E2E v1"),
+        expected_revision=0,
+    )
+    store.save(
+        dossier_id,
+        _valid_dossier_payload(dossier_id, title="E2E v2"),
+        expected_revision=1,
+    )
+
+    backups = store.list_backups(dossier_id)
+    assert len(backups) == 1, f"Expected 1 backup after update, found {len(backups)}"
+    backup_filename = backups[0]["backup_filename"]
+
+    yield {
+        "dossier_id": dossier_id,
+        "backup_filename": backup_filename,
+        "expected_revision": 2,
+    }
+
+    try:
+        store.delete(dossier_id, expected_revision=None)
+    except Exception:
+        pass
+    dossier_dir = store.root
+    backup_dir = getattr(store, "backup_root", None)
+    record_path = dossier_dir / f"{dossier_id}.json"
+    record_path.unlink(missing_ok=True)
+    if backup_dir:
+        for f in backup_dir.glob(f"{dossier_id}.*.json"):
+            f.unlink(missing_ok=True)
+
+
+@pytest.fixture()
+def seeded_review_with_backup():
+    """Seed a post-match review with two revisions (one backup).
+
+    Same structure as ``seeded_dossier_with_backup`` but for the
+    post-match-review store.
+    """
+    from scoutfootball.api import _review_store
+
+    review_id = f"e2e-review-{uuid.uuid4().hex[:8]}"
+    store = _review_store()
+
+    store.save(
+        review_id,
+        _valid_review_payload(review_id, title="E2E v1"),
+        expected_revision=0,
+    )
+    store.save(
+        review_id,
+        _valid_review_payload(review_id, title="E2E v2"),
+        expected_revision=1,
+    )
+
+    backups = store.list_backups(review_id)
+    assert len(backups) == 1, f"Expected 1 backup after update, found {len(backups)}"
+    backup_filename = backups[0]["backup_filename"]
+
+    yield {
+        "review_id": review_id,
+        "backup_filename": backup_filename,
+        "expected_revision": 2,
+    }
+
+    try:
+        store.delete(review_id, expected_revision=None)
+    except Exception:
+        pass
+    review_dir = store.root
+    backup_dir = getattr(store, "backup_root", None)
+    record_path = review_dir / f"{review_id}.json"
+    record_path.unlink(missing_ok=True)
+    if backup_dir:
+        for f in backup_dir.glob(f"{review_id}.*.json"):
             f.unlink(missing_ok=True)
 
 
@@ -531,6 +716,253 @@ def test_opposition_briefing_diff_and_restore_round_trip(
     assert result["restoredTitle"] == "E2E v1", (
         f"Expected restored title 'E2E v1', got {result['restoredTitle']}"
     )
+    assert result["backupCountAfterRestore"] == 2, (
+        f"Expected 2 backups after restore, got {result['backupCountAfterRestore']}"
+    )
+
+
+# ── Recruitment decision round-trip E2E (dossier) ────────────────────
+
+
+def test_recruitment_dossier_diff_and_restore_round_trip(
+    page, live_server_url: str, seeded_dossier_with_backup
+) -> None:
+    """End-to-end round-trip for a decision dossier.
+
+    Same structure as the recruitment brief round-trip but exercises the
+    ``/recruitment/dossiers/{id}/...`` endpoint family, proving the
+    dossier store + diff + restore path works from the browser context.
+    This closes the G1 / P1 E2E coverage gap where only brief and
+    briefing round-trips had real-browser coverage (CAPABILITIES.md).
+    """
+    dossier_id = seeded_dossier_with_backup["dossier_id"]
+    backup_filename = seeded_dossier_with_backup["backup_filename"]
+    expected_revision = seeded_dossier_with_backup["expected_revision"]
+
+    open_loaded_app(page, live_server_url)
+
+    result = page.evaluate(
+        """async ({ baseUrl, dossierId, backupFilename, expectedRevision }) => {
+            const out = {};
+
+            // 1. List backups — must include the seeded backup.
+            const listResp = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId) + '/backups'
+            );
+            out.listStatus = listResp.status;
+            const listData = await listResp.json();
+            out.backupCount = listData.count;
+            out.hasSeededBackup = listData.backups.some(
+                b => b.backup_filename === backupFilename
+            );
+
+            // 2. Diff the backup against the current record.
+            const diffResp = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId)
+                + '/diff?backup_filename=' + encodeURIComponent(backupFilename)
+            );
+            out.diffStatus = diffResp.status;
+            const diffData = await diffResp.json();
+            out.diffChangeCount = diffData.change_count;
+            out.diffCurrentRevision = diffData.current_revision;
+            out.diffBackupRevision = diffData.backup_revision;
+            // The title changed between rev 1 and rev 2, so the diff
+            // must include at least one change touching the title path.
+            out.hasTitleChange = (diffData.changes || []).some(
+                c => (c.path || '').includes('title')
+            );
+
+            // 3. Restore from the backup (rev 1 → new rev 3).
+            const restoreResp = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId) + '/restore',
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        backup_filename: backupFilename,
+                        expected_revision: expectedRevision,
+                    }),
+                }
+            );
+            out.restoreStatus = restoreResp.status;
+            const restoreData = await restoreResp.json();
+            out.restoredRevision = restoreData.record?.server_revision;
+            out.restoredTitle = restoreData.record?.dossier?.title;
+
+            // 4. List backups again — must now have two backups.
+            const listAfterResp = await fetch(
+                baseUrl + '/recruitment/dossiers/' + encodeURIComponent(dossierId) + '/backups'
+            );
+            const listAfterData = await listAfterResp.json();
+            out.backupCountAfterRestore = listAfterData.count;
+
+            return out;
+        }""",
+        {
+            "baseUrl": live_server_url,
+            "dossierId": dossier_id,
+            "backupFilename": backup_filename,
+            "expectedRevision": expected_revision,
+        },
+    )
+
+    # 1. Backup list before restore.
+    assert result["listStatus"] == 200, f"List backups failed: {result}"
+    assert result["backupCount"] == 1, (
+        f"Expected 1 backup before restore, got {result['backupCount']}"
+    )
+    assert result["hasSeededBackup"], (
+        f"Seeded backup not found in list: {result}"
+    )
+
+    # 2. Diff.
+    assert result["diffStatus"] == 200, f"Diff failed: {result}"
+    assert result["diffChangeCount"] >= 1, (
+        f"Expected >=1 diff change, got {result['diffChangeCount']}"
+    )
+    assert result["diffCurrentRevision"] == 2, (
+        f"Expected current_revision=2, got {result['diffCurrentRevision']}"
+    )
+    assert result["diffBackupRevision"] == 1, (
+        f"Expected backup_revision=1, got {result['diffBackupRevision']}"
+    )
+    assert result["hasTitleChange"], (
+        "Expected a title change in the dossier diff (v1 → v2), but none found"
+    )
+
+    # 3. Restore.
+    assert result["restoreStatus"] == 200, f"Restore failed: {result}"
+    assert result["restoredRevision"] == 3, (
+        f"Expected restored revision=3, got {result['restoredRevision']}"
+    )
+    # The restored title must match the backup's title (v1).
+    assert result["restoredTitle"] == "E2E v1", (
+        f"Expected restored title 'E2E v1', got {result['restoredTitle']}"
+    )
+
+    # 4. Backup list after restore.
+    assert result["backupCountAfterRestore"] == 2, (
+        f"Expected 2 backups after restore, got {result['backupCountAfterRestore']}"
+    )
+
+
+# ── Opposition decision round-trip E2E (review) ──────────────────────
+
+
+def test_opposition_review_diff_and_restore_round_trip(
+    page, live_server_url: str, seeded_review_with_backup
+) -> None:
+    """End-to-end round-trip for a post-match review.
+
+    Same structure as the opposition briefing round-trip but exercises
+    the ``/opposition/reviews/{id}/...`` endpoint family, proving the
+    review store + diff + restore path works from the browser context.
+    This closes the G1 / P1 E2E coverage gap where only brief and
+    briefing round-trips had real-browser coverage (CAPABILITIES.md).
+    """
+    review_id = seeded_review_with_backup["review_id"]
+    backup_filename = seeded_review_with_backup["backup_filename"]
+    expected_revision = seeded_review_with_backup["expected_revision"]
+
+    open_loaded_app(page, live_server_url)
+
+    result = page.evaluate(
+        """async ({ baseUrl, reviewId, backupFilename, expectedRevision }) => {
+            const out = {};
+
+            // 1. List backups — must include the seeded backup.
+            const listResp = await fetch(
+                baseUrl + '/opposition/reviews/' + encodeURIComponent(reviewId) + '/backups'
+            );
+            out.listStatus = listResp.status;
+            const listData = await listResp.json();
+            out.backupCount = listData.count;
+            out.hasSeededBackup = listData.backups.some(
+                b => b.backup_filename === backupFilename
+            );
+
+            // 2. Diff the backup against the current record.
+            const diffResp = await fetch(
+                baseUrl + '/opposition/reviews/' + encodeURIComponent(reviewId)
+                + '/diff?backup_filename=' + encodeURIComponent(backupFilename)
+            );
+            out.diffStatus = diffResp.status;
+            const diffData = await diffResp.json();
+            out.diffChangeCount = diffData.change_count;
+            out.diffCurrentRevision = diffData.current_revision;
+            out.diffBackupRevision = diffData.backup_revision;
+            out.hasTitleChange = (diffData.changes || []).some(
+                c => (c.path || '').includes('title')
+            );
+
+            // 3. Restore from the backup (rev 1 → new rev 3).
+            const restoreResp = await fetch(
+                baseUrl + '/opposition/reviews/' + encodeURIComponent(reviewId) + '/restore',
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        backup_filename: backupFilename,
+                        expected_revision: expectedRevision,
+                    }),
+                }
+            );
+            out.restoreStatus = restoreResp.status;
+            const restoreData = await restoreResp.json();
+            out.restoredRevision = restoreData.record?.server_revision;
+            out.restoredTitle = restoreData.record?.review?.title;
+
+            // 4. List backups again — must now have two backups.
+            const listAfterResp = await fetch(
+                baseUrl + '/opposition/reviews/' + encodeURIComponent(reviewId) + '/backups'
+            );
+            const listAfterData = await listAfterResp.json();
+            out.backupCountAfterRestore = listAfterData.count;
+
+            return out;
+        }""",
+        {
+            "baseUrl": live_server_url,
+            "reviewId": review_id,
+            "backupFilename": backup_filename,
+            "expectedRevision": expected_revision,
+        },
+    )
+
+    # 1. Backup list before restore.
+    assert result["listStatus"] == 200, f"List backups failed: {result}"
+    assert result["backupCount"] == 1, (
+        f"Expected 1 backup before restore, got {result['backupCount']}"
+    )
+    assert result["hasSeededBackup"], (
+        f"Seeded backup not found in list: {result}"
+    )
+
+    # 2. Diff.
+    assert result["diffStatus"] == 200, f"Diff failed: {result}"
+    assert result["diffChangeCount"] >= 1, (
+        f"Expected >=1 diff change, got {result['diffChangeCount']}"
+    )
+    assert result["diffCurrentRevision"] == 2, (
+        f"Expected current_revision=2, got {result['diffCurrentRevision']}"
+    )
+    assert result["diffBackupRevision"] == 1, (
+        f"Expected backup_revision=1, got {result['diffBackupRevision']}"
+    )
+    assert result["hasTitleChange"], (
+        "Expected a title change in the review diff (v1 → v2), but none found"
+    )
+
+    # 3. Restore.
+    assert result["restoreStatus"] == 200, f"Restore failed: {result}"
+    assert result["restoredRevision"] == 3, (
+        f"Expected restored revision=3, got {result['restoredRevision']}"
+    )
+    assert result["restoredTitle"] == "E2E v1", (
+        f"Expected restored title 'E2E v1', got {result['restoredTitle']}"
+    )
+
+    # 4. Backup list after restore.
     assert result["backupCountAfterRestore"] == 2, (
         f"Expected 2 backups after restore, got {result['backupCountAfterRestore']}"
     )
