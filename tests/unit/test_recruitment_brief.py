@@ -368,6 +368,27 @@ class TestBriefStoreListCount:
         assert summary["title"] == "First"
         assert summary["server_revision"] == 1
         assert "brief" not in summary  # Summary should NOT include the full brief
+        # Workflow inference depends on budget_eur / minimum_minutes being
+        # present in the summary (nullable ints mirror the model).
+        assert summary["budget_eur"] == 30_000_000
+        assert summary["minimum_minutes"] == 1500
+
+    def test_list_summary_budget_and_minutes_nullable_when_unset(self, tmp_path):
+        """Briefs saved without budget/minutes must surface as None in summary.
+
+        Workflow inference treats None / 0 as 'incomplete brief' so the
+        summary must not silently default to 0 or omit the keys.
+        """
+        store = BriefStore(tmp_path / "briefs")
+        payload = _valid_payload("brief-no-budget")
+        payload["budget_eur"] = None
+        payload["minimum_minutes"] = None
+        store.save("brief-no-budget", payload, expected_revision=0)
+        records = store.list_records()
+        assert len(records) == 1
+        summary = records[0]
+        assert summary["budget_eur"] is None
+        assert summary["minimum_minutes"] is None
 
     def test_list_sorted_most_recent_first(self, tmp_path):
         store = BriefStore(tmp_path / "briefs")

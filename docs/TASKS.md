@@ -322,6 +322,30 @@ C1 退出门槛收尾（2026-07-23）：维护者授权完成 C1 退出门槛最
 
 **遗留**：三个黄金工作流的完整导航路径（球探决策 brief→dossier、比赛准备 briefing→review、数据与模型发布）在浏览器中的端到端步骤串联仍未覆盖；dossier / review 编辑 UI 仍未实现（与 6.5 一致）。本轮覆盖的是决策导航层的状态推断，不是完整工作流串联。
 
+### 6.8 工作流视图字段级 evidence gap 修复与 E2E — `verified`（2026-07-25）
+
+关闭 6.7 LIVE 契约测试遗留的字段级假阳性：`_workflowInferSteps` 对 `brief-gap-*`（budget_eur / minimum_minutes 缺失）和 `briefing-tier-*`（全部 fact_tier == unknown）的推断依赖 list 端点摘要中的字段，但 `BriefStore.list_records` 摘要未含 `budget_eur` / `minimum_minutes`，`BriefingStore.list_records` 摘要未含 `sections`，导致只要有任何 brief / briefing 存在，工作流视图就会把每条都标记为 evidence gap。6.7 的 count-based 契约测试只断言 create-* / *-missing 与计数的关系，没覆盖字段级 gap，所以这个假阳性一直没被捕获。
+
+**核心交付**：
+
+- `src/scoutfootball/recruitment/store.py` `BriefStore.list_records`：摘要新增 `budget_eur` 和 `minimum_minutes`（nullable int，与模型一致，未设置时为 `None` 而非 0），使前端推断能区分"已填写且 > 0"与"未填写"。docstring 同步更新字段清单与可空说明。
+- `src/scoutfootball/opposition/store.py` `BriefingStore.list_records`：摘要新增 `sections` 最小投影 `[{section_id, fact_tier}, ...]`，仅保留推断所需的两个字段，不泄露 `summary` 文本和 `evidence_refs`（调用方需要完整内容时走 `load(briefing_id)`）。docstring 同步说明投影策略与不包含的字段。
+- `tests/unit/test_recruitment_brief.py`：扩展 `test_list_returns_summaries` 断言 `budget_eur == 30_000_000` 和 `minimum_minutes == 1500`；新增 `test_list_summary_budget_and_minutes_nullable_when_unset` 验证两个字段为 `None` 时不被默认成 0 或省略。
+- `tests/unit/test_opposition_briefing.py`：扩展 `test_list_returns_summaries` 的 key 清单加入 `sections`；新增 `test_list_summary_sections_projection_minimal`（投影只含 section_id + fact_tier，不泄露 summary/evidence_refs）、`test_list_summary_sections_all_unknown_fact_tier`（全 unknown 的 briefing 保留实际 tier）、`test_list_summary_sections_empty_when_no_sections`（无 section 时返回空列表而非 null）。
+- `tests/e2e/test_decision_workflows.py`：新增 `seeded_workflow_field_gaps` fixture（种子两条 brief 一完整一缺失、两条 briefing 一分类一全 unknown，cleanup 删除记录与备份目录）和 `test_workflow_view_field_gaps_match_record_state`（断言 `brief-gap-{complete_id}` 不出现、`brief-gap-{incomplete_id}` 出现、`briefing-tier-{classified_id}` 不出现、`briefing-tier-{unclassified_id}` 出现，轮询至步骤 ID 稳定后断言）。这是 6.7 count-based 契约的字段级补充：count-based 只能证明"有 brief 时不显示 create-brief"，字段级才能证明"完整 brief 不被误标为 evidence gap"。
+- `docs/CAPABILITIES.md` 工程与发布缺口表 E2E 行与"可以陈述"条目同步：字段级 evidence gap 推断纳入当前观察。
+
+**测试覆盖**：
+
+- `uv run pytest tests/unit/test_recruitment_brief.py tests/unit/test_opposition_briefing.py -q`：133 测试全过。
+- `uv run pytest tests/unit/ -q`：全量单元测试通过（exit 0）。
+- `uv run pytest tests/integration/ -q`：23 通过 2 skipped。
+- `uv run ruff check`（五个修改文件）：All checks passed。
+- `node --check frontend/app.js`：通过。
+- E2E 测试 `test_workflow_view_field_gaps_match_record_state` 语法验证通过（`ast.parse`）；浏览器执行需 `-m e2e` 单独运行。
+
+**遗留**：dossier / review 编辑 UI 仍未实现（与 6.5 / 6.7 一致）；三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 一致）。本轮修的是 6.7 LIVE 契约下的字段级假阳性回归，不改变 P1 节点整体状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
