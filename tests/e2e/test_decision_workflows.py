@@ -720,6 +720,182 @@ def test_workflow_view_inference_matches_api_state(
     )
 
 
+@pytest.fixture()
+def seeded_workflow_field_gaps():
+    """Seed two briefs and two briefings that exercise field-level gaps.
+
+    Yields a dict with four IDs:
+
+    - ``complete_brief_id``: a brief with ``budget_eur > 0`` and
+      ``minimum_minutes > 0``.  Must NOT trigger ``brief-gap-*``.
+    - ``incomplete_brief_id``: a brief with both fields ``None``.  MUST
+      trigger ``brief-gap-*``.
+    - ``classified_briefing_id``: a briefing with at least one section
+      whose ``fact_tier != "unknown"``.  Must NOT trigger
+      ``briefing-tier-*``.
+    - ``unclassified_briefing_id``: a briefing whose every section has
+      ``fact_tier == "unknown"``.  MUST trigger ``briefing-tier-*``.
+
+    Cleanup removes all four records and their backup directories so
+    the E2E run leaves no test artifacts in ``data/reports/``.
+    """
+    from scoutfootball.api import _brief_store, _briefing_store
+
+    brief_store = _brief_store()
+    briefing_store = _briefing_store()
+
+    complete_brief_id = f"e2e-wf-complete-{uuid.uuid4().hex[:8]}"
+    incomplete_brief_id = f"e2e-wf-incomplete-{uuid.uuid4().hex[:8]}"
+    classified_briefing_id = f"e2e-wf-classified-{uuid.uuid4().hex[:8]}"
+    unclassified_briefing_id = f"e2e-wf-uncategorized-{uuid.uuid4().hex[:8]}"
+
+    # Complete brief: budget + minutes both set > 0.
+    brief_store.save(
+        complete_brief_id,
+        _valid_brief_payload(complete_brief_id, title="E2E complete brief"),
+        expected_revision=0,
+    )
+    # Incomplete brief: both fields None.
+    incomplete_payload = _valid_brief_payload(
+        incomplete_brief_id, title="E2E incomplete brief"
+    )
+    incomplete_payload["budget_eur"] = None
+    incomplete_payload["minimum_minutes"] = None
+    brief_store.save(incomplete_brief_id, incomplete_payload, expected_revision=0)
+
+    # Classified briefing: one section with fact_tier="recorded".
+    briefing_store.save(
+        classified_briefing_id,
+        _valid_briefing_payload(classified_briefing_id, title="E2E classified"),
+        expected_revision=0,
+    )
+    # Unclassified briefing: all sections fact_tier="unknown".
+    unclassified_payload = _valid_briefing_payload(
+        unclassified_briefing_id, title="E2E unclassified"
+    )
+    unclassified_payload["sections"] = [
+        {
+            "section_id": "opponent_strength",
+            "fact_tier": "unknown",
+            "summary": "Not yet classified.",
+            "evidence_refs": [],
+        },
+    ]
+    briefing_store.save(
+        unclassified_briefing_id, unclassified_payload, expected_revision=0
+    )
+
+    yield {
+        "complete_brief_id": complete_brief_id,
+        "incomplete_brief_id": incomplete_brief_id,
+        "classified_briefing_id": classified_briefing_id,
+        "unclassified_briefing_id": unclassified_briefing_id,
+    }
+
+    # Cleanup: best-effort delete + unlink for all four records.
+    for store, bid in (
+        (brief_store, complete_brief_id),
+        (brief_store, incomplete_brief_id),
+        (briefing_store, classified_briefing_id),
+        (briefing_store, unclassified_briefing_id),
+    ):
+        try:
+            store.delete(bid, expected_revision=None)
+        except Exception:
+            pass
+        record_path = store.root / f"{bid}.json"
+        record_path.unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for f in backup_dir.glob(f"{bid}.*.json"):
+                f.unlink(missing_ok=True)
+
+
+def test_workflow_view_field_gaps_match_record_state(
+    page, live_server_url: str, seeded_workflow_field_gaps
+) -> None:
+    """Field-level evidence gaps must reflect the actual record content.
+
+    The count-based contract test
+    (``test_workflow_view_inference_matches_api_state``) verifies the
+    create-* / *-missing invariants.  This test complements it by
+    verifying the *field-level* evidence gaps that depend on summary
+    fields the list endpoints must surface:
+
+    - A brief with ``budget_eur > 0`` and ``minimum_minutes > 0`` must
+      NOT produce ``brief-gap-<id>``.
+    - A brief with either field ``None`` MUST produce ``brief-gap-<id>``.
+    - A briefing with at least one non-unknown ``fact_tier`` must NOT
+      produce ``briefing-tier-<id>``.
+    - A briefing whose sections are all ``fact_tier == "unknown"`` MUST
+      produce ``briefing-tier-<id>``.
+
+    Catches the regression where ``list_records`` summaries omitted
+    ``budget_eur`` / ``minimum_minutes`` / ``sections`` and the workflow
+    view flagged every brief and briefing as an evidence gap.
+    """
+    complete_brief = seeded_workflow_field_gaps["complete_brief_id"]
+    incomplete_brief = seeded_workflow_field_gaps["incomplete_brief_id"]
+    classified_briefing = seeded_workflow_field_gaps["classified_briefing_id"]
+    unclassified_briefing = seeded_workflow_field_gaps["unclassified_briefing_id"]
+
+    open_loaded_app(page, live_server_url)
+
+    page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+    page.locator("#view-workflow").wait_for(state="visible", timeout=10_000)
+
+    def _collect_gap_ids() -> set:
+        return set(
+            page.evaluate(
+                """() => [...document.querySelectorAll(
+                    "#wf-evidence-gap-list li[data-wf-step-id]"
+                )].map(li => li.dataset.wfStepId)"""
+            )
+        )
+
+    # Poll until stable across two reads 400ms apart (same pattern as the
+    # count-based contract test).
+    prev = None
+    cur = None
+    for _ in range(20):
+        cur = _collect_gap_ids()
+        if cur == prev and cur is not None:
+            break
+        prev = cur
+        page.wait_for_timeout(400)
+    assert cur is not None, "workflow view gap IDs never became readable"
+    assert cur == prev, (
+        "workflow view gap IDs did not stabilize within 8s; "
+        f"last two reads differed:\n  {prev!r}\n  {cur!r}"
+    )
+
+    # Complete brief must NOT be flagged.
+    assert f"brief-gap-{complete_brief}" not in cur, (
+        f"Complete brief {complete_brief} was flagged as an evidence gap "
+        f"even though budget_eur and minimum_minutes are both set > 0. "
+        f"This is a false positive caused by list_records summaries "
+        f"omitting the fields the workflow inference reads. gaps={cur!r}"
+    )
+    # Incomplete brief MUST be flagged.
+    assert f"brief-gap-{incomplete_brief}" in cur, (
+        f"Incomplete brief {incomplete_brief} (budget_eur=None, "
+        f"minimum_minutes=None) was not flagged as an evidence gap. "
+        f"gaps={cur!r}"
+    )
+    # Classified briefing must NOT be flagged.
+    assert f"briefing-tier-{classified_briefing}" not in cur, (
+        f"Classified briefing {classified_briefing} was flagged as an "
+        f"evidence gap even though it has a section with "
+        f"fact_tier='recorded'. gaps={cur!r}"
+    )
+    # Unclassified briefing MUST be flagged.
+    assert f"briefing-tier-{unclassified_briefing}" in cur, (
+        f"Unclassified briefing {unclassified_briefing} (all sections "
+        f"fact_tier='unknown') was not flagged as an evidence gap. "
+        f"gaps={cur!r}"
+    )
+
+
 # ── Recruitment decision round-trip E2E ──────────────────────────────
 
 

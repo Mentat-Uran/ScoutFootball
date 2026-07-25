@@ -126,7 +126,12 @@ class BriefStore:
         Returns a summary list (no full brief payload) to keep the
         response small.  Each entry has: ``brief_id``, ``server_revision``,
         ``brief_revision``, ``title``, ``team``, ``position_group``,
-        ``updated_at``, ``stored_at``.
+        ``budget_eur``, ``minimum_minutes``, ``updated_at``, ``stored_at``.
+
+        ``budget_eur`` and ``minimum_minutes`` are included (as nullable
+        ints, mirroring the model) so workflow inference can detect
+        incomplete briefs without fetching each record in full.  They may
+        be ``None`` when the maintainer left them unset.
         """
         if not self.root.exists():
             return []
@@ -145,6 +150,8 @@ class BriefStore:
                     "title": brief.get("title", ""),
                     "team": brief.get("team", ""),
                     "position_group": brief.get("position_group", ""),
+                    "budget_eur": brief.get("budget_eur"),
+                    "minimum_minutes": brief.get("minimum_minutes"),
                     "updated_at": brief.get("updated_at", ""),
                     "stored_at": record["stored_at"],
                 })

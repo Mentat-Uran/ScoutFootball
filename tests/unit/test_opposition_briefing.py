@@ -485,10 +485,66 @@ class TestBriefingStoreListCount:
             "away_team",
             "kickoff_at",
             "competition",
+            "sections",
             "updated_at",
             "stored_at",
         ):
             assert key in summary
+
+    def test_list_summary_sections_projection_minimal(self, tmp_path):
+        """Sections projection must carry only section_id + fact_tier.
+
+        Workflow inference only needs fact_tier to detect unclassified
+        briefings; the summary must not leak section ``summary`` text or
+        ``evidence_refs`` (callers use ``load()`` for full content).
+        """
+        store = BriefingStore(tmp_path / "briefings")
+        store.save(
+            "briefing-001",
+            _valid_payload("briefing-001"),
+            expected_revision=0,
+        )
+        records = store.list_records()
+        assert len(records) == 1
+        sections = records[0]["sections"]
+        assert isinstance(sections, list)
+        assert len(sections) == 2  # opponent_strength + key_players
+        for entry in sections:
+            assert set(entry.keys()) == {"section_id", "fact_tier"}
+        tiers = {entry["fact_tier"] for entry in sections}
+        assert tiers == {"recorded", "official"}
+
+    def test_list_summary_sections_all_unknown_fact_tier(self, tmp_path):
+        """Briefing whose sections are all 'unknown' must surface in summary.
+
+        Workflow inference flags briefings where every section has
+        fact_tier == 'unknown' (or sections is empty) as an evidence gap.
+        The summary must preserve the actual tiers so the inference does
+        not produce false positives on well-classified briefings.
+        """
+        store = BriefingStore(tmp_path / "briefings")
+        payload = _valid_payload(
+            "briefing-uncategorized",
+            sections=[
+                _valid_section("opponent_strength", fact_tier="unknown"),
+                _valid_section("key_players", fact_tier="unknown"),
+            ],
+        )
+        store.save("briefing-uncategorized", payload, expected_revision=0)
+        records = store.list_records()
+        assert len(records) == 1
+        sections = records[0]["sections"]
+        assert len(sections) == 2
+        assert all(s["fact_tier"] == "unknown" for s in sections)
+
+    def test_list_summary_sections_empty_when_no_sections(self, tmp_path):
+        """A briefing with no sections must surface an empty list, not null."""
+        store = BriefingStore(tmp_path / "briefings")
+        payload = _valid_payload("briefing-empty", sections=[])
+        store.save("briefing-empty", payload, expected_revision=0)
+        records = store.list_records()
+        assert len(records) == 1
+        assert records[0]["sections"] == []
 
     def test_list_sorted_most_recent_first(self, tmp_path):
         store = BriefingStore(tmp_path / "briefings")

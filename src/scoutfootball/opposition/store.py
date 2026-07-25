@@ -127,7 +127,14 @@ class BriefingStore:
         response small.  Each entry has: ``briefing_id``,
         ``server_revision``, ``briefing_revision``, ``title``,
         ``home_team``, ``away_team``, ``kickoff_at``, ``competition``,
-        ``updated_at``, ``stored_at``.
+        ``sections``, ``updated_at``, ``stored_at``.
+
+        ``sections`` is a minimal projection ``[{section_id, fact_tier},
+        ...]`` — enough for workflow inference to detect unclassified
+        briefings (all ``fact_tier == "unknown"`` or empty sections)
+        without fetching each record in full.  Section ``summary`` text
+        and ``evidence_refs`` are not included; callers that need them
+        must ``load(briefing_id)``.
         """
         if not self.root.exists():
             return []
@@ -139,6 +146,14 @@ class BriefingStore:
                 except BriefingStoreError:
                     continue
                 briefing = record["briefing"]
+                sections_proj = [
+                    {
+                        "section_id": s.get("section_id", ""),
+                        "fact_tier": s.get("fact_tier", "unknown"),
+                    }
+                    for s in briefing.get("sections", [])
+                    if isinstance(s, dict)
+                ]
                 records.append({
                     "briefing_id": briefing["briefing_id"],
                     "server_revision": record["server_revision"],
@@ -148,6 +163,7 @@ class BriefingStore:
                     "away_team": briefing.get("away_team", ""),
                     "kickoff_at": briefing.get("kickoff_at"),
                     "competition": briefing.get("competition", ""),
+                    "sections": sections_proj,
                     "updated_at": briefing.get("updated_at", ""),
                     "stored_at": record["stored_at"],
                 })
