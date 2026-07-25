@@ -23,11 +23,13 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
-# The 22 navigation buttons rendered in frontend/index.html. We hard-code the
+# The 24 navigation buttons rendered in frontend/index.html. We hard-code the
 # list (instead of scraping) so a missing/renamed button fails loudly here
 # rather than silently in a downstream workflow test.
 EXPECTED_NAV_VIEWS = [
     "overview",
+    "workflow",
+    "versions",
     "players",
     "compare",
     "value",
@@ -81,7 +83,7 @@ def test_health_endpoint_reachable(live_server_url: str) -> None:
 
 
 def test_index_page_loads_with_all_nav_buttons(page, live_server_url: str) -> None:
-    """The SPA shell loads and all 22 nav-action buttons are present.
+    """The SPA shell loads and all 24 nav-action buttons are present.
 
     This catches regressions where:
     - frontend static files are not mounted on the FastAPI app
@@ -91,7 +93,7 @@ def test_index_page_loads_with_all_nav_buttons(page, live_server_url: str) -> No
     The selector ``.nav-stack .nav-action[...]`` deliberately excludes the
     brand-lockup button at the top of the side nav, which also carries the
     ``nav-action`` class and ``data-view='overview'`` but is not part of
-    the 22-button nav stack.
+    the 24-button nav stack.
     """
     response = open_loaded_app(page, live_server_url)
     assert response is not None
