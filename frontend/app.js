@@ -16715,7 +16715,7 @@ function _renderWorkflowStep(step, index, kind) {
         ? `<button class="wf-step-action" type="button" data-wf-jump="${escapeAttr(step.action)}">${escapeHtml(step.actionLabel || t("workflow_action_goto"))}</button>`
         : `<button class="wf-step-action" type="button" disabled>${escapeHtml(zT ? "—" : "—")}</button>`;
     return `
-        <li class="${itemClass}">
+        <li class="${itemClass}" data-wf-step-id="${escapeAttr(step.id)}">
             <span class="wf-step-marker ${markerClass}">${escapeHtml(markerText)}</span>
             <div class="wf-step-body">
                 <span class="wf-step-title">${escapeHtml(step.title)}</span>
