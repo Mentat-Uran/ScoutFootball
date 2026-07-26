@@ -141,7 +141,7 @@ class TestPostMatchReviewModel:
         payload = _valid_payload()
         review = validate_review_payload(payload)
         assert review.review_id == "review-test-001"
-        assert review.schema == REVIEW_SCHEMA
+        assert review.schema_name == REVIEW_SCHEMA
         assert review.version == REVIEW_VERSION
         assert review.status == "draft"
         assert review.decision is None

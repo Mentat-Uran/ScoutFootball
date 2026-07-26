@@ -2366,7 +2366,7 @@ def _cmd_validate_brief(args: argparse.Namespace) -> None:
         result = {"status": "valid", "brief_id": brief.brief_id}
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"VALID: {brief.brief_id} (schema={brief.schema} v{brief.version})")
+        print(f"VALID: {brief.brief_id} (schema={brief.schema_name} v{brief.version})")
 
 
 # ── Recruitment decision dossier CLI ─────────────────────────────────────
@@ -2622,7 +2622,7 @@ def _cmd_validate_dossier(args: argparse.Namespace) -> None:
         result = {"status": "valid", "dossier_id": dossier.dossier_id}
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"VALID: {dossier.dossier_id} (schema={dossier.schema} v={dossier.version})")
+        print(f"VALID: {dossier.dossier_id} (schema={dossier.schema_name} v={dossier.version})")
 
 
 # ── Opposition briefing CLI ──────────────────────────────────────────────
@@ -2939,7 +2939,7 @@ def _cmd_validate_briefing(args: argparse.Namespace) -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(
-            f"VALID: {briefing.briefing_id} (schema={briefing.schema} v={briefing.version})"
+            f"VALID: {briefing.briefing_id} (schema={briefing.schema_name} v={briefing.version})"
         )
 
 
@@ -3280,7 +3280,7 @@ def _cmd_validate_review(args: argparse.Namespace) -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(
-            f"VALID: {review.review_id} (schema={review.schema} v={review.version})"
+            f"VALID: {review.review_id} (schema={review.schema_name} v={review.version})"
         )
 
 
