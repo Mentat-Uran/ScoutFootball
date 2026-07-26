@@ -1248,6 +1248,14 @@ def _save_dc_calibration_report(
         try:
             pred = predict_match_dc(model, home_id, away_id, max_goals=5)
         except Exception:
+            logger.warning(
+                "Calibration report: prediction failed for match_id=%s "
+                "home=%s away=%s; skipping (may bias calibration metrics)",
+                row.get("match_id", "?"),
+                home_id,
+                away_id,
+                exc_info=True,
+            )
             continue
 
         # Actual score bucket
@@ -1401,6 +1409,12 @@ def _build_market_enriched_features(
             market_source = csv_file.name
             break
         except Exception:
+            logger.debug(
+                "Transfermarkt manual snapshot %s failed to load; "
+                "trying next candidate",
+                csv_file.name,
+                exc_info=True,
+            )
             continue
 
     # Fallback: try raw Transfermarkt CSVs (player_market_value + player_profiles)
