@@ -135,6 +135,62 @@ def _valid_review_payload(
     return payload
 
 
+def _valid_briefing_payload(
+    briefing_id: str = "brf-api-001",
+    *,
+    title: str = "API test briefing",
+    **overrides,
+) -> dict:
+    """Build a valid ``scoutfootball.opposition-briefing`` v1.0.0 payload.
+
+    The briefing model has no status/decision state machine (unlike the
+    dossier and review). It carries an explicit ``sections`` tuple of
+    fact sections, each with its own ``fact_tier`` classification so
+    the reviewer can never confuse an official squad list with a
+    maintainer estimate.
+    """
+    payload = {
+        "schema": "scoutfootball.opposition-briefing",
+        "version": "1.0.0",
+        "briefing_id": briefing_id,
+        "revision": 1,
+        "created_at": _now(),
+        "updated_at": _now(),
+        "author": "maintainer",
+        "title": title,
+        "match_id": "match-001",
+        "home_team": "Home FC",
+        "away_team": "Away FC",
+        "kickoff_at": _now(),
+        "competition": "Test Cup",
+        "season": "2025",
+        "sections": [
+            {
+                "section_id": "opponent_strength",
+                "fact_tier": "recorded",
+                "summary": "Away FC are 4th in the table, +12 xGD over last 6.",
+                "evidence_refs": ["fbref/2025/AwayFC", "team_match.parquet#row=64760"],
+            },
+            {
+                "section_id": "key_players",
+                "fact_tier": "official",
+                "summary": "Star striker expected to start; backup doubtful.",
+                "evidence_refs": ["official-squad-list-2025"],
+            },
+        ],
+        "linked_pattern_card_ids": ["pattern-away-right-overload"],
+        "linked_scenario_tree_id": None,
+        "linked_post_match_review_id": None,
+        "notes": "Watch for the right-side overload in 4-2-3-1.",
+        "limitations": [
+            "Briefing is a personal local object; not an external fact.",
+            "fact_tier is the maintainer's honest classification, not automated.",
+        ],
+    }
+    payload.update(overrides)
+    return payload
+
+
 @pytest.fixture
 def api_client(tmp_path):
     """Build a TestClient with ``report_root`` redirected to ``tmp_path``."""
@@ -1759,3 +1815,505 @@ class TestContractsLiveCounts:
         assert after.status_code == 200
         after_ids = {c["artifact_id"] for c in after.json()["contracts"]}
         assert "opposition.post_match_review" in after_ids
+
+
+# ── Opposition Briefing endpoints ──────────────────────────────────────
+
+
+class TestOppositionBriefingEndpoints:
+    """Cover the routes under ``/opposition/briefs``.
+
+    The briefing endpoints predate this test class (create / get / list
+    / backups / diff / restore were added in P1). This class focuses on
+    the new ``PUT /opposition/briefs/{briefing_id}`` update endpoint
+    added to complete the opposition workflow closed-loop (briefing
+    section-level editing, mirroring the dossier/review entry-list
+    editors). The update endpoint accepts a partial ``fields`` object +
+    an ``expected_revision`` (If-Match). It must reject unknown fields,
+    invalid ``fact_tier`` enum values, malformed ``sections`` shapes,
+    and revision conflicts. Successful updates create a backup, bump
+    ``server_revision``, and return the new record envelope.
+    """
+
+    def test_list_empty_returns_ok_with_zero_count(self, api_client: TestClient):
+        response = api_client.get("/opposition/briefs")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["count"] == 0
+        assert data["briefings"] == []
+
+    def test_get_unknown_briefing_returns_404(self, api_client: TestClient):
+        response = api_client.get("/opposition/briefs/nonexistent")
+        assert response.status_code == 404
+        detail = response.json()["detail"]
+        assert detail["code"] == "briefing_not_found"
+
+    def test_create_then_get_round_trip(self, api_client: TestClient):
+        payload = _valid_briefing_payload("brf-roundtrip")
+        create = api_client.post("/opposition/briefs", json=payload)
+        assert create.status_code == 200
+        record = create.json()["record"]
+        assert record["server_revision"] == 1
+        assert record["briefing"]["briefing_id"] == "brf-roundtrip"
+
+        get = api_client.get("/opposition/briefs/brf-roundtrip")
+        assert get.status_code == 200
+        assert get.json()["record"]["briefing"]["briefing_id"] == "brf-roundtrip"
+
+    def test_create_with_invalid_payload_returns_400(self, api_client: TestClient):
+        # Missing briefing_id
+        bad_payload = _valid_briefing_payload("brf-bad")
+        del bad_payload["briefing_id"]
+        response = api_client.post("/opposition/briefs", json=bad_payload)
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "missing_briefing_id"
+
+    def test_create_with_validation_error_returns_400(self, api_client: TestClient):
+        # Invalid fact_tier in a section
+        bad_payload = _valid_briefing_payload("brf-bad")
+        bad_payload["sections"][0]["fact_tier"] = "bogus_tier"
+        response = api_client.post("/opposition/briefs", json=bad_payload)
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "validation_error"
+
+
+class TestOppositionBriefingUpdate:
+    """Cover ``PUT /opposition/briefs/{briefing_id}``.
+
+    The update endpoint mirrors the dossier/review update endpoints but
+    enforces no decision-consistency checks (the briefing model has no
+    status/decision state machine). The entry-list field ``sections``
+    uses full-list replacement semantics and is validated early by
+    ``_validate_entry_list`` for shape and ``fact_tier`` enum; the
+    Pydantic model re-validates ``section_id`` uniqueness (including
+    the ``custom:<tail>`` rule) and full schema when the store saves.
+    """
+
+    def test_update_title_creates_backup_and_bumps_revision(
+        self, api_client: TestClient,
+    ):
+        create = api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-1"),
+        )
+        assert create.status_code == 200
+        server_rev = create.json()["record"]["server_revision"]
+        briefing_rev = create.json()["record"]["briefing"]["revision"]
+
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-1",
+            json={
+                "fields": {"title": "Updated briefing title"},
+                "expected_revision": server_rev,
+            },
+        )
+        assert response.status_code == 200
+        record = response.json()["record"]
+        assert record["server_revision"] == server_rev + 1
+        assert record["briefing"]["title"] == "Updated briefing title"
+        assert record["briefing"]["revision"] == briefing_rev + 1
+        # updated_at should be refreshed
+        assert (
+            record["briefing"]["updated_at"]
+            != create.json()["record"]["briefing"]["updated_at"]
+        )
+
+        # Backup should now exist
+        backups = api_client.get("/opposition/briefs/brf-upd-1/backups")
+        assert backups.status_code == 200
+        assert backups.json()["count"] == 1
+
+    def test_update_with_stale_revision_returns_409(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-conflict"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-conflict",
+            json={
+                "fields": {"title": "Stale update"},
+                # Pass an obviously stale revision (current is 1)
+                "expected_revision": 99,
+            },
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "briefing_revision_conflict"
+
+    def test_update_unknown_briefing_returns_404(self, api_client: TestClient):
+        response = api_client.put(
+            "/opposition/briefs/nonexistent",
+            json={"fields": {"title": "x"}, "expected_revision": 1},
+        )
+        assert response.status_code == 404
+        assert response.json()["detail"]["code"] == "briefing_not_found"
+
+    def test_update_with_invalid_field_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-field"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-field",
+            json={
+                # briefing_id and schema are not editable; the update
+                # API must refuse to mutate identity/schema/version
+                # through merge.
+                "fields": {"briefing_id": "hijacked", "schema": "evil"},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert "briefing_id" in detail["invalid_fields"]
+        assert "schema" in detail["invalid_fields"]
+
+    def test_update_with_missing_body_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-empty"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-empty", content=b"",
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "missing_payload"
+
+    def test_update_with_malformed_json_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-bad"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-bad",
+            content=b"{not json",
+            headers={"content-type": "application/json"},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_json"
+
+    def test_update_with_missing_expected_revision_returns_400(
+        self, api_client: TestClient,
+    ):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-miss"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-miss",
+            json={"fields": {"title": "x"}},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "missing_expected_revision"
+
+    def test_update_with_invalid_expected_revision_returns_400(
+        self, api_client: TestClient,
+    ):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-badrev"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-badrev",
+            json={
+                "fields": {"title": "x"},
+                "expected_revision": "not-an-int",
+            },
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_expected_revision"
+
+    def test_update_with_non_object_fields_returns_400(
+        self, api_client: TestClient,
+    ):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-fields"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-fields",
+            json={"fields": "not-an-object", "expected_revision": 1},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_fields"
+
+    def test_update_preserves_sections_and_limitations(self, api_client: TestClient):
+        """The update API must not silently drop sections/limitations."""
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-keep"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-keep",
+            json={
+                "fields": {"title": "Edited title only"},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        briefing = response.json()["record"]["briefing"]
+        # Sections from the original payload must be preserved
+        assert len(briefing["sections"]) == 2
+        assert briefing["sections"][0]["section_id"] == "opponent_strength"
+        assert briefing["sections"][1]["section_id"] == "key_players"
+        # Non-editable fields are untouched
+        assert briefing["briefing_id"] == "brf-upd-keep"
+        assert briefing["schema"] == "scoutfootball.opposition-briefing"
+        assert len(briefing["limitations"]) == 2
+
+    def test_update_nullable_fields_round_trip(self, api_client: TestClient):
+        """``kickoff_at`` / ``linked_*_id`` accept null to clear the value."""
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-upd-null"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-upd-null",
+            json={
+                "fields": {
+                    "kickoff_at": None,
+                    "linked_scenario_tree_id": "st-001",
+                    "linked_post_match_review_id": "pmr-001",
+                    "linked_pattern_card_ids": ["pc-1", "pc-2"],
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        briefing = response.json()["record"]["briefing"]
+        assert briefing["kickoff_at"] is None
+        assert briefing["linked_scenario_tree_id"] == "st-001"
+        assert briefing["linked_post_match_review_id"] == "pmr-001"
+        assert briefing["linked_pattern_card_ids"] == ["pc-1", "pc-2"]
+
+
+class TestOppositionBriefingSectionUpdate:
+    """Cover ``PUT /opposition/briefs/{id}`` ``sections`` entry-list updates.
+
+    The ``sections`` field uses full-list replacement semantics: the
+    caller sends the complete new list and the model re-validates each
+    entry's schema, ``section_id`` uniqueness (including the
+    ``custom:<tail>`` rule) and ``fact_tier`` enum value. These tests
+    cover the round-trip plus the early shape/enum checks added in
+    ``_validate_entry_list``.
+    """
+
+    def test_replace_sections_round_trip(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-rt"),
+        )
+        new_sections = [
+            {
+                "section_id": "recent_form",
+                "fact_tier": "recorded",
+                "summary": "W3 D1 L2 in last 6, xGD +4.",
+                "evidence_refs": ["fbref/2025/AwayFC"],
+            },
+            {
+                "section_id": "injuries",
+                "fact_tier": "official",
+                "summary": "Star CB out with hamstring strain.",
+                "evidence_refs": ["official-medical-report"],
+            },
+            {
+                "section_id": "custom:set_pieces",
+                "fact_tier": "estimated",
+                "summary": "High conversion on near-post corners.",
+                "evidence_refs": [],
+            },
+        ]
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-rt",
+            json={
+                "fields": {"sections": new_sections},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        briefing = response.json()["record"]["briefing"]
+        # Old sections are gone; the new list replaces wholesale.
+        assert [s["section_id"] for s in briefing["sections"]] == [
+            "recent_form", "injuries", "custom:set_pieces",
+        ]
+        assert briefing["sections"][1]["fact_tier"] == "official"
+        assert briefing["sections"][2]["section_id"].startswith("custom:")
+
+    def test_replace_with_empty_sections_clears_field(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-clear"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-clear",
+            json={
+                "fields": {"sections": []},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        briefing = response.json()["record"]["briefing"]
+        assert briefing["sections"] == []
+
+    def test_invalid_fact_tier_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-bad-tier"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-bad-tier",
+            json={
+                "fields": {
+                    "sections": [
+                        {
+                            "section_id": "opponent_strength",
+                            "fact_tier": "bogus_tier",
+                            "summary": "Bad tier.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "sections"
+        assert detail["sub_field"] == "fact_tier"
+
+    def test_non_list_value_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-nonlist"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-nonlist",
+            json={
+                "fields": {"sections": "not-a-list"},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "sections"
+
+    def test_non_dict_entry_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-nondict"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-nondict",
+            json={
+                "fields": {"sections": ["not-an-object"]},
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "sections"
+        assert detail["index"] == 0
+
+    def test_missing_section_id_returns_400(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-noid"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-noid",
+            json={
+                "fields": {
+                    "sections": [
+                        {
+                            # section_id missing
+                            "fact_tier": "recorded",
+                            "summary": "No id.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "invalid_field"
+        assert detail["invalid_field"] == "sections"
+        assert detail["sub_field"] == "section_id"
+
+    def test_duplicate_section_ids_returns_400(self, api_client: TestClient):
+        """Duplicate ids are caught by the Pydantic model re-validation."""
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-dupid"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-dupid",
+            json={
+                "fields": {
+                    "sections": [
+                        {
+                            "section_id": "opponent_strength",
+                            "fact_tier": "recorded",
+                            "summary": "First.",
+                            "evidence_refs": [],
+                        },
+                        {
+                            "section_id": "opponent_strength",
+                            "fact_tier": "recorded",
+                            "summary": "Second.",
+                            "evidence_refs": [],
+                        },
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        # The model re-validation raises BriefingValidationError, which
+        # the API surfaces as validation_error (not invalid_field,
+        # because the early shape check passes — both entries are dicts
+        # with valid ids and valid enums — and the duplicate-id check is
+        # a model-level constraint enforced by the
+        # _validate_section_ids_unique field validator).
+        assert detail["code"] == "validation_error"
+
+    def test_invalid_custom_section_id_returns_400(self, api_client: TestClient):
+        """``custom:<tail>`` with an invalid tail is caught by the model."""
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-badcustom"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-badcustom",
+            json={
+                "fields": {
+                    "sections": [
+                        {
+                            # tail contains a space, which fails the
+                            # [a-zA-Z0-9_][a-zA-Z0-9_-]* regex
+                            "section_id": "custom:bad tail",
+                            "fact_tier": "recorded",
+                            "summary": "Bad custom id.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert detail["code"] == "validation_error"
+
+    def test_section_update_creates_backup(self, api_client: TestClient):
+        api_client.post(
+            "/opposition/briefs", json=_valid_briefing_payload("brf-sec-backup"),
+        )
+        response = api_client.put(
+            "/opposition/briefs/brf-sec-backup",
+            json={
+                "fields": {
+                    "sections": [
+                        {
+                            "section_id": "tactical_notes",
+                            "fact_tier": "estimated",
+                            "summary": "Likely to press high.",
+                            "evidence_refs": [],
+                        }
+                    ]
+                },
+                "expected_revision": 1,
+            },
+        )
+        assert response.status_code == 200
+        backups = api_client.get("/opposition/briefs/brf-sec-backup/backups")
+        assert backups.status_code == 200
+        assert backups.json()["count"] == 1
