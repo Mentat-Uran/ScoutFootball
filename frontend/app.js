@@ -18305,7 +18305,7 @@ function _renderEditEntryList(listCfg, entries, cfg) {
             return `
                 <div class="ver-edit-entry" data-entry-idx="${idx}" style="border:1px solid var(--glass-border);border-radius:var(--radius-md);padding:8px;display:grid;gap:6px;background:var(--glass-bg)">
                     <div class="ver-edit-entry-fields" style="display:grid;gap:6px">${fieldsHtml}</div>
-                    <button type="button" onclick="_removeEditEntry('${escapeAttr(fieldName)}', ${idx})" style="justify-self:start;font-size:0.72rem;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-muted);cursor:pointer">${escapeHtml(removeBtnTxt)}</button>
+                    <button type="button" data-action="remove-entry" data-entry-list-field="${escapeAttr(fieldName)}" data-entry-idx="${idx}" style="justify-self:start;font-size:0.72rem;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-muted);cursor:pointer">${escapeHtml(removeBtnTxt)}</button>
                 </div>`;
         }).join("");
 
@@ -18313,7 +18313,7 @@ function _renderEditEntryList(listCfg, entries, cfg) {
         <div class="ver-edit-entry-list" data-entry-list="${escapeAttr(fieldName)}" style="border-top:1px solid var(--glass-border);padding-top:10px;margin-top:10px;display:grid;gap:6px">
             <div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-size:0.8rem;font-weight:600;color:var(--text-primary)">${escapeHtml(headerTxt)}</span>
-                <button type="button" onclick="_addEditEntry('${escapeAttr(fieldName)}')" style="font-size:0.74rem;padding:4px 12px;border-radius:var(--radius-sm);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary);cursor:pointer">${escapeHtml(addBtnTxt)}</button>
+                <button type="button" data-action="add-entry" data-entry-list-field="${escapeAttr(fieldName)}" style="font-size:0.74rem;padding:4px 12px;border-radius:var(--radius-sm);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary);cursor:pointer">${escapeHtml(addBtnTxt)}</button>
             </div>
             <div class="ver-edit-entry-list-items" style="display:grid;gap:6px">${itemsHtml}</div>
         </div>`;
@@ -18407,9 +18407,46 @@ function _removeEditEntry(fieldName, idx) {
     wrapper.outerHTML = newHtml;
 }
 
-// Expose entry-list editor handlers to inline onclick handlers.
+// Expose entry-list editor handlers for debugging / programmatic use.
+// Click handling is wired via event delegation in _initEntryListDelegation()
+// below — inline ``onclick`` attributes are intentionally avoided so the
+// CSP ``script-src 'self'`` directive is not violated.
 window._addEditEntry = _addEditEntry;
 window._removeEditEntry = _removeEditEntry;
+
+let _entryListDelegationBound = false;
+function _initEntryListDelegation() {
+    // Bind a single delegated click listener on document for all
+    // ``[data-action="add-entry"]`` and ``[data-action="remove-entry"]``
+    // buttons inside the versions edit dialog. Delegation survives the
+    // ``outerHTML`` re-renders that ``_addEditEntry`` /
+    // ``_removeEditEntry`` perform, so a single binding covers all
+    // entry-list editors for all artifact types. Inline ``onclick``
+    // handlers would violate the page CSP (``script-src 'self'``) and
+    // are intentionally not used.
+    if (_entryListDelegationBound) return;
+    _entryListDelegationBound = true;
+    document.addEventListener("click", (ev) => {
+        const target = ev.target;
+        if (!(target instanceof Element)) return;
+        const addBtn = target.closest('[data-action="add-entry"]');
+        if (addBtn) {
+            ev.preventDefault();
+            const fieldName = addBtn.getAttribute("data-entry-list-field");
+            if (fieldName) _addEditEntry(fieldName);
+            return;
+        }
+        const removeBtn = target.closest('[data-action="remove-entry"]');
+        if (removeBtn) {
+            ev.preventDefault();
+            const fieldName = removeBtn.getAttribute("data-entry-list-field");
+            const idxAttr = removeBtn.getAttribute("data-entry-idx");
+            const idx = idxAttr !== null ? parseInt(idxAttr, 10) : -1;
+            if (fieldName && idx >= 0) _removeEditEntry(fieldName, idx);
+            return;
+        }
+    });
+}
 
 function _showEditConflict(message) {
     const el = document.getElementById("ver-edit-conflict");
@@ -27077,6 +27114,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Start WC init early — it runs in parallel with other API calls
     const wcInitPromise = initWorldCup();
     bindEvents();
+    // Wire delegated click handling for entry-list editors in the versions
+    // edit dialog. Must be called once at startup so add/remove buttons
+    // work under the page CSP (no inline ``onclick`` attributes).
+    _initEntryListDelegation();
     setView("overview");
 
     // Load scouting localStorage state
