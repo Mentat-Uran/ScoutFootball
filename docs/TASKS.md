@@ -450,7 +450,34 @@ C1 verified 后 statsbomb_open source_claim audit 扩展（2026-07-25）：C1 �
 - `test_update_with_invalid_field_returns_400` 原断言 `hypothesis_results` 是非法字段，但本轮把它纳入 `_REVIEW_EDITABLE_FIELDS` 后该断言失效。修复：改用 `schema` 作为非法字段示例（`schema` 不在白名单中，仍是 invalid_field 错误）。
 - Ruff I001 import 排序：`_validate_entry_list` 引入后 `api.py` 顶部 import 块顺序变化，自动修复。
 
-**遗留**：briefing 的 sections 单条编辑仍未实现（`sections` 字段在 BriefingStore 中作为整体替换，前端无 entry-list 编辑器）；三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 / 6.10 / 6.11 一致）。本轮补的是 dossier / review 的条目级编辑路径，关闭 6.10 遗留的最后一个 P1 决策闭环 UI 断点，不改变 P1 节点整体状态。
+**遗留**：三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 / 6.10 / 6.11 一致）。本轮补的是 dossier / review 的条目级编辑路径，关闭 6.10 遗留的最后一个 P1 决策闭环 UI 断点，不改变 P1 节点整体状态。
+
+### 6.13 P1 决策闭环条目级编辑对称补齐（versions 视图编辑 briefing sections） — `verified`（2026-07-27）
+
+关闭 6.12 末尾遗留的"briefing 的 sections 单条编辑仍未实现"断点。6.12 接入了 dossier / review 的 9 类 entry-list 编辑，但 briefing 的 `sections` 字段虽在 `BriefingStore` 中已是整体替换语义，前端无 entry-list 编辑器，维护者要补/改/删一条 section 仍需 CLI 或 restore-from-backup 绕路。本轮把 briefing 的 `sections` 接入条目级编辑，与 6.12 的 dossier/review entry-list 编辑共用同一编辑对话框与配置驱动模式，让维护者可在浏览器中完成"打开编辑 → 增删改 section → 校验 fact_tier 与 section_id（含 `custom:<tail>` 规则）→ 提交 → 看到新 revision"完整往返，且与 6.10 顶层字段编辑、6.12 dossier/review 条目级编辑对称。
+
+**核心交付**：
+
+- `src/scoutfootball/api.py`：新增 `update_opposition_briefing(briefing_id, fields, *, expected_revision)` 服务函数，与 `update_decision_dossier` / `update_post_match_review` 同构。`fields` 字典按 `_BRIEFING_EDITABLE_FIELDS` 白名单过滤（title / home_team / away_team / match_id / kickoff_at / competition / season / sections / linked_pattern_card_ids / linked_scenario_tree_id / linked_post_match_review_id / notes）。`sections` 字段在 store 持久化前由 `_validate_entry_list` 做早期 shape + enum 校验（非 list、非 dict entry、缺 section_id、非法 fact_tier 直接返回 400 + 具体字段名）；通过早期校验后由 BriefingStore 的 Pydantic 模型重新校验 schema、section_id 唯一性（含 `custom:<tail>` 正则规则）与完整字段。`expected_revision` 与 store 的 `save` 乐观并发语义一致，冲突抛 `briefing_revision_conflict`。briefing 模型无 status/decision 状态机，故跳过 dossier/review 的 `decision_consistency` 校验路径。
+- `src/scoutfootball/api_server.py`：注册 `PUT /opposition/briefs/{briefing_id}` 端点，请求体 `{"fields": ..., "expected_revision": N}`，响应沿用 `{"record": ..., "status": "ok"}` 形状，错误路径（400 missing_payload / invalid_json / invalid_field / validation_error、404 not_found、409 briefing_revision_conflict、428 precondition_required）按现有 brief/briefing 端点模式映射 HTTPException。
+- `frontend/app.js`：扩展 `_VERSION_ARTIFACT_TYPES.briefing` 配置，新增 `editPath` / `editLabelKey` / `editFormFields`（含 nullable `kickoff_at` / `linked_scenario_tree_id` / `linked_post_match_review_id`、`list-strings` 类型的 `linked_pattern_card_ids`）与 `entryLists[sections]`（fieldName / labelKey / idField=`section_id` / idPrefix=`sec-` / fields，每个 field 支持 `text` / `select-enum`（fact_tier） / `textarea`（summary）/ `list-strings`（evidence_refs）类型）。复用 6.12 已有的 `_renderEditEntryList` / `_readEditEntryListFromDom` / `_addEditEntry` / `_removeEditEntry` 函数。`_collectEditForm` 处理 `nullable` 字段（空值转 null 而非空字符串）与 `list-strings` 字段（按行分割、过滤空行、空列表转 `[]` 而非 `null`）。`_openEditDialog` 在渲染顶层字段后追加 `entryLists[sections]` 编辑器。`_updateEditButtonVisibility` 让编辑按钮在 briefing 类型且选中记录时显示。新增 20+ i18n key（label / hint / field / placeholder / section_id / fact_tier / summary / evidence_refs / 校验错误消息），中英文同步。修正过时注释（"brief and briefing do not have entryLists" → "brief is the only artifact type that does not have entryLists"）。
+- `tests/unit/test_decision_dossier_and_review_api.py`：新增 `_valid_briefing_payload` seed helper 与 3 个测试类共 21 个测试。`TestOppositionBriefingEndpoints`（5 个）覆盖 list empty / get unknown 404 / create-then-get round-trip / create missing field 400 / create invalid fact_tier 400。`TestOppositionBriefingUpdate`（8 个）覆盖 title 更新创建备份并递增 server_revision / 404 unknown / 400 invalid field（briefing_id 与 schema 不可编辑）/ 400 missing body / 400 malformed json / 400 missing expected_revision / 400 invalid expected_revision / 400 non-object fields / preserves sections 与 limitations / nullable fields round-trip（kickoff_at → null、linked_*_id 设置）。`TestOppositionBriefingSectionUpdate`（8 个）覆盖 sections round-trip（含 `custom:` id）/ 空列表替换清空 / 非法 fact_tier 400 / 非 list value 400 / 非 dict entry 400 + index / 缺 section_id 400 + sub_field / 重复 section_id 400 validation_error / 非法 custom tail 400 validation_error / section 更新创建备份。
+
+**测试覆盖**：
+
+- `uv run ruff check src/scoutfootball/api.py src/scoutfootball/api_server.py tests/unit/test_decision_dossier_and_review_api.py`：All checks passed。
+- `node --check frontend/app.js`：通过。
+- `uv run pytest tests/unit/test_decision_dossier_and_review_api.py -q`：108 测试全过（含 21 个新测试）。
+- `uv run pytest tests/e2e/test_decision_workflows.py tests/unit/test_decision_dossier_and_review_api.py tests/unit/test_opposition_briefing.py tests/unit/test_opposition_post_match_review.py tests/unit/test_recruitment_dossier.py tests/unit/test_recruitment_brief.py -q`：396 测试全过。
+- `uv run pytest tests/unit/test_contract_quality.py tests/unit/test_data_contracts.py tests/unit/test_api_error_contract.py tests/integration/test_api_endpoints.py -q`：67 测试全过。
+- `uv run pytest tests/unit/test_opposition_cli.py tests/unit/test_opposition_contracts.py tests/unit/test_recruitment_cli.py tests/unit/test_recruitment_contracts.py tests/unit/test_brief_backup_restore.py -q`：169 测试全过。
+
+**关键修复**：
+
+- 过时注释修正：`app.js:18592` 的注释 "brief and briefing do not have entryLists" 在 6.12 落地 briefing `entryLists` 配置后即过时，本轮更新为 "brief is the only artifact type that does not have entryLists"。
+- PowerShell heredoc 限制：首次 commit 尝试用 bash heredoc `<<'EOF'` 语法在 PowerShell 下失败（`The '<' operator is reserved for future use`），改为 Write 工具写 commit message 文件后用 `git commit -F` 引用，符合 AGENTS.md "Windows and PowerShell Conventions"。
+
+**遗留**：三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 / 6.10 / 6.11 / 6.12 一致）。本轮补的是 briefing 的条目级编辑路径，让四类决策档案在 versions 视图的"创建 + 编辑 + 顶层字段 + 条目级"四个维度全部对称，关闭 6.12 遗留的最后一个 P1 决策闭环 UI 断点，不改变 P1 节点整体状态（仍 `verified`）。
 
 ## 后续依赖表
 
