@@ -527,7 +527,17 @@ def data_source_label() -> str:
                 detail = "season proxy only (FBref)"
         else:
             detail = "local Parquet"
-    except Exception:
+    except Exception as exc:
+        # DuckDB read failed (e.g. file missing, schema mismatch). Fall
+        # back to the generic label so the UI still renders, but log at
+        # debug so the degradation is diagnosable. Matches the pattern
+        # used by the other 5 handlers in this file.
+        logger.debug(
+            "data_source_label: duckdb read failed, falling back to "
+            "'local Parquet': %s",
+            exc,
+            exc_info=True,
+        )
         detail = "local Parquet"
 
     parts = [detail]

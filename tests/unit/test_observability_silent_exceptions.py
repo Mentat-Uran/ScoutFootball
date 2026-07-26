@@ -19,11 +19,16 @@ Scoped modules:
     - ``pipeline.py``
     - ``features/manifest.py``  (data provenance / hashing)
     - ``features/rating_matrix.py``  (rating feature matrix + xT/VAEP merge)
+    - ``models/match_prediction.py``  (DC fit + bootstrap CIs)
+    - ``app/data_loader.py``  (UI data access layer)
 
 The previously duplicated hash functions ``pipeline._hash_input_frames``
 and ``rating_matrix._compute_dataframe_hash`` were consolidated into
 ``manifest.compute_dataframe_hash``; the fallback path now logs at
-WARNING level, so no exemption is required.
+WARNING level, so no exemption is required. Bootstrap iteration
+failures in ``models/match_prediction.py`` are logged at DEBUG level
+(per-iteration failures are expected; the aggregate threshold check
+raises RuntimeError if too many fail).
 """
 
 from __future__ import annotations
@@ -165,6 +170,8 @@ _OBSERVABILITY_MODULES = [
     _SRC_ROOT / "pipeline.py",
     _SRC_ROOT / "features" / "manifest.py",
     _SRC_ROOT / "features" / "rating_matrix.py",
+    _SRC_ROOT / "models" / "match_prediction.py",
+    _SRC_ROOT / "app" / "data_loader.py",
 ]
 
 # Intentional exemptions: (module_relative_path, function_name).
@@ -266,6 +273,8 @@ class TestObservabilityStaticScan:
             "pipeline.py",
             "features/manifest.py",
             "features/rating_matrix.py",
+            "models/match_prediction.py",
+            "app/data_loader.py",
         ],
     )
     def test_module_has_logger_defined(self, module_rel: str) -> None:
@@ -302,6 +311,8 @@ class TestObservabilityStaticScan:
             "pipeline.py",
             "features/manifest.py",
             "features/rating_matrix.py",
+            "models/match_prediction.py",
+            "app/data_loader.py",
         ],
     )
     def test_no_silent_exception_handlers(self, module_rel: str) -> None:
