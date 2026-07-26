@@ -6,8 +6,12 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "check_frontend_manifest.py"
+COMMITTED_MANIFEST = REPO_ROOT / "frontend" / "data_manifest.json"
+COMMITTED_DATA_DIR = REPO_ROOT / "frontend" / "data"
 
 
 def _load_module():
@@ -183,3 +187,46 @@ def test_invalid_manifest_file_entry_returns_one(tmp_path: Path) -> None:
     })
 
     assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+# ---------------------------------------------------------------------------
+# Integration test: validate the REAL committed manifest against frontend/data/
+# ---------------------------------------------------------------------------
+# The unit tests above only exercise check_manifest() logic with synthetic
+# tmp_path data. They cannot catch the real-world failure mode where a
+# developer edits a frontend/data/*.json file but forgets to regenerate
+# data_manifest.json. This test closes that gap by running check_manifest()
+# against the actual committed files.
+# ---------------------------------------------------------------------------
+
+
+def test_committed_frontend_manifest_is_fresh() -> None:
+    """The committed ``frontend/data_manifest.json`` must match
+    ``frontend/data/`` exactly (file list + sizes within tolerance).
+
+    If this test fails, a frontend data file was added, removed, or
+    resized without regenerating the manifest. Fix by running::
+
+        PYTHONPATH=src python scripts/export_static_frontend_data.py --profile release
+    """
+    if not COMMITTED_MANIFEST.exists():
+        pytest.skip(
+            f"committed manifest not found at {COMMITTED_MANIFEST}; "
+            "skipping integration check (relevant only when manifest is committed)"
+        )
+    if not COMMITTED_DATA_DIR.exists():
+        pytest.skip(
+            f"frontend data dir not found at {COMMITTED_DATA_DIR}; "
+            "skipping integration check (relevant only when data is present)"
+        )
+
+    mod = _load_module()
+    exit_code = mod.check_manifest(
+        COMMITTED_MANIFEST, COMMITTED_DATA_DIR, quiet=True
+    )
+    assert exit_code == 0, (
+        "Committed frontend/data_manifest.json is stale — file list or "
+        "sizes do not match frontend/data/. Regenerate with: "
+        "PYTHONPATH=src python scripts/export_static_frontend_data.py "
+        "--profile release"
+    )
