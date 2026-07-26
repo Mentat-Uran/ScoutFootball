@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from pathlib import Path
@@ -12,6 +11,7 @@ import pandas as pd
 from scoutfootball.features.manifest import (
     SourceLineageEntry,
     build_manifest_payload,
+    compute_dataframe_hash,
 )
 
 logger = logging.getLogger(__name__)
@@ -400,7 +400,7 @@ def build_rating_feature_matrix(
         matrix["unknown_source_covered"] = True
 
     # --- Add input file hash ---
-    matrix.attrs["_input_hash"] = _compute_dataframe_hash(player_match, player_rolling)
+    matrix.attrs["_input_hash"] = compute_dataframe_hash(player_match, player_rolling)
 
     # --- Add has_expected_metrics and has_ball_value_data if present ---
     for flag_col in ("has_expected_metrics", "has_ball_value_data"):
@@ -667,8 +667,16 @@ def _merge_xt_vaep_data(matrix: pd.DataFrame) -> pd.DataFrame:
                     norm = normalize_person_name(str(row["player_name"]))
                     if norm and pid not in sb_id_to_norm_name:
                         sb_id_to_norm_name[pid] = norm
-        except Exception:
-            pass
+        except Exception as exc:
+            # xT name-bridge failure degrades VAEP player matching to
+            # raw player_id (no normalized names), which silently drops
+            # VAEP rows for players whose IDs don't match. Log so the
+            # degradation is visible.
+            logger.warning(
+                "Failed to build xT name bridge for VAEP merge: %s. "
+                "VAEP matching will fall back to raw player_id.",
+                exc,
+            )
 
     if vaep_path.exists():
         try:
@@ -726,19 +734,3 @@ def _merge_xt_vaep_data(matrix: pd.DataFrame) -> pd.DataFrame:
     )
 
     return matrix
-
-
-def _compute_dataframe_hash(*dfs: pd.DataFrame) -> str:
-    """Compute a SHA256 hash of DataFrame contents for reproducibility."""
-    hasher = hashlib.sha256()
-    for df in dfs:
-        if df.empty:
-            continue
-        # Use parquet bytes for stable hashing
-        try:
-            hasher.update(df.to_parquet(index=False))
-        except Exception:
-            # Fallback: hash column names and row count
-            hasher.update(",".join(df.columns).encode())
-            hasher.update(str(len(df)).encode())
-    return hasher.hexdigest()[:16]

@@ -211,8 +211,16 @@ def count_parquet_rows(path: Path) -> int | None:
 
         meta = pq.read_metadata(str(path))
         return int(meta.num_rows)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Expected fallback when pyarrow is unavailable or the parquet
+        # footer is unreadable. Debug-level so the fallback is observable
+        # during diagnosis without spamming normal runs.
+        logger.debug(
+            "count_parquet_rows: pyarrow footer read failed for %s (%s); "
+            "falling back to full read.",
+            path,
+            exc,
+        )
 
     # 2. Read first column only
     try:
@@ -261,9 +269,18 @@ def extract_lineage_attrs(df: pd.DataFrame) -> tuple[
 def compute_dataframe_hash(*dfs: pd.DataFrame) -> str:
     """Compute a SHA256 hash of DataFrame contents for reproducibility.
 
-    Mirrors ``rating_matrix._compute_dataframe_hash`` but is exposed as a
-    public helper so other feature modules can record input hashes without
-    importing a private symbol.
+    Central helper used by ``pipeline`` builders and
+    ``rating_matrix.build_rating_feature_matrix`` to populate the
+    ``input_hash`` manifest field. Replaces the previously duplicated
+    ``pipeline._hash_input_frames`` and ``rating_matrix._compute_dataframe_hash``
+    so the fallback path is observable in exactly one place.
+
+    Fallback behavior: when ``df.to_parquet()`` raises (e.g. unserializable
+    column, mixed dtype), a weaker hash is computed from column names,
+    dtypes and row count. The fallback is logged at WARNING level so
+    silent content drift does not go undetected — every fallback is an
+    operator-visible signal that the input_hash no longer reflects full
+    bytes.
     """
     hasher = hashlib.sha256()
     for df in dfs:
@@ -271,9 +288,18 @@ def compute_dataframe_hash(*dfs: pd.DataFrame) -> str:
             continue
         try:
             hasher.update(df.to_parquet(index=False))
-        except Exception:
-            # Fallback: hash column names and row count
+        except Exception as exc:
+            # Fallback: hash column names, dtypes and row count. dtypes
+            # are included so schema drift (e.g. int64 -> float64 after
+            # fillna) is still detected even when column names are stable.
+            logger.warning(
+                "compute_dataframe_hash: parquet serialization failed (%s); "
+                "falling back to columns+dtypes+length hash. input_hash "
+                "will not reflect full row contents.",
+                exc,
+            )
             hasher.update(",".join(map(str, df.columns)).encode())
+            hasher.update("|".join(str(df[c].dtype) for c in df.columns).encode())
             hasher.update(str(len(df)).encode())
     return hasher.hexdigest()[:16]
 
