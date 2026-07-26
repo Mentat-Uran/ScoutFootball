@@ -1363,6 +1363,7 @@ const i18n = {
         versions_edit: "编辑",
         versions_edit_dossier: "编辑 Decision dossier",
         versions_edit_review: "编辑 Post-match review",
+        versions_edit_briefing: "编辑 Opposition briefing",
         versions_edit_note: "本地优先：编辑会写入本地存储并创建备份；evidence、comparisons、risks 等子项不在编辑范围内。",
         versions_edit_cancel: "取消",
         versions_edit_submit: "保存",
@@ -1406,12 +1407,18 @@ const i18n = {
         versions_edit_list_hypothesis_results: "假设对照",
         versions_edit_list_falsified_patterns: "被证伪的模式",
         versions_edit_list_new_questions: "新问题",
+        versions_edit_list_sections: "事实分节",
         versions_edit_field_evidence_id: "证据 ID",
         versions_edit_field_comparison_id: "对比 ID",
         versions_edit_field_risk_id: "风险 ID",
         versions_edit_field_hypothesis_id: "假设 ID",
         versions_edit_field_pattern_id: "模式 ID",
         versions_edit_field_question_id: "问题 ID",
+        versions_edit_field_section_id: "分节 ID",
+        versions_edit_field_kickoff_at: "开球时间（ISO 8601）",
+        versions_edit_field_linked_scenario_tree_id: "关联情景树 ID",
+        versions_edit_field_linked_post_match_review_id: "关联赛后复盘 ID",
+        versions_edit_field_linked_pattern_card_ids: "关联模式卡 ID（每行一条）",
         versions_edit_field_fact_tier: "事实层级",
         versions_edit_field_severity: "严重度",
         versions_edit_field_outcome: "结果",
@@ -2801,6 +2808,7 @@ const i18n = {
         versions_edit: "Edit",
         versions_edit_dossier: "Edit decision dossier",
         versions_edit_review: "Edit post-match review",
+        versions_edit_briefing: "Edit opposition briefing",
         versions_edit_note: "Local-first: edits are saved locally with a backup; evidence, comparisons and risks are not editable here.",
         versions_edit_cancel: "Cancel",
         versions_edit_submit: "Save",
@@ -2844,12 +2852,18 @@ const i18n = {
         versions_edit_list_hypothesis_results: "Hypothesis results",
         versions_edit_list_falsified_patterns: "Falsified patterns",
         versions_edit_list_new_questions: "New questions",
+        versions_edit_list_sections: "Sections",
         versions_edit_field_evidence_id: "Evidence ID",
         versions_edit_field_comparison_id: "Comparison ID",
         versions_edit_field_risk_id: "Risk ID",
         versions_edit_field_hypothesis_id: "Hypothesis ID",
         versions_edit_field_pattern_id: "Pattern ID",
         versions_edit_field_question_id: "Question ID",
+        versions_edit_field_section_id: "Section ID",
+        versions_edit_field_kickoff_at: "Kickoff (ISO 8601)",
+        versions_edit_field_linked_scenario_tree_id: "Linked scenario tree ID",
+        versions_edit_field_linked_post_match_review_id: "Linked post-match review ID",
+        versions_edit_field_linked_pattern_card_ids: "Linked pattern card IDs (one per line)",
         versions_edit_field_fact_tier: "Fact tier",
         versions_edit_field_severity: "Severity",
         versions_edit_field_outcome: "Outcome",
@@ -17222,6 +17236,7 @@ const _VERSION_ARTIFACT_TYPES = {
         diffPath: (id, fn) => `/opposition/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
         restorePath: (id) => `/opposition/briefs/${encodeURIComponent(id)}/restore`,
         createPath: "/opposition/briefs",
+        editPath: (id) => `/opposition/briefs/${encodeURIComponent(id)}`,
         idField: "briefing_id",
         listKey: "briefings",
         stateField: "briefings",
@@ -17229,6 +17244,7 @@ const _VERSION_ARTIFACT_TYPES = {
         labelKey: "versions_type_briefing",
         createLabelKey: "versions_create_briefing",
         createHintKey: "versions_create_hint_briefing",
+        editLabelKey: "versions_edit_briefing",
         // Briefing has no upstream closing-artifact linkage (it IS the
         // upstream artifact of the opposition workflow).
         idPrefix: "briefing-",
@@ -17237,8 +17253,8 @@ const _VERSION_ARTIFACT_TYPES = {
         linkIdField: "",
         // Sections are intentionally NOT in the small create form: they
         // require fact_tier classification and evidence_refs, which are
-        // better added through a dedicated editor later. The Pydantic
-        // model accepts an empty sections tuple.
+        // better added through the edit dialog after creation. The
+        // Pydantic model accepts an empty sections tuple.
         formFields: [
             { name: "briefing_id", type: "text", required: false, labelKey: "versions_create_field_briefing_id", placeholderKey: "versions_create_field_briefing_id_ph", noteKey: "versions_create_field_id_note" },
             { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph_briefing" },
@@ -17248,6 +17264,54 @@ const _VERSION_ARTIFACT_TYPES = {
             { name: "competition", type: "text", required: false, labelKey: "versions_create_field_competition", placeholderKey: "versions_create_field_competition_ph" },
             { name: "season", type: "text", required: false, labelKey: "versions_create_field_season", placeholderKey: "versions_create_field_season_ph" },
             { name: "notes", type: "textarea", required: false, labelKey: "versions_create_field_notes" },
+        ],
+        // Editable fields for the PUT /opposition/briefs/{id} endpoint.
+        // Kept in sync with _BRIEFING_EDITABLE_FIELDS in api.py. The ID
+        // field, schema, version, revision, created_at, updated_at,
+        // author, limitations are not editable here — they have their
+        // own lifecycle. The entry-list field (sections) IS editable
+        // and is described by `entryLists` below; it uses full-list
+        // replacement semantics.
+        //
+        // The briefing model has no status/decision state machine
+        // (unlike dossier/review), so there is no status/decision
+        // dropdown in this edit form. ``kickoff_at`` accepts an ISO
+        // 8601 datetime string or empty (cleared to null on save).
+        // ``linked_scenario_tree_id`` / ``linked_post_match_review_id``
+        // accept a string ID or empty (cleared to null on save).
+        // ``linked_pattern_card_ids`` is a list of strings, one per
+        // line; empty lines are dropped on save.
+        editFormFields: [
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph_briefing" },
+            { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
+            { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
+            { name: "match_id", type: "text", required: false, labelKey: "versions_create_field_match_id", placeholderKey: "versions_create_field_match_id_ph" },
+            { name: "kickoff_at", type: "text", required: false, nullable: true, labelKey: "versions_edit_field_kickoff_at" },
+            { name: "competition", type: "text", required: false, labelKey: "versions_create_field_competition", placeholderKey: "versions_create_field_competition_ph" },
+            { name: "season", type: "text", required: false, labelKey: "versions_create_field_season", placeholderKey: "versions_create_field_season_ph" },
+            { name: "linked_scenario_tree_id", type: "text", required: false, nullable: true, labelKey: "versions_edit_field_linked_scenario_tree_id" },
+            { name: "linked_post_match_review_id", type: "text", required: false, nullable: true, labelKey: "versions_edit_field_linked_post_match_review_id" },
+            { name: "linked_pattern_card_ids", type: "list-strings", required: false, labelKey: "versions_edit_field_linked_pattern_card_ids" },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_edit_field_notes" },
+        ],
+        // Entry-list field rendered as a config-driven list editor in
+        // the edit dialog. Uses full-list replacement: the caller sends
+        // the complete new list and the server re-validates each
+        // entry's schema, section_id uniqueness (including the
+        // ``custom:<tail>`` rule) and fact_tier enum value.
+        entryLists: [
+            {
+                fieldName: "sections",
+                labelKey: "versions_edit_list_sections",
+                idField: "section_id",
+                idPrefix: "sec-",
+                fields: [
+                    { name: "section_id", type: "text", required: true, labelKey: "versions_edit_field_section_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
         ],
     },
     dossier: {
@@ -18225,6 +18289,13 @@ function _renderEditField(field, currentValue, cfg) {
     } else if (field.type === "number") {
         const val = (currentValue === null || currentValue === undefined) ? "" : String(currentValue);
         control = `<input id="${id}" name="${escapeAttr(field.name)}" type="number" min="0" step="1" value="${escapeAttr(val)}" class="glass-control" style="width:100%">`;
+    } else if (field.type === "list-strings") {
+        // Top-level list-of-strings field (e.g. linked_pattern_card_ids).
+        // Rendered as a textarea, one string per line. The collect step
+        // splits by newline, trims and drops empty lines, matching the
+        // behaviour of the entry-list ``list-strings`` sub-field.
+        const val = Array.isArray(currentValue) ? currentValue.join("\n") : (currentValue || "");
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="2" style="width:100%;min-height:48px;resize:vertical;font-family:inherit;font-size:0.82rem;padding:8px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(val)}</textarea>`;
     } else {
         const placeholder = field.placeholderKey ? ` placeholder="${escapeAttr(t(field.placeholderKey))}"` : "";
         const val = currentValue || "";
@@ -18516,9 +18587,9 @@ async function _openEditDialog() {
         const currentValue = artifact[field.name];
         return _renderEditField(field, currentValue, cfg);
     }).join("");
-    // Append entry-list editors (supporting_evidence, risks, etc.) after
-    // the regular fields. The entry-list config is optional; brief and
-    // briefing do not have entryLists.
+    // Append entry-list editors (supporting_evidence, risks, sections,
+    // etc.) after the regular fields. The entry-list config is optional;
+    // brief is the only artifact type that does not have entryLists.
     const entryListsHtml = (cfg.entryLists || []).map((listCfg) => {
         const entries = artifact[listCfg.fieldName] || [];
         return _renderEditEntryList(listCfg, entries, cfg);
@@ -18590,6 +18661,12 @@ function _collectEditForm() {
         //  - decision "" -> null (no decision)
         //  - final_score_* "" -> null (unknown score)
         //  - number fields "" -> null
+        //  - nullable text fields "" -> null (e.g. kickoff_at,
+        //    linked_scenario_tree_id, linked_post_match_review_id on
+        //    briefings: the Pydantic model expects str | None, and an
+        //    empty string would fail datetime parsing or carry a
+        //    semantic "no link" value that should be null instead)
+        //  - list-strings fields: split by newline, trim, drop empties
         if (field.name === "decision" && raw === "") {
             data[field.name] = null;
         } else if (field.type === "number" && raw === "") {
@@ -18597,6 +18674,11 @@ function _collectEditForm() {
         } else if (field.type === "number") {
             const n = Number(raw);
             data[field.name] = Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+        } else if (field.type === "list-strings") {
+            const lines = (el.value || "").split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+            data[field.name] = lines;
+        } else if (field.nullable && raw === "") {
+            data[field.name] = null;
         } else {
             data[field.name] = raw;
         }
@@ -18667,19 +18749,25 @@ function _collectEditForm() {
     }
     // Client-side decision consistency check. The server re-checks, but
     // surfacing it here gives the maintainer a faster, localized error.
-    const status = data.status;
-    const decision = data.decision;
-    if (status === cfg.decisionRequiredStatus && !decision) {
-        const msgKey = cfg.decisionRequiredStatus === "finalized"
-            ? "versions_edit_decision_required_finalized"
-            : "versions_edit_decision_required";
-        return { ok: false, error: "decision_required", message: t(msgKey) };
-    }
-    if (status !== cfg.decisionRequiredStatus && decision !== null) {
-        const msgKey = cfg.decisionRequiredStatus === "finalized"
-            ? "versions_edit_decision_not_allowed_review"
-            : "versions_edit_decision_not_allowed";
-        return { ok: false, error: "decision_not_allowed", message: t(msgKey) };
+    // Only applies to artifact types that have a status/decision state
+    // machine (dossier, review). Briefings and briefs have no
+    // ``decisionRequiredStatus`` and must skip this check entirely —
+    // otherwise ``undefined === undefined`` would block every edit.
+    if (cfg.decisionRequiredStatus !== undefined) {
+        const status = data.status;
+        const decision = data.decision;
+        if (status === cfg.decisionRequiredStatus && !decision) {
+            const msgKey = cfg.decisionRequiredStatus === "finalized"
+                ? "versions_edit_decision_required_finalized"
+                : "versions_edit_decision_required";
+            return { ok: false, error: "decision_required", message: t(msgKey) };
+        }
+        if (status !== cfg.decisionRequiredStatus && decision !== null) {
+            const msgKey = cfg.decisionRequiredStatus === "finalized"
+                ? "versions_edit_decision_not_allowed_review"
+                : "versions_edit_decision_not_allowed";
+            return { ok: false, error: "decision_not_allowed", message: t(msgKey) };
+        }
     }
     return { ok: true, data };
 }

@@ -11268,6 +11268,158 @@ def update_post_match_review(
     })
 
 
+# Editable fields for an opposition briefing. The update API only accepts
+# keys in this set; everything else (schema, version, briefing_id,
+# revision, created_at, updated_at, author, limitations, etc.) is
+# preserved from the current revision and cannot be mutated through
+# this endpoint. The entry-list field ``sections`` uses full-list
+# replacement semantics: the caller sends the complete new list and
+# the model re-validates each entry's schema, ``section_id`` uniqueness
+# and ``fact_tier`` enum value. The briefing model has no
+# status/decision state machine (unlike dossier/review), so the
+# consistency checks are limited to shape and enum validation.
+_BRIEFING_EDITABLE_FIELDS = frozenset({
+    "title",
+    "home_team",
+    "away_team",
+    "match_id",
+    "kickoff_at",
+    "competition",
+    "season",
+    "sections",
+    "linked_pattern_card_ids",
+    "linked_scenario_tree_id",
+    "linked_post_match_review_id",
+    "notes",
+})
+
+
+def update_opposition_briefing(
+    briefing_id: str,
+    fields: dict,
+    *,
+    expected_revision: int,
+) -> dict:
+    """Apply a partial update to an opposition briefing, creating a new revision.
+
+    ``fields`` may contain any subset of :data:`_BRIEFING_EDITABLE_FIELDS`.
+    Keys outside that set are rejected with ``invalid_field`` so the
+    endpoint cannot be used to mutate schema/version/briefing_id/
+    revision/created_at/updated_at/author/limitations through merge.
+    The entry-list field ``sections`` IS editable and uses full-list
+    replacement semantics: the caller sends the complete new list and
+    the model re-validates each entry's schema, ``section_id``
+    uniqueness (including the ``custom:<tail>`` rule) and ``fact_tier``
+    enum value.
+
+    The briefing model has no status/decision state machine (unlike the
+    decision dossier and post-match review), so this endpoint does not
+    perform decision-consistency checks. ``kickoff_at`` accepts an ISO
+    8601 datetime string or null; ``linked_scenario_tree_id`` /
+    ``linked_post_match_review_id`` accept a string or null;
+    ``linked_pattern_card_ids`` accepts a list of strings. These are
+    re-validated by the Pydantic model when the store saves.
+
+    The current record is loaded, the editable fields are merged in, the
+    ``revision`` is bumped and ``updated_at`` is refreshed, then the
+    merged payload is saved with ``expected_revision`` (If-Match style).
+    The store handles backup creation and atomic write.
+    """
+    from scoutfootball.opposition.briefing import (
+        VALID_FACT_TIERS as BRIEFING_VALID_FACT_TIERS,
+    )
+    from scoutfootball.opposition.briefing import BriefingValidationError
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    if not isinstance(fields, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "fields must be a JSON object",
+            "http_status": 400,
+        })
+
+    # Reject any field the update API does not own. This keeps the
+    # endpoint's surface explicit and prevents callers from silently
+    # mutating schema/version/briefing_id/limitations through merge.
+    invalid_keys = set(fields.keys()) - _BRIEFING_EDITABLE_FIELDS
+    if invalid_keys:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_field",
+            "message": (
+                "fields must be a subset of: "
+                + ", ".join(sorted(_BRIEFING_EDITABLE_FIELDS))
+            ),
+            "http_status": 400,
+            "metadata": {"invalid_fields": sorted(invalid_keys)},
+        })
+
+    # Early shape/enum validation for the ``sections`` entry-list field.
+    # The Pydantic model re-validates each entry's full schema (required
+    # section_id, custom section_id tail pattern, fact_tier enum, summary
+    # max length, evidence_refs shape, section_id uniqueness) when the
+    # store saves; these checks just give callers fast, specific feedback
+    # for the most common mistakes (non-list value, non-dict entry,
+    # missing section_id, invalid fact_tier) before the current record is
+    # loaded.
+    if "sections" in fields:
+        err = _validate_entry_list(
+            "sections",
+            fields["sections"],
+            entry_id_field="section_id",
+            valid_enums={"fact_tier": BRIEFING_VALID_FACT_TIERS},
+        )
+        if err is not None:
+            return _clean_json_value(err)
+
+    store = _briefing_store()
+    try:
+        current_record = store.load(briefing_id)
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_briefing = current_record["briefing"]
+    merged = dict(current_briefing)
+    merged.update(fields)
+
+    # Bump revision + updated_at. The store re-validates via the model,
+    # so this is convenience, not a security boundary.
+    merged["revision"] = int(current_briefing.get("revision", 1)) + 1
+    merged["updated_at"] = _utc_now_iso_helper()
+
+    try:
+        record = store.save(
+            briefing_id, merged, expected_revision=expected_revision,
+        )
+    except BriefingValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
 def export_local_pack() -> dict:
     """Bundle all local personal artifacts into a portable offline pack.
 
