@@ -256,6 +256,7 @@ def list_teams() -> list[str]:
         try:
             frame = _read_parquet(path)
         except Exception:
+            logger.warning("list_teams: parquet read failed", exc_info=True)
             continue
         if "team_id" not in frame.columns:
             continue
@@ -452,6 +453,7 @@ def _prediction_calibration() -> dict[str, Any]:
                 calibration["rps"] = _clean_json_value(row.get("rps_1x2"))
                 calibration["log_loss"] = _clean_json_value(row.get("log_loss_exact"))
         except Exception:
+            logger.warning("prediction calibration: poisson read failed", exc_info=True)
             pass
 
     # DC calibration (overrides if available)
@@ -468,6 +470,7 @@ def _prediction_calibration() -> dict[str, Any]:
                     dc_row.get("rps_1x2", calibration.get("rps"))
                 )
         except Exception:
+            logger.warning("prediction calibration: dixon_coles read failed", exc_info=True)
             pass
 
     # Full calibration detail is produced by the training backtest. Prefer
@@ -483,6 +486,7 @@ def _prediction_calibration() -> dict[str, Any]:
             calibration["rps"] = detail_metrics.get("rps_1x2")
             calibration["log_loss"] = detail_metrics.get("log_loss_exact")
     except Exception:
+        logger.warning("prediction calibration: detail metrics failed", exc_info=True)
         pass
 
     return calibration
@@ -1214,6 +1218,7 @@ def _match_model_comparison(home_team: str, away_team: str) -> dict[str, Any] | 
                 "away": round(float(prediction.summary.away_win), 4),
             }
     except Exception:
+        logger.warning("match model comparison: poisson failed", exc_info=True)
         pass
     try:
         prediction = load_score_prediction_dc(home_team, away_team)
@@ -1224,6 +1229,7 @@ def _match_model_comparison(home_team: str, away_team: str) -> dict[str, Any] | 
                 "away": round(float(prediction.summary.away_win), 4),
             }
     except Exception:
+        logger.warning("match model comparison: dixon_coles failed", exc_info=True)
         pass
     return comparison if len(comparison) >= 2 else None
 
@@ -1232,6 +1238,7 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
     try:
         prediction = load_score_prediction(home_team, away_team)
     except Exception as exc:
+        logger.warning("get_match_prediction failed", exc_info=True)
         return {"error": str(exc)}
     if isinstance(prediction, dict):
         return prediction
@@ -1266,6 +1273,7 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
     try:
         prediction = load_score_prediction_dc(home_team, away_team)
     except Exception as exc:
+        logger.warning("get_match_prediction_dc failed", exc_info=True)
         return {"error": str(exc)}
     if isinstance(prediction, dict):
         prediction["model_type"] = prediction.get("model_type", "dixon_coles")
@@ -1301,6 +1309,7 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
                 if "home_advantage" in dc_row:
                     result["home_advantage"] = _clean_json_value(dc_row["home_advantage"])
     except Exception:
+        logger.warning("get_match_prediction_dc: enrichment failed", exc_info=True)
         pass  # enrichment is optional
     model_cmp = _match_model_comparison(home_team, away_team)
     if model_cmp:
@@ -1331,6 +1340,7 @@ def _resolve_tuned_decay() -> float | None:
             if isinstance(best, (int, float)) and best >= 0:
                 return float(best)
     except Exception:
+        logger.warning("resolve tuned decay failed", exc_info=True)
         pass
     return None
 
@@ -1393,6 +1403,7 @@ def _get_prediction_confidence(
         _PREDICTION_CI_CACHE[cache_key] = {"data": result, "timestamp": now}
         return result
     except Exception:
+        logger.warning("get prediction confidence failed", exc_info=True)
         return None
 
 
@@ -1449,6 +1460,7 @@ def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
             result["confidence_intervals"] = ci
         return _clean_json_value(result)
     except Exception as exc:
+        logger.warning("get_form_weighted_prediction failed", exc_info=True)
         return {"error": str(exc)}
 
 
@@ -1558,6 +1570,7 @@ def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool
             result["confidence_intervals"] = ci
         return _clean_json_value(result)
     except Exception as exc:
+        logger.warning("get_ensemble_prediction failed", exc_info=True)
         return {"error": str(exc)}
 
 
@@ -1617,6 +1630,7 @@ def get_match_momentum(
             ],
         })
     except Exception as exc:
+        logger.warning("get_match_momentum failed", exc_info=True)
         return {"error": str(exc)}
 
 
@@ -1693,6 +1707,7 @@ def get_calibration_drift() -> dict:
         _BACKTEST_CACHE["drift_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_calibration_drift failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -1732,6 +1747,7 @@ def get_calibration_drift_timeline() -> dict:
             "overall_metrics": report.get("overall_metrics", {}),
         })
     except Exception as exc:
+        logger.warning("get_calibration_drift_timeline failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -1804,6 +1820,7 @@ def _get_isotonic_calibrator(*, force_refresh: bool = False) -> object | None:
         _CALIBRATOR_CACHE["timestamp"] = now
         return calibrator
     except Exception:
+        logger.warning("get isotonic calibrator failed", exc_info=True)
         return None
 
 
@@ -1847,6 +1864,7 @@ def get_ensemble_weights() -> dict:
             "path": str(weights_path),
         })
     except Exception as exc:
+        logger.warning("get_ensemble_weights failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -1936,6 +1954,7 @@ def get_calibration_comparison() -> dict:
         _BACKTEST_CACHE["calibration_comparison_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_calibration_comparison failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -1978,6 +1997,7 @@ def get_prediction_attribution(home_team: str, away_team: str) -> dict:
             "n_factors": len(attribution.factors),
         })
     except Exception as exc:
+        logger.warning("get_prediction_attribution failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2021,6 +2041,7 @@ def get_prediction_attribution_ci(
             "factor_cis": ci.factor_cis,
         })
     except Exception as exc:
+        logger.warning("get_prediction_attribution_ci failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2063,6 +2084,7 @@ def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
                     "dixon_coles_form": w.get("dixon_coles_form", 0.5),
                 }
         except Exception:
+            logger.warning("get_ensemble_attribution: load_ensemble_weights failed", exc_info=True)
             pass
 
         ensemble_attr = compute_ensemble_attribution(
@@ -2092,6 +2114,7 @@ def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
             },
         })
     except Exception as exc:
+        logger.warning("get_ensemble_attribution failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2130,6 +2153,9 @@ def get_ensemble_attribution_ci(
                     "dixon_coles_form": w.get("dixon_coles_form", 0.5),
                 }
         except Exception:
+            logger.warning(
+                "get_ensemble_attribution_ci: load_ensemble_weights failed", exc_info=True
+            )
             pass
 
         ci = bootstrap_ensemble_attribution_confidence(
@@ -2153,6 +2179,7 @@ def get_ensemble_attribution_ci(
             "factor_cis": ci.factor_cis,
         })
     except Exception as exc:
+        logger.warning("get_ensemble_attribution_ci failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2231,6 +2258,7 @@ def get_value_bet_analysis(
     except ValueError as exc:
         return {"status": "error", "message": str(exc)}
     except Exception as exc:
+        logger.warning("get_value_bet_analysis failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2319,6 +2347,7 @@ def get_reliability_diagram(*, n_bins: int = 10) -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_reliability_diagram failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2413,6 +2442,7 @@ def get_team_accuracy(team_id: str, *, min_predictions: int = 3) -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_team_accuracy failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2504,6 +2534,7 @@ def get_model_comparison() -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_model_comparison failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2596,6 +2627,7 @@ def get_scoreline_calibration(*, max_scoreline: int = 5, min_samples: int = 3) -
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_scoreline_calibration failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2687,6 +2719,7 @@ def get_confidence_distribution(*, n_bins: int = 10, min_samples_per_bucket: int
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_confidence_distribution failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2750,6 +2783,7 @@ def get_h2h_bias_correction(
             "disclaimer": report.disclaimer,
         })
     except Exception as exc:
+        logger.warning("get_h2h_bias_correction failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2884,6 +2918,7 @@ def get_error_analysis(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_error_analysis failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -2971,6 +3006,7 @@ def get_outcome_distribution() -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_outcome_distribution failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3070,6 +3106,7 @@ def get_temporal_validation(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_temporal_validation failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3166,6 +3203,7 @@ def get_probability_heatmap(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_probability_heatmap failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3236,6 +3274,7 @@ def get_prediction_staleness() -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_prediction_staleness failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3349,6 +3388,7 @@ def get_confidence_interval_plot(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_confidence_interval_plot failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3454,6 +3494,7 @@ def get_fold_comparison(*, min_samples_per_fold: int = 5) -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_fold_comparison failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3576,6 +3617,7 @@ def get_league_error_analysis(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_league_error_analysis failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3681,6 +3723,7 @@ def get_feature_importance(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_feature_importance failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3796,6 +3839,7 @@ def get_ci_coverage(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_ci_coverage failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -3912,6 +3956,7 @@ def get_calibration_drift_heatmap(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_calibration_drift_heatmap failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4023,6 +4068,7 @@ def get_error_clustering(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_error_clustering failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4126,6 +4172,7 @@ def get_data_drift(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_data_drift failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4232,6 +4279,7 @@ def get_ci_width_analysis(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_ci_width_analysis failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4343,6 +4391,7 @@ def get_scenario_stress_test(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_scenario_stress_test failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4469,6 +4518,7 @@ def get_team_calibration_drift(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_team_calibration_drift failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4574,6 +4624,7 @@ def get_prediction_uncertainty(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_prediction_uncertainty failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4686,6 +4737,7 @@ def get_profit_loss_simulation(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_profit_loss_simulation failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4790,6 +4842,7 @@ def get_cumulative_trajectory(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_cumulative_trajectory failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -4893,6 +4946,7 @@ def get_difficulty_stratification(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_difficulty_stratification failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -5013,6 +5067,7 @@ def get_prediction_streaks(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_prediction_streaks failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -5078,6 +5133,7 @@ def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
                     "age_seconds": int(__import__("time").time() - cached.get("timestamp", 0)),
                 }
         except Exception:
+            logger.warning("get_prediction_diagnostics: ci cache check failed", exc_info=True)
             pass
 
         return _clean_json_value({
@@ -5090,6 +5146,7 @@ def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
             "ci_cache": ci_status,
         })
     except Exception as exc:
+        logger.warning("get_prediction_diagnostics failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -5140,6 +5197,7 @@ def get_head_to_head(
         )
         return _clean_json_value(result)
     except Exception:
+        logger.warning("get_head_to_head failed, returning fallback", exc_info=True)
         return _clean_json_value(fallback)
 
 
@@ -5183,6 +5241,7 @@ def get_value_summary() -> dict:
             if not results_df.empty:
                 metrics = _clean_json_value(results_df.iloc[0].to_dict())
         except Exception:
+            logger.warning("get_value_summary: results parquet read failed", exc_info=True)
             pass
 
     mean_residual = None
@@ -5191,6 +5250,7 @@ def get_value_summary() -> dict:
             raw = oof["residual_log"].mean()
             mean_residual = float(raw) if raw == raw else None
         except Exception:
+            logger.warning("get_value_summary: residual_log mean failed", exc_info=True)
             mean_residual = None
 
     return _clean_json_value({
@@ -5527,6 +5587,7 @@ def get_prediction_summary() -> dict[str, Any]:
                 poisson_info = frame.iloc[0].to_dict()
                 poisson_info["status"] = "ok"
         except Exception:
+            logger.warning("get_prediction_summary: poisson read failed", exc_info=True)
             pass
 
     # Dixon-Coles artifact info
@@ -5546,6 +5607,7 @@ def get_prediction_summary() -> dict[str, Any]:
                 dc_info = dc_frame.iloc[0].to_dict()
                 dc_info["status"] = "ok"
         except Exception:
+            logger.warning("get_prediction_summary: DC read failed", exc_info=True)
             dc_info["status"] = "error"
 
     poisson_ready = poisson_info.get("status") == "ok"
@@ -5706,6 +5768,7 @@ def get_prediction_calibration(force_refresh: bool = False) -> dict[str, Any]:
                         })
 
         except Exception:
+            logger.warning("get_prediction_calibration: DC detail failed", exc_info=True)
             dc_metrics = {"status": "error"}
 
     # --- Poisson calibration (from existing results parquet) ---
@@ -5726,6 +5789,7 @@ def get_prediction_calibration(force_refresh: bool = False) -> dict[str, Any]:
                     "n_matches": _clean_json_value(row.get("n_matches")),
                 }
         except Exception:
+            logger.warning("get_prediction_calibration: poisson results failed", exc_info=True)
             poisson_metrics = {"status": "error"}
 
     result = _clean_json_value({
@@ -5783,6 +5847,7 @@ def get_backtest_comparison(force_refresh: bool = False) -> dict[str, Any]:
         try:
             data = _read_json(path)
         except Exception:
+            logger.warning("get_backtest_comparison: metric file read failed", exc_info=True)
             continue
         available = True
         overall = data.get("overall", {}) or {}
@@ -5832,6 +5897,7 @@ def get_backtest_comparison(force_refresh: bool = False) -> dict[str, Any]:
                 "n_matches": cal_data.get("n_matches"),
             }
         except Exception:
+            logger.warning("get_backtest_comparison: calibration data read failed", exc_info=True)
             pass
 
     if not available:
@@ -5945,6 +6011,7 @@ def get_decay_tuning(force_refresh: bool = False) -> dict[str, Any]:
                 "candidates": data.get("candidates", []),
             })
         except Exception as exc:
+            logger.warning("get_decay_tuning failed", exc_info=True)
             result = {
                 "status": "error",
                 "error": str(exc),
@@ -5993,6 +6060,7 @@ def get_action_value_summary(
         try:
             xt_df = _read_parquet(xt_path)
         except Exception:
+            logger.warning("get_action_value_summary: xT load failed", exc_info=True)
             pass
 
     # Load VAEP data
@@ -6001,6 +6069,7 @@ def get_action_value_summary(
         try:
             vaep_df = _read_parquet(vaep_path)
         except Exception:
+            logger.warning("get_action_value_summary: VAEP load failed", exc_info=True)
             pass
 
     matches_df = pd.DataFrame()
@@ -6008,6 +6077,7 @@ def get_action_value_summary(
         try:
             matches_df = _read_parquet(matches_path)
         except Exception:
+            logger.warning("get_action_value_summary: matches load failed", exc_info=True)
             pass
 
     if xt_df.empty and vaep_df.empty:
@@ -6119,6 +6189,7 @@ def get_action_value_player_context(player_id: str) -> dict[str, Any]:
         try:
             return _read_parquet(path)
         except Exception:
+            logger.warning("get_action_value_player_context: read failed", exc_info=True)
             return pd.DataFrame()
 
     xt = read("player_action_value.parquet")
@@ -6128,6 +6199,7 @@ def get_action_value_player_context(player_id: str) -> dict[str, Any]:
     try:
         matches = _read_parquet(matches_path) if matches_path.exists() else pd.DataFrame()
     except Exception:
+        logger.warning("get_action_value_player_context: matches load failed", exc_info=True)
         matches = pd.DataFrame()
     return _clean_json_value(
         build_player_action_value_context(
@@ -6152,14 +6224,17 @@ def get_action_value_rating_links(player_id: str) -> dict[str, Any]:
     try:
         xt = pd.read_parquet(xt_path) if xt_path.exists() else pd.DataFrame()
     except Exception:
+        logger.warning("get_action_value_rating_links: xT load failed", exc_info=True)
         xt = pd.DataFrame()
     try:
         matches = pd.read_parquet(matches_path) if matches_path.exists() else pd.DataFrame()
     except Exception:
+        logger.warning("get_action_value_rating_links: matches load failed", exc_info=True)
         matches = pd.DataFrame()
     try:
         ratings = load_player_ratings()
     except Exception:
+        logger.warning("get_action_value_rating_links: ratings load failed", exc_info=True)
         ratings = pd.DataFrame()
     return _clean_json_value(
         build_action_value_rating_links(player_id, attach_team_names(xt, matches), ratings)
@@ -6193,6 +6268,7 @@ def get_player_match_action_values(limit: int = 100, offset: int = 0) -> dict[st
         frame = _read_parquet(path)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except Exception as exc:
+        logger.warning("get_player_match_action_values failed", exc_info=True)
         return _clean_json_value(
             {"status": "error", "rows": [], "count": 0, "error": str(exc)}
         )
@@ -6231,6 +6307,7 @@ def get_artifacts_summary() -> dict:
 
             events_count = len(_read_parquet(events_path))
         except Exception:
+            logger.warning("get_artifacts_summary: events count failed", exc_info=True)
             events_count = 0
 
     # Data health flags. Demo fallback rows keep the UI usable, but must never
@@ -6252,6 +6329,7 @@ def get_artifacts_summary() -> dict:
             has_truth = len(truth_df) > 0
             truth_rows = len(truth_df)
         except Exception:
+            logger.warning("get_artifacts_summary: truth labels read failed", exc_info=True)
             pass
 
     # Player match coverage
@@ -6355,7 +6433,7 @@ def get_truth_label_supervision() -> dict:
     try:
         labels = _read_parquet(path)
     except Exception as exc:
-        logger.warning("Unable to read truth labels for supervision report: %s", exc)
+        logger.warning("Unable to read truth labels for supervision report: %s", exc, exc_info=True)
         return {
             "schema": "scoutfootball.truth-label-supervision",
             "version": "1.0.0",
@@ -6700,6 +6778,9 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
                         fi_df.to_dict(orient="records"),
                     )
                 except Exception:
+                    logger.warning(
+                        "get_model_run_detail: feature importance read failed", exc_info=True
+                    )
                     meta["feature_importance"] = []
 
             # Load optimized params info
@@ -6716,6 +6797,9 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
                         "max": round(float(params.max()), 6),
                     }
                 except Exception:
+                    logger.warning(
+                        "get_model_run_detail: optimized params load failed", exc_info=True
+                    )
                     pass
 
             # Data source attribution
@@ -7133,6 +7217,7 @@ def get_player_profile(
                     "coverage_note": "StatsBomb Open Data sample only",
                 }
     except Exception:
+        logger.warning("get_player_profile: xT integration failed", exc_info=True)
         xt_summary = {"available": False, "reason": "xT data not available for this player"}
 
     # Confidence reason explanation
@@ -7196,6 +7281,7 @@ def get_player_profile(
             compute_career_trajectory(rows)
         )
     except Exception as exc:  # noqa: BLE001
+        logger.warning("get_player_profile: career_trajectory failed", exc_info=True)
         result["career_trajectory"] = {
             "available": False,
             "error": str(exc),
@@ -7207,6 +7293,7 @@ def get_player_profile(
             compute_role_fit_scores(row, df)
         )
     except Exception as exc:  # noqa: BLE001
+        logger.warning("get_player_profile: role_fit failed", exc_info=True)
         result["role_fit"] = {"available": False, "error": str(exc)}
 
     try:
@@ -7215,6 +7302,7 @@ def get_player_profile(
             compute_peer_benchmark(row, df)
         )
     except Exception as exc:  # noqa: BLE001
+        logger.warning("get_player_profile: peer_benchmark failed", exc_info=True)
         result["peer_benchmark"] = {"available": False, "error": str(exc)}
 
     # CSV export
@@ -9219,7 +9307,7 @@ def get_wc_squad_scouting_needs(
             )
         except Exception:  # noqa: BLE001 — defensive on user-facing path
             logger.warning(
-                "compute_position_gap_report failed for club %r", club
+                "compute_position_gap_report failed for club %r", club, exc_info=True
             )
             result = {"status": "error", "gaps": []}
         gaps_by_pos: dict[str, dict] = {}
@@ -11201,6 +11289,7 @@ def export_local_pack() -> dict:
         try:
             full_briefs.append(brief_store.load(summary["brief_id"]))
         except Exception as exc:  # noqa: BLE001 — report, don't crash export
+            logger.warning("export_local_pack: brief load failed", exc_info=True)
             skipped_briefs.append({
                 "brief_id": summary.get("brief_id"),
                 "reason": str(exc) or type(exc).__name__,
@@ -11212,6 +11301,7 @@ def export_local_pack() -> dict:
         try:
             full_briefings.append(briefing_store.load(summary["briefing_id"]))
         except Exception as exc:  # noqa: BLE001 — report, don't crash export
+            logger.warning("export_local_pack: briefing load failed", exc_info=True)
             skipped_briefings.append({
                 "briefing_id": summary.get("briefing_id"),
                 "reason": str(exc) or type(exc).__name__,
@@ -11864,6 +11954,10 @@ def get_wc_tournament_match_impact(
                 draw_goals = (1, 1)
                 away_win_goals = (1, 2)
         except Exception:
+            logger.warning(
+                "get_wc_tournament_match_impact: scoreline prediction failed, using fallback",
+                exc_info=True,
+            )
             # Fallback: classic 2-1 / 1-1 / 1-2 scenarios.
             home_win_goals = (2, 1)
             draw_goals = (1, 1)
@@ -12337,6 +12431,7 @@ def get_backtest_report_card() -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_backtest_report_card failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -12455,6 +12550,7 @@ def get_prediction_anomalies(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_prediction_anomalies failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -12574,6 +12670,7 @@ def get_team_performance_profile(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
+        logger.warning("get_team_performance_profile failed", exc_info=True)
         return {"status": "error", "message": str(exc)}
 
 
@@ -12813,6 +12910,7 @@ def _capture_wc_knockout_prediction_snapshot(state: Any, match_id: str) -> dict[
             ],
         }
     except Exception:
+        logger.warning("capture wc knockout prediction snapshot failed", exc_info=True)
         return None
 
 
@@ -13232,6 +13330,7 @@ def _decode_wc_tournament_import(encoded: str) -> tuple[Any | None, dict | None]
         json_bytes = base64.urlsafe_b64decode(padded)
         state_dict = json.loads(json_bytes.decode("utf-8"))
     except Exception as exc:
+        logger.warning("decode wc tournament import failed", exc_info=True)
         return None, _clean_json_value({
             "status": "error",
             "code": "decode_failed",
