@@ -8,15 +8,22 @@ Verifies two layers:
    still produced for the remaining fixtures, but the skip is now
    visible instead of silent).
 
-2. **Static AST scan**: every ``except Exception:`` block in
-   ``evaluation/backtests.py``, ``pipeline.py`` and
-   ``evaluation/scouting_queue.py`` must contain a ``logger.<level>(...)``
+2. **Static AST scan**: every ``except Exception:`` block in the
+   scoped observability modules must contain a ``logger.<level>(...)``
    call. This prevents regressions where a new silent exception handler
    is added without observability.
 
-The hash-fallback ``except Exception:`` in ``pipeline.py:_hash_frames``
-is intentionally exempt: the fallback path (columns+length) is the
-documented behavior and the hash still produces a stable value.
+Scoped modules:
+    - ``evaluation/backtests.py``
+    - ``evaluation/scouting_queue.py``
+    - ``pipeline.py``
+    - ``features/manifest.py``  (data provenance / hashing)
+    - ``features/rating_matrix.py``  (rating feature matrix + xT/VAEP merge)
+
+The previously duplicated hash functions ``pipeline._hash_input_frames``
+and ``rating_matrix._compute_dataframe_hash`` were consolidated into
+``manifest.compute_dataframe_hash``; the fallback path now logs at
+WARNING level, so no exemption is required.
 """
 
 from __future__ import annotations
@@ -156,18 +163,20 @@ _OBSERVABILITY_MODULES = [
     _SRC_ROOT / "evaluation" / "backtests.py",
     _SRC_ROOT / "evaluation" / "scouting_queue.py",
     _SRC_ROOT / "pipeline.py",
+    _SRC_ROOT / "features" / "manifest.py",
+    _SRC_ROOT / "features" / "rating_matrix.py",
 ]
 
-# Intentional exemptions: (file_relative_path, except_line_no_hint_substring).
-# We don't exempt by line number (brittle); instead we document here and
-# rely on the _is_intentional_silent_handler check to allow only the
-# specific hash-fallback pattern in pipeline._hash_input_frames.
-_INTENTIONAL_EXEMPTIONS = {
-    # pipeline._hash_input_frames: hashing fallback that still produces a
-    # stable hash from columns+length; logging here would be noise on every
-    # hash and the fallback is the documented behavior.
-    ("pipeline.py", "_hash_input_frames"),
-}
+# Intentional exemptions: (module_relative_path, function_name).
+# Kept empty by design — every silent ``except Exception:`` in scoped
+# modules must either log or be refactored. Add an entry here only after
+# confirming the silence is genuinely correct AND the surrounding code
+# already provides equivalent observability (e.g. a downstream handler
+# logs the terminal failure). The previously duplicated hash functions
+# ``pipeline._hash_input_frames`` and ``rating_matrix._compute_dataframe_hash``
+# were consolidated into ``manifest.compute_dataframe_hash``; the fallback
+# path now logs at WARNING level, so no exemption is required.
+_INTENTIONAL_EXEMPTIONS: set[tuple[str, str]] = set()
 
 
 def _module_name(rel_path: str) -> str:
@@ -255,6 +264,8 @@ class TestObservabilityStaticScan:
             "evaluation/backtests.py",
             "evaluation/scouting_queue.py",
             "pipeline.py",
+            "features/manifest.py",
+            "features/rating_matrix.py",
         ],
     )
     def test_module_has_logger_defined(self, module_rel: str) -> None:
@@ -289,6 +300,8 @@ class TestObservabilityStaticScan:
             "evaluation/backtests.py",
             "evaluation/scouting_queue.py",
             "pipeline.py",
+            "features/manifest.py",
+            "features/rating_matrix.py",
         ],
     )
     def test_no_silent_exception_handlers(self, module_rel: str) -> None:

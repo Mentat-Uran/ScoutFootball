@@ -14,6 +14,7 @@ from scoutfootball.entities.normalize import normalize_country_name, normalize_p
 from scoutfootball.evaluation.validation import run_pre_training_validation
 from scoutfootball.features.manifest import (
     SourceLineageEntry,
+    compute_dataframe_hash,
     count_parquet_rows,
     extract_lineage_attrs,
     hash_file,
@@ -851,29 +852,8 @@ def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataF
             notes=filter_note,
         )
     ]
-    team_match.attrs["_input_hash"] = _hash_input_frames(matches)
+    team_match.attrs["_input_hash"] = compute_dataframe_hash(matches)
     return team_match
-
-
-def _hash_input_frames(*frames: pd.DataFrame) -> str:
-    """Hash input DataFrame contents for manifest ``input_hash`` field.
-
-    Uses a stable parquet-bytes hash. Empty frames are skipped. Mirrors
-    ``rating_matrix._compute_dataframe_hash`` but lives here so pipeline
-    builders can call it without a private import.
-    """
-    import hashlib
-
-    hasher = hashlib.sha256()
-    for frame in frames:
-        if frame is None or frame.empty:
-            continue
-        try:
-            hasher.update(frame.to_parquet(index=False))
-        except Exception:
-            hasher.update(",".join(map(str, frame.columns)).encode())
-            hasher.update(str(len(frame)).encode())
-    return hasher.hexdigest()[:16]
 
 
 def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFrame:
@@ -1014,7 +994,7 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
             notes="matches metadata file; joined on match_id",
         ),
     ]
-    built.attrs["_input_hash"] = _hash_input_frames(events, matches)
+    built.attrs["_input_hash"] = compute_dataframe_hash(events, matches)
     return built
 
 
@@ -1088,7 +1068,7 @@ def _build_player_match_proxy_from_fbref(settings: PlatformSettings) -> pd.DataF
             notes="season proxy; one row per player-season",
         )
     ]
-    player_match.attrs["_input_hash"] = _hash_input_frames(frame)
+    player_match.attrs["_input_hash"] = compute_dataframe_hash(frame)
     return player_match
 
 
@@ -1128,7 +1108,7 @@ def _build_player_match_proxy_from_understat(
             notes=excluded_note,
         )
     ]
-    proxy.attrs["_input_hash"] = _hash_input_frames(raw)
+    proxy.attrs["_input_hash"] = compute_dataframe_hash(raw)
     return proxy
 
 
