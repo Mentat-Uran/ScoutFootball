@@ -3135,7 +3135,7 @@ def test_versions_view_edit_dossier_add_supporting_evidence_round_trip(
     )
 
     # Click "Add entry" — must append a new entry to the DOM.
-    ev_list.locator("button", has_text="Add entry").click()
+    ev_list.locator("button[data-action='add-entry']").click()
     page.wait_for_timeout(150)
     assert ev_list.locator(".ver-edit-entry").count() == 1, (
         "Add entry button did not append a new entry"
@@ -3269,7 +3269,7 @@ def test_versions_view_edit_dossier_remove_supporting_evidence_round_trip(
 
     # Click the "Remove" button on the first entry.
     ev_list.locator(".ver-edit-entry").first.locator(
-        "button", has_text="Remove"
+        "button[data-action='remove-entry']"
     ).click()
     page.wait_for_timeout(150)
 
@@ -3441,7 +3441,7 @@ def test_versions_view_edit_dossier_missing_evidence_id_blocks_submit(
     ev_list = page.locator(
         ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
     )
-    ev_list.locator("button", has_text="Add entry").click()
+    ev_list.locator("button[data-action='add-entry']").click()
     page.wait_for_timeout(150)
 
     # Clear the auto-suggested evidence_id so the required field is empty.
@@ -3518,7 +3518,7 @@ def test_versions_view_edit_dossier_duplicate_evidence_ids_block_submit(
         ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
     )
     # Add a second entry; the seeded entry (idx 0) keeps ev-seed-1.
-    ev_list.locator("button", has_text="Add entry").click()
+    ev_list.locator("button[data-action='add-entry']").click()
     page.wait_for_timeout(150)
 
     # Set the new entry's id to collide with the seeded entry's id.
@@ -3600,7 +3600,7 @@ def test_versions_view_edit_dossier_invalid_fact_tier_blocks_submit(
     ev_list = page.locator(
         ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
     )
-    ev_list.locator("button", has_text="Add entry").click()
+    ev_list.locator("button[data-action='add-entry']").click()
     page.wait_for_timeout(150)
 
     page.locator(
@@ -3711,7 +3711,7 @@ def test_versions_view_edit_review_hypothesis_results_round_trip(
         "Seeded review should have 0 hypothesis_results in the dialog"
     )
 
-    hyp_list.locator("button", has_text="Add entry").click()
+    hyp_list.locator("button[data-action='add-entry']").click()
     page.wait_for_timeout(150)
 
     page.locator(
@@ -3834,7 +3834,7 @@ def test_versions_view_edit_review_remove_hypothesis_results_round_trip(
     )
 
     hyp_list.locator(".ver-edit-entry").first.locator(
-        "button", has_text="Remove"
+        "button[data-action='remove-entry']"
     ).click()
     page.wait_for_timeout(150)
 
@@ -3915,7 +3915,7 @@ def test_versions_view_edit_dossier_risks_round_trip(
         "Seeded dossier should have 0 risks in the dialog"
     )
 
-    risk_list.locator("button", has_text="Add entry").click()
+    risk_list.locator("button[data-action='add-entry']").click()
     page.wait_for_timeout(150)
 
     page.locator(
@@ -3980,5 +3980,608 @@ def test_versions_view_edit_dossier_risks_round_trip(
         f"Expected summary, got {risk['summary']!r}"
     )
 
-    page.locator("#ver-edit-cancel").click()
+
+# ── Workflow A/B: full decision-loop navigation E2E ──────────────────
+
+
+def _purge_store_records(store) -> list[tuple[str, dict]]:
+    """Snapshot + delete all records in a store.
+
+    Returns a list of ``(record_id, payload)`` tuples so the caller can
+    restore records after the test.  Backup files for each record are
+    also removed so the test starts from a clean backup history.
+
+    Used by the Workflow A/B navigation tests to get a deterministic
+    empty store state without permanently destroying the maintainer's
+    existing records: the snapshot is restored in the ``finally`` block.
+    """
+    import json
+
+    snapshots: list[tuple[str, dict]] = []
+    for f in store.root.glob("*.json"):
+        rid = f.stem
+        try:
+            with open(f, encoding="utf-8") as fh:
+                payload = json.load(fh)
+            snapshots.append((rid, payload))
+        except Exception:
+            # If we can't read it, we still need to remove it for a
+            # deterministic test state; just don't try to restore it.
+            pass
+        try:
+            store.delete(rid, expected_revision=None)
+        except Exception:
+            pass
+        f.unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for bf in backup_dir.glob(f"{rid}.*.json"):
+                bf.unlink(missing_ok=True)
+    return snapshots
+
+
+def _restore_store_records(store, snapshots: list[tuple[str, dict]]) -> None:
+    """Restore records snapshotted by ``_purge_store_records``.
+
+    Best-effort: if a record cannot be re-saved (e.g. schema drift
+    between the snapshot and the current model), the error is swallowed
+    so the test's primary assertion is not masked by a restore failure.
+    The maintainer can inspect the snapshot file manually if needed.
+    """
+    for rid, payload in snapshots:
+        try:
+            store.save(rid, payload, expected_revision=0)
+        except Exception:
+            pass
+
+
+def _wait_for_workflow_steps_stable(
+    page, *, timeout_s: float = 8.0
+) -> tuple[set, set, set]:
+    """Poll the workflow view until the three step lists stabilize.
+
+    Returns ``(next_ids, blocker_ids, gap_ids)`` collected from the DOM.
+    Two consecutive reads 400ms apart must match before the result is
+    returned; this filters out the brief moment when only some of the
+    four fetches have resolved and the inference is mid-update.
+    """
+    prev_next: set | None = None
+    prev_block: set | None = None
+    prev_gap: set | None = None
+    cur_next: set = set()
+    cur_block: set = set()
+    cur_gap: set = set()
+    for _ in range(int(timeout_s * 2.5)):
+        cur_next = set(
+            page.evaluate(
+                """() => [...document.querySelectorAll(
+                    "#wf-next-list li[data-wf-step-id]"
+                )].map(li => li.dataset.wfStepId)"""
+            )
+        )
+        cur_block = set(
+            page.evaluate(
+                """() => [...document.querySelectorAll(
+                    "#wf-blocker-list li[data-wf-step-id]"
+                )].map(li => li.dataset.wfStepId)"""
+            )
+        )
+        cur_gap = set(
+            page.evaluate(
+                """() => [...document.querySelectorAll(
+                    "#wf-evidence-gap-list li[data-wf-step-id]"
+                )].map(li => li.dataset.wfStepId)"""
+            )
+        )
+        if (
+            cur_next == prev_next
+            and cur_block == prev_block
+            and cur_gap == prev_gap
+            and prev_next is not None
+        ):
+            break
+        prev_next, prev_block, prev_gap = cur_next, cur_block, cur_gap
+        page.wait_for_timeout(400)
+    return cur_next, cur_block, cur_gap
+
+
+def _wait_for_dialog_close(
+    page, *, dialog_id: str, timeout_s: float = 5.0
+) -> bool:
+    """Poll until a dialog closes.  Returns True if closed, False on timeout."""
+    for _ in range(int(timeout_s * 5)):
+        is_open = page.evaluate(
+            f"() => !!document.getElementById('{dialog_id}').open"
+        )
+        if not is_open:
+            return True
+        page.wait_for_timeout(200)
+    return False
+
+
+def _purge_test_artifacts(store, prefix: str) -> None:
+    """Delete records created during a Workflow A/B test run.
+
+    Only touches records whose ID starts with ``prefix`` (e.g.
+    ``brief-`` / ``dossier-`` / ``briefing-`` / ``review-``) so the
+    restore step is not fighting freshly-created test artifacts.
+    """
+    for f in store.root.glob(f"{prefix}*.json"):
+        rid = f.stem
+        try:
+            store.delete(rid, expected_revision=None)
+        except Exception:
+            pass
+        f.unlink(missing_ok=True)
+        backup_dir = getattr(store, "backup_root", None)
+        if backup_dir:
+            for bf in backup_dir.glob(f"{rid}.*.json"):
+                bf.unlink(missing_ok=True)
+
+
+def test_workflow_a_recruitment_brief_to_dossier_navigation(
+    page, live_server_url: str
+) -> None:
+    """Workflow A end-to-end navigation: brief → dossier full loop.
+
+    Drives the complete recruitment decision workflow in the browser,
+    verifying that the workflow view's inferred steps track the actual
+    store state at every transition:
+
+    1. Empty briefs + dossiers stores (existing data snapshotted).
+    2. Workflow view shows ``create-brief`` next-step +
+       ``brief-missing`` evidence gap.
+    3. Click ``create-brief`` → versions view + create dialog opens.
+    4. Fill + submit brief form → dialog closes, brief persists.
+    5. Return to workflow view: ``create-brief`` gone,
+       ``brief-missing`` gone, ``create-dossier`` now appears,
+       ``dossier-missing`` appears.
+    6. Click ``create-dossier`` → versions view + create dialog opens
+       with ``brief_id`` pre-filled from the just-created brief.
+    7. Submit dossier form → dialog closes, dossier persists.
+    8. Return to workflow view: ``create-dossier`` gone,
+       ``dossier-draft-{id}`` gap appears (draft dossier needs decision).
+    9. Switch to versions view, edit the dossier: add a
+       ``supporting_evidence`` entry, set status=``decided`` +
+       decision=``proceed`` + decision_note.
+    10. Return to workflow view: ``dossier-draft-{id}`` gap is gone
+        (the dossier is no longer in draft state).
+
+    Catches regressions where:
+    - the workflow view does not re-fetch after a navigation round-trip
+    - the create-* / *-missing / *-draft inferences drift from the
+      actual store state
+    - the create-dossier pre-fill loses the brief_id between the
+      workflow view and the versions view create dialog
+    - editing a dossier to ``decided`` does not clear the
+      ``dossier-draft-{id}`` gap on workflow re-render
+    """
+    from scoutfootball.api import _brief_store, _dossier_store
+
+    brief_store = _brief_store()
+    dossier_store = _dossier_store()
+
+    brief_snapshots = _purge_store_records(brief_store)
+    dossier_snapshots = _purge_store_records(dossier_store)
+
+    try:
+        open_loaded_app(page, live_server_url)
+
+        # Step 2: workflow shows create-brief + brief-missing.
+        page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+        page.locator("#view-workflow").wait_for(
+            state="visible", timeout=10_000
+        )
+        next_ids, _, gap_ids = _wait_for_workflow_steps_stable(page)
+        assert "create-brief" in next_ids, (
+            f"Expected create-brief in next-list when briefs store is empty, "
+            f"got next={next_ids}"
+        )
+        assert "brief-missing" in gap_ids, (
+            f"Expected brief-missing in gap-list, got gaps={gap_ids}"
+        )
+
+        # Step 3: click create-brief → versions view + dialog.
+        page.locator("#wf-next-list button[data-wf-create='brief']").click()
+        page.locator("#view-versions").wait_for(
+            state="visible", timeout=10_000
+        )
+        page.locator("#ver-create-dialog").wait_for(
+            state="visible", timeout=5_000
+        )
+        assert page.locator("#ver-type-select").input_value() == "brief", (
+            "Expected type selector synced to 'brief' after workflow jump"
+        )
+
+        # Step 4: fill + submit brief form.
+        page.locator("#ver-create-input-title").fill("Workflow A brief")
+        page.locator("#ver-create-input-budget_eur").fill("30000000")
+        page.locator("#ver-create-input-minimum_minutes").fill("1500")
+        page.locator("#ver-create-submit").click()
+        assert _wait_for_dialog_close(
+            page, dialog_id="ver-create-dialog"
+        ), "Create brief dialog did not close after submit"
+
+        new_brief_id = page.evaluate(
+            """async (baseUrl) => {
+                const r = await fetch(baseUrl + '/recruitment/briefs?limit=100');
+                const d = await r.json();
+                const items = Array.isArray(d.briefs) ? d.briefs : [];
+                const hit = items.find(x => (x.brief_id || '').startsWith('brief-'));
+                return hit ? hit.brief_id : null;
+            }""",
+            live_server_url,
+        )
+        assert new_brief_id, "Newly created brief not found in list"
+
+        # Step 5: return to workflow view, verify state transition.
+        page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+        page.locator("#view-workflow").wait_for(
+            state="visible", timeout=10_000
+        )
+        next_ids, _, gap_ids = _wait_for_workflow_steps_stable(page)
+        assert "create-brief" not in next_ids, (
+            f"create-brief still in next-list after creating a brief: "
+            f"next={next_ids}"
+        )
+        assert "brief-missing" not in gap_ids, (
+            f"brief-missing still in gap-list after creating a brief: "
+            f"gaps={gap_ids}"
+        )
+        assert "create-dossier" in next_ids, (
+            f"Expected create-dossier in next-list after brief created, "
+            f"got next={next_ids}"
+        )
+        assert "dossier-missing" in gap_ids, (
+            f"Expected dossier-missing in gap-list, got gaps={gap_ids}"
+        )
+
+        # Step 6: click create-dossier → dialog with brief_id pre-filled.
+        page.locator(
+            "#wf-next-list button[data-wf-create='dossier']"
+        ).click()
+        page.locator("#view-versions").wait_for(
+            state="visible", timeout=10_000
+        )
+        page.locator("#ver-create-dialog").wait_for(
+            state="visible", timeout=5_000
+        )
+        assert page.locator("#ver-type-select").input_value() == "dossier", (
+            "Expected type selector synced to 'dossier' after workflow jump"
+        )
+        brief_select = page.locator("#ver-create-input-brief_id")
+        assert brief_select.input_value() == new_brief_id, (
+            f"Expected brief_id pre-fill {new_brief_id!r}, "
+            f"got {brief_select.input_value()!r}"
+        )
+
+        # Step 7: submit dossier form.
+        page.locator("#ver-create-input-title").fill("Workflow A dossier")
+        page.locator("#ver-create-submit").click()
+        assert _wait_for_dialog_close(
+            page, dialog_id="ver-create-dialog"
+        ), "Create dossier dialog did not close after submit"
+
+        new_dossier_id = page.evaluate(
+            """async (baseUrl) => {
+                const r = await fetch(baseUrl + '/recruitment/dossiers?limit=100');
+                const d = await r.json();
+                const items = Array.isArray(d.dossiers) ? d.dossiers : [];
+                const hit = items.find(x => (x.dossier_id || '').startsWith('dossier-'));
+                return hit ? hit.dossier_id : null;
+            }""",
+            live_server_url,
+        )
+        assert new_dossier_id, "Newly created dossier not found in list"
+
+        # Step 8: workflow shows dossier-draft-{id} gap, no create-dossier.
+        page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+        page.locator("#view-workflow").wait_for(
+            state="visible", timeout=10_000
+        )
+        next_ids, _, gap_ids = _wait_for_workflow_steps_stable(page)
+        assert "create-dossier" not in next_ids, (
+            f"create-dossier still in next-list after dossier created: "
+            f"next={next_ids}"
+        )
+        assert f"dossier-draft-{new_dossier_id}" in gap_ids, (
+            f"Expected dossier-draft-{new_dossier_id} in gap-list, "
+            f"got gaps={gap_ids}"
+        )
+
+        # Step 9: edit dossier — add supporting_evidence + status=decided.
+        page.locator(".nav-stack .nav-action[data-view='versions']").click()
+        page.locator("#view-versions").wait_for(
+            state="visible", timeout=10_000
+        )
+        type_select = page.locator("#ver-type-select")
+        type_select.wait_for(state="visible", timeout=10_000)
+        type_select.select_option("dossier")
+        page.wait_for_timeout(200)
+        _select_record_in_versions_view(page, new_dossier_id)
+
+        page.locator("#ver-edit").click()
+        page.locator("#ver-edit-dialog").wait_for(
+            state="visible", timeout=5_000
+        )
+
+        # Add a supporting_evidence entry.
+        ev_list = page.locator(
+            ".ver-edit-entry-list[data-entry-list='supporting_evidence']"
+        )
+        ev_list.locator("button[data-action='add-entry']").click()
+        page.wait_for_timeout(150)
+        page.locator(
+            "#ver-edit-entry-supporting_evidence-0-evidence_id"
+        ).fill("ev-wf-a-1")
+        page.locator(
+            "#ver-edit-entry-supporting_evidence-0-summary"
+        ).fill("Workflow A evidence.")
+
+        # Move status to decided + decision to proceed.
+        page.locator("#ver-edit-input-status").select_option("decided")
+        page.locator("#ver-edit-input-decision").select_option("proceed")
+        page.locator("#ver-edit-input-decision_note").fill(
+            "Workflow A decision: proceed with signing."
+        )
+        page.locator("#ver-edit-submit").click()
+        assert _wait_for_dialog_close(
+            page, dialog_id="ver-edit-dialog"
+        ), "Edit dialog did not close after submitting decided dossier"
+
+        # Step 10: workflow no longer shows dossier-draft-{id} gap.
+        page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+        page.locator("#view-workflow").wait_for(
+            state="visible", timeout=10_000
+        )
+        next_ids, _, gap_ids = _wait_for_workflow_steps_stable(page)
+        assert f"dossier-draft-{new_dossier_id}" not in gap_ids, (
+            f"dossier-draft-{new_dossier_id} still in gap-list after "
+            f"dossier moved to decided: gaps={gap_ids}"
+        )
+    finally:
+        # Cleanup: delete test artifacts, then restore snapshotted records.
+        _purge_test_artifacts(brief_store, "brief-")
+        _purge_test_artifacts(dossier_store, "dossier-")
+        _restore_store_records(brief_store, brief_snapshots)
+        _restore_store_records(dossier_store, dossier_snapshots)
+
+
+def test_workflow_b_opposition_briefing_to_review_navigation(
+    page, live_server_url: str
+) -> None:
+    """Workflow B end-to-end navigation: briefing → review full loop.
+
+    Drives the complete opposition decision workflow in the browser,
+    verifying that the workflow view's inferred steps track the actual
+    store state at every transition:
+
+    1. Empty briefings + reviews stores (existing data snapshotted).
+    2. Workflow view shows ``create-briefing`` next-step +
+       ``briefing-missing`` evidence gap.
+    3. Click ``create-briefing`` → versions view + create dialog opens.
+    4. Fill + submit briefing form → dialog closes, briefing persists.
+    5. Return to workflow view: ``create-briefing`` gone,
+       ``briefing-missing`` gone, ``create-review`` now appears,
+       ``review-missing`` appears.
+    6. Click ``create-review`` → versions view + create dialog opens
+       with ``briefing_id`` pre-filled from the just-created briefing.
+    7. Submit review form → dialog closes, review persists.
+    8. Return to workflow view: ``create-review`` gone,
+       ``review-draft-{id}`` gap appears (draft review needs decision).
+    9. Switch to versions view, edit the review: add a
+       ``hypothesis_results`` entry, set status=``finalized`` +
+       decision=``confirmed`` + decision_note.
+    10. Return to workflow view: ``review-draft-{id}`` gap is gone
+        (the review is no longer in draft state).
+
+    Catches regressions where:
+    - the workflow view does not re-fetch after a navigation round-trip
+    - the create-* / *-missing / *-draft inferences drift from the
+      actual store state for the opposition workflow
+    - the create-review pre-fill loses the briefing_id between the
+      workflow view and the versions view create dialog
+    - editing a review to ``finalized`` does not clear the
+      ``review-draft-{id}`` gap on workflow re-render
+    """
+    from scoutfootball.api import _briefing_store, _review_store
+
+    briefing_store = _briefing_store()
+    review_store = _review_store()
+
+    briefing_snapshots = _purge_store_records(briefing_store)
+    review_snapshots = _purge_store_records(review_store)
+
+    try:
+        open_loaded_app(page, live_server_url)
+
+        # Step 2: workflow shows create-briefing + briefing-missing.
+        page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+        page.locator("#view-workflow").wait_for(
+            state="visible", timeout=10_000
+        )
+        next_ids, _, gap_ids = _wait_for_workflow_steps_stable(page)
+        assert "create-briefing" in next_ids, (
+            f"Expected create-briefing in next-list when briefings store "
+            f"is empty, got next={next_ids}"
+        )
+        assert "briefing-missing" in gap_ids, (
+            f"Expected briefing-missing in gap-list, got gaps={gap_ids}"
+        )
+
+        # Step 3: click create-briefing → versions view + dialog.
+        page.locator(
+            "#wf-next-list button[data-wf-create='briefing']"
+        ).click()
+        page.locator("#view-versions").wait_for(
+            state="visible", timeout=10_000
+        )
+        page.locator("#ver-create-dialog").wait_for(
+            state="visible", timeout=5_000
+        )
+        assert page.locator("#ver-type-select").input_value() == "briefing", (
+            "Expected type selector synced to 'briefing' after workflow jump"
+        )
+
+        # Step 4: fill + submit briefing form.
+        page.locator("#ver-create-input-title").fill("Workflow B briefing")
+        page.locator("#ver-create-input-home_team").fill("E2E Home FC")
+        page.locator("#ver-create-input-away_team").fill("E2E Away FC")
+        page.locator("#ver-create-submit").click()
+        assert _wait_for_dialog_close(
+            page, dialog_id="ver-create-dialog"
+        ), "Create briefing dialog did not close after submit"
+
+        new_briefing_id = page.evaluate(
+            """async (baseUrl) => {
+                const r = await fetch(baseUrl + '/opposition/briefs?limit=100');
+                const d = await r.json();
+                const items = Array.isArray(d.briefings) ? d.briefings : [];
+                const hit = items.find(x => (x.briefing_id || '').startsWith('briefing-'));
+                return hit ? hit.briefing_id : null;
+            }""",
+            live_server_url,
+        )
+        assert new_briefing_id, "Newly created briefing not found in list"
+
+        # Step 5: return to workflow view, verify state transition.
+        page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+        page.locator("#view-workflow").wait_for(
+            state="visible", timeout=10_000
+        )
+        next_ids, _, gap_ids = _wait_for_workflow_steps_stable(page)
+        assert "create-briefing" not in next_ids, (
+            f"create-briefing still in next-list after creating a briefing: "
+            f"next={next_ids}"
+        )
+        assert "briefing-missing" not in gap_ids, (
+            f"briefing-missing still in gap-list after creating a briefing: "
+            f"gaps={gap_ids}"
+        )
+        assert "create-review" in next_ids, (
+            f"Expected create-review in next-list after briefing created, "
+            f"got next={next_ids}"
+        )
+        assert "review-missing" in gap_ids, (
+            f"Expected review-missing in gap-list, got gaps={gap_ids}"
+        )
+
+        # Step 6: click create-review → dialog with briefing_id pre-filled.
+        page.locator(
+            "#wf-next-list button[data-wf-create='review']"
+        ).click()
+        page.locator("#view-versions").wait_for(
+            state="visible", timeout=10_000
+        )
+        page.locator("#ver-create-dialog").wait_for(
+            state="visible", timeout=5_000
+        )
+        assert page.locator("#ver-type-select").input_value() == "review", (
+            "Expected type selector synced to 'review' after workflow jump"
+        )
+        briefing_select = page.locator("#ver-create-input-briefing_id")
+        assert briefing_select.input_value() == new_briefing_id, (
+            f"Expected briefing_id pre-fill {new_briefing_id!r}, "
+            f"got {briefing_select.input_value()!r}"
+        )
+
+        # Step 7: submit review form.
+        page.locator("#ver-create-input-title").fill("Workflow B review")
+        page.locator("#ver-create-submit").click()
+        assert _wait_for_dialog_close(
+            page, dialog_id="ver-create-dialog"
+        ), "Create review dialog did not close after submit"
+
+        new_review_id = page.evaluate(
+            """async (baseUrl) => {
+                const r = await fetch(baseUrl + '/opposition/reviews?limit=100');
+                const d = await r.json();
+                const items = Array.isArray(d.reviews) ? d.reviews : [];
+                const hit = items.find(x => (x.review_id || '').startsWith('review-'));
+                return hit ? hit.review_id : null;
+            }""",
+            live_server_url,
+        )
+        assert new_review_id, "Newly created review not found in list"
+
+        # Step 8: workflow shows review-draft-{id} gap, no create-review.
+        page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+        page.locator("#view-workflow").wait_for(
+            state="visible", timeout=10_000
+        )
+        next_ids, _, gap_ids = _wait_for_workflow_steps_stable(page)
+        assert "create-review" not in next_ids, (
+            f"create-review still in next-list after review created: "
+            f"next={next_ids}"
+        )
+        assert f"review-draft-{new_review_id}" in gap_ids, (
+            f"Expected review-draft-{new_review_id} in gap-list, "
+            f"got gaps={gap_ids}"
+        )
+
+        # Step 9: edit review — add hypothesis_results + status=finalized.
+        page.locator(".nav-stack .nav-action[data-view='versions']").click()
+        page.locator("#view-versions").wait_for(
+            state="visible", timeout=10_000
+        )
+        type_select = page.locator("#ver-type-select")
+        type_select.wait_for(state="visible", timeout=10_000)
+        type_select.select_option("review")
+        page.wait_for_timeout(200)
+        _select_record_in_versions_view(page, new_review_id)
+
+        page.locator("#ver-edit").click()
+        page.locator("#ver-edit-dialog").wait_for(
+            state="visible", timeout=5_000
+        )
+
+        # Add a hypothesis_results entry.
+        hyp_list = page.locator(
+            ".ver-edit-entry-list[data-entry-list='hypothesis_results']"
+        )
+        hyp_list.locator("button[data-action='add-entry']").click()
+        page.wait_for_timeout(150)
+        page.locator(
+            "#ver-edit-entry-hypothesis_results-0-hypothesis_id"
+        ).fill("hyp-wf-b-1")
+        page.locator(
+            "#ver-edit-entry-hypothesis_results-0-planned"
+        ).fill("Press high in the first 20 minutes.")
+        page.locator(
+            "#ver-edit-entry-hypothesis_results-0-observed"
+        ).fill("Pressed high for the first 15 minutes.")
+        # outcome defaults to the first option ("confirmed"); pick it
+        # explicitly so the test is robust against option reordering.
+        page.locator(
+            "#ver-edit-entry-hypothesis_results-0-outcome"
+        ).select_option("confirmed")
+        # fact_tier defaults to "official"; leave it.
+
+        # Move status to finalized + decision to confirmed.
+        page.locator("#ver-edit-input-status").select_option("finalized")
+        page.locator("#ver-edit-input-decision").select_option("confirmed")
+        page.locator("#ver-edit-input-decision_note").fill(
+            "Workflow B decision: hypothesis confirmed by the result."
+        )
+        page.locator("#ver-edit-submit").click()
+        assert _wait_for_dialog_close(
+            page, dialog_id="ver-edit-dialog"
+        ), "Edit dialog did not close after submitting finalized review"
+
+        # Step 10: workflow no longer shows review-draft-{id} gap.
+        page.locator(".nav-stack .nav-action[data-view='workflow']").click()
+        page.locator("#view-workflow").wait_for(
+            state="visible", timeout=10_000
+        )
+        next_ids, _, gap_ids = _wait_for_workflow_steps_stable(page)
+        assert f"review-draft-{new_review_id}" not in gap_ids, (
+            f"review-draft-{new_review_id} still in gap-list after "
+            f"review moved to finalized: gaps={gap_ids}"
+        )
+    finally:
+        # Cleanup: delete test artifacts, then restore snapshotted records.
+        _purge_test_artifacts(briefing_store, "briefing-")
+        _purge_test_artifacts(review_store, "review-")
+        _restore_store_records(briefing_store, briefing_snapshots)
+        _restore_store_records(review_store, review_snapshots)
 

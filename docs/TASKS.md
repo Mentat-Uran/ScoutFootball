@@ -426,6 +426,32 @@ C1 verified 后 statsbomb_open source_claim audit 扩展（2026-07-25）：C1 �
 
 **遗留**：四类决策档案的"创建 + 编辑 + 版本回溯"对称路径已全部接入 versions 视图，但条目级 UI（dossier / review 的 evidence / comparator / risk 单条增删、briefing 的 sections 单条编辑）仍未实现，仍需通过 CLI 或 restore-from-backup；三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 / 6.10 一致）。本轮补的是 brief / briefing 的顶层创建路径，让四类档案在 versions 视图形成对称工作台，不改变 P1 节点整体状态。
 
+### 6.12 P1 决策闭环条目级编辑 E2E（dossier / review evidence 列表） — `verified`（2026-07-25）
+
+关闭 6.10 反复遗留的"dossier / review 的证据/比较/风险条目级 UI 仍未实现"断点。6.10 接入顶层字段编辑与状态推进，但当维护者要补充一条 supporting_evidence、修正一条 risks 严重度、或追加一条 hypothesis_results 时仍需 CLI 或 restore-from-backup 绕路。本轮把 dossier 的 `supporting_evidence` / `counter_evidence` / `comparisons` / `risks` 与 review 的 `hypothesis_results` / `falsified_patterns` / `new_questions` / `supporting_evidence` / `counter_evidence` 全部接入条目级编辑，与 6.10 的顶层字段编辑共用同一编辑对话框，让维护者可在浏览器中完成"打开编辑 → 增删改条目 → 校验 → 提交 → 看到新 revision"完整往返。
+
+**核心交付**：
+
+- `src/scoutfootball/api.py`：扩展 `_DOSSIER_EDITABLE_FIELDS` 与 `_REVIEW_EDITABLE_FIELDS` 把 4 + 5 个 entry-list 字段纳入白名单（dossier: supporting_evidence / counter_evidence / comparisons / risks；review: hypothesis_results / falsified_patterns / new_questions / supporting_evidence / counter_evidence），与 Pydantic 模型层 re-validation 配合实现全列表替换语义。新增 `_validate_entry_list(field_name, value, *, entry_id_field, valid_enums=None)` helper 在 record load 之前做早期 shape + enum 校验：非 list、非 dict entry、缺 id、id 重复、非法枚举（fact_tier / severity / outcome）直接返回 400 + 具体字段名，让调用方得到快速反馈；通过早期校验后仍由 store 的 Pydantic 重新校验 schema 完整性（required string fields、id 唯一性、max length、evidence_refs shape）。`update_decision_dossier` 与 `update_post_match_review` 在 fields dict 中检测 entry-list 字段时调用 `_validate_entry_list`，错误返回 400，成功时透传给 store 重新模型化并 `If-Match` 持久化。
+- `frontend/app.js`：扩展 `_VERSION_ARTIFACT_TYPES` 配置表，为 dossier / review 增加 `entryLists` 配置（`fieldName` / `labelKey` / `idField` / `idPrefix` / `fields`，每个 field 支持 `text` / `textarea` / `select-enum` / `list-strings` 类型）。新增 5 个函数：`_renderEditEntryField`（按 field 类型渲染单条 entry 的字段输入控件，`select-enum` 渲染下拉、`list-strings` 渲染多行 textarea 一行一条）、`_renderEditEntryList`（渲染整条 entry-list 容器，含 Add entry 按钮、每条 entry 的字段网格与 Remove entry 按钮、空状态提示）、`_readEditEntryListFromDom`（从 DOM 反向读取 entry 列表，处理 `list-strings` 的换行分割与空行过滤、空 list 与 null 区分）、`_addEditEntry`（点击 Add entry 时追加新 entry 到 DOM，复用 `_renderEditEntryField`）、`_removeEditEntry`（点击 Remove entry 时从 DOM 移除该 entry）。`_openEditDialog` 在渲染顶层字段后追加所有 `entryLists` 配置的编辑器；`_collectEditForm` 在收集顶层字段后调用 `_readEditEntryListFromDom` 收集每个 entry-list，校验缺失 id / 重复 id / 非法枚举，校验失败时高亮提示并阻止提交。新增 30+ i18n key（label / hint / add / remove / empty / field label / placeholder / 校验错误消息），中英文同步。
+- `tests/unit/test_decision_dossier_and_review_api.py`：新增 `TestDecisionDossierEntryListUpdate` 与 `TestPostMatchReviewEntryListUpdate` 两个测试类，覆盖 entry-list round-trip（replace supporting_evidence 后旧条目被新列表替换、`server_revision` 递增、备份创建）、enum 校验（invalid fact_tier / severity / outcome 返回 400）、空 list 替换（合法清空所有 entry）、错误路径（非 list value、非 dict entry、缺 evidence_id / hypothesis_id / risk_id、重复 id）。共 26 个新单元测试。
+- `tests/e2e/test_decision_workflows.py`：新增 9 个 E2E 测试覆盖条目级编辑往返：`test_versions_view_edit_dossier_add_supporting_evidence_round_trip`（空列表 → 添加 1 条 evidence_id=ev-ui-1 + fact_tier=official + summary + evidence_refs → 提交 → server_revision=2 + GET 验证字段持久化）、`test_versions_view_edit_dossier_remove_supporting_evidence_round_trip`（已有 1 条 evidence → Remove entry → 提交 → server_revision=2 + supporting_evidence 变空数组）、`test_versions_view_edit_dossier_edit_existing_evidence_round_trip`（已有 1 条 evidence → 修改 summary 与 fact_tier → 提交 → server_revision=2 + 字段更新）、`test_versions_view_edit_dossier_missing_evidence_id_blocks_submit`（清空 evidence_id → 提交 → 客户端校验阻断、对话框保持打开、server_revision 仍为 1）、`test_versions_view_edit_dossier_duplicate_evidence_ids_block_submit`（两条 entry 用相同 evidence_id → 校验阻断）、`test_versions_view_edit_dossier_invalid_fact_tier_blocks_submit`（输入 fact_tier='bogus' → 校验阻断）、`test_versions_view_edit_review_hypothesis_results_round_trip`（空列表 → 添加 1 条 hypothesis_id + outcome=confirmed → 提交 → server_revision=2 + GET 验证）、`test_versions_view_edit_review_remove_hypothesis_results_round_trip`（已有 1 条 → Remove → 提交 → 列表变空）、`test_versions_view_edit_dossier_risks_round_trip`（添加 1 条 risk_id + severity=high + description → 提交 → server_revision=2 + 字段持久化）。
+- `docs/CAPABILITIES.md`：审计快照头更新到 2026-07-25，反映 P1+（dossier / review 条目级编辑 E2E：supporting_evidence / risks / hypothesis_results 的新增 / 编辑 / 移除 / 客户端校验阻断）落地；决策工作流导航 + 版本恢复行追加 P1+ E2E 覆盖描述；"可以直接陈述"段落新增条目级编辑覆盖范围说明。
+
+**测试覆盖**：
+
+- `uv run ruff check .`：All checks passed（修复 `api.py` I001 import 排序）。
+- `uv run pytest tests/unit/test_decision_dossier_and_review_api.py -q`：87 通过（含 26 个新单元测试）。
+- `uv run pytest tests/e2e/test_decision_workflows.py -m e2e -v`：29 通过（2 smoke + 2 工作流状态推断 + 1 字段级 evidence gap + 4 diff+restore 往返 + 6 创建路径 + 7 编辑路径 + 1 工作流跳转 pre-fill + 9 条目级编辑往返），约 320s。
+- `node --check frontend/app.js`：通过。
+
+**关键修复**：
+
+- `test_update_with_invalid_field_returns_400` 原断言 `hypothesis_results` 是非法字段，但本轮把它纳入 `_REVIEW_EDITABLE_FIELDS` 后该断言失效。修复：改用 `schema` 作为非法字段示例（`schema` 不在白名单中，仍是 invalid_field 错误）。
+- Ruff I001 import 排序：`_validate_entry_list` 引入后 `api.py` 顶部 import 块顺序变化，自动修复。
+
+**遗留**：briefing 的 sections 单条编辑仍未实现（`sections` 字段在 BriefingStore 中作为整体替换，前端无 entry-list 编辑器）；三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 / 6.10 / 6.11 一致）。本轮补的是 dossier / review 的条目级编辑路径，关闭 6.10 遗留的最后一个 P1 决策闭环 UI 断点，不改变 P1 节点整体状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
