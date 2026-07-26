@@ -749,7 +749,16 @@ def bootstrap_prediction_confidence(
             away_wins.append(pred.summary.away_win)
             home_lambdas.append(pred.home_lambda)
             away_lambdas.append(pred.away_lambda)
-        except Exception:
+        except Exception as exc:
+            # Bootstrap iterations are expected to occasionally fail
+            # (degenerate resamples, singular fits). The aggregate
+            # threshold check below raises RuntimeError if too many
+            # fail, but per-iteration failure causes are logged at
+            # debug level so CI degradation is diagnosable.
+            logger.debug(
+                "bootstrap_prediction_confidence: iter failed: %s", exc,
+                exc_info=True,
+            )
             failed += 1
             continue
 
@@ -1801,7 +1810,14 @@ def bootstrap_attribution_confidence(
                 delta_samples = {k: [] for k in factor_keys}
             for f in attr.factors:
                 delta_samples[f["factor"]].append(float(f["delta"]))
-        except Exception:
+        except Exception as exc:
+            # See bootstrap_prediction_confidence for rationale: debug-
+            # level per-iteration logging so CI degradation is
+            # diagnosable without spamming normal runs.
+            logger.debug(
+                "bootstrap_attribution_confidence: iter failed: %s", exc,
+                exc_info=True,
+            )
             failed += 1
             continue
 
@@ -2029,7 +2045,15 @@ def bootstrap_ensemble_attribution_confidence(
                 delta_samples = {k: [] for k in factor_keys}
             for f in ens.blended.factors:
                 delta_samples[f["factor"]].append(float(f["delta"]))
-        except Exception:
+        except Exception as exc:
+            # See bootstrap_prediction_confidence for rationale: debug-
+            # level per-iteration logging so CI degradation is
+            # diagnosable without spamming normal runs.
+            logger.debug(
+                "bootstrap_ensemble_attribution_confidence: iter failed: %s",
+                exc,
+                exc_info=True,
+            )
             failed += 1
             continue
 
