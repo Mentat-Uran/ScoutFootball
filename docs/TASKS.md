@@ -452,6 +452,8 @@ C1 verified 后 statsbomb_open source_claim audit 扩展（2026-07-25）：C1 �
 
 **遗留**：三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 / 6.10 / 6.11 一致）。本轮补的是 dossier / review 的条目级编辑路径，关闭 6.10 遗留的最后一个 P1 决策闭环 UI 断点，不改变 P1 节点整体状态。
 
+**附注**（2026-07-27 文档同步审计，见 6.14 节）：d13ec98 commit 在落地 9 条条目级编辑 E2E 的同时，**额外**新增了 2 条完整决策工作流导航 E2E 测试（`test_workflow_a_recruitment_brief_to_dossier_navigation` 与 `test_workflow_b_opposition_briefing_to_review_navigation`），共 11 条 E2E 测试，但原 commit message 与本节"测试覆盖"段只记录 9 条条目级编辑测试，未提及导航测试。这是文档与实际状态不同步的早期案例，已在 6.14 文档同步轮中修正——两条导航 E2E 测试均通过真实浏览器验证（38.95s），覆盖工作流 A（recruitment brief → dossier）与工作流 B（opposition briefing → review）从空 store 出发的完整导航链。
+
 ### 6.13 P1 决策闭环条目级编辑对称补齐（versions 视图编辑 briefing sections） — `verified`（2026-07-27）
 
 关闭 6.12 末尾遗留的"briefing 的 sections 单条编辑仍未实现"断点。6.12 接入了 dossier / review 的 9 类 entry-list 编辑，但 briefing 的 `sections` 字段虽在 `BriefingStore` 中已是整体替换语义，前端无 entry-list 编辑器，维护者要补/改/删一条 section 仍需 CLI 或 restore-from-backup 绕路。本轮把 briefing 的 `sections` 接入条目级编辑，与 6.12 的 dossier/review entry-list 编辑共用同一编辑对话框与配置驱动模式，让维护者可在浏览器中完成"打开编辑 → 增删改 section → 校验 fact_tier 与 section_id（含 `custom:<tail>` 规则）→ 提交 → 看到新 revision"完整往返，且与 6.10 顶层字段编辑、6.12 dossier/review 条目级编辑对称。
@@ -478,6 +480,52 @@ C1 verified 后 statsbomb_open source_claim audit 扩展（2026-07-25）：C1 �
 - PowerShell heredoc 限制：首次 commit 尝试用 bash heredoc `<<'EOF'` 语法在 PowerShell 下失败（`The '<' operator is reserved for future use`），改为 Write 工具写 commit message 文件后用 `git commit -F` 引用，符合 AGENTS.md "Windows and PowerShell Conventions"。
 
 **遗留**：三个黄金工作流的完整导航路径端到端串联仍未覆盖（与 6.7 / 6.9 / 6.10 / 6.11 / 6.12 一致）。本轮补的是 briefing 的条目级编辑路径，让四类决策档案在 versions 视图的"创建 + 编辑 + 顶层字段 + 条目级"四个维度全部对称，关闭 6.12 遗留的最后一个 P1 决策闭环 UI 断点，不改变 P1 节点整体状态（仍 `verified`）。
+
+### 6.14 P1 文档与实际状态同步（工作流 A/B 导航 E2E 已落地） — `verified`（2026-07-27）
+
+关闭 6.7-6.13 反复出现的"三个黄金工作流的完整导航路径端到端串联仍未覆盖"声明与实际测试状态不同步的文档漂移。重新审计 `tests/e2e/test_decision_workflows.py` 发现：d13ec98 commit（6.12 落地）在添加 9 条 dossier/review 条目级编辑 E2E 测试的同时，**额外**添加了 2 条完整决策工作流导航 E2E 测试（`test_workflow_a_recruitment_brief_to_dossier_navigation` 与 `test_workflow_b_opposition_briefing_to_review_navigation`），共 11 条 E2E 测试；但原 commit message 与 6.12 节"测试覆盖"段只记录 9 条条目级编辑测试，未提及导航测试。6.13 节末尾"遗留"声明沿用 6.7-6.12 的"三个黄金工作流完整导航路径端到端串联仍未覆盖"措辞，与实际状态冲突。
+
+按 /goal 选题原则第 1 条（真实性、不可恢复风险）与项目章程"任务状态、能力口径和路线依赖必须在实际变化后保持同步"原则，本轮专门修正文档漂移，不增加新功能。修正内容：
+
+- `docs/CAPABILITIES.md` 审计快照头日期从 2026-07-25 升至 2026-07-27，新增 P1++ 表述反映 dossier/review/briefing 条目级编辑对称补齐与工作流 A/B 完整导航路径 E2E 落地。
+- `docs/CAPABILITIES.md` "可以直接陈述"段落追加：两个完整决策工作流导航 E2E 已通过真实浏览器验证（2026-07-27）——工作流 A（recruitment brief → dossier）与工作流 B（opposition briefing → review）从空 store 出发的完整导航链覆盖（工作流视图推断 → 创建 brief/briefing → 工作流视图状态转印 → 创建 dossier/review 含 pre-fill → 工作流视图显示 draft gap → 编辑推进到 decided/finalized → 工作流视图清除 draft gap）；并明确工作流 C（数据与模型发布）属 CLI 流程，结构与 A/B 不同。
+- `docs/CAPABILITIES.md` 工程与发布缺口表"真实浏览器 E2E"行：当前观察追加 `workflow A recruitment brief → dossier 完整导航路径` 与 `workflow B opposition briefing → review 完整导航路径`；目标状态从"三个黄金工作流完整导航路径在静态和低覆盖路径运行"细化为"工作流 A 与 B 完整导航路径已覆盖；工作流 C（数据与模型发布）属 CLI 流程，导航 E2E 未覆盖，需用 integration test 串接 validate → build-features → train → model-admission → promote/rollback"。
+- `docs/TASKS.md` 6.12 节末尾追加附注（2026-27-27 文档同步审计）：记录 d13ec98 实际加了 11 条 E2E 测试（9 条条目级编辑 + 2 条导航），原 commit 与 6.12 节"测试覆盖"段只记 9 条；两条导航 E2E 测试均通过真实浏览器验证（38.95s），覆盖工作流 A/B 的完整导航链。
+
+**真实状态核验**：
+
+- `uv run pytest tests/e2e/test_decision_workflows.py::test_workflow_a_recruitment_brief_to_dossier_navigation tests/e2e/test_decision_workflows.py::test_workflow_b_opposition_briefing_to_review_navigation -m e2e -v`：2 通过，38.95s。
+- `uv run pytest tests/e2e/test_decision_workflows.py -m e2e --collect-only -q`：35 tests collected（24 在 d13ec98 前 + 11 在 d13ec98）。
+- `git log --all --oneline -S "test_workflow_a_recruitment_brief_to_dossier_navigation" -- tests/e2e/test_decision_workflows.py`：唯一命中 d13ec98，确认导航测试与 6.12 同 commit。
+
+**遗留**：工作流 C（数据与模型发布）属 CLI 流程，与 A/B 的浏览器导航 E2E 结构不同，导航 E2E 未覆盖。其完整链路（validate → build-features → train → model-admission → promote/rollback）已有 unit 测试覆盖各片段（test_phase10.py、test_model_admission.py、test_model_run_lifecycle.py、test_optimizer_validation_gate.py），但缺一条 integration test 把整条链路在 tmp_path 数据根上串起来。这是后续工作候选，不是当前轮可决定（需要评估 mutating pipeline 测试基础设施）。本轮为纯文档同步轮，不改变 P1 节点整体状态（仍 `verified`），关闭 6.7-6.13 反复出现的"三个黄金工作流完整导航路径端到端串联仍未覆盖"声明与实际状态的文档漂移。
+
+### 6.15 P1 工作流 C 覆盖口径修正（CLI 流程不适用浏览器 E2E） — `verified`（2026-07-27）
+
+关闭 6.14 遗留的"工作流 C 导航 E2E 未覆盖"表述与实际覆盖状态不一致的文档漂移。6.14 节末尾"遗留"段沿用了 6.7-6.13 的措辞"导航 E2E 未覆盖"，并补充"缺一条 integration test 把整条链路在 tmp_path 数据根上串起来"作为后续工作候选。本轮调研确认：
+
+1. **工作流 C 与 A/B 不同构**：A/B 是前端 UI 驱动决策工作流（`workflow`/`versions` 视图 → Playwright 驱动浏览器），C 是 CLI 驱动数据/模型发布工作流（`validate` → `build-features` → `train`/`optimize_ratings_gpu.py` → `model-admission` → `promote-model-run`/`reject-model-run`/`rollback-model-run`）。工作流 C 没有前端 UI 可被 Playwright 驱动，强行写"浏览器 E2E 模拟 CLI"是工具错用。
+
+2. **已有三层覆盖**：
+   - **单元测试**：`test_model_run_lifecycle.py`（promote/rollback/reject/discard 各路径 + chain-of-custody hash drift fail-closed）、`test_model_admission.py`（8 项 evidence 检查 + chain-of-custody training-time vs on-disk manifest hash 比对）、`test_optimizer_validation_gate.py`（GPU optimizer 验证门禁 fail-closed + `--force` 覆盖 + import error fail-closed）、`test_phase10.py`（31 项 pre-training validation 含 manifest exists/freshness/source_lineage_freshness/truth_labels_schema）。
+   - **integration smoke**：`test_pipeline_e2e.py` 覆盖 `info`/`validate`/`build-features`/`train` 四个 CLI 命令的退出码（后两个被 `SCOUTFOOTBALL_RUN_MUTATING_PIPELINE_TESTS=1` gate 保护）。
+   - **真实端到端执行证据**：WORKFLOW_LOG.md 参考工作流 2（2026-07-19 维护者实际执行 `optimize_ratings_gpu.py --quick --no-viz → model-admission --json → promote-model-run --confirm → rollback-model-run --confirm` 完整链路，sha256 字节级验证可逆性：ratings B657F3E4.. → F6034D7F.. → B657F3E4.. 字节级一致）。
+
+3. **"缺一条 integration test 串起整条链路"的真实定位**：这是延伸改进而非阻塞——单元测试已覆盖各组件逻辑（promote 创建备份 + 替换活跃产物、rollback 还原 + 翻转 activation status、admission 8 项检查 + chain-of-custody、validation 31 项检查 + manifest freshness），integration smoke 已覆盖 CLI 退出码，真实执行证据已覆盖端到端可逆性。补一条 integration test 在 tmp_path 上串起 model-admission → promote → rollback 仍有价值（可发现组件间集成假设的失效），但不属于 P1 退出门槛硬要求，也不属于选题原则第 1-6 条中任何一条的高优先级。
+
+按 /goal 选题原则第 1 条（真实性）与项目章程"任务状态、能力口径和路线依赖必须在实际变化后保持同步"原则，本轮修正文档漂移，不增加新功能。修正内容：
+
+- `docs/CAPABILITIES.md` 审计快照头追加 P1+++ 表述：工作流 C 覆盖口径修正——CLI 流程不适用浏览器 E2E，已有单元测试 + integration smoke + 真实执行证据三层覆盖。
+- `docs/CAPABILITIES.md` "可以直接陈述"段落修正：原"工作流 C 的导航 E2E 仍未覆盖，因其属于 CLI 流程，结构与 A/B 不同"替换为详细说明工作流 C 与 A/B 不同构的原因 + 三层覆盖的具体内容（单元测试文件清单、integration smoke 命令清单、真实执行证据引用）。
+- `docs/CAPABILITIES.md` 工程与发布缺口表"真实浏览器 E2E"行目标状态修正：原"工作流 C 属 CLI 流程，导航 E2E 未覆盖，需用 integration test 串接 validate → build-features → train → model-admission → promote/rollback"替换为"工作流 C 与 A/B 不同构，是 CLI 流程而非前端 UI 工作流，不适用浏览器 E2E，已有三层覆盖：单元测试 + integration smoke + 真实端到端执行证据"。
+
+**真实状态核验**：
+
+- `uv run pytest tests/unit/test_model_run_lifecycle.py tests/unit/test_model_admission.py tests/unit/test_optimizer_validation_gate.py tests/unit/test_phase10.py -q`：通过（单元测试三层覆盖可核验）。
+- `uv run pytest tests/integration/test_pipeline_e2e.py::test_info_command tests/integration/test_pipeline_e2e.py::test_validate_command -q`：通过（integration smoke 可核验）。
+- WORKFLOW_LOG.md 参考工作流 2（2026-07-19）记录了维护者实际执行 `optimize_ratings_gpu.py → model-admission → promote → rollback` 完整链路的 sha256 字节级验证证据。
+
+**遗留**：补一条 integration test 在 tmp_path 上串起 model-admission → promote → rollback 仍是延伸改进候选，但不阻塞 P1 节点状态，不属于选题原则前 6 条高优先级。本轮为纯文档同步轮，不改变 P1 节点整体状态（仍 `verified`），关闭 6.14 遗留的"工作流 C 导航 E2E 未覆盖"与实际覆盖状态的文档漂移。
 
 ## 后续依赖表
 
