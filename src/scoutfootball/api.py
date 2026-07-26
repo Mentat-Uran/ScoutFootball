@@ -80,6 +80,21 @@ _STATSBOMB_ATTRIBUTION = (
 )
 
 
+def _make_error_response(error: str, *, message: str | None = None) -> dict[str, Any]:
+    """Build a uniform error response dict.
+
+    All API-level error responses use this shape so callers can check
+    ``response.get("status") == "error"`` uniformly and read either
+    ``response["error"]`` (short code or exception message) or
+    ``response["message"]`` (human-readable description) without
+    shape-specific branching. ``error`` and ``message`` carry the same
+    string by default; pass an explicit ``message`` when ``error`` is
+    an enum-like code (e.g. ``"no_data"``) and a friendlier description
+    should be displayed to the user.
+    """
+    return {"status": "error", "error": error, "message": message or error}
+
+
 def _read_parquet(path: Path):
     """Read a Parquet file via DuckDB (avoids pyarrow dependency)."""
     import duckdb
@@ -597,11 +612,11 @@ def get_world_cup_match_prediction(home_team: str, away_team: str) -> dict[str, 
     enriched_squads, strengths = _get_wc_enriched_squads()
     valid_teams = set(enriched_squads)
     if home_team not in valid_teams:
-        return {"error": f"World Cup home team '{home_team}' not found"}
+        return _make_error_response(f"World Cup home team '{home_team}' not found")
     if away_team not in valid_teams:
-        return {"error": f"World Cup away team '{away_team}' not found"}
+        return _make_error_response(f"World Cup away team '{away_team}' not found")
     if home_team == away_team:
-        return {"error": "Home and away World Cup teams must be different"}
+        return _make_error_response("Home and away World Cup teams must be different")
 
     home_strength = float(strengths.get(home_team, 0.2))
     away_strength = float(strengths.get(away_team, 0.2))
@@ -1239,7 +1254,7 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
         prediction = load_score_prediction(home_team, away_team)
     except Exception as exc:
         logger.warning("get_match_prediction failed", exc_info=True)
-        return {"error": str(exc)}
+        return _make_error_response(str(exc))
     if isinstance(prediction, dict):
         return prediction
     result = {
@@ -1274,7 +1289,7 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
         prediction = load_score_prediction_dc(home_team, away_team)
     except Exception as exc:
         logger.warning("get_match_prediction_dc failed", exc_info=True)
-        return {"error": str(exc)}
+        return _make_error_response(str(exc))
     if isinstance(prediction, dict):
         prediction["model_type"] = prediction.get("model_type", "dixon_coles")
         return prediction
@@ -1422,7 +1437,7 @@ def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
 
         team_match = load_team_match()
         if team_match is None or len(team_match) < 50:
-            return {"error": "Insufficient team_match data for form-weighted prediction"}
+            return _make_error_response("Insufficient team_match data for form-weighted prediction")
 
         decay = _resolve_tuned_decay()
         model = fit_dixon_coles_with_form(
@@ -1461,7 +1476,7 @@ def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
         return _clean_json_value(result)
     except Exception as exc:
         logger.warning("get_form_weighted_prediction failed", exc_info=True)
-        return {"error": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool = False) -> dict:
@@ -1485,7 +1500,7 @@ def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool
 
         team_match = load_team_match()
         if team_match is None or len(team_match) < 50:
-            return {"error": "Insufficient team_match data for ensemble prediction"}
+            return _make_error_response("Insufficient team_match data for ensemble prediction")
 
         decay = _resolve_tuned_decay()
 
@@ -1571,7 +1586,7 @@ def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool
         return _clean_json_value(result)
     except Exception as exc:
         logger.warning("get_ensemble_prediction failed", exc_info=True)
-        return {"error": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_match_momentum(
@@ -1631,7 +1646,7 @@ def get_match_momentum(
         })
     except Exception as exc:
         logger.warning("get_match_momentum failed", exc_info=True)
-        return {"error": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_calibration_drift() -> dict:
@@ -1708,7 +1723,7 @@ def get_calibration_drift() -> dict:
         return result
     except Exception as exc:
         logger.warning("get_calibration_drift failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_calibration_drift_timeline() -> dict:
@@ -1748,7 +1763,7 @@ def get_calibration_drift_timeline() -> dict:
         })
     except Exception as exc:
         logger.warning("get_calibration_drift_timeline failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 # --- Isotonic calibrator cache ---
@@ -1865,7 +1880,7 @@ def get_ensemble_weights() -> dict:
         })
     except Exception as exc:
         logger.warning("get_ensemble_weights failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_calibration_comparison() -> dict:
@@ -1955,7 +1970,7 @@ def get_calibration_comparison() -> dict:
         return result
     except Exception as exc:
         logger.warning("get_calibration_comparison failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_prediction_attribution(home_team: str, away_team: str) -> dict:
@@ -1998,7 +2013,7 @@ def get_prediction_attribution(home_team: str, away_team: str) -> dict:
         })
     except Exception as exc:
         logger.warning("get_prediction_attribution failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_prediction_attribution_ci(
@@ -2042,7 +2057,7 @@ def get_prediction_attribution_ci(
         })
     except Exception as exc:
         logger.warning("get_prediction_attribution_ci failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
@@ -2115,7 +2130,7 @@ def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
         })
     except Exception as exc:
         logger.warning("get_ensemble_attribution failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_ensemble_attribution_ci(
@@ -2180,7 +2195,7 @@ def get_ensemble_attribution_ci(
         })
     except Exception as exc:
         logger.warning("get_ensemble_attribution_ci failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_value_bet_analysis(
@@ -2198,11 +2213,11 @@ def get_value_bet_analysis(
     """
     try:
         if home_odds < 1.0 or draw_odds < 1.0 or away_odds < 1.0:
-            return {"status": "error", "message": "All odds must be >= 1.0"}
+            return _make_error_response("All odds must be >= 1.0")
 
         prediction = get_match_prediction_dc(home_team, away_team)
         if "error" in prediction:
-            return {"status": "error", "message": prediction["error"]}
+            return _make_error_response(prediction["error"])
 
         model_probs = {
             "home_win": float(prediction.get("home_win", 0.0)),
@@ -2256,10 +2271,10 @@ def get_value_bet_analysis(
             ),
         })
     except ValueError as exc:
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
     except Exception as exc:
         logger.warning("get_value_bet_analysis failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_reliability_diagram(*, n_bins: int = 10) -> dict:
@@ -2348,7 +2363,7 @@ def get_reliability_diagram(*, n_bins: int = 10) -> dict:
         return result
     except Exception as exc:
         logger.warning("get_reliability_diagram failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_team_accuracy(team_id: str, *, min_predictions: int = 3) -> dict:
@@ -2443,7 +2458,7 @@ def get_team_accuracy(team_id: str, *, min_predictions: int = 3) -> dict:
         return result
     except Exception as exc:
         logger.warning("get_team_accuracy failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_model_comparison() -> dict:
@@ -2535,7 +2550,7 @@ def get_model_comparison() -> dict:
         return result
     except Exception as exc:
         logger.warning("get_model_comparison failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_scoreline_calibration(*, max_scoreline: int = 5, min_samples: int = 3) -> dict:
@@ -2628,7 +2643,7 @@ def get_scoreline_calibration(*, max_scoreline: int = 5, min_samples: int = 3) -
         return result
     except Exception as exc:
         logger.warning("get_scoreline_calibration failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_confidence_distribution(*, n_bins: int = 10, min_samples_per_bucket: int = 5) -> dict:
@@ -2720,7 +2735,7 @@ def get_confidence_distribution(*, n_bins: int = 10, min_samples_per_bucket: int
         return result
     except Exception as exc:
         logger.warning("get_confidence_distribution failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_h2h_bias_correction(
@@ -2784,7 +2799,7 @@ def get_h2h_bias_correction(
         })
     except Exception as exc:
         logger.warning("get_h2h_bias_correction failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_error_analysis(
@@ -2919,7 +2934,7 @@ def get_error_analysis(
         return result
     except Exception as exc:
         logger.warning("get_error_analysis failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_outcome_distribution() -> dict:
@@ -3007,7 +3022,7 @@ def get_outcome_distribution() -> dict:
         return result
     except Exception as exc:
         logger.warning("get_outcome_distribution failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_temporal_validation(
@@ -3107,7 +3122,7 @@ def get_temporal_validation(
         return result
     except Exception as exc:
         logger.warning("get_temporal_validation failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_probability_heatmap(
@@ -3204,7 +3219,7 @@ def get_probability_heatmap(
         return result
     except Exception as exc:
         logger.warning("get_probability_heatmap failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_prediction_staleness() -> dict:
@@ -3275,7 +3290,7 @@ def get_prediction_staleness() -> dict:
         return result
     except Exception as exc:
         logger.warning("get_prediction_staleness failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_confidence_interval_plot(
@@ -3389,7 +3404,7 @@ def get_confidence_interval_plot(
         return result
     except Exception as exc:
         logger.warning("get_confidence_interval_plot failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_fold_comparison(*, min_samples_per_fold: int = 5) -> dict:
@@ -3495,7 +3510,7 @@ def get_fold_comparison(*, min_samples_per_fold: int = 5) -> dict:
         return result
     except Exception as exc:
         logger.warning("get_fold_comparison failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_league_error_analysis(
@@ -3618,7 +3633,7 @@ def get_league_error_analysis(
         return result
     except Exception as exc:
         logger.warning("get_league_error_analysis failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_feature_importance(
@@ -3724,7 +3739,7 @@ def get_feature_importance(
         return result
     except Exception as exc:
         logger.warning("get_feature_importance failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_ci_coverage(
@@ -3840,7 +3855,7 @@ def get_ci_coverage(
         return result
     except Exception as exc:
         logger.warning("get_ci_coverage failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_calibration_drift_heatmap(
@@ -3957,7 +3972,7 @@ def get_calibration_drift_heatmap(
         return result
     except Exception as exc:
         logger.warning("get_calibration_drift_heatmap failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_error_clustering(
@@ -4069,7 +4084,7 @@ def get_error_clustering(
         return result
     except Exception as exc:
         logger.warning("get_error_clustering failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_data_drift(
@@ -4173,7 +4188,7 @@ def get_data_drift(
         return result
     except Exception as exc:
         logger.warning("get_data_drift failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_ci_width_analysis(
@@ -4280,7 +4295,7 @@ def get_ci_width_analysis(
         return result
     except Exception as exc:
         logger.warning("get_ci_width_analysis failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_scenario_stress_test(
@@ -4392,7 +4407,7 @@ def get_scenario_stress_test(
         return result
     except Exception as exc:
         logger.warning("get_scenario_stress_test failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_team_calibration_drift(
@@ -4519,7 +4534,7 @@ def get_team_calibration_drift(
         return result
     except Exception as exc:
         logger.warning("get_team_calibration_drift failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_prediction_uncertainty(
@@ -4625,7 +4640,7 @@ def get_prediction_uncertainty(
         return result
     except Exception as exc:
         logger.warning("get_prediction_uncertainty failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_profit_loss_simulation(
@@ -4738,7 +4753,7 @@ def get_profit_loss_simulation(
         return result
     except Exception as exc:
         logger.warning("get_profit_loss_simulation failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_cumulative_trajectory(
@@ -4843,7 +4858,7 @@ def get_cumulative_trajectory(
         return result
     except Exception as exc:
         logger.warning("get_cumulative_trajectory failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_difficulty_stratification(
@@ -4947,7 +4962,7 @@ def get_difficulty_stratification(
         return result
     except Exception as exc:
         logger.warning("get_difficulty_stratification failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_prediction_streaks(
@@ -5068,7 +5083,7 @@ def get_prediction_streaks(
         return result
     except Exception as exc:
         logger.warning("get_prediction_streaks failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
@@ -5147,7 +5162,7 @@ def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
         })
     except Exception as exc:
         logger.warning("get_prediction_diagnostics failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_head_to_head(
@@ -5476,9 +5491,9 @@ def get_team_comparison(team_a: str, team_b: str) -> dict:
     b = _find(team_b)
 
     if not a:
-        return {"error": f"Team '{team_a}' not found"}
+        return _make_error_response(f"Team '{team_a}' not found")
     if not b:
-        return {"error": f"Team '{team_b}' not found"}
+        return _make_error_response(f"Team '{team_b}' not found")
 
     # Position group comparison
     pos_groups = ["GK", "DEF", "MID", "ATT"]
@@ -6013,8 +6028,7 @@ def get_decay_tuning(force_refresh: bool = False) -> dict[str, Any]:
         except Exception as exc:
             logger.warning("get_decay_tuning failed", exc_info=True)
             result = {
-                "status": "error",
-                "error": str(exc),
+                **_make_error_response(str(exc)),
                 "tuning_path": str(tuning_path).replace("\\", "/"),
             }
 
@@ -6837,7 +6851,7 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
         }
         return _clean_json_value(meta)
 
-    return {"error": f"Run '{run_id}' not found", "available_runs": _get_run_ids()}
+    return {**_make_error_response(f"Run '{run_id}' not found"), "available_runs": _get_run_ids()}
 
 
 def _player_list_to_csv(player_list: list[dict]) -> str:
@@ -7326,9 +7340,9 @@ def get_player_comparison(player_a: str, player_b: str) -> dict:
     profile_b = get_player_profile(player_b)
 
     if not profile_a.get("found"):
-        return {"error": f"Player '{player_a}' not found", "found_a": False}
+        return {**_make_error_response(f"Player '{player_a}' not found"), "found_a": False}
     if not profile_b.get("found"):
-        return {"error": f"Player '{player_b}' not found", "found_b": False}
+        return {**_make_error_response(f"Player '{player_b}' not found"), "found_b": False}
 
     # Build radar comparison
     radar_a = profile_a.get("radar", [0, 0, 0, 0, 0])
@@ -7822,20 +7836,20 @@ def get_player_comparison_multi(
 
     if not isinstance(player_names, list) or len(player_names) < 2:
         return {
-            "error": "need_at_least_two_players",
+            **_make_error_response("need_at_least_two_players"),
             "n_players": len(player_names) if isinstance(player_names, list) else 0,
             "min_required": 2,
         }
     if len(player_names) > 6:
         return {
-            "error": "too_many_players",
+            **_make_error_response("too_many_players"),
             "n_players": len(player_names),
             "max_allowed": 6,
         }
 
     df = load_player_ratings()
     if df.empty:
-        return {"error": "no_data"}
+        return _make_error_response("no_data", message="No data available")
     if "sub_position" in df.columns and "position_group" not in df.columns:
         df["position_group"] = df["sub_position"]
 
@@ -7862,7 +7876,7 @@ def get_player_comparison_multi(
 
     if missing:
         return {
-            "error": "player_not_found",
+            **_make_error_response("player_not_found"),
             "missing": missing,
             "resolved": list(rows_by_name.keys()),
         }
@@ -8914,12 +8928,11 @@ def get_league_form_table(
     except Exception as exc:
         logger.warning("get_league_form_table failed: %s", exc, exc_info=True)
         return {
-            "status": "error",
+            **_make_error_response(str(exc)),
             "league": league,
             "season": season,
             "last_n": last_n,
             "teams": [],
-            "error": str(exc),
         }
 
 
@@ -8973,13 +8986,12 @@ def get_fixture_difficulty(
     except Exception as exc:
         logger.warning("get_fixture_difficulty failed: %s", exc, exc_info=True)
         return {
-            "status": "error",
+            **_make_error_response(str(exc)),
             "league": league,
             "season": season,
             "team": team,
             "upcoming_n": upcoming_n,
             "teams": [],
-            "error": str(exc),
         }
 
 
@@ -9035,12 +9047,11 @@ def get_season_projection(
     except Exception as exc:
         logger.warning("get_season_projection failed: %s", exc, exc_info=True)
         return {
-            "status": "error",
+            **_make_error_response(str(exc)),
             "league": league,
             "season": season,
             "num_simulations": num_simulations,
             "teams": [],
-            "error": str(exc),
         }
 
 
@@ -9369,10 +9380,9 @@ def get_wc_squad_balance_comparison(team_a: str, team_b: str) -> dict:
     enriched_squads, _ = _get_wc_enriched_squads()
     missing = [team for team in (team_a, team_b) if team not in enriched_squads]
     if missing:
-        return {
-            "status": "error",
-            "error": f"Team(s) not found in World Cup data: {', '.join(missing)}",
-        }
+        return _make_error_response(
+            f"Team(s) not found in World Cup data: {', '.join(missing)}"
+        )
 
     team_a_balance = compute_squad_balance(enriched_squads[team_a])
     team_b_balance = compute_squad_balance(enriched_squads[team_b])
@@ -9482,7 +9492,7 @@ def get_wc_knockout() -> dict:
     """
     enriched_squads, strengths = _get_wc_enriched_squads()
     if not enriched_squads:
-        return {"status": "error", "error": "World Cup squad data not available"}
+        return _make_error_response("World Cup squad data not available")
 
     group_preds = compute_group_predictions(strengths)
     bracket = _simulate_knockout(strengths, group_preds, num_simulations=10000)
@@ -9513,9 +9523,9 @@ def get_wc_team_outlook(team: str) -> dict:
     """
     enriched_squads, strengths = _get_wc_enriched_squads()
     if not enriched_squads:
-        return {"status": "error", "error": "World Cup squad data not available"}
+        return _make_error_response("World Cup squad data not available")
     if team not in strengths:
-        return {"status": "error", "error": f"Team '{team}' not found in World Cup data"}
+        return _make_error_response(f"Team '{team}' not found in World Cup data")
 
     strength_details = _get_wc_strength_details()
     group_preds = compute_group_predictions(strengths)
@@ -12432,7 +12442,7 @@ def get_backtest_report_card() -> dict:
         return result
     except Exception as exc:
         logger.warning("get_backtest_report_card failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_prediction_anomalies(
@@ -12551,7 +12561,7 @@ def get_prediction_anomalies(
         return result
     except Exception as exc:
         logger.warning("get_prediction_anomalies failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def get_team_performance_profile(
@@ -12671,7 +12681,7 @@ def get_team_performance_profile(
         return result
     except Exception as exc:
         logger.warning("get_team_performance_profile failed", exc_info=True)
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
 
 
 def apply_wc_tournament_result(
