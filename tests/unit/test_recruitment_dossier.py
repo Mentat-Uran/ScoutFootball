@@ -121,7 +121,7 @@ class TestDecisionDossierModel:
         payload = _valid_payload()
         dossier = validate_dossier_payload(payload)
         assert dossier.dossier_id == "dossier-test-001"
-        assert dossier.schema == DOSSIER_SCHEMA
+        assert dossier.schema_name == DOSSIER_SCHEMA
         assert dossier.version == DOSSIER_VERSION
         assert dossier.status == "draft"
         assert dossier.decision is None

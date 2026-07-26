@@ -191,9 +191,14 @@ class DecisionDossier(BaseModel):
     ``model_validate`` so there is no separate hand-rolled serialization.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
-    schema: str = Field(default=DOSSIER_SCHEMA)
+    schema_name: str = Field(default=DOSSIER_SCHEMA, alias="schema")
     version: str = Field(default=DOSSIER_VERSION)
     dossier_id: str = Field(min_length=1, max_length=128)
     revision: int = Field(default=1, ge=1)
@@ -219,7 +224,7 @@ class DecisionDossier(BaseModel):
     notes: str = Field(default="", max_length=4000)
     limitations: tuple[str, ...] = Field(default_factory=tuple)
 
-    @field_validator("schema")
+    @field_validator("schema_name")
     @classmethod
     def _validate_schema(cls, value: str) -> str:
         if value != DOSSIER_SCHEMA:
