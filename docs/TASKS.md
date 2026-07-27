@@ -549,7 +549,37 @@ C1 verified 后 statsbomb_open source_claim audit 扩展（2026-07-25）：C1 �
 - `uv run ruff check src/scoutfootball/api.py src/scoutfootball/api_server.py tests/unit/test_portable_pack.py`：clean。
 - `node --check frontend/app.js`：JS 语法正确。
 
-**遗留**：L1 节点整体状态仍为 `ready`（依赖 P1，P1 已 `verified`），本轮落地 L1.1 核心能力但未将节点升为 `verified`——L1 节点的完整验收应包含真实跨机器迁移演练（在两台机器间实际传输 portable pack 并验证导入后工作流可用），这超出本轮范围。后续可补 L1.2（迁移演练记录）或直接在维护者真实工作流中验证后升级节点状态。
+**遗留**：L1 节点整体状态仍为 `ready`（依赖 P1，P1 已 `verified`），本轮落地 L1.1 核心能力但未将节点升为 `verified`——L1 节点的完整验收应包含真实跨机器迁移演练（在两台机器间实际传输 portable pack 并验证导入后工作流可用），这超出本轮范围。后续可补迁移演练记录或直接在维护者真实工作流中验证后升级节点状态。
+
+### L1.2 本地健康端点与总览面板 — `verified`（2026-07-27，commit e3a34d7）
+
+对应 L1 退出门槛第 6 项"本地健康页显示数据质量、模型失效、存储、任务失败和适配器状态，不向项目维护者上传遥测"。提交时间早于 L1.1，但当时未在 TASKS.md 登记，本轮补登记并同步受影响的契约文件。
+
+**实现内容**（commit e3a34d7，6 文件 +1272/-2）：
+
+- `src/scoutfootball/api.py` 新增 `get_detailed_health(*, force_refresh=False)`，组合五个只读子 builder：`artifacts` / `validation` / `model_admission` / `contract_quality` / `source_health`。子 builder 失败时通过 `_safe_call` 记录日志并返回 `None`，对应 section 降级为 `{"status": "unavailable"}`——fail-soft 而非 fail-closed，因为这是只读诊断端点，不是发布门禁。顶层 `status: "ok"` 当所有 builder 成功且 `validation` + `contract_quality` 通过；`"degraded"` 当任一 builder 失败或关键检查失败。TTL cache 默认 300s 与 `data_loader` 一致；`force_refresh=True` 绕过缓存。
+- `src/scoutfootball/api_server.py` 注册 `GET /health/detailed?force_refresh=bool` 路由。
+- `src/scoutfootball/architecture.py` 在 `api.server` capability 的 `api_paths` 中登记 `/health/detailed`。
+- `frontend/index.html` 在 overview 视图新增 `#detailed-health-section` 面板，默认 `display:none`；首次成功 fetch 后才显示，API 离线时保持隐藏（`/health` 轮询已有 banner）。五张卡片：验证 / 模型晋级 / 契约质量 / 来源健康 / 本地产物；顶部状态 pill + 失败项/不可用项 meta + limitations 注脚；"强制刷新"按钮触发 `fetchDetailedHealth(true)` 绕过后端缓存；语言切换时通过 `applyLocale` 重新渲染。
+- `tests/unit/test_detailed_health.py` 新增 20 条单元测试：`TestSchemaConformance`（顶层 schema、base section、limitations 文档）、`TestTopLevelStatus`（ok / degraded 多路径）、`TestFailSoft`（每个 sub-builder 异常时 section 降级；全部失败仍返回响应）、`TestCacheBehavior`（第二次调用返回同一对象；`force_refresh` 绕过）、`TestJsonSerialization`（`json.dumps` 不抛出）、`TestApiEndpoint`（TestClient 验证 200 + schema + `force_refresh` 参数解析 + 非法值 422）、`test_health_detailed_is_registered_in_capability_api_paths`（防止 capability registry 与路由表漂移）。
+
+**本轮补登记的同步工作**（未提交，工作树修改）：
+
+commit e3a34d7 修改了 `architecture.py` 的 `api_paths`，但未刷新 `data/project_manifest.json` 与 `docs/REFERENCE_INDEX.md`，导致 manifest 与 reference index 进入 stale 状态——直到本轮维护者手动运行 `generate_manifest.py --check` 才发现。本轮关闭该缺口：
+
+- `data/project_manifest.json` 与 `docs/REFERENCE_INDEX.md` 重新生成，与当前 `architecture.py` 一致。
+- `docs/DATA_CONTRACTS.md` 第 9 节新增 `GET /health/detailed` 契约登记（schema、query params、response schema、status 语义、fail-soft 设计说明）。
+- `tests/unit/test_generate_manifest.py` 新增 `test_committed_manifest_matches_current_architecture`：直接调用 `--check`（默认路径）验证真实仓库的 manifest 和 reference index 与当前 `architecture.py` 一致。未来任何修改 `architecture.py` 但忘记刷新 manifest 的 commit 会立即被 `uv run pytest` 捕获。
+
+**真实状态核验**：
+
+- `uv run pytest tests/unit/test_detailed_health.py -q`：20 通过（commit e3a34d7 当时记录）。
+- `uv run pytest tests/unit/test_generate_manifest.py -v`：7 通过（含本轮新增的 committed manifest 一致性测试）。
+- `uv run python scripts/generate_manifest.py --check`：`OK: manifest is up to date` + `OK: reference index is up to date`。
+- `uv run pytest tests/unit/ -q`：全部通过，exit 0，无回归。
+- `uv run ruff check tests/unit/test_generate_manifest.py scripts/generate_manifest.py`：clean。
+
+**遗留**：L1 节点整体状态仍为 `ready`——L1.1 与 L1.2 分别覆盖 L1 退出门槛的不同子项，但 L1 节点的完整验收仍应包含真实跨机器迁移演练（L1.1 遗留项）。本轮不改变 L1 节点整体状态。
 
 ## 后续依赖表
 

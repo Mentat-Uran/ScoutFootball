@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-24T17:40:44.857782+00:00`
-- content SHA-256：`f07a8956a897665a9e28b70ab05700957490ae47120a388aac567757c9a3d739`
+- manifest generated_at：`2026-07-27T06:20:48.178534+00:00`
+- content SHA-256：`b882238b8e57104c13e0b7c04abd2b0816b89c41530be63fb73c292322041940`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -102,7 +102,7 @@
 | worldcup.knockout | world_cup | delivered | /world-cup/knockout, /world-cup/knockout-bracket, /world-cup/knockout-probabilities, /world-cup/knockout-scenarios | tournament knockout, tournament knockout generate, tournament knockout show, tournament knockout apply | wc_knockout, wc_tournament |
 | worldcup.predictions | world_cup | delivered | /world-cup/predictions, /world-cup/standings-probabilities, /world-cup/qualification-impact, /world-cup/tournament-match-predictions, /world-cup/match-prediction | — | wc_probability, wc_compare |
 | worldcup.squads | world_cup | delivered | /world-cup/squads/{team}, /world-cup/squad-balance-comparison/{a}/{b}, /world-cup/squads/{team}/scouting-needs | — | wc_squads, wc_compare |
-| api.server | infrastructure | delivered | /health, /license | serve | — |
+| api.server | infrastructure | delivered | /health, /health/detailed, /license | serve | — |
 | frontend.analyst_console | infrastructure | delivered | — | — | overview, players, compare, value, matches, teams, league, scouting, actions, reports, tactical, wc_schedule, wc_squads, wc_compare, wc_probability, wc_knockout, wc_tournament, license, data, calibration, backtest, help, workflow, versions |
 | data.artifacts | infrastructure | delivered | /artifacts, /model-runs, /reports/model-runs, /reports/model-runs/{run_id} | info, capabilities, data-contracts | data |
 

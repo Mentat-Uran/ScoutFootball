@@ -441,6 +441,37 @@ Returns server health status.
 
 **Response**: `{ status, data_source, version }`
 
+### GET /health/detailed
+Returns a comprehensive local health snapshot combining artifacts summary, pre-training validation, model admission, contract quality, and source health. Local-only diagnostic; no telemetry is uploaded.
+
+**Query params**:
+- `force_refresh` (bool, default=`false`): Bypass the in-memory TTL cache (default 300s) and recompute all sub-builders.
+
+**Response**:
+```json
+{
+  "schema": "scoutfootball.detailed-health",
+  "schema_version": "1.0.0",
+  "generated_at": "ISO-8601 timestamp",
+  "status": "ok | degraded",
+  "base": { "status": "ok", "data_source": "string", "version": "string" },
+  "artifacts": { "..." : "artifacts summary or {status: 'unavailable'}" },
+  "validation": { "status": "pass | fail", "checks": "..." },
+  "model_admission": { "status": "...", "reviewable_run_count": "int" },
+  "contract_quality": { "status": "pass | incomplete | fail", "checks": "..." },
+  "source_health": { "sources": "...", "snapshots_recorded": "int" },
+  "unavailable_sections": ["section_id", "..."],
+  "failed_sections": ["validation", "contract_quality:incomplete", "..."],
+  "limitations": ["string", "..."]
+}
+```
+
+**Status semantics**:
+- `ok`: All sub-builders succeeded and validation + contract_quality both pass.
+- `degraded`: Any sub-builder failed (section degrades to `{"status": "unavailable"}`) or any critical check failed (validation fail, contract_quality fail/incomplete).
+
+**Fail-soft design**: Sub-builder failures are logged and returned as `{"status": "unavailable"}` sections rather than raising—the health page renders available sections even when one source fails. This is a read-only diagnostic endpoint, not a release gate.
+
 ### GET /ratings
 Returns player ratings with optional filters.
 
