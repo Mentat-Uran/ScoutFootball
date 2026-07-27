@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-27T06:47:39.124828+00:00",
+  "generated_at": "2026-07-27T07:23:05.136512+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -336,7 +336,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-27T06:47:39.124308+00:00",
+    "generated_at": "2026-07-27T07:23:05.135999+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -490,11 +490,20 @@
         "domain": "match_predictions",
         "status": "delivered",
         "api_paths": [
-          "/predictions/{home}/{away}",
+          "/predictions/{home_team}/{away_team}",
           "/predictions/meta",
           "/predictions/ensemble/weights",
-          "/predictions/{home}/{away}/attribution",
-          "/predictions/{home}/{away}/diagnostics"
+          "/predictions/models/comparison",
+          "/predictions/staleness",
+          "/predictions/team-accuracy/{team_id}",
+          "/predictions/{home_team}/{away_team}/attribution",
+          "/predictions/{home_team}/{away_team}/attribution/ci",
+          "/predictions/{home_team}/{away_team}/ensemble-attribution",
+          "/predictions/{home_team}/{away_team}/ensemble-attribution/ci",
+          "/predictions/{home_team}/{away_team}/diagnostics",
+          "/predictions/{home_team}/{away_team}/h2h",
+          "/predictions/{home_team}/{away_team}/h2h-bias-correction",
+          "/predictions/{home_team}/{away_team}/momentum"
         ],
         "cli_commands": [
           "backtest",
@@ -518,8 +527,34 @@
           "/predictions/backtest",
           "/predictions/tuning",
           "/predictions/drift",
+          "/predictions/drift/timeline",
           "/predictions/calibration/reliability",
-          "/predictions/calibration/scoreline"
+          "/predictions/calibration/scoreline",
+          "/predictions/calibration/comparison",
+          "/predictions/calibration/confidence-distribution",
+          "/predictions/calibration/error-analysis",
+          "/predictions/calibration/outcome-distribution",
+          "/predictions/calibration/temporal-validation",
+          "/predictions/calibration/probability-heatmap",
+          "/predictions/calibration/ci-plot",
+          "/predictions/calibration/ci-coverage",
+          "/predictions/calibration/ci-width",
+          "/predictions/calibration/fold-comparison",
+          "/predictions/calibration/league-errors",
+          "/predictions/calibration/feature-importance",
+          "/predictions/calibration/drift-heatmap",
+          "/predictions/calibration/error-clustering",
+          "/predictions/calibration/data-drift",
+          "/predictions/calibration/stress-test",
+          "/predictions/calibration/team-drift",
+          "/predictions/calibration/team-profile",
+          "/predictions/calibration/uncertainty",
+          "/predictions/calibration/profit-loss",
+          "/predictions/calibration/trajectory",
+          "/predictions/calibration/difficulty",
+          "/predictions/calibration/streaks",
+          "/predictions/calibration/report-card",
+          "/predictions/calibration/anomalies"
         ],
         "cli_commands": [
           "backtest",
@@ -540,7 +575,7 @@
         "domain": "match_predictions",
         "status": "delivered",
         "api_paths": [
-          "/predictions/{home}/{away}/value"
+          "/predictions/{home_team}/{away_team}/value"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -556,14 +591,19 @@
         "domain": "team_analysis",
         "status": "delivered",
         "api_paths": [
+          "/teams",
           "/teams/compare",
           "/teams/strength",
           "/teams/style-clusters",
+          "/teams/style-clusters/similarity",
           "/teams/style-atlas",
           "/teams/style-matchup",
+          "/teams/style-evolution",
           "/teams/{team}/style-neighbors",
+          "/teams/{team}/style-percentiles",
           "/teams/{team}/style-drift",
-          "/teams/style-evolution"
+          "/teams/{team}/style-drift-neighbors",
+          "/teams/cross-league-depth"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -619,10 +659,13 @@
         "domain": "player_analysis",
         "status": "delivered",
         "api_paths": [
+          "/players",
           "/players/compare",
           "/players/compare-multi",
-          "/players/{player}/similar",
-          "/players/{player}/career-trajectory"
+          "/players/{player_name}",
+          "/players/{player_name}/similar",
+          "/players/{player_name}/career-trajectory",
+          "/player/{player_name}/profile"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -639,11 +682,9 @@
         "domain": "player_analysis",
         "status": "delivered",
         "api_paths": [
-          "/players/{player}/style-fit",
-          "/players/{player}/role-fit",
-          "/players/{player}/peer-benchmark",
-          "/style-neighbors",
-          "/style-drift-neighbors"
+          "/players/{player_name}/style-fit",
+          "/players/{player_name}/role-fit",
+          "/players/{player_name}/peer-benchmark"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -663,9 +704,10 @@
           "/positions/style-evolution",
           "/positions/action-profile",
           "/positions/trend-overlay",
-          "/positions/{position}/style-drift",
-          "/positions/{position}/cross-league",
-          "/positions/{position}/action-similarity"
+          "/positions/{position_group}/style-drift",
+          "/positions/{position_group}/style-drift-neighbors",
+          "/positions/{position_group}/cross-league",
+          "/positions/{position_group}/action-similarity"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -683,10 +725,11 @@
         "api_paths": [
           "/action-values",
           "/action-values/evidence",
-          "/action-values/evidence/{player}",
-          "/action-values/players/{player}/context",
-          "/action-values/players/{player}/rating-links",
-          "/action-values/matches"
+          "/action-values/evidence/{player_id}",
+          "/action-values/players/{player_id}/context",
+          "/action-values/players/{player_id}/rating-links",
+          "/action-values/matches",
+          "/value-summary"
         ],
         "cli_commands": [
           "action-value",
@@ -705,9 +748,8 @@
         "domain": "action_value",
         "status": "delivered",
         "api_paths": [
-          "/positions/{position}/action-similarity",
-          "/teams/cross-league-action",
-          "/cross-league-action-comparison"
+          "/positions/{position_group}/action-similarity",
+          "/teams/cross-league-action"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -724,7 +766,7 @@
         "status": "delivered",
         "api_paths": [
           "/teams/{team}/scouting-targets",
-          "/teams/{team}/scouting-style-match/{position}",
+          "/teams/{team}/scouting-style-match/{position_group}",
           "/teams/{team}/scouting-dashboard",
           "/teams/{team}/position-gap-report",
           "/teams/style-clusters/recruits"
@@ -765,8 +807,8 @@
           "/scouting-workspaces",
           "/scouting-workspaces/capabilities",
           "/scouting-workspaces/latest",
-          "/scouting-workspaces/{id}",
-          "/scouting-workspaces/{id} (PUT)"
+          "/scouting-workspaces/{workspace_id}",
+          "/scouting-workspaces/{workspace_id} (PUT)"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -783,11 +825,12 @@
         "status": "delivered",
         "api_paths": [
           "/recruitment/briefs",
+          "/recruitment/briefs (POST)",
           "/recruitment/briefs/{brief_id}",
           "/recruitment/briefs/{brief_id}/backups",
           "/recruitment/briefs/{brief_id}/backups/{backup_filename}",
           "/recruitment/briefs/{brief_id}/diff",
-          "/recruitment/briefs/{brief_id}/restore",
+          "/recruitment/briefs/{brief_id}/restore (POST)",
           "/recruitment/contracts"
         ],
         "cli_commands": [
@@ -808,11 +851,13 @@
         "status": "delivered",
         "api_paths": [
           "/recruitment/dossiers",
+          "/recruitment/dossiers (POST)",
           "/recruitment/dossiers/{dossier_id}",
+          "/recruitment/dossiers/{dossier_id} (PUT)",
           "/recruitment/dossiers/{dossier_id}/backups",
           "/recruitment/dossiers/{dossier_id}/backups/{backup_filename}",
           "/recruitment/dossiers/{dossier_id}/diff",
-          "/recruitment/dossiers/{dossier_id}/restore"
+          "/recruitment/dossiers/{dossier_id}/restore (POST)"
         ],
         "cli_commands": [
           "create-dossier",
@@ -832,11 +877,13 @@
         "status": "delivered",
         "api_paths": [
           "/opposition/briefs",
+          "/opposition/briefs (POST)",
           "/opposition/briefs/{briefing_id}",
+          "/opposition/briefs/{briefing_id} (PUT)",
           "/opposition/briefs/{briefing_id}/backups",
           "/opposition/briefs/{briefing_id}/backups/{backup_filename}",
           "/opposition/briefs/{briefing_id}/diff",
-          "/opposition/briefs/{briefing_id}/restore",
+          "/opposition/briefs/{briefing_id}/restore (POST)",
           "/opposition/contracts"
         ],
         "cli_commands": [
@@ -857,11 +904,13 @@
         "status": "delivered",
         "api_paths": [
           "/opposition/reviews",
+          "/opposition/reviews (POST)",
           "/opposition/reviews/{review_id}",
+          "/opposition/reviews/{review_id} (PUT)",
           "/opposition/reviews/{review_id}/backups",
           "/opposition/reviews/{review_id}/backups/{backup_filename}",
           "/opposition/reviews/{review_id}/diff",
-          "/opposition/reviews/{review_id}/restore"
+          "/opposition/reviews/{review_id}/restore (POST)"
         ],
         "cli_commands": [
           "create-review",
@@ -1004,7 +1053,12 @@
         "api_paths": [
           "/health",
           "/health/detailed",
-          "/license"
+          "/license",
+          "/search",
+          "/local-pack/export",
+          "/local-pack/import (POST)",
+          "/tactical-board/capabilities",
+          "/tactical-board/export/mp4 (POST)"
         ],
         "cli_commands": [
           "serve"
@@ -1078,7 +1132,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-27T06:47:39.124828+00:00",
+    "generated_at": "2026-07-27T07:23:05.136512+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -2004,5 +2058,5 @@
       }
     ]
   },
-  "content_sha256": "446bfb5e52f681fa995c0d38fab146f98b74c05bcc197f016bd87fb8bc9bca8c"
+  "content_sha256": "5d8d2252088288f8b6323799d4838922bb5bcfc777235b3f2881d6d7bca29789"
 }

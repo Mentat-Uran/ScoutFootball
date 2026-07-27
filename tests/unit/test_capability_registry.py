@@ -144,15 +144,40 @@ def test_registry_includes_core_domains() -> None:
 # ── API route drift gate ──────────────────────────────────────────────
 
 # Route prefixes that are owned by the capability registry.  Routes under
-# these prefixes must be declared in some capability's ``api_paths``; routes
-# outside them (health, static, world-cup, data, etc.) are out of scope for
-# this drift gate because they are covered by other capabilities or are
-# infrastructure.
+# these prefixes must be declared in some capability's ``api_paths``.
+# Expanding this set is a deliberate act: any new route under a covered
+# prefix MUST be added to a capability, which is exactly the drift we want
+# to catch.  Bare-path entries (e.g. ``/search``, ``/artifacts``) cover the
+# exact path and any sub-paths, since FastAPI route paths are finite and
+# known.  ``api_paths`` entries may carry a ``(METHOD)`` suffix (e.g.
+# ``/path (POST)``) which is stripped before comparison.
 _CAPABILITY_ROUTE_PREFIXES = (
     "/recruitment/",
     "/opposition/",
     "/world-cup/",
     "/worldcup/",
+    "/predictions/",
+    "/teams/",
+    "/players",
+    "/player/",
+    "/positions/",
+    "/action-values/",
+    "/value-summary",
+    "/scouting-workspaces",
+    "/scouting/",
+    "/watchlist",
+    "/shortlist",
+    "/review-queue",
+    "/search",
+    "/local-pack/",
+    "/tactical-board/",
+    "/health",
+    "/license",
+    "/artifacts",
+    "/model-runs",
+    "/reports/",
+    "/league/",
+    "/ratings",
 )
 
 # Suffix pattern for non-GET method annotations in api_paths, e.g.
@@ -195,12 +220,12 @@ def _normalized_capability_api_paths() -> set[str]:
 
 
 def test_capability_api_paths_exist_as_routes() -> None:
-    """Every recruitment/opposition/world-cup api_path must be a real route.
+    """Every capability api_path must be a real FastAPI route.
 
     Catches drift where someone declares a path in the capability registry
     but never wires it in ``api_server.py`` (or renames the route and forgets
-    to update the registry).  Covers recruitment, opposition, and world-cup
-    domains.  ``api_paths`` entries may carry a ``(METHOD)`` suffix (e.g.
+    to update the registry).  Covers all capability-managed prefixes.
+    ``api_paths`` entries may carry a ``(METHOD)`` suffix (e.g.
     ``/path (POST)``) which is stripped before comparison.
     """
     registered = {
@@ -216,12 +241,12 @@ def test_capability_api_paths_exist_as_routes() -> None:
     )
 
 
-def test_recruitment_opposition_worldcup_routes_are_registered() -> None:
-    """Every recruitment/opposition/world-cup route must be in the registry.
+def test_capability_managed_routes_are_registered() -> None:
+    """Every route under capability-managed prefixes must be in the registry.
 
-    Catches drift where someone adds a new recruitment, opposition, or
-    world-cup API endpoint in ``api_server.py`` but forgets to declare it in
-    the capability registry's ``api_paths``.
+    Catches drift where someone adds a new API endpoint in ``api_server.py``
+    but forgets to declare it in the capability registry's ``api_paths``.
+    Covers all prefixes listed in ``_CAPABILITY_ROUTE_PREFIXES``.
     """
     actual = {
         p for p in _extract_fastapi_paths()
