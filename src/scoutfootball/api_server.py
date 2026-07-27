@@ -183,6 +183,7 @@ from scoutfootball.api import (
     get_world_cup_match_briefing,
     get_world_cup_match_prediction,
     health_check,
+    import_local_pack,
     import_wc_tournament_state,
     list_decision_dossier_backups,
     list_opposition_briefing_backups,
@@ -2444,6 +2445,18 @@ def create_app() -> FastAPI:
     def local_pack_export():
         """Export all local personal artifacts as a portable offline pack."""
         return export_local_pack()
+
+    @app.post("/local-pack/import")
+    def local_pack_import(payload: dict, overwrite: bool = Query(False)):
+        """Import a portable pack into the local stores.
+
+        The request body is the inner ``pack`` object from an export
+        response (``response["pack"]``). ``overwrite`` controls conflict
+        handling: ``False`` (default) skips records whose ID already
+        exists locally; ``True`` replaces them via revision bump.
+        """
+        pack = payload.get("pack", payload) if isinstance(payload, dict) else payload
+        return import_local_pack(pack, overwrite=overwrite)
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")

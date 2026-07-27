@@ -527,6 +527,30 @@ C1 verified 后 statsbomb_open source_claim audit 扩展（2026-07-25）：C1 �
 
 **遗留**：补一条 integration test 在 tmp_path 上串起 model-admission → promote → rollback 仍是延伸改进候选，但不阻塞 P1 节点状态，不属于选题原则前 6 条高优先级。本轮为纯文档同步轮，不改变 P1 节点整体状态（仍 `verified`），关闭 6.14 遗留的"工作流 C 导航 E2E 未覆盖"与实际覆盖状态的文档漂移。
 
+## L1 子任务进展
+
+### L1.1 便携包导入与完整性校验 — `verified`（2026-07-27）
+
+落地 L1 节点（本地协作与可移植性）的核心能力：便携包导出已由 P1 阶段实现（`/local-pack/export` + 前端导出按钮），本轮补齐对称的导入路径，使维护者可以在不依赖云同步的前提下，在机器之间迁移本地产物或从备份恢复。
+
+**实现内容**：
+
+- `src/scoutfootball/api.py` 新增 `import_local_pack(pack, *, overwrite=False)`：三层失败模型——pack 级（schema/版本/size 校验 fail-closed，拒绝整个包）、section 级（`section_hashes` SHA-256 不匹配 fail-closed per section，跳过该节但继续导入其他节）、record 级（验证失败或 ID 冲突 fail-soft，记入 `skipped`/`conflicts` 不中止导入）。`overwrite=False`（默认）仅导入新记录，冲突记入 `conflicts`；`overwrite=True` 通过 `expected_revision=current_revision` 走标准 save 路径，bump `server_revision` 并创建 revision 备份。pack envelope 字段（`server_revision`、`stored_at`）不保留，目标 store 自管版本计数。100 MB size hard cap 防止恶意/病理 payload 内存耗尽。
+- `src/scoutfootball/api.py` 修复 `export_local_pack` 的 corrupt-file 静默丢失缺陷：原实现依赖 `list_records()`，而 `list_records` 静默跳过 parse 失败的文件，导致 corrupt JSON 文件从导出包中消失且无任何 trace。新增 glob 路径直接遍历 store root，将 `list_records` 未返回的 `*.json` 文件记入 `skipped`，并在 logger.warning 留下证据。
+- `src/scoutfootball/api_server.py` 新增 `POST /local-pack/import?overwrite=<bool>` 端点：body 接受 `{ "pack": <pack-object> }` 或裸 pack 对象（与 export 响应结构对称），`overwrite` query 参数控制冲突处理。
+- `frontend/index.html` 在便携包面板新增"导入 portable pack JSON"按钮和隐藏的 `<input type="file" accept="application/json,.json">`。
+- `frontend/app.js` 新增 `_importPortablePack(pack, overwrite)` 调用 POST 端点；新增两阶段导入流程：Phase 1 以 `overwrite=false` 安全导入（新记录创建，冲突报告但不修改），如有冲突弹 `confirm` 询问是否覆盖，用户确认后 Phase 2 以 `overwrite=true` 覆盖冲突记录（创建 revision 备份）；导入后刷新版本视图（records、timeline、status rail）反映新版本。新增 7 条 i18n 键（中英对称）：`versions_import_pack`、`versions_pack_imported`、`versions_pack_import_failed`、`versions_pack_import_confirm_overwrite`、`versions_pack_invalid_json`、`versions_pack_invalid_structure`、`versions_pack_section_errors`。
+- `tests/unit/test_portable_pack.py` 新增 26 条单元测试，覆盖：导出 schema/版本/sections/哈希、导出跳过 corrupt 记录、空 store 导出；导入 pack 级校验（schema/版本/size/非 dict）、section 级哈希不匹配跳过整节但其他节仍导入、record 级冲突处理（`overwrite` 两种模式）、corrupt 记录跳过、envelope 字段不保留、round-trip（store A 导出 → store B 导入 → 等价记录）；API 端点 `POST /local-pack/import` 行为。
+
+**真实状态核验**：
+
+- `uv run pytest tests/unit/test_portable_pack.py -q`：26 通过。
+- `uv run pytest tests/unit/test_recruitment_brief.py tests/unit/test_opposition_briefing.py tests/unit/test_portable_pack.py tests/integration/test_api_endpoints.py -q`：180 通过（回归无破坏）。
+- `uv run ruff check src/scoutfootball/api.py src/scoutfootball/api_server.py tests/unit/test_portable_pack.py`：clean。
+- `node --check frontend/app.js`：JS 语法正确。
+
+**遗留**：L1 节点整体状态仍为 `ready`（依赖 P1，P1 已 `verified`），本轮落地 L1.1 核心能力但未将节点升为 `verified`——L1 节点的完整验收应包含真实跨机器迁移演练（在两台机器间实际传输 portable pack 并验证导入后工作流可用），这超出本轮范围。后续可补 L1.2（迁移演练记录）或直接在维护者真实工作流中验证后升级节点状态。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
