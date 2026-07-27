@@ -107,3 +107,25 @@ def test_reference_index_is_generated_and_checked(tmp_path: Path) -> None:
     ])
     assert stale.returncode == 1
     assert "reference index is stale" in stale.stdout.lower()
+
+
+def test_committed_manifest_matches_current_architecture() -> None:
+    """真实仓库的 committed manifest 与 reference index 必须与当前 architecture.py 一致。
+
+    之前所有测试在 tmp_path 上验证 generate_manifest.py 的逻辑正确性，但没有
+    测试验证"当前提交的 manifest 与当前 architecture.py 一致"。这导致
+    e3a34d7 修改 architecture.py 添加 /health/detailed 到 api.server capability
+    的 api_paths 后，data/project_manifest.json 与 docs/REFERENCE_INDEX.md stale
+    未被 pytest 捕获——直到维护者手动运行 generate_manifest.py --check 才发现。
+
+    本测试关闭该缺口：直接调用 --check（使用默认路径）验证真实仓库的 manifest
+    和 reference index 与当前 architecture.py 一致。未来任何修改 architecture.py
+    但忘记刷新 manifest 的 commit 会立即被 uv run pytest 捕获。
+    """
+    # 使用默认路径（data/project_manifest.json + docs/REFERENCE_INDEX.md）
+    check = _run_script(["--check"])
+    assert check.returncode == 0, (
+        "Committed manifest or reference index is stale. "
+        "Run `PYTHONPATH=src uv run python scripts/generate_manifest.py` to regenerate.\n"
+        f"stdout: {check.stdout}\nstderr: {check.stderr}"
+    )
