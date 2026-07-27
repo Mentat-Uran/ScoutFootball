@@ -26,6 +26,27 @@ const i18n = {
         health_proxy: "球员 match-level 覆盖不足",
         health_trends: "趋势指标契约待统一",
         health_truth: "真实标签仍为空表",
+        detailed_health_title: "本地健康详情",
+        detailed_health_force_refresh: "强制刷新",
+        detailed_health_validation: "验证",
+        detailed_health_model_admission: "模型晋级",
+        detailed_health_contract_quality: "契约质量",
+        detailed_health_source_health: "来源健康",
+        detailed_health_artifacts: "本地产物",
+        detailed_health_unavailable: "不可用",
+        detailed_health_loading: "加载中…",
+        detailed_health_offline: "API 离线 — 详情不可用",
+        detailed_health_refreshed_at: "刷新时间",
+        detailed_health_failed_sections: "失败项",
+        detailed_health_unavailable_sections: "不可用项",
+        detailed_health_reviewable: "可复核",
+        detailed_health_not_reviewable: "不可复核",
+        detailed_health_not_available: "未提供",
+        detailed_health_with_snapshot: "已存快照",
+        detailed_health_without_snapshot: "未存快照",
+        detailed_health_registered_sources: "已登记来源",
+        detailed_health_passed: "通过",
+        detailed_health_failed: "失败",
         card_players: "球员画像",
         card_players_body: "排名、位置内 percentile、雷达、置信度和详情卡。",
         card_value: "身价偏离",
@@ -1471,6 +1492,27 @@ const i18n = {
         health_proxy: "player match-level coverage is thin",
         health_trends: "trend metric contract pending",
         health_truth: "truth labels are still empty",
+        detailed_health_title: "Local detailed health",
+        detailed_health_force_refresh: "Force refresh",
+        detailed_health_validation: "Validation",
+        detailed_health_model_admission: "Model admission",
+        detailed_health_contract_quality: "Contract quality",
+        detailed_health_source_health: "Source health",
+        detailed_health_artifacts: "Local artifacts",
+        detailed_health_unavailable: "Unavailable",
+        detailed_health_loading: "Loading…",
+        detailed_health_offline: "API offline — detail unavailable",
+        detailed_health_refreshed_at: "Refreshed",
+        detailed_health_failed_sections: "Failed",
+        detailed_health_unavailable_sections: "Unavailable",
+        detailed_health_reviewable: "Reviewable",
+        detailed_health_not_reviewable: "Not reviewable",
+        detailed_health_not_available: "Not available",
+        detailed_health_with_snapshot: "With snapshot",
+        detailed_health_without_snapshot: "Without snapshot",
+        detailed_health_registered_sources: "Registered sources",
+        detailed_health_passed: "Passed",
+        detailed_health_failed: "Failed",
         card_players: "Player profile",
         card_players_body: "Rankings, percentiles, radar, confidence, detail cards.",
         card_value: "Value deviation",
@@ -3057,6 +3099,8 @@ let reviews = [];
 let matches = [];
 let ratingsMeta = { model_meta: {}, league_metrics: [] };
 let artifactSummary = { data_health: {}, artifacts: [] };
+let detailedHealth = null; // populated by fetchDetailedHealth(); null = never fetched
+let detailedHealthState = "idle"; // "idle" | "loading" | "ok" | "error"
 let predictionMeta = { status: "no_data" };
 let predictionCalibration = {};
 let valueSummaryMeta = { sample_count: 0, metrics: {} };
@@ -4018,6 +4062,12 @@ function applyLocale() {
         element.placeholder = t(element.dataset.i18nPlaceholder);
     });
     document.getElementById("lang-toggle").textContent = appState.lang === "zh" ? "EN" : "中";
+    // Re-render the detailed-health panel so the labels follow the new
+    // language. Safe to call when the panel doesn't exist yet (e.g. on
+    // initial load before the overview view is rendered).
+    if (typeof renderDetailedHealth === "function") {
+        renderDetailedHealth();
+    }
 }
 
 async function setView(view) {
@@ -10683,6 +10733,241 @@ function renderOverview() {
     }
 }
 
+// ── Detailed health (/health/detailed) ───────────────────────────────
+//
+// The detailed-health panel surfaces the backend's composite health
+// snapshot (validation / model-admission / contract-quality / source-health
+// / artifacts) on the overview page. It is hidden by default and only
+// shown after the first successful fetch, so static/offline users never
+// see a broken panel. A "force refresh" button lets the operator bypass
+// the backend's TTL cache after a model retrain or build-features run.
+//
+// Fail-soft: if the endpoint is offline, the panel stays hidden and the
+// browser console gets a debug log — no banner, no error toast. This
+// matches the existing /health polling pattern.
+
+function fetchDetailedHealth(forceRefresh) {
+    const section = document.getElementById("detailed-health-section");
+    if (!section) return Promise.resolve();
+
+    detailedHealthState = "loading";
+    renderDetailedHealth();
+
+    const url = `${API_BASE}/health/detailed${forceRefresh ? "?force_refresh=true" : ""}`;
+    return fetch(url, { signal: AbortSignal.timeout(15000) })
+        .then((resp) => {
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        })
+        .then((data) => {
+            detailedHealth = data;
+            detailedHealthState = "ok";
+            renderDetailedHealth();
+        })
+        .catch((err) => {
+            detailedHealthState = "error";
+            // Don't spam console when the API is simply offline — the
+            // /health polling already surfaces that. Log at debug level.
+            if (typeof console !== "undefined" && console.debug) {
+                console.debug("fetchDetailedHealth failed:", err);
+            }
+            renderDetailedHealth();
+        });
+}
+
+function _dhStatusPillClass(status) {
+    // Map backend status strings to frontend pill classes.
+    // "ok" / "pass" → high; "degraded" / "incomplete" → medium;
+    // "fail" / "unavailable" / unknown → low.
+    if (status === "ok" || status === "pass") return "status-high";
+    if (status === "degraded" || status === "incomplete") return "status-medium";
+    return "status-low";
+}
+
+function _dhStatusLabel(status) {
+    if (status === "ok" || status === "pass") return "OK";
+    if (status === "degraded") return "DEGRADED";
+    if (status === "incomplete") return "INCOMPLETE";
+    if (status === "fail") return "FAIL";
+    if (status === "unavailable") return t("detailed_health_unavailable");
+    if (status === "not_available") return t("detailed_health_not_available");
+    return status ? String(status).toUpperCase() : "–";
+}
+
+function _dhCard(titleKey, status, bodyHtml) {
+    const pillCls = _dhStatusPillClass(status);
+    const pillLabel = _dhStatusLabel(status);
+    return `<article class="liquid-panel compact-panel" style="padding:0.5rem 0.7rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.4rem;margin-bottom:0.3rem">
+            <span style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t(titleKey))}</span>
+            <span class="status-pill ${pillCls}">${escapeHtml(pillLabel)}</span>
+        </div>
+        ${bodyHtml}
+    </article>`;
+}
+
+function _dhMetricCell(label, value) {
+    if (value == null) return "";
+    return `<div style="font-size:0.78rem">
+        <span style="color:var(--text-muted)">${escapeHtml(label)}</span>
+        <br><strong>${escapeHtml(String(value))}</strong>
+    </div>`;
+}
+
+function _dhValidationBody(v) {
+    if (!v || v.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell(`${t("detailed_health_passed")}/${t("detailed_health_failed")}`, `${v.passed_count ?? 0}/${v.failed_count ?? 0}`),
+        _dhMetricCell("Total", v.total_checks),
+    ];
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem">${cells.join("")}</div>`;
+}
+
+function _dhModelAdmissionBody(m) {
+    if (!m || m.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell(t("detailed_health_reviewable"), m.reviewable_run_count),
+        _dhMetricCell(t("detailed_health_not_reviewable"), m.not_reviewable_run_count),
+        _dhMetricCell(t("detailed_health_not_available"), m.not_available_run_count),
+    ];
+    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
+    if (m.runs_summary_omitted) {
+        html += `<p style="font-size:0.68rem;color:var(--text-muted);margin-top:0.3rem">runs summary omitted — use CLI model-admission --json for per-run details</p>`;
+    }
+    return html;
+}
+
+function _dhContractQualityBody(cq) {
+    if (!cq || cq.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell("Checks", cq.checks_count),
+        _dhMetricCell(t("detailed_health_failed"), (cq.failed_checks || []).length),
+        _dhMetricCell("Incomplete", (cq.incomplete_checks || []).length),
+    ];
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
+}
+
+function _dhSourceHealthBody(sh) {
+    if (!sh || sh.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell(t("detailed_health_registered_sources"), sh.registered_source_count),
+        _dhMetricCell(t("detailed_health_with_snapshot"), sh.sources_with_snapshot),
+        _dhMetricCell(t("detailed_health_without_snapshot"), sh.sources_without_snapshot),
+    ];
+    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
+    if (Array.isArray(sh.unregistered_raw_directories) && sh.unregistered_raw_directories.length > 0) {
+        html += `<p style="font-size:0.68rem;color:var(--warn,#ff9800);margin-top:0.3rem">Unregistered: ${escapeHtml(sh.unregistered_raw_directories.join(", "))}</p>`;
+    }
+    return html;
+}
+
+function _dhArtifactsBody(a) {
+    if (!a || a.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell(t("metric_player_match"), a.player_match_rows),
+        _dhMetricCell(t("metric_team_match"), a.team_match_rows),
+        _dhMetricCell(t("metric_ratings"), a.rating_rows),
+        _dhMetricCell(t("metric_events"), a.event_samples),
+    ];
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
+}
+
+function renderDetailedHealth() {
+    const section = document.getElementById("detailed-health-section");
+    if (!section) return;
+    const overallPill = document.getElementById("dh-overall-pill");
+    const metaNote = document.getElementById("dh-meta-note");
+    const grid = document.getElementById("dh-grid");
+    const limitationsNote = document.getElementById("dh-limitations-note");
+    if (!overallPill || !metaNote || !grid || !limitationsNote) return;
+
+    // While loading for the first time, keep the panel hidden — there is
+    // nothing to render and showing an empty panel would be jarring.
+    if (detailedHealthState === "loading" && !detailedHealth) {
+        section.style.display = "none";
+        return;
+    }
+    // On error with no prior data, also keep hidden — the /health polling
+    // already surfaces API offline state via the global banner.
+    if (detailedHealthState === "error" && !detailedHealth) {
+        section.style.display = "none";
+        return;
+    }
+
+    section.style.display = "block";
+
+    // Top-level status pill
+    const topStatus = detailedHealth?.status || "degraded";
+    overallPill.className = `status-pill ${_dhStatusPillClass(topStatus)}`;
+    overallPill.textContent = _dhStatusLabel(topStatus);
+
+    // Meta note: refreshed_at + failed/unavailable sections
+    const metaParts = [];
+    if (detailedHealth?.generated_at) {
+        // Format the ISO timestamp as localtime; fall back to raw on error.
+        try {
+            const dt = new Date(detailedHealth.generated_at);
+            const formatted = dt.toLocaleString();
+            metaParts.push(`${t("detailed_health_refreshed_at")}: ${formatted}`);
+        } catch {
+            metaParts.push(`${t("detailed_health_refreshed_at")}: ${detailedHealth.generated_at}`);
+        }
+    }
+    if (detailedHealth?.failed_sections?.length) {
+        metaParts.push(`${t("detailed_health_failed_sections")}: ${detailedHealth.failed_sections.join(", ")}`);
+    }
+    if (detailedHealth?.unavailable_sections?.length) {
+        metaParts.push(`${t("detailed_health_unavailable_sections")}: ${detailedHealth.unavailable_sections.join(", ")}`);
+    }
+    metaNote.textContent = metaParts.length > 0 ? metaParts.join("  •  ") : "–";
+
+    // Cards
+    const cards = [];
+    if (detailedHealth) {
+        cards.push(_dhCard("detailed_health_validation", detailedHealth.validation?.status, _dhValidationBody(detailedHealth.validation)));
+        cards.push(_dhCard("detailed_health_model_admission", detailedHealth.model_admission?.status, _dhModelAdmissionBody(detailedHealth.model_admission)));
+        cards.push(_dhCard("detailed_health_contract_quality", detailedHealth.contract_quality?.status, _dhContractQualityBody(detailedHealth.contract_quality)));
+        cards.push(_dhCard("detailed_health_source_health", detailedHealth.source_health?.status, _dhSourceHealthBody(detailedHealth.source_health)));
+        cards.push(_dhCard("detailed_health_artifacts", detailedHealth.artifacts?.status, _dhArtifactsBody(detailedHealth.artifacts)));
+    }
+    grid.innerHTML = cards.join("");
+
+    // Limitations
+    if (detailedHealth?.limitations?.length) {
+        limitationsNote.innerHTML = detailedHealth.limitations
+            .map((l) => `• ${escapeHtml(l)}`)
+            .join("<br>");
+    } else {
+        limitationsNote.textContent = "–";
+    }
+}
+
+function _initDetailedHealthButton() {
+    // Wire the force-refresh button. Called once during initial load.
+    const btn = document.getElementById("dh-refresh-btn");
+    if (!btn || btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => {
+        // Disable briefly to prevent double-clicks; re-enable on completion.
+        btn.disabled = true;
+        btn.textContent = "…";
+        fetchDetailedHealth(true).finally(() => {
+            btn.disabled = false;
+            btn.textContent = t("detailed_health_force_refresh");
+        });
+    });
+}
+
 function _fmtMetric(value, decimals) {
     if (value == null) return "–";
     return safeNum(value, decimals != null ? decimals : 3);
@@ -16575,7 +16860,12 @@ function renderData() {
 }
 
 async function renderActiveView() {
-    if (appState.view === "overview") renderOverview();
+    if (appState.view === "overview") {
+        renderOverview();
+        // Re-render the detailed-health panel with current cached data so
+        // labels stay correct after language switches and navigation.
+        renderDetailedHealth();
+    }
     if (appState.view === "workflow") await renderWorkflow();
     if (appState.view === "versions") await renderVersions();
     if (appState.view === "players") await renderPlayers();
@@ -27360,6 +27650,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     checkApiStatus();
     // Poll every 10s so backend coming online is detected automatically
     setInterval(checkApiStatus, 10000);
+
+    // Detailed health (/health/detailed) — fire one shot on initial load.
+    // The fail-soft path keeps the panel hidden if the API is offline; the
+    // force-refresh button on the panel lets the operator re-fetch on demand.
+    _initDetailedHealthButton();
+    fetchDetailedHealth(false);
 
     // Initialize World Cup — already started in parallel above, just await completion
     await wcInitPromise;

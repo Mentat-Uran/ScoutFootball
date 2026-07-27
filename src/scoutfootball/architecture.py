@@ -752,7 +752,7 @@ def build_capability_registry() -> CapabilityRegistry:
             description="FastAPI 只读 API 服务，支持 CORS、静态文件托管、工作区写操作。",
             domain="infrastructure",
             cli_commands=("serve",),
-            api_paths=("/health", "/license"),
+            api_paths=("/health", "/health/detailed", "/license"),
         ),
         Capability(
             id="frontend.analyst_console",

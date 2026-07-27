@@ -212,6 +212,21 @@
                     <article class="liquid-panel compact-panel"></article>
                 </div>
 
+                <div id="detailed-health-section" style="margin-bottom:var(--space);display:none">
+                    <article class="liquid-panel compact-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="detailed_health_title">本地健康详情</h3>
+                            <span class="status-pill status-medium" id="dh-overall-pill">–</span>
+                            <button type="button" id="dh-refresh-btn" class="glass-control" style="margin-left:auto;font-size:0.72rem;padding:0.2rem 0.6rem" data-i18n="detailed_health_force_refresh" title="force_refresh=true">强制刷新</button>
+                        </div>
+                        <p class="feature-note" id="dh-meta-note" style="padding:0.3rem 0.8rem;font-size:0.72rem;color:var(--text-muted)">–</p>
+                        <div id="dh-grid" style="padding:0.4rem 0.8rem 0.8rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:0.5rem">
+                            <!-- Filled by renderDetailedHealth() -->
+                        </div>
+                        <p class="feature-note" id="dh-limitations-note" style="padding:0 0.8rem 0.6rem;font-size:0.7rem;color:var(--text-muted);border-top:1px solid rgba(255,255,255,0.05);padding-top:0.5rem">–</p>
+                    </article>
+                </div>
+
                 <div class="grid-3">
                     <article class="liquid-panel work-card" data-jump="players">
                         <span class="card-index">01</span>
