@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-27T06:20:48.178534+00:00",
+  "generated_at": "2026-07-27T06:47:39.124828+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -336,7 +336,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-27T06:20:48.177025+00:00",
+    "generated_at": "2026-07-27T06:47:39.124308+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -882,19 +882,39 @@
         "api_paths": [
           "/world-cup/groups",
           "/world-cup/schedule",
-          "/world-cup/teams",
-          "/world-cup/tournament-summary",
-          "/world-cup/tournament-standings",
-          "/world-cup/tournament-matches",
-          "/world-cup/tournament-scenarios"
+          "/worldcup/teams",
+          "/world-cup/contracts",
+          "/world-cup/tournament/summary",
+          "/world-cup/tournament/standings",
+          "/world-cup/tournament/standings-probabilities",
+          "/world-cup/tournament/overall-leaderboard",
+          "/world-cup/tournament/qualification-impact",
+          "/world-cup/tournament/tiebreak-diagnostics",
+          "/world-cup/tournament/matches",
+          "/world-cup/tournament/match-predictions",
+          "/world-cup/tournament/match-impact",
+          "/world-cup/tournament/top-matches",
+          "/world-cup/tournament/scenarios/{team}",
+          "/world-cup/tournament/group-simulation",
+          "/world-cup/tournament/export",
+          "/world-cup/tournament/import (POST)",
+          "/world-cup/tournament/import/preview (POST)",
+          "/world-cup/tournament/result (POST/DELETE)",
+          "/world-cup/tournament/reset (POST)",
+          "/world-cup/match-briefings/{home}/{away}/spotlight",
+          "/world-cup/teams/{team}/form-trend"
         ],
         "cli_commands": [
           "tournament",
           "tournament show",
           "tournament standings",
           "tournament apply",
+          "tournament clear",
+          "tournament reset",
           "tournament matches",
-          "tournament scenarios"
+          "tournament scenarios",
+          "tournament qualification",
+          "tournament tiebreaks"
         ],
         "frontend_views": [
           "wc_schedule",
@@ -912,15 +932,22 @@
         "status": "delivered",
         "api_paths": [
           "/world-cup/knockout",
-          "/world-cup/knockout-bracket",
-          "/world-cup/knockout-probabilities",
-          "/world-cup/knockout-scenarios"
+          "/world-cup/tournament/knockout",
+          "/world-cup/tournament/knockout/{match_id}/briefing",
+          "/world-cup/tournament/knockout/{match_id}/review",
+          "/world-cup/tournament/knockout/reviews",
+          "/world-cup/tournament/knockout/probabilities",
+          "/world-cup/tournament/knockout/scenarios/{team}",
+          "/world-cup/tournament/knockout/match-impact",
+          "/world-cup/tournament/knockout/generate (POST)",
+          "/world-cup/tournament/knockout/result (POST/DELETE)"
         ],
         "cli_commands": [
           "tournament knockout",
           "tournament knockout generate",
           "tournament knockout show",
-          "tournament knockout apply"
+          "tournament knockout apply",
+          "tournament knockout clear"
         ],
         "frontend_views": [
           "wc_knockout",
@@ -937,10 +964,9 @@
         "status": "delivered",
         "api_paths": [
           "/world-cup/predictions",
-          "/world-cup/standings-probabilities",
-          "/world-cup/qualification-impact",
-          "/world-cup/tournament-match-predictions",
-          "/world-cup/match-prediction"
+          "/world-cup/predictions/{home_team}/{away_team}",
+          "/world-cup/match-briefings/{home_team}/{away_team}",
+          "/world-cup/outlook/{team}"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -958,8 +984,8 @@
         "status": "delivered",
         "api_paths": [
           "/world-cup/squads/{team}",
-          "/world-cup/squad-balance-comparison/{a}/{b}",
-          "/world-cup/squads/{team}/scouting-needs"
+          "/world-cup/squads/{team}/scouting-needs",
+          "/world-cup/squad-balance-comparison/{team_a}/{team_b}"
         ],
         "cli_commands": [],
         "frontend_views": [
@@ -1052,7 +1078,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-27T06:20:48.178534+00:00",
+    "generated_at": "2026-07-27T06:47:39.124828+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -1978,5 +2004,5 @@
       }
     ]
   },
-  "content_sha256": "b882238b8e57104c13e0b7c04abd2b0816b89c41530be63fb73c292322041940"
+  "content_sha256": "446bfb5e52f681fa995c0d38fab146f98b74c05bcc197f016bd87fb8bc9bca8c"
 }

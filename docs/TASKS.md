@@ -581,6 +581,33 @@ commit e3a34d7 修改了 `architecture.py` 的 `api_paths`，但未刷新 `data/
 
 **遗留**：L1 节点整体状态仍为 `ready`——L1.1 与 L1.2 分别覆盖 L1 退出门槛的不同子项，但 L1 节点的完整验收仍应包含真实跨机器迁移演练（L1.1 遗留项）。本轮不改变 L1 节点整体状态。
 
+### L1.3 worldcup capability 注册表漂移修复 — `verified`（2026-07-27）
+
+L1.2 引入的 `test_committed_manifest_matches_current_architecture` 守住的是 manifest 与 `architecture.py` 之间的一致性，但暴露出一个更深的漂移：`architecture.py` 中 `worldcup.*` 四个 capability 的 `api_paths` 与 `cli_commands` 长期偏离真实路由表和 CLI 子命令。原本 `_CAPABILITY_ROUTE_PREFIXES` 只覆盖 `/recruitment/` 与 `/opposition/`，因此 worldcup 这条漂移从未被测试发现。本轮补齐注册表，并把 worldcup 纳入同一道 drift gate。
+
+**实现内容**：
+
+- `src/scoutfootball/architecture.py` 修复 4 个 worldcup capability：
+  - `worldcup.tournament`：原 `api_paths` 含 12 条已不存在的过期路径（如 `/world-cup/standings`、`/world-cup/matches` 等旧别名），实际 FastAPI 路由表已有 22 条 `/world-cup/tournament/*` 路径未登记。本轮替换为 22 条真实路径，并标注非 GET 方法（`/world-cup/tournament/import (POST)`、`/world-cup/tournament/import/preview (POST)`、`/world-cup/tournament/result (POST/DELETE)`、`/world-cup/tournament/reset (POST)`），参数名与 `api_server.py` 中 `{team}` / `{home}` / `{away}` 占位符对齐。`cli_commands` 补齐 `clear`、`reset`、`qualification`、`tiebreaks` 四个已上线但未登记的子命令。
+  - `worldcup.knockout`：`api_paths` 改为 `/world-cup/knockout/*` 实际路由，`cli_commands` 补齐 `knockout clear`。
+  - `worldcup.predictions`：`api_paths` 改为 `/world-cup/match-briefings/{home}/{away}/spotlight` 与 `/world-cup/teams/{team}/form-trend` 等真实路径。
+  - `worldcup.squads`：`api_paths` 对齐 `/world-cup/squads`、`/world-cup/teams` 等真实路由。
+- `tests/unit/test_capability_registry.py` 扩展 drift gate：
+  - `_CAPABILITY_ROUTE_PREFIXES` 新增 `/world-cup/` 与 `/worldcup/` 两个前缀，覆盖所有 worldcup 域路由。
+  - 新增 `_METHOD_SUFFIX_RE` 与 `_normalize_api_path`：将 `api_paths` 中的 `(POST)` / `(POST/DELETE)` 后缀剥离后再与 FastAPI 路由路径比较，避免方法标注被误判为路径不匹配。
+  - `test_recruitment_opposition_worldcup_routes_are_registered`（原 `test_recruitment_opposition_routes_are_registered`）覆盖 worldcup 路由必须出现在 capability 注册表中。
+  - `test_capability_api_paths_exist_as_routes` 同样扩展覆盖 worldcup，确保注册表中的 path 在 FastAPI 路由表中存在。
+- `data/project_manifest.json` 与 `docs/REFERENCE_INDEX.md` 通过 `scripts/generate_manifest.py` 重新生成，反映更新后的 31 条 capability 与 27 条 data contract。
+
+**真实状态核验**：
+
+- `uv run pytest tests/unit/test_capability_registry.py -v`：全部通过，含扩展后的 drift gate。
+- `uv run python scripts/generate_manifest.py --check`：`OK: manifest is up to date` + `OK: reference index is up to date`。
+- `uv run pytest tests/unit/ -q`：通过，无回归。
+- `uv run ruff check src/scoutfootball/architecture.py tests/unit/test_capability_registry.py`：clean。
+
+**遗留**：本轮只修复 capability 注册表与路由表之间的漂移，未改变 worldcup 路由本身的行为。L1 节点整体状态保持 `ready`，仍依赖 L1.1 遗留的跨机器迁移演练。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
