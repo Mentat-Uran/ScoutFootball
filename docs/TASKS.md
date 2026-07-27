@@ -608,6 +608,57 @@ L1.2 引入的 `test_committed_manifest_matches_current_architecture` 守住的�
 
 **遗留**：本轮只修复 capability 注册表与路由表之间的漂移，未改变 worldcup 路由本身的行为。L1 节点整体状态保持 `ready`，仍依赖 L1.1 遗留的跨机器迁移演练。
 
+### L1.4 capability drift gate 全域扩展与占位符对齐 — `verified`（2026-07-27）
+
+L1.3 把 worldcup 纳入 drift gate 后，子代理审查发现剩余漂移仍开放：`_CAPABILITY_ROUTE_PREFIXES` 只覆盖 4 个前缀（recruitment/opposition/world-cup/worldcup），predictions/teams/players/positions/action-values/scouting-workspaces 等 9+ 个前缀完全在 drift gate 之外，新路由可被静默添加而不触发任何测试。同时 capability `api_paths` 中存在 17 条占位符名称与 FastAPI 实际参数名不一致（`{home}/{away}` vs `{home_team}/{away_team}`、`{player}` vs `{player_name}`、`{position}` vs `{position_group}`、`{id}` vs `{workspace_id}`），3 条完全过期的根级路径（`/style-neighbors`、`/style-drift-neighbors`、`/cross-league-action-comparison`），以及 recruitment/opposition 域 PUT/POST 方法未标注。本轮一次性关闭这些缺口。
+
+**实现内容**：
+
+- `src/scoutfootball/architecture.py` 修复 8 个 capability 的占位符名称（17 条路径）：
+  - `predictions.match`：`{home}/{away}` → `{home_team}/{away_team}`（3 条），并补登记 `attribution/ci`、`ensemble-attribution`、`ensemble-attribution/ci`、`h2h`、`h2h-bias-correction`、`momentum`、`models/comparison`、`staleness`、`team-accuracy/{team_id}` 9 条缺失路由。
+  - `predictions.value_bet`：`{home}/{away}` → `{home_team}/{away_team}`（1 条）。
+  - `predictions.calibration`：补登记 26 条 `calibration/*` 子路由 + `drift/timeline`。
+  - `player.comparison`：`{player}` → `{player_name}`（2 条），并补登记 `/players`、`/players/{player_name}`、`/player/{player_name}/profile` 3 条缺失路由。
+  - `player.style_fit`：`{player}` → `{player_name}`（3 条），并删除 `/style-neighbors`、`/style-drift-neighbors` 2 条完全过期路径。
+  - `position.analysis`：`{position}` → `{position_group}`（3 条），并补登记 `style-drift-neighbors` 1 条缺失路由。
+  - `action_value.core`：`{player}` → `{player_id}`（3 条），并补登记 `/value-summary` 1 条缺失路由。
+  - `action_value.position_similarity`：`{position}` → `{position_group}`（1 条），并删除 `/cross-league-action-comparison` 1 条完全过期路径。
+  - `scouting.targets`：`{position}` → `{position_group}`（1 条）。
+  - `scouting.workspace`：`{id}` → `{workspace_id}`（2 条）。
+  - `team.analysis`：补登记 `/teams`、`/teams/style-clusters/similarity`、`/teams/{team}/style-percentiles`、`/teams/{team}/style-drift-neighbors`、`/teams/cross-league-depth` 5 条缺失路由。
+  - `api.server`：补登记 `/search`、`/local-pack/export`、`/local-pack/import (POST)`、`/tactical-board/capabilities`、`/tactical-board/export/mp4 (POST)` 5 条缺失路由。
+- `src/scoutfootball/architecture.py` 为 recruitment/opposition 4 个 capability 的非 GET 路由补加方法标注：
+  - `recruitment.briefs`：`/recruitment/briefs (POST)`、`/recruitment/briefs/{brief_id}/restore (POST)`。
+  - `recruitment.dossiers`：`/recruitment/dossiers (POST)`、`/recruitment/dossiers/{dossier_id} (PUT)`、`/recruitment/dossiers/{dossier_id}/restore (POST)`。
+  - `opposition.briefings`：`/opposition/briefs (POST)`、`/opposition/briefs/{briefing_id} (PUT)`、`/opposition/briefs/{briefing_id}/restore (POST)`。
+  - `opposition.post_match_reviews`：`/opposition/reviews (POST)`、`/opposition/reviews/{review_id} (PUT)`、`/opposition/reviews/{review_id}/restore (POST)`。
+- `tests/unit/test_capability_registry.py` 扩展 drift gate 覆盖范围：
+  - `_CAPABILITY_ROUTE_PREFIXES` 从 4 个前缀扩展到 26 个，覆盖所有 capability 管理的路由前缀：`/predictions/`、`/teams/`、`/players`、`/player/`、`/positions/`、`/action-values/`、`/value-summary`、`/scouting-workspaces`、`/scouting/`、`/watchlist`、`/shortlist`、`/review-queue`、`/search`、`/local-pack/`、`/tactical-board/`、`/health`、`/license`、`/artifacts`、`/model-runs`、`/reports/`、`/league/`、`/ratings`。
+  - `test_recruitment_opposition_worldcup_routes_are_registered` 重命名为 `test_capability_managed_routes_are_registered`，覆盖所有已声明前缀。
+  - `test_capability_api_paths_exist_as_routes` docstring 更新，反映全覆盖语义。
+  - 模块顶部注释更新：解释扩展覆盖范围是"刻意行为"——任何在新前缀下添加的路由必须登记到 capability，正是要捕获的漂移。
+- `data/project_manifest.json` 与 `docs/REFERENCE_INDEX.md` 通过 `scripts/generate_manifest.py` 重新生成（31 capabilities，27 data contracts）。
+
+**真实状态核验**：
+
+- `uv run ruff check src/scoutfootball/architecture.py tests/unit/test_capability_registry.py scripts/generate_manifest.py`：clean。
+- `uv run python scripts/generate_manifest.py --check`：`OK: manifest is up to date` + `OK: reference index is up to date`。
+- `uv run pytest tests/unit/test_capability_registry.py tests/unit/test_generate_manifest.py tests/unit/test_detailed_health.py -v`：38 通过。
+- `uv run pytest tests/unit/ tests/integration/ -q`：全部通过（含 2 项 integration skipped），exit 0，无回归。
+
+**覆盖范围变化**：
+
+| 维度 | L1.3 前 | L1.3 后 | L1.4 后 |
+|---|---:|---:|---:|
+| drift gate 覆盖前缀数 | 4 | 4 | 26 |
+| drift gate 覆盖路由数 | 约 33 | 约 77 | 约 200 |
+| capability api_paths 总数 | 76 | 88 | 155 |
+| 占位符名称不一致 | 17 | 17 | 0 |
+| 完全过期路径 | 3 | 3 | 0 |
+| recruitment/opposition 方法标注 | 0 | 0 | 11 |
+
+**遗留**：本轮完成 capability 注册表与路由表的全域对齐，L1 节点整体状态保持 `ready`，仍依赖 L1.1 遗留的跨机器迁移演练。drift gate 现已覆盖所有 capability 管理的路由前缀，未来任何新路由若未登记到 capability，`test_capability_managed_routes_are_registered` 会立即失败。
+
 ## 后续依赖表
 
 | 节点 | 直接依赖 | 解锁结果 |
