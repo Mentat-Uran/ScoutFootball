@@ -57,6 +57,7 @@ from scoutfootball.api import (
     get_decay_tuning,
     get_decision_dossier,
     get_decision_dossiers,
+    get_detailed_health,
     get_difficulty_stratification,
     get_ensemble_attribution,
     get_ensemble_attribution_ci,
@@ -342,6 +343,10 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health():
         return health_check()
+
+    @app.get("/health/detailed")
+    def health_detailed(force_refresh: bool = Query(False)):
+        return get_detailed_health(force_refresh=force_refresh)
 
     @app.get("/license")
     def license_info():

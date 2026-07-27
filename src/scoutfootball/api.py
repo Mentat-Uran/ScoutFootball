@@ -241,6 +241,276 @@ def health_check() -> HealthResponse:
     )
 
 
+# ── Detailed health ────────────────────────────────────────────────────
+# L1 退出门槛第 6 项要求"本地健康页显示数据质量、模型失效、存储、任务失败
+# 和适配器状态，不向项目维护者上传遥测"。``/health/detailed`` 端点是这一项
+# 的后端入口：组合 validate / model-admission / contract-quality /
+# source-health / artifacts 五类信号，让维护者在前端 overview 视图一眼看
+# 到本地真实状态，而不是硬编码值。
+#
+# 设计原则：
+# 1. 不替换 ``/health`` liveness probe（``HealthResponse`` 保持精简）。
+# 2. 不向外部上传任何数据——所有 builder 都在本地读取，无网络请求。
+# 3. 昂贵操作（validation re-hashes lineage、model-admission sha256s
+#    candidate parquets、contract-quality 调用 source-health）通过 TTL
+#    cache 缓存，默认 300s 与 data_loader 的 cache 一致。
+# 4. 任何子 builder 失败时记录日志并返回 ``status="unavailable"`` 而非
+#    抛出，让健康页仍能渲染其他可用部分（fail-soft 而非 fail-closed，
+#    因为这是只读诊断端点，不是发布门禁）。
+# 5. 所有 builder 都是已有的只读函数，``get_detailed_health`` 只是组合层。
+
+_detailed_health_cache = _TTLCache()
+
+
+def _safe_call(builder_name: str, fn):
+    """Call a health sub-builder; log and return None on any exception.
+
+    Health sub-builders read local files and may fail for many reasons
+    (missing data root, corrupt parquet, racy file deletion). A failed
+    sub-builder must not break the whole ``/health/detailed`` response—
+    the health page should still render the other available sections.
+    """
+    try:
+        return fn()
+    except Exception as exc:
+        logger.warning(
+            "get_detailed_health: %s builder failed: %s", builder_name, exc,
+            exc_info=True,
+        )
+        return None
+
+
+def _build_validation_section(settings) -> dict[str, Any]:
+    from scoutfootball.evaluation.validation import run_pre_training_validation
+
+    report = run_pre_training_validation(settings)
+    checks_payload = [
+        {
+            "check_name": c.check_name,
+            "passed": c.passed,
+            "message": c.message,
+        }
+        for c in report.checks
+    ]
+    return {
+        "status": "pass" if report.passed else "fail",
+        "total_checks": len(report.checks),
+        "passed_count": sum(1 for c in report.checks if c.passed),
+        "failed_count": len(report.failures),
+        "failures": [
+            {"check_name": c.check_name, "message": c.message}
+            for c in report.failures
+        ],
+        "checks": checks_payload,
+        "summary": report.summary(),
+    }
+
+
+def _build_model_admission_section(settings) -> dict[str, Any]:
+    from scoutfootball.evaluation.model_admission import build_model_admission_report
+
+    report = build_model_admission_report(settings=settings)
+    runs = report.get("runs", [])
+    not_reviewable_count = sum(
+        1 for r in runs if r.get("status") == "not_reviewable"
+    )
+    not_available_count = sum(
+        1 for r in runs if r.get("status") == "not_available"
+    )
+    return {
+        "status": "ok",
+        "report_version": report.get("report_version"),
+        "run_count": report.get("run_count", 0),
+        "reviewable_run_count": report.get("reviewable_run_count", 0),
+        "not_reviewable_run_count": not_reviewable_count,
+        "not_available_run_count": not_available_count,
+        "limitations": report.get("limitations", []),
+        # 不返回完整 runs 列表——可能很长，且每个 run 含完整 8 项检查 +
+        # comparison 数据。前端 overview 视图只需要计数摘要。维护者需要
+        # 详情时走 ``model-admission --json`` CLI 或 ``/model-runs`` API。
+        "runs_summary_omitted": True,
+    }
+
+
+def _build_contract_quality_section(settings) -> dict[str, Any]:
+    from scoutfootball.evaluation.contract_quality import (
+        build_contract_quality_report,
+    )
+
+    report = build_contract_quality_report(settings=settings)
+    return {
+        "status": report.get("overall_status", "unknown"),
+        "report_version": report.get("report_version"),
+        "failed_checks": report.get("failed_checks", []),
+        "incomplete_checks": report.get("incomplete_checks", []),
+        "checks_count": len(report.get("checks", [])),
+        "limitations": report.get("limitations", []),
+    }
+
+
+def _build_source_health_section(settings) -> dict[str, Any]:
+    from scoutfootball.evaluation.source_health import build_source_health_report
+
+    report = build_source_health_report(settings=settings)
+    sources = report.get("registered_sources", [])
+    with_snapshot = sum(
+        1 for s in sources
+        if s.get("snapshot", {}).get("status") == "recorded"
+    )
+    without_snapshot = len(sources) - with_snapshot
+    return {
+        "status": "ok",
+        "report_version": report.get("report_version"),
+        "registered_source_count": report.get("registered_source_count", 0),
+        "sources_with_snapshot": with_snapshot,
+        "sources_without_snapshot": without_snapshot,
+        "unregistered_raw_directories": report.get(
+            "unregistered_raw_directories", []
+        ),
+        # 简短摘要：source_id + snapshot status，让前端能显示一行表
+        "sources": [
+            {
+                "source_id": s.get("source_id"),
+                "snapshot_status": s.get("snapshot", {}).get("status"),
+                "local_status": s.get("local_observation", {}).get("status"),
+                "license_status": s.get("license", {}).get("status"),
+            }
+            for s in sources
+        ],
+    }
+
+
+def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
+    """Compose a comprehensive local health snapshot for the overview page.
+
+    Combines:
+    - ``health_check()`` (status / data_source / version)
+    - ``get_artifacts_summary()`` (row counts, artifact files, license)
+    - ``run_pre_training_validation()`` (31 checks)
+    - ``build_model_admission_report()`` (reviewable / not_reviewable)
+    - ``build_contract_quality_report()`` (8 checks, overall_status)
+    - ``build_source_health_report()`` (source snapshot coverage)
+
+    All sub-builders are read-only and local. Expensive builders are
+    cached via ``_detailed_health_cache`` with a TTL matching the
+    data_loader cache (default 300s). Pass ``force_refresh=True`` to
+    bypass the cache (e.g. after a model retrain or build-features run).
+
+    Sub-builder failures are logged and returned as
+    ``status="unavailable"`` sections rather than raising—the health
+    page should render available sections even when one source fails.
+    """
+    from scoutfootball import __version__
+
+    cache_key = "get_detailed_health"
+    if not force_refresh:
+        cached = _detailed_health_cache.get(cache_key)
+        if cached is not _MISSING:
+            return cached
+
+    settings = _settings()
+    generated_at = datetime.now(UTC).isoformat()
+
+    # Cheap sub-builders run every call (already cached at data_loader
+    # level for parquet reads; health_check + artifacts_summary are fast).
+    base_health = {
+        "status": "ok",
+        "data_source": data_source_label(),
+        "version": __version__,
+    }
+    artifacts = _safe_call(
+        "artifacts_summary", lambda: get_artifacts_summary()
+    )
+
+    # Expensive sub-builders run inside _safe_call so a failure in one
+    # doesn't break the whole response.
+    validation = _safe_call(
+        "validation", lambda: _build_validation_section(settings)
+    )
+    model_admission = _safe_call(
+        "model_admission", lambda: _build_model_admission_section(settings)
+    )
+    contract_quality = _safe_call(
+        "contract_quality",
+        lambda: _build_contract_quality_section(settings),
+    )
+    source_health = _safe_call(
+        "source_health", lambda: _build_source_health_section(settings)
+    )
+
+    # Compute top-level status: "ok" if all sub-builders succeeded and
+    # validation + contract_quality both pass; "degraded" if any sub-builder
+    # failed or any critical check failed; "error" only if base_health
+    # itself failed (should not happen since data_source_label is cheap).
+    sub_builders = {
+        "artifacts": artifacts,
+        "validation": validation,
+        "model_admission": model_admission,
+        "contract_quality": contract_quality,
+        "source_health": source_health,
+    }
+    unavailable = [k for k, v in sub_builders.items() if v is None]
+    failed_checks = []
+    if validation and validation.get("status") == "fail":
+        failed_checks.append("validation")
+    if (
+        contract_quality
+        and contract_quality.get("status") in ("fail", "incomplete")
+    ):
+        failed_checks.append(f"contract_quality:{contract_quality.get('status')}")
+
+    if unavailable:
+        top_status = "degraded"
+    elif failed_checks:
+        top_status = "degraded"
+    else:
+        top_status = "ok"
+
+    result = _clean_json_value({
+        "schema": "scoutfootball.detailed-health",
+        "schema_version": "1.0.0",
+        "generated_at": generated_at,
+        "status": top_status,
+        "base": base_health,
+        "artifacts": artifacts if artifacts is not None else {"status": "unavailable"},
+        "validation": validation if validation is not None else {"status": "unavailable"},
+        "model_admission": (
+            model_admission if model_admission is not None
+            else {"status": "unavailable"}
+        ),
+        "contract_quality": (
+            contract_quality if contract_quality is not None
+            else {"status": "unavailable"}
+        ),
+        "source_health": (
+            source_health if source_health is not None
+            else {"status": "unavailable"}
+        ),
+        "unavailable_sections": unavailable,
+        "failed_sections": failed_checks,
+        "limitations": [
+            "Local-only diagnostic; no telemetry is uploaded to any external service.",
+            (
+                "Sub-builders are read-only; failures degrade individual "
+                "sections rather than the whole response."
+            ),
+            (
+                "Expensive builders (validation, model-admission, "
+                "contract-quality, source-health) are TTL-cached "
+                "(default 300s); pass force_refresh=True to bypass."
+            ),
+            (
+                "model_admission runs_summary_omitted=True—use CLI "
+                "model-admission --json or /model-runs API for per-run "
+                "details."
+            ),
+        ],
+    })
+
+    _detailed_health_cache.set(cache_key, result)
+    return result
+
+
 def list_players() -> PlayerListResponse:
     """Return all unique player names from the ratings dataset."""
     df = load_player_ratings()
