@@ -1308,6 +1308,13 @@ const i18n = {
         versions_restore_failed: "恢复失败：",
         versions_pack_exported: "已导出便携包（共",
         versions_pack_failed: "导出失败：",
+        versions_import_pack: "导入 portable pack JSON",
+        versions_pack_imported: "已导入便携包（新增 {imported} 条，冲突 {conflicts} 条，跳过 {skipped} 条）",
+        versions_pack_import_failed: "导入失败：",
+        versions_pack_import_confirm_overwrite: "检测到 {conflicts} 条冲突记录。点击“确定”以覆盖本地记录（基于本地版本号创建新版本并备份），或“取消”以保留本地记录（仅导入新记录）。",
+        versions_pack_invalid_json: "无法解析 JSON 文件：",
+        versions_pack_invalid_structure: "文件结构无效：缺少 pack 字段或非有效对象。",
+        versions_pack_section_errors: "部分节校验失败：{errors}",
         versions_current_revision: "当前版本",
         versions_backup_revision: "备份版本",
         versions_backup_deletion: "删除备份",
@@ -2774,6 +2781,13 @@ const i18n = {
         versions_restore_failed: "Restore failed: ",
         versions_pack_exported: "Portable pack exported (",
         versions_pack_failed: "Export failed: ",
+        versions_import_pack: "Import portable pack JSON",
+        versions_pack_imported: "Portable pack imported (new: {imported}, conflicts: {conflicts}, skipped: {skipped})",
+        versions_pack_import_failed: "Import failed: ",
+        versions_pack_import_confirm_overwrite: "{conflicts} conflicting record(s) detected. Click OK to overwrite local records (creates a new revision with backup), or Cancel to keep local records (only new records will be imported).",
+        versions_pack_invalid_json: "Could not parse JSON file: ",
+        versions_pack_invalid_structure: "Invalid file structure: missing pack field or not a valid object.",
+        versions_pack_section_errors: "Some sections failed validation: {errors}",
         versions_current_revision: "Current revision",
         versions_backup_revision: "Backup revision",
         versions_backup_deletion: "Deletion backup",
@@ -17980,6 +17994,27 @@ async function _exportPortablePack() {
     return resp.json();
 }
 
+async function _importPortablePack(pack, overwrite) {
+    // POST /local-pack/import?overwrite=<bool>
+    // Body: { "pack": <pack-object> } — the inner pack from an export
+    // response. Accepts either { pack: {...} } or the pack object directly
+    // for ergonomics; the API server mirrors this flexibility.
+    const body = (pack && typeof pack === "object" && pack.schema === "scoutfootball.portable-pack")
+        ? { pack }
+        : pack;
+    const url = API_BASE + "/local-pack/import?overwrite=" + (overwrite ? "true" : "false");
+    const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+    return resp.json();
+}
+
 function _versionStatusLabel() {
     const zT = appState.lang === "zh";
     const parts = [];
@@ -19311,6 +19346,107 @@ function _wireVersionControlsOnce() {
             } catch (err) {
                 if (statusEl) statusEl.textContent = `${t("versions_pack_failed")}${err?.message || err}`;
             }
+        });
+    }
+    const importPackBtn = document.getElementById("ver-import-pack");
+    const importPackInput = document.getElementById("ver-import-pack-input");
+    if (importPackBtn && importPackInput) {
+        importPackBtn.addEventListener("click", () => {
+            // Reset so selecting the same file twice still fires change.
+            importPackInput.value = "";
+            importPackInput.click();
+        });
+        importPackInput.addEventListener("change", async (event) => {
+            const statusEl = document.getElementById("ver-pack-status");
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            if (statusEl) statusEl.textContent = "…";
+            let packObj;
+            try {
+                const text = await file.text();
+                let parsed;
+                try {
+                    parsed = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error(t("versions_pack_invalid_json") + (parseErr?.message || parseErr));
+                }
+                // Accept either { pack: {...} } (full export response) or
+                // the bare pack object. The inner pack must declare the
+                // portable-pack schema.
+                packObj = (parsed && typeof parsed === "object" && parsed.pack && typeof parsed.pack === "object")
+                    ? parsed.pack
+                    : parsed;
+                if (!packObj || typeof packObj !== "object" || packObj.schema !== "scoutfootball.portable-pack") {
+                    throw new Error(t("versions_pack_invalid_structure"));
+                }
+            } catch (err) {
+                if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${err?.message || err}`;
+                return;
+            }
+            // Phase 1: safe import (overwrite=false). New records are
+            // created; conflicts are reported but not modified.
+            let result;
+            try {
+                result = await _importPortablePack(packObj, false);
+            } catch (err) {
+                if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${err?.message || err}`;
+                return;
+            }
+            if (result?.status !== "ok") {
+                if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${result?.message || JSON.stringify(result)}`;
+                return;
+            }
+            const summary = result.summary || { total_imported: 0, total_conflicts: 0, total_skipped: 0 };
+            // Phase 2: if there are conflicts, ask the user whether to
+            // overwrite. This second pass replaces the conflicting local
+            // records via a revision bump (creates a backup).
+            if (summary.total_conflicts > 0) {
+                const confirmMsg = t("versions_pack_import_confirm_overwrite")
+                    .replace("{conflicts}", String(summary.total_conflicts));
+                if (confirm(confirmMsg)) {
+                    try {
+                        const overwriteResult = await _importPortablePack(packObj, true);
+                        if (overwriteResult?.status === "ok") {
+                            const ow = overwriteResult.summary || { total_imported: 0, total_conflicts: 0, total_skipped: 0 };
+                            // Refresh version records to reflect the new
+                            // revisions created by the overwrite pass.
+                            await _fetchVersionRecords();
+                            _renderVersionRecordOptions();
+                            _renderVersionSummary();
+                            _renderVersionTimeline();
+                            _renderVersionStatusRail();
+                            if (statusEl) statusEl.textContent = t("versions_pack_imported")
+                                .replace("{imported}", String(ow.total_imported))
+                                .replace("{conflicts}", String(ow.total_conflicts))
+                                .replace("{skipped}", String(ow.total_skipped));
+                            return;
+                        } else {
+                            if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${overwriteResult?.message || JSON.stringify(overwriteResult)}`;
+                            return;
+                        }
+                    } catch (err) {
+                        if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${err?.message || err}`;
+                        return;
+                    }
+                }
+            }
+            // No conflicts, or user declined to overwrite: report phase-1
+            // results. Refresh records to show newly imported ones.
+            await _fetchVersionRecords();
+            _renderVersionRecordOptions();
+            _renderVersionSummary();
+            _renderVersionTimeline();
+            _renderVersionStatusRail();
+            const sectionErrors = result.section_errors || [];
+            let msg = t("versions_pack_imported")
+                .replace("{imported}", String(summary.total_imported))
+                .replace("{conflicts}", String(summary.total_conflicts))
+                .replace("{skipped}", String(summary.total_skipped));
+            if (sectionErrors.length > 0) {
+                const errs = sectionErrors.map((e) => `${e.section}:${e.code}`).join(", ");
+                msg += " " + t("versions_pack_section_errors").replace("{errors}", errs);
+            }
+            if (statusEl) statusEl.textContent = msg;
         });
     }
 }

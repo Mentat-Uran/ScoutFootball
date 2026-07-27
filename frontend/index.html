@@ -356,6 +356,8 @@
                     </div>
                     <div style="padding:0 0.8rem 0.8rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                         <button class="text-button" id="ver-export-pack" type="button">⬇ <span data-i18n="versions_export_pack">导出 portable pack JSON</span></button>
+                        <button class="text-button" id="ver-import-pack" type="button">⬆ <span data-i18n="versions_import_pack">导入 portable pack JSON</span></button>
+                        <input id="ver-import-pack-input" type="file" accept="application/json,.json" style="display:none" />
                         <span class="toolbar-status" id="ver-pack-status" aria-live="polite"></span>
                     </div>
                     <p class="feature-note" style="padding:0 0.8rem 0.8rem" data-i18n="versions_pack_note">便携包包含所有本地产物（recruitment briefs、opposition briefings），并附带每节的 sha256 哈希用于完整性校验。</p>

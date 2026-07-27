@@ -11717,27 +11717,65 @@ def export_local_pack() -> dict:
     # abort the export).
     full_briefs: list[dict] = []
     skipped_briefs: list[dict] = []
+    seen_brief_ids: set[str] = set()
     for summary in brief_records:
+        brief_id = summary.get("brief_id")
+        if brief_id:
+            seen_brief_ids.add(brief_id)
         try:
-            full_briefs.append(brief_store.load(summary["brief_id"]))
+            full_briefs.append(brief_store.load(brief_id))
         except Exception as exc:  # noqa: BLE001 — report, don't crash export
             logger.warning("export_local_pack: brief load failed", exc_info=True)
             skipped_briefs.append({
-                "brief_id": summary.get("brief_id"),
+                "brief_id": brief_id,
                 "reason": str(exc) or type(exc).__name__,
             })
 
+    # ``list_records`` silently skips files that fail to parse, so corrupt
+    # JSON files would otherwise vanish from the export without a trace.
+    # Detect them by globbing the store root directly and reporting any
+    # ``*.json`` file whose stem is not in ``seen_brief_ids``.
+    if brief_store.root.exists():
+        for path in brief_store.root.glob("*.json"):
+            stem = path.stem
+            if stem not in seen_brief_ids:
+                logger.warning(
+                    "export_local_pack: corrupt brief file skipped: %s",
+                    path,
+                )
+                skipped_briefs.append({
+                    "brief_id": stem,
+                    "reason": "file failed to parse (corrupt JSON or schema violation)",
+                })
+
     full_briefings: list[dict] = []
     skipped_briefings: list[dict] = []
+    seen_briefing_ids: set[str] = set()
     for summary in briefing_records:
+        briefing_id = summary.get("briefing_id")
+        if briefing_id:
+            seen_briefing_ids.add(briefing_id)
         try:
-            full_briefings.append(briefing_store.load(summary["briefing_id"]))
+            full_briefings.append(briefing_store.load(briefing_id))
         except Exception as exc:  # noqa: BLE001 — report, don't crash export
             logger.warning("export_local_pack: briefing load failed", exc_info=True)
             skipped_briefings.append({
-                "briefing_id": summary.get("briefing_id"),
+                "briefing_id": briefing_id,
                 "reason": str(exc) or type(exc).__name__,
             })
+
+    if briefing_store.root.exists():
+        for path in briefing_store.root.glob("*.json"):
+            stem = path.stem
+            if stem not in seen_briefing_ids:
+                logger.warning(
+                    "export_local_pack: corrupt briefing file skipped: %s",
+                    path,
+                )
+                skipped_briefings.append({
+                    "briefing_id": stem,
+                    "reason": "file failed to parse (corrupt JSON or schema violation)",
+                })
 
     sections = {
         "recruitment_briefs": {
@@ -11778,6 +11816,292 @@ def export_local_pack() -> dict:
     return _clean_json_value({
         "status": "ok",
         "pack": pack,
+    })
+
+
+_PORTABLE_PACK_SCHEMA = "scoutfootball.portable-pack"
+_PORTABLE_PACK_VERSION = "1.0.0"
+_PORTABLE_PACK_SECTIONS = ("recruitment_briefs", "opposition_briefings")
+_PORTABLE_PACK_MAX_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB hard cap
+
+
+def import_local_pack(pack: dict, *, overwrite: bool = False) -> dict:
+    """Import a portable pack into the local stores.
+
+    Mirrors :func:`export_local_pack`: the ``pack`` argument is the inner
+    ``pack`` object from an export response (``response["pack"]``). The
+    function writes each section's records into the corresponding local
+    store via the standard ``save()`` API, so revision history and backup
+    semantics are preserved.
+
+    Failure model (three tiers):
+
+    1. **Pack-level (fail-closed)**: unknown schema, unsupported version,
+       or missing mandatory keys reject the entire pack. No records are
+       written.
+    2. **Section-level (fail-closed per section)**: ``section_hashes``
+       mismatch indicates in-transit corruption; the entire section is
+       skipped and reported in ``section_errors``. Other sections are
+       still imported.
+    3. **Record-level (fail-soft)**: a record that fails validation or
+       conflicts with an existing local ID is reported in ``skipped`` or
+       ``conflicts`` and does not abort the import. This matches
+       :func:`export_local_pack`'s behavior of skipping corrupt records
+       rather than aborting the export.
+
+    Conflict handling:
+
+    - ``overwrite=False`` (default): records whose ID already exists
+      locally are reported in ``conflicts`` and not modified. This is the
+      safe default for "merge pack into existing local store".
+    - ``overwrite=True``: existing local records are replaced by calling
+      ``save(id, payload, expected_revision=current_revision)``, which
+      bumps ``server_revision`` and creates a revision backup. This is
+      the appropriate mode for "restore from pack" or "sync from another
+      machine".
+
+    The pack's envelope fields (``server_revision``, ``stored_at``) are
+    NOT preserved — the target store manages its own revision counter.
+    Only the inner ``brief`` / ``briefing`` payload (the user-authored
+    content) is imported.
+
+    Size guard: packs larger than ``_PORTABLE_PACK_MAX_SIZE_BYTES``
+    (100 MB) are rejected to prevent accidental memory exhaustion from
+    malformed or hostile payloads. The export currently produces packs
+    well under 1 MB (100 briefs × ~5 KB each), so 100 MB is a generous
+    ceiling that catches pathological inputs without rejecting any
+    legitimate pack.
+    """
+    import hashlib
+    import json
+
+    # ── Pack-level validation ───────────────────────────────────────
+    if not isinstance(pack, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_pack",
+            "message": "pack must be a JSON object",
+        })
+
+    pack_size = len(json.dumps(pack, ensure_ascii=False).encode("utf-8"))
+    if pack_size > _PORTABLE_PACK_MAX_SIZE_BYTES:
+        return _clean_json_value({
+            "status": "error",
+            "code": "pack_too_large",
+            "message": (
+                f"pack is {pack_size} bytes, exceeds "
+                f"{_PORTABLE_PACK_MAX_SIZE_BYTES} byte limit"
+            ),
+        })
+
+    schema = pack.get("schema")
+    version = pack.get("version")
+    if schema != _PORTABLE_PACK_SCHEMA:
+        return _clean_json_value({
+            "status": "error",
+            "code": "incompatible_schema",
+            "message": (
+                f"pack schema '{schema}' is not '{_PORTABLE_PACK_SCHEMA}'"
+            ),
+        })
+    if version != _PORTABLE_PACK_VERSION:
+        return _clean_json_value({
+            "status": "error",
+            "code": "incompatible_version",
+            "message": (
+                f"pack version '{version}' is not "
+                f"'{_PORTABLE_PACK_VERSION}'"
+            ),
+        })
+
+    sections = pack.get("sections")
+    section_hashes = pack.get("section_hashes")
+    if not isinstance(sections, dict) or not isinstance(section_hashes, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_pack",
+            "message": "pack.sections and pack.section_hashes must be objects",
+        })
+
+    # ── Section-level: hash verification + record import ────────────
+    brief_store = _brief_store()
+    briefing_store = _briefing_store()
+
+    # Build existing-ID → revision maps for conflict detection. Using
+    # list_records() avoids N load() calls; each list_records() is a
+    # single glob + parse of small summary fields.
+    existing_brief_revs: dict[str, int] = {
+        s["brief_id"]: int(s["server_revision"])
+        for s in brief_store.list_records(limit=100)
+    }
+    existing_briefing_revs: dict[str, int] = {
+        s["briefing_id"]: int(s["server_revision"])
+        for s in briefing_store.list_records(limit=100)
+    }
+
+    section_results: list[dict] = []
+    section_errors: list[dict] = []
+
+    for section_name in _PORTABLE_PACK_SECTIONS:
+        section = sections.get(section_name)
+        if not isinstance(section, dict):
+            section_errors.append({
+                "section": section_name,
+                "code": "missing_section",
+                "message": f"section '{section_name}' is missing or not an object",
+            })
+            continue
+
+        # Hash verification (fail-closed for this section only)
+        recorded_hash = section_hashes.get(section_name)
+        if not isinstance(recorded_hash, str) or len(recorded_hash) != 64:
+            section_errors.append({
+                "section": section_name,
+                "code": "missing_or_invalid_hash",
+                "message": (
+                    f"section_hashes['{section_name}'] must be a 64-char "
+                    f"SHA-256 hex string"
+                ),
+            })
+            continue
+        canonical = json.dumps(section, ensure_ascii=False, sort_keys=True, indent=2)
+        actual_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        if actual_hash != recorded_hash:
+            section_errors.append({
+                "section": section_name,
+                "code": "hash_mismatch",
+                "message": (
+                    f"section hash mismatch (recorded={recorded_hash[:12]}…, "
+                    f"actual={actual_hash[:12]}…); section may be corrupted "
+                    f"in transit"
+                ),
+            })
+            continue
+
+        # Record-level import
+        records = section.get("records")
+        if not isinstance(records, list):
+            section_errors.append({
+                "section": section_name,
+                "code": "invalid_records",
+                "message": "section.records must be a list",
+            })
+            continue
+
+        # Pick the right store / payload key / id field for this section
+        if section_name == "recruitment_briefs":
+            store = brief_store
+            payload_key = "brief"
+            id_field = "brief_id"
+            existing_revs = existing_brief_revs
+        else:
+            store = briefing_store
+            payload_key = "briefing"
+            id_field = "briefing_id"
+            existing_revs = existing_briefing_revs
+
+        imported = 0
+        conflicts: list[dict] = []
+        skipped: list[dict] = []
+
+        for record in records:
+            if not isinstance(record, dict):
+                skipped.append({
+                    "reason": "record is not an object",
+                })
+                continue
+
+            payload = record.get(payload_key)
+            record_id = record.get(id_field) or (
+                payload.get(id_field) if isinstance(payload, dict) else None
+            )
+            if not isinstance(record_id, str) or not record_id:
+                skipped.append({
+                    "reason": f"missing or invalid {id_field}",
+                })
+                continue
+
+            if not isinstance(payload, dict):
+                skipped.append({
+                    id_field: record_id,
+                    "reason": f"missing or invalid '{payload_key}' payload",
+                })
+                continue
+
+            current_revision = existing_revs.get(record_id)
+            try:
+                if current_revision is None:
+                    # New record: create with revision 1
+                    store.save(record_id, payload, expected_revision=None)
+                    imported += 1
+                elif overwrite:
+                    # Existing record: replace via revision bump
+                    # (creates a revision backup automatically)
+                    store.save(
+                        record_id, payload,
+                        expected_revision=current_revision,
+                    )
+                    imported += 1
+                else:
+                    # Conflict: existing record, overwrite not authorized
+                    conflicts.append({
+                        id_field: record_id,
+                        "local_revision": current_revision,
+                    })
+            except Exception as exc:  # noqa: BLE001 — report, don't abort
+                logger.warning(
+                    "import_local_pack: save failed for %s=%s: %s",
+                    id_field, record_id, exc,
+                    exc_info=True,
+                )
+                skipped.append({
+                    id_field: record_id,
+                    "reason": str(exc) or type(exc).__name__,
+                })
+
+            # If we just imported or overwrote, update the existing_revs
+            # cache so a second record with the same ID in the pack would
+            # be detected as a conflict (rather than creating a duplicate).
+            if current_revision is None or overwrite:
+                existing_revs[record_id] = existing_revs.get(record_id, 0) + 1
+
+        section_results.append({
+            "section": section_name,
+            "schema": section.get("schema"),
+            "version": section.get("version"),
+            "total_records": len(records),
+            "imported": imported,
+            "conflicts": conflicts,
+            "skipped": skipped,
+        })
+
+    # ── Compose summary ─────────────────────────────────────────────
+    total_imported = sum(s["imported"] for s in section_results)
+    total_conflicts = sum(len(s["conflicts"]) for s in section_results)
+    total_skipped = sum(len(s["skipped"]) for s in section_results)
+
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.portable-pack-import",
+        "version": "1.0.0",
+        "imported_at": _utc_now_iso_helper(),
+        "overwrite_mode": bool(overwrite),
+        "summary": {
+            "total_imported": total_imported,
+            "total_conflicts": total_conflicts,
+            "total_skipped": total_skipped,
+        },
+        "section_results": section_results,
+        "section_errors": section_errors,
+        "limitations": [
+            "Pack envelope fields (server_revision, stored_at) are not "
+            "preserved; the target store manages its own revision counter.",
+            "Record-level failures (validation, conflict) are reported in "
+            "skipped/conflicts and do not abort the import.",
+            "Section hash mismatch skips the entire section; other sections "
+            "are still imported.",
+            "Local-only operation; no telemetry is uploaded.",
+        ],
     })
 
 
