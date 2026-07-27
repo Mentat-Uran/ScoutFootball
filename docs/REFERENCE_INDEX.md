@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-27T07:23:05.136512+00:00`
-- content SHA-256：`5d8d2252088288f8b6323799d4838922bb5bcfc777235b3f2881d6d7bca29789`
+- manifest generated_at：`2026-07-27T14:39:21.575591+00:00`
+- content SHA-256：`5cf904ce2aa8a5f369bb1ce8e1c44edb434289e9a4563af7aa2fa3c824172ec4`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -68,6 +68,8 @@
 - `uv run python -m scoutfootball list-reviews`
 - `uv run python -m scoutfootball show-review <review_id>`
 - `uv run python -m scoutfootball validate-review <path>`
+- `uv run python -m scoutfootball export-local-pack [--output <path>]`
+- `uv run python -m scoutfootball import-local-pack [--from <path>] [--confirm]`
 - `uv run streamlit run src/scoutfootball/app/streamlit_app.py`
 
 ## 能力登记
@@ -103,6 +105,7 @@
 | worldcup.predictions | world_cup | delivered | /world-cup/predictions, /world-cup/predictions/{home_team}/{away_team}, /world-cup/match-briefings/{home_team}/{away_team}, /world-cup/outlook/{team} | — | wc_probability, wc_compare |
 | worldcup.squads | world_cup | delivered | /world-cup/squads/{team}, /world-cup/squads/{team}/scouting-needs, /world-cup/squad-balance-comparison/{team_a}/{team_b} | — | wc_squads, wc_compare |
 | api.server | infrastructure | delivered | /health, /health/detailed, /license, /search, /local-pack/export, /local-pack/import (POST), /tactical-board/capabilities, /tactical-board/export/mp4 (POST) | serve | — |
+| local.portable_pack | infrastructure | delivered | /local-pack/export, /local-pack/import (POST) | export-local-pack, import-local-pack | — |
 | frontend.analyst_console | infrastructure | delivered | — | — | overview, players, compare, value, matches, teams, league, scouting, actions, reports, tactical, wc_schedule, wc_squads, wc_compare, wc_probability, wc_knockout, wc_tournament, license, data, calibration, backtest, help, workflow, versions |
 | data.artifacts | infrastructure | delivered | /artifacts, /model-runs, /reports/model-runs, /reports/model-runs/{run_id} | info, capabilities, data-contracts | data |
 

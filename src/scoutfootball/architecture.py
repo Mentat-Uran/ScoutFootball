@@ -270,6 +270,8 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball list-reviews",
             "uv run python -m scoutfootball show-review <review_id>",
             "uv run python -m scoutfootball validate-review <path>",
+            "uv run python -m scoutfootball export-local-pack [--output <path>]",
+            "uv run python -m scoutfootball import-local-pack [--from <path>] [--confirm]",
             "uv run streamlit run src/scoutfootball/app/streamlit_app.py",
         ),
     )
@@ -836,6 +838,25 @@ def build_capability_registry() -> CapabilityRegistry:
                 "/local-pack/import (POST)",
                 "/tactical-board/capabilities",
                 "/tactical-board/export/mp4 (POST)",
+            ),
+        ),
+        Capability(
+            id="local.portable_pack",
+            name="本地便携包",
+            description=(
+                "将本地招募 brief 与对手 briefing 打包为带 section SHA-256 的"
+                " JSON 便携包，用于跨机器迁移、本地备份和恢复；"
+                "导入时按 section 校验哈希、按 record 处理冲突，"
+                "不依赖云同步或外部账号。"
+            ),
+            domain="infrastructure",
+            cli_commands=(
+                "export-local-pack",
+                "import-local-pack",
+            ),
+            api_paths=(
+                "/local-pack/export",
+                "/local-pack/import (POST)",
             ),
         ),
         Capability(

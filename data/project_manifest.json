@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-27T07:23:05.136512+00:00",
+  "generated_at": "2026-07-27T14:39:21.575591+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -332,11 +332,13 @@
       "uv run python -m scoutfootball list-reviews",
       "uv run python -m scoutfootball show-review <review_id>",
       "uv run python -m scoutfootball validate-review <path>",
+      "uv run python -m scoutfootball export-local-pack [--output <path>]",
+      "uv run python -m scoutfootball import-local-pack [--from <path>] [--confirm]",
       "uv run streamlit run src/scoutfootball/app/streamlit_app.py"
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-27T07:23:05.135999+00:00",
+    "generated_at": "2026-07-27T14:39:21.574037+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -1068,6 +1070,24 @@
         "notes": ""
       },
       {
+        "id": "local.portable_pack",
+        "name": "本地便携包",
+        "description": "将本地招募 brief 与对手 briefing 打包为带 section SHA-256 的 JSON 便携包，用于跨机器迁移、本地备份和恢复；导入时按 section 校验哈希、按 record 处理冲突，不依赖云同步或外部账号。",
+        "domain": "infrastructure",
+        "status": "delivered",
+        "api_paths": [
+          "/local-pack/export",
+          "/local-pack/import (POST)"
+        ],
+        "cli_commands": [
+          "export-local-pack",
+          "import-local-pack"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
         "id": "frontend.analyst_console",
         "name": "分析师工作台",
         "description": "单页前端应用，包含球员、球队、预测、球探、动作价值、世界杯等多个分析视图。",
@@ -1132,7 +1152,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-27T07:23:05.136512+00:00",
+    "generated_at": "2026-07-27T14:39:21.575591+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -2058,5 +2078,5 @@
       }
     ]
   },
-  "content_sha256": "5d8d2252088288f8b6323799d4838922bb5bcfc777235b3f2881d6d7bca29789"
+  "content_sha256": "5cf904ce2aa8a5f369bb1ce8e1c44edb434289e9a4563af7aa2fa3c824172ec4"
 }
