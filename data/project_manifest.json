@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-27T14:39:21.575591+00:00",
+  "generated_at": "2026-07-27T15:15:57.946224+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -281,6 +281,7 @@
       "uv run python -m scoutfootball info",
       "uv run python -m scoutfootball capabilities",
       "uv run python -m scoutfootball data-contracts",
+      "uv run python -m scoutfootball list-adapters [--source S] [--capability C] [--json]",
       "uv run python -m scoutfootball ingest",
       "uv run python -m scoutfootball build-features",
       "uv run python -m scoutfootball train",
@@ -338,7 +339,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-27T14:39:21.574037+00:00",
+    "generated_at": "2026-07-27T15:15:57.944209+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -354,6 +355,22 @@
       "world_cup"
     ],
     "capabilities": [
+      {
+        "id": "pipeline.adapters",
+        "name": "适配器清单注册表",
+        "description": "机器可读的源适配器清单：声明每个注册数据源的能力、字段映射和转换损失。是 I1 开放互操作基线的入口，只读元数据，不触发实际数据接入。",
+        "domain": "data_pipeline",
+        "status": "delivered",
+        "api_paths": [
+          "/adapters"
+        ],
+        "cli_commands": [
+          "list-adapters"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": "Manifest 是保守的：未记录的能力或映射直接省略，不猜测。Tracking/video 能力位保留但当前无适配器声明，需待合规样本数据就绪后才进入后续 I1 切片。"
+      },
       {
         "id": "pipeline.ingest",
         "name": "数据接入",
@@ -1152,7 +1169,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-27T14:39:21.575591+00:00",
+    "generated_at": "2026-07-27T15:15:57.946224+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -2078,5 +2095,5 @@
       }
     ]
   },
-  "content_sha256": "5cf904ce2aa8a5f369bb1ce8e1c44edb434289e9a4563af7aa2fa3c824172ec4"
+  "content_sha256": "276e4eb2b42dc4f77ad58d1d9126fcad0aea21d1f8b36f9505e91606a9b87bb1"
 }
