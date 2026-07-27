@@ -61,11 +61,23 @@ def inspect_raw_csv(
         raise ValueError("source_not_registered")
     source_root = (settings.data_root / root).resolve()
     candidate = Path(path)
-    resolved = (
-        (settings.data_root / candidate).resolve()
-        if not candidate.is_absolute()
-        else candidate.resolve()
-    )
+    if candidate.is_absolute():
+        resolved = candidate.resolve()
+    else:
+        resolved = (settings.data_root / candidate).resolve()
+        # Support paths relative to project root (e.g. "data/raw/clubelo/...")
+        # in addition to paths relative to data_root (e.g. "raw/clubelo/...").
+        # When the candidate starts with the data_root folder name, the naive
+        # join produces a double prefix; strip it and retry so the maintainer
+        # can pass either form interchangeably. Only triggers when the naive
+        # path does not exist, so backward compatibility is preserved.
+        if (
+            not resolved.exists()
+            and len(candidate.parts) > 1
+            and candidate.parts[0] == settings.data_root.name
+        ):
+            stripped = Path(*candidate.parts[1:])
+            resolved = (settings.data_root / stripped).resolve()
     try:
         relative = resolved.relative_to(source_root)
     except ValueError as exc:
