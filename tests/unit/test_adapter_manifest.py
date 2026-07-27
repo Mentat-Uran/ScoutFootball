@@ -40,7 +40,7 @@ from scoutfootball.api import get_adapter_registry
 # contract is not silently widened.
 #
 # The first 7 are maintained sources (in the maintainer's real workflow).
-# The last 4 are experimental sources (implemented but not in active use,
+# The last 6 are experimental sources (implemented but not in active use,
 # confirmed 2026-07-17); they are registered so the manifest surface
 # honestly reflects the codebase, and are marked maintained=False in
 # their manifests.
@@ -59,6 +59,8 @@ _EXPECTED_SOURCE_IDS = frozenset(
         "sofifa",
         "api_football",
         "transfermarkt_datasets",
+        "whoscored",
+        "capology",
     }
 )
 
@@ -514,6 +516,61 @@ class TestSourceSpecificContracts:
             f"transfermarkt_datasets capabilities drifted. "
             f"Expected {sorted(c.value for c in expected)}, "
             f"got {sorted(c.value for c in m.capabilities)}."
+        )
+
+    def test_whoscored_documents_pipeline_gap(self) -> None:
+        """whoscored has 3 fetch functions but none is wired into run_daily_ingest.
+
+        The manifest must honestly state that ``scoutfootball ingest --sources
+        whoscored`` returns 'skipped: unknown source', so consumers do not
+        infer the source is ingestible from its presence in the registry.
+        """
+        registry = build_adapter_registry()
+        m = registry.by_source("whoscored")
+        assert m is not None
+        assert AdapterCapability.RATING in m.capabilities
+        assert AdapterCapability.EVENT in m.capabilities
+        assert AdapterCapability.INJURY in m.capabilities
+        assert m.maintained is False
+        combined = (m.notes + " " + m.conversion_loss_notes).lower()
+        assert "skipped: unknown source" in combined, (
+            "whoscored manifest must document that the pipeline returns "
+            "'skipped: unknown source' for whoscored, since the adapter is "
+            "not wired into run_daily_ingest."
+        )
+        # The rating fallback (NaN ratings + empty player_name when scraping
+        # fails) is a foot-gun that must be called out so downstream consumers
+        # do not mistake the fallback for real ratings.
+        assert "nan" in combined or "fallback" in combined, (
+            "whoscored manifest must document the ratings fallback behavior "
+            "(NaN ratings + empty player_name when Selenium scraping fails)."
+        )
+
+    def test_capology_is_player_stats_not_market_value(self) -> None:
+        """capology provides salary (a contract fact), not a market-value estimate.
+
+        Salary is a player-level attribute reported by Capology, not a
+        Transfermarkt-style market-value estimate, so the capability must be
+        PLAYER_STATS rather than MARKET_VALUE.
+        """
+        registry = build_adapter_registry()
+        m = registry.by_source("capology")
+        assert m is not None
+        assert m.capabilities == (AdapterCapability.PLAYER_STATS,)
+        assert AdapterCapability.MARKET_VALUE not in m.capabilities
+        assert m.maintained is False
+        combined = (m.notes + " " + m.conversion_loss_notes).lower()
+        # The pipeline-gap note is a contract: capology is importable but
+        # not wired into run_daily_ingest, and the manifest must say so.
+        assert "skipped: unknown source" in combined, (
+            "capology manifest must document that the pipeline returns "
+            "'skipped: unknown source' for capology, since the adapter is "
+            "not wired into run_daily_ingest."
+        )
+        # The GBP currency hardcode is a contract: consumers must not assume
+        # multi-currency support.
+        assert "gbp" in combined, (
+            "capology manifest must document that currency is hardcoded to GBP."
         )
 
 
