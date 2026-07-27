@@ -143,6 +143,84 @@ def _cmd_data_contracts(args: argparse.Namespace) -> None:
     print("\n".join(lines))
 
 
+def _cmd_list_adapters(args: argparse.Namespace) -> None:
+    """List provider adapter manifests (I1: open interop baseline)."""
+    from scoutfootball.adapters.registry import build_adapter_registry
+
+    registry = build_adapter_registry()
+
+    if args.json:
+        print(json.dumps(registry.model_dump(mode="json"), indent=2, ensure_ascii=False))
+        return
+
+    manifests = registry.manifests
+    if args.source:
+        manifests = tuple(m for m in manifests if m.source_id == args.source)
+        if not manifests:
+            print(f"No adapter manifest found for source: {args.source}")
+            sys.exit(1)
+    if args.capability:
+        from scoutfootball.adapters.manifest import AdapterCapability
+
+        try:
+            cap = AdapterCapability(args.capability)
+        except ValueError:
+            valid = ", ".join(c.value for c in AdapterCapability)
+            print(
+                f"Error: unknown capability '{args.capability}'. Valid: {valid}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        manifests = tuple(m for m in manifests if cap in m.capabilities)
+
+    lines = [
+        f"ScoutFootball adapter registry (v{registry.package_version})",
+        f"Generated: {registry.generated_at}",
+        f"Total adapters: {len(registry.manifests)}",
+        f"Maintained: {sum(1 for m in registry.manifests if m.maintained)}",
+        "",
+    ]
+    for manifest in manifests:
+        lines.append(f"  [{manifest.source_id}] {manifest.parser_version}")
+        lines.append(f"      module: {manifest.module_path}")
+        lines.append(f"      maintained: {manifest.maintained}")
+        caps = ", ".join(c.value for c in manifest.capabilities)
+        lines.append(f"      capabilities: {caps}")
+        if manifest.ingestion_cli:
+            lines.append(f"      cli: {manifest.ingestion_cli}")
+        if manifest.artifact_paths:
+            lines.append(f"      artifacts: {len(manifest.artifact_paths)} paths")
+        if manifest.schema_mappings:
+            direct = sum(1 for s in manifest.schema_mappings if s.conversion == "direct")
+            lossy = len(manifest.schema_mappings) - direct
+            lines.append(
+                f"      schema_mappings: {len(manifest.schema_mappings)} "
+                f"({direct} direct, {lossy} lossy)"
+            )
+        if manifest.conversion_loss_notes:
+            note = manifest.conversion_loss_notes
+            if len(note) > 120:
+                note = note[:117] + "..."
+            lines.append(f"      loss_notes: {note}")
+        lines.append("")
+
+    if args.verbose:
+        lines.append("Schema mapping detail:")
+        for manifest in manifests:
+            if not manifest.schema_mappings:
+                continue
+            lines.append(f"  [{manifest.source_id}]")
+            for mapping in manifest.schema_mappings:
+                note = f" — {mapping.note}" if mapping.note else ""
+                lines.append(
+                    f"      {mapping.source_field} -> {mapping.internal_field} "
+                    f"({mapping.conversion}){note}"
+                )
+            lines.append("")
+
+    print("\n".join(lines))
+
+
 def _cmd_ingest(args: argparse.Namespace) -> None:
     from scoutfootball.pipeline import run_daily_ingest
 
@@ -3507,6 +3585,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dc_p.add_argument("--counts", action="store_true", help="Show layer counts summary")
 
+    adapters_p = sub.add_parser(
+        "list-adapters",
+        help="List provider adapter manifests with capabilities, schema mappings and loss notes",
+    )
+    adapters_p.add_argument(
+        "--source", type=str, default=None, help="Filter by source_id (e.g. statsbomb_open)"
+    )
+    adapters_p.add_argument(
+        "--capability",
+        type=str,
+        default=None,
+        help="Filter by AdapterCapability (e.g. event, player_stats, identity)",
+    )
+    adapters_p.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show full schema mapping detail per adapter",
+    )
+    adapters_p.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of human-readable text"
+    )
+
     ingest_p = sub.add_parser("ingest", help="Run daily data ingestion")
     ingest_p.add_argument(
         "--sources",
@@ -4575,6 +4675,7 @@ def main() -> None:
         "info": _cmd_info,
         "capabilities": _cmd_capabilities,
         "data-contracts": _cmd_data_contracts,
+        "list-adapters": _cmd_list_adapters,
         "ingest": _cmd_ingest,
         "build-features": _cmd_build_features,
         "train": _cmd_train,

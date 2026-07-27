@@ -36,6 +36,7 @@ from scoutfootball.api import (
     get_action_value_player_context,
     get_action_value_rating_links,
     get_action_value_summary,
+    get_adapter_registry,
     get_artifacts_summary,
     get_backtest_comparison,
     get_backtest_report_card,
@@ -359,6 +360,15 @@ def create_app() -> FastAPI:
             "data_source_label": artifacts.get("data_source_label", ""),
             "updated_at": updated,
         }
+
+    @app.get("/adapters")
+    def adapters():
+        """Provider adapter manifest registry (I1: open interop baseline).
+
+        Returns capabilities, schema mappings and conversion-loss notes
+        for every registered source adapter. Read-only metadata only.
+        """
+        return get_adapter_registry()
 
     @app.get("/players")
     def players():

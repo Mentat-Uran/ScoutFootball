@@ -511,6 +511,20 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
     return result
 
 
+def get_adapter_registry() -> dict[str, Any]:
+    """Return the provider adapter manifest registry (I1 baseline).
+
+    The registry is a machine-readable catalog of every source adapter
+    the project knows about, including its capabilities, schema
+    mappings and conversion-loss notes. It is read-only metadata: no
+    ingester runs here and no source data is uploaded.
+    """
+    from scoutfootball.adapters.registry import build_adapter_registry
+
+    registry = build_adapter_registry()
+    return registry.model_dump(mode="json")
+
+
 def list_players() -> PlayerListResponse:
     """Return all unique player names from the ratings dataset."""
     df = load_player_ratings()
