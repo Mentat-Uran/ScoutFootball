@@ -1731,6 +1731,200 @@ def _cmd_export_ratings(_args: argparse.Namespace) -> None:
     print(f"  team_coverage: {len(team_coverage)} rows")
 
 
+def _cmd_export_local_pack(args: argparse.Namespace) -> None:
+    """Export all local personal artifacts (recruitment briefs and
+    opposition briefings) into a portable offline JSON pack.
+
+    Mirrors ``POST /local-pack/export`` but works without a running API
+    server, so the maintainer can migrate or back up local artifacts
+    from a terminal session, a cron job, or a recovery shell.  No cloud,
+    no account, no telemetry — the pack is a single JSON document
+    intended for file transfer or local backup.
+    """
+    import json as _json
+
+    from scoutfootball.api import export_local_pack
+
+    try:
+        response = export_local_pack()
+    except Exception as exc:  # noqa: BLE001 — surface any failure to the user
+        print(f"Error: unable to export local pack: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if response.get("status") != "ok":
+        print(f"Error: export returned non-ok status: {response}", file=sys.stderr)
+        sys.exit(1)
+
+    pack = response["pack"]
+    payload = _json.dumps(pack, ensure_ascii=False, indent=2)
+
+    output_path = Path(args.output).resolve() if args.output else None
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(payload, encoding="utf-8")
+        briefs = pack.get("sections", {}).get("recruitment_briefs", {}).get("count", 0)
+        briefings = pack.get("sections", {}).get("opposition_briefings", {}).get("count", 0)
+        skipped = pack.get("skipped", {})
+        skipped_briefs = len(skipped.get("recruitment_briefs", []))
+        skipped_briefings = len(skipped.get("opposition_briefings", []))
+        print(f"Portable pack written to {output_path}")
+        print(f"  schema: {pack.get('schema')} v{pack.get('version')}")
+        print(f"  recruitment_briefs: {briefs} record(s)")
+        print(f"  opposition_briefings: {briefings} record(s)")
+        if skipped_briefs or skipped_briefings:
+            print(f"  skipped: {skipped_briefs} brief(s), {skipped_briefings} briefing(s)")
+        print(f"  exported_at: {pack.get('exported_at')}")
+    else:
+        # stdout: emit the pack JSON so it can be piped into a file or
+        # another command.  Do not print any extra human-readable lines
+        # because they would corrupt the piped output.
+        print(payload)
+
+
+def _cmd_import_local_pack(args: argparse.Namespace) -> None:
+    """Import a portable pack into the local stores.
+
+    Mirrors ``POST /local-pack/import`` but works without a running API
+    server.  By default this is a **dry-run preview**: the pack is
+    parsed and a summary is printed without writing anything to disk.
+    Pass ``--confirm`` to actually import records; pass ``--overwrite``
+    to replace records whose ID already exists locally (otherwise they
+    are reported as conflicts and left untouched).
+    """
+    import json as _json
+
+    from scoutfootball.api import (
+        _PORTABLE_PACK_SCHEMA,
+        _PORTABLE_PACK_VERSION,
+        import_local_pack,
+    )
+
+    # ── Read the pack from --from PATH or stdin ────────────────────
+    if args.from_path:
+        pack_path = Path(args.from_path).resolve()
+        if not pack_path.exists():
+            print(f"Error: pack file not found: {pack_path}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            pack = _json.loads(pack_path.read_text(encoding="utf-8"))
+        except (OSError, _json.JSONDecodeError) as exc:
+            print(f"Error: unable to parse pack file: {exc}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        try:
+            pack = _json.loads(sys.stdin.read())
+        except _json.JSONDecodeError as exc:
+            print(f"Error: unable to parse pack from stdin: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    if not isinstance(pack, dict):
+        print("Error: pack must be a JSON object", file=sys.stderr)
+        sys.exit(1)
+
+    # ── Pack-level validation (mirrors import_local_pack's checks) ──
+    schema = pack.get("schema")
+    version = pack.get("version")
+    if schema != _PORTABLE_PACK_SCHEMA:
+        print(
+            f"Error: pack schema '{schema}' is not '{_PORTABLE_PACK_SCHEMA}'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if version != _PORTABLE_PACK_VERSION:
+        print(
+            f"Error: pack version '{version}' is not '{_PORTABLE_PACK_VERSION}'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    sections = pack.get("sections")
+    if not isinstance(sections, dict):
+        print("Error: pack.sections must be an object", file=sys.stderr)
+        sys.exit(1)
+
+    # ── Build a preview summary ────────────────────────────────────
+    # In dry-run mode we report what would happen, without calling
+    # import_local_pack (which writes to disk).  This mirrors the
+    # "preview or append" pattern used by record-source-policy etc.
+    section_summaries = []
+    for name in ("recruitment_briefs", "opposition_briefings"):
+        section = sections.get(name)
+        if isinstance(section, dict):
+            count = section.get("count")
+            if not isinstance(count, int):
+                records = section.get("records")
+                count = len(records) if isinstance(records, list) else 0
+            section_summaries.append({"section": name, "count": count})
+        else:
+            section_summaries.append({"section": name, "count": 0, "missing": True})
+
+    # ── Dry-run: print preview and exit ────────────────────────────
+    if not args.confirm:
+        result = {
+            "status": "preview",
+            "schema": schema,
+            "version": version,
+            "exported_at": pack.get("exported_at"),
+            "sections": section_summaries,
+            "overwrite": args.overwrite,
+            "note": (
+                "Dry-run only. Pass --confirm to write records to the local stores. "
+                "Pass --overwrite to replace records whose ID already exists locally."
+            ),
+        }
+        if args.json:
+            print(_json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print("Portable pack import preview (dry-run)")
+            print(f"  schema: {schema} v{version}")
+            print(f"  exported_at: {pack.get('exported_at')}")
+            for s in section_summaries:
+                marker = " (missing)" if s.get("missing") else ""
+                print(f"  {s['section']}: {s['count']} record(s){marker}")
+            print(f"  overwrite: {args.overwrite}")
+            print(
+                "  Pass --confirm to write records to the local stores."
+            )
+        return
+
+    # ── Confirmed import: call import_local_pack ───────────────────
+    try:
+        result = import_local_pack(pack, overwrite=args.overwrite)
+    except Exception as exc:  # noqa: BLE001 — surface any failure
+        print(f"Error: unable to import local pack: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(_json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        status = result.get("status", "unknown")
+        section_results = result.get("section_results", [])
+        section_errors = result.get("section_errors", [])
+        summary = result.get("summary", {})
+        print(f"Import status: {status}")
+        for section_result in section_results:
+            section_name = section_result.get("section", "?")
+            section_imported = section_result.get("imported", 0)
+            section_conflicts = len(section_result.get("conflicts", []))
+            section_skipped = len(section_result.get("skipped", []))
+            print(
+                f"  {section_name}: imported={section_imported} "
+                f"conflicts={section_conflicts} skipped={section_skipped}"
+            )
+        if summary:
+            print(
+                f"  total: imported={summary.get('total_imported', 0)} "
+                f"conflicts={summary.get('total_conflicts', 0)} "
+                f"skipped={summary.get('total_skipped', 0)}"
+            )
+        if section_errors:
+            print(f"  section_errors: {len(section_errors)}")
+            for err in section_errors:
+                print(f"    - {err.get('section')}: {err.get('code')}")
+        if status == "error":
+            sys.exit(1)
+
+
 def _cmd_backtest(args: argparse.Namespace) -> None:
     from scoutfootball.evaluation.backtests import (
         run_dc_backtest_with_calibration,
@@ -3730,6 +3924,38 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("export-ratings", help="Export ratings to DuckDB database")
 
+    export_local_pack_p = sub.add_parser(
+        "export-local-pack",
+        help="Bundle local recruitment briefs and opposition briefings into a portable JSON pack",
+    )
+    export_local_pack_p.add_argument(
+        "--output",
+        default=None,
+        help="Write the pack to this path. If omitted, the pack JSON is written to stdout.",
+    )
+
+    import_local_pack_p = sub.add_parser(
+        "import-local-pack",
+        help="Import a portable JSON pack into the local stores (dry-run by default)",
+    )
+    import_local_pack_p.add_argument(
+        "--from",
+        dest="from_path",
+        default=None,
+        help="Read the pack from this path. If omitted, the pack is read from stdin.",
+    )
+    import_local_pack_p.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace records whose ID already exists locally (default: report as conflicts)",
+    )
+    import_local_pack_p.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Actually write records to the local stores. Without this flag, a preview is printed.",
+    )
+    import_local_pack_p.add_argument("--json", action="store_true", help="Emit JSON")
+
     truth_p = sub.add_parser(
         "import-truth-labels",
         help="Import scouting workspace review decisions as truth labels",
@@ -4373,6 +4599,8 @@ def main() -> None:
         "action-value": _cmd_action_value,
         "action-value-matches": _cmd_action_value_matches,
         "export-ratings": _cmd_export_ratings,
+        "export-local-pack": _cmd_export_local_pack,
+        "import-local-pack": _cmd_import_local_pack,
         "import-truth-labels": _cmd_import_truth_labels,
         "import-transfermarkt-truth-labels": _cmd_import_transfermarkt_truth_labels,
         "transfermarkt-identity-review": _cmd_transfermarkt_identity_review,
