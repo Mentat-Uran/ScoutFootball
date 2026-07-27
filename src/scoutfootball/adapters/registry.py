@@ -969,6 +969,297 @@ def build_transfermarkt_datasets_manifest() -> AdapterManifest:
     )
 
 
+def build_whoscored_manifest() -> AdapterManifest:
+    """WhoScored: player ratings, match events, missing players via Selenium (experimental).
+
+    The adapter module exports three fetch functions (player ratings,
+    match events, missing players) backed by soccerdata's WhoScored
+    scraper, which drives Selenium/Chrome against whoscored.com match
+    pages. The functions are importable from
+    ``scoutfootball.adapters`` but are NOT wired into
+    ``run_daily_ingest``: passing ``whoscored`` to the pipeline returns
+    ``"skipped: unknown source 'whoscored'"``. The manifest documents
+    this honestly so consumers do not infer the source is ingestible
+    from its presence in the registry.
+    """
+    return AdapterManifest(
+        source_id="whoscored",
+        parser_version="whoscored/v0.1.0",
+        module_path="scoutfootball.adapters.whoscored",
+        capabilities=(
+            AdapterCapability.RATING,
+            AdapterCapability.EVENT,
+            AdapterCapability.INJURY,
+        ),
+        schema_mappings=(
+            # fetch_player_match_ratings output
+            SchemaMapping(
+                source_field="player_name",
+                internal_field="player_name",
+                conversion="direct",
+                note=(
+                    "Scraped from match page ratings table; "
+                    "source is WhoScored player name string."
+                ),
+            ),
+            SchemaMapping(
+                source_field="team_name",
+                internal_field="team_name",
+                conversion="direct",
+                note="Derived from schedule home_team/away_team for the side being scraped.",
+            ),
+            SchemaMapping(
+                source_field="match_date",
+                internal_field="match_date",
+                conversion="direct",
+                note="From schedule row date; not the scrape timestamp.",
+            ),
+            SchemaMapping(
+                source_field="rating",
+                internal_field="rating",
+                conversion="direct",
+                note="WhoScored 1-10 player match rating derived from Opta event data.",
+            ),
+            SchemaMapping(
+                source_field="position",
+                internal_field="position",
+                conversion="direct",
+                note="Scraped from match page; not normalized to internal position codes.",
+            ),
+            # fetch_match_events output
+            SchemaMapping(
+                source_field="match_id",
+                internal_field="match_id",
+                conversion="direct",
+                note=(
+                    "WhoScored game_id from schedule; "
+                    "not the same namespace as statsbomb match_id."
+                ),
+            ),
+            SchemaMapping(
+                source_field="event_type",
+                internal_field="event_type",
+                conversion="direct",
+                note="Renamed from soccerdata 'type' column.",
+            ),
+            SchemaMapping(
+                source_field="minute",
+                internal_field="minute",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="second",
+                internal_field="second",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="x",
+                internal_field="x",
+                conversion="approximate",
+                note="WhoScored pitch coordinates; scale convention not normalized to 0-1.",
+            ),
+            SchemaMapping(
+                source_field="y",
+                internal_field="y",
+                conversion="approximate",
+                note="WhoScored pitch coordinates; scale convention not normalized to 0-1.",
+            ),
+            SchemaMapping(
+                source_field="end_x",
+                internal_field="end_x",
+                conversion="approximate",
+            ),
+            SchemaMapping(
+                source_field="end_y",
+                internal_field="end_y",
+                conversion="approximate",
+            ),
+            SchemaMapping(
+                source_field="is_shot",
+                internal_field="is_shot",
+                conversion="direct",
+                note="Defaulted to False when source column missing.",
+            ),
+            SchemaMapping(
+                source_field="is_goal",
+                internal_field="is_goal",
+                conversion="direct",
+                note="Defaulted to False when source column missing.",
+            ),
+            SchemaMapping(
+                source_field="card_type",
+                internal_field="card_type",
+                conversion="direct",
+                note="NaN when source column missing.",
+            ),
+            SchemaMapping(
+                source_field="outcome_type",
+                internal_field="outcome_type",
+                conversion="direct",
+                note="NaN when source column missing.",
+            ),
+            # fetch_missing_players output
+            SchemaMapping(
+                source_field="reason",
+                internal_field="reason",
+                conversion="direct",
+                note="Injury/suspension reason text from WhoScored missing-players feed.",
+            ),
+            SchemaMapping(
+                source_field="status",
+                internal_field="status",
+                conversion="direct",
+                note="Missing-player status string; not normalized to an enum.",
+            ),
+        ),
+        conversion_loss_notes=(
+            "Three fetch functions exist but none is wired into run_daily_ingest: "
+            "passing 'whoscored' to scoutfootball ingest returns 'skipped: unknown "
+            "source'. Player ratings are scraped from match pages via Selenium with "
+            "a 2-second sleep per match, making large-season scraping slow and "
+            "fragile; when scraping fails the adapter falls back to returning the "
+            "schedule with NaN ratings and empty player_name, which downstream "
+            "consumers must not mistake for real ratings. Event coordinates (x, y, "
+            "end_x, end_y) are kept as raw WhoScored values and not normalized to "
+            "the StatsBomb 120x80 convention or a 0-1 scale; cross-source event "
+            "alignment with statsbomb_open is not safe without explicit "
+            "coordinate transformation. match_id is WhoScored's game_id namespace "
+            "and does not collide with statsbomb match_id. The missing-players "
+            "match_date is derived from the schedule 'game' column when present, "
+            "else NaT. Requires soccerdata + Selenium + Chrome/Chromium, none of "
+            "which are in default project deps. Uses unofficial Selenium scraping "
+            "of whoscored.com; ToS and redistribution boundary unclear."
+        ),
+        ingestion_cli="scoutfootball ingest --sources whoscored",
+        artifact_paths=(
+            "raw/whoscored/<league>/<season>/player_ratings.parquet",
+            "raw/whoscored/<league>/<season>/match_events.parquet",
+            "raw/whoscored/<league>/<season>/missing_players.parquet",
+        ),
+        maintained=False,
+        notes=(
+            "Experimental, not in maintainer's real workflow (confirmed 2026-07-17). "
+            "Adapter functions are importable but NOT wired into run_daily_ingest: "
+            "the pipeline returns 'skipped: unknown source' for whoscored. "
+            "Requires soccerdata + Selenium + Chrome/Chromium. "
+            "Uses unofficial Selenium scraping of whoscored.com; redistribution unclear."
+        ),
+    )
+
+
+def build_capology_manifest() -> AdapterManifest:
+    """Capology: player salary data via ScraperFC (experimental).
+
+    The adapter module exports ``fetch_player_salaries`` backed by
+    ScraperFC's Capology scraper. The function is importable from
+    ``scoutfootball.adapters`` but is NOT wired into
+    ``run_daily_ingest``: passing ``capology`` to the pipeline returns
+    ``"skipped: unknown source 'capology'"``. Salary is a player-level
+    contract fact (not a market-value estimate), so the capability is
+    PLAYER_STATS rather than MARKET_VALUE.
+    """
+    return AdapterManifest(
+        source_id="capology",
+        parser_version="capology/v0.1.0",
+        module_path="scoutfootball.adapters.capology",
+        capabilities=(AdapterCapability.PLAYER_STATS,),
+        schema_mappings=(
+            SchemaMapping(
+                source_field="player_name",
+                internal_field="player_name",
+                conversion="direct",
+                note="Heuristic-detected from raw ScraperFC columns (player/name lookup).",
+            ),
+            SchemaMapping(
+                source_field="team_name",
+                internal_field="team_name",
+                conversion="direct",
+                note="Heuristic-detected from raw club/team columns.",
+            ),
+            SchemaMapping(
+                source_field="position",
+                internal_field="position",
+                conversion="direct",
+                note=(
+                    "Heuristic-detected from pos/position columns; "
+                    "not normalized to internal position codes."
+                ),
+            ),
+            SchemaMapping(
+                source_field="weekly_gross_salary",
+                internal_field="weekly_gross_salary",
+                conversion="approximate",
+                note=(
+                    "Parsed from raw string by stripping non-digit chars; "
+                    "currency hardcoded to GBP."
+                ),
+            ),
+            SchemaMapping(
+                source_field="annual_gross_salary",
+                internal_field="annual_gross_salary",
+                conversion="approximate",
+                note=(
+                    "Parsed from raw string by stripping non-digit chars; "
+                    "currency hardcoded to GBP."
+                ),
+            ),
+            SchemaMapping(
+                source_field="weekly_net_salary",
+                internal_field="weekly_net_salary",
+                conversion="approximate",
+                note=(
+                    "Parsed from raw string by stripping non-digit chars; "
+                    "currency hardcoded to GBP."
+                ),
+            ),
+            SchemaMapping(
+                source_field="annual_net_salary",
+                internal_field="annual_net_salary",
+                conversion="approximate",
+                note=(
+                    "Parsed from raw string by stripping non-digit chars; "
+                    "currency hardcoded to GBP."
+                ),
+            ),
+            SchemaMapping(
+                source_field="expiry_date",
+                internal_field="expiry_date",
+                conversion="direct",
+                note="Contract expiry date string; not parsed to datetime.",
+            ),
+        ),
+        conversion_loss_notes=(
+            "fetch_player_salaries is importable but NOT wired into run_daily_ingest: "
+            "passing 'capology' to scoutfootball ingest returns 'skipped: unknown "
+            "source'. ScraperFC returns a MultiIndex-column DataFrame whose exact "
+            "column names vary by Capology page structure; the adapter uses "
+            "heuristic _detect_column_mapping (lowercase substring match) to find "
+            "player/team/position/salary columns, so any Capology HTML redesign "
+            "can silently misroute columns. Salary values are parsed from raw "
+            "strings by stripping non-digit characters and replacing empties with "
+            "0.0, which masks parse failures as zero salary rather than raising. "
+            "Currency is hardcoded to GBP via scraper.scrape_salaries(season, "
+            "league, 'gbp'); other currencies are not exposed. Salary is a "
+            "contract fact reported by Capology, not a market-value estimate, so "
+            "the capability is PLAYER_STATS rather than MARKET_VALUE. Requires "
+            "ScraperFC which is not in default project deps. Uses unofficial "
+            "scraping of capology.com; ToS and redistribution boundary unclear."
+        ),
+        ingestion_cli="scoutfootball ingest --sources capology",
+        artifact_paths=(
+            "raw/capology/<league>/<season>/player_salaries.parquet",
+        ),
+        maintained=False,
+        notes=(
+            "Experimental, not in maintainer's real workflow (confirmed 2026-07-17). "
+            "Adapter function is importable but NOT wired into run_daily_ingest: "
+            "the pipeline returns 'skipped: unknown source' for capology. "
+            "Requires ScraperFC. Currency hardcoded to GBP. "
+            "Uses unofficial scraping of capology.com; redistribution unclear."
+        ),
+    )
+
+
 def build_adapter_registry() -> AdapterRegistry:
     """Build the canonical adapter manifest registry.
 
@@ -995,6 +1286,8 @@ def build_adapter_registry() -> AdapterRegistry:
         build_sofifa_manifest(),
         build_api_football_manifest(),
         build_transfermarkt_datasets_manifest(),
+        build_whoscored_manifest(),
+        build_capology_manifest(),
     )
     return AdapterRegistry(
         generated_at=_dt.datetime.now(_dt.UTC).isoformat(),
