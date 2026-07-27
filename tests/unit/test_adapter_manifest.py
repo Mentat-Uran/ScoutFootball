@@ -9,6 +9,12 @@ The manifest schema is intentionally conservative — undocumented
 capabilities or mappings are omitted rather than guessed — so the tests
 enforce that conservatism by checking invariants, not by asserting
 exact field lists that would drift on every adapter update.
+
+The registry includes both maintained sources (in the maintainer's real
+workflow) and experimental sources (implemented but not in active use,
+marked ``maintained=False``). The ``maintained`` flag is a contract:
+consumers filter on it to see only active sources, so mislabeling an
+experimental adapter as maintained (or vice versa) is a regression.
 """
 
 from __future__ import annotations
@@ -29,10 +35,37 @@ from scoutfootball.adapters.registry import build_adapter_registry
 from scoutfootball.api import get_adapter_registry
 
 # Source ids that the registry is contractually required to know about.
-# This mirrors the seven ``build_*_manifest`` functions in registry.py;
+# This mirrors the ``build_*_manifest`` functions in registry.py;
 # adding a new source requires both a builder and an entry here so the
 # contract is not silently widened.
+#
+# The first 7 are maintained sources (in the maintainer's real workflow).
+# The last 4 are experimental sources (implemented but not in active use,
+# confirmed 2026-07-17); they are registered so the manifest surface
+# honestly reflects the codebase, and are marked maintained=False in
+# their manifests.
 _EXPECTED_SOURCE_IDS = frozenset(
+    {
+        # Maintained sources
+        "statsbomb_open",
+        "football_data",
+        "clubelo",
+        "understat",
+        "fbref",
+        "transfermarkt_manual",
+        "reep",
+        # Experimental sources (not in active use)
+        "sofascore",
+        "sofifa",
+        "api_football",
+        "transfermarkt_datasets",
+    }
+)
+
+# Subset of source ids that must be marked maintained=True. The
+# experimental sources below must be maintained=False. Splitting the
+# contract makes it harder to accidentally flip a flag during edits.
+_MAINTAINED_SOURCE_IDS = frozenset(
     {
         "statsbomb_open",
         "football_data",
@@ -43,6 +76,8 @@ _EXPECTED_SOURCE_IDS = frozenset(
         "reep",
     }
 )
+
+_EXPERIMENTAL_SOURCE_IDS = _EXPECTED_SOURCE_IDS - _MAINTAINED_SOURCE_IDS
 
 # Conversion categories documented on SchemaMapping.conversion. Anything
 # outside this set is a contract violation: either the docstring in
@@ -178,6 +213,46 @@ class TestAdapterRegistry:
 
         video_sources = registry.with_capability(AdapterCapability.VIDEO)
         assert video_sources == ()
+
+    def test_maintained_flag_matches_expected_split(self) -> None:
+        """The maintained flag is a consumer-facing contract.
+
+        Consumers filter on ``maintained=True`` to see only sources in
+        the maintainer's real workflow, so mislabeling an experimental
+        adapter as maintained (or vice versa) is a regression that
+        this test pins down explicitly.
+        """
+        registry = build_adapter_registry()
+        for manifest in registry.manifests:
+            if manifest.source_id in _MAINTAINED_SOURCE_IDS:
+                assert manifest.maintained is True, (
+                    f"{manifest.source_id} must be maintained=True (it is in "
+                    f"_MAINTAINED_SOURCE_IDS). If it became experimental, move "
+                    f"it to _EXPERIMENTAL_SOURCE_IDS and update this test."
+                )
+            else:
+                assert manifest.maintained is False, (
+                    f"{manifest.source_id} must be maintained=False (it is in "
+                    f"_EXPERIMENTAL_SOURCE_IDS). If it became actively maintained, "
+                    f"move it to _MAINTAINED_SOURCE_IDS and update this test."
+                )
+
+    def test_experimental_sources_document_status_in_notes(self) -> None:
+        """Every experimental source must say so in its notes.
+
+        A ``maintained=False`` flag without explanation in human-readable
+        notes is opaque: someone reading the manifest should not have to
+        cross-reference the flag to understand the source is experimental.
+        """
+        registry = build_adapter_registry()
+        for manifest in registry.manifests:
+            if not manifest.maintained:
+                combined = (manifest.notes + " " + manifest.conversion_loss_notes).lower()
+                assert "experimental" in combined or "not in maintainer" in combined, (
+                    f"Experimental source {manifest.source_id} must state in notes "
+                    f"or conversion_loss_notes that it is experimental or not in "
+                    f"the maintainer's real workflow."
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +420,100 @@ class TestSourceSpecificContracts:
         combined = (m.notes + " " + m.conversion_loss_notes).lower()
         assert "manual" in combined, (
             "transfermarkt_manual manifest must clearly state it is manual import only."
+        )
+
+    def test_sofascore_does_not_claim_rating(self) -> None:
+        """sofascore's function name implies player ratings, but the code
+        returns schedule + league_table data. The manifest must document
+        actual behavior, so RATING must not appear in capabilities."""
+        registry = build_adapter_registry()
+        m = registry.by_source("sofascore")
+        assert m is not None
+        assert AdapterCapability.RATING not in m.capabilities, (
+            "sofascore must not claim RATING: the implementation returns schedule "
+            "and league_table data, not player match ratings. Claiming RATING "
+            "would mislead consumers about what the adapter actually provides."
+        )
+        assert AdapterCapability.FIXTURE in m.capabilities
+        assert AdapterCapability.RESULT in m.capabilities
+        assert m.maintained is False
+        # The doc/code mismatch must be documented in conversion_loss_notes
+        # so consumers understand why the function name and capabilities diverge.
+        loss_text = m.conversion_loss_notes.lower()
+        assert "docstring" in loss_text or "player match ratings" in loss_text, (
+            "sofascore manifest must document the docstring/code mismatch."
+        )
+
+    def test_sofifa_is_player_stats_only(self) -> None:
+        """sofifa provides FIFA video-game attributes, not real-world performance."""
+        registry = build_adapter_registry()
+        m = registry.by_source("sofifa")
+        assert m is not None
+        assert m.capabilities == (AdapterCapability.PLAYER_STATS,)
+        assert m.maintained is False
+        # The IP disclaimer is a contract: FIFA attributes are EA Sports IP,
+        # not physical measurements, and must not be reported as such.
+        combined = (m.notes + " " + m.conversion_loss_notes).lower()
+        assert "ea sports" in combined, (
+            "sofifa manifest must disclose that FIFA attributes are EA Sports IP, "
+            "not real-world measurements."
+        )
+
+    def test_api_football_does_not_claim_coach_capability(self) -> None:
+        """api_football implements fetch_coaches but no capability covers it.
+        The manifest must omit coaches rather than shoehorning it into an
+        existing capability."""
+        registry = build_adapter_registry()
+        m = registry.by_source("api_football")
+        assert m is not None
+        assert AdapterCapability.INJURY in m.capabilities
+        assert AdapterCapability.TRANSFER in m.capabilities
+        # Coaches data exists in the adapter but is not exposed via any
+        # capability. This is intentional conservatism.
+        loss_text = m.conversion_loss_notes.lower()
+        assert "coachs" in loss_text or "coaches" in loss_text, (
+            "api_football manifest must document that the /coachs endpoint exists "
+            "but is not exposed via any capability."
+        )
+        assert m.maintained is False
+
+    def test_transfermarkt_datasets_has_empty_schema_mappings(self) -> None:
+        """transfermarkt_datasets dumps raw tables without field-level mapping.
+        The schema_mappings tuple must be empty to honestly reflect this:
+        documenting fake mappings would violate the manifest's conservatism."""
+        registry = build_adapter_registry()
+        m = registry.by_source("transfermarkt_datasets")
+        assert m is not None
+        assert m.schema_mappings == (), (
+            "transfermarkt_datasets must have empty schema_mappings: the adapter "
+            "dumps raw tables without field-level transformation."
+        )
+        # The adapter must explain why schema_mappings is empty.
+        loss_text = m.conversion_loss_notes.lower()
+        assert "empty" in loss_text or "no source-to-internal" in loss_text, (
+            "transfermarkt_datasets must explain in conversion_loss_notes why "
+            "schema_mappings is empty."
+        )
+        assert m.maintained is False
+
+    def test_transfermarkt_datasets_claims_six_capabilities(self) -> None:
+        """transfermarkt_datasets exports 6 tables that map to 6 capabilities.
+        Pinning the count catches accidental capability drift."""
+        registry = build_adapter_registry()
+        m = registry.by_source("transfermarkt_datasets")
+        assert m is not None
+        expected = {
+            AdapterCapability.MARKET_VALUE,
+            AdapterCapability.TRANSFER,
+            AdapterCapability.PLAYER_STATS,
+            AdapterCapability.LINEUP,
+            AdapterCapability.FIXTURE,
+            AdapterCapability.RESULT,
+        }
+        assert set(m.capabilities) == expected, (
+            f"transfermarkt_datasets capabilities drifted. "
+            f"Expected {sorted(c.value for c in expected)}, "
+            f"got {sorted(c.value for c in m.capabilities)}."
         )
 
 

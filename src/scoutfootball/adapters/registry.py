@@ -574,6 +574,401 @@ def build_reep_manifest() -> AdapterManifest:
     )
 
 
+def build_sofascore_manifest() -> AdapterManifest:
+    """SofaScore: schedule and team-level league table (experimental).
+
+    Wired through ``scoutfootball ingest --source sofascore`` but not in
+    the maintainer's real workflow (confirmed 2026-07-17). The function
+    name ``fetch_player_match_stats`` and its docstring imply player
+    match ratings, but the implementation reads ``read_schedule`` and
+    ``read_league_table`` and returns match-level plus team-level data;
+    no player ratings are produced by the current code path. The
+    manifest documents actual behavior, not the docstring intent.
+    """
+    return AdapterManifest(
+        source_id="sofascore",
+        parser_version="sofascore/v0.1.0",
+        module_path="scoutfootball.adapters.sofascore",
+        capabilities=(
+            AdapterCapability.FIXTURE,
+            AdapterCapability.RESULT,
+            AdapterCapability.PLAYER_STATS,
+        ),
+        schema_mappings=(
+            SchemaMapping(
+                source_field="home_team",
+                internal_field="home_team",
+                conversion="direct",
+                note="Schedule row home team; soccerdata name, not internal team_id.",
+            ),
+            SchemaMapping(
+                source_field="away_team",
+                internal_field="away_team",
+                conversion="direct",
+                note="Schedule row away team; soccerdata name, not internal team_id.",
+            ),
+            SchemaMapping(
+                source_field="date",
+                internal_field="match_date",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="home_score",
+                internal_field="home_score",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="away_score",
+                internal_field="away_score",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="team",
+                internal_field="team_name",
+                conversion="direct",
+                note="From league_table merge; raw soccerdata name.",
+            ),
+            SchemaMapping(
+                source_field="MP",
+                internal_field="matches_played",
+                conversion="direct",
+                note="Team-season aggregate, not player-level.",
+            ),
+            SchemaMapping(
+                source_field="W",
+                internal_field="wins",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="D",
+                internal_field="draws",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="L",
+                internal_field="losses",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="GF",
+                internal_field="goals_for",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="GA",
+                internal_field="goals_against",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="Pts",
+                internal_field="points",
+                conversion="direct",
+            ),
+        ),
+        conversion_loss_notes=(
+            "Function name and docstring claim player match ratings (player_name, "
+            "rating, position, minutes_played) but the implementation returns "
+            "schedule + league_table data; player ratings are NOT produced. This "
+            "doc/code mismatch is intentional in the manifest: it describes actual "
+            "behavior. Uses the unofficial api.sofascore.com endpoint via "
+            "soccerdata; not an official API, redistribution boundary unclear. "
+            "Requires soccerdata package which is not in default project deps."
+        ),
+        ingestion_cli="scoutfootball ingest --source sofascore",
+        artifact_paths=(
+            "raw/sofascore/<league>/<season>/schedule.parquet",
+            "raw/sofascore/<league>/<season>/league_table.parquet",
+        ),
+        maintained=False,
+        notes=(
+            "Experimental, not in maintainer's real workflow (confirmed 2026-07-17). "
+            "Requires soccerdata package. Uses unofficial API; redistribution unclear."
+        ),
+    )
+
+
+def build_sofifa_manifest() -> AdapterManifest:
+    """SoFIFA: FIFA player attributes via soccerdata (experimental).
+
+    Wired through ``scoutfootball ingest --source sofifa`` but the
+    pipeline ``_ingest_sofifa`` is a placeholder that returns 'skipped:
+    SoFIFA adapter not yet implemented' without calling the adapter, so
+    no data actually flows through the CLI today.
+    """
+    return AdapterManifest(
+        source_id="sofifa",
+        parser_version="sofifa/v0.1.0",
+        module_path="scoutfootball.adapters.sofifa",
+        capabilities=(AdapterCapability.PLAYER_STATS,),
+        schema_mappings=(
+            SchemaMapping(
+                source_field="player",
+                internal_field="player_name",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="team",
+                internal_field="team_name",
+                conversion="direct",
+                note="SoFIFA club name; not normalized to internal team_id.",
+            ),
+            SchemaMapping(
+                source_field="overall_rating",
+                internal_field="overall_rating",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="potential",
+                internal_field="potential",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="pac",
+                internal_field="pac",
+                conversion="derived",
+                note="Direct column if present, else averaged from acceleration+sprint_speed.",
+            ),
+            SchemaMapping(
+                source_field="sho",
+                internal_field="sho",
+                conversion="derived",
+                note="Direct column if present, else averaged from 7 shooting sub-attributes.",
+            ),
+            SchemaMapping(
+                source_field="pas",
+                internal_field="pas",
+                conversion="derived",
+                note="Direct column if present, else averaged from 6 passing sub-attributes.",
+            ),
+            SchemaMapping(
+                source_field="dri",
+                internal_field="dri",
+                conversion="derived",
+                note="Direct column if present, else averaged from 5 dribbling sub-attributes.",
+            ),
+            SchemaMapping(
+                source_field="def",
+                internal_field="def",
+                conversion="derived",
+                note="Direct column if present, else averaged from 4 defending sub-attributes.",
+            ),
+            SchemaMapping(
+                source_field="phy",
+                internal_field="phy",
+                conversion="derived",
+                note="Direct column if present, else averaged from 4 physical sub-attributes.",
+            ),
+            SchemaMapping(
+                source_field="age",
+                internal_field="age",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="preferred_foot",
+                internal_field="preferred_foot",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="international_reputation",
+                internal_field="international_reputation",
+                conversion="direct",
+            ),
+        ),
+        conversion_loss_notes=(
+            "FIFA composite attributes (PAC/SHO/PAS/DRI/DEF/PHY) are derived by "
+            "averaging sub-attributes when the composite column is not directly "
+            "available; the averaging is a heuristic, not EA Sports' official "
+            "formula. FIFA player attributes are EA Sports intellectual property "
+            "derived from the FIFA/EA FC video game, not real-world measurements; "
+            "they are useful for player comparison but should not be reported as "
+            "physical performance. Requires soccerdata package which is not in "
+            "default project deps. The pipeline _ingest_sofifa is a placeholder "
+            "that does not actually invoke this adapter."
+        ),
+        ingestion_cli="scoutfootball ingest --source sofifa",
+        artifact_paths=(
+            "raw/sofifa/<league>/<season>/player_attributes.parquet",
+        ),
+        maintained=False,
+        notes=(
+            "Experimental, not in maintainer's real workflow (confirmed 2026-07-17). "
+            "Pipeline ingest is a placeholder; adapter code exists but is not invoked. "
+            "FIFA attributes are EA Sports IP, not real-world measurements."
+        ),
+    )
+
+
+def build_api_football_manifest() -> AdapterManifest:
+    """API-Football: injuries and transfers via official API (experimental).
+
+    Wired through ``scoutfootball ingest --source api_football``; the
+    pipeline catches ``ApiKeyMissingError`` and skips gracefully when no
+    key is configured, so the platform works without it. Free-tier
+    limit is 100 requests/day.
+    """
+    return AdapterManifest(
+        source_id="api_football",
+        parser_version="api_football/v0.1.0",
+        module_path="scoutfootball.adapters.api_football",
+        capabilities=(
+            AdapterCapability.INJURY,
+            AdapterCapability.TRANSFER,
+        ),
+        schema_mappings=(
+            # /injuries endpoint
+            SchemaMapping(
+                source_field="player.name",
+                internal_field="player_name",
+                conversion="direct",
+                note="From /injuries response.player.name.",
+            ),
+            SchemaMapping(
+                source_field="team.name",
+                internal_field="team_name",
+                conversion="direct",
+                note="From /injuries response.team.name.",
+            ),
+            SchemaMapping(
+                source_field="injury.type",
+                internal_field="injury_type",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="injury.reason",
+                internal_field="reason",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="injury.date_start",
+                internal_field="date_start",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="injury.date_end",
+                internal_field="date_end",
+                conversion="direct",
+                note="May be empty for ongoing injuries.",
+            ),
+            # /transfers endpoint
+            SchemaMapping(
+                source_field="player.name",
+                internal_field="player_name",
+                conversion="direct",
+                note="From /transfers response.player.name.",
+            ),
+            SchemaMapping(
+                source_field="transfers[].from.name",
+                internal_field="from_team",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="transfers[].to.name",
+                internal_field="to_team",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="transfers[].type",
+                internal_field="transfer_type",
+                conversion="direct",
+            ),
+            SchemaMapping(
+                source_field="transfers[].date",
+                internal_field="date",
+                conversion="direct",
+                note="Date object flattened to string; format varies.",
+            ),
+            SchemaMapping(
+                source_field="transfers[].fee",
+                internal_field="fee",
+                conversion="direct",
+                note="Free-text fee string; not parsed to numeric value.",
+            ),
+        ),
+        conversion_loss_notes=(
+            "Requires API_FOOTBALL_KEY environment variable; free-tier limit 100 "
+            "requests/day enforced by _DailyRequestCounter. The /coachs endpoint "
+            "is implemented in fetch_coaches but does not map to any documented "
+            "capability and is not exposed in this manifest. Transfer fee is a "
+            "free-text string (e.g. '€25m', 'loan', 'free') and is not parsed to "
+            "a numeric value by this adapter. Paginated responses are merged into "
+            "a single JSON cache file; the original page boundaries are lost."
+        ),
+        ingestion_cli="scoutfootball ingest --source api_football",
+        artifact_paths=(
+            "raw/api_football/injuries/<league_id>/<season>.json",
+            "raw/api_football/transfers/<team_id>.json",
+            "raw/api_football/coaches/<league_id>/<season>.json",
+        ),
+        maintained=False,
+        notes=(
+            "Experimental, not in maintainer's real workflow (confirmed 2026-07-17). "
+            "Requires API_FOOTBALL_KEY; free-tier 100 requests/day. "
+            "API-Football (api-sports.io) official license."
+        ),
+    )
+
+
+def build_transfermarkt_datasets_manifest() -> AdapterManifest:
+    """transfermarkt-datasets: bulk DuckDB export (experimental).
+
+    Downloads a pre-built ~500MB DuckDB file from
+    ``dcaribou/transfermarkt-datasets`` and exports individual tables
+    to Parquet without field-level transformation. The adapter is a
+    table dumper, not a field mapper: schema_mappings is intentionally
+    empty because no source-to-internal field mapping occurs at this
+    layer.
+    """
+    return AdapterManifest(
+        source_id="transfermarkt_datasets",
+        parser_version="transfermarkt_datasets/v0.1.0",
+        module_path="scoutfootball.adapters.transfermarkt_datasets",
+        capabilities=(
+            AdapterCapability.MARKET_VALUE,
+            AdapterCapability.TRANSFER,
+            AdapterCapability.PLAYER_STATS,
+            AdapterCapability.LINEUP,
+            AdapterCapability.FIXTURE,
+            AdapterCapability.RESULT,
+        ),
+        schema_mappings=(
+            # Intentionally empty: this adapter dumps raw tables to Parquet
+            # without field-level mapping. Downstream code performs any
+            # needed transformations. Documenting fake mappings here would
+            # violate the manifest's conservatism principle.
+        ),
+        conversion_loss_notes=(
+            "Adapter exports raw DuckDB tables to Parquet without field-level "
+            "transformation; schema_mappings is empty because no source-to-"
+            "internal mapping occurs at this layer. The ~500MB DuckDB file is "
+            "downloaded from an external R2 storage URL on first use and cached "
+            "locally; subsequent runs read the cache. Tables are dumped as-is, "
+            "so downstream consumers must handle schema drift in the upstream "
+            "dataset. The adapter does not verify column names against an "
+            "internal schema; it only checks that the expected table names "
+            "exist in the DuckDB file. game_events table is exported but not "
+            "claimed as EVENT capability because the schema is unverified and "
+            "not consumed by any current pipeline."
+        ),
+        ingestion_cli="scoutfootball ingest --source transfermarkt_datasets",
+        artifact_paths=(
+            "raw/transfermarkt_datasets/transfermarkt-datasets.duckdb",
+            "raw/transfermarkt_datasets/player_valuations.parquet",
+            "raw/transfermarkt_datasets/transfers.parquet",
+            "raw/transfermarkt_datasets/appearances.parquet",
+            "raw/transfermarkt_datasets/game_lineups.parquet",
+            "raw/transfermarkt_datasets/games.parquet",
+            "raw/transfermarkt_datasets/club_games.parquet",
+        ),
+        maintained=False,
+        notes=(
+            "Experimental, not in maintainer's real workflow (confirmed 2026-07-17). "
+            "Downloads ~500MB external DuckDB file from dcaribou/transfermarkt-datasets. "
+            "Maintainer confirmed personal local use OK (2026-07-17); redistribution "
+            "requires checking upstream dataset license and Transfermarkt ToS."
+        ),
+    )
+
+
 def build_adapter_registry() -> AdapterRegistry:
     """Build the canonical adapter manifest registry.
 
@@ -581,6 +976,12 @@ def build_adapter_registry() -> AdapterRegistry:
     stays in sync with the adapter modules. Each manifest is built by
     a dedicated function that documents the actual fields the adapter
     reads and writes.
+
+    The registry includes both maintained sources (in the maintainer's
+    real workflow) and experimental sources (implemented but not in
+    active use, marked ``maintained=False``). Experimental sources are
+    registered so the manifest surface honestly reflects the codebase;
+    consumers can filter on ``maintained=True`` to see only active sources.
     """
     manifests = (
         build_statsbomb_open_manifest(),
@@ -590,6 +991,10 @@ def build_adapter_registry() -> AdapterRegistry:
         build_fbref_manifest(),
         build_transfermarkt_manual_manifest(),
         build_reep_manifest(),
+        build_sofascore_manifest(),
+        build_sofifa_manifest(),
+        build_api_football_manifest(),
+        build_transfermarkt_datasets_manifest(),
     )
     return AdapterRegistry(
         generated_at=_dt.datetime.now(_dt.UTC).isoformat(),
