@@ -52,6 +52,8 @@ C1 可信证据内核 — `verified`（2026-07-23）。退出门槛 4 条全部�
 
 **P1/I1/R1/E1 已解锁**。P1（个人决策闭环）四个分支现已全部 `verified`：6.1 Recruitment Pack（brief + dossier，2026-07-24）、6.2 Opposition & Match Pack（briefing + post_match_review，2026-07-24）、6.3 World Cup Pack 参考化（2026-07-23）、6.4 产品体验（2026-07-24）。P1 退出门槛 4 条全部满足：(1) 维护者可从真实输入独立完成参考工作流（6.4 工作流导航 + 版本/备份层）；(2) 需求 brief 到有人工结论的证据包可 round-trip（6.1 brief→dossier、6.2 briefing→review 双侧闭环）；(3) 可行动推荐显示覆盖/来源/敏感性/可检查证据（dossier 与 review 的 evidence 携带 fact_tier，decision/status 一致性阻断无结论的行动建议）；(4) 世界杯包与招募/比赛包复用 Core（6.3 contracts.py 唯一复用层）。I1/R1/E1 待维护者选择实际工作流作为验收载体后启动。
 
+**L1 已 verified**（2026-07-27）。L1（本地协作与可移植性）退出门槛"通过本地包、备份和导入导出复核，不建设云协作"全部满足：L1.1 便携包导入与完整性校验（pack/section/record 三层失败模型 + 26 单测）、L1.2 本地健康端点与总览面板（`/health/detailed` + 5 张卡片，不向维护者上传遥测）、L1.3 worldcup capability 注册表漂移修复（4 capability api_paths/cli_commands 对齐）、L1.4 capability drift gate 全域扩展（4→26 前缀，覆盖约 200 路由；17 占位符名称对齐；11 方法标注）、L1.5 跨 data root 迁移端到端验证（9 集成测试，独立 source/target data root 真实切换 `SCOUTFOOTBALL_DATA_ROOT`，覆盖物理文件落地 + API 可见性 + 冲突处理 + revision backup + JSON 序列化可移植性）。L1.1 遗留的"真实跨机器迁移演练"由 L1.5 关闭：测试 fixture 模式（`source_data_root` + `target_data_root` + `_switch_env()`）通过 `monkeypatch.setenv` 真实切换 data root，不再 patch store factory，证明 `_brief_store()` / `_briefing_store()` 在每次调用时重新解析 `_settings()`，无 module-level 路径缓存。完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 9。剩余延伸改进（不阻塞 L1 verified）：CLI 入口 `scoutfootball export-local-pack --output <path>` / `import-local-pack --from <path>`、pack 签名机制（GPG 签名 section_hashes）、不同盘符/OS/文件系统权限的真实迁移手动复核——这些是后续可选项，不属于 L1 退出门槛。
+
 当前 C1 证据补充：`validate-decision-package` 已以当前静态世界杯简报集合完成内容级验证；它对下载的简报导出和短名单决策包同样失败关闭。该验证只证明本地合同与已记录字段完整，不替代来源、快照或身份的人工审计。`record-quality-audit` 现在可将维护者实际复核的身份解析或来源主张样本追加到本地账本；`record-quality-threshold` 只在维护者明确给出最大错误率、最小有效样本数和决策文本后追加阈值。`contract-quality --audit-ledger --threshold-ledger` 只汇总有效样本，并在阈值缺失或样本不足时保持 `baseline_required`、在超过维护者设置阈值时失败，绝不自动设定阈值。`inspect-raw-source` 现在为已登记目录内的本地 UTF-8 CSV 生成不含单元格值的内容哈希、结构和完整可读性证据，使它们能与现有 Parquet preflight 一样登记不可变来源快照，并被 `contract-quality --evidence` 作为局部内容可读性证据消费。2026-07-17 Reep `people.csv` 已在 Git 忽略的 `data/raw/reep/` 本地保留，按上游 `meta.json` 明示的 `2026-06-21` 生成时间写入快照账本，并记录 `until_manual_deletion` 政策；同日用户授权后其余 6 个已登记来源也写入各自的 `until_manual_deletion` 本地政策。`reep-identity-lookup` 现可按精确 Transfermarkt、FBref 或 Wikidata ID 只读检索这份本地快照，并返回限量的交叉标识供人工复核；它不读取 Transfermarkt 文件，也不创建项目 canonical ID、身价、评分、阵容或真值标签。它们不会由此产生上游快照日期或来源正确性的声明。`contract-quality` 现在也会拒绝任何未注册 raw 目录。2026-07-19 遗留的 `data/raw/transfermarkt/` 目录（3 个 CSV，~53MB，被 `pipeline.py` 和 `fill_truth_labels.py` 实际读取但未登记）已对齐：3 个 CSV 通过 `git mv` 移动到已登记的 `data/raw/transfermarkt_manual/` 目录，`pipeline.py:1171` 和 `fill_truth_labels.py:79` 的路径同步更新，空目录删除。`contract-quality` 的 `unregistered_raw_directories` 检查从 `fail` 转为 `pass`，`overall_status` 从 `fail` 转为 `incomplete`（剩余 incomplete 项均为需要维护者审计数据的 `baseline_required` 检查）。`transfermarkt_manual` 的 `until_manual_deletion` 政策现已实际覆盖真实数据。
 
 C1 退出门槛第 3 条端到端验证（2026-07-19）：在当前 snapshot 上首次生成 `reviewable` 候选 `data/models/runs/20260719T142124Z-631abaea/`（此前 40 个历史 run 全部 `not_reviewable`，主因是缺 `rating_feature_matrix_manifest.json`；该 manifest 现已存在）。`model-admission --json` 报告 `reviewable_run_count: 1`，8 项 evidence 检查全部通过（parameter_artifact、recorded_lineage、time_split、baseline_holdout、candidate_holdout、error_cases、required_inputs、candidate_rating_artifact）。`promote-model-run --confirm` 成功晋级，创建带 sha256 校验的备份 `data/models/backups/20260719T142324Z-20260719T142124Z-631abaea-f1416f39/`，活跃产物 sha256 替换为候选 sha256。`rollback-model-run --confirm` 从备份还原，活跃产物 sha256 字节级还原为 baseline（ratings=B657F3E4.. / params=7F0534FC.. / meta=E27BEAC8..，与 baseline 完全一致）。reject 路径由单元测试 `tests/unit/test_model_run_lifecycle.py::test_rejection_is_a_confirmed_metadata_action_that_keeps_candidate` 覆盖（dry-run 保持 `not_activated`、`--confirm` 翻转为 `rejected` 且候选目录保留），不重复端到端测试因为该路径不涉及活跃产物可逆性。完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 2。2026-07-19 后续补：`model-admission` 新增第 8 项 `candidate_rating_artifact` 检查，确保 `player_ratings_candidate.parquet` 存在且 SHA-256 与 meta.json 一致并局限于 run 目录，`reviewable` 状态不再具有误导性；同时补齐该 run 目录下未被 git 跟踪的 `player_ratings_candidate.parquet` 和 `training_history.json`，与 DATA_CONTRACTS.md 声明的候选产物清单一致。剩余 C1 退出门槛（第 1/2/4 条）仍需：经审计的身份/来源主张样本和阈值、可靠的其余来源快照日期。遗留未登记 raw 目录的处置已于 2026-07-19 完成（`data/raw/transfermarkt/` 3 个 CSV 移动到已登记的 `data/raw/transfermarkt_manual/`，代码路径同步更新，`contract-quality` 的 `unregistered_raw_directories` 检查转为 `pass`）。
@@ -657,7 +659,45 @@ L1.3 把 worldcup 纳入 drift gate 后，子代理审查发现剩余漂移仍�
 | 完全过期路径 | 3 | 3 | 0 |
 | recruitment/opposition 方法标注 | 0 | 0 | 11 |
 
-**遗留**：本轮完成 capability 注册表与路由表的全域对齐，L1 节点整体状态保持 `ready`，仍依赖 L1.1 遗留的跨机器迁移演练。drift gate 现已覆盖所有 capability 管理的路由前缀，未来任何新路由若未登记到 capability，`test_capability_managed_routes_are_registered` 会立即失败。
+**遗留**：本轮完成 capability 注册表与路由表的全域对齐。drift gate 现已覆盖所有 capability 管理的路由前缀，未来任何新路由若未登记到 capability，`test_capability_managed_routes_are_registered` 会立即失败。L1 节点整体状态升级见下方 L1.5。
+
+### L1.5 跨 data root 迁移端到端验证 — `verified`（2026-07-27）
+
+关闭 L1.1 遗留的"真实跨机器迁移演练"门槛。L1.1-L1.4 各自在子任务层面 `verified`，但 L1 节点整体状态保持 `ready`，因为现有单测 `tests/unit/test_portable_pack.py` 的 `patched_stores` fixture 让 source 和 target 共享同一 `tmp_path`，并未覆盖真正跨 data root 的迁移场景。本轮通过 9 个集成测试在两个独立 data root 之间真实迁移 portable pack，证明维护者可在本机完成 pack 的导出、迁移、导入和复核。
+
+**实现内容**：
+
+- 新建 `tests/integration/test_portable_pack_migration.py`（541 行，9 测试，3 测试类）：
+  - **TestCrossDataRootMigration**（5 测试）：
+    - `test_export_from_source_produces_non_empty_pack`：源 env export pack，验证 count=3 briefs / 2 briefings 非空
+    - `test_import_into_target_lands_records_in_target_root`：切换 env 后 import pack，验证记录物理文件落在 target data root 而非 source
+    - `test_target_pack_re_export_matches_source_counts`：从 target 重新 export pack，验证 counts 与 source pack 一致
+    - `test_imported_records_are_visible_via_api_in_target`：在 target env 中启动 FastAPI app，验证 `GET /recruitment/briefs` 和 `GET /opposition/briefs` 能读到迁移后的记录（修复了原 route 错误 `/opposition/briefings` → `/opposition/briefs`）
+    - `test_individual_record_load_via_api_in_target`：验证 `GET /recruitment/briefs/{brief_id}` 和 `GET /opposition/briefs/{briefing_id}` 在 target env 中可读到单条记录
+  - **TestCrossDataRootConflictHandling**（2 测试）：
+    - `test_reimport_into_target_without_overwrite_reports_conflicts`：第二次 import 同一 pack 不覆盖，验证 `status=conflicts` 且 `conflicts` 列表非空
+    - `test_reimport_into_target_with_overwrite_replaces_records`：第二次 import 同一 pack 用 `overwrite=True`，验证 `status=ok` 且 `server_revision` 自增
+  - **TestCrossDataRootEdgeCases**（2 测试）：
+    - `test_empty_source_pack_migrates_to_empty_target`：空 store export → import，验证 `status=ok` 且 target 仍为空
+    - `test_pack_is_portable_across_data_roots_via_serialized_json`：pack 序列化为 JSON 字符串再反序列化，验证 pack 在跨进程/跨机器传输中不丢失语义（模拟真实 file 传输场景）
+- 测试 fixture 模式：`source_data_root` + `target_data_root` 通过 `tmp_path` 创建两个独立子目录；`_switch_env(monkeypatch, data_root)` 通过 `monkeypatch.setenv("SCOUTFOOTBALL_DATA_ROOT", str(data_root))` 真实切换 data root，不再 patch store factory；`_seed_source_stores(data_root)` 通过 `BriefStore.save()` / `BriefingStore.save()` 真实写入磁盘。
+
+**真实状态核验**：
+
+- `uv run ruff check tests/integration/test_portable_pack_migration.py`：clean
+- `uv run pytest tests/integration/test_portable_pack_migration.py -v`：9/9 通过
+- `uv run pytest tests/integration/ -q`：全部通过（含本测试集），无回归
+- `uv run pytest tests/unit/test_portable_pack.py tests/unit/test_capability_registry.py -q`：单测无回归
+
+**覆盖范围变化**：
+
+| 维度 | L1.4 前 | L1.5 后 |
+|---|---:|---:|
+| 跨环境迁移测试覆盖 | 单 tmp_path 模拟 | 独立 data root 真实验证 |
+| 参考工作流记录数 | 8 | 9 |
+| L1 节点状态 | ready | verified |
+
+**遗留**：本轮关闭 L1.1 遗留门槛，L1 节点整体状态升级为 `verified`。延伸改进（不阻塞 verified）：(1) CLI 入口 `scoutfootball export-local-pack --output <path>` / `import-local-pack --from <path>` 让维护者无需启动 API 即可完成迁移；(2) pack 签名机制（GPG 签名 section_hashes）防止跨机器传输时被恶意篡改；(3) 真实迁移场景涉及不同盘符/OS/文件系统权限，需维护者在真实迁移时手动复核——这些是后续可选项，不属于 L1 退出门槛。完整证据见 [WORKFLOW_LOG.md](WORKFLOW_LOG.md) 参考工作流 9。
 
 ## 后续依赖表
 

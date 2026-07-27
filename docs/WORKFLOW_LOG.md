@@ -609,6 +609,71 @@
 
 ---
 
+### 参考工作流 9：portable pack 跨 data root 迁移端到端验证（L1 本地包、备份与导入导出复核子流程）
+
+- **选择的工作流**：L1 "本地包、备份和导入导出复核" 的真实迁移用例。L1 退出门槛要求"维护者可以在本机完成 pack 的导出、迁移、导入和复核"，但现有单测 `tests/unit/test_portable_pack.py` 的 `patched_stores` fixture 让 source 和 target 共享同一 `tmp_path`，并未覆盖真正跨 data root 的迁移场景。本工作流验证 portable pack 在两个独立 data root 之间真实迁移的端到端可用性。
+- **执行日期**：2026-07-27
+- **执行环境**：Windows, Python 3.12.11, uv, 工作目录 `c:\football\scoutlab`，分支 `codex/integration`，HEAD `4f4de72`
+- **真实输入**：
+  - 源 data root：`tmp_path/source/data`，通过 `SCOUTFOOTBALL_DATA_ROOT` 环境变量指向
+  - 源数据：3 个 recruitment briefs（`brief-migrate-001/002/003`，teams: Arsenal/Liverpool/Bayern Munich）+ 2 个 opposition briefings（`briefing-migrate-001/002`，home: Arsenal/Real Madrid），通过 `BriefStore.save()` / `BriefingStore.save()` 真实写入磁盘
+  - 目标 data root：`tmp_path/target/data`，初始为空目录
+  - Pack schema：`scoutfootball.portable-pack` v1.0.0
+- **问题背景**：
+  - `_brief_store()` 和 `_briefing_store()` 通过 `_settings().report_root` 解析路径，`PlatformSettings.from_root()` 读取 `SCOUTFOOTBALL_DATA_ROOT` 环境变量
+  - 现有单测通过 `monkeypatch.setattr("scoutfootball.api._brief_store", lambda: brief_store)` 直接替换 store factory，绕过了整个 `_settings() → report_root → BriefStore(root)` 链路
+  - 因此单测无法捕获：环境变量切换是否真的会让 export 读到 source、import 写到 target；pack 是否依赖任何 in-memory object identity；FastAPI app 在 target env 中能否真的读到迁移后的记录
+- **修复与实现**：
+  - 新建 `tests/integration/test_portable_pack_migration.py`（541 行，9 测试），通过 `monkeypatch.setenv("SCOUTFOOTBALL_DATA_ROOT", ...)` 真实切换 data root，不再 patch store factory
+  - **TestCrossDataRootMigration**（5 测试）：
+    - `test_export_from_source_produces_non_empty_pack`：源 env export pack，count=3/2
+    - `test_import_into_target_lands_records_in_target_root`：切到 target env import，验证 3+2 个 JSON 文件物理出现在 `target_data_root/reports/{recruitment,opposition}/` 下；source data root 文件数不变（3+2）
+    - `test_target_pack_re_export_matches_source_counts`：在 target env 重新 export，section counts、brief_ids、briefing_ids、user-authored payload（title/team）逐字段匹配；envelope `server_revision` 重置为 1（不保留）
+    - `test_imported_records_are_visible_via_api_in_target`：在 target env build `TestClient(create_app())`，GET `/recruitment/briefs` 返回 count=3 + 3 个 brief_ids，GET `/opposition/briefs` 返回 count=2 + 2 个 briefing_ids
+    - `test_individual_record_load_via_api_in_target`：GET `/recruitment/briefs/brief-migrate-002` 返回完整 record，title 和 team 字段匹配源端写入值
+  - **TestCrossDataRootConflictHandling**（2 测试）：
+    - `test_reimport_into_target_without_overwrite_reports_conflicts`：同一 pack 在 target import 两次，第二次 overwrite=False 时 total_imported=0、total_conflicts=5
+    - `test_reimport_into_target_with_overwrite_replaces_records`：第二次 overwrite=True 时 total_imported=5、total_conflicts=0；`server_revision` 升到 2；`BriefStore.list_backups()` 返回 ≥1 个 revision backup
+  - **TestCrossDataRootEdgeCases**（2 测试）：
+    - `test_empty_source_pack_migrates_to_empty_target`：源和目标都为空，import 是 no-op，target 不创建 brief/briefing 目录
+    - `test_pack_is_portable_across_data_roots_via_serialized_json`：pack 序列化为 JSON 文件再读回，验证不依赖 in-memory object identity
+- **执行步骤与命令**：
+  ```bash
+  # 1. lint
+  uv run ruff check tests/integration/test_portable_pack_migration.py
+
+  # 2. 跨 data root 迁移集成测试
+  uv run pytest tests/integration/test_portable_pack_migration.py -v
+
+  # 3. 全量 integration 回归
+  uv run pytest tests/integration/ -q
+
+  # 4. 便携包单元测试回归
+  uv run pytest tests/unit/test_portable_pack.py tests/unit/test_capability_registry.py -q
+  ```
+- **执行结果**：
+  - ruff check 通过
+  - `test_portable_pack_migration.py`：9/9 通过（3.89s）
+  - 全量 integration：33 passed, 2 skipped
+  - 单元测试回归：`test_portable_pack.py` + `test_capability_registry.py` 37/37 通过
+- **修复记录**（执行过程中发现并修复的真实问题）：
+  - **`/opposition/briefings` 404**：首次运行 `test_imported_records_are_visible_via_api_in_target` 时，GET `/opposition/briefings` 返回 404
+    - 根因：实际路由是 `/opposition/briefs`（不是 `/briefings`），路由处理函数名 `opposition_briefs` 调用 `get_opposition_briefings()` 内部函数，但路径用 "briefs" 而非 "briefings" 以与 `/recruitment/briefs` 对齐
+    - 修复：测试改用 `/opposition/briefs`
+- **人工复盘**：
+  - **是否达到预期**：是。L1 退出门槛"维护者可以在本机完成 pack 的导出、迁移、导入和复核"得到端到端验证——不仅是 API 合约层，而是物理文件层面 + API 可见性层面的完整迁移证据。两个独立 data root 之间通过 pack 迁移记录是可工作的，包括冲突处理、revision backup、JSON 序列化可移植性。
+  - **有什么问题**：
+    - "参考工作流" 在 target env 中只能验证 recruitment/opposition 相关 API；`info` / `validate` / `preflight` 等 CLI 命令依赖 `data/raw` 和 `data/gold` 下的产物，在空 target 中不适用。这是预期——portable pack 的设计范围就是 recruitment briefs + opposition briefings，不迁移 raw 数据或模型产物。需要分别在它们的 L 节点中验证。
+    - 测试用 `tmp_path` 模拟两个独立 data root，但真实迁移场景可能涉及不同盘符、不同 OS、不同文件系统权限。这些环境差异超出自动化测试范围，需要维护者在真实迁移时手动复核。
+  - **数据治理启示**：跨环境迁移的可信度不只取决于 pack schema 的 hash 验证，还取决于 target env 能否真正读到迁移后的记录。如果 `_brief_store()` 在 module level 缓存了 root 路径，env 切换会失效——这次测试证明没有这种缓存，每次调用都重新解析 `_settings()`，这是正确的设计。任何后续重构必须保留这一特性。
+  - **下一步改进**：
+    - L1 节点状态可升级为 `verified`（L1.5），因为 portable pack 的跨 data root 迁移能力已有端到端测试证据
+    - 可考虑增加 CLI 入口 `scoutfootball export-local-pack --output <path>` 和 `scoutfootball import-local-pack --from <path>`，让维护者无需启动 API 即可完成迁移（当前只能通过 API endpoint）
+    - 可考虑为 pack 增加签名机制（如 GPG 签名 section_hashes），防止跨机器传输时被恶意篡改——但这是远期改进，当前 hash 验证已足够
+- **是否可重复使用**：是。维护者每次修改 `_brief_store()` / `_briefing_store()` / `export_local_pack()` / `import_local_pack()` 后，运行 `pytest tests/integration/test_portable_pack_migration.py` 即可验证跨 data root 迁移能力未被破坏。测试 fixture 模式（`source_data_root` + `target_data_root` + `_switch_env()`）可被其他需要跨 env 验证的测试复用。
+
+---
+
 ## 更新规则
 
 - 维护者填写真实任务后，将对应"待填写"替换为真实内容。
