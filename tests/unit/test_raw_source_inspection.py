@@ -107,3 +107,100 @@ def test_raw_csv_inspection_still_rejects_partial_width_row(tmp_path) -> None:
     with pytest.raises(ValueError, match="csv_row_width_mismatch:3"):
         inspect_raw_csv(source_id="reep", path="raw/reep/people.csv", settings=settings)
 
+
+def test_raw_csv_inspection_accepts_project_root_relative_path(tmp_path) -> None:
+    """Paths relative to project root (e.g. "data/raw/reep/people.csv")
+    must work in addition to paths relative to data_root (e.g.
+    "raw/reep/people.csv"). The maintainer naturally passes "data/..."
+    from the project root, and the naive data_root join would produce a
+    double-"data" prefix; the strip-prefix fallback resolves this."""
+    settings = PlatformSettings.from_root(tmp_path)
+    path = settings.data_root / "raw" / "reep" / "people.csv"
+    path.parent.mkdir(parents=True)
+    path.write_text("reep_id,name\n1,Alice\n2,Bob\n", encoding="utf-8")
+
+    # "data/raw/reep/people.csv" relative to project root (tmp_path)
+    report = inspect_raw_csv(
+        source_id="reep",
+        path="data/raw/reep/people.csv",
+        settings=settings,
+    )
+
+    assert report["artifacts"][0]["inspection"]["row_count"] == 2
+    assert report["artifacts"][0]["artifact_path"] == "raw/reep/people.csv"
+
+
+def test_raw_csv_inspection_accepts_data_root_relative_path_backward_compat(
+    tmp_path,
+) -> None:
+    """Paths relative to data_root (e.g. "raw/reep/people.csv") must
+    continue to work after the project-root-relative fallback is added."""
+    settings = PlatformSettings.from_root(tmp_path)
+    path = settings.data_root / "raw" / "reep" / "people.csv"
+    path.parent.mkdir(parents=True)
+    path.write_text("reep_id,name\n1,Alice\n", encoding="utf-8")
+
+    report = inspect_raw_csv(
+        source_id="reep",
+        path="raw/reep/people.csv",
+        settings=settings,
+    )
+
+    assert report["artifacts"][0]["inspection"]["row_count"] == 1
+
+
+def test_raw_csv_inspection_project_root_relative_missing_file_reports_missing(
+    tmp_path,
+) -> None:
+    """When the maintainer passes a "data/..." path that does not exist
+    on disk, the error should be source_file_missing (not
+    path_outside_registered_source), so the message points at the real
+    problem rather than a confusing escape failure."""
+    settings = PlatformSettings.from_root(tmp_path)
+    # Create the registered source root but not the file.
+    (settings.data_root / "raw" / "reep").mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="source_file_missing"):
+        inspect_raw_csv(
+            source_id="reep",
+            path="data/raw/reep/nonexistent.csv",
+            settings=settings,
+        )
+
+
+def test_raw_csv_inspection_strip_prefix_works_with_custom_data_root_name(
+    tmp_path,
+) -> None:
+    """When SCOUTFOOTBALL_DATA_ROOT points to a folder whose name is not
+    "data" (e.g. "my_data"), the strip-prefix fallback should still
+    handle "my_data/raw/..." paths correctly."""
+    custom_data_root = tmp_path / "my_data"
+    settings = PlatformSettings.from_root(tmp_path)
+    # Manually override data_root to simulate SCOUTFOOTBALL_DATA_ROOT.
+    path = custom_data_root / "raw" / "reep" / "people.csv"
+    path.parent.mkdir(parents=True)
+    path.write_text("reep_id,name\n1,Alice\n", encoding="utf-8")
+    # Rebuild settings with custom data_root.
+    from scoutfootball.config import PlatformSettings as PS
+
+    settings = PS.model_construct(
+        project_root=tmp_path,
+        source_root=tmp_path / "src",
+        test_root=tmp_path / "tests",
+        data_root=custom_data_root,
+        raw_root=custom_data_root / "raw",
+        silver_root=custom_data_root / "silver",
+        gold_root=custom_data_root / "gold",
+        model_root=custom_data_root / "models",
+        report_root=custom_data_root / "reports",
+        log_root=custom_data_root / "logs",
+    )
+
+    report = inspect_raw_csv(
+        source_id="reep",
+        path="my_data/raw/reep/people.csv",
+        settings=settings,
+    )
+
+    assert report["artifacts"][0]["inspection"]["row_count"] == 1
+
