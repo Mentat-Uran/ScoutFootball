@@ -425,14 +425,214 @@ def _build_lineage_health(
                 "lineage_status": lineage_status,
             },
         }
+    # Manifest hash matches training-time hash. Now verify the manifest's
+    # declared source files still match their recorded input_hash. This
+    # closes the chain to the raw snapshot: without it, upstream parquet
+    # could be silently rewritten without the manifest being rebuilt, and
+    # lineage_health would still report ok.
+    source_check = _verify_manifest_source_lineage(settings)
+    training_args = _summarise_training_args(activated_meta)
+    if source_check["status"] == "stale":
+        return {
+            "status": LINEAGE_STALE,
+            "evidence": {
+                "reason": (
+                    "manifest hash matches training-time hash, but at least "
+                    "one declared source_lineage file has drifted; the active "
+                    "rating's chain to the raw snapshot is broken"
+                ),
+                "current_manifest_hash": current_manifest_hash,
+                "training_manifest_hash": training_hash,
+                "lineage_status": lineage_status,
+                "source_lineage": source_check,
+                "training_args": training_args,
+            },
+        }
+    if source_check["status"] == "broken":
+        return {
+            "status": LINEAGE_UNVERIFIED,
+            "evidence": {
+                "reason": (
+                    "manifest hash matches training-time hash, but at least "
+                    "one declared source_lineage file is missing; the chain "
+                    "to the raw snapshot cannot be completed"
+                ),
+                "current_manifest_hash": current_manifest_hash,
+                "training_manifest_hash": training_hash,
+                "lineage_status": lineage_status,
+                "source_lineage": source_check,
+                "training_args": training_args,
+            },
+        }
     return {
         "status": LINEAGE_OK,
         "evidence": {
-            "reason": "active model training-time manifest hash matches current on-disk manifest",
+            "reason": (
+                "active model training-time manifest hash matches current "
+                "on-disk manifest"
+                + (
+                    "; source_lineage verified against raw snapshot"
+                    if source_check["status"] == "verified"
+                    else "; source_lineage not declared in manifest, raw snapshot chain unverified"
+                )
+            ),
             "current_manifest_hash": current_manifest_hash,
             "training_manifest_hash": training_hash,
             "lineage_status": lineage_status,
+            "source_lineage": source_check,
+            "training_args": training_args,
         },
+    }
+
+
+def _summarise_training_args(run_meta: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a small summary of the activated run's training args.
+
+    PRS-0 R-003 wants the lineage chain to surface training configuration,
+    not just hashes. The full ``args`` block can be large, so we keep only
+    the fields that identify *which* training configuration produced the
+    active rating. Returns ``None`` when the run has no args block (e.g.
+    legacy runs written before args were recorded).
+    """
+    args = run_meta.get("args")
+    if not isinstance(args, dict):
+        return None
+    # Keep only stable identifying fields; drop large lists/data paths that
+    # would bloat the health report. Callers needing the full args can read
+    # the run's meta.json directly.
+    keep = (
+        "optimizer",
+        "learning_rate",
+        "weight_decay",
+        "epochs",
+        "batch_size",
+        "hidden_dims",
+        "dropout",
+        "seed",
+        "feature_set",
+        "target",
+        "cohort",
+    )
+    summary = {key: args[key] for key in keep if key in args}
+    return summary or None
+
+
+def _hash_file_short(path: Path) -> str | None:
+    """Return sha256[:16] of *path* bytes, or None if the file is missing.
+
+    Mirrors ``scoutfootball.features.manifest.hash_file`` so source_lineage
+    verification is byte-for-byte consistent with how manifests are written.
+    """
+    if not path.exists():
+        return None
+    import hashlib
+
+    hasher = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()[:16]
+
+
+def _verify_manifest_source_lineage(
+    settings: PlatformSettings,
+) -> dict[str, Any]:
+    """Verify each ``source_lineage`` entry still matches the on-disk source.
+
+    PRS-0 R-003 requires the lineage chain to reach the raw snapshot, not
+    just the feature manifest file. The manifest declares each upstream
+    parquet via ``source_lineage[i].{relative_path, input_hash}`` (written
+    by ``features.manifest`` using ``hash_file``). This helper recomputes
+    each source file's sha256[:16] and compares it to the recorded hash so
+    that upstream drift is detected even when the manifest file itself was
+    not rebuilt.
+
+    Returns a dict with:
+
+    - ``status``: ``verified`` | ``stale`` | ``broken`` | ``unverified``
+    - ``sources``: per-source evidence list
+    - ``reason``: short human-readable explanation
+    """
+    manifest = _read_json(_feature_manifest_path(settings))
+    if manifest is None:
+        return {
+            "status": "unverified",
+            "sources": [],
+            "reason": "manifest missing or unreadable",
+        }
+    source_lineage = manifest.get("source_lineage")
+    if not isinstance(source_lineage, list) or not source_lineage:
+        return {
+            "status": "unverified",
+            "sources": [],
+            "reason": "manifest has no source_lineage block; raw snapshot chain not declared",
+        }
+
+    sources: list[dict[str, Any]] = []
+    any_drift = False
+    any_missing = False
+    for entry in source_lineage:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name") or entry.get("relative_path") or "unknown"
+        rel_path = entry.get("relative_path")
+        recorded_hash = entry.get("input_hash")
+        if not isinstance(rel_path, str) or not rel_path:
+            sources.append({
+                "name": name,
+                "relative_path": None,
+                "recorded_hash": recorded_hash,
+                "current_hash": None,
+                "status": "invalid_entry",
+            })
+            continue
+        # Resolve relative to the data root (manifest paths are data-root
+        # relative, e.g. ``gold/feature_store/player_match.parquet``).
+        current_path = settings.data_root / rel_path
+        current_hash = _hash_file_short(current_path)
+        if current_hash is None:
+            any_missing = True
+            entry_status = "missing"
+        elif not isinstance(recorded_hash, str) or not recorded_hash:
+            # Manifest recorded the source but did not stamp its hash; we
+            # can only say the file exists, not that it matches.
+            entry_status = "no_recorded_hash"
+        elif current_hash != recorded_hash:
+            any_drift = True
+            entry_status = "drift"
+        else:
+            entry_status = "match"
+        sources.append({
+            "name": name,
+            "relative_path": rel_path,
+            "recorded_hash": recorded_hash,
+            "current_hash": current_hash,
+            "status": entry_status,
+        })
+
+    if any_drift:
+        return {
+            "status": "stale",
+            "sources": sources,
+            "reason": (
+                "at least one source_lineage input_hash differs from the "
+                "current on-disk file; the manifest no longer reflects the "
+                "raw snapshot it was built from"
+            ),
+        }
+    if any_missing:
+        return {
+            "status": "broken",
+            "sources": sources,
+            "reason": (
+                "at least one source_lineage file is missing; the chain to "
+                "the raw snapshot cannot be completed"
+            ),
+        }
+    return {
+        "status": "verified",
+        "sources": sources,
+        "reason": "all source_lineage input hashes match current on-disk files",
     }
 
 
