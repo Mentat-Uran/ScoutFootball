@@ -181,9 +181,7 @@ def test_raw_csv_inspection_strip_prefix_works_with_custom_data_root_name(
     path.parent.mkdir(parents=True)
     path.write_text("reep_id,name\n1,Alice\n", encoding="utf-8")
     # Rebuild settings with custom data_root.
-    from scoutfootball.config import PlatformSettings as PS
-
-    settings = PS.model_construct(
+    settings = PlatformSettings.model_construct(
         project_root=tmp_path,
         source_root=tmp_path / "src",
         test_root=tmp_path / "tests",
