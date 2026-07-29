@@ -220,6 +220,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball capabilities",
             "uv run python -m scoutfootball data-contracts",
             "uv run python -m scoutfootball list-adapters [--source S] [--capability C] [--json]",
+            "uv run python -m scoutfootball adapter-compatibility [--source S] [--json]",
             "uv run python -m scoutfootball ingest",
             "uv run python -m scoutfootball build-features",
             "uv run python -m scoutfootball train",
@@ -291,13 +292,13 @@ def build_capability_registry() -> CapabilityRegistry:
             id="pipeline.adapters",
             name="适配器清单注册表",
             description=(
-                "机器可读的源适配器清单：声明每个注册数据源的能力、"
-                "字段映射和转换损失。是 I1 开放互操作基线的入口，"
+                "机器可读的源适配器清单和本地准入矩阵：声明每个注册数据源的能力、"
+                "字段映射、转换损失及其与数据契约的关系。是 I1 开放互操作基线的入口，"
                 "只读元数据，不触发实际数据接入。"
             ),
             domain="data_pipeline",
-            cli_commands=("list-adapters",),
-            api_paths=("/adapters",),
+            cli_commands=("list-adapters", "adapter-compatibility"),
+            api_paths=("/adapters", "/adapters/compatibility"),
             notes=(
                 "Manifest 是保守的：未记录的能力或映射直接省略，不猜测。"
                 "Tracking/video 能力位保留但当前无适配器声明，"

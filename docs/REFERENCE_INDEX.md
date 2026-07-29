@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-27T15:15:57.946224+00:00`
-- content SHA-256：`276e4eb2b42dc4f77ad58d1d9126fcad0aea21d1f8b36f9505e91606a9b87bb1`
+- manifest generated_at：`2026-07-29T07:30:38.093385+00:00`
+- content SHA-256：`cc30cdea4ce58b1f4af31bd075af959ce084510f79e27fc1f255a4419d4956a8`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -18,6 +18,7 @@
 - `uv run python -m scoutfootball capabilities`
 - `uv run python -m scoutfootball data-contracts`
 - `uv run python -m scoutfootball list-adapters [--source S] [--capability C] [--json]`
+- `uv run python -m scoutfootball adapter-compatibility [--source S] [--json]`
 - `uv run python -m scoutfootball ingest`
 - `uv run python -m scoutfootball build-features`
 - `uv run python -m scoutfootball train`
@@ -77,7 +78,7 @@
 
 | ID | 领域 | 状态 | API | CLI | 前端视图 |
 | --- | --- | --- | --- | --- | --- |
-| pipeline.adapters | data_pipeline | delivered | /adapters | list-adapters | — |
+| pipeline.adapters | data_pipeline | delivered | /adapters, /adapters/compatibility | list-adapters, adapter-compatibility | — |
 | pipeline.ingest | data_pipeline | delivered | — | ingest | — |
 | pipeline.build_features | data_pipeline | delivered | — | build-features | — |
 | pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, inspect-raw-source, reep-identity-lookup, contract-quality, model-admission, discard-model-run, reject-model-run, promote-model-run, rollback-model-run, validate-decision-package, record-source-snapshot, record-source-policy, record-quality-audit, record-quality-threshold | — |

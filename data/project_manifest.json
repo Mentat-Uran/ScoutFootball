@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-27T15:15:57.946224+00:00",
+  "generated_at": "2026-07-29T07:30:38.093385+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -282,6 +282,7 @@
       "uv run python -m scoutfootball capabilities",
       "uv run python -m scoutfootball data-contracts",
       "uv run python -m scoutfootball list-adapters [--source S] [--capability C] [--json]",
+      "uv run python -m scoutfootball adapter-compatibility [--source S] [--json]",
       "uv run python -m scoutfootball ingest",
       "uv run python -m scoutfootball build-features",
       "uv run python -m scoutfootball train",
@@ -339,7 +340,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-27T15:15:57.944209+00:00",
+    "generated_at": "2026-07-29T07:30:38.093385+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -358,14 +359,16 @@
       {
         "id": "pipeline.adapters",
         "name": "适配器清单注册表",
-        "description": "机器可读的源适配器清单：声明每个注册数据源的能力、字段映射和转换损失。是 I1 开放互操作基线的入口，只读元数据，不触发实际数据接入。",
+        "description": "机器可读的源适配器清单和本地准入矩阵：声明每个注册数据源的能力、字段映射、转换损失及其与数据契约的关系。是 I1 开放互操作基线的入口，只读元数据，不触发实际数据接入。",
         "domain": "data_pipeline",
         "status": "delivered",
         "api_paths": [
-          "/adapters"
+          "/adapters",
+          "/adapters/compatibility"
         ],
         "cli_commands": [
-          "list-adapters"
+          "list-adapters",
+          "adapter-compatibility"
         ],
         "frontend_views": [],
         "data_artifacts": [],
@@ -1169,7 +1172,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-27T15:15:57.946224+00:00",
+    "generated_at": "2026-07-29T07:30:38.093385+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -2095,5 +2098,5 @@
       }
     ]
   },
-  "content_sha256": "276e4eb2b42dc4f77ad58d1d9126fcad0aea21d1f8b36f9505e91606a9b87bb1"
+  "content_sha256": "cc30cdea4ce58b1f4af31bd075af959ce084510f79e27fc1f255a4419d4956a8"
 }

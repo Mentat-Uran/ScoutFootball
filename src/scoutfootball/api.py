@@ -525,6 +525,17 @@ def get_adapter_registry() -> dict[str, Any]:
     return registry.model_dump(mode="json")
 
 
+def get_adapter_compatibility_matrix() -> dict[str, Any]:
+    """Return project-local adapter admission derived from contracts.
+
+    The matrix is read-only metadata.  It does not start an ingester, validate
+    an upstream license, or authorize publication of source or derived data.
+    """
+    from scoutfootball.adapters.compatibility import build_adapter_compatibility_matrix
+
+    return build_adapter_compatibility_matrix().model_dump(mode="json")
+
+
 def list_players() -> PlayerListResponse:
     """Return all unique player names from the ratings dataset."""
     df = load_player_ratings()
