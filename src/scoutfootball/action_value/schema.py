@@ -3,8 +3,9 @@
 Defines the standardized action representation that all data sources
 (StatsBomb, etc.) are converted into before computing xT/VAEP.
 
-Coordinate system: 0-100 normalized (x: left-to-right, y: bottom-to-top).
-Direction: always attack-to-defense (left-to-right after normalization).
+Coordinate system: 0-100 normalization of the provider coordinate scale.
+Direction: provider orientation is retained; this schema does not by itself
+infer or rotate every action into a common attacking direction.
 """
 from __future__ import annotations
 
