@@ -332,6 +332,241 @@ def test_rating_older_than_feature_matrix_is_stale(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Source-lineage verification (PRS-0 R-003: manifest → raw snapshot chain)
+# ---------------------------------------------------------------------------
+
+
+def _write_manifest_with_source_lineage(
+    root, *, sources: list[dict] | None = None
+) -> str:
+    """Write a manifest whose source_lineage points at real source files.
+
+    Each entry in *sources* should be ``{"name": ..., "relative_path": ...,
+    "content": <bytes>}``. The helper writes the source file, stamps its
+    sha256[:16] as ``input_hash``, and records it in the manifest's
+    ``source_lineage``. Returns the sha256[:16] of the manifest file itself
+    (so callers can build a matching activated run).
+    """
+    source_lineage: list[dict] = []
+    for entry in sources or []:
+        rel = entry["relative_path"]
+        full = root / "data" / rel
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_bytes(entry["content"])
+        source_lineage.append({
+            "name": entry["name"],
+            "relative_path": rel,
+            "rows_read": 1,
+            "input_hash": _sha256_file(full)[:16],
+            "notes": None,
+        })
+    return _write_manifest(
+        root,
+        content={
+            "artifact": "rating_feature_matrix",
+            "total_rows": 1,
+            "source_lineage": source_lineage,
+        },
+    )
+
+
+def test_source_lineage_drift_forces_stale(tmp_path) -> None:
+    """Source parquet rewritten without manifest rebuild → lineage stale.
+
+    Closes the PRS-0 R-003 gap: before this check, upstream parquet could
+    be silently rewritten and lineage_health would still report ok because
+    the manifest file itself had not changed.
+    """
+    manifest_hash = _write_manifest_with_source_lineage(
+        tmp_path,
+        sources=[
+            {
+                "name": "player_match",
+                "relative_path": "gold/feature_store/player_match.parquet",
+                "content": b"player_match v1",
+            }
+        ],
+    )
+    _write_feature_matrix(tmp_path)
+    _write_active_rating(root=tmp_path, synthetic=False)
+    _write_truth_labels(tmp_path, sources=["scouting_review"])
+    _write_run(
+        tmp_path,
+        "20260730T000000Z-sourcechain",
+        manifest_hash=manifest_hash,
+        activated=True,
+        reviewable=True,
+    )
+    # Rewrite the source parquet without rebuilding the manifest. The
+    # manifest file hash is unchanged, so the old check would still pass;
+    # the new source_lineage check must catch the drift.
+    (tmp_path / "data" / "gold" / "feature_store" / "player_match.parquet").write_bytes(
+        b"player_match v2 - drifted"
+    )
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    assert report["lineage_health"]["status"] == LINEAGE_STALE
+    sl = report["lineage_health"]["evidence"]["source_lineage"]
+    assert sl["status"] == "stale"
+    assert any(s["status"] == "drift" for s in sl["sources"])
+    assert report["verdict"] == VERDICT_NOT_READY
+    assert any("lineage_health" in r for r in report["blocking_reasons"])
+
+
+def test_source_lineage_verified_keeps_ok(tmp_path) -> None:
+    """All source files match recorded input_hash → lineage ok with evidence."""
+    manifest_hash = _write_manifest_with_source_lineage(
+        tmp_path,
+        sources=[
+            {
+                "name": "player_match",
+                "relative_path": "gold/feature_store/player_match.parquet",
+                "content": b"player_match v1",
+            },
+            {
+                "name": "player_rolling",
+                "relative_path": "gold/feature_store/player_rolling.parquet",
+                "content": b"player_rolling v1",
+            },
+        ],
+    )
+    _write_feature_matrix(tmp_path)
+    _write_active_rating(root=tmp_path, synthetic=False)
+    _write_truth_labels(tmp_path, sources=["scouting_review"])
+    _write_run(
+        tmp_path,
+        "20260730T000000Z-sourcechain-ok",
+        manifest_hash=manifest_hash,
+        activated=True,
+        reviewable=True,
+    )
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    assert report["lineage_health"]["status"] == LINEAGE_OK
+    sl = report["lineage_health"]["evidence"]["source_lineage"]
+    assert sl["status"] == "verified"
+    assert len(sl["sources"]) == 2
+    assert all(s["status"] == "match" for s in sl["sources"])
+    assert "source_lineage verified" in report["lineage_health"]["evidence"]["reason"]
+
+
+def test_source_lineage_missing_file_is_unverified(tmp_path) -> None:
+    """Declared source file is missing → lineage unverified (chain broken)."""
+    manifest_hash = _write_manifest_with_source_lineage(
+        tmp_path,
+        sources=[
+            {
+                "name": "player_match",
+                "relative_path": "gold/feature_store/player_match.parquet",
+                "content": b"player_match v1",
+            }
+        ],
+    )
+    _write_feature_matrix(tmp_path)
+    _write_active_rating(root=tmp_path, synthetic=False)
+    _write_truth_labels(tmp_path, sources=["scouting_review"])
+    _write_run(
+        tmp_path,
+        "20260730T000000Z-sourcechain-missing",
+        manifest_hash=manifest_hash,
+        activated=True,
+        reviewable=True,
+    )
+    # Remove the declared source file. The chain to the raw snapshot is
+    # broken (not stale — we cannot compare hashes against a missing file).
+    (tmp_path / "data" / "gold" / "feature_store" / "player_match.parquet").unlink()
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    assert report["lineage_health"]["status"] == LINEAGE_UNVERIFIED
+    sl = report["lineage_health"]["evidence"]["source_lineage"]
+    assert sl["status"] == "broken"
+    assert any(s["status"] == "missing" for s in sl["sources"])
+    assert report["verdict"] == VERDICT_NOT_READY
+
+
+def test_source_lineage_absent_keeps_ok_with_note(tmp_path) -> None:
+    """Manifest without source_lineage → lineage ok but evidence notes gap.
+
+    Legacy manifests written before source_lineage existed must not be
+    downgraded (we cannot verify what was never declared), but the evidence
+    must honestly say the raw-snapshot chain is unverified rather than
+    silently claiming full lineage.
+    """
+    manifest_hash = _write_manifest(
+        tmp_path,
+        content={"artifact": "rating_feature_matrix", "total_rows": 1},
+    )
+    _write_feature_matrix(tmp_path)
+    _write_active_rating(root=tmp_path, synthetic=False)
+    _write_truth_labels(tmp_path, sources=["scouting_review"])
+    _write_run(
+        tmp_path,
+        "20260730T000000Z-no-source-lineage",
+        manifest_hash=manifest_hash,
+        activated=True,
+        reviewable=True,
+    )
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    assert report["lineage_health"]["status"] == LINEAGE_OK
+    sl = report["lineage_health"]["evidence"]["source_lineage"]
+    assert sl["status"] == "unverified"
+    assert "not declared" in report["lineage_health"]["evidence"]["reason"]
+
+
+def test_lineage_evidence_includes_training_args(tmp_path) -> None:
+    """Activated run with args block → lineage evidence surfaces a summary.
+
+    PRS-0 R-003 wants the lineage chain to surface training configuration,
+    not just hashes. The summary is a small subset of args (optimizer,
+    learning_rate, seed, etc.); the full args remain in the run's meta.json.
+    """
+    manifest_hash = _write_manifest(tmp_path)
+    _write_feature_matrix(tmp_path)
+    _write_active_rating(root=tmp_path, synthetic=False)
+    _write_truth_labels(tmp_path, sources=["scouting_review"])
+    _write_run(
+        tmp_path,
+        "20260730T000000Z-with-args",
+        manifest_hash=manifest_hash,
+        activated=True,
+        reviewable=True,
+    )
+    # Inject an args block into the activated run's meta.json.
+    run_meta_path = (
+        tmp_path
+        / "data"
+        / "models"
+        / "runs"
+        / "20260730T000000Z-with-args"
+        / "meta.json"
+    )
+    meta = json.loads(run_meta_path.read_text(encoding="utf-8"))
+    meta["args"] = {
+        "optimizer": "adamw",
+        "learning_rate": 0.001,
+        "epochs": 50,
+        "seed": 42,
+        "feature_set": "v1",
+        # Large/noisy fields that should NOT appear in the summary:
+        "data_paths": ["a", "b", "c"],
+        "cohort_filter": {"season": ["2425"], "league": ["EPL"]},
+    }
+    run_meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    args_summary = report["lineage_health"]["evidence"]["training_args"]
+    assert args_summary is not None
+    assert args_summary["optimizer"] == "adamw"
+    assert args_summary["learning_rate"] == 0.001
+    assert args_summary["seed"] == 42
+    # Noisy fields must not leak into the summary.
+    assert "data_paths" not in args_summary
+    assert "cohort_filter" not in args_summary
+
+
+# ---------------------------------------------------------------------------
 # Top-level detailed health integration (R-004 fix)
 # ---------------------------------------------------------------------------
 
