@@ -433,3 +433,119 @@ def test_detailed_health_top_status_degrades_when_research_not_ready(
     assert any(
         r.startswith("research_health:") for r in report["failed_sections"]
     )
+
+
+# ── feature_coverage and data_grain evidence sections (PRS-0 R-003) ──
+
+
+def _write_rich_feature_matrix(root) -> None:
+    """Write a rating_feature_matrix with _missing markers and FIELD_GROUPS cols."""
+    path = root / "data" / "gold" / "feature_store" / "rating_feature_matrix.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "player_id": ["p1", "p2", "p3"],
+            "season_id": ["2425", "2425", "2425"],
+            "tackles": [1.0, 2.0, 3.0],
+            "interceptions": [0.5, 1.0, 1.5],
+            "tackles_won": [0.5, 1.0, 1.5],
+            "fouls_committed": [1, 2, 3],
+            "fouls_drawn": [1, 2, 3],
+            "crosses": [0, 1, 2],
+            "own_goals": [0, 0, 0],
+            "xt_total": [None, 0.1, 0.2],
+            "xt_per_90": [None, 0.01, 0.02],
+            "vaep_total": [None, 0.3, 0.4],
+            "vaep_per_90": [None, 0.03, 0.04],
+            "defense_missing": [False, False, False],
+            "xT_VAEP_missing": [True, False, False],
+        }
+    ).to_parquet(path, index=False)
+
+
+def _write_player_match_with_grain(root) -> None:
+    """Write a player_match parquet with data_granularity and source_name."""
+    path = root / "data" / "gold" / "feature_store" / "player_match.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "player_id": ["p1", "p2", "p3", "p4"],
+            "season_id": ["2425"] * 4,
+            "data_granularity": ["season_proxy", "season_proxy", "match", "match"],
+            "source_name": ["understat", "fbref", "statsbomb_open", "statsbomb_open"],
+        }
+    ).to_parquet(path, index=False)
+
+
+def test_feature_coverage_reports_missing_rates(tmp_path) -> None:
+    """feature_coverage surfaces per-group missing_rate using _missing markers."""
+    _write_rich_feature_matrix(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+
+    fc = report["feature_coverage"]
+    assert fc["status"] == "ok"
+    groups = fc["evidence"]["field_groups"]
+    # defense_missing marker is all False → missing_rate 0.0
+    assert groups["defense"]["missing_rate"] == 0.0
+    # xT_VAEP_missing marker has 1/3 True → missing_rate ~0.333
+    assert abs(groups["xT_VAEP"]["missing_rate"] - (1.0 / 3.0)) < 1e-6
+    # possession and goalkeeper have no fields in schema → missing_rate 1.0
+    assert groups["possession"]["missing_rate"] == 1.0
+    assert groups["goalkeeper"]["missing_rate"] == 1.0
+
+
+def test_feature_coverage_unavailable_when_matrix_missing(tmp_path) -> None:
+    """When rating_feature_matrix is absent, feature_coverage is unavailable."""
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    assert report["feature_coverage"]["status"] == "unavailable"
+
+
+def test_data_grain_reports_granularity_distribution(tmp_path) -> None:
+    """data_grain surfaces data_granularity and source_name value_counts."""
+    _write_player_match_with_grain(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+
+    dg = report["data_grain"]
+    assert dg["status"] == "ok"
+    assert dg["evidence"]["total_rows"] == 4
+    assert dg["evidence"]["data_granularity"] == {
+        "season_proxy": 2,
+        "match": 2,
+    }
+    assert dg["evidence"]["source_name"] == {
+        "understat": 1,
+        "fbref": 1,
+        "statsbomb_open": 2,
+    }
+
+
+def test_data_grain_unavailable_when_player_match_missing(tmp_path) -> None:
+    """When player_match is absent, data_grain is unavailable."""
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    assert report["data_grain"]["status"] == "unavailable"
+
+
+def test_feature_coverage_and_data_grain_do_not_affect_verdict(tmp_path) -> None:
+    """Evidence-only sections must not change the fail-closed verdict.
+
+    Even if feature_coverage and data_grain report ok, the verdict is still
+    driven by the five layers. An empty workspace (no runs, no labels) must
+    remain not_ready regardless of these evidence sections.
+    """
+    _write_rich_feature_matrix(tmp_path)
+    _write_player_match_with_grain(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+
+    assert report["feature_coverage"]["status"] == "ok"
+    assert report["data_grain"]["status"] == "ok"
+    # Verdict is still fail-closed (not_ready or unavailable — the latter
+    # because no truth_labels were written so research_readiness is
+    # unavailable) regardless of these evidence sections being ok.
+    assert report["verdict"] in (VERDICT_NOT_READY, VERDICT_UNAVAILABLE)
+    assert "feature_coverage" not in report["blocking_reasons"]
+    assert "data_grain" not in report["blocking_reasons"]

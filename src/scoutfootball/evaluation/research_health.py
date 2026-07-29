@@ -106,6 +106,10 @@ def _truth_labels_path(settings: PlatformSettings) -> Path:
     return settings.gold_root / "feature_store" / "player_truth_labels.parquet"
 
 
+def _player_match_path(settings: PlatformSettings) -> Path:
+    return settings.gold_root / "feature_store" / "player_match.parquet"
+
+
 def _active_meta_path(settings: PlatformSettings) -> Path:
     return settings.gold_root / "feature_store" / "optimized_params_meta.json"
 
@@ -202,6 +206,145 @@ def _build_storage_health(settings: PlatformSettings) -> dict[str, Any]:
             "readable": readable,
             "missing": missing,
             "unreadable": unreadable,
+        },
+    }
+
+
+def _build_feature_coverage(
+    settings: PlatformSettings, *, storage: dict[str, Any]
+) -> dict[str, Any]:
+    """Compute per-field-group missing rates in ``rating_feature_matrix``.
+
+    PRS-0 R-003 status report must surface feature missingness so the
+    maintainer does not have to hand-copy percentages into docs. This
+    section is evidence-only: it does not participate in the fail-closed
+    verdict (the five layers do), but it gives the same command
+    (``scoutfootball research-health``) the machine-readable coverage
+    snapshot that ``PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`` section 3.2
+    used to maintain by hand.
+    """
+    if storage["status"] == STORAGE_UNAVAILABLE:
+        return {"status": "unavailable", "evidence": {"reason": "storage unavailable"}}
+
+    matrix_path = _feature_matrix_path(settings)
+    if not matrix_path.exists():
+        return {
+            "status": "unavailable",
+            "evidence": {"reason": "rating_feature_matrix.parquet missing"},
+        }
+    try:
+        import pandas as pd
+
+        from scoutfootball.features.rating_matrix import FIELD_GROUPS
+
+        df = pd.read_parquet(matrix_path)
+    except Exception as exc:  # noqa: BLE001 — read-only diagnostic
+        return {
+            "status": "unavailable",
+            "evidence": {"reason": f"read failed: {exc}"},
+        }
+
+    total_rows = int(len(df))
+    if total_rows == 0:
+        return {
+            "status": "unavailable",
+            "evidence": {"reason": "rating_feature_matrix has 0 rows"},
+        }
+
+    groups: dict[str, Any] = {}
+    for group_name, field_list in FIELD_GROUPS.items():
+        present_cols = [c for c in field_list if c in df.columns]
+        missing_marker = f"{group_name}_missing"
+        # Prefer the explicit _missing marker column (written before median
+        # imputation) over post-imputation NaN checks — imputation hides
+        # the original missingness that PRS-0 R-007 requires to be visible.
+        if missing_marker in df.columns:
+            missing_rate = float(df[missing_marker].astype(bool).mean())
+            per_col_missing = {
+                col: float(df[col].isna().mean()) for col in present_cols
+            }
+        elif not present_cols:
+            missing_rate = 1.0
+            per_col_missing = {}
+        else:
+            # No marker column: fall back to NaN-based check.
+            group_df = df[present_cols]
+            per_col_missing = {
+                col: float(group_df[col].isna().mean()) for col in present_cols
+            }
+            missing_rate = float(group_df.isna().all(axis=1).mean())
+        groups[group_name] = {
+            "fields_present": present_cols,
+            "fields_missing_from_schema": [
+                c for c in field_list if c not in df.columns
+            ],
+            "missing_rate": missing_rate,
+            "per_field_missing_rate": per_col_missing,
+        }
+
+    return {
+        "status": "ok",
+        "evidence": {
+            "total_rows": total_rows,
+            "columns": list(df.columns),
+            "field_groups": groups,
+        },
+    }
+
+
+def _build_data_grain(
+    settings: PlatformSettings, *, storage: dict[str, Any]
+) -> dict[str, Any]:
+    """Report ``player_match`` observation grain and source distribution.
+
+    PRS-0 R-006: season-proxy rows (27,504) and real match-level rows
+    (94 from StatsBomb open data) must not be conflated. This section
+    surfaces the counts so the maintainer can verify grain at a glance
+    instead of hand-copying numbers into planning docs.
+    """
+    if storage["status"] == STORAGE_UNAVAILABLE:
+        return {"status": "unavailable", "evidence": {"reason": "storage unavailable"}}
+
+    pm_path = _player_match_path(settings)
+    if not pm_path.exists():
+        return {
+            "status": "unavailable",
+            "evidence": {"reason": "player_match.parquet missing"},
+        }
+    try:
+        import pandas as pd
+
+        df = pd.read_parquet(pm_path)
+    except Exception as exc:  # noqa: BLE001 — read-only diagnostic
+        return {
+            "status": "unavailable",
+            "evidence": {"reason": f"read failed: {exc}"},
+        }
+
+    total_rows = int(len(df))
+    if total_rows == 0:
+        return {
+            "status": "unavailable",
+            "evidence": {"reason": "player_match has 0 rows"},
+        }
+
+    grain_counts: dict[str, int] = {}
+    if "data_granularity" in df.columns:
+        grain_counts = {
+            str(k): int(v) for k, v in df["data_granularity"].value_counts().items()
+        }
+    source_counts: dict[str, int] = {}
+    if "source_name" in df.columns:
+        source_counts = {
+            str(k): int(v) for k, v in df["source_name"].value_counts().items()
+        }
+
+    return {
+        "status": "ok",
+        "evidence": {
+            "total_rows": total_rows,
+            "data_granularity": grain_counts,
+            "source_name": source_counts,
         },
     }
 
@@ -578,6 +721,11 @@ def build_research_health_report(
         reviewability=reviewability,
         freshness=freshness,
     )
+    # Evidence-only sections (PRS-0 R-003 status report): surface feature
+    # missingness and data grain so the maintainer no longer hand-copies
+    # these into planning docs. They do not participate in the verdict.
+    feature_coverage = _build_feature_coverage(resolved, storage=storage)
+    data_grain = _build_data_grain(resolved, storage=storage)
     layers = {
         "storage_health": storage,
         "lineage_health": lineage,
@@ -593,6 +741,8 @@ def build_research_health_report(
         "verdict": verdict,
         "blocking_reasons": blocking_reasons,
         **layers,
+        "feature_coverage": feature_coverage,
+        "data_grain": data_grain,
         "limitations": [
             (
                 "Local-only read-only diagnostic; no telemetry is uploaded. "
