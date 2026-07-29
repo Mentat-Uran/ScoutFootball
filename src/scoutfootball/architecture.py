@@ -351,6 +351,7 @@ def build_capability_registry() -> CapabilityRegistry:
                 "reep-identity-lookup",
                 "contract-quality",
                 "model-admission",
+                "research-health",
                 "discard-model-run",
                 "reject-model-run",
                 "promote-model-run",
@@ -851,6 +852,7 @@ def build_capability_registry() -> CapabilityRegistry:
             api_paths=(
                 "/health",
                 "/health/detailed",
+                "/health/research",
                 "/license",
                 "/search",
                 "/local-pack/export",

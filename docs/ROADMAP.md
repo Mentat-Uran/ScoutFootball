@@ -1,6 +1,6 @@
 # ScoutFootball 长期开发顺序与工程路线图
 
-> 更新日期：2026-07-17。项目定位以 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) 为准，行业工具与技术取舍见 [`FOOTBALL_TOOLING_LANDSCAPE_2026.md`](FOOTBALL_TOOLING_LANDSCAPE_2026.md)，当前能力边界见 [`CAPABILITIES.md`](CAPABILITIES.md)，当前可执行队列以 [`TASKS.md`](TASKS.md) 顶部为准。
+> 更新日期：2026-07-29。项目定位以 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) 为准，球员评分专项缺陷与实施门禁见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)，行业工具与技术取舍见 [`FOOTBALL_TOOLING_LANDSCAPE_2026.md`](FOOTBALL_TOOLING_LANDSCAPE_2026.md)，当前能力边界见 [`CAPABILITIES.md`](CAPABILITIES.md)，当前可执行队列以 [`TASKS.md`](TASKS.md) 顶部为准。
 >
 > 本路线图不设置周、月、年份、发布日期或完成期限。节点只受前置依赖、启动条件和退出门槛约束；后序方向可以无限期暂停、跳过或停止。
 
@@ -9,6 +9,8 @@
 ScoutFootball 的长期定位是：**本地优先、开放源代码、个人维护、非盈利、供应商中立且可审计的足球证据到决策工作台**。
 
 第一服务对象是维护者本人以及具有相似需求的个人足球爱好者、独立分析者和研究学习者。开放代码允许其他个人或组织复用，但项目不以客户、收入、市场份额、企业部署或服务合同为目标。
+
+当前开发焦点进一步收敛为：**维护者在本机长期研究足球球员评分的可复现系统**。世界杯、招募、比赛准备、动作价值、互操作和战术工具只有在复用可信数据、身份、评分、实验与证据包内核，或直接支持一项真实个人研究任务时才继续扩展。评分专项的目标语义、缺陷登记、功能积压和 PRS-0 至 PRS-8 门禁以 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md) 为准；本文保留跨场景的长期公共依赖。
 
 项目不以页面数、路由数、数据行数或模型参数量为成功标准，而以三件事衡量：
 
@@ -19,6 +21,7 @@ ScoutFootball 的长期定位是：**本地优先、开放源代码、个人维�
 产品结构采用“一个核心、多个场景包”：
 
 - **ScoutFootball Core：** 来源/许可、快照/lineage、身份、契约、模型治理、证据包、工作区和适配器。
+- **Player Rating Research Pack：** 研究问题、cohort、角色内 baseline、独立标签、候选比较、不确定性、球员档案和可重放研究包；这是当前第一参考实现。
 - **World Cup Pack：** 世界杯赛程、简报、路径、战术与赛后复盘的参考实现。
 - **Recruitment Pack：** 招募需求、角色匹配、长名单、shortlist、决策档案和结果反馈。
 - **Opposition & Match Pack：** 对手分析、情景、战术计划、视频/事件证据和赛后学习。

@@ -22,13 +22,14 @@ ScoutFootball 是本地优先、开放源代码、个人维护、非盈利的足
 
 项目不按 SaaS、付费产品、企业平台或数据市场开发。代码和文档遵循仓库的 MIT License；第三方数据和视频仍遵循各自许可。项目定位和决策规则以 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) 为准。
 
-世界杯是第一个参考场景包，不是核心平台的永久边界；同一套证据和工作流契约应能服务赛事之外的招募与比赛准备。
+世界杯是参考场景包，不是核心平台的永久边界。当前第一参考用途是可复现的本地个人球员评分研究系统；招募、比赛准备、动作价值和赛事工具应复用评分研究的证据内核，而不是各自扩张为独立产品面。
 
-当前重点：把宽幅原型收敛为三个可信、可重复的工作流——球探决策、比赛准备、数据/模型发布。来源许可、快照、身份复核、统一契约、真实浏览器 E2E 和失败即阻断的发布，优先于继续增加顶层页面和模型复杂度。
+当前重点：让球员评分研究具备明确目标、canonical 身份和数据粒度、透明 baseline、独立评价标签、不确定性、active rating 新鲜度、错误分析和可重放本地研究包。详细缺陷和依赖门禁见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)。
 
 ## 战略与真实范围
 
 - [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) 定义本地、开放、个人、非盈利的项目属性，优先级高于其他规划文档。
+- [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md) 定义当前球员评分研究缺陷、目标系统、功能积压和 PRS-0 至 PRS-8 门禁。
 - [`CAPABILITIES.md`](CAPABILITIES.md) 区分已交付、部分交付、样例/实验、本地状态、计划和未核验能力。
 - [`FOOTBALL_TOOLING_LANDSCAPE_2026.md`](FOOTBALL_TOOLING_LANDSCAPE_2026.md) 给出 2026 商业与开放工具版图，作为技术参照，不是商业化或市场进入计划。
 - [`ROADMAP.md`](ROADMAP.md) 只定义有退出门槛的长期依赖顺序，不设置日历期限；[`TASKS.md`](TASKS.md) 顶部是当前可执行队列。
@@ -38,12 +39,12 @@ ScoutFootball 是本地优先、开放源代码、个人维护、非盈利的足
 - **研发流水线:** `ingest` -> `build-features` -> `train`。
 - **数据验证:** `scoutfootball validate` 检查训练前数据一致性。
 - **本地数据层:** DuckDB + Parquet，按 raw/silver/gold/models/reports/logs 分层。
-- **球员评分:** PyTorch 权重优化器，组合目标（Spearman + soft NDCG@20 + 位置内一致性 + 训练集积分/联赛校准 + 分布/尾部/联赛偏差损失 + 球员评分 guardrail + 可选球员真值标签锚定），holdout 评估、availability cap、quality cap、稳健球队聚合、覆盖率过滤和模型运行登记。
+- **球员评分:** 基于球队积分代理目标的 PyTorch 研究候选，具备 holdout 指标、availability/quality cap、模型运行登记和本地准入生命周期。当前只属部分交付：active rating 早于当前特征矩阵，本地没有可复核模型运行，也没有合格的独立监督标签；不能写成已验证的球员能力真值。
 - **真实标签契约:** `player_truth_labels.parquet` schema、来源政策、校验和手动快照导入。当前文件行数和来源分布必须在锁定运行时内容级验证；标签独立性和时间切分仍是模型准入门槛。
 - **神经网络候选模型:** `scoutfootball train-rating-nn` 使用 `rating_feature_matrix.parquet` + `player_truth_labels.parquet` 训练监督式 sklearn MLP 候选模型，并写入 `data/models/player_rating_nn/`；除非同切分下优于当前优化器和 baseline，否则不替换 `player_ratings_optimized.parquet`。
 - **评分模型卡:** `MODEL_CARD.md` 记录数据源、标签定义、适用边界和已知偏差。
 - **比分预测:** Independent Poisson baseline，含比分概率矩阵。
-- **产品与可视化:** 15 页 Streamlit 工作台；Liquid Glass 静态工作台当前有 22 个顶层视图目标，覆盖核心分析、世界杯、战术、质量和治理。这个数量不代表所有流程都已成熟，准确边界以 `CAPABILITIES.md` 为准。球探工程、决策包、战术工程和部分简报联动默认保存在浏览器本地，不是云同步或多人协作；预计阵容和赛事模型结果也不是官方实时球队新闻。
+- **产品与可视化:** 15 页 Streamlit 工作台；Liquid Glass 静态工作台当前有 24 个顶层视图目标，覆盖核心分析、世界杯、战术、质量和治理。这个数量不代表所有流程都已成熟，准确边界以 `CAPABILITIES.md` 为准。球探工程、决策包、战术工程和部分简报联动默认保存在浏览器本地，不是云同步或多人协作；预计阵容和赛事模型结果也不是官方实时球队新闻。
 
 ## Liquid Glass 前端
 

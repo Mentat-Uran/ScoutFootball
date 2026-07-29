@@ -407,6 +407,19 @@ def _cmd_model_admission(args: argparse.Namespace) -> None:
     )
 
 
+def _cmd_research_health(_args: argparse.Namespace) -> None:
+    """Report the five-layer research health of the rating system.
+
+    PRS-0 R-003/R-004: a stale, unreviewable, synthetic or non-independent-label
+    rating system must be reported as not ready, never hidden behind a top-level
+    ``ok``. The verdict is fail-closed; see ``research_health.py``.
+    """
+    from scoutfootball.evaluation.research_health import build_research_health_report
+
+    report = build_research_health_report()
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -3758,6 +3771,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     model_admission_p.add_argument("--run-id", default=None)
     model_admission_p.add_argument("--json", action="store_true", help="Emit JSON")
+    sub.add_parser(
+        "research-health",
+        help=(
+            "Report five-layer research health of the rating system "
+            "(PRS-0 R-003/R-004); fail-closed verdict, never hides stale/"
+            "unreviewable/synthetic/non-independent-label states behind ok"
+        ),
+    )
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -4738,6 +4759,7 @@ def main() -> None:
         "source-health": _cmd_source_health,
         "contract-quality": _cmd_contract_quality,
         "model-admission": _cmd_model_admission,
+        "research-health": _cmd_research_health,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
