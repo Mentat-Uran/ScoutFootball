@@ -17,7 +17,7 @@
 
 ### PRS-0：当前评分真实性止血 — `ready`
 
-- [ ] 把 `storage_health`、`lineage_health`、`model_reviewability`、`active_rating_freshness` 和 `research_readiness` 分开计算；任何一层失败都不能被顶层 `ok` 隐藏。
+- [x] 把 `storage_health`、`lineage_health`、`model_reviewability`、`active_rating_freshness` 和 `research_readiness` 分开计算；任何一层失败都不能被顶层 `ok` 隐藏。（2026-07-29：`1d6bc08` 实现 five-layer fail-closed verdict）
 - [ ] 为当前 active rating 建立从评分文件、模型运行、训练配置、特征 manifest 到原始快照的完整 lineage；feature hash 或批准状态不一致时默认 stale。
 - [ ] 隔离 synthetic fallback；其数据不得进入真实研究健康、评估或导出。
 - [x] 生成当前评分研究状态报告，机器读取标签独立性、特征缺失、数据粒度、模型可复核状态和 active rating 新鲜度，替代手工复制的易漂移数字。（2026-07-29：`scoutfootball research-health` 现包含 feature_coverage 和 data_grain 证据 section；标签独立性、模型可复核状态和 active rating 新鲜度已由五层覆盖）
