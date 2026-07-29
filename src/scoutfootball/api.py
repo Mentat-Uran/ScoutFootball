@@ -39,6 +39,7 @@ from scoutfootball.app.data_loader import (
     _MISSING,
     _TTLCache,
     data_source_label,
+    frame_is_synthetic,
     load_league_metrics,
     load_model_meta,
     load_oof_predictions,
@@ -5662,7 +5663,12 @@ def get_player_ratings(
     """Return player ratings from DuckDB, sorted by optimized_score DESC."""
     df = load_player_ratings(position=position, league=league, team=team, season=season)
     if df.empty:
-        return {"count": 0, "players": []}
+        return {"count": 0, "players": [], "data_mode": "empty"}
+
+    # PRS-0 R-003: stamp synthetic fallback in the response so consumers
+    # cannot mistake demo data for a real rating artifact. The data is still
+    # served (so the UI does not break) but is clearly labeled.
+    synthetic = frame_is_synthetic(df)
 
     # Normalize confidence_level to uppercase for frontend
     if "confidence_level" in df.columns:
@@ -5677,7 +5683,11 @@ def get_player_ratings(
 
     players = df.to_dict(orient="records")
     # Convert NaN to None for JSON serialization
-    return _clean_json_value({"count": len(players), "players": players})
+    return _clean_json_value({
+        "count": len(players),
+        "players": players,
+        "data_mode": "synthetic" if synthetic else "artifact",
+    })
 
 
 def get_ratings_meta() -> dict:
@@ -5723,7 +5733,11 @@ def get_team_strength(
     """
     df = load_player_ratings(league=league, season=season)
     if df.empty:
-        return {"count": 0, "teams": []}
+        return {"count": 0, "teams": [], "data_mode": "empty"}
+
+    # PRS-0 R-003: stamp synthetic fallback so consumers cannot mistake demo
+    # data for a real team-strength artifact.
+    synthetic = frame_is_synthetic(df)
 
     # Resolve column aliases
     team_col = "team" if "team" in df.columns else (
@@ -5835,7 +5849,11 @@ def get_team_strength(
     # Apply limit
     teams = teams[:limit]
 
-    return _clean_json_value({"count": len(teams), "teams": teams})
+    return _clean_json_value({
+        "count": len(teams),
+        "teams": teams,
+        "data_mode": "synthetic" if synthetic else "artifact",
+    })
 
 
 def get_team_comparison(team_a: str, team_b: str) -> dict:
@@ -7467,6 +7485,21 @@ def get_player_profile(
 
     df = load_player_ratings()
 
+    # PRS-0 R-003: refuse to export synthetic fallback as real research CSV.
+    # Check at the top so the maintainer gets an immediate, clear error
+    # instead of waiting for the full profile build to fail or — worse —
+    # silently exporting demo data as a real artifact. The JSON path still
+    # serves synthetic data (clearly labeled) so the UI does not break.
+    if fmt == "csv" and frame_is_synthetic(df):
+        return _make_error_response(
+            "synthetic_data_refused",
+            message=(
+                "Cannot export CSV: player ratings are synthetic fallback, "
+                "not a real artifact. Run `scoutfootball build-features` "
+                "and `scoutfootball train` to produce real ratings."
+            ),
+        )
+
     # Alias sub_position → position_group for frontend compatibility
     if "sub_position" in df.columns and "position_group" not in df.columns:
         df["position_group"] = df["sub_position"]
@@ -7514,6 +7547,7 @@ def get_player_profile(
             "offset": offset,
             "limit": limit,
             "players": player_list,
+            "data_mode": "synthetic" if frame_is_synthetic(df) else "artifact",
         })
 
     if rows.empty:
@@ -7655,6 +7689,7 @@ def get_player_profile(
         "position_percentiles": _compute_position_percentiles(row, pos_pool),
         "low_confidence_reasons": _compute_low_confidence_reasons(row),
         "trend_3seasons": _compute_3season_trend(rows),
+        "data_mode": "synthetic" if frame_is_synthetic(df) else "artifact",
     })
 
     # Embed career intelligence blocks. Each block is wrapped in a
@@ -7816,6 +7851,14 @@ def get_player_comparison(player_a: str, player_b: str) -> dict:
         "stats_comparison": stats_comparison,
         "same_position": (
             profile_a.get("position_group", "") == profile_b.get("position_group", "")
+        ),
+        # PRS-0 R-003: propagate synthetic flag from underlying profiles so
+        # consumers cannot mistake a demo-data comparison for a real one.
+        "data_mode": (
+            "synthetic"
+            if profile_a.get("data_mode") == "synthetic"
+            or profile_b.get("data_mode") == "synthetic"
+            else "artifact"
         ),
     })
 
@@ -8224,6 +8267,10 @@ def get_player_comparison_multi(
     if "sub_position" in df.columns and "position_group" not in df.columns:
         df["position_group"] = df["sub_position"]
 
+    # PRS-0 R-003: stamp synthetic fallback so consumers cannot mistake
+    # demo data for a real multi-player comparison.
+    synthetic = frame_is_synthetic(df)
+
     rows_by_name: dict[str, Any] = {}
     missing: list[str] = []
     for name in player_names:
@@ -8253,6 +8300,7 @@ def get_player_comparison_multi(
         }
 
     result = compute_multi_player_comparison(rows_by_name, df)
+    result["data_mode"] = "synthetic" if synthetic else "artifact"
     return _clean_json_value(result)
 
 
