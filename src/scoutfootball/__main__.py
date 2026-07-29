@@ -420,6 +420,20 @@ def _cmd_research_health(_args: argparse.Namespace) -> None:
     print(json.dumps(report, indent=2, ensure_ascii=False))
 
 
+def _cmd_audit_identity(_args: argparse.Namespace) -> None:
+    """Report canonical identity risks in player_match.parquet (PRS-1 R-005).
+
+    Read-only scan of player_id format distribution, same-name-different-id
+    risk, multi-team-season transfer records, and cross-source alignment gaps.
+    Does not resolve conflicts or modify any artifact; every risk is evidence
+    for the maintainer's human review.
+    """
+    from scoutfootball.evaluation.identity_audit import build_identity_audit_report
+
+    report = build_identity_audit_report()
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -3779,6 +3793,15 @@ def build_parser() -> argparse.ArgumentParser:
             "unreviewable/synthetic/non-independent-label states behind ok"
         ),
     )
+    sub.add_parser(
+        "audit-identity",
+        help=(
+            "Report canonical identity risks in player_match.parquet "
+            "(PRS-1 R-005): player_id format distribution, same-name-"
+            "different-id, multi-team-season transfers, cross-source "
+            "alignment gaps. Read-only; every risk is evidence for review"
+        ),
+    )
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -4760,6 +4783,7 @@ def main() -> None:
         "contract-quality": _cmd_contract_quality,
         "model-admission": _cmd_model_admission,
         "research-health": _cmd_research_health,
+        "audit-identity": _cmd_audit_identity,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,

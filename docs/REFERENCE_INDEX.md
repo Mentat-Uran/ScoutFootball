@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-29T07:30:38.093385+00:00`
-- content SHA-256：`cc30cdea4ce58b1f4af31bd075af959ce084510f79e27fc1f255a4419d4956a8`
+- manifest generated_at：`2026-07-29T17:33:32.575655+00:00`
+- content SHA-256：`612da3c3c17ad6e8c882912360da769696b5446443edd90baf1018679086d5b9`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -49,6 +49,7 @@
 - `uv run python -m scoutfootball transfermarkt-identity-review`
 - `uv run python -m scoutfootball reconcile-transfermarkt-truth-labels`
 - `uv run python -m scoutfootball audit-truth-labels`
+- `uv run python -m scoutfootball audit-identity`
 - `uv run python -m scoutfootball backtest`
 - `uv run python -m scoutfootball tune-predictions`
 - `uv run python -m scoutfootball optimize-ensemble`
@@ -81,10 +82,11 @@
 | pipeline.adapters | data_pipeline | delivered | /adapters, /adapters/compatibility | list-adapters, adapter-compatibility | — |
 | pipeline.ingest | data_pipeline | delivered | — | ingest | — |
 | pipeline.build_features | data_pipeline | delivered | — | build-features | — |
-| pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, inspect-raw-source, reep-identity-lookup, contract-quality, model-admission, discard-model-run, reject-model-run, promote-model-run, rollback-model-run, validate-decision-package, record-source-snapshot, record-source-policy, record-quality-audit, record-quality-threshold | — |
+| pipeline.validate | data_pipeline | delivered | /health, /artifacts | validate, preflight, optimizer-preflight, source-health, inspect-raw-source, reep-identity-lookup, contract-quality, model-admission, research-health, discard-model-run, reject-model-run, promote-model-run, rollback-model-run, validate-decision-package, record-source-snapshot, record-source-policy, record-quality-audit, record-quality-threshold | — |
 | ratings.training | player_ratings | delivered | — | train, train-rating-nn | — |
 | ratings.export | player_ratings | delivered | /ratings, /ratings/meta, /ratings/snapshots | export-ratings | players, value |
 | ratings.truth_labels | player_ratings | delivered | /reports/truth-labels, /reports/transfermarkt-identities | import-truth-labels, import-transfermarkt-truth-labels, transfermarkt-identity-review, reconcile-transfermarkt-truth-labels, audit-truth-labels | — |
+| ratings.identity_audit | player_ratings | delivered | — | audit-identity | — |
 | predictions.match | match_predictions | delivered | /predictions/{home_team}/{away_team}, /predictions/meta, /predictions/ensemble/weights, /predictions/models/comparison, /predictions/staleness, /predictions/team-accuracy/{team_id}, /predictions/{home_team}/{away_team}/attribution, /predictions/{home_team}/{away_team}/attribution/ci, /predictions/{home_team}/{away_team}/ensemble-attribution, /predictions/{home_team}/{away_team}/ensemble-attribution/ci, /predictions/{home_team}/{away_team}/diagnostics, /predictions/{home_team}/{away_team}/h2h, /predictions/{home_team}/{away_team}/h2h-bias-correction, /predictions/{home_team}/{away_team}/momentum | backtest, tune-predictions, optimize-ensemble | matches |
 | predictions.calibration | match_predictions | delivered | /predictions/calibration, /predictions/backtest, /predictions/tuning, /predictions/drift, /predictions/drift/timeline, /predictions/calibration/reliability, /predictions/calibration/scoreline, /predictions/calibration/comparison, /predictions/calibration/confidence-distribution, /predictions/calibration/error-analysis, /predictions/calibration/outcome-distribution, /predictions/calibration/temporal-validation, /predictions/calibration/probability-heatmap, /predictions/calibration/ci-plot, /predictions/calibration/ci-coverage, /predictions/calibration/ci-width, /predictions/calibration/fold-comparison, /predictions/calibration/league-errors, /predictions/calibration/feature-importance, /predictions/calibration/drift-heatmap, /predictions/calibration/error-clustering, /predictions/calibration/data-drift, /predictions/calibration/stress-test, /predictions/calibration/team-drift, /predictions/calibration/team-profile, /predictions/calibration/uncertainty, /predictions/calibration/profit-loss, /predictions/calibration/trajectory, /predictions/calibration/difficulty, /predictions/calibration/streaks, /predictions/calibration/report-card, /predictions/calibration/anomalies | backtest, tune-predictions | matches, calibration, backtest |
 | predictions.value_bet | match_predictions | delivered | /predictions/{home_team}/{away_team}/value | — | matches |
@@ -107,7 +109,7 @@
 | worldcup.knockout | world_cup | delivered | /world-cup/knockout, /world-cup/tournament/knockout, /world-cup/tournament/knockout/{match_id}/briefing, /world-cup/tournament/knockout/{match_id}/review, /world-cup/tournament/knockout/reviews, /world-cup/tournament/knockout/probabilities, /world-cup/tournament/knockout/scenarios/{team}, /world-cup/tournament/knockout/match-impact, /world-cup/tournament/knockout/generate (POST), /world-cup/tournament/knockout/result (POST/DELETE) | tournament knockout, tournament knockout generate, tournament knockout show, tournament knockout apply, tournament knockout clear | wc_knockout, wc_tournament |
 | worldcup.predictions | world_cup | delivered | /world-cup/predictions, /world-cup/predictions/{home_team}/{away_team}, /world-cup/match-briefings/{home_team}/{away_team}, /world-cup/outlook/{team} | — | wc_probability, wc_compare |
 | worldcup.squads | world_cup | delivered | /world-cup/squads/{team}, /world-cup/squads/{team}/scouting-needs, /world-cup/squad-balance-comparison/{team_a}/{team_b} | — | wc_squads, wc_compare |
-| api.server | infrastructure | delivered | /health, /health/detailed, /license, /search, /local-pack/export, /local-pack/import (POST), /tactical-board/capabilities, /tactical-board/export/mp4 (POST) | serve | — |
+| api.server | infrastructure | delivered | /health, /health/detailed, /health/research, /license, /search, /local-pack/export, /local-pack/import (POST), /tactical-board/capabilities, /tactical-board/export/mp4 (POST) | serve | — |
 | local.portable_pack | infrastructure | delivered | /local-pack/export, /local-pack/import (POST) | export-local-pack, import-local-pack | — |
 | frontend.analyst_console | infrastructure | delivered | — | — | overview, players, compare, value, matches, teams, league, scouting, actions, reports, tactical, wc_schedule, wc_squads, wc_compare, wc_probability, wc_knockout, wc_tournament, license, data, calibration, backtest, help, workflow, versions |
 | data.artifacts | infrastructure | delivered | /artifacts, /model-runs, /reports/model-runs, /reports/model-runs/{run_id} | info, capabilities, data-contracts | data |
