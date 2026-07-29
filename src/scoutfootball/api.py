@@ -380,6 +380,38 @@ def _build_source_health_section(settings) -> dict[str, Any]:
     }
 
 
+def _build_research_health_section(settings) -> dict[str, Any]:
+    """PRS-0 R-003/R-004: five-layer fail-closed research health summary.
+
+    Returns a compact summary (verdict + per-layer status + blocking reasons)
+    suitable for the overview page. The full five-layer report with evidence
+    is available via ``scoutfootball research-health`` CLI or
+    ``GET /health/research``.
+    """
+    from scoutfootball.evaluation.research_health import (
+        build_research_health_report,
+    )
+
+    report = build_research_health_report(settings=settings)
+    return {
+        "verdict": report.get("verdict"),
+        "blocking_reasons": report.get("blocking_reasons", []),
+        "layers": {
+            "storage_health": report.get("storage_health", {}).get("status"),
+            "lineage_health": report.get("lineage_health", {}).get("status"),
+            "model_reviewability": report.get("model_reviewability", {}).get(
+                "status"
+            ),
+            "active_rating_freshness": report.get(
+                "active_rating_freshness", {}
+            ).get("status"),
+            "research_readiness": report.get("research_readiness", {}).get(
+                "status"
+            ),
+        },
+    }
+
+
 def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
     """Compose a comprehensive local health snapshot for the overview page.
 
@@ -437,6 +469,14 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
     source_health = _safe_call(
         "source_health", lambda: _build_source_health_section(settings)
     )
+    # PRS-0 R-003/R-004: research_health is the fail-closed layered verdict
+    # for the rating system. It reuses model_admission and truth_labels
+    # evidence so a 0-reviewable-run or stale-lineage state can no longer be
+    # hidden by a top-level ok. Computed in its own _safe_call so a failure
+    # here degrades this section without breaking the rest of the report.
+    research_health = _safe_call(
+        "research_health", lambda: _build_research_health_section(settings)
+    )
 
     # Compute top-level status: "ok" if all sub-builders succeeded and
     # validation + contract_quality both pass; "degraded" if any sub-builder
@@ -448,6 +488,7 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
         "model_admission": model_admission,
         "contract_quality": contract_quality,
         "source_health": source_health,
+        "research_health": research_health,
     }
     unavailable = [k for k, v in sub_builders.items() if v is None]
     failed_checks = []
@@ -458,6 +499,15 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
         and contract_quality.get("status") in ("fail", "incomplete")
     ):
         failed_checks.append(f"contract_quality:{contract_quality.get('status')}")
+    # R-004: a not_ready/unavailable research verdict is a failed check at
+    # the top level. Before this, model_admission's reviewable_run_count=0
+    # was invisible to top_status because model_admission's own status was
+    # hardcoded "ok".
+    if research_health and research_health.get("verdict") in (
+        "not_ready",
+        "unavailable",
+    ):
+        failed_checks.append(f"research_health:{research_health.get('verdict')}")
 
     if unavailable:
         top_status = "degraded"
@@ -486,6 +536,10 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
             source_health if source_health is not None
             else {"status": "unavailable"}
         ),
+        "research_health": (
+            research_health if research_health is not None
+            else {"verdict": "unavailable"}
+        ),
         "unavailable_sections": unavailable,
         "failed_sections": failed_checks,
         "limitations": [
@@ -496,7 +550,7 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
             ),
             (
                 "Expensive builders (validation, model-admission, "
-                "contract-quality, source-health) are TTL-cached "
+                "contract-quality, source-health, research-health) are TTL-cached "
                 "(default 300s); pass force_refresh=True to bypass."
             ),
             (
@@ -504,11 +558,33 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
                 "model-admission --json or /model-runs API for per-run "
                 "details."
             ),
+            (
+                "research_health is a fail-closed layered verdict (PRS-0 "
+                "R-003/R-004); use CLI research-health or /health/research "
+                "for the full five-layer report."
+            ),
         ],
     })
 
     _detailed_health_cache.set(cache_key, result)
     return result
+
+
+def get_research_health() -> dict[str, Any]:
+    """Return the five-layer research health snapshot for the rating system.
+
+    Thin wrapper around ``research_health.build_research_health_report`` so
+    the API layer stays consistent with the CLI (``scoutfootball
+    research-health``). PRS-0 R-003/R-004: the verdict is fail-closed — a
+    stale, unreviewable, synthetic or non-independent-label rating system is
+    reported as ``not_ready`` and can no longer be hidden behind a top-level
+    ``ok``. Read-only and local; no synthetic fallback.
+    """
+    from scoutfootball.evaluation.research_health import (
+        build_research_health_report,
+    )
+
+    return build_research_health_report()
 
 
 def get_adapter_registry() -> dict[str, Any]:

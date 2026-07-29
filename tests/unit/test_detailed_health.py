@@ -94,6 +94,28 @@ def _ok_source_health() -> dict[str, Any]:
     }
 
 
+def _ok_research_health() -> dict[str, Any]:
+    """A known-good research_health section (verdict=ready, no blockers).
+
+    PRS-0 R-003/R-004 added ``research_health`` as a sixth sub-builder of
+    ``get_detailed_health``. Its verdict is fail-closed: when not patched
+    in tests it returns ``not_ready`` against an empty tmp_path, which
+    degrades the top-level status. Tests that assert ``status == "ok"``
+    must patch this builder just like the other five.
+    """
+    return {
+        "verdict": "ready",
+        "blocking_reasons": [],
+        "layers": {
+            "storage_health": "ok",
+            "lineage_health": "ok",
+            "model_reviewability": "ok",
+            "active_rating_freshness": "fresh",
+            "research_readiness": "ready",
+        },
+    }
+
+
 def _patch_all_builders_ok(monkeypatch) -> None:
     """Patch every expensive sub-builder to return a known-good payload.
 
@@ -117,6 +139,10 @@ def _patch_all_builders_ok(monkeypatch) -> None:
     monkeypatch.setattr(
         "scoutfootball.api._build_source_health_section",
         lambda settings: _ok_source_health(),
+    )
+    monkeypatch.setattr(
+        "scoutfootball.api._build_research_health_section",
+        lambda settings: _ok_research_health(),
     )
 
 

@@ -1,5 +1,7 @@
 # EVALUATION.md — 评分系统评估报告
 
+> 历史评估快照，不是当前 active rating 的准入证据。2026-07-29 本地审计确认当前 41 个模型运行中没有可复核运行，当前评分早于现行特征矩阵，29,723 条标签中独立合格监督标签为 0。当前缺陷与新评价协议见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)，能力边界见 [`CAPABILITIES.md`](CAPABILITIES.md)。在 PRS-0 生成式研究状态和 active lineage 落地前，不要把下文指标写成当前发布指标。
+
 最新计算口径：v1.3 GPU 重跑（2026-06-09 23:05，本地 `data/models/runs/20260609T145045Z/meta.json`）。v1.3.1-dev 已新增训练集联赛 residual offset 和 `league_bias_weight`，只读复算显示当前参数 holdout points MAE 可从 11.55 降到 9.44，但完整 optimizer 重跑仍待执行。v1.3.2-dev 已新增可选球员真值标签锚定损失和监督式 NN 候选入口；当前 `player_truth_labels.parquet` 为空，所以尚无可报告的球员级监督指标。
 
 ## 数据切分

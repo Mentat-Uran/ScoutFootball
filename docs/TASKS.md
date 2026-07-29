@@ -1,8 +1,8 @@
 # 任务路线图
 
-> 当前队列更新：2026-07-27。项目定位见 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md)，长期依赖见 [`ROADMAP.md`](ROADMAP.md)，行业依据见 [`FOOTBALL_TOOLING_LANDSCAPE_2026.md`](FOOTBALL_TOOLING_LANDSCAPE_2026.md)，能力边界见 [`CAPABILITIES.md`](CAPABILITIES.md)。本文件顶部是当前任务真源；旧阶段和交付记录已归档为历史证据，其中的日期不构成当前期限。
+> 当前队列更新：2026-07-29。项目定位见 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md)，球员评分专项规划见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)，长期依赖见 [`ROADMAP.md`](ROADMAP.md)，行业依据见 [`FOOTBALL_TOOLING_LANDSCAPE_2026.md`](FOOTBALL_TOOLING_LANDSCAPE_2026.md)，能力边界见 [`CAPABILITIES.md`](CAPABILITIES.md)。本文件顶部是当前任务真源；旧阶段和交付记录已归档为历史证据，其中的日期不构成当前期限。
 
-当前状态：仓库已形成宽幅本地原型，主要矛盾已经从“功能不足”转为定位一致性、数据可读性、契约漂移、真实浏览器测试、发布门禁和个人端到端工作流。路线不设工期，只执行依赖已满足的节点。
+当前状态：仓库已形成宽幅本地原型，当前开发焦点收敛到“本地个人球员评分研究系统”。主要矛盾不是功能数量，而是评分目标语义、独立标签、canonical 身份、数据粒度、跨位置可比性、不确定性、active rating 新鲜度和个人研究闭环。路线不设工期，只执行依赖已满足的节点。
 
 ## 队列规则
 
@@ -10,6 +10,48 @@
 - 只有 `ready` 或 `in_progress` 节点可以拆成实现任务；`blocked` 节点只记录依赖，不提前堆功能。
 - 解锁取决于退出证据，不取决于日期。被解锁的节点也可以暂停或停止。
 - 当前只允许本地、开放、个人、非盈利路线；SaaS、商业版、收入、获客、组织账号和云协作不进入队列。
+
+## 球员评分研究专项队列
+
+完整缺陷证据、目标架构、功能积压和验收协议见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)。本节只维护可执行状态，不重复专项文档。
+
+### PRS-0：当前评分真实性止血 — `ready`
+
+- [ ] 把 `storage_health`、`lineage_health`、`model_reviewability`、`active_rating_freshness` 和 `research_readiness` 分开计算；任何一层失败都不能被顶层 `ok` 隐藏。
+- [ ] 为当前 active rating 建立从评分文件、模型运行、训练配置、特征 manifest 到原始快照的完整 lineage；feature hash 或批准状态不一致时默认 stale。
+- [ ] 隔离 synthetic fallback；其数据不得进入真实研究健康、评估或导出。
+- [ ] 生成当前评分研究状态报告，机器读取标签独立性、特征缺失、数据粒度、模型可复核状态和 active rating 新鲜度，替代手工复制的易漂移数字。
+- [ ] 同步 `MODEL_CARD.md`、`EVALUATION.md`、`PROBLEMS.md` 的当前边界；历史快照保留日期，不再充当当前真源。
+- [ ] 修复当前标准 Ruff 阻断，并建立几分钟内可完成的评分快速门禁；完整测试仍单独分片执行和报告。
+
+当前启动证据（2026-07-29 本地只读审计）：
+
+- `validate` 31/31 通过，`contract-quality` 通过；这只证明当前文件和契约检查通过。
+- 41 个本地模型运行中 `reviewable=0`、`not_reviewable=40`、`not_available=1`。
+- 当前特征矩阵 manifest hash 为 `951d5f39d6fd4b20`；最近候选记录的训练时 hash 为 `bba38aa0f9c1b233`，因此不可复核。
+- 当前优化评分早于当前特征矩阵，但详细健康仍返回顶层 `status=ok`。
+- 29,723 条标签全部为 `expert_tier`，独立合格监督标签为 0。
+
+退出门槛：维护者能在 5 分钟内从 CLI 或本地 UI 判断当前榜单能否用于指定研究；不可复核、过期、synthetic 或标签不独立时均明确拒绝写成 ready。
+
+### 后续专项节点
+
+| 节点 | 状态 | 解锁条件 | 核心结果 |
+| --- | --- | --- | --- |
+| PRS-1 身份、粒度和 cohort 内核 | `blocked` | PRS-0 verified | canonical 主键、转会/同名处理、观测粒度、缺失原因、角色体系 v1 |
+| PRS-2 透明 baseline 与评分语义 v1 | `blocked` | PRS-1 verified | 角色内 baseline、分钟收缩、门将独立模型、不确定性和敏感性 |
+| PRS-3 个人评价集与标签工作台 | `blocked` | PRS-1 verified | pairwise/tier 独立标签、盲评、撤销、冲突和独立性审计 |
+| PRS-4 实验注册与严谨评估 | `blocked` | PRS-2 + PRS-3 verified | baseline 对照、时间外/联赛外/转会/覆盖切片、错误分析和晋级门禁 |
+| PRS-5 个人研究工作区 | `blocked` | PRS-2 verified；完整比较依赖 PRS-4 | 研究项目、cohort builder、球员 dossier、版本比较和研究包 |
+| PRS-6 动作价值受控融合 | `blocked` | PRS-1 + PRS-4 verified，且有合法共同覆盖数据 | xT/VAEP 粒度对齐、共同 cohort、消融和 domain-shift |
+| PRS-7 结果反馈与决策效用 | `blocked` | PRS-5 verified 且有足够后续时间窗 | shortlist 时点、下一赛季/转会后结果和个人效用复盘 |
+| PRS-8 tracking/video 研究 | `blocked` | 合规数据、质量基线及 PRS-1 至 PRS-6 公共内核成熟 | 离球、空间和视频证据研究；不作近期承诺 |
+
+队列约束：
+
+- I1 已开始的切片只完成有明确边界的收尾、验证和文档；不得继续以新增适配器或页面替代 PRS-0/PRS-1。
+- 在 PRS-0 至 PRS-2 验证前，默认不新增顶层视图，不晋级无独立标签的复杂评分模型，不把稀疏 xT/VAEP 拼入全局总分。
+- 后续任何功能若不能进入“研究问题 → cohort → 快照 → baseline/候选 → 评估 → 人工结论 → 可重放研究包”，默认保持 `blocked` 或停止。
 
 ## 当前已解锁节点
 

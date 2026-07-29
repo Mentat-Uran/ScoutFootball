@@ -123,6 +123,7 @@ from scoutfootball.api import (
     get_recruitment_briefs,
     get_recruitment_contracts,
     get_reliability_diagram,
+    get_research_health,
     get_review_queue,
     get_riser_decliner_watchlist,
     get_scenario_stress_test,
@@ -350,6 +351,16 @@ def create_app() -> FastAPI:
     @app.get("/health/detailed")
     def health_detailed(force_refresh: bool = Query(False)):
         return get_detailed_health(force_refresh=force_refresh)
+
+    @app.get("/health/research")
+    def health_research():
+        """Five-layer research health for the rating system (PRS-0 R-003/R-004).
+
+        Fail-closed verdict: a stale, unreviewable, synthetic or
+        non-independent-label rating system is reported as ``not_ready``,
+        never hidden behind a top-level ``ok``. Read-only and local.
+        """
+        return get_research_health()
 
     @app.get("/license")
     def license_info():

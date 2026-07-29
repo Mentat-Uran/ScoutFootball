@@ -1,6 +1,6 @@
 # ScoutFootball 能力真相表
 
-> 审计快照：2026-07-27，分支 `codex/integration`。本文只描述本地仓库可核验状态，不证明线上部署当前可达，也不把计划、样例或估算写成生产能力。工程与发布缺口表已更新到 2026-07-27，反映 G0-B 修复、G1 子任务3（真实浏览器 E2E）、P1（决策工作流闭环 E2E + 创建/编辑路径）、P1+（dossier/review 条目级编辑 E2E：supporting_evidence / risks / hypothesis_results 的新增/编辑/移除/客户端校验阻断）、P1++（dossier/review/briefing 条目级编辑对称补齐 + 工作流 A/B 完整导航路径 E2E：brief → dossier 与 briefing → review 全链路状态推断与 pre-fill 跳转）与 P1+++（工作流 C 覆盖口径修正：CLI 流程不适用浏览器 E2E，已有单元测试 + integration smoke + 真实执行证据三层覆盖）落地。
+> 审计快照：2026-07-29，分支 `codex/integration`。本文只描述本地仓库可核验状态，不证明线上部署当前可达，也不把计划、样例或估算写成生产能力。球员评分的专项缺陷、目标产品和分阶段门禁见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)。
 
 项目属性以 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) 为准：本地优先、MIT 开放源代码、个人维护、非盈利。本表中的桌面、容器、API 或可选协作能力不代表 SaaS、商业版、企业支持或营收计划。
 
@@ -19,22 +19,24 @@
 
 - 仓库已经是一个跨数据、模型、API、静态前端、桌面包装和世界杯场景的完整原型，不是空壳。
 - 产品宽度显著超过旧文档的"7 个分析视图 + 4 个世界杯视图"：当前 HTML 中可见 24 个顶层 `data-view` 目标（含 P1 新增的 `workflow` 和 `versions`）。
-- 关键缺口不再是"有没有更多功能"，而是统一契约、能力登记、真实浏览器 E2E 覆盖面、发布门禁、完整可读数据和三个端到端决策闭环的持续验证。
+- 当前焦点已收敛为本地个人球员评分研究。关键缺口不是"有没有更多功能"，而是评分目标语义、独立标签、canonical 身份、数据粒度、跨位置校准、不确定性、active rating 新鲜度和可重放研究闭环。
+- 当前 41 个模型运行中没有可复核运行；29,723 条标签全部为模型体系衍生的 `expert_tier`，独立合格监督标签为 0。现有评分只能保持“部分交付/研究候选”，不能写成已验证的球员能力真值。
+- 当前评分文件早于当前特征矩阵；最新候选因训练时 feature manifest hash 与现行 hash 不一致而不可复核。详细健康仍返回顶层 `ok`，所以现有健康状态尚不能代表评分可发布。
 - 浏览器球探工作区、战术工程和部分世界杯输入仍是本地状态；动作价值下钻仍只有 3 场比赛、94 条球员—比赛证据记录，并非 tracking；预计名单和模拟结果不是官方实时事实。
-- 2026-07-25 在当前锁定 `uv` 运行时执行 `scoutfootball preflight --target key`，21 个关键 Parquet 均完成内容级解码、schema 检查和抽样校验。该结果只覆盖本次本地检查的文件，不证明来源权利、快照新鲜度或未来运行时持续可读。
+- 2026-07-29 在当前锁定 `uv` 运行时执行 `scoutfootball validate`，31/31 检查通过；该结果只覆盖当前文件、schema、部分唯一键和 lineage，不证明标签独立、模型语义正确或评分新鲜。
 
 ## 仓库规模快照
 
 | 对象 | 本地观察 | 判断 |
 | --- | ---: | --- |
-| FastAPI 路由装饰器 | 163 | 产品契约面较宽，必须自动盘点和分域 |
+| FastAPI 路由装饰器 | 202 | 产品契约面较宽，必须自动盘点和分域 |
 | 静态前端顶层视图 | 24 | 旧 README 的 7+4 口径已过时；P1 新增 `workflow` + `versions` |
-| Python 测试文件 | 94（93 个 `test_*.py` + `conftest.py`） | 单元/集成基础较强，但不替代真实浏览器测试 |
+| Python `test_*.py` 文件 | 151 | 单元/集成基础较强，但不替代独立模型验证或完整测试实际完成 |
 | 前端 Node 测试文件 | 4 | 有纯 JS 回归基础，覆盖面仍有限 |
-| `frontend/app.js` | 26,490 个物理行 / 1.35 MiB | 高变更耦合风险，应按领域拆分 |
-| `frontend/index.html` | 2,654 个物理行 / 191 KiB | 导航、模板和内容高度集中 |
-| `src/scoutfootball/api.py` | 11,493 个物理行 / 428 KiB | 数据装配单体过大 |
-| `src/scoutfootball/api_server.py` | 1,853 个物理行 / 64 KiB | 路由面需要分域和生成式文档 |
+| `frontend/app.js` | 29,845 个物理行 / 1.52 MiB | 高变更耦合风险，应按研究领域拆分 |
+| `frontend/index.html` | 2,838 个物理行 / 205 KiB | 导航、模板和内容高度集中 |
+| `src/scoutfootball/api.py` | 14,338 个物理行 / 537 KiB | 数据装配单体过大 |
+| `src/scoutfootball/api_server.py` | 2,586 个物理行 / 93 KiB | 路由面需要分域和生成式文档 |
 | `docs/TASKS.md` | 约 230 KiB | 活跃队列与历史交付日志混合 |
 | `docs/CODEX_CONTINUOUS_STATE.md` | 约 318 KiB | 大量滚动状态不适合作为当前真源 |
 
@@ -46,9 +48,9 @@
 | --- | --- | --- | --- |
 | 数据流水线 | `ingest`、`build-features`、`train`、验证和多类导出入口 | 已交付 | 当前工作区全部已登记来源已有本地保留/删除政策；上游快照日期、陈旧度与来源主张审计仍须逐项保留证据 |
 | 本地数据层 | raw/silver/gold/models/reports/logs，DuckDB + Parquet | 已交付 | 当前锁定 `uv` 运行时的 21 个关键 Parquet 已通过内容级 preflight；每次数据或运行时变更后仍须重新检查，且这不替代来源、快照与许可审计 |
-| 球员评分 | 优化器、覆盖/可用性约束、holdout 指标、模型运行登记、候选评分快照与本地准入/拒绝/晋级/回滚 | 部分交付 | 只有维护者带决策文本并确认后才会切换已核验候选；v1.3.1/v1.3.2 后续完整重跑、独立真值与经审计设定的质量阈值仍未完成 |
+| 球员评分 | 球队积分代理优化器、覆盖/可用性约束、holdout 指标、模型运行登记、候选评分快照与本地准入/拒绝/晋级/回滚 | 部分交付 | 当前 41 个运行无 reviewable 候选，active rating 早于当前特征矩阵；默认特征未实际使用 xT/VAEP，角色、身份、跨位置校准和独立真值均未完成。只能作为研究候选，不能解释为已验证能力真值 |
 | NN 评分 | `train-rating-nn` 监督式候选入口 | 样例/实验 | 只有独立合格标签、时间外 holdout 并优于 baseline 后才可晋级 |
-| 真值标签 | schema、来源政策、手动 Transfermarkt 快照导入与保守身份复核 | 部分交付 | 标签来源、独立性和当前可读行数口径仍需统一；不得把模型衍生标签当外部真值 |
+| 评价标签 | schema、来源政策、手动 Transfermarkt 快照导入与保守身份复核 | 部分交付 | 当前 29,723 行全部为 `expert_tier`，独立合格标签为 0；不得把模型衍生标签当外部真值，后续应建立 pairwise/tier 个人评价集 |
 | 比赛预测 | Independent Poisson、Dixon-Coles 基线、概率矩阵与校准展示 | 已交付的基线 | 不是投注建议；需按联赛/时间/阵容覆盖持续校准 |
 | 动作价值 | xT/VAEP 聚合、分页、来源标记、比赛证据下钻 | 部分交付 | 本地 footer 报告聚合 9,951 行；下钻仅有 3 场比赛、94 条球员—比赛证据记录，不能写成 tracking 或全量联赛 |
 | 球员画像/对比 | 百分位、趋势、雷达、导出和低置信度原因 | 已交付 | 结论强度必须服从字段覆盖、联赛和样本量 |
@@ -64,7 +66,7 @@
 | 决策工作流导航 + 版本恢复 | 前端 `workflow` 视图：基于已加载 brief/briefing/dossier/review 状态推断可执行下一步、阻断原因和缺失证据；前端 `versions` 视图：四类记录的备份时间线、字段级 diff、`If-Match` 恢复、可移植离线包导出 | 已交付的本地工作流 | P1 E2E 覆盖 versions 视图冒烟、workflow 视图冒烟、四类 artifact（brief/briefing/dossier/review）的 diff+restore 往返（2026-07-25）；P1+ E2E 覆盖 dossier/review 的条目级编辑（supporting_evidence / risks / hypothesis_results 的新增、编辑、移除、客户端校验阻断：缺失 ID、重复 ID、非法枚举）（2026-07-25） |
 | 世界杯可复现 demo 快照 | `scripts/demo_snapshot/export_worldcup_demo_snapshot.py` 导出 6 JSON + manifest + README，`--check` 验证 hash 一致性 | 已交付的本地流程 | 剥离 volatile timestamp keys（`generated_at`/`updated_at`/`created_at`/`recorded_at`/`as_of`）后计算 SHA-256；当前 6/6 文件 hash 一致；维护者数据变更后需重新导出 |
 | 静态前端 | 24 个顶层视图、API/静态 fallback、离线状态 | 部分交付 | 静态路径映射不是全路由覆盖；静态 manifest 陈旧度和契约一致性需自动门禁 |
-| API | 只读分析接口及有限、显式开启的本地工作区写入 | 已交付/部分交付 | 163 个路由装饰器过宽；需要分域、schema registry、弃用策略和 API/静态一致性 |
+| API | 只读分析接口及有限、显式开启的本地工作区写入 | 已交付/部分交付 | 202 个路由装饰器过宽；需要分域、schema registry、弃用策略和 API/静态一致性 |
 | Streamlit | 15 页研究/运维工作台 | 已交付 | 与主静态产品的职责需要收敛，避免双重产品真源 |
 | 桌面/容器 | Electron/PyInstaller、Docker/GHCR/发布配置 | 部分交付 | 跨平台构建、签名、回滚和最终资产需在每次发布中独立确认 |
 | 云部署 | README 记录 Vercel/Render 路径 | 未核验 | 本次不把文档 URL 当成当前可达证明；发布需要实际健康检查和访问确认 |
