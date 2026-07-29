@@ -221,6 +221,48 @@ def _cmd_list_adapters(args: argparse.Namespace) -> None:
     print("\n".join(lines))
 
 
+def _cmd_adapter_compatibility(args: argparse.Namespace) -> None:
+    """Show project-local adapter admission without running an ingester."""
+    from scoutfootball.adapters.compatibility import build_adapter_compatibility_matrix
+
+    matrix = build_adapter_compatibility_matrix()
+    entries = matrix.entries
+    if args.source:
+        entries = tuple(entry for entry in entries if entry.source_id == args.source)
+        if not entries:
+            print(f"No adapter compatibility entry found for source: {args.source}")
+            sys.exit(1)
+
+    if args.json:
+        payload = matrix.model_dump(mode="json")
+        payload["entries"] = [entry.model_dump(mode="json") for entry in entries]
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    lines = [
+        f"ScoutFootball adapter compatibility (v{matrix.package_version})",
+        "Admission is project-local; it is not an upstream license or publication decision.",
+        "",
+    ]
+    for entry in entries:
+        lines.append(f"  [{entry.source_id}] {entry.admission_status}")
+        lines.append(f"      maintained: {entry.maintained}")
+        lines.append(f"      contract_registered: {entry.contract_registered}")
+        if entry.license_name:
+            lines.append(f"      input_license: {entry.license_name}")
+            lines.append(
+                "      input_redistribution_allowed: "
+                f"{entry.redistribution_allowed}"
+            )
+        if entry.ingestion_cli:
+            lines.append(f"      cli: {entry.ingestion_cli}")
+        for reason in entry.reasons:
+            lines.append(f"      reason: {reason}")
+        lines.append("")
+
+    print("\n".join(lines))
+
+
 def _cmd_ingest(args: argparse.Namespace) -> None:
     from scoutfootball.pipeline import run_daily_ingest
 
@@ -3607,6 +3649,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Emit JSON instead of human-readable text"
     )
 
+    adapter_compatibility_p = sub.add_parser(
+        "adapter-compatibility",
+        help="Show project-local adapter admission and input-contract coverage",
+    )
+    adapter_compatibility_p.add_argument(
+        "--source", type=str, default=None, help="Filter by source_id"
+    )
+    adapter_compatibility_p.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of human-readable text"
+    )
+
     ingest_p = sub.add_parser("ingest", help="Run daily data ingestion")
     ingest_p.add_argument(
         "--sources",
@@ -4676,6 +4729,7 @@ def main() -> None:
         "capabilities": _cmd_capabilities,
         "data-contracts": _cmd_data_contracts,
         "list-adapters": _cmd_list_adapters,
+        "adapter-compatibility": _cmd_adapter_compatibility,
         "ingest": _cmd_ingest,
         "build-features": _cmd_build_features,
         "train": _cmd_train,

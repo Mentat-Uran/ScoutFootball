@@ -36,6 +36,7 @@ from scoutfootball.api import (
     get_action_value_player_context,
     get_action_value_rating_links,
     get_action_value_summary,
+    get_adapter_compatibility_matrix,
     get_adapter_registry,
     get_artifacts_summary,
     get_backtest_comparison,
@@ -369,6 +370,16 @@ def create_app() -> FastAPI:
         for every registered source adapter. Read-only metadata only.
         """
         return get_adapter_registry()
+
+    @app.get("/adapters/compatibility")
+    def adapter_compatibility():
+        """Project-local adapter admission and input-contract coverage.
+
+        This does not validate an upstream license or make a publication
+        decision; it only prevents experimental or uncontracted adapters from
+        being mistaken for admitted local workflow inputs.
+        """
+        return get_adapter_compatibility_matrix()
 
     @app.get("/players")
     def players():
