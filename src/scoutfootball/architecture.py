@@ -251,6 +251,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball transfermarkt-identity-review",
             "uv run python -m scoutfootball reconcile-transfermarkt-truth-labels",
             "uv run python -m scoutfootball audit-truth-labels",
+            "uv run python -m scoutfootball audit-identity",
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -401,6 +402,18 @@ def build_capability_registry() -> CapabilityRegistry:
                 "/reports/truth-labels",
                 "/reports/transfermarkt-identities",
             ),
+        ),
+        Capability(
+            id="ratings.identity_audit",
+            name="身份风险审计",
+            description=(
+                "只读扫描 player_match.parquet 的 canonical 身份风险面（PRS-1 R-005）："
+                "player_id 格式分布、同名不同 ID、多队赛季转会记录、跨源对齐缺口。"
+                "不解决冲突、不修改任何产物；每个风险都是维护者人工复核的证据，"
+                "unresolved 是诚实默认。"
+            ),
+            domain="player_ratings",
+            cli_commands=("audit-identity",),
         ),
         Capability(
             id="predictions.match",

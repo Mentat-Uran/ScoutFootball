@@ -23,6 +23,7 @@
 - [x] 生成当前评分研究状态报告，机器读取标签独立性、特征缺失、数据粒度、模型可复核状态和 active rating 新鲜度，替代手工复制的易漂移数字。（2026-07-29：`scoutfootball research-health` 现包含 feature_coverage 和 data_grain 证据 section；标签独立性、模型可复核状态和 active rating 新鲜度已由五层覆盖）
 - [x] 同步 `MODEL_CARD.md`、`EVALUATION.md`、`PROBLEMS.md` 的当前边界；历史快照保留日期，不再充当当前真源。（2026-07-29：随 PRS-0 规划文档 `1d6bc08` 一并更新）
 - [x] 修复当前标准 Ruff 阻断，并建立几分钟内可完成的评分快速门禁；完整测试仍单独分片执行和报告。（2026-07-29：修复 `test_raw_source_inspection.py` N817；新增 `scripts/check-rating-fast.ps1` 覆盖 ruff + 18 个评分核心单元测试文件，~250 用例约 15 秒完成）
+- [x] 建立 canonical 身份风险只读审计，为 PRS-1 R-005 提供前置证据而非提前建设被阻塞的 canonical 身份系统。（2026-07-30：`evaluation.identity_audit` 四维只读扫描 `player_match.parquet`——player_id 格式分布、同名不同 ID、多队赛季转会、跨源对齐缺口；`audit-identity` CLI + `ratings.identity_audit` capability；任一风险 present 即 verdict=`risks_present`，不解决冲突、不修改任何产物；16 个单元测试覆盖格式分类/空数据/缺列/单源无风险/同名/转会/跨源/组合/样本上限九条路径；本地烟雾测试确认当前数据有 3 种 ID 格式、2706 同名冲突、485 转会行、2671 跨源重叠）
 
 当前启动证据（2026-07-29 本地只读审计）：
 

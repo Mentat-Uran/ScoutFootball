@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-29T07:30:38.093385+00:00",
+  "generated_at": "2026-07-29T17:33:32.575655+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -313,6 +313,7 @@
       "uv run python -m scoutfootball transfermarkt-identity-review",
       "uv run python -m scoutfootball reconcile-transfermarkt-truth-labels",
       "uv run python -m scoutfootball audit-truth-labels",
+      "uv run python -m scoutfootball audit-identity",
       "uv run python -m scoutfootball backtest",
       "uv run python -m scoutfootball tune-predictions",
       "uv run python -m scoutfootball optimize-ensemble",
@@ -340,7 +341,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-29T07:30:38.093385+00:00",
+    "generated_at": "2026-07-29T17:33:32.574652+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -430,6 +431,7 @@
           "reep-identity-lookup",
           "contract-quality",
           "model-admission",
+          "research-health",
           "discard-model-run",
           "reject-model-run",
           "promote-model-run",
@@ -500,6 +502,20 @@
           "transfermarkt-identity-review",
           "reconcile-transfermarkt-truth-labels",
           "audit-truth-labels"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.identity_audit",
+        "name": "身份风险审计",
+        "description": "只读扫描 player_match.parquet 的 canonical 身份风险面（PRS-1 R-005）：player_id 格式分布、同名不同 ID、多队赛季转会记录、跨源对齐缺口。不解决冲突、不修改任何产物；每个风险都是维护者人工复核的证据，unresolved 是诚实默认。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "audit-identity"
         ],
         "frontend_views": [],
         "data_artifacts": [],
@@ -1075,6 +1091,7 @@
         "api_paths": [
           "/health",
           "/health/detailed",
+          "/health/research",
           "/license",
           "/search",
           "/local-pack/export",
@@ -1172,7 +1189,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-29T07:30:38.093385+00:00",
+    "generated_at": "2026-07-29T17:33:32.575655+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -2098,5 +2115,5 @@
       }
     ]
   },
-  "content_sha256": "cc30cdea4ce58b1f4af31bd075af959ce084510f79e27fc1f255a4419d4956a8"
+  "content_sha256": "612da3c3c17ad6e8c882912360da769696b5446443edd90baf1018679086d5b9"
 }
