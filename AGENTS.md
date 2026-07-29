@@ -259,6 +259,9 @@ uv run pytest
 uv run pytest tests/unit/test_rating_optimizer_validation.py
 uv run pytest tests/unit/test_rating_optimizer_validation.py tests/unit/test_composite_objective.py tests/unit/test_player_rating_nn.py
 uv run pytest tests/integration/ -q
+# PRS-0 rating fast gate: ruff + ~250 rating-system unit tests, finishes in a few minutes.
+# Run this before iterating on rating/admission/health/identity/contract code.
+powershell -ExecutionPolicy Bypass -File scripts/check-rating-fast.ps1
 PYTHONPATH=src uv run python -m scoutfootball info
 PYTHONPATH=src uv run python -m scoutfootball validate
 PYTHONPATH=src uv run python -m scoutfootball ingest
