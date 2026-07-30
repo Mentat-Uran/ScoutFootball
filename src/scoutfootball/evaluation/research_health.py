@@ -849,6 +849,40 @@ def _build_canonical_resolution_audit(
         }
 
 
+def _build_role_system_audit(
+    settings: PlatformSettings,
+) -> dict[str, Any]:
+    """Surface the role family distribution in the health report.
+
+    PRS-1 R-009 role system v1: a typed ``RoleFamily`` vocabulary of 8
+    families (GK/CB/FB/DM/CM/AM/W/ST) plus a default classifier that
+    maps the existing ``position_group`` column to a typed family. The
+    audit reports the raw distribution, the family distribution, and
+    how many rows still carry a coarse ``DF``/``MF``/``FW`` label (which
+    get a default fine role but are flagged for a future behaviour-
+    based role suggestion tool).
+
+    v1 does not auto-invent DM labels from MF players, and does not
+    include a role override registry. An all-unknown result is
+    ``status=ok`` because unknown is the honest default, not a failure.
+    The section is evidence-only and does not participate in the
+    fail-closed verdict.
+    """
+    try:
+        from scoutfootball.evaluation.role_system import (
+            build_role_system_report,
+        )
+
+        return build_role_system_report(settings=settings)
+    except Exception as exc:  # read-only diagnostic; never raise
+        return {
+            "schema": "scoutfootball.role-system",
+            "schema_version": "1.0.0",
+            "status": "unavailable",
+            "evidence": {"reason": f"role system audit failed: {exc}"},
+        }
+
+
 def _build_research_readiness(
     settings: PlatformSettings,
     *,
@@ -1018,6 +1052,7 @@ def build_research_health_report(
     grain_and_missingness = _build_grain_and_missingness_audit(resolved)
     identity_registry = _build_identity_registry_audit(resolved)
     canonical_resolution = _build_canonical_resolution_audit(resolved)
+    role_system = _build_role_system_audit(resolved)
     layers = {
         "storage_health": storage,
         "lineage_health": lineage,
@@ -1038,6 +1073,7 @@ def build_research_health_report(
         "grain_and_missingness": grain_and_missingness,
         "identity_registry": identity_registry,
         "canonical_resolution": canonical_resolution,
+        "role_system": role_system,
         "limitations": [
             (
                 "Local-only read-only diagnostic; no telemetry is uploaded. "
@@ -1082,6 +1118,17 @@ def build_research_health_report(
                 "instead of being silently promoted to canonical. The "
                 "original player_match.parquet is never modified. An "
                 "all-unresolved result does not block the verdict."
+            ),
+            (
+                "role_system is PRS-1 R-009's v1 position-family audit: "
+                "it classifies position_group into 8 typed RoleFamily "
+                "values (GK/CB/FB/DM/CM/AM/W/ST) so PRS-2 in-role "
+                "baseline slicing has a stable vocabulary. Coarse source "
+                "labels DF/MF/FW collapse to default fine roles "
+                "(CB/CM/ST) and are flagged via coarse_position_rows; "
+                "v1 does not auto-invent DM from MF and does not include "
+                "a role override registry. An all-unknown result does "
+                "not block the verdict."
             ),
         ],
     }

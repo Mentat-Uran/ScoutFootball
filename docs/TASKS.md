@@ -88,7 +88,23 @@
 - [x] 15 个单元测试覆盖：精确名称+球队匹配（high）、名称匹配球队不同（medium）、无匹配、空数据、无 statsbomb 行、缺文件、缺 season_id、多候选全部报告、不同赛季/联赛排除、标准化（去重音/大小写）、限制声明非空、无 fuzzy matching 限制文档化、全名 vs 短名不匹配。（`tests/unit/test_identity_suggest.py`）
 - [x] 真实数据验证：69 个 statsbomb 球员中 10 个高置信度匹配（主要 Barcelona 球员：ter Stegen、Dembélé、Griezmann、Frenkie de Jong 等），59 个无匹配（主要是 statsbomb 全名 vs understat 常用名差异，如 "Lionel Andrés Messi Cuccittini" vs "Lionel Messi"、"Sergio Busquets i Burgos" vs "Sergio Busquets"）。工具如实报告无匹配，不猜测。10 个高置信度匹配可直接通过 `identity-registry-append` CLI 确认录入 registry。
 
-退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-5 已交付 typed enums、只读 grain/missingness 审计、canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary）、canonical 主键解析器（source-stable fallback + research-health 集成）、event-level source join（grain/source 透传 + ACTUAL_ZERO 部分检测）和 canonical 映射建议工具（精确标准化名称匹配 + 人工复核入口），不触及 cohort 协议和角色体系——它们解锁 PRS-2/PRS-3，必须单独切片验证。
+切片 5.5：canonical 映射 registry 录入（2026-07-31）。
+
+- [x] 通过 `identity-registry-append` CLI 和批量 Python 脚本录入切片 5 的 10 个高置信度 statsbomb→understat 映射到 `data/gold/identity_registry/decisions.jsonl`。每条记录包含完整证据（标准化名称、球队、赛季、联赛）、`decided_by="autonomous-agent"` 标记和 notes 说明。registry 从 0 条增长到 10 条 active confirmed 映射。
+- [x] `resolve-canonical-ids` 验证：27,598 行 player_match 中 21 行 statsbomb_open 行解析为 10 个 distinct understat canonical IDs（10 个球员 × 多个比赛行）。剩余 73 行 statsbomb_open（59 个 unmatched + 重复比赛行）和所有 fbref/understat 行保持 `unresolved:<source>:<id>` 标记——这是诚实默认，不是失败。understat/fbref 自映射是否需要录入留给后续切片决策。
+
+切片 6：角色体系 v1（2026-07-31）。
+
+- [x] `evaluation/role_system.py`：定义 `RoleFamily` StrEnum（GK/CB/FB/DM/CM/AM/W/ST/UNKNOWN）作为 PRS-1 R-009 角色体系 v1 的 typed 词汇。8 个位置族与优化器侧 `scripts/optimizer/constants.py` 的 `POSITIONS` 列表一致，但独立于优化器链（避免破坏 `position_metrics.POSITION_GROUP_MAP`）。`UNKNOWN` 是缺失/未映射值的诚实 sentinel，不静默塌缩为 CM。（`src/scoutfootball/evaluation/role_system.py`）
+- [x] `classify_role_family(position_group)` 纯函数：None/NaN/空/bool/数值 → UNKNOWN；已知细角色（GK/CB/FB/DM/CM/AM/W/ST）直接映射；粗位置（DF/MF/FW）收敛到默认细角色（CB/CM/ST），因为来源未提供足够信息选择更细角色；未知值 → UNKNOWN。大小写不敏感，前后空白被 strip。不自动从 MF 创造 DM——v1 只暴露词汇和审计，不猜测角色。
+- [x] `build_role_system_report(settings)` 只读审计：读取 `player_match.parquet`，报告 `position_group` 原始分布（含 NaN sentinel `<NaN>`）、`RoleFamily` 映射后分布、`coarse_position_rows`（DF/MF/FW 行数）、`unknown_position_rows`、`distinct_unknown_values` 和 `unknown_value_samples`（前 20 个，排序）。fail-closed：missing/empty/unreadable player_match 返回 `status=unavailable`；无 `position_group` 列返回 `status=ok` with all UNKNOWN；正常数据返回 `status=ok` with 完整分布。
+- [x] `research-health` 集成：新增 `_build_role_system_audit` 函数和 `role_system` evidence section。fail-closed：模块导入失败或审计异常返回 `unavailable`。不参与 fail-closed verdict（unresolved/unknown 是诚实默认不是失败）。limitations 新增一条说明 v1 范围（不自动创造 DM、无 role override registry、不替换 POSITION_GROUP_MAP）。
+- [x] CLI 入口 `role-system-report`：支持 `--json`（机器可读）。人类可读模式输出 raw 分布、RoleFamily 分布、coarse/unknown 计数和限制声明。（`src/scoutfootball/__main__.py`）
+- [x] `architecture.py` 新增 `ratings.role_system` capability 并把 `role-system-report` 注册到 `supported_commands`。同时补齐遗漏的 `suggest-identity-mappings` 到 `supported_commands`。
+- [x] 35 个单元测试覆盖：RoleFamily enum 稳定性（8 角色 + UNKNOWN）、classify_role_family 全部分支（None/NaN/空/空白/bool/数值/已知细角色/粗位置/未知值/大小写/空白 strip）、POSITION_TO_ROLE 覆盖所有粗位置标签、build_role_system_report（missing/empty/no-column/normal-distribution/DM=0-when-no-DM-label/limitations-非空/JSON-可序列化/unknown-samples-capped-at-20）、research-health 集成（section-存在/unavailable-when-missing/limitation-存在）。（`tests/unit/test_role_system.py`）
+- [x] 真实数据烟雾测试：27,598 行 player_match 中粗位置占主导（DF 9231 / MF 6745 / FW 5655 = 21,631 行，78.4%），GK 2013 行，DM 0 行（v1 不自动创造 DM，诚实报告）。UNKNOWN 3,954 行包含 "UNK" 1970 行（来源未标记位置）和组合位置标签 1984 行（如 "MF,FW" 646 / "FW,MF" 501 / "DF,MF" 477 等——FBref 多位置球员，v1 不猜测主要位置，留给后续切片）。`research-health` 报告正确包含 `role_system` section 和 limitations。
+
+退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-6 已交付 typed enums、只读 grain/missingness 审计、canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary）、canonical 主键解析器（source-stable fallback + research-health 集成）、event-level source join（grain/source 透传 + ACTUAL_ZERO 部分检测）、canonical 映射建议工具（精确标准化名称匹配 + 人工复核入口）+ 10 个高置信度映射录入 registry、角色体系 v1（8 位置族 typed 词汇 + 只读审计 + research-health 集成）。剩余 cohort 内核切片解锁 PRS-2/PRS-3，必须单独切片验证。
 
 ### 后续专项节点
 
