@@ -740,6 +740,129 @@ def _cmd_role_system_report(args: argparse.Namespace) -> None:
         print(f"  - {lim}")
 
 
+def _cmd_cohort_preview(args: argparse.Namespace) -> None:
+    """Preview cohort membership against player_match.parquet (PRS-1 R-010).
+
+    Applies a declarative CohortDefinition to the resolved player_match
+    view and reports included/excluded player-season rows with typed
+    exclusion reasons. Read-only; does not modify any parquet artifact.
+
+    Use ``--json`` for machine-readable output.
+    """
+    from scoutfootball.evaluation.cohort import CohortDefinition, preview_cohort
+    from scoutfootball.evaluation.role_system import RoleFamily
+
+    role_set: frozenset[RoleFamily] | None = None
+    if args.role:
+        requested = {r.strip().upper() for r in args.role.split(",") if r.strip()}
+        valid: set[RoleFamily] = set()
+        for r in requested:
+            try:
+                valid.add(RoleFamily(r))
+            except ValueError:
+                print(f"error: unknown role family '{r}'")
+                print(
+                    f"valid values: {', '.join(f.value for f in RoleFamily)}"
+                )
+                return
+        role_set = frozenset(valid)
+
+    comp_set: frozenset[str] | None = None
+    if args.competition:
+        comp_set = frozenset(
+            c.strip() for c in args.competition.split(",") if c.strip()
+        )
+
+    season_set: frozenset[str] | None = None
+    if args.season:
+        season_set = frozenset(
+            s.strip() for s in args.season.split(",") if s.strip()
+        )
+
+    team_set: frozenset[str] | None = None
+    if args.team:
+        team_set = frozenset(
+            t.strip() for t in args.team.split(",") if t.strip()
+        )
+
+    definition = CohortDefinition(
+        name=args.name or "cli-cohort",
+        description=args.description or "",
+        competition_ids=comp_set,
+        season_ids=season_set,
+        team_ids=team_set,
+        role_families=role_set,
+        min_minutes=args.min_minutes,
+        age_min=args.age_min,
+        age_max=args.age_max,
+        require_resolved_identity=args.require_resolved_identity,
+        require_known_role=args.require_known_role,
+    )
+
+    report = preview_cohort(definition)
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    print(f"Cohort preview (schema {report['schema']} v{report['schema_version']})")
+    print(f"status: {report['status']}")
+    print(f"cohort_hash: {report['cohort_hash']}")
+    if report.get("membership_hash"):
+        print(f"membership_hash: {report['membership_hash']}")
+    print()
+
+    print("--- Definition ---")
+    for k, v in report["definition"].items():
+        print(f"  {k}: {v}")
+    print()
+
+    if report["status"] != "ok":
+        print(f"reason: {report['evidence'].get('reason', 'unknown')}")
+        return
+
+    ev = report["evidence"]
+    print("--- Membership ---")
+    print(f"total_candidate_rows: {ev['total_candidate_rows']}")
+    print(f"included_rows: {ev['included_rows']}")
+    print(f"excluded_rows: {ev['excluded_rows']}")
+    print()
+
+    if ev["by_exclusion_reason"]:
+        print("--- By exclusion reason ---")
+        for reason, count in sorted(
+            ev["by_exclusion_reason"].items(), key=lambda kv: -kv[1]
+        ):
+            print(f"  {reason}: {count}")
+        print()
+
+    if ev["excluded_samples"]:
+        print(f"--- Excluded samples (first {len(ev['excluded_samples'])}) ---")
+        for s in ev["excluded_samples"][:10]:
+            print(
+                f"  {s['player_name']} | {s['season_id']} | "
+                f"{s['competition_id']} | role={s['role_family']} | "
+                f"min={s['minutes_played']:.0f} | {s['exclusion_reason']}"
+            )
+        print()
+
+    members = ev["members"]
+    if members:
+        print(f"--- Members (first {min(10, len(members))} of {len(members)}) ---")
+        for m in members[:10]:
+            print(
+                f"  {m['player_name']} | {m['season_id']} | "
+                f"{m['competition_id']} | {m['team_name']} | "
+                f"role={m['role_family']} | min={m['minutes_played']:.0f} | "
+                f"{m['source_name']}/{m['data_granularity']}"
+            )
+        print()
+
+    print("Limitations:")
+    for lim in report["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -4239,6 +4362,71 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit full report as JSON",
     )
 
+    cohort_preview_p = sub.add_parser(
+        "cohort-preview",
+        help=(
+            "Preview cohort membership against player_match.parquet "
+            "(PRS-1 R-010). Read-only; applies a declarative "
+            "CohortDefinition and reports included/excluded rows."
+        ),
+    )
+    cohort_preview_p.add_argument(
+        "--name", default="", help="Cohort name (for display and hash)"
+    )
+    cohort_preview_p.add_argument(
+        "--description", default="", help="Cohort description (for documentation)"
+    )
+    cohort_preview_p.add_argument(
+        "--competition",
+        default=None,
+        help="Comma-separated competition_ids to include (e.g. 'ESP-La Liga,ENG-Premier League')",
+    )
+    cohort_preview_p.add_argument(
+        "--season",
+        default=None,
+        help="Comma-separated season_ids to include (e.g. '2425,2324')",
+    )
+    cohort_preview_p.add_argument(
+        "--team",
+        default=None,
+        help="Comma-separated team_ids to include",
+    )
+    cohort_preview_p.add_argument(
+        "--role",
+        default=None,
+        help=(
+            "Comma-separated RoleFamily values to include "
+            "(e.g. 'CB,DM,FB'). Valid: GK/CB/FB/DM/CM/AM/W/ST/UNKNOWN"
+        ),
+    )
+    cohort_preview_p.add_argument(
+        "--min-minutes",
+        type=int,
+        default=None,
+        help="Minimum total minutes_played in the season",
+    )
+    cohort_preview_p.add_argument(
+        "--age-min", type=int, default=None, help="Minimum age at season start"
+    )
+    cohort_preview_p.add_argument(
+        "--age-max", type=int, default=None, help="Maximum age at season start"
+    )
+    cohort_preview_p.add_argument(
+        "--require-resolved-identity",
+        action="store_true",
+        help="Exclude rows with unresolved canonical_player_id",
+    )
+    cohort_preview_p.add_argument(
+        "--require-known-role",
+        action="store_true",
+        help="Exclude rows with UNKNOWN RoleFamily",
+    )
+    cohort_preview_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -5229,6 +5417,7 @@ def main() -> None:
         "resolve-canonical-ids": _cmd_resolve_canonical_ids,
         "suggest-identity-mappings": _cmd_suggest_identity_mappings,
         "role-system-report": _cmd_role_system_report,
+        "cohort-preview": _cmd_cohort_preview,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
