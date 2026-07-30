@@ -101,6 +101,18 @@
       "missing_rate": 0.0
     },
     {
+      "name": "season_id",
+      "dtype": "object",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "competition_id",
+      "dtype": "object",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
       "name": "is_home",
       "dtype": "object",
       "source": "flag",
@@ -173,18 +185,6 @@
       "missing_rate": 0.0
     },
     {
-      "name": "competition_id",
-      "dtype": "object",
-      "source": "category",
-      "missing_rate": 0.0034
-    },
-    {
-      "name": "season_id",
-      "dtype": "object",
-      "source": "category",
-      "missing_rate": 0.0034
-    },
-    {
       "name": "nation",
       "dtype": "string",
       "source": "meta",
@@ -234,7 +234,7 @@
       "notes": "season proxy; excluded 3 season(s) already covered by FBref to avoid double-counting"
     }
   ],
-  "timestamp": "2026-07-30T17:22:24.394983+00:00",
+  "timestamp": "2026-07-30T17:33:41.726401+00:00",
   "source_breakdown": {
     "understat": 18909,
     "fbref": 8595,
