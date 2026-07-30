@@ -15,7 +15,7 @@
 
 完整缺陷证据、目标架构、功能积压和验收协议见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)。本节只维护可执行状态，不重复专项文档。
 
-### PRS-0：当前评分真实性止血 — `ready`
+### PRS-0：当前评分真实性止血 — `verified`（2026-07-31）
 
 - [x] 把 `storage_health`、`lineage_health`、`model_reviewability`、`active_rating_freshness` 和 `research_readiness` 分开计算；任何一层失败都不能被顶层 `ok` 隐藏。（2026-07-29：`1d6bc08` 实现 five-layer fail-closed verdict）
 - [x] 为当前 active rating 建立从评分文件、模型运行、训练配置、特征 manifest 到原始快照的完整 lineage；feature hash 或批准状态不一致时默认 stale。（2026-07-30：`_build_lineage_health` 在 manifest hash 匹配后追加 `_verify_manifest_source_lineage`，重新计算 `source_lineage[i].input_hash` 与当前 parquet 比对；任一 source drift 即 `LINEAGE_STALE`，source 缺失即 `LINEAGE_UNVERIFIED`；`_summarise_training_args` 把 optimizer/lr/seed 等关键训练配置摘要注入 evidence；5 个新单元测试覆盖 drift/verified/missing/absent/args 五条路径）
@@ -35,11 +35,13 @@
 
 退出门槛：维护者能在 5 分钟内从 CLI 或本地 UI 判断当前榜单能否用于指定研究；不可复核、过期、synthetic 或标签不独立时均明确拒绝写成 ready。
 
+**verified 证据（2026-07-31）**：`scoutfootball research-health` 在数秒内返回 `verdict=not_ready` 并列出 4 条 blocking_reasons（`lineage_health: unverified`——active rating 是无激活模型 run 的 legacy 产物；`model_reviewability: no_reviewable_runs`——41 个 run 中 0 个 reviewable；`active_rating_freshness: unverified`——同根因；`research_readiness: blocked`——29,723 条标签全部为 `expert_tier`，独立合格监督标签 0 行）。五层健康中 `storage_health=ok`（4 个核心产物全部存在且可读），其余四层按真实状态降级，任何一层失败都不被顶层隐藏。这满足退出门槛：系统明确拒绝把不可复核、过期、标签不独立的状态写成 ready，并给出具体原因。PRS-0 的目标是"止血"（让系统诚实报告当前状态），不是让当前评分变 ready——后者依赖 PRS-1+ 的身份、粒度、标签和重训练工作。本地验证：`ruff check .` All checks passed；`scripts/check-rating-fast.ps1` ruff + 290 个评分核心单元测试通过。
+
 ### 后续专项节点
 
 | 节点 | 状态 | 解锁条件 | 核心结果 |
 | --- | --- | --- | --- |
-| PRS-1 身份、粒度和 cohort 内核 | `blocked` | PRS-0 verified | canonical 主键、转会/同名处理、观测粒度、缺失原因、角色体系 v1 |
+| PRS-1 身份、粒度和 cohort 内核 | `ready` | PRS-0 verified（2026-07-31） | canonical 主键、转会/同名处理、观测粒度、缺失原因、角色体系 v1 |
 | PRS-2 透明 baseline 与评分语义 v1 | `blocked` | PRS-1 verified | 角色内 baseline、分钟收缩、门将独立模型、不确定性和敏感性 |
 | PRS-3 个人评价集与标签工作台 | `blocked` | PRS-1 verified | pairwise/tier 独立标签、盲评、撤销、冲突和独立性审计 |
 | PRS-4 实验注册与严谨评估 | `blocked` | PRS-2 + PRS-3 verified | baseline 对照、时间外/联赛外/转会/覆盖切片、错误分析和晋级门禁 |
