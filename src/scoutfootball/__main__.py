@@ -434,6 +434,161 @@ def _cmd_audit_identity(_args: argparse.Namespace) -> None:
     print(json.dumps(report, indent=2, ensure_ascii=False))
 
 
+def _cmd_identity_registry_lookup(args: argparse.Namespace) -> None:
+    """Look up the active canonical mapping for one (source, source_id) pair.
+
+    Prints ``unresolved`` and exits 1 when no active mapping exists, so the
+    CLI cannot be confused with a successful lookup. The exit code is part
+    of the contract: scripts that pipe this output must check exit status
+    rather than parsing "unresolved" out of stdout.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.identity_registry import lookup, read_registry
+
+    settings = PlatformSettings.from_root()
+    records = read_registry(settings=settings)
+    result = lookup(
+        records,
+        source_name=args.source,
+        source_player_id=args.source_id,
+    )
+    if result is None:
+        print(
+            json.dumps(
+                {
+                    "source_name": args.source,
+                    "source_player_id": args.source_id,
+                    "status": "unresolved",
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        sys.exit(1)
+    print(
+        json.dumps(
+            {
+                "source_name": args.source,
+                "source_player_id": args.source_id,
+                "status": "confirmed",
+                "canonical_player_id": result["canonical_player_id"],
+                "decision_id": result["decision_id"],
+                "revision": result["revision"],
+                "recorded_at": result["recorded_at"],
+                "decided_by": result["decided_by"],
+                "evidence": result["evidence"],
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+
+def _cmd_identity_registry_append(args: argparse.Namespace) -> None:
+    """Append one explicit confirmed mapping to the local identity registry."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.identity_registry import (
+        append_decision,
+        build_decision,
+        read_registry,
+    )
+
+    settings = PlatformSettings.from_root()
+    existing = read_registry(settings=settings)
+    record = build_decision(
+        source_name=args.source,
+        source_player_id=args.source_id,
+        action="confirmed",
+        canonical_player_id=args.canonical_id,
+        evidence=args.evidence,
+        decided_by=args.decided_by,
+        notes=args.notes or "",
+        supersedes_decision_id=args.supersedes,
+        revision=len(existing) + 1,
+    )
+    try:
+        append_decision(record, settings=settings)
+    except ValueError as exc:
+        print(f"Error: cannot append identity registry decision: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(json.dumps({"decision": record}, indent=2, ensure_ascii=False))
+
+
+def _cmd_identity_registry_revoke(args: argparse.Namespace) -> None:
+    """Append one explicit revoke for an existing mapping (no replacement)."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.identity_registry import (
+        append_decision,
+        build_decision,
+        read_registry,
+    )
+
+    settings = PlatformSettings.from_root()
+    existing = read_registry(settings=settings)
+    record = build_decision(
+        source_name=args.source,
+        source_player_id=args.source_id,
+        action="revoked",
+        canonical_player_id=None,
+        evidence=args.evidence,
+        decided_by=args.decided_by,
+        notes=args.notes or "",
+        supersedes_decision_id=args.supersedes,
+        revision=len(existing) + 1,
+    )
+    try:
+        append_decision(record, settings=settings)
+    except ValueError as exc:
+        print(f"Error: cannot revoke identity registry decision: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(json.dumps({"decision": record}, indent=2, ensure_ascii=False))
+
+
+def _cmd_identity_registry_list(args: argparse.Namespace) -> None:
+    """List active canonical mappings, optionally filtered by source_name."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.identity_registry import (
+        active_canonical_map,
+        read_registry,
+    )
+
+    settings = PlatformSettings.from_root()
+    records = read_registry(settings=settings)
+    active = active_canonical_map(records)
+    entries = [
+        {
+            "source_name": source_name,
+            "source_player_id": source_player_id,
+            "canonical_player_id": canonical_player_id,
+        }
+        for (source_name, source_player_id), canonical_player_id in sorted(
+            active.items()
+        )
+        if args.source is None or source_name == args.source
+    ]
+    print(
+        json.dumps(
+            {"count": len(entries), "mappings": entries},
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+
+def _cmd_identity_registry_stats(args: argparse.Namespace) -> None:
+    """Print a read-only summary of the local identity registry."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.identity_registry import (
+        read_registry,
+        registry_summary,
+    )
+
+    settings = PlatformSettings.from_root()
+    records = read_registry(settings=settings)
+    summary = registry_summary(records)
+    print(json.dumps(summary, indent=2, ensure_ascii=False))
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -3802,6 +3957,85 @@ def build_parser() -> argparse.ArgumentParser:
             "alignment gaps. Read-only; every risk is evidence for review"
         ),
     )
+    identity_registry_lookup_p = sub.add_parser(
+        "identity-registry-lookup",
+        help=(
+            "Look up the active canonical mapping for one (source, source_id) pair "
+            "(PRS-1 R-005). Exits 1 with status=unresolved when no active mapping exists"
+        ),
+    )
+    identity_registry_lookup_p.add_argument(
+        "--source", required=True, help="Source name (e.g. fbref, understat)"
+    )
+    identity_registry_lookup_p.add_argument(
+        "--source-id", required=True, help="Source-specific player_id"
+    )
+
+    identity_registry_append_p = sub.add_parser(
+        "identity-registry-append",
+        help=(
+            "Append one explicit confirmed (source, source_id) -> canonical_player_id "
+            "mapping to the local append-only identity registry (PRS-1 R-005)"
+        ),
+    )
+    identity_registry_append_p.add_argument("--source", required=True, help="Source name")
+    identity_registry_append_p.add_argument(
+        "--source-id", required=True, help="Source-specific player_id"
+    )
+    identity_registry_append_p.add_argument(
+        "--canonical-id", required=True, help="Canonical player_id this source ID maps to"
+    )
+    identity_registry_append_p.add_argument(
+        "--evidence", required=True, help="Why this mapping is correct (<=500 chars)"
+    )
+    identity_registry_append_p.add_argument(
+        "--decided-by", default="maintainer", help="Maintainer identity recorded with the decision"
+    )
+    identity_registry_append_p.add_argument(
+        "--supersedes", default=None, help="decision_id of a prior confirmed decision this corrects"
+    )
+    identity_registry_append_p.add_argument(
+        "--notes", default="", help="Optional free-form notes (<=500 chars)"
+    )
+
+    identity_registry_revoke_p = sub.add_parser(
+        "identity-registry-revoke",
+        help=(
+            "Revoke the active canonical mapping for one (source, source_id) pair "
+            "without recording a replacement (PRS-1 R-005)"
+        ),
+    )
+    identity_registry_revoke_p.add_argument("--source", required=True, help="Source name")
+    identity_registry_revoke_p.add_argument(
+        "--source-id", required=True, help="Source-specific player_id"
+    )
+    identity_registry_revoke_p.add_argument(
+        "--evidence", required=True, help="Why the prior mapping is wrong (<=500 chars)"
+    )
+    identity_registry_revoke_p.add_argument(
+        "--decided-by", default="maintainer", help="Maintainer identity recorded with the decision"
+    )
+    identity_registry_revoke_p.add_argument(
+        "--supersedes",
+        default=None,
+        help="decision_id of the prior confirmed decision being revoked",
+    )
+    identity_registry_revoke_p.add_argument(
+        "--notes", default="", help="Optional free-form notes (<=500 chars)"
+    )
+
+    identity_registry_list_p = sub.add_parser(
+        "identity-registry-list",
+        help="List currently active canonical mappings, optionally filtered by source",
+    )
+    identity_registry_list_p.add_argument(
+        "--source", default=None, help="Only list mappings from this source name"
+    )
+
+    sub.add_parser(
+        "identity-registry-stats",
+        help="Print a read-only summary of the local identity registry",
+    )
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -4784,6 +5018,11 @@ def main() -> None:
         "model-admission": _cmd_model_admission,
         "research-health": _cmd_research_health,
         "audit-identity": _cmd_audit_identity,
+        "identity-registry-lookup": _cmd_identity_registry_lookup,
+        "identity-registry-append": _cmd_identity_registry_append,
+        "identity-registry-revoke": _cmd_identity_registry_revoke,
+        "identity-registry-list": _cmd_identity_registry_list,
+        "identity-registry-stats": _cmd_identity_registry_stats,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
