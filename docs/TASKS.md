@@ -47,14 +47,23 @@
 - [x] 覆盖空数据、缺列、未知 grain、event-level group 在不同 grain/source/marker 组合下的分类路径；确保未知 grain 场景返回 `UNKNOWN` 而非猜测。（`tests/unit/test_grain.py` 44 个单元测试，包括枚举稳定性、classify_grain/classify_observation/classify_missing_reason 全部分支、报告结构和 research-health 集成）
 - [x] 本地烟雾测试：当前真实数据下 `grain_and_missingness.player_match_grain` 返回 match/season_proxy/aggregate 三类分布；`feature_group_missingness` 对 `xT_VAEP`/`goalkeeper` 等 event-level group 在 `rating_feature_matrix.parquet` 缺少 `data_granularity`/`source_name` 时返回 `unknown` 而非 `not_applicable`/`not_recorded`，诚实暴露当前 feature matrix 没有把 grain 信息从 `player_match.parquet` 透传的缺口。
 
+切片 2：canonical 身份映射注册表 v1（2026-07-31）。
+
+- [x] 实现 `evaluation/identity_registry.py`：append-only JSONL 注册表 `data/gold/identity_registry/decisions.jsonl`，以稳定 `(source_name, source_player_id)` 为业务键，记录人工确认的 `canonical_player_id` 映射。复用 `transfermarkt_identity_review` 的 record_type + record_version + revision 单调 + fsync 模式，但独立于任何快照上下文，可跨 snapshot/season/row 复用。schema 严格校验：`confirmed` 必带 canonical、`revoked` 不可带 canonical、所有字段长度上限、`supersedes_decision_id` 修正链可选。
+- [x] `lookup` 在最新记录为 `revoked` 或无记录时返回 `None`（unresolved 是诚实默认）；`active_canonical_map` 累积所有当前 active 映射；`registry_summary` 报告 by_action/by_source 分布。不做自动跨源对齐、不修改 `player_match.parquet`、不做 lineage 失效。
+- [x] 5 个 CLI 子命令接入 `__main__.py`：`identity-registry-lookup`（未解析时退出码 1）、`identity-registry-append`、`identity-registry-revoke`、`identity-registry-list`、`identity-registry-stats`。`architecture.py` 新增 `ratings.identity_registry` capability 并把 5 个命令注册到 `supported_commands`。
+- [x] 56 个单元测试覆盖：validate_record 全部 schema 拒绝路径、build_decision 的 confirmed-requires-canonical 与 revoked-cannot-select-canonical、read_registry 的 blank-line/invalid-json/revision-gap 检测、append_decision 的并发冲突检测、lookup 的 revoke-clears-active 与 cross-source 隔离、active_canonical_map 累积/清除、registry_summary 计数、端到端 round-trip。
+- [x] 本地烟雾测试（`SCOUTFOOTBALL_DATA_ROOT` 临时目录）：空 registry stats 返回 0/0 → append revision 1 → lookup 返回 confirmed + 退出码 0 → list 1 条 → revoke revision 2 → lookup 返回 unresolved + 退出码 1 → final stats 显示 total=2 / active=0 / by_action={confirmed:1, revoked:1}。
+- [x] 顺手修复预存在的 capability drift gate 失败：`research-health` 子命令在 PRS-0 verified 阶段遗漏加入 `architecture.supported_commands`，导致 `test_supported_commands_covers_all_cli_subparsers` 失败。本轮随 `identity-registry-*` 一并补齐。
+
 未完成切片（仍 `in_progress`，不进入 verified）：
 
-- [ ] canonical 主键：定义并落地 `canonical_player_id` 与转会/同名解析协议（R-005 风险已由 PRS-0 `identity_audit` 暴露，本切片需提供解析器而非只读审计）。
+- [ ] canonical 主键解析器：在 identity_registry v1 之上，落地 `canonical_player_id` 默认派生规则（如 source-stable fallback），并把 `(source_name, source_player_id) -> canonical_player_id` 应用到 `player_match.parquet` 派生视图（不修改原文件）。R-005 风险已由 PRS-0 `identity_audit` 暴露，identity_registry v1 提供了人工录入入口，但仍需解析器把 unresolved 行也显式标记为 `unresolved:<source>:<id>` 而非静默使用 source_player_id。
 - [ ] cohort 内核：基于 canonical 主键 + grain + 角色体系 v1，构建可复用的 cohort 定义、过滤和快照协议。
 - [ ] 角色体系 v1：在 grain 之上定义位置/角色分组，为 PRS-2 角色内 baseline 提供输入。
 - [ ] event-level source join：把 `data_granularity` / `source_name` 透传到 `rating_feature_matrix.parquet`，并把 `ACTUAL_ZERO` 与 `NOT_RECORDED` 在 source-level event join 上区分。
 
-退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。本切片只交付 typed enums 和只读审计，不触及 canonical 主键和 cohort 协议——它们解锁 PRS-2/PRS-3，必须单独切片验证。
+退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-2 已交付 typed enums、只读 grain/missingness 审计和 canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary），不触及 canonical 主键派生器、cohort 协议和角色体系——它们解锁 PRS-2/PRS-3，必须单独切片验证。
 
 ### 后续专项节点
 

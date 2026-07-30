@@ -231,6 +231,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball reep-identity-lookup",
             "uv run python -m scoutfootball contract-quality",
             "uv run python -m scoutfootball model-admission",
+            "uv run python -m scoutfootball research-health",
             "uv run python -m scoutfootball discard-model-run <run_id>",
             "uv run python -m scoutfootball reject-model-run <run_id> --decision <text>",
             "uv run python -m scoutfootball promote-model-run <run_id> --decision <text>",
@@ -252,6 +253,17 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball reconcile-transfermarkt-truth-labels",
             "uv run python -m scoutfootball audit-truth-labels",
             "uv run python -m scoutfootball audit-identity",
+            "uv run python -m scoutfootball identity-registry-lookup --source S --source-id X",
+            (
+                "uv run python -m scoutfootball identity-registry-append "
+                "--source S --source-id X --canonical-id C --evidence E"
+            ),
+            (
+                "uv run python -m scoutfootball identity-registry-revoke "
+                "--source S --source-id X --evidence E"
+            ),
+            "uv run python -m scoutfootball identity-registry-list [--source S]",
+            "uv run python -m scoutfootball identity-registry-stats",
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -414,6 +426,25 @@ def build_capability_registry() -> CapabilityRegistry:
             ),
             domain="player_ratings",
             cli_commands=("audit-identity",),
+        ),
+        Capability(
+            id="ratings.identity_registry",
+            name="canonical 身份映射注册表",
+            description=(
+                "本地 append-only JSONL 注册表，记录人工确认的 "
+                "(source_name, source_player_id) -> canonical_player_id 映射决策（PRS-1 R-005）。"
+                "未录入的键保持 unresolved；不做自动跨源对齐、不修改 player_match.parquet；"
+                "支持 confirmed / revoked 两种动作，所有记录带 evidence、decided_by 和可选 "
+                "supersedes_decision_id 修正链。lookup 在未解析时退出码 1，避免脚本误读为成功。"
+            ),
+            domain="player_ratings",
+            cli_commands=(
+                "identity-registry-lookup",
+                "identity-registry-append",
+                "identity-registry-revoke",
+                "identity-registry-list",
+                "identity-registry-stats",
+            ),
         ),
         Capability(
             id="predictions.match",
