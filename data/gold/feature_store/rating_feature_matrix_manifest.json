@@ -1,7 +1,7 @@
 {
   "artifact": "rating_feature_matrix",
   "schema_version": "1.0",
-  "total_rows": 26678,
+  "total_rows": 26747,
   "column_count": 44,
   "columns": [
     {
@@ -56,13 +56,13 @@
       "name": "npxg",
       "dtype": "object",
       "source": "metric",
-      "missing_rate": 0.3052
+      "missing_rate": 0.306
     },
     {
       "name": "xa",
       "dtype": "float64",
       "source": "metric",
-      "missing_rate": 0.3052
+      "missing_rate": 0.307
     },
     {
       "name": "available_flag",
@@ -74,13 +74,13 @@
       "name": "tackles",
       "dtype": "object",
       "source": "metric",
-      "missing_rate": 0.0681
+      "missing_rate": 0.0679
     },
     {
       "name": "passes",
       "dtype": "object",
       "source": "metric",
-      "missing_rate": 1.0
+      "missing_rate": 0.9974
     },
     {
       "name": "xT_added",
@@ -170,61 +170,61 @@
       "name": "tackles_won",
       "dtype": "Int64",
       "source": "metric",
-      "missing_rate": 0.5283
+      "missing_rate": 0.5296
     },
     {
       "name": "interceptions",
       "dtype": "Int64",
       "source": "metric",
-      "missing_rate": 0.5283
+      "missing_rate": 0.5296
     },
     {
       "name": "fouls_committed",
       "dtype": "Int64",
       "source": "metric",
-      "missing_rate": 0.5283
+      "missing_rate": 0.5296
     },
     {
       "name": "fouls_drawn",
       "dtype": "Int64",
       "source": "metric",
-      "missing_rate": 0.5283
+      "missing_rate": 0.5296
     },
     {
       "name": "crosses",
       "dtype": "Int64",
       "source": "metric",
-      "missing_rate": 0.5283
+      "missing_rate": 0.5296
     },
     {
       "name": "own_goals",
       "dtype": "Int64",
       "source": "metric",
-      "missing_rate": 0.5283
+      "missing_rate": 0.5296
     },
     {
       "name": "xt_total",
       "dtype": "float64",
       "source": "metric",
-      "missing_rate": 0.9774
+      "missing_rate": 0.9775
     },
     {
       "name": "xt_per_90",
       "dtype": "float64",
       "source": "metric",
-      "missing_rate": 0.9774
+      "missing_rate": 0.9775
     },
     {
       "name": "vaep_total",
       "dtype": "float64",
       "source": "metric",
-      "missing_rate": 0.9139
+      "missing_rate": 0.9141
     },
     {
       "name": "vaep_per_90",
       "dtype": "float64",
       "source": "metric",
-      "missing_rate": 0.9139
+      "missing_rate": 0.9141
     },
     {
       "name": "finishing_raw",
@@ -269,22 +269,22 @@
       "missing_rate": 0.0
     }
   ],
-  "input_hash": "f99e244c8f40fe15",
+  "input_hash": "15411cb601783aa3",
   "source_lineage": [
     {
       "name": "player_match",
       "relative_path": "gold/feature_store/player_match.parquet",
       "rows_read": 27598,
-      "input_hash": "5dce9f5050ea4172",
+      "input_hash": "6c0a6f56ed866f5d",
       "notes": null
     },
     {
       "name": "player_rolling",
       "relative_path": "gold/feature_store/player_rolling.parquet",
       "rows_read": 27598,
-      "input_hash": "f1dba47ad4516194",
+      "input_hash": "6fa366e4408325fc",
       "notes": null
     }
   ],
-  "timestamp": "2026-07-30T17:22:36.103375+00:00"
+  "timestamp": "2026-07-30T17:33:49.925430+00:00"
 }

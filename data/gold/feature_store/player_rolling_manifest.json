@@ -101,6 +101,18 @@
       "missing_rate": 0.0
     },
     {
+      "name": "season_id",
+      "dtype": "object",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "competition_id",
+      "dtype": "object",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
       "name": "is_home",
       "dtype": "object",
       "source": "flag",
@@ -171,18 +183,6 @@
       "dtype": "bool",
       "source": "flag",
       "missing_rate": 0.0
-    },
-    {
-      "name": "competition_id",
-      "dtype": "object",
-      "source": "category",
-      "missing_rate": 0.0034
-    },
-    {
-      "name": "season_id",
-      "dtype": "object",
-      "source": "category",
-      "missing_rate": 0.0034
     },
     {
       "name": "nation",
@@ -515,17 +515,17 @@
       "missing_rate": 0.9994
     }
   ],
-  "input_hash": "f1dba47ad4516194",
+  "input_hash": "6fa366e4408325fc",
   "source_lineage": [
     {
       "name": "player_match",
       "relative_path": "gold/feature_store/player_match.parquet",
       "rows_read": 27598,
-      "input_hash": "5dce9f5050ea4172",
+      "input_hash": "6c0a6f56ed866f5d",
       "notes": null
     }
   ],
-  "timestamp": "2026-07-30T17:22:29.366880+00:00",
+  "timestamp": "2026-07-30T17:33:45.225161+00:00",
   "source_breakdown": {
     "understat": 18909,
     "fbref": 8595,

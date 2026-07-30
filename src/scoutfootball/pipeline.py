@@ -916,7 +916,7 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
 
         agg_records.append({
             "match_id": str(match_id),
-            "player_id": str(player_id),
+            "player_id": str(int(float(player_id))),
             "player_name": player_name,
             "team_id": str(team_id),
             "team_name": team_name,
@@ -938,10 +938,55 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
 
     player_match = pd.DataFrame(agg_records)
 
-    # Merge match metadata
-    match_meta = matches[["match_id", "match_date", "home_team_id", "away_team_id"]].copy()
+    # Merge match metadata. Include season and competition columns so
+    # statsbomb match-level rows carry the same season_id/competition_id
+    # vocabulary as the understat/fbref season-proxy rows — without this,
+    # the rows have NaN season_id and are silently dropped during
+    # rating_feature_matrix aggregation (groupby drops NaN keys). Only
+    # select columns that exist in ``matches`` so older/incomplete match
+    # files don't raise KeyError — missing columns simply won't be merged.
+    _match_meta_cols = [
+        "match_id",
+        "match_date",
+        "home_team_id",
+        "away_team_id",
+        "season_id",
+        "season_name",
+        "competition_id",
+        "competition_name",
+    ]
+    available_cols = [c for c in _match_meta_cols if c in matches.columns]
+    match_meta = matches[available_cols].copy()
     match_meta["match_id"] = match_meta["match_id"].astype(str)
     player_match = player_match.merge(match_meta, on="match_id", how="left")
+
+    # Convert StatsBomb internal IDs to the vocabulary used by
+    # understat/fbref season-proxy rows so downstream groupby and grain
+    # audit can cross-reference the same player-season across sources.
+    # season_name "2019/2020" -> season_id "1920" (matches understat/fbref).
+    # competition_name "La Liga" -> competition_id "ESP-La Liga" (matches
+    # the "<country>-<league>" format used by fbref/understat).
+    def _season_name_to_id(s: object) -> object:
+        if pd.isna(s):
+            return pd.NA
+        parts = str(s).strip().split("/")
+        if len(parts) == 2:
+            return parts[0][-2:] + parts[1][-2:]
+        return pd.NA
+
+    if "season_name" in player_match.columns:
+        player_match["season_id"] = player_match["season_name"].apply(_season_name_to_id)
+
+    _statsbomb_competition_map = {
+        "La Liga": "ESP-La Liga",
+        "Ligue 1": "FRA-Ligue 1",
+        "Premier League": "ENG-Premier League",
+        "Serie A": "ITA-Serie A",
+        "Bundesliga": "GER-Bundesliga",
+    }
+    if "competition_name" in player_match.columns:
+        mapped = player_match["competition_name"].map(_statsbomb_competition_map)
+        player_match["competition_id"] = mapped.fillna(player_match.get("competition_id"))
 
     # Determine is_home and opponent
     player_match["is_home"] = player_match["team_id"] == player_match["home_team_id"].astype(str)
@@ -973,7 +1018,13 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
 
     # Drop helper columns
     player_match = player_match.drop(
-        columns=["home_team_id", "away_team_id", "position_name"],
+        columns=[
+            "home_team_id",
+            "away_team_id",
+            "position_name",
+            "season_name",
+            "competition_name",
+        ],
         errors="ignore",
     )
 
