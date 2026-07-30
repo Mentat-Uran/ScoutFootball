@@ -791,6 +791,64 @@ def _build_grain_and_missingness_audit(
         }
 
 
+def _build_identity_registry_audit(
+    settings: PlatformSettings,
+) -> dict[str, Any]:
+    """Surface the canonical identity registry state in the health report.
+
+    PRS-1 R-005: the registry is the maintainer's append-only ledger of
+    explicit ``(source_name, source_player_id) -> canonical_player_id``
+    decisions. An empty or unresolved registry is **not** a failure — it
+    is the honest default before any human decision has been recorded.
+    The health report therefore surfaces counts and the latest revision
+    without participating in the fail-closed verdict, so the maintainer
+    can see at a glance how many source IDs have been canonicalised.
+    """
+    try:
+        from scoutfootball.evaluation.identity_registry import (
+            read_registry,
+            registry_summary,
+        )
+
+        records = read_registry(settings=settings)
+        return registry_summary(records)
+    except Exception as exc:  # read-only diagnostic; never raise
+        return {
+            "schema": "scoutfootball.identity_registry",
+            "schema_version": "1.0",
+            "status": "unavailable",
+            "evidence": {"reason": f"identity registry read failed: {exc}"},
+        }
+
+
+def _build_canonical_resolution_audit(
+    settings: PlatformSettings,
+) -> dict[str, Any]:
+    """Surface the canonical ID resolution state in the health report.
+
+    PRS-1 R-005: the resolver applies the identity registry's active
+    ``confirmed`` mappings to a derived view of ``player_match.parquet``
+    and counts how many rows received a real canonical ID vs how many
+    fell back to the ``unresolved:<source>:<id>`` marker. An all-unresolved
+    result is **not** a failure — it is the honest default before any
+    human decision has been recorded. The section is evidence-only and
+    does not participate in the fail-closed verdict.
+    """
+    try:
+        from scoutfootball.evaluation.canonical_resolver import (
+            build_canonical_resolution_report,
+        )
+
+        return build_canonical_resolution_report(settings=settings)
+    except Exception as exc:  # read-only diagnostic; never raise
+        return {
+            "schema": "scoutfootball.canonical-resolver",
+            "schema_version": "1.0.0",
+            "status": "unavailable",
+            "evidence": {"reason": f"canonical resolution failed: {exc}"},
+        }
+
+
 def _build_research_readiness(
     settings: PlatformSettings,
     *,
@@ -958,6 +1016,8 @@ def build_research_health_report(
     # evidence sections, this does not participate in the fail-closed
     # verdict — PRS-1 verification will gate on it later.
     grain_and_missingness = _build_grain_and_missingness_audit(resolved)
+    identity_registry = _build_identity_registry_audit(resolved)
+    canonical_resolution = _build_canonical_resolution_audit(resolved)
     layers = {
         "storage_health": storage,
         "lineage_health": lineage,
@@ -976,6 +1036,8 @@ def build_research_health_report(
         "feature_coverage": feature_coverage,
         "data_grain": data_grain,
         "grain_and_missingness": grain_and_missingness,
+        "identity_registry": identity_registry,
+        "canonical_resolution": canonical_resolution,
         "limitations": [
             (
                 "Local-only read-only diagnostic; no telemetry is uploaded. "
@@ -1001,6 +1063,25 @@ def build_research_health_report(
                 "exists so downstream code can label rows when the "
                 "source-level event join (planned for a later PRS-1 slice) "
                 "provides that evidence."
+            ),
+            (
+                "identity_registry is PRS-1 R-005's append-only ledger of "
+                "explicit human (source, source_id) -> canonical_player_id "
+                "decisions. An empty registry is the honest default before "
+                "any decision has been recorded; it does not block the "
+                "verdict because unresolved status is not a failure. Use "
+                "`scoutfootball identity-registry-*` CLI to record or "
+                "inspect decisions."
+            ),
+            (
+                "canonical_resolution is PRS-1 R-005's read-only resolver "
+                "output: it applies the registry's active confirmed "
+                "mappings to a derived view of player_match.parquet and "
+                "counts resolved vs unresolved rows. Unresolved rows are "
+                "marked `unresolved:<source>:<id>` so they stay visible "
+                "instead of being silently promoted to canonical. The "
+                "original player_match.parquet is never modified. An "
+                "all-unresolved result does not block the verdict."
             ),
         ],
     }

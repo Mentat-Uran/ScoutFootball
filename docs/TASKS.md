@@ -55,15 +55,24 @@
 - [x] 56 个单元测试覆盖：validate_record 全部 schema 拒绝路径、build_decision 的 confirmed-requires-canonical 与 revoked-cannot-select-canonical、read_registry 的 blank-line/invalid-json/revision-gap 检测、append_decision 的并发冲突检测、lookup 的 revoke-clears-active 与 cross-source 隔离、active_canonical_map 累积/清除、registry_summary 计数、端到端 round-trip。
 - [x] 本地烟雾测试（`SCOUTFOOTBALL_DATA_ROOT` 临时目录）：空 registry stats 返回 0/0 → append revision 1 → lookup 返回 confirmed + 退出码 0 → list 1 条 → revoke revision 2 → lookup 返回 unresolved + 退出码 1 → final stats 显示 total=2 / active=0 / by_action={confirmed:1, revoked:1}。
 - [x] 顺手修复预存在的 capability drift gate 失败：`research-health` 子命令在 PRS-0 verified 阶段遗漏加入 `architecture.supported_commands`，导致 `test_supported_commands_covers_all_cli_subparsers` 失败。本轮随 `identity-registry-*` 一并补齐。
+- [x] 把 identity_registry 接入 `research-health` 报告作为 `identity_registry` 证据 section：调用 `read_registry` + `registry_summary`，失败时返回 `unavailable`。空注册表（当前真实状态）显示 `total_records=0 / active_mapping_count=0`；不参与 fail-closed verdict，因为 unresolved 是诚实默认而非失败。4 个新测试覆盖空注册表、confirmed 计数、revoked 清除 active、corrupt JSONL 返回 unavailable。
 
 未完成切片（仍 `in_progress`，不进入 verified）：
 
-- [ ] canonical 主键解析器：在 identity_registry v1 之上，落地 `canonical_player_id` 默认派生规则（如 source-stable fallback），并把 `(source_name, source_player_id) -> canonical_player_id` 应用到 `player_match.parquet` 派生视图（不修改原文件）。R-005 风险已由 PRS-0 `identity_audit` 暴露，identity_registry v1 提供了人工录入入口，但仍需解析器把 unresolved 行也显式标记为 `unresolved:<source>:<id>` 而非静默使用 source_player_id。
+切片 3：canonical 主键解析器（2026-07-31）。
+
+- [x] 实现 `evaluation/canonical_resolver.py`：在 identity_registry v1 之上，把 active confirmed 映射应用到 `player_match.parquet` 派生视图（不修改原文件）。解析规则：(1) `(source_name, player_id)` 在注册表有 active confirmed → 使用记录的 `canonical_player_id`；(2) 未解析（无记录或最新为 revoked）→ 显式标记 `unresolved:<source_name>:<player_id>`（source-stable fallback，确定性、可追溯，不静默使用 source_player_id）；(3) `source_name` 或 `player_id` 缺失/NaN → `unresolved:unknown:missing` 等防御性 fallback。业务键 `(source_name, player_id)` 与 CLI `identity-registry-append --source-id` 契约一致——`player_id` 列值就是注册表的 `source_player_id`。
+- [x] `resolve_canonical_ids(df, records)` 是纯函数（不 mutate 输入，不 I/O）；`resolution_summary(df)` 报告 resolved/unresolved 行数、distinct canonical IDs、distinct unresolved markers、by_source 分解；`build_canonical_resolution_report(settings)` 是只读 fail-closed 审计（missing/empty parquet、corrupt registry 全部返回 `status=unavailable`，不 raise）；`load_resolved_player_match(settings)` 返回带 `canonical_player_id` 列的 DataFrame，失败 raise。
+- [x] CLI 子命令 `resolve-canonical-ids`：输出 JSON 摘要，`--sample N` 额外打印 N 行 `(source_name, player_id, canonical_player_id)` 样本。unavailable 和 all-unresolved 都退出码 0（只读诊断，unresolved 是诚实默认不是失败）。`architecture.py` 新增 `ratings.canonical_resolver` capability 并把 `resolve-canonical-ids` 注册到 `supported_commands`。
+- [x] 把 canonical_resolution 接入 `research-health` 报告作为证据 section：调用 `build_canonical_resolution_report`，失败时返回 `unavailable`。空注册表（当前真实状态）显示 `total_rows=27598 / resolved_rows=0 / unresolved_rows=27598 / distinct_unresolved_markers=11731`；不参与 fail-closed verdict，因为 unresolved 是诚实默认而非失败。limitations 新增一条解释 source-stable fallback 语义。
+- [x] 47 个解析器单元测试覆盖：unresolved_canonical_id/is_unresolved 标记对、resolve_canonical_ids 的 confirmed/revoked/cross-source 隔离/NaN/数值 coercion/空 df/自定义列名/supersedes 链/输入不 mutation/已有 canonical 列拒绝、resolution_summary 的 all-resolved/all-unresolved/mixed/by_source/empty/missing-col/distinct 计数、build_canonical_resolution_report 的 missing/empty/corrupt-registry/corrupt-parquet 全 fail-closed、load_resolved_player_match 的 raise/success/round-trip、schema 稳定性和 JSON 可序列化。7 个 CLI 测试覆盖 no-player-match/empty-registry/confirmed-mapping/sample/sample-zero/sample-no-player-match/revoked。5 个 research-health 集成测试覆盖 unavailable-without-player-match/all-unresolved/confirmed-mapping/revoked/corrupt-registry。
+- [x] 本地烟雾测试（真实数据）：`resolve-canonical-ids --sample 5` 在 27,598 行上退出码 0，返回 `status=ok`，by_source 分布 fbref=8595 / statsbomb_open=94 / understat=18909（与 PRS-0 grain 审计的 27,504 season-proxy + 94 match-level 一致）。`research-health` 报告的 `canonical_resolution` section 正确呈现相同数据。
+
 - [ ] cohort 内核：基于 canonical 主键 + grain + 角色体系 v1，构建可复用的 cohort 定义、过滤和快照协议。
 - [ ] 角色体系 v1：在 grain 之上定义位置/角色分组，为 PRS-2 角色内 baseline 提供输入。
 - [ ] event-level source join：把 `data_granularity` / `source_name` 透传到 `rating_feature_matrix.parquet`，并把 `ACTUAL_ZERO` 与 `NOT_RECORDED` 在 source-level event join 上区分。
 
-退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-2 已交付 typed enums、只读 grain/missingness 审计和 canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary），不触及 canonical 主键派生器、cohort 协议和角色体系——它们解锁 PRS-2/PRS-3，必须单独切片验证。
+退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-3 已交付 typed enums、只读 grain/missingness 审计、canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary）和 canonical 主键解析器（source-stable fallback + research-health 集成），不触及 cohort 协议和角色体系——它们解锁 PRS-2/PRS-3，必须单独切片验证。
 
 ### 后续专项节点
 

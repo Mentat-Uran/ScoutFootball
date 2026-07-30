@@ -332,6 +332,278 @@ def test_rating_older_than_feature_matrix_is_stale(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# identity_registry evidence section (PRS-1 R-005)
+# ---------------------------------------------------------------------------
+
+
+def test_identity_registry_section_present_and_empty_by_default(tmp_path) -> None:
+    """No registry file → identity_registry section shows zero counts.
+
+    An empty registry is the honest default before any human decision
+    has been recorded; it must not block the verdict (unresolved status
+    is not a failure).
+    """
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["identity_registry"]
+    assert section["schema"] == "scoutfootball.identity_registry"
+    assert section["schema_version"] == "1.0"
+    assert section["total_records"] == 0
+    assert section["active_mapping_count"] == 0
+    assert section["records_by_action"] == {"confirmed": 0, "revoked": 0}
+    assert section["active_mappings_by_source"] == {}
+    assert section["latest_revision"] == 0
+    assert section["latest_recorded_at"] is None
+    # Must not appear in blocking_reasons — unresolved is not a failure.
+    assert all("identity_registry" not in r for r in report["blocking_reasons"])
+
+
+def test_identity_registry_section_reflects_recorded_decisions(tmp_path) -> None:
+    """A confirmed mapping is reflected in the health report's counts."""
+    from scoutfootball.evaluation.identity_registry import (
+        append_decision,
+        build_decision,
+        read_registry,
+    )
+
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    existing = read_registry(settings=settings)
+    record = build_decision(
+        source_name="fbref",
+        source_player_id="lara|1998|ar",
+        action="confirmed",
+        canonical_player_id="canonical:fbref:lara:1998:ar",
+        evidence="transfermarkt snapshot row 12 maps here",
+        decided_by="maintainer",
+        revision=len(existing) + 1,
+    )
+    append_decision(record, settings=settings)
+
+    report = build_research_health_report(settings=settings)
+    section = report["identity_registry"]
+    assert section["total_records"] == 1
+    assert section["active_mapping_count"] == 1
+    assert section["records_by_action"] == {"confirmed": 1, "revoked": 0}
+    assert section["active_mappings_by_source"] == {"fbref": 1}
+    assert section["latest_revision"] == 1
+    assert section["latest_recorded_at"] == record["recorded_at"]
+
+
+def test_identity_registry_section_surfaces_revoked_decisions(tmp_path) -> None:
+    """A revoked mapping clears active count but stays in total_records."""
+    from scoutfootball.evaluation.identity_registry import (
+        append_decision,
+        build_decision,
+        read_registry,
+    )
+
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    existing = read_registry(settings=settings)
+    r1 = build_decision(
+        source_name="fbref",
+        source_player_id="lara|1998|ar",
+        action="confirmed",
+        canonical_player_id="canonical:fbref:lara:1998:ar",
+        evidence="first attempt",
+        decided_by="maintainer",
+        revision=len(existing) + 1,
+    )
+    append_decision(r1, settings=settings)
+    r2 = build_decision(
+        source_name="fbref",
+        source_player_id="lara|1998|ar",
+        action="revoked",
+        canonical_player_id=None,
+        evidence="was wrong; no replacement",
+        decided_by="maintainer",
+        revision=len(read_registry(settings=settings)) + 1,
+    )
+    append_decision(r2, settings=settings)
+
+    report = build_research_health_report(settings=settings)
+    section = report["identity_registry"]
+    assert section["total_records"] == 2
+    assert section["active_mapping_count"] == 0
+    assert section["records_by_action"] == {"confirmed": 1, "revoked": 1}
+    assert section["active_mappings_by_source"] == {}
+
+
+def test_identity_registry_section_unavailable_on_corrupt_file(tmp_path) -> None:
+    """A corrupt registry JSONL is surfaced as unavailable, not crashed."""
+    _build_healthy_workspace(tmp_path)
+    registry = tmp_path / "data" / "gold" / "identity_registry" / "decisions.jsonl"
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text("{not valid json}\n", encoding="utf-8")
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["identity_registry"]
+    assert section["schema"] == "scoutfootball.identity_registry"
+    assert section["status"] == "unavailable"
+    assert "identity registry read failed" in section["evidence"]["reason"]
+    # The verdict is unaffected — the registry is evidence-only.
+    assert report["verdict"] == VERDICT_READY
+
+
+# ---------------------------------------------------------------------------
+# canonical_resolution evidence section (PRS-1 R-005 slice 3)
+# ---------------------------------------------------------------------------
+
+
+def _write_player_match_for_resolver(
+    root, *, rows: int = 4
+) -> None:
+    """Write a minimal player_match.parquet the resolver can read."""
+    path = root / "data" / "gold" / "feature_store" / "player_match.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df = pd.DataFrame(
+        {
+            "player_id": ["lara|1998|ar", "understat|12345", "10605", "martin|1997|dk"][:rows],
+            "player_name": ["Lara", "Marco", "Stats", "Martin"][:rows],
+            "source_name": ["fbref", "understat", "statsbomb_open", "fbref"][:rows],
+            "season_id": ["2425"] * rows,
+        }
+    )
+    df.to_parquet(path, index=False)
+
+
+def test_canonical_resolution_section_unavailable_without_player_match(tmp_path) -> None:
+    """No player_match.parquet → canonical_resolution is unavailable.
+
+    The healthy workspace fixture writes rating_feature_matrix.parquet but
+    not player_match.parquet, so the resolver cannot run. This is honest:
+    the section reports unavailable rather than claiming 0 resolved rows.
+    """
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["canonical_resolution"]
+    assert section["schema"] == "scoutfootball.canonical-resolver"
+    assert section["schema_version"] == "1.0.0"
+    assert section["status"] == "unavailable"
+    assert "player_match.parquet missing" in section["evidence"]["reason"]
+    # Evidence-only — must not affect the verdict.
+    assert all("canonical_resolution" not in r for r in report["blocking_reasons"])
+
+
+def test_canonical_resolution_section_all_unresolved_with_empty_registry(tmp_path) -> None:
+    """player_match.parquet present + empty registry → ok, all unresolved.
+
+    An all-unresolved result is the honest default before any human
+    decision has been recorded; it must not block the verdict.
+    """
+    _build_healthy_workspace(tmp_path)
+    _write_player_match_for_resolver(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["canonical_resolution"]
+    assert section["status"] == "ok"
+    evidence = section["evidence"]
+    assert evidence["total_rows"] == 4
+    assert evidence["resolved_rows"] == 0
+    assert evidence["unresolved_rows"] == 4
+    assert set(evidence["by_source"].keys()) == {"fbref", "understat", "statsbomb_open"}
+    # Unresolved is honest default — verdict is unaffected.
+    assert all("canonical_resolution" not in r for r in report["blocking_reasons"])
+
+
+def test_canonical_resolution_section_reflects_confirmed_mapping(tmp_path) -> None:
+    """A confirmed registry decision resolves one row in the derived view."""
+    from scoutfootball.evaluation.identity_registry import (
+        append_decision,
+        build_decision,
+        read_registry,
+    )
+
+    _build_healthy_workspace(tmp_path)
+    _write_player_match_for_resolver(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    existing = read_registry(settings=settings)
+    record = build_decision(
+        source_name="fbref",
+        source_player_id="lara|1998|ar",
+        action="confirmed",
+        canonical_player_id="canonical:fbref:lara:1998:ar",
+        evidence="transfermarkt snapshot row 12 maps here",
+        decided_by="maintainer",
+        revision=len(existing) + 1,
+    )
+    append_decision(record, settings=settings)
+
+    report = build_research_health_report(settings=settings)
+    section = report["canonical_resolution"]
+    assert section["status"] == "ok"
+    evidence = section["evidence"]
+    assert evidence["resolved_rows"] == 1
+    assert evidence["unresolved_rows"] == 3
+    assert evidence["distinct_canonical_ids"] == 1
+    assert evidence["by_source"]["fbref"] == {"resolved": 1, "unresolved": 1}
+
+
+def test_canonical_resolution_section_revoked_falls_back_to_unresolved(tmp_path) -> None:
+    """A revoked mapping clears the resolved count back to 0."""
+    from scoutfootball.evaluation.identity_registry import (
+        append_decision,
+        build_decision,
+        read_registry,
+    )
+
+    _build_healthy_workspace(tmp_path)
+    _write_player_match_for_resolver(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    # Confirm then revoke the same key.
+    append_decision(
+        build_decision(
+            source_name="fbref",
+            source_player_id="lara|1998|ar",
+            action="confirmed",
+            canonical_player_id="canonical:fbref:lara:1998:ar",
+            evidence="first attempt",
+            decided_by="maintainer",
+            revision=1,
+        ),
+        settings=settings,
+    )
+    append_decision(
+        build_decision(
+            source_name="fbref",
+            source_player_id="lara|1998|ar",
+            action="revoked",
+            canonical_player_id=None,
+            evidence="was wrong; no replacement",
+            decided_by="maintainer",
+            revision=2,
+        ),
+        settings=settings,
+    )
+
+    report = build_research_health_report(settings=settings)
+    section = report["canonical_resolution"]
+    evidence = section["evidence"]
+    assert evidence["resolved_rows"] == 0
+    assert evidence["unresolved_rows"] == 4
+
+
+def test_canonical_resolution_section_unavailable_on_corrupt_registry(tmp_path) -> None:
+    """A corrupt registry JSONL is surfaced as unavailable, not crashed."""
+    _build_healthy_workspace(tmp_path)
+    _write_player_match_for_resolver(tmp_path)
+    registry = tmp_path / "data" / "gold" / "identity_registry" / "decisions.jsonl"
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text("{not valid json}\n", encoding="utf-8")
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["canonical_resolution"]
+    assert section["schema"] == "scoutfootball.canonical-resolver"
+    assert section["status"] == "unavailable"
+    assert "identity registry read failed" in section["evidence"]["reason"]
+    # Verdict is unaffected — the section is evidence-only.
+    assert report["verdict"] == VERDICT_READY
+
+
+# ---------------------------------------------------------------------------
 # Source-lineage verification (PRS-0 R-003: manifest → raw snapshot chain)
 # ---------------------------------------------------------------------------
 

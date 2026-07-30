@@ -264,6 +264,7 @@ def build_default_architecture() -> ProjectArchitecture:
             ),
             "uv run python -m scoutfootball identity-registry-list [--source S]",
             "uv run python -m scoutfootball identity-registry-stats",
+            "uv run python -m scoutfootball resolve-canonical-ids [--sample N]",
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -445,6 +446,21 @@ def build_capability_registry() -> CapabilityRegistry:
                 "identity-registry-list",
                 "identity-registry-stats",
             ),
+        ),
+        Capability(
+            id="ratings.canonical_resolver",
+            name="canonical 主键解析器",
+            description=(
+                "只读解析器：在 identity_registry v1 之上，把 active confirmed "
+                "映射应用到 player_match.parquet 派生视图（不修改原文件），为每行"
+                "派生 canonical_player_id。未解析行显式标记为 "
+                "unresolved:<source>:<id>（source-stable fallback），不静默使用 "
+                "source_player_id。空注册表下所有行 unresolved 是诚实默认，不阻断 "
+                "research-health verdict。CLI resolve-canonical-ids 输出解析摘要，"
+                "--sample N 同时打印 N 行样本。"
+            ),
+            domain="player_ratings",
+            cli_commands=("resolve-canonical-ids",),
         ),
         Capability(
             id="predictions.match",

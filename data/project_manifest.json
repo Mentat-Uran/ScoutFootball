@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-29T17:33:32.575655+00:00",
+  "generated_at": "2026-07-30T17:08:11.398740+00:00",
   "package_version": "1.0.3",
   "architecture": {
     "package_name": "scoutfootball",
@@ -293,6 +293,7 @@
       "uv run python -m scoutfootball reep-identity-lookup",
       "uv run python -m scoutfootball contract-quality",
       "uv run python -m scoutfootball model-admission",
+      "uv run python -m scoutfootball research-health",
       "uv run python -m scoutfootball discard-model-run <run_id>",
       "uv run python -m scoutfootball reject-model-run <run_id> --decision <text>",
       "uv run python -m scoutfootball promote-model-run <run_id> --decision <text>",
@@ -314,6 +315,12 @@
       "uv run python -m scoutfootball reconcile-transfermarkt-truth-labels",
       "uv run python -m scoutfootball audit-truth-labels",
       "uv run python -m scoutfootball audit-identity",
+      "uv run python -m scoutfootball identity-registry-lookup --source S --source-id X",
+      "uv run python -m scoutfootball identity-registry-append --source S --source-id X --canonical-id C --evidence E",
+      "uv run python -m scoutfootball identity-registry-revoke --source S --source-id X --evidence E",
+      "uv run python -m scoutfootball identity-registry-list [--source S]",
+      "uv run python -m scoutfootball identity-registry-stats",
+      "uv run python -m scoutfootball resolve-canonical-ids [--sample N]",
       "uv run python -m scoutfootball backtest",
       "uv run python -m scoutfootball tune-predictions",
       "uv run python -m scoutfootball optimize-ensemble",
@@ -341,7 +348,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-29T17:33:32.574652+00:00",
+    "generated_at": "2026-07-30T17:08:11.398740+00:00",
     "package_version": "1.0.3",
     "domains": [
       "action_value",
@@ -516,6 +523,38 @@
         "api_paths": [],
         "cli_commands": [
           "audit-identity"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.identity_registry",
+        "name": "canonical 身份映射注册表",
+        "description": "本地 append-only JSONL 注册表，记录人工确认的 (source_name, source_player_id) -> canonical_player_id 映射决策（PRS-1 R-005）。未录入的键保持 unresolved；不做自动跨源对齐、不修改 player_match.parquet；支持 confirmed / revoked 两种动作，所有记录带 evidence、decided_by 和可选 supersedes_decision_id 修正链。lookup 在未解析时退出码 1，避免脚本误读为成功。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "identity-registry-lookup",
+          "identity-registry-append",
+          "identity-registry-revoke",
+          "identity-registry-list",
+          "identity-registry-stats"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.canonical_resolver",
+        "name": "canonical 主键解析器",
+        "description": "只读解析器：在 identity_registry v1 之上，把 active confirmed 映射应用到 player_match.parquet 派生视图（不修改原文件），为每行派生 canonical_player_id。未解析行显式标记为 unresolved:<source>:<id>（source-stable fallback），不静默使用 source_player_id。空注册表下所有行 unresolved 是诚实默认，不阻断 research-health verdict。CLI resolve-canonical-ids 输出解析摘要，--sample N 同时打印 N 行样本。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "resolve-canonical-ids"
         ],
         "frontend_views": [],
         "data_artifacts": [],
@@ -1189,7 +1228,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-29T17:33:32.575655+00:00",
+    "generated_at": "2026-07-30T17:08:11.398740+00:00",
     "package_version": "1.0.3",
     "layers": [
       "gold",
@@ -2115,5 +2154,5 @@
       }
     ]
   },
-  "content_sha256": "612da3c3c17ad6e8c882912360da769696b5446443edd90baf1018679086d5b9"
+  "content_sha256": "4d46705bb2d0e2b37799c06de4665ebfc66c7cd4edcdab6ffbbf08a029a411f2"
 }
