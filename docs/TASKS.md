@@ -70,9 +70,16 @@
 
 - [ ] cohort 内核：基于 canonical 主键 + grain + 角色体系 v1，构建可复用的 cohort 定义、过滤和快照协议。
 - [ ] 角色体系 v1：在 grain 之上定义位置/角色分组，为 PRS-2 角色内 baseline 提供输入。
-- [ ] event-level source join：把 `data_granularity` / `source_name` 透传到 `rating_feature_matrix.parquet`，并把 `ACTUAL_ZERO` 与 `NOT_RECORDED` 在 source-level event join 上区分。
 
-退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-3 已交付 typed enums、只读 grain/missingness 审计、canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary）和 canonical 主键解析器（source-stable fallback + research-health 集成），不触及 cohort 协议和角色体系——它们解锁 PRS-2/PRS-3，必须单独切片验证。
+切片 4：event-level source join 与 ACTUAL_ZERO 检测（2026-07-31）。
+
+- [x] event-level source join：把 `data_granularity` / `source_name` 从 `player_match.parquet` 透传到 `rating_feature_matrix.parquet`。`build_rating_feature_matrix` 使用 `"first"` 聚合 grain/source 列（与 `player_name`/`team_name` 语义一致），并新增 `data_granularity_set` / `source_name_set` 列记录每个 player-season 的完整 grain/source 集合（`|` 分隔、排序），防御未来跨 grain/source join 的静默塌缩。当前真实数据下 26,678 个 player-season 全部为单一 grain（season_proxy），`_set` 列与 first 列一致；未来跨源 join 产生混合 grain 时 `_set` 列会显式呈现。`RATING_MATRIX_COLUMN_SOURCES` 把 4 个新列标记为 `"meta"` category。（`src/scoutfootball/features/rating_matrix.py`）
+- [x] ACTUAL_ZERO 检测：在 `_audit_feature_matrix_missingness` 中，对 event-level group（xT_VAEP/goalkeeper）在 match-grain + event-level source（statsbomb_open）的 bucket 内，统计所有 present fields 全为 0（非 NaN）且不在 missing mask 中的行数，报告为 `actual_zero_rows`。区分"球员本场确实做了 0 次该动作"与"字段缺失后被插补为 0"。`missing_marker=True` 的行即使值为 0 也不计入（0 是插补产物非真实观测）。season_proxy/aggregate grain 和非 event-level source 不做检测（0 可能是聚合产物或插补结果）。`limitations` 更新为诚实声明部分自动检测能力。（`src/scoutfootball/evaluation/grain.py`）
+- [x] 11 个新单元测试覆盖：4 个 rating_matrix grain/source 透传测试（列存在性、单一 grain player-season、跨 grain player-season 防御、缺列时 `_set` 为空字符串）+ 7 个 grain audit ACTUAL_ZERO 测试（正例 match+statsbomb+全 0、marker=True 排除、season_proxy 排除、非 event-level source 排除、非 event-level group 排除、部分 NaN 排除、混合行计数）。全部 51 个 grain 测试 + 32 个 rating_feature_matrix 测试通过。
+- [x] 本地烟雾测试（真实数据）：重建 `rating_feature_matrix.parquet`（26,678 行），4 个 grain/source 列全部存在。`build_grain_and_missingness_report` 返回 `status=ok`：`player_match_grain` 正确报告 27,598 行（27,504 season_proxy + 94 match，3 个 source）；`feature_group_missingness` 的 4 个 field group 全部按 (grain, source) bucket 分解，`actual_zero_rows=0`（当前 feature matrix 无 match-grain 行，因为 94 条 statsbomb match 行的 `season_id` 为 NaN，在 player-season 聚合时被 pandas groupby 丢弃——这是 player_match builder 的既有数据质量问题，非本切片引入；grain audit 如实暴露这一差距）。报告 JSON 可序列化，API 可返回。
+- [x] 发现并记录既有数据质量缺口：94 条 statsbomb_open match-level 行在 `player_match.parquet` 中 `season_id=NaN` 且 `player_id` 为数值格式（与 understat/fbref 的字符串 `"name|year|country"` 格式不一致），在 `build_rating_feature_matrix` 的 `groupby(["player_id","season_id"])` 中被静默丢弃。这是 canonical 主键解析和 player_match builder 的前置依赖问题，留给后续 PRS-1 切片（canonical 主键统一 + season_id 补全）处理，不在本切片范围内修复。grain audit 的 `player_match_grain` section 仍然如实报告这 94 行的存在，不被 feature matrix 聚合掩盖。
+
+退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-4 已交付 typed enums、只读 grain/missingness 审计、canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary）、canonical 主键解析器（source-stable fallback + research-health 集成）和 event-level source join（grain/source 透传 + ACTUAL_ZERO 部分检测），不触及 cohort 协议和角色体系——它们解锁 PRS-2/PRS-3，必须单独切片验证。
 
 ### 后续专项节点
 

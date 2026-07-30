@@ -547,7 +547,6 @@ def test_canonical_resolution_section_revoked_falls_back_to_unresolved(tmp_path)
     from scoutfootball.evaluation.identity_registry import (
         append_decision,
         build_decision,
-        read_registry,
     )
 
     _build_healthy_workspace(tmp_path)

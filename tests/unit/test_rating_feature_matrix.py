@@ -178,6 +178,7 @@ class TestBuildRatingFeatureMatrix:
             "passes": [30, 15, 50],
             "xT_added": [pd.NA, pd.NA, pd.NA],
             "source_name": ["fbref", "fbref", "statsbomb_open"],
+            "data_granularity": ["season_proxy", "season_proxy", "match"],
         })
 
     def _sample_player_rolling(self) -> pd.DataFrame:
@@ -230,6 +231,150 @@ class TestBuildRatingFeatureMatrix:
         matrix = build_rating_feature_matrix(pm, pr)
         assert "_input_hash" in matrix.attrs
         assert len(matrix.attrs["_input_hash"]) > 0
+
+    def test_matrix_carries_grain_and_source_columns(self) -> None:
+        """The feature matrix must carry data_granularity, source_name,
+        data_granularity_set and source_name_set columns forward from
+        player_match so the downstream grain audit (PRS-1 R-006/R-007)
+        can classify missingness without guessing. This is the
+        event-level source join: grain/source provenance is no longer
+        dropped at the player_match → rating_feature_matrix boundary.
+        """
+        pm = self._sample_player_match()
+        pr = self._sample_player_rolling()
+        matrix = build_rating_feature_matrix(pm, pr)
+
+        for col in (
+            "data_granularity",
+            "source_name",
+            "data_granularity_set",
+            "source_name_set",
+        ):
+            assert col in matrix.columns, f"Missing grain/source column: {col}"
+
+    def test_grain_set_reflects_single_grain_per_player_season(self) -> None:
+        """When a player-season has exactly one grain and one source
+        (the current real-data case for all 26,678 player-seasons), the
+        _set columns equal the first-aggregated value. This keeps the
+        simple case simple while the _set columns stay available for
+        future cross-grain joins.
+        """
+        pm = self._sample_player_match()
+        pr = self._sample_player_rolling()
+        matrix = build_rating_feature_matrix(pm, pr)
+
+        # p1 has 2 fbref season_proxy rows → aggregated to 1 row.
+        p1 = matrix[matrix["player_id"] == "p1"].iloc[0]
+        assert p1["data_granularity"] == "season_proxy"
+        assert p1["source_name"] == "fbref"
+        assert p1["data_granularity_set"] == "season_proxy"
+        assert p1["source_name_set"] == "fbref"
+
+        # p2 has 1 statsbomb_open match row.
+        p2 = matrix[matrix["player_id"] == "p2"].iloc[0]
+        assert p2["data_granularity"] == "match"
+        assert p2["source_name"] == "statsbomb_open"
+        assert p2["data_granularity_set"] == "match"
+        assert p2["source_name_set"] == "statsbomb_open"
+
+    def test_grain_set_aggregates_cross_grain_player_season(self) -> None:
+        """When a player-season spans multiple grains (e.g. a future
+        join that produces both match-level statsbomb and season-proxy
+        understat rows for the same player-season), the _set column
+        surfaces both grains sorted and pipe-separated while the
+        first-aggregated column only shows one. This is the defensive
+        case: current real data does not trigger it, but the schema
+        must handle it so a future cross-source join does not silently
+        collapse grain information.
+        """
+        pm = pd.DataFrame({
+            "player_id": ["p1", "p1"],
+            "player_name": ["Alice", "Alice"],
+            "team_id": ["t1", "t2"],
+            "team_name": ["Team A", "Team B"],
+            "season_id": ["2024", "2024"],
+            "competition_id": ["PL", "PL"],
+            "position_group": ["FW", "FW"],
+            "match_date": pd.to_datetime(["2024-01-01", "2024-02-01"]),
+            "match_id": ["m1", "m2"],
+            "minutes_played": [90, 90],
+            "goals": [1, 0],
+            "assists": [0, 1],
+            "shots": [3, 2],
+            "shots_on_target": [1, 1],
+            "npxg": [0.5, 0.2],
+            "xa": [0.2, 0.3],
+            "starts": [1, 1],
+            "available_flag": [1, 1],
+            "tackles": [0, 2],
+            "passes": [30, 25],
+            "xT_added": [pd.NA, pd.NA],
+            "source_name": ["statsbomb_open", "understat"],
+            "data_granularity": ["match", "season_proxy"],
+        })
+        pr = pd.DataFrame({
+            "player_id": ["p1"],
+            "season_id": ["2024"],
+            "goals_2": [1],
+        })
+        matrix = build_rating_feature_matrix(pm, pr)
+
+        assert len(matrix) == 1
+        row = matrix.iloc[0]
+        # first-aggregated columns show one value (the first row's).
+        assert row["data_granularity"] in ("match", "season_proxy")
+        assert row["source_name"] in ("statsbomb_open", "understat")
+        # _set columns surface both values, sorted and pipe-separated.
+        assert row["data_granularity_set"] == "match|season_proxy"
+        assert row["source_name_set"] == "statsbomb_open|understat"
+
+    def test_missing_grain_columns_produce_empty_set(self) -> None:
+        """When player_match has no data_granularity/source_name columns
+        (e.g. a legacy or test fixture), the matrix still has the _set
+        columns as empty strings so downstream consumers do not see NaN
+        or KeyError. The first-aggregated columns are absent in this
+        case because there is nothing to first-aggregate.
+        """
+        pm = pd.DataFrame({
+            "player_id": ["p1"],
+            "player_name": ["Alice"],
+            "team_id": ["t1"],
+            "team_name": ["Team A"],
+            "season_id": ["2024"],
+            "competition_id": ["PL"],
+            "position_group": ["FW"],
+            "match_date": pd.to_datetime(["2024-01-01"]),
+            "match_id": ["m1"],
+            "minutes_played": [90],
+            "goals": [1],
+            "assists": [0],
+            "shots": [3],
+            "shots_on_target": [1],
+            "npxg": [0.5],
+            "xa": [0.2],
+            "starts": [1],
+            "available_flag": [1],
+            "tackles": [0],
+            "passes": [30],
+            "xT_added": [pd.NA],
+        })
+        pr = pd.DataFrame({
+            "player_id": ["p1"],
+            "season_id": ["2024"],
+            "goals_2": [1],
+        })
+        matrix = build_rating_feature_matrix(pm, pr)
+
+        # _set columns always exist and are empty strings when the
+        # upstream columns are absent.
+        assert "data_granularity_set" in matrix.columns
+        assert "source_name_set" in matrix.columns
+        assert matrix["data_granularity_set"].iloc[0] == ""
+        assert matrix["source_name_set"].iloc[0] == ""
+        # The first-aggregated columns are absent because there was
+        # nothing to aggregate.
+        assert "data_granularity" not in matrix.columns
+        assert "source_name" not in matrix.columns
 
 
 # ---------------------------------------------------------------------------
