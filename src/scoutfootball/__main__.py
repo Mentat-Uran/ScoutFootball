@@ -629,6 +629,63 @@ def _cmd_resolve_canonical_ids(args: argparse.Namespace) -> None:
         print(sample.to_string(index=False))
 
 
+def _cmd_suggest_identity_mappings(args: argparse.Namespace) -> None:
+    """Suggest canonical identity mappings for statsbomb players.
+
+    Cross-references statsbomb players against fbref/understat players in
+    the same season + competition using normalized name + team matching.
+    Outputs candidate mappings for human review — does NOT auto-apply them.
+
+    Use ``--json`` for machine-readable output. Use ``--unmatched-only``
+    to show only players with no match found (useful for manual review
+    prioritization).
+    """
+    from scoutfootball.evaluation.identity_suggest import suggest_canonical_mappings
+
+    report = suggest_canonical_mappings()
+
+    if args.unmatched_only:
+        print(json.dumps(report["unmatched"], indent=2, ensure_ascii=False))
+        return
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    # Human-readable summary
+    s = report["summary"]
+    print(f"Identity mapping suggestions (schema {report['schema']} v{report['schema_version']})")
+    print(f"Total primary players examined: {report['total_primary_players']}")
+    print(f"  High confidence (name + team match): {s['high']}")
+    print(f"  Medium confidence (name match, team differs): {s['medium']}")
+    print(f"  No match found: {s['no_match']}")
+    print()
+
+    if report["matched"]:
+        print("--- Matched (candidates for review) ---")
+        for m in report["matched"]:
+            print(f"  [{m['confidence']}] {m['source_player_name']} ({m['source_player_id']})")
+            print(f"    -> {m['candidate_player_name']} ({m['candidate_source_player_id']})")
+            print(f"    canonical_id={m['suggested_canonical_player_id']}")
+            print(f"    {m['evidence']}")
+            print()
+
+    if report["unmatched"]:
+        print("--- Unmatched (need manual review) ---")
+        for u in report["unmatched"]:
+            print(f"  {u['source_player_name']} ({u['source_player_id']})")
+            team = u['source_team_name']
+            season = u['season_id']
+            comp = u['competition_id']
+            print(f"    team={team} season={season} comp={comp}")
+            print(f"    reason: {u['reason']}")
+            print()
+
+    print("Limitations:")
+    for lim in report["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -4095,6 +4152,25 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    suggest_identity_p = sub.add_parser(
+        "suggest-identity-mappings",
+        help=(
+            "Suggest canonical identity mappings for statsbomb players by "
+            "cross-referencing against fbref/understat (PRS-1 R-005). "
+            "Read-only; does not modify the registry."
+        ),
+    )
+    suggest_identity_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+    suggest_identity_p.add_argument(
+        "--unmatched-only",
+        action="store_true",
+        help="Show only players with no match found (for manual review prioritization)",
+    )
+
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -5083,6 +5159,7 @@ def main() -> None:
         "identity-registry-list": _cmd_identity_registry_list,
         "identity-registry-stats": _cmd_identity_registry_stats,
         "resolve-canonical-ids": _cmd_resolve_canonical_ids,
+        "suggest-identity-mappings": _cmd_suggest_identity_mappings,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
