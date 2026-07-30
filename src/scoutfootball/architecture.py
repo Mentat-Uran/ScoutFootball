@@ -267,6 +267,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball resolve-canonical-ids [--sample N]",
             "uv run python -m scoutfootball suggest-identity-mappings [--json]",
             "uv run python -m scoutfootball role-system-report [--json]",
+            "uv run python -m scoutfootball cohort-preview [filters] [--json]",
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -465,6 +466,21 @@ def build_capability_registry() -> CapabilityRegistry:
             cli_commands=("resolve-canonical-ids",),
         ),
         Capability(
+            id="ratings.identity_suggester",
+            name="canonical 映射建议工具",
+            description=(
+                "PRS-1 R-005 canonical 映射建议工具：以 statsbomb 为主源，按"
+                "season+competition 跨源（fbref/understat）匹配候选 canonical 映射。"
+                "采用精确标准化名称匹配（Unicode NFC + 去变音符 + 大小写归一 + "
+                "去后缀），分 high（name + team 同时匹配）/medium（name 匹配 team "
+                "不同）/no_match 三档置信度。只读：不修改 registry、不修改 "
+                "player_match.parquet、不自动写入任何 confirmed 决策。--unmatched-only "
+                "用于人工复核优先级排序。维护者需通过 identity-registry-append 显式录入。"
+            ),
+            domain="player_ratings",
+            cli_commands=("suggest-identity-mappings",),
+        ),
+        Capability(
             id="ratings.role_system",
             name="角色体系 v1",
             description=(
@@ -479,6 +495,27 @@ def build_capability_registry() -> CapabilityRegistry:
             ),
             domain="player_ratings",
             cli_commands=("role-system-report",),
+        ),
+        Capability(
+            id="ratings.cohort",
+            name="cohort 内核 v1",
+            description=(
+                "PRS-1 R-010 cohort 内核 v1：声明式 CohortDefinition（联赛/"
+                "赛季/球队/角色/分钟/年龄/身份/角色已知性过滤器）+ 只读 "
+                "preview_cohort。基于 canonical_player_id（切片 3）+ grain"
+                "（切片 1/4）+ RoleFamily（切片 6）构建可复用的研究人群。"
+                "cohort_hash 仅依赖定义（sha256[:16]），membership_hash 依赖"
+                "定义+数据（sorted canonical_player_id|season_id），两者共同"
+                "满足 PRS-1 退出门槛'cohort 重新运行能得到同一成员与相同 hash'。"
+                "排除原因 typed（ExclusionReason StrEnum），first-match-wins "
+                "固定顺序。cohort 单位是 player-season（匹配 "
+                "rating_feature_matrix 粒度），multi_team_season 标记但不拆分。"
+                "CLI cohort-preview 支持 --competition/--season/--team/--role/"
+                "--min-minutes/--age-min/--age-max/--require-resolved-identity/"
+                "--require-known-role 过滤器和 --json 输出。"
+            ),
+            domain="player_ratings",
+            cli_commands=("cohort-preview",),
         ),
         Capability(
             id="predictions.match",
