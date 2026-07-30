@@ -686,6 +686,60 @@ def _cmd_suggest_identity_mappings(args: argparse.Namespace) -> None:
         print(f"  - {lim}")
 
 
+def _cmd_role_system_report(args: argparse.Namespace) -> None:
+    """Report role family distribution in player_match.parquet (PRS-1 R-009).
+
+    Classifies the existing ``position_group`` column into 8 typed
+    ``RoleFamily`` values (GK/CB/FB/DM/CM/AM/W/ST) so PRS-2 in-role
+    baseline slicing has a stable vocabulary. Read-only; does not
+    modify any parquet artifact.
+
+    Use ``--json`` for machine-readable output.
+    """
+    from scoutfootball.evaluation.role_system import build_role_system_report
+
+    report = build_role_system_report()
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    print(f"Role system report (schema {report['schema']} v{report['schema_version']})")
+    print(f"status: {report['status']}")
+    if report["status"] != "ok":
+        print(f"reason: {report['evidence'].get('reason', 'unknown')}")
+        return
+
+    ev = report["evidence"]
+    print(f"total_rows: {ev['total_rows']}")
+    print(f"position_group_present: {ev['position_group_present']}")
+    print()
+
+    print("--- Raw position_group distribution ---")
+    for value, count in sorted(ev["raw_distribution"].items(), key=lambda kv: -kv[1]):
+        print(f"  {value}: {count}")
+    print()
+
+    print("--- RoleFamily distribution ---")
+    for family, count in ev["role_family_distribution"].items():
+        if count > 0:
+            print(f"  {family}: {count}")
+    print()
+
+    print(f"coarse_position_rows (DF/MF/FW): {ev['coarse_position_rows']}")
+    print(f"unknown_position_rows: {ev['unknown_position_rows']}")
+    if ev.get("distinct_unknown_values", 0) > 0:
+        print(f"distinct_unknown_values: {ev['distinct_unknown_values']}")
+        samples = ev.get("unknown_value_samples", [])
+        if samples:
+            print(f"  samples: {samples}")
+    print()
+
+    print("Limitations:")
+    for lim in report["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -4171,6 +4225,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show only players with no match found (for manual review prioritization)",
     )
 
+    role_system_p = sub.add_parser(
+        "role-system-report",
+        help=(
+            "Report role family distribution in player_match.parquet "
+            "(PRS-1 R-009). Read-only; classifies position_group into "
+            "8 typed RoleFamily values (GK/CB/FB/DM/CM/AM/W/ST)."
+        ),
+    )
+    role_system_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -5160,6 +5228,7 @@ def main() -> None:
         "identity-registry-stats": _cmd_identity_registry_stats,
         "resolve-canonical-ids": _cmd_resolve_canonical_ids,
         "suggest-identity-mappings": _cmd_suggest_identity_mappings,
+        "role-system-report": _cmd_role_system_report,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,

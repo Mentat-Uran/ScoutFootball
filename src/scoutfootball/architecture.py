@@ -265,6 +265,8 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball identity-registry-list [--source S]",
             "uv run python -m scoutfootball identity-registry-stats",
             "uv run python -m scoutfootball resolve-canonical-ids [--sample N]",
+            "uv run python -m scoutfootball suggest-identity-mappings [--json]",
+            "uv run python -m scoutfootball role-system-report [--json]",
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -461,6 +463,22 @@ def build_capability_registry() -> CapabilityRegistry:
             ),
             domain="player_ratings",
             cli_commands=("resolve-canonical-ids",),
+        ),
+        Capability(
+            id="ratings.role_system",
+            name="角色体系 v1",
+            description=(
+                "PRS-1 R-009 角色体系 v1：8 个位置族（GK/CB/FB/DM/CM/AM/W/ST）"
+                "的 typed 词汇和只读审计。classify_role_family 把现有 "
+                "position_group 列映射到 RoleFamily，粗位置 DF/MF/FW 收敛到"
+                "默认细角色（CB/CM/ST）并在审计中标记 coarse_position_rows。"
+                "v1 不自动从 MF 创造 DM，不修改 player_match.parquet，"
+                "不替换 position_metrics.POSITION_GROUP_MAP（优化器链保持不变）。"
+                "research-health 报告的 role_system section 提供分布审计；"
+                "CLI role-system-report 输出 JSON 或人类可读报告。"
+            ),
+            domain="player_ratings",
+            cli_commands=("role-system-report",),
         ),
         Capability(
             id="predictions.match",
