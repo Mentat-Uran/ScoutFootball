@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.0.3`
-- manifest generated_at：`2026-07-29T17:33:32.575655+00:00`
-- content SHA-256：`612da3c3c17ad6e8c882912360da769696b5446443edd90baf1018679086d5b9`
+- manifest generated_at：`2026-07-30T17:08:11.398740+00:00`
+- content SHA-256：`4d46705bb2d0e2b37799c06de4665ebfc66c7cd4edcdab6ffbbf08a029a411f2`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -29,6 +29,7 @@
 - `uv run python -m scoutfootball reep-identity-lookup`
 - `uv run python -m scoutfootball contract-quality`
 - `uv run python -m scoutfootball model-admission`
+- `uv run python -m scoutfootball research-health`
 - `uv run python -m scoutfootball discard-model-run <run_id>`
 - `uv run python -m scoutfootball reject-model-run <run_id> --decision <text>`
 - `uv run python -m scoutfootball promote-model-run <run_id> --decision <text>`
@@ -50,6 +51,12 @@
 - `uv run python -m scoutfootball reconcile-transfermarkt-truth-labels`
 - `uv run python -m scoutfootball audit-truth-labels`
 - `uv run python -m scoutfootball audit-identity`
+- `uv run python -m scoutfootball identity-registry-lookup --source S --source-id X`
+- `uv run python -m scoutfootball identity-registry-append --source S --source-id X --canonical-id C --evidence E`
+- `uv run python -m scoutfootball identity-registry-revoke --source S --source-id X --evidence E`
+- `uv run python -m scoutfootball identity-registry-list [--source S]`
+- `uv run python -m scoutfootball identity-registry-stats`
+- `uv run python -m scoutfootball resolve-canonical-ids [--sample N]`
 - `uv run python -m scoutfootball backtest`
 - `uv run python -m scoutfootball tune-predictions`
 - `uv run python -m scoutfootball optimize-ensemble`
@@ -87,6 +94,8 @@
 | ratings.export | player_ratings | delivered | /ratings, /ratings/meta, /ratings/snapshots | export-ratings | players, value |
 | ratings.truth_labels | player_ratings | delivered | /reports/truth-labels, /reports/transfermarkt-identities | import-truth-labels, import-transfermarkt-truth-labels, transfermarkt-identity-review, reconcile-transfermarkt-truth-labels, audit-truth-labels | — |
 | ratings.identity_audit | player_ratings | delivered | — | audit-identity | — |
+| ratings.identity_registry | player_ratings | delivered | — | identity-registry-lookup, identity-registry-append, identity-registry-revoke, identity-registry-list, identity-registry-stats | — |
+| ratings.canonical_resolver | player_ratings | delivered | — | resolve-canonical-ids | — |
 | predictions.match | match_predictions | delivered | /predictions/{home_team}/{away_team}, /predictions/meta, /predictions/ensemble/weights, /predictions/models/comparison, /predictions/staleness, /predictions/team-accuracy/{team_id}, /predictions/{home_team}/{away_team}/attribution, /predictions/{home_team}/{away_team}/attribution/ci, /predictions/{home_team}/{away_team}/ensemble-attribution, /predictions/{home_team}/{away_team}/ensemble-attribution/ci, /predictions/{home_team}/{away_team}/diagnostics, /predictions/{home_team}/{away_team}/h2h, /predictions/{home_team}/{away_team}/h2h-bias-correction, /predictions/{home_team}/{away_team}/momentum | backtest, tune-predictions, optimize-ensemble | matches |
 | predictions.calibration | match_predictions | delivered | /predictions/calibration, /predictions/backtest, /predictions/tuning, /predictions/drift, /predictions/drift/timeline, /predictions/calibration/reliability, /predictions/calibration/scoreline, /predictions/calibration/comparison, /predictions/calibration/confidence-distribution, /predictions/calibration/error-analysis, /predictions/calibration/outcome-distribution, /predictions/calibration/temporal-validation, /predictions/calibration/probability-heatmap, /predictions/calibration/ci-plot, /predictions/calibration/ci-coverage, /predictions/calibration/ci-width, /predictions/calibration/fold-comparison, /predictions/calibration/league-errors, /predictions/calibration/feature-importance, /predictions/calibration/drift-heatmap, /predictions/calibration/error-clustering, /predictions/calibration/data-drift, /predictions/calibration/stress-test, /predictions/calibration/team-drift, /predictions/calibration/team-profile, /predictions/calibration/uncertainty, /predictions/calibration/profit-loss, /predictions/calibration/trajectory, /predictions/calibration/difficulty, /predictions/calibration/streaks, /predictions/calibration/report-card, /predictions/calibration/anomalies | backtest, tune-predictions | matches, calibration, backtest |
 | predictions.value_bet | match_predictions | delivered | /predictions/{home_team}/{away_team}/value | — | matches |

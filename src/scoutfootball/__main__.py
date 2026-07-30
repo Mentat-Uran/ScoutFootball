@@ -589,6 +589,46 @@ def _cmd_identity_registry_stats(args: argparse.Namespace) -> None:
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 
 
+def _cmd_resolve_canonical_ids(args: argparse.Namespace) -> None:
+    """Resolve canonical player IDs against the local identity registry.
+
+    Applies the registry's active ``confirmed`` mappings to a derived view
+    of ``player_match.parquet`` and prints the resolution summary. The
+    original parquet is never modified. Unresolved rows are reported as
+    ``unresolved:<source>:<id>`` — they are the honest default, not a
+    failure, so this command exits 0 even when every row is unresolved.
+
+    Use ``--sample N`` to also print N sample rows showing
+    ``(source_name, player_id, canonical_player_id)`` so the maintainer can
+    eyeball which source IDs need a registry decision.
+    """
+    from scoutfootball.evaluation.canonical_resolver import (
+        build_canonical_resolution_report,
+        load_resolved_player_match,
+    )
+
+    report = build_canonical_resolution_report()
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    if report["status"] != "ok":
+        # Unavailable is still a successful read-only diagnostic; exit 0
+        # so scripts can pipe the JSON without parsing exit codes.
+        return
+    if args.sample and isinstance(args.sample, int) and args.sample > 0:
+        try:
+            resolved_df = load_resolved_player_match()
+        except ValueError as exc:
+            print(f"Error: cannot load resolved view for sampling: {exc}", file=sys.stderr)
+            return
+        sample_cols = [
+            c
+            for c in ("source_name", "player_id", "canonical_player_id")
+            if c in resolved_df.columns
+        ]
+        sample = resolved_df[sample_cols].head(args.sample)
+        print("\n--- sample ---")
+        print(sample.to_string(index=False))
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -4036,6 +4076,25 @@ def build_parser() -> argparse.ArgumentParser:
         "identity-registry-stats",
         help="Print a read-only summary of the local identity registry",
     )
+
+    resolve_canonical_ids_p = sub.add_parser(
+        "resolve-canonical-ids",
+        help=(
+            "Resolve canonical player IDs against the identity registry and "
+            "print the resolution summary (PRS-1 R-005). Read-only; the "
+            "original player_match.parquet is never modified."
+        ),
+    )
+    resolve_canonical_ids_p.add_argument(
+        "--sample",
+        type=int,
+        default=0,
+        help=(
+            "Also print this many sample rows showing source_name, player_id "
+            "and the resolved canonical_player_id (default: 0, no sample)"
+        ),
+    )
+
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -5023,6 +5082,7 @@ def main() -> None:
         "identity-registry-revoke": _cmd_identity_registry_revoke,
         "identity-registry-list": _cmd_identity_registry_list,
         "identity-registry-stats": _cmd_identity_registry_stats,
+        "resolve-canonical-ids": _cmd_resolve_canonical_ids,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
