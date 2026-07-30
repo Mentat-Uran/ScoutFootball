@@ -459,6 +459,304 @@ class TestBuildGrainAndMissingnessReport:
         assert defense_proxy["missing_rows"] == 1
         assert defense_proxy["missing_reason"] == MissingReason.NOT_AVAILABLE.value
 
+    def test_actual_zero_detected_on_match_statsbomb_event_level_row(
+        self, tmp_path
+    ) -> None:
+        """ACTUAL_ZERO is detected when an event-level field group
+        (xT_VAEP) has all present fields exactly 0 (not NaN) on a
+        match-grain row from an event-level source (statsbomb_open), and
+        the row is not marked as missing. This is the genuine-zero
+        case: the player truly did 0 of this action in this match, and
+        the 0 is not an imputation artefact.
+        """
+        _write_player_match(tmp_path)
+        _write_feature_matrix(
+            tmp_path,
+            rows=[
+                {
+                    "player_id": "p1",
+                    "data_granularity": "match",
+                    "source_name": "statsbomb_open",
+                    # All xT_VAEP fields are 0, not NaN.
+                    "xt_total": 0.0,
+                    "xt_per_90": 0.0,
+                    "vaep_total": 0.0,
+                    "vaep_per_90": 0.0,
+                    "xT_VAEP_missing": False,
+                    # defense has data so it is not missing.
+                    "tackles": 5.0,
+                    "interceptions": 3.0,
+                    "defense_missing": False,
+                },
+            ],
+        )
+        settings = PlatformSettings.from_root(tmp_path)
+        report = build_grain_and_missingness_report(settings=settings)
+        groups = report["feature_group_missingness"]["evidence"]["field_groups"]
+        xt_bucket = groups["xT_VAEP"]["bucket_breakdown"][
+            f"{EvidenceGrain.MATCH.value}|statsbomb_open"
+        ]
+        # The row is not missing (all fields are 0, not NaN, marker False).
+        assert xt_bucket["missing_rows"] == 0
+        # ACTUAL_ZERO is detected: the 0s are genuine observations.
+        assert xt_bucket["actual_zero_rows"] == 1
+
+    def test_actual_zero_not_counted_when_missing_marker_true(
+        self, tmp_path
+    ) -> None:
+        """When the ``{group}_missing`` marker is True, the row was
+        imputed — even if all fields happen to be 0 after imputation,
+        it must NOT be counted as ACTUAL_ZERO. The 0 here is an
+        imputation artefact, not a true observation.
+
+        Note: ``classify_missing_reason`` intentionally returns
+        ``NOT_RECORDED`` (not ``NOT_AVAILABLE``) for event-level groups
+        on event-level sources, because "the source could have supplied
+        it but did not" is the root-cause classification; the marker
+        only records that imputation filled the gap downstream. The
+        ``actual_zero_rows`` check is independent of the reason: it
+        excludes any row in the missing mask, regardless of which
+        ``MissingReason`` was assigned.
+        """
+        _write_player_match(tmp_path)
+        _write_feature_matrix(
+            tmp_path,
+            rows=[
+                {
+                    "player_id": "p1",
+                    "data_granularity": "match",
+                    "source_name": "statsbomb_open",
+                    # All xT_VAEP fields are 0, but the marker says
+                    # they were imputed (missing pre-imputation).
+                    "xt_total": 0.0,
+                    "xt_per_90": 0.0,
+                    "vaep_total": 0.0,
+                    "vaep_per_90": 0.0,
+                    "xT_VAEP_missing": True,
+                    "tackles": 5.0,
+                    "interceptions": 3.0,
+                    "defense_missing": False,
+                },
+            ],
+        )
+        settings = PlatformSettings.from_root(tmp_path)
+        report = build_grain_and_missingness_report(settings=settings)
+        groups = report["feature_group_missingness"]["evidence"]["field_groups"]
+        xt_bucket = groups["xT_VAEP"]["bucket_breakdown"][
+            f"{EvidenceGrain.MATCH.value}|statsbomb_open"
+        ]
+        # The row is missing (marker True) — classify_missing_reason
+        # returns NOT_RECORDED for event-level group on event-level
+        # source regardless of marker (root cause is "source did not
+        # record", imputation is a downstream consequence).
+        assert xt_bucket["missing_rows"] == 1
+        assert xt_bucket["missing_reason"] == MissingReason.NOT_RECORDED.value
+        # ACTUAL_ZERO must NOT be counted — the row is in the missing
+        # mask, so non_missing_mask excludes it regardless of the 0s.
+        assert xt_bucket["actual_zero_rows"] == 0
+
+    def test_actual_zero_not_counted_on_season_proxy_row(self, tmp_path) -> None:
+        """ACTUAL_ZERO detection only applies to match-grain rows from
+        event-level sources. A season_proxy row whose xT_VAEP fields
+        are all 0 must NOT be counted as ACTUAL_ZERO: on season-proxy
+        rows the 0 may be an aggregation artefact (no events recorded
+        for the season-level stand-in) rather than a true observation.
+        The audit remains honest by not over-trusting the 0 here.
+        """
+        _write_player_match(tmp_path)
+        _write_feature_matrix(
+            tmp_path,
+            rows=[
+                {
+                    "player_id": "p1",
+                    "data_granularity": "season_proxy",
+                    "source_name": "statsbomb_open",
+                    "xt_total": 0.0,
+                    "xt_per_90": 0.0,
+                    "vaep_total": 0.0,
+                    "vaep_per_90": 0.0,
+                    "xT_VAEP_missing": False,
+                    "tackles": 5.0,
+                    "interceptions": 3.0,
+                    "defense_missing": False,
+                },
+            ],
+        )
+        settings = PlatformSettings.from_root(tmp_path)
+        report = build_grain_and_missingness_report(settings=settings)
+        groups = report["feature_group_missingness"]["evidence"]["field_groups"]
+        # season_proxy + statsbomb_open: xT_VAEP is NOT_APPLICABLE
+        # (event-level group on non-match grain). The 0 is not trusted
+        # as a true observation.
+        xt_bucket = groups["xT_VAEP"]["bucket_breakdown"][
+            f"{EvidenceGrain.SEASON_PROXY.value}|statsbomb_open"
+        ]
+        assert xt_bucket["actual_zero_rows"] == 0
+
+    def test_actual_zero_not_counted_on_non_event_source(self, tmp_path) -> None:
+        """ACTUAL_ZERO detection only applies to event-level sources
+        (currently ``statsbomb_open``). A match-grain row from fbref
+        with all xT_VAEP fields 0 must NOT be counted as ACTUAL_ZERO:
+        fbref has no event-level coverage at all, so a 0 there is not a
+        trusted observation — it is either an aggregation artefact or
+        an imputation result. The audit does not over-trust the 0 here.
+        """
+        _write_player_match(tmp_path)
+        _write_feature_matrix(
+            tmp_path,
+            rows=[
+                {
+                    "player_id": "p1",
+                    "data_granularity": "match",
+                    "source_name": "fbref",  # non-event-level source
+                    "xt_total": 0.0,
+                    "xt_per_90": 0.0,
+                    "vaep_total": 0.0,
+                    "vaep_per_90": 0.0,
+                    "xT_VAEP_missing": False,
+                    "tackles": 5.0,
+                    "interceptions": 3.0,
+                    "defense_missing": False,
+                },
+            ],
+        )
+        settings = PlatformSettings.from_root(tmp_path)
+        report = build_grain_and_missingness_report(settings=settings)
+        groups = report["feature_group_missingness"]["evidence"]["field_groups"]
+        xt_bucket = groups["xT_VAEP"]["bucket_breakdown"][
+            f"{EvidenceGrain.MATCH.value}|fbref"
+        ]
+        # xT_VAEP on fbref is NOT_APPLICABLE regardless of values.
+        assert xt_bucket["actual_zero_rows"] == 0
+
+    def test_actual_zero_not_counted_on_non_event_group(self, tmp_path) -> None:
+        """ACTUAL_ZERO detection only applies to event-level groups
+        (xT_VAEP, goalkeeper). The defense group is not event-level:
+        its 0s may be aggregation artefacts (e.g. a season-proxy row
+        with 0 tackles because no matches were recorded, not because
+        the player made 0 tackles). The audit does not over-trust 0s
+        on non-event-level groups.
+        """
+        _write_player_match(tmp_path)
+        _write_feature_matrix(
+            tmp_path,
+            rows=[
+                {
+                    "player_id": "p1",
+                    "data_granularity": "match",
+                    "source_name": "statsbomb_open",
+                    "xt_total": 0.5,
+                    "xt_per_90": 0.05,
+                    "vaep_total": None,
+                    "vaep_per_90": None,
+                    "xT_VAEP_missing": False,
+                    # defense fields all 0, but defense is not event-level.
+                    "tackles": 0.0,
+                    "interceptions": 0.0,
+                    "defense_missing": False,
+                },
+            ],
+        )
+        settings = PlatformSettings.from_root(tmp_path)
+        report = build_grain_and_missingness_report(settings=settings)
+        groups = report["feature_group_missingness"]["evidence"]["field_groups"]
+        defense_bucket = groups["defense"]["bucket_breakdown"][
+            f"{EvidenceGrain.MATCH.value}|statsbomb_open"
+        ]
+        # defense 0s are not trusted as ACTUAL_ZERO.
+        assert defense_bucket["actual_zero_rows"] == 0
+
+    def test_actual_zero_not_counted_when_some_fields_nan(
+        self, tmp_path
+    ) -> None:
+        """ACTUAL_ZERO requires ALL present fields to be exactly 0 (not
+        NaN). When some fields are 0 and others are NaN, the row is
+        partially missing — the NaN fields were not observed, so we
+        cannot claim the player genuinely did 0 of the action. The
+        audit does not inflate ACTUAL_ZERO with partial-NaN rows.
+        """
+        _write_player_match(tmp_path)
+        _write_feature_matrix(
+            tmp_path,
+            rows=[
+                {
+                    "player_id": "p1",
+                    "data_granularity": "match",
+                    "source_name": "statsbomb_open",
+                    # Two fields 0, two fields NaN — partial missing.
+                    "xt_total": 0.0,
+                    "xt_per_90": 0.0,
+                    "vaep_total": None,
+                    "vaep_per_90": None,
+                    "xT_VAEP_missing": False,
+                    "tackles": 5.0,
+                    "interceptions": 3.0,
+                    "defense_missing": False,
+                },
+            ],
+        )
+        settings = PlatformSettings.from_root(tmp_path)
+        report = build_grain_and_missingness_report(settings=settings)
+        groups = report["feature_group_missingness"]["evidence"]["field_groups"]
+        xt_bucket = groups["xT_VAEP"]["bucket_breakdown"][
+            f"{EvidenceGrain.MATCH.value}|statsbomb_open"
+        ]
+        # Partial NaN → not all-zero → not ACTUAL_ZERO.
+        assert xt_bucket["actual_zero_rows"] == 0
+
+    def test_actual_zero_count_in_bucket_with_mixed_rows(
+        self, tmp_path
+    ) -> None:
+        """When a bucket has multiple rows, only the rows that satisfy
+        all ACTUAL_ZERO conditions are counted. This verifies the
+        per-row masking logic: a bucket with one genuine-zero row and
+        one non-zero row reports ``actual_zero_rows == 1``, not 2.
+        """
+        _write_player_match(tmp_path)
+        _write_feature_matrix(
+            tmp_path,
+            rows=[
+                {
+                    "player_id": "p1",
+                    "data_granularity": "match",
+                    "source_name": "statsbomb_open",
+                    # Row 1: all xT_VAEP 0 → ACTUAL_ZERO.
+                    "xt_total": 0.0,
+                    "xt_per_90": 0.0,
+                    "vaep_total": 0.0,
+                    "vaep_per_90": 0.0,
+                    "xT_VAEP_missing": False,
+                    "tackles": 5.0,
+                    "interceptions": 3.0,
+                    "defense_missing": False,
+                },
+                {
+                    "player_id": "p2",
+                    "data_granularity": "match",
+                    "source_name": "statsbomb_open",
+                    # Row 2: xT_VAEP has data → not ACTUAL_ZERO.
+                    "xt_total": 0.5,
+                    "xt_per_90": 0.05,
+                    "vaep_total": 0.1,
+                    "vaep_per_90": 0.01,
+                    "xT_VAEP_missing": False,
+                    "tackles": 2.0,
+                    "interceptions": 1.0,
+                    "defense_missing": False,
+                },
+            ],
+        )
+        settings = PlatformSettings.from_root(tmp_path)
+        report = build_grain_and_missingness_report(settings=settings)
+        groups = report["feature_group_missingness"]["evidence"]["field_groups"]
+        xt_bucket = groups["xT_VAEP"]["bucket_breakdown"][
+            f"{EvidenceGrain.MATCH.value}|statsbomb_open"
+        ]
+        # 2 rows in bucket, 1 genuine-zero, 1 with data.
+        assert xt_bucket["bucket_rows"] == 2
+        assert xt_bucket["missing_rows"] == 0
+        assert xt_bucket["actual_zero_rows"] == 1
+
     def test_feature_matrix_without_grain_columns_falls_back_to_unknown(
         self, tmp_path
     ) -> None:

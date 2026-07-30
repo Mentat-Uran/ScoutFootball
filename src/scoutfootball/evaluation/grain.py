@@ -326,11 +326,16 @@ def build_grain_and_missingness_report(
                 "guessed; this surfaces grain-vocabulary drift."
             ),
             (
-                "MissingReason.ACTUAL_ZERO is not auto-detected here: "
-                "distinguishing genuine 0 from imputed 0 requires the "
-                "source-level event join planned for a later slice. "
-                "The enum is included so downstream code can label "
-                "rows correctly when that evidence exists."
+                "MissingReason.ACTUAL_ZERO is partially auto-detected: "
+                "the audit counts event-level fields that are exactly 0 "
+                "on match-grain rows from event-level sources (where "
+                "the 0 can be trusted as a true observation rather than "
+                "an imputed value) and reports them as "
+                "``actual_zero_rows`` in each bucket. Detection does "
+                "not cover season-proxy or aggregate rows, where a 0 "
+                "may still be an aggregation artefact or imputation "
+                "result; those remain classified by their "
+                "{group}_missing marker."
             ),
         ],
     }
@@ -514,6 +519,35 @@ def _audit_feature_matrix_missingness(settings: PlatformSettings) -> dict[str, A
             missing_count = int(missing_mask.sum())
             bucket_total = int(len(sub))
 
+            # Detect ACTUAL_ZERO: event-level fields on match-level rows
+            # from event-level sources where all present fields are 0
+            # (not NaN) and the row was not marked as missing. This
+            # distinguishes "player genuinely did 0 of this action in
+            # this match" from "field was missing and filled to 0 by
+            # imputation". Only applies to event-level groups on
+            # match-grain rows from event-level sources, because only
+            # there can we trust a 0 to be a true observation rather
+            # than an aggregated or imputed value.
+            actual_zero_count = 0
+            if (
+                group_name in EVENT_LEVEL_GROUPS
+                and grain == EvidenceGrain.MATCH
+                and (source or "") in EVENT_LEVEL_SOURCES
+                and present_fields
+            ):
+                # Rows that are NOT missing (marker False or absent).
+                non_missing_mask = ~missing_mask
+                if marker_present:
+                    non_missing_mask = non_missing_mask & (
+                        ~df.loc[sub.index, missing_marker].astype(bool)
+                    )
+                # Among non-missing rows, count those where all present
+                # fields are exactly 0. NaN is not 0, so missing values
+                # do not inflate the count.
+                sub_fields = df.loc[sub.index, present_fields]
+                all_zero = (sub_fields == 0).all(axis=1) & sub_fields.notna().all(axis=1)
+                actual_zero_count = int((non_missing_mask & all_zero).sum())
+
             reason: MissingReason
             if missing_count == 0:
                 # No missing rows in this bucket — nothing to classify.
@@ -538,6 +572,7 @@ def _audit_feature_matrix_missingness(settings: PlatformSettings) -> dict[str, A
                 "missing_rows": missing_count,
                 "missing_rate": round(missing_count / bucket_total, 4) if bucket_total else 0.0,
                 "missing_reason": reason.value if missing_count > 0 else None,
+                "actual_zero_rows": actual_zero_count,
             }
 
         groups[group_name] = {

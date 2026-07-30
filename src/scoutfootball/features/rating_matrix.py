@@ -104,6 +104,15 @@ RATING_MATRIX_COLUMN_SOURCES: dict[str, str] = {
     "xt_per_90": "metric",
     "vaep_total": "metric",
     "vaep_per_90": "metric",
+    # Grain/source metadata carried forward from player_match (PRS-1
+    # R-006/R-007). These are meta columns, not metrics: they describe
+    # the row's evidence grain and source provenance so downstream grain
+    # audit can classify missingness (NOT_RECORDED vs NOT_APPLICABLE vs
+    # ACTUAL_ZERO) without guessing from the field values alone.
+    "data_granularity": "meta",
+    "source_name": "meta",
+    "data_granularity_set": "meta",
+    "source_name_set": "meta",
     # Missing-field and source-coverage flags written by the rating
     # matrix builder itself (not read from any external source).
 }
@@ -342,12 +351,51 @@ def build_rating_feature_matrix(
     for col in first_cols:
         agg_dict[col] = "first"
 
+    # Carry grain/source columns forward from player_match so the feature
+    # matrix exposes per-row grain information to downstream grain audit
+    # (PRS-1 R-006/R-007). Use "first" aggregation matching player_name/
+    # team_name semantics; the _set columns below record the full set of
+    # grains/sources for the player-season so a future cross-grain row
+    # (e.g. statsbomb match-level + understat season-proxy for the same
+    # player-season) is visible rather than silently collapsed.
+    for meta_col in ("data_granularity", "source_name"):
+        if meta_col in pm.columns:
+            agg_dict[meta_col] = "first"
+
     # Missing flags: any True means the group was missing for at least one match
     missing_flag_cols = [c for c in pm.columns if c.endswith("_missing")]
     for col in missing_flag_cols:
         agg_dict[col] = "max"  # True > False, so max = any True
 
     matrix = pm.groupby(["player_id", "season_id"], as_index=False).agg(agg_dict)
+
+    # Record the full set of grains/sources for each player-season. Current
+    # data has exactly 1 grain and 1 source per player-season, but this is
+    # defensive: if a future cross-grain/source join produces a player-season
+    # with mixed grains, the _set column surfaces that while "first" only
+    # shows one. Empty string when the column is absent or all values are
+    # NaN so downstream string consumers do not see NaN.
+    if "data_granularity" in pm.columns:
+        grain_set = (
+            pm.groupby(["player_id", "season_id"])["data_granularity"]
+            .apply(lambda s: "|".join(sorted(set(str(v) for v in s.dropna()))))
+            .reset_index(name="data_granularity_set")
+        )
+        matrix = matrix.merge(grain_set, on=["player_id", "season_id"], how="left")
+        matrix["data_granularity_set"] = matrix["data_granularity_set"].fillna("")
+    else:
+        matrix["data_granularity_set"] = ""
+
+    if "source_name" in pm.columns:
+        source_set = (
+            pm.groupby(["player_id", "season_id"])["source_name"]
+            .apply(lambda s: "|".join(sorted(set(str(v) for v in s.dropna()))))
+            .reset_index(name="source_name_set")
+        )
+        matrix = matrix.merge(source_set, on=["player_id", "season_id"], how="left")
+        matrix["source_name_set"] = matrix["source_name_set"].fillna("")
+    else:
+        matrix["source_name_set"] = ""
 
     # --- Merge FBref misc defensive stats ---
     matrix = _merge_fbref_misc_defense(matrix)

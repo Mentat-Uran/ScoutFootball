@@ -2,7 +2,7 @@
   "artifact": "rating_feature_matrix",
   "schema_version": "1.0",
   "total_rows": 26678,
-  "column_count": 40,
+  "column_count": 44,
   "columns": [
     {
       "name": "player_id",
@@ -119,6 +119,18 @@
       "missing_rate": 0.0
     },
     {
+      "name": "data_granularity",
+      "dtype": "object",
+      "source": "meta",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "source_name",
+      "dtype": "object",
+      "source": "meta",
+      "missing_rate": 0.0
+    },
+    {
       "name": "defense_missing",
       "dtype": "bool",
       "source": "missing_marker",
@@ -140,6 +152,18 @@
       "name": "goalkeeper_missing",
       "dtype": "bool",
       "source": "missing_marker",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "data_granularity_set",
+      "dtype": "object",
+      "source": "meta",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "source_name_set",
+      "dtype": "object",
+      "source": "meta",
       "missing_rate": 0.0
     },
     {
@@ -245,7 +269,7 @@
       "missing_rate": 0.0
     }
   ],
-  "input_hash": "c451edbe28686715",
+  "input_hash": "f99e244c8f40fe15",
   "source_lineage": [
     {
       "name": "player_match",
@@ -262,5 +286,5 @@
       "notes": null
     }
   ],
-  "timestamp": "2026-07-26T19:06:30.117320+00:00"
+  "timestamp": "2026-07-30T17:22:36.103375+00:00"
 }
