@@ -258,6 +258,27 @@ def _read_player_match(settings: PlatformSettings):
     return df, None
 
 
+def _player_ratings_path(settings: PlatformSettings):
+    """Path to the legacy optimized ratings parquet."""
+    return settings.gold_root / "feature_store" / "player_ratings_optimized.parquet"
+
+
+def _read_player_ratings(settings: PlatformSettings):
+    """Read player_ratings_optimized.parquet; return (df, error_message)."""
+    path = _player_ratings_path(settings)
+    if not path.exists():
+        return None, "player_ratings_optimized.parquet missing"
+    try:
+        import pandas as pd
+
+        df = pd.read_parquet(path)
+    except Exception as exc:  # noqa: BLE001 — read-only diagnostic
+        return None, f"player_ratings_optimized.parquet read failed: {exc}"
+    if df is None or len(df) == 0:
+        return None, "player_ratings_optimized.parquet has 0 rows"
+    return df, None
+
+
 def load_resolved_player_match(
     settings: PlatformSettings | None = None,
 ) -> Any:
@@ -279,6 +300,126 @@ def load_resolved_player_match(
         raise ValueError(f"canonical_resolver_load_failed:{error}")
     records = read_registry(settings=resolved)
     return resolve_canonical_ids(df, records)
+
+
+def load_resolved_player_ratings(
+    settings: PlatformSettings | None = None,
+) -> Any:
+    """Load ``player_ratings_optimized.parquet`` and return a resolved view.
+
+    The returned DataFrame is a copy of the legacy ratings table with
+    ``player_id``, ``source_name``, ``canonical_player_id`` and
+    ``canonical_match_ambiguous`` columns added. The original parquet is
+    never modified.
+
+    PRS-1 R-005 requires that ``canonical_player_id`` runs through every
+    rating artifact. The legacy ratings table does not carry ``player_id``
+    or ``source_name`` (it only has the human-readable ``player`` column),
+    so this function recovers the source key pair by joining to
+    ``player_match.parquet`` on ``(player, season)`` →
+    ``(player_name, season_id)`` and then applying the identity registry's
+    active mappings via ``resolve_canonical_ids``.
+
+    When multiple ``player_match`` rows match the same
+    ``(player_name, season_id)`` (the same-name aliasing risk documented in
+    the PRS-1 identity audit), the first match is used for the source key
+    and the row is flagged with ``canonical_match_ambiguous=True`` so
+    downstream consumers can detect the aliasing risk instead of trusting
+    the canonical ID silently. Rows without any match get
+    ``player_id=None``, ``source_name=None`` and
+    ``canonical_player_id=unresolved:unknown:missing`` (the defensive
+    fallback in ``resolve_canonical_ids``).
+
+    Raises ``ValueError`` if ``player_ratings_optimized.parquet`` is
+    missing, empty or unreadable. A missing or unreadable
+    ``player_match.parquet`` is not fatal: every row gets
+    ``canonical_player_id=unresolved:unknown:missing`` so the legacy
+    ratings table is still honest about its unresolved state.
+    """
+    import pandas as pd
+
+    from scoutfootball.evaluation.identity_registry import read_registry
+
+    resolved = settings or PlatformSettings.from_root()
+    ratings_df, error = _read_player_ratings(resolved)
+    if ratings_df is None:
+        raise ValueError(f"canonical_resolver_load_failed:{error}")
+
+    # Defensive: if the ratings table already carries a canonical_player_id
+    # column, the caller must drop it first. The resolver never silently
+    # overwrites an existing canonical decision.
+    if DEFAULT_CANONICAL_COL in ratings_df.columns:
+        raise ValueError(
+            "canonical_resolver_input_already_has_column:"
+            f"{DEFAULT_CANONICAL_COL}"
+        )
+
+    pm_df, pm_error = _read_player_match(resolved)
+
+    if pm_df is None:
+        # No player_match — every row gets unresolved:unknown:missing.
+        # This is the honest fallback: we cannot recover the source key
+        # without player_match, so we do not pretend to.
+        ratings_df[DEFAULT_SOURCE_PLAYER_ID_COL] = None
+        ratings_df[DEFAULT_SOURCE_NAME_COL] = None
+        ratings_df["canonical_match_ambiguous"] = False
+        records = read_registry(settings=resolved)
+        return resolve_canonical_ids(ratings_df, records)
+
+    # Build (player_name, season_id) → (player_id, source_name, match_count)
+    # map from player_match. We only need the key columns; drop NaN keys
+    # so they do not produce false matches.
+    pm_keys = pm_df[
+        ["player_name", "season_id", DEFAULT_SOURCE_PLAYER_ID_COL, DEFAULT_SOURCE_NAME_COL]
+    ].copy()
+    pm_keys["player_name"] = pm_keys["player_name"].astype(str)
+    pm_keys["season_id"] = pm_keys["season_id"].astype(str)
+    pm_keys = pm_keys.replace({"nan": pd.NA})
+    pm_keys = pm_keys.dropna(subset=["player_name", "season_id"])
+
+    pm_grouped = pm_keys.groupby(["player_name", "season_id"], observed=True)
+    pm_first = pm_grouped.first().reset_index()
+    pm_counts = pm_grouped.size().reset_index(name="_pm_match_count")
+    pm_map = pm_first.merge(pm_counts, on=["player_name", "season_id"])
+
+    # Join ratings to the player_match map. The ratings table uses
+    # ``player`` + ``season`` as the human-readable key; player_match uses
+    # ``player_name`` + ``season_id``. We normalise both to strings so
+    # numeric season IDs (e.g. 2021) match their string counterparts.
+    out = ratings_df.copy()
+    out["player"] = out["player"].astype(str)
+    out["season"] = out["season"].astype(str)
+    out = out.replace({"nan": pd.NA})
+
+    out = out.merge(
+        pm_map[
+            [
+                "player_name",
+                "season_id",
+                DEFAULT_SOURCE_PLAYER_ID_COL,
+                DEFAULT_SOURCE_NAME_COL,
+                "_pm_match_count",
+            ]
+        ],
+        left_on=["player", "season"],
+        right_on=["player_name", "season_id"],
+        how="left",
+    )
+
+    # Flag ambiguous matches (multiple player_ids for same player_name +
+    # season). The first match was used for the source key; downstream
+    # consumers must not trust the canonical ID silently on these rows.
+    out["canonical_match_ambiguous"] = out["_pm_match_count"].fillna(0).gt(1)
+
+    # Drop the join helper columns; keep player_id and source_name so
+    # resolve_canonical_ids can use them as the business key.
+    out = out.drop(
+        columns=["player_name", "season_id", "_pm_match_count"],
+        errors="ignore",
+    )
+
+    records = read_registry(settings=resolved)
+    return resolve_canonical_ids(out, records)
 
 
 def build_canonical_resolution_report(
@@ -346,6 +487,7 @@ __all__ = [
     "build_canonical_resolution_report",
     "is_unresolved",
     "load_resolved_player_match",
+    "load_resolved_player_ratings",
     "resolution_summary",
     "resolve_canonical_ids",
     "unresolved_canonical_id",

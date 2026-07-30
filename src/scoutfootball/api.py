@@ -107,6 +107,42 @@ def _read_parquet(path: Path):
         con.close()
 
 
+def _infer_evidence_grain(df: pd.DataFrame | None) -> str:
+    """Infer the evidence grain of a ratings or value frame (PRS-1 R-006).
+
+    Returns the grain string used by the PRS-1 grain audit:
+    - ``"match"`` if the frame carries per-match rows
+      (``data_granularity == "match"``).
+    - ``"season_proxy"`` if the frame carries season-aggregated rows.
+    - ``"unknown"`` if the grain cannot be determined.
+
+    The legacy ``player_ratings_optimized.parquet`` does not carry a
+    ``data_granularity`` column, but it is built from season-proxy
+    inputs (one row per player-season), so we infer ``"season_proxy"``
+    when the column is missing but the frame looks like a
+    season-aggregated ratings table (has ``player`` + ``season``
+    columns). This keeps the legacy artifact honest in API responses
+    until PRS-2 baselines replace it with a grain-stamped successor.
+    """
+    if df is None or df.empty:
+        return "unknown"
+    if "data_granularity" in df.columns:
+        grains = df["data_granularity"].dropna().unique().tolist()
+        if not grains:
+            return "unknown"
+        if len(grains) == 1:
+            return str(grains[0])
+        # Mixed grain — return the set joined by | for transparency,
+        # matching the data_granularity_set convention in rating_matrix.
+        return "|".join(sorted(str(g) for g in grains))
+    # Legacy ratings table without data_granularity column.
+    # player_ratings_optimized is built from season-proxy inputs
+    # (one row per player-season), so we infer "season_proxy".
+    if "player" in df.columns and "season" in df.columns:
+        return "season_proxy"
+    return "unknown"
+
+
 # ── World Cup data cache ──────────────────────────────────────────
 _wc_cache = _TTLCache()
 _WC_ENRICHED_KEY = "wc_enriched"
@@ -5643,6 +5679,9 @@ def get_value_summary() -> dict:
     return _clean_json_value({
         "status": "demo" if is_synthetic else "ok",
         "data_mode": "synthetic" if is_synthetic else "artifact",
+        # PRS-1 R-006: stamp the evidence grain so season-proxy OOF data
+        # cannot be mistaken for match-level evidence in the UI/exports.
+        "evidence_grain": _infer_evidence_grain(oof),
         "sample_count": len(oof),
         "fairness_distribution": oof["fairness_label"].value_counts().to_dict()
         if "fairness_label" in oof.columns
@@ -5687,6 +5726,9 @@ def get_player_ratings(
         "count": len(players),
         "players": players,
         "data_mode": "synthetic" if synthetic else "artifact",
+        # PRS-1 R-006: stamp the evidence grain so season-proxy ratings
+        # cannot be mistaken for match-level evidence in the UI/exports.
+        "evidence_grain": _infer_evidence_grain(df),
     })
 
 
@@ -7548,6 +7590,9 @@ def get_player_profile(
             "limit": limit,
             "players": player_list,
             "data_mode": "synthetic" if frame_is_synthetic(df) else "artifact",
+            # PRS-1 R-006: stamp the evidence grain so season-proxy ratings
+            # cannot be mistaken for match-level evidence in the UI/exports.
+            "evidence_grain": _infer_evidence_grain(df),
         })
 
     if rows.empty:
@@ -7690,6 +7735,9 @@ def get_player_profile(
         "low_confidence_reasons": _compute_low_confidence_reasons(row),
         "trend_3seasons": _compute_3season_trend(rows),
         "data_mode": "synthetic" if frame_is_synthetic(df) else "artifact",
+        # PRS-1 R-006: stamp the evidence grain so season-proxy ratings
+        # cannot be mistaken for match-level evidence in the UI/exports.
+        "evidence_grain": _infer_evidence_grain(df),
     })
 
     # Embed career intelligence blocks. Each block is wrapped in a

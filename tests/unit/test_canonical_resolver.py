@@ -38,6 +38,7 @@ from scoutfootball.evaluation.canonical_resolver import (
     build_canonical_resolution_report,
     is_unresolved,
     load_resolved_player_match,
+    load_resolved_player_ratings,
     resolution_summary,
     resolve_canonical_ids,
     unresolved_canonical_id,
@@ -92,6 +93,29 @@ def _write_player_match(root, df: pd.DataFrame | None = None) -> None:
     path = root / "data" / "gold" / "feature_store" / "player_match.parquet"
     path.parent.mkdir(parents=True, exist_ok=True)
     (df if df is not None else _sample_df()).to_parquet(path, index=False)
+
+
+def _sample_ratings_df(**overrides) -> pd.DataFrame:
+    """Return a small player_ratings_optimized-shaped DataFrame.
+
+    The legacy ratings table only carries the human-readable ``player`` +
+    ``season`` columns (no ``player_id`` / ``source_name``). The resolver
+    recovers the source key by joining to ``player_match.parquet`` on
+    ``(player, season)`` → ``(player_name, season_id)``.
+    """
+    base = {
+        "player": ["Lara", "Marco", "Unmatched Player", "Martin"],
+        "season": ["2425"] * 4,
+        "rating": [7.1, 6.8, 5.5, 6.4],
+    }
+    base.update(overrides)
+    return pd.DataFrame(base)
+
+
+def _write_player_ratings(root, df: pd.DataFrame | None = None) -> None:
+    path = root / "data" / "gold" / "feature_store" / "player_ratings_optimized.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    (df if df is not None else _sample_ratings_df()).to_parquet(path, index=False)
 
 
 # ---------------------------------------------------------------------------
@@ -641,6 +665,189 @@ class TestLoadResolvedPlayerMatch:
         # Other rows still unresolved.
         other_rows = out[out["player_id"] != "understat|12345"]
         assert other_rows["canonical_player_id"].apply(is_unresolved).all()
+
+
+# ---------------------------------------------------------------------------
+# load_resolved_player_ratings (PRS-1 slice 8b)
+# ---------------------------------------------------------------------------
+
+
+class TestLoadResolvedPlayerRatings:
+    """The legacy ratings table only carries ``player`` + ``season``. The
+    resolver recovers the source key by joining to ``player_match.parquet``
+    on ``(player, season)`` → ``(player_name, season_id)`` and then applies
+    the identity registry's active mappings.
+
+    These tests pin the join contract and the honest fallbacks documented
+    in the ``load_resolved_player_ratings`` docstring.
+    """
+
+    def test_raises_on_missing_ratings_parquet(self, tmp_path) -> None:
+        """No player_ratings_optimized.parquet → ValueError (the ratings
+        table is the primary input; without it there is nothing to
+        resolve)."""
+        settings = PlatformSettings.from_root(tmp_path)
+        with pytest.raises(ValueError, match="canonical_resolver_load_failed"):
+            load_resolved_player_ratings(settings=settings)
+
+    def test_raises_on_empty_ratings_parquet(self, tmp_path) -> None:
+        _write_player_ratings(tmp_path, df=pd.DataFrame({"player": [], "season": []}))
+        settings = PlatformSettings.from_root(tmp_path)
+        with pytest.raises(ValueError, match="0 rows"):
+            load_resolved_player_ratings(settings=settings)
+
+    def test_raises_when_ratings_already_has_canonical_col(self, tmp_path) -> None:
+        """The resolver never silently overwrites an existing canonical
+        decision. If the ratings table already carries the column, the
+        caller must drop it first."""
+        ratings = _sample_ratings_df()
+        ratings["canonical_player_id"] = "preset"
+        _write_player_ratings(tmp_path, df=ratings)
+        _write_player_match(tmp_path)
+        settings = PlatformSettings.from_root(tmp_path)
+        with pytest.raises(
+            ValueError, match="canonical_resolver_input_already_has_column"
+        ):
+            load_resolved_player_ratings(settings=settings)
+
+    def test_missing_player_match_falls_back_to_unresolved_unknown_missing(
+        self, tmp_path
+    ) -> None:
+        """When player_match.parquet is unavailable, the resolver cannot
+        recover the source key. Every row gets the explicit
+        ``unresolved:unknown:missing`` marker so downstream consumers see
+        the unresolved state instead of trusting a source-specific ID."""
+        _write_player_ratings(tmp_path)
+        settings = PlatformSettings.from_root(tmp_path)
+        out = load_resolved_player_ratings(settings=settings)
+        assert isinstance(out, pd.DataFrame)
+        assert "canonical_player_id" in out.columns
+        assert "player_id" in out.columns
+        assert "source_name" in out.columns
+        assert "canonical_match_ambiguous" in out.columns
+        # All rows honestly report unresolved:unknown:missing.
+        assert (out["canonical_player_id"] == "unresolved:unknown:missing").all()
+        # No source key recovered.
+        assert out["player_id"].isna().all()
+        assert out["source_name"].isna().all()
+        # Ambiguous flag is False (no join happened).
+        assert (~out["canonical_match_ambiguous"]).all()
+
+    def test_join_recovers_source_key_for_matched_rows(self, tmp_path) -> None:
+        """Ratings rows whose (player, season) matches a player_match row
+        inherit that row's ``player_id`` + ``source_name`` and get a
+        resolved canonical_player_id when the registry has an active
+        confirmed mapping for the recovered key."""
+        _write_player_match(tmp_path)
+        _write_player_ratings(tmp_path)
+        settings = PlatformSettings.from_root(tmp_path)
+        # Confirm a mapping for Marco's understat key (from _sample_df).
+        append_decision(
+            _confirmed_record(
+                source_name="understat",
+                source_player_id="understat|12345",
+                canonical_player_id="canonical:marco",
+                revision=1,
+            ),
+            settings=settings,
+        )
+        out = load_resolved_player_ratings(settings=settings)
+        # Marco's row recovered the source key and got the canonical ID.
+        marco = out[out["player"] == "Marco"].iloc[0]
+        assert marco["player_id"] == "understat|12345"
+        assert marco["source_name"] == "understat"
+        assert marco["canonical_player_id"] == "canonical:marco"
+        assert marco["canonical_match_ambiguous"] is False or bool(
+            marco["canonical_match_ambiguous"]
+        ) is False
+        # Lara also matched player_match (fbref|lara|1998|ar) but has no
+        # registry mapping, so she stays unresolved with the source key.
+        lara = out[out["player"] == "Lara"].iloc[0]
+        assert lara["player_id"] == "lara|1998|ar"
+        assert lara["source_name"] == "fbref"
+        assert is_unresolved(lara["canonical_player_id"])
+        assert lara["canonical_player_id"] == "unresolved:fbref:lara|1998|ar"
+
+    def test_unmatched_ratings_row_gets_unresolved_unknown_missing(
+        self, tmp_path
+    ) -> None:
+        """A ratings row with no (player, season) match in player_match
+        cannot recover its source key. It gets the defensive
+        ``unresolved:unknown:missing`` marker (the same fallback used
+        when player_match.parquet is missing entirely)."""
+        _write_player_match(tmp_path)
+        _write_player_ratings(tmp_path)
+        settings = PlatformSettings.from_root(tmp_path)
+        out = load_resolved_player_ratings(settings=settings)
+        unmatched = out[out["player"] == "Unmatched Player"].iloc[0]
+        assert unmatched["canonical_player_id"] == "unresolved:unknown:missing"
+        # Source key is NaN — the join did not recover anything.
+        assert pd.isna(unmatched["player_id"])
+        assert pd.isna(unmatched["source_name"])
+
+    def test_ambiguous_match_flagged(self, tmp_path) -> None:
+        """When multiple player_match rows share the same
+        (player_name, season_id), the first match's source key is used
+        but the row is flagged ``canonical_match_ambiguous=True`` so
+        downstream consumers do not trust the canonical ID silently."""
+        # Two player_match rows for "Lara" in season "2425" with
+        # different source keys (the same-name aliasing risk documented
+        # in the PRS-1 identity audit).
+        pm_df = pd.DataFrame(
+            {
+                "source_name": ["fbref", "understat"],
+                "player_id": ["lara|1998|ar", "lara|1998|ar_duplicate"],
+                "player_name": ["Lara", "Lara"],
+                "season_id": ["2425", "2425"],
+            }
+        )
+        _write_player_match(tmp_path, df=pm_df)
+        _write_player_ratings(tmp_path)
+        settings = PlatformSettings.from_root(tmp_path)
+        out = load_resolved_player_ratings(settings=settings)
+        lara = out[out["player"] == "Lara"].iloc[0]
+        assert bool(lara["canonical_match_ambiguous"]) is True
+
+    def test_empty_registry_marks_all_matched_rows_unresolved(self, tmp_path) -> None:
+        """With no confirmed mappings, matched rows keep the source-stable
+        ``unresolved:<source>:<id>`` marker (not unresolved:unknown:missing,
+        because the source key was successfully recovered)."""
+        _write_player_match(tmp_path)
+        _write_player_ratings(tmp_path)
+        settings = PlatformSettings.from_root(tmp_path)
+        out = load_resolved_player_ratings(settings=settings)
+        marco = out[out["player"] == "Marco"].iloc[0]
+        assert marco["canonical_player_id"] == "unresolved:understat:understat|12345"
+
+    def test_input_ratings_not_mutated(self, tmp_path) -> None:
+        _write_player_match(tmp_path)
+        _write_player_ratings(tmp_path)
+        settings = PlatformSettings.from_root(tmp_path)
+        ratings_path = (
+            tmp_path / "data" / "gold" / "feature_store" / "player_ratings_optimized.parquet"
+        )
+        before = ratings_path.read_bytes()
+        load_resolved_player_ratings(settings=settings)
+        assert ratings_path.read_bytes() == before
+
+    def test_round_trip_with_registry(self, tmp_path) -> None:
+        """Append a confirmed mapping → load_resolved_player_ratings
+        reflects it on the matching ratings row."""
+        _write_player_match(tmp_path)
+        _write_player_ratings(tmp_path)
+        settings = PlatformSettings.from_root(tmp_path)
+        append_decision(
+            _confirmed_record(
+                source_name="fbref",
+                source_player_id="lara|1998|ar",
+                canonical_player_id="canonical:lara",
+                revision=1,
+            ),
+            settings=settings,
+        )
+        out = load_resolved_player_ratings(settings=settings)
+        lara = out[out["player"] == "Lara"].iloc[0]
+        assert lara["canonical_player_id"] == "canonical:lara"
 
 
 # ---------------------------------------------------------------------------
