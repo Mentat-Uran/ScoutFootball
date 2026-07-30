@@ -81,7 +81,14 @@
 - [x] 9 个新单元测试覆盖 statsbomb season_id/competition_id 填充（`tests/unit/test_pipeline_statsbomb.py`）：season_name→season_id 转换（"2019/2020"→"1920"、"2024/2025"→"2425"、不可解析→NaN、缺 season_name 列→保留原 season_id）；competition_name→competition_id 映射（La Liga→ESP-La Liga、5 大联赛全覆盖、未映射→保留原 competition_id）；端到端聚合验证（statsbomb 行不被 NaN season_id 丢弃、不可解析 season_name→行被 groupby 丢弃的诚实失败模式）。
 - [x] 发现并记录既有数据质量缺口：94 条 statsbomb_open match-level 行的 `player_id` 为数值格式（如 "10605"），与 understat/fbref 的字符串 `"name|year|country"` 格式不一致。当前 69 个 statsbomb player-season 作为独立行出现在 feature matrix 中，未与同球员的 fbref/understat season-proxy 行合并。这是 canonical 主键解析的前置依赖问题，留给后续 PRS-1 切片（canonical 主键统一）处理。grain audit 的 `player_match_grain` section 如实报告这 94 行的存在和 3 个 source 的分布。
 
-退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-4 已交付 typed enums、只读 grain/missingness 审计、canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary）、canonical 主键解析器（source-stable fallback + research-health 集成）和 event-level source join（grain/source 透传 + ACTUAL_ZERO 部分检测），不触及 cohort 协议和角色体系——它们解锁 PRS-2/PRS-3，必须单独切片验证。
+切片 5：canonical 映射建议工具（2026-07-31）。
+
+- [x] `identity_suggest.py`：只读工具，交叉引用 statsbomb 球员与 fbref/understat 球员，通过标准化名称（`normalize_person_name` 去重音、小写、去非字母数字）+ 球队（`normalize_team_name` 别名映射）+ 赛季+联赛范围匹配，输出候选 canonical 映射供人工复核。置信度分级：`high`（名称+球队+赛季匹配）、`medium`（名称+赛季匹配，球队不同——可能转会或词汇差异）、`no_match`（同赛季+联赛内无标准化名称匹配）。不自动应用映射，不修改 registry。（`src/scoutfootball/evaluation/identity_suggest.py`）
+- [x] CLI 入口 `suggest-identity-mappings`：支持 `--json`（机器可读）、`--unmatched-only`（仅显示无匹配球员，用于人工复核优先级）。人类可读模式输出匹配候选、无匹配列表和限制声明。（`src/scoutfootball/__main__.py`）
+- [x] 15 个单元测试覆盖：精确名称+球队匹配（high）、名称匹配球队不同（medium）、无匹配、空数据、无 statsbomb 行、缺文件、缺 season_id、多候选全部报告、不同赛季/联赛排除、标准化（去重音/大小写）、限制声明非空、无 fuzzy matching 限制文档化、全名 vs 短名不匹配。（`tests/unit/test_identity_suggest.py`）
+- [x] 真实数据验证：69 个 statsbomb 球员中 10 个高置信度匹配（主要 Barcelona 球员：ter Stegen、Dembélé、Griezmann、Frenkie de Jong 等），59 个无匹配（主要是 statsbomb 全名 vs understat 常用名差异，如 "Lionel Andrés Messi Cuccittini" vs "Lionel Messi"、"Sergio Busquets i Burgos" vs "Sergio Busquets"）。工具如实报告无匹配，不猜测。10 个高置信度匹配可直接通过 `identity-registry-append` CLI 确认录入 registry。
+
+退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。切片 1-5 已交付 typed enums、只读 grain/missingness 审计、canonical 身份映射注册表基础设施（人工录入入口 + lookup/summary）、canonical 主键解析器（source-stable fallback + research-health 集成）、event-level source join（grain/source 透传 + ACTUAL_ZERO 部分检测）和 canonical 映射建议工具（精确标准化名称匹配 + 人工复核入口），不触及 cohort 协议和角色体系——它们解锁 PRS-2/PRS-3，必须单独切片验证。
 
 ### 后续专项节点
 
