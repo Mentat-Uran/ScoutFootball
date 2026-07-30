@@ -37,11 +37,30 @@
 
 **verified 证据（2026-07-31）**：`scoutfootball research-health` 在数秒内返回 `verdict=not_ready` 并列出 4 条 blocking_reasons（`lineage_health: unverified`——active rating 是无激活模型 run 的 legacy 产物；`model_reviewability: no_reviewable_runs`——41 个 run 中 0 个 reviewable；`active_rating_freshness: unverified`——同根因；`research_readiness: blocked`——29,723 条标签全部为 `expert_tier`，独立合格监督标签 0 行）。五层健康中 `storage_health=ok`（4 个核心产物全部存在且可读），其余四层按真实状态降级，任何一层失败都不被顶层隐藏。这满足退出门槛：系统明确拒绝把不可复核、过期、标签不独立的状态写成 ready，并给出具体原因。PRS-0 的目标是"止血"（让系统诚实报告当前状态），不是让当前评分变 ready——后者依赖 PRS-1+ 的身份、粒度、标签和重训练工作。本地验证：`ruff check .` All checks passed；`scripts/check-rating-fast.ps1` ruff + 290 个评分核心单元测试通过。
 
+### PRS-1：身份、粒度和 cohort 内核 — `in_progress`
+
+切片 1：观测粒度和缺失原因 typed enums（2026-07-31）。
+
+- [x] 定义 `EvidenceGrain`（match / season_proxy / aggregate / unknown）、`ObservationType`（observed / aggregated / proxy / estimated / not_recorded）、`MissingReason`（not_recorded / not_applicable / not_available / filtered / actual_zero / unknown）三个 `StrEnum`，作为后续 PRS-1 切片（canonical 主键、cohort、角色体系）和 PRS-2 baseline 切片的公共词汇。（`src/scoutfootball/evaluation/grain.py`）
+- [x] 实现只读 `build_grain_and_missingness_report(settings)`：基于 `player_match.parquet` 的 `data_granularity` / `source_name` 列分类每行 grain，基于 `rating_feature_matrix.parquet` 的 FIELD_GROUPS 和 `*_missing` 标记分类每个 field-group 的 MissingReason；不修改任何产物。（PRS-1 R-006/R-007）
+- [x] 把 grain 和 missingness 审计接入 `research-health` 报告，作为 `grain_and_missingness` 证据 section；在 limitations 中诚实声明 `ACTUAL_ZERO` 当前不可自动检测（需 source-level event join，留给后续 PRS-1 切片）。
+- [x] 覆盖空数据、缺列、未知 grain、event-level group 在不同 grain/source/marker 组合下的分类路径；确保未知 grain 场景返回 `UNKNOWN` 而非猜测。（`tests/unit/test_grain.py` 44 个单元测试，包括枚举稳定性、classify_grain/classify_observation/classify_missing_reason 全部分支、报告结构和 research-health 集成）
+- [x] 本地烟雾测试：当前真实数据下 `grain_and_missingness.player_match_grain` 返回 match/season_proxy/aggregate 三类分布；`feature_group_missingness` 对 `xT_VAEP`/`goalkeeper` 等 event-level group 在 `rating_feature_matrix.parquet` 缺少 `data_granularity`/`source_name` 时返回 `unknown` 而非 `not_applicable`/`not_recorded`，诚实暴露当前 feature matrix 没有把 grain 信息从 `player_match.parquet` 透传的缺口。
+
+未完成切片（仍 `in_progress`，不进入 verified）：
+
+- [ ] canonical 主键：定义并落地 `canonical_player_id` 与转会/同名解析协议（R-005 风险已由 PRS-0 `identity_audit` 暴露，本切片需提供解析器而非只读审计）。
+- [ ] cohort 内核：基于 canonical 主键 + grain + 角色体系 v1，构建可复用的 cohort 定义、过滤和快照协议。
+- [ ] 角色体系 v1：在 grain 之上定义位置/角色分组，为 PRS-2 角色内 baseline 提供输入。
+- [ ] event-level source join：把 `data_granularity` / `source_name` 透传到 `rating_feature_matrix.parquet`，并把 `ACTUAL_ZERO` 与 `NOT_RECORDED` 在 source-level event join 上区分。
+
+退出门槛：canonical 主键可解析转会/同名；cohort 定义可复用于 PRS-2 baseline 和 PRS-3 标签工作台；grain 和 missingness 在 feature matrix 上一致可读；角色体系 v1 可承载 PRS-2 角色内 baseline 切片。本切片只交付 typed enums 和只读审计，不触及 canonical 主键和 cohort 协议——它们解锁 PRS-2/PRS-3，必须单独切片验证。
+
 ### 后续专项节点
 
 | 节点 | 状态 | 解锁条件 | 核心结果 |
 | --- | --- | --- | --- |
-| PRS-1 身份、粒度和 cohort 内核 | `ready` | PRS-0 verified（2026-07-31） | canonical 主键、转会/同名处理、观测粒度、缺失原因、角色体系 v1 |
+| PRS-1 身份、粒度和 cohort 内核 | `in_progress` | PRS-0 verified（2026-07-31） | canonical 主键、转会/同名处理、观测粒度、缺失原因、角色体系 v1 |
 | PRS-2 透明 baseline 与评分语义 v1 | `blocked` | PRS-1 verified | 角色内 baseline、分钟收缩、门将独立模型、不确定性和敏感性 |
 | PRS-3 个人评价集与标签工作台 | `blocked` | PRS-1 verified | pairwise/tier 独立标签、盲评、撤销、冲突和独立性审计 |
 | PRS-4 实验注册与严谨评估 | `blocked` | PRS-2 + PRS-3 verified | baseline 对照、时间外/联赛外/转会/覆盖切片、错误分析和晋级门禁 |

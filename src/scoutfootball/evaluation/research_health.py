@@ -766,6 +766,31 @@ def _rating_is_synthetic(rating_path: Path) -> bool | None:
     return bool(df["is_synthetic"].fillna(False).astype(bool).all())
 
 
+def _build_grain_and_missingness_audit(
+    settings: PlatformSettings,
+) -> dict[str, Any]:
+    """Wrap ``grain.build_grain_and_missingness_report`` so the health
+    report never crashes when the audit module is unavailable.
+
+    The audit is read-only and local; failures are surfaced as
+    ``unavailable`` rather than raising, mirroring the other evidence
+    sections in this module.
+    """
+    try:
+        from scoutfootball.evaluation.grain import (
+            build_grain_and_missingness_report,
+        )
+
+        return build_grain_and_missingness_report(settings=settings)
+    except Exception as exc:  # read-only diagnostic; never raise
+        return {
+            "schema": "scoutfootball.grain-audit",
+            "schema_version": "1.0.0",
+            "status": "unavailable",
+            "evidence": {"reason": f"grain audit failed: {exc}"},
+        }
+
+
 def _build_research_readiness(
     settings: PlatformSettings,
     *,
@@ -926,6 +951,13 @@ def build_research_health_report(
     # these into planning docs. They do not participate in the verdict.
     feature_coverage = _build_feature_coverage(resolved, storage=storage)
     data_grain = _build_data_grain(resolved, storage=storage)
+    # PRS-1 R-006/R-007 typed grain + missingness audit. Read-only and
+    # local; surfaces typed EvidenceGrain / ObservationType / MissingReason
+    # so the maintainer can verify "unknown" vs "actual_zero" vs
+    # "not_recorded" without hand-inspecting parquet. Like the other
+    # evidence sections, this does not participate in the fail-closed
+    # verdict — PRS-1 verification will gate on it later.
+    grain_and_missingness = _build_grain_and_missingness_audit(resolved)
     layers = {
         "storage_health": storage,
         "lineage_health": lineage,
@@ -943,6 +975,7 @@ def build_research_health_report(
         **layers,
         "feature_coverage": feature_coverage,
         "data_grain": data_grain,
+        "grain_and_missingness": grain_and_missingness,
         "limitations": [
             (
                 "Local-only read-only diagnostic; no telemetry is uploaded. "
@@ -960,6 +993,14 @@ def build_research_health_report(
             (
                 "Use `scoutfootball research-health` or GET /health/research "
                 "for this report; get_detailed_health surfaces a summary."
+            ),
+            (
+                "grain_and_missingness is PRS-1 R-006/R-007 best-evidence "
+                "audit, not canonical schema enforcement. "
+                "MissingReason.ACTUAL_ZERO is not auto-detected; the enum "
+                "exists so downstream code can label rows when the "
+                "source-level event join (planned for a later PRS-1 slice) "
+                "provides that evidence."
             ),
         ],
     }
