@@ -968,6 +968,48 @@ def _build_label_review_queue_audit(
         }
 
 
+def _build_label_stability_audit(
+    settings: PlatformSettings,
+    records: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Surface the PRS-LABEL-006 stability report in the health report.
+
+    PRS-3 slice 3: quantifies annotation stability along two axes:
+
+    - ``retest_pairs``: re-annotation pairs traced via
+      ``supersedes_decision_id`` chains (original -> retest), comparing
+      the original and retest label values for consistency.
+    - ``annotator_agreement``: groups of confirmed labels (including
+      superseded ones) on the same business key that were decided by
+      multiple distinct annotators, reporting whether they agreed.
+
+    Like the label ledger and review queue audits, this section does
+    **not** participate in the fail-closed verdict: stability metrics
+    are signals for the maintainer, not gates. ``status=ok`` only means
+    the report could be built, not that the labels are correct or
+    supervision-ready. An empty ledger returns 0/0/0/0 honestly.
+
+    If ``records`` is provided (e.g. by ``_build_label_ledger_audit``
+    returning the raw list), reuse it to avoid re-reading the JSONL.
+    Otherwise read the ledger here.
+    """
+    try:
+        from scoutfootball.evaluation.label_stability import build_stability_report
+
+        if records is None:
+            from scoutfootball.evaluation.label_ledger import read_ledger
+            records = read_ledger(settings=settings)
+
+        return build_stability_report(records)
+    except Exception as exc:  # read-only diagnostic; never raise
+        return {
+            "schema": "scoutfootball.label-stability",
+            "schema_version": "1.0.0",
+            "status": "unavailable",
+            "evidence": {"reason": f"label stability build failed: {exc}"},
+        }
+
+
 def _build_research_readiness(
     settings: PlatformSettings,
     *,
@@ -1142,6 +1184,9 @@ def build_research_health_report(
     label_review_queue = _build_label_review_queue_audit(
         resolved, records=ledger_records
     )
+    label_stability = _build_label_stability_audit(
+        resolved, records=ledger_records
+    )
     layers = {
         "storage_health": storage,
         "lineage_health": lineage,
@@ -1165,6 +1210,7 @@ def build_research_health_report(
         "role_system": role_system,
         "label_ledger": label_ledger,
         "label_review_queue": label_review_queue,
+        "label_stability": label_stability,
         "limitations": [
             (
                 "Local-only read-only diagnostic; no telemetry is uploaded. "
@@ -1248,6 +1294,21 @@ def build_research_health_report(
                 "review signals exist, not that labels are correct or "
                 "supervision-ready. Use `scoutfootball label-review-"
                 "queue` CLI for the full report."
+            ),
+            (
+                "label_stability is PRS-LABEL-006's read-only diagnostic "
+                "of annotation stability: retest_pairs traced via "
+                "supersedes_decision_id chains (original -> retest), and "
+                "annotator_agreement groups where multiple distinct "
+                "decided_by values annotated the same business key. It "
+                "does not participate in the fail-closed verdict because "
+                "stability metrics are signals, not gates. An empty "
+                "ledger returns 0/0/0/0 honestly; absence of retest or "
+                "agreement signals does not mean labels are correct or "
+                "supervision-ready. The report does not prove annotators "
+                "were truly blind or that evidence is correct; it only "
+                "compares label values structurally. Use "
+                "`scoutfootball label-stability` CLI for the full report."
             ),
         ],
     }

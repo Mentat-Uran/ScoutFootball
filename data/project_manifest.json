@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-31T06:30:58.008730+00:00",
+  "generated_at": "2026-07-31T07:59:29.546694+00:00",
   "package_version": "1.1.0",
   "architecture": {
     "package_name": "scoutfootball",
@@ -325,12 +325,15 @@
       "uv run python -m scoutfootball role-system-report [--json]",
       "uv run python -m scoutfootball cohort-preview [filters] [--json]",
       "uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]",
+      "uv run python -m scoutfootball baseline-b1 [--n-bootstrap N] [--seed S] [--top N] [--json]",
       "uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]",
       "uv run python -m scoutfootball label-append --label-type T --cohort-hash H --role-family R --season-id S --observation-window W --confidence C --evidence E [pairwise/tier payload]",
       "uv run python -m scoutfootball label-revoke --target-decision-id D --evidence E",
       "uv run python -m scoutfootball label-list [--cohort-hash H] [--label-type T] [--role-family R] [--season-id S] [--player-id P] [--include-revoked]",
       "uv run python -m scoutfootball label-stats",
       "uv run python -m scoutfootball label-audit [--strict]",
+      "uv run python -m scoutfootball label-review-queue [--tier-conflict-threshold N] [--evidence-min-chars N] [--max-age-days N] [--json]",
+      "uv run python -m scoutfootball label-stability [--tier-tolerance N] [--json]",
       "uv run python -m scoutfootball backtest",
       "uv run python -m scoutfootball tune-predictions",
       "uv run python -m scoutfootball optimize-ensemble",
@@ -358,7 +361,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-31T06:30:58.007224+00:00",
+    "generated_at": "2026-07-31T07:59:29.545185+00:00",
     "package_version": "1.1.0",
     "domains": [
       "action_value",
@@ -627,6 +630,20 @@
         "notes": ""
       },
       {
+        "id": "ratings.baseline_b1",
+        "name": "B1 专家权重 baseline (PRS-2)",
+        "description": "PRS-2 B1 expert_weighted baseline：在 B0 角色内百分位之上替换等权为版本化专家权重。B1_WEIGHTS v1.0 为每个 RoleFamily 手工定义维度权重（如 ST: finishing=0.55/attacking=0.25/availability=0.20；CB: defending=0.50/possession=0.20/availability=0.30；GK: availability=1.0 占位）。权重和必须为 1.0，权重是显式专家选择而非优化器 softmax 输出（遵循 AGENTS.md '不得把 raw softmax 权重当作实际模型权重'）。缺失维度下权重自动再归一化（如 CB 缺 possession 时 defending/availability 重新分配到 0.625/0.375）；全部核心维度缺失时 score=50.0、confidence=low，权重不被应用。B1 复用 B0_DIMENSIONS，因此与 B0 的角色特定维度/列/方向/core 标记完全一致，唯一差异是聚合方式（B0 等权，B1 加权），任何 B1 vs B0 的分数差异都归因于权重选择。GK 权重集为 availability=1.0（唯一维度），因此 GK 的 B1 == B0，仍为 gk_provisional 占位。cross_position_comparable=False。Bootstrap 排名区间（固定 seed，默认 200 次重采样，每次重采样后重新计算所有球员分数含权重再归一化并赋予 1-indexed rank）给出每位球员 rank 的 p5/p50/p95。每条 B1DimensionScore 记录 weight（原始权重）+ effective_weight（再归一化后）+ contribution（=effective_weight * dimension_percentile），可手工复算。read-only 诊断；不修改 rating_feature_matrix.parquet。CLI baseline-b1 支持 --n-bootstrap/--seed/--top/--json。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "baseline-b1"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
         "id": "ratings.baseline_b2",
         "name": "B2 分钟收缩 baseline (PRS-2)",
         "description": "PRS-2 B2 shrinkage baseline：在 B0 角色内等权百分位之上叠加基于 minutes_played 的经验贝叶斯收缩。收缩公式 b2_score = w * prior_mean + (1 - w) * b0_score，其中 w = reference_minutes / (reference_minutes + minutes_played)，默认 reference_minutes=900（10 场 full match，w=0.5）。低出场球员被向角色先验收缩（90 min 球员 w≈0.91，3000 min 球员 w≈0.23）。prior_mean 取角色池中 minutes_played >= reference_minutes 的 stable core 球员的分钟加权 B0 分数均值；若无球员达标则 fallback 到全池简单均值并标记 prior_source=fallback_full_pool。B2 同时报告 B0 分数、B0 rank、B2 分数、B2 rank 和两者的 bootstrap 排名区间（p5/p50/p95，固定 seed，默认 200 次重采样），便于维护者对比B0/B2 排名差异。B2 不修改 B0 的缺失数据处理：B0 low 球员保持 low 并应用完全收缩（b2=prior_mean）；minutes_played 缺失或非正的球员应用完全收缩并标记 minutes_input_missing=True，B2 confidence 上限为 medium。GK 仍为 gk_provisional。cross_position_comparable=False。read-only 诊断；不修改 rating_feature_matrix.parquet。CLI baseline-b2 支持 --reference-minutes/--n-bootstrap/--seed/--top/--json。",
@@ -653,6 +670,34 @@
           "label-list",
           "label-stats",
           "label-audit"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.label_review_queue",
+        "name": "PRS-LABEL-005 标签复核队列诊断",
+        "description": "PRS-3 切片 2 label_review_queue：在 label_ledger 之上叠加只读诊断，识别三类需要维护者注意的 active 标签子集。(1) 冲突队列：同 cohort+role+season+observation_window 下对同一比较对象存在矛盾判断——pairwise 把 (A vs B) 与 (B vs A) 标准化为 sorted pair + normalised preference (first/second/tie)，仅当 first 与 second 同时出现才标记冲突（tie 是'无法判断'不与明确偏好冲突）；tier 当 max-min >= threshold（默认 2 档）标记冲突。冲突组携带所有涉及的 decision_id 便于一次看到矛盾全貌。(2) 低信心队列：confidence=low 或 evidence 长度 < evidence_min_chars（默认 50）的标签。(3) 待复测队列：recorded_at 距今 >= max_age_days（默认 180）的 active 标签，老化标签不被自动作废仅标记为值得重新评估；recorded_at 解析失败的记录跳过 retest 并计入 retest_skipped_count。status=ok 表示三个队列都为空，status=review_needed 表示至少一个非空；ok 不证明标签正确，只表示没有自动可检测的复核信号。基于 active_labels 集合，被 revoke/supersede 的记录不参与。CLI label-review-queue 支持 --tier-conflict-threshold/--evidence-min-chars/--max-age-days/--json。read-only 诊断；不修改 decisions.jsonl 或任何 parquet 产物。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "label-review-queue"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.label_stability",
+        "name": "PRS-LABEL-006 标签稳定性诊断",
+        "description": "PRS-3 切片 3 label_stability：在 label_ledger 之上叠加只读诊断，量化维护者标注的稳定性。(1) retest_pairs：通过 supersedes_decision_id 链追踪re-annotation 对（original → retest），对比两者标签值是否一致——pairwise 比较 first/second/tie 方向，tier 比较 |original_tier - retest_tier| <= tier_tolerance（默认 1）。每对报告 consistent、days_between、same_decided_by、original/retest value 和 decision_id。revoked retest 不产生 retest pair（revoke 是撤销不是复测）；不同 label_type 的 supersedes 不产生 pair。(2) annotator_agreement：按业务键（pairwise 为 sorted player pair + cohort + role + season，tier 为 canonical_player_id + cohort + role + season）分组所有 confirmed记录（包括被 superseded 的），只报告有 >= 2 个不同 decided_by 的组，对比组内标签值一致性。summary 报告retest_consistency_rate 和 agreement_rate；rate=None当对应集合为空。基于全部 records（不只 active）追踪历史；read-only 诊断；不修改 decisions.jsonl 或任何 parquet 产物；不参与 fail-closed verdict（稳定性指标是信号不是门禁，空报告不意味标签正确或监督就绪）。CLI label-stability 支持 --tier-tolerance/--json。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "label-stability"
         ],
         "frontend_views": [],
         "data_artifacts": [],
@@ -1326,7 +1371,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-31T06:30:58.008730+00:00",
+    "generated_at": "2026-07-31T07:59:29.546694+00:00",
     "package_version": "1.1.0",
     "layers": [
       "gold",
@@ -2252,5 +2297,5 @@
       }
     ]
   },
-  "content_sha256": "94469619f5bb77be7c8dad18e119fb87808749cd5150204eee98794722190e9d"
+  "content_sha256": "9ca79dc1f9ee48e1c4953e9853c2047086b7abd288a6b1074385ddbbe0a21327"
 }
