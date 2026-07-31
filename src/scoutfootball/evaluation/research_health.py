@@ -1010,6 +1010,65 @@ def _build_label_stability_audit(
         }
 
 
+def _build_weight_sensitivity_audit(
+    settings: PlatformSettings,
+) -> dict[str, Any]:
+    """Surface the PRS-MODEL-011 B1 weight sensitivity report.
+
+    Perturbs each B1 dimension weight by configurable multiplicative
+    deltas, recomputes B1 scores, and measures ranking stability versus
+    the baseline. Like the other evidence-only sections, this does not
+    participate in the fail-closed verdict: sensitivity metrics are
+    signals for the maintainer, not gates. ``status=ok`` only means the
+    report could be built, not that the weights are correct or that the
+    ranking is trustworthy. A missing feature matrix returns
+    ``unavailable`` honestly.
+    """
+    try:
+        from scoutfootball.evaluation.sensitivity import (
+            compute_weight_sensitivity_report,
+        )
+
+        return compute_weight_sensitivity_report(settings=settings)
+    except Exception as exc:  # read-only diagnostic; never raise
+        return {
+            "schema": "scoutfootball.weight-sensitivity",
+            "schema_version": "1.0.0",
+            "status": "unavailable",
+            "evidence": {"reason": f"weight sensitivity build failed: {exc}"},
+        }
+
+
+def _build_minutes_sensitivity_audit(
+    settings: PlatformSettings,
+) -> dict[str, Any]:
+    """Surface the PRS-MODEL-012 B2 minutes-threshold sensitivity report.
+
+    Perturbs B2's ``reference_minutes`` by configurable absolute minute
+    deltas, recomputes B2 scores (shrinkage weight + prior_mean +
+    stable_core membership all change), and measures ranking stability
+    versus the baseline. Like the other evidence-only sections, this
+    does not participate in the fail-closed verdict: sensitivity metrics
+    are signals for the maintainer, not gates. ``status=ok`` only means
+    the report could be built, not that the threshold is correct or that
+    the ranking is trustworthy. A missing feature matrix returns
+    ``unavailable`` honestly.
+    """
+    try:
+        from scoutfootball.evaluation.minutes_sensitivity import (
+            compute_minutes_sensitivity_report,
+        )
+
+        return compute_minutes_sensitivity_report(settings=settings)
+    except Exception as exc:  # read-only diagnostic; never raise
+        return {
+            "schema": "scoutfootball.minutes-sensitivity",
+            "schema_version": "1.0.0",
+            "status": "unavailable",
+            "evidence": {"reason": f"minutes sensitivity build failed: {exc}"},
+        }
+
+
 def _build_research_readiness(
     settings: PlatformSettings,
     *,
@@ -1187,6 +1246,8 @@ def build_research_health_report(
     label_stability = _build_label_stability_audit(
         resolved, records=ledger_records
     )
+    weight_sensitivity = _build_weight_sensitivity_audit(resolved)
+    minutes_sensitivity = _build_minutes_sensitivity_audit(resolved)
     layers = {
         "storage_health": storage,
         "lineage_health": lineage,
@@ -1211,6 +1272,8 @@ def build_research_health_report(
         "label_ledger": label_ledger,
         "label_review_queue": label_review_queue,
         "label_stability": label_stability,
+        "weight_sensitivity": weight_sensitivity,
+        "minutes_sensitivity": minutes_sensitivity,
         "limitations": [
             (
                 "Local-only read-only diagnostic; no telemetry is uploaded. "
@@ -1309,6 +1372,34 @@ def build_research_health_report(
                 "were truly blind or that evidence is correct; it only "
                 "compares label values structurally. Use "
                 "`scoutfootball label-stability` CLI for the full report."
+            ),
+            (
+                "weight_sensitivity is PRS-MODEL-011's read-only "
+                "diagnostic of B1 expert-weight robustness: it perturbs "
+                "each dimension weight by multiplicative deltas "
+                "(default ±10%/±20%), renormalises, recomputes B1 "
+                "scores, and measures ranking stability (Spearman, mean/"
+                "max rank shift, top-N overlap) versus the baseline. It "
+                "does not participate in the fail-closed verdict because "
+                "sensitivity metrics are signals, not gates. status=ok "
+                "only means the report could be built, not that the "
+                "weights are correct or that the ranking is trustworthy. "
+                "Use `scoutfootball weight-sensitivity` CLI for the "
+                "full report with custom deltas."
+            ),
+            (
+                "minutes_sensitivity is PRS-MODEL-012's read-only "
+                "diagnostic of B2 minutes-threshold robustness: it "
+                "perturbs reference_minutes by absolute minute deltas "
+                "(default ±150/±300/±600), recomputes B2 scores "
+                "(shrinkage weight + prior_mean + stable_core membership "
+                "all change), and measures ranking stability versus the "
+                "baseline. It does not participate in the fail-closed "
+                "verdict because sensitivity metrics are signals, not "
+                "gates. status=ok only means the report could be built, "
+                "not that the threshold is correct or that the ranking "
+                "is trustworthy. Use `scoutfootball minutes-sensitivity` "
+                "CLI for the full report with custom deltas."
             ),
         ],
     }

@@ -717,6 +717,27 @@ def build_capability_registry() -> CapabilityRegistry:
             cli_commands=("weight-sensitivity",),
         ),
         Capability(
+            id="ratings.minutes_sensitivity",
+            name="PRS-MODEL-012 分钟门槛敏感性分析",
+            description=(
+                "PRS-2 切片 PRS-MODEL-012：B2 分钟门槛敏感性诊断。"
+                "对 B2 的 reference_minutes 参数应用可配置的绝对分钟扰动"
+                "（默认 -600/-300/-150/+150/+300/+600），重新计算 B2 分数。"
+                "与 PRS-MODEL-011 不同，reference_minutes 扰动有复合效应："
+                "收缩权重 w、stable_core 成员、prior_mean 三者同时变化。"
+                "通过四个指标衡量排名稳定性：Spearman 相关系数、平均绝对"
+                "排名变动、最大绝对排名变动、top-N 重叠率。每条扰动报告"
+                "perturbed_reference_minutes、prior_source、stable_core_count"
+                "以便观察门槛变化是否触发 prior fallback 路径切换。"
+                "诊断为只读，不修改特征矩阵、B2 参数或任何 parquet 产物；"
+                "不参与 fail-closed verdict（敏感性指标是信号不是门禁）。"
+                "CLI minutes-sensitivity 支持 --deltas/--baseline-minutes/"
+                "--top-n/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("minutes-sensitivity",),
+        ),
+        Capability(
             id="predictions.match",
             name="比赛结果预测",
             description="Poisson、Dixon-Coles、集成模型等多种比赛结果预测，含概率校准。",

@@ -1407,3 +1407,99 @@ def test_label_stability_limitation_present_in_report(tmp_path) -> None:
     assert "retest_pairs" in joined
     assert "annotator_agreement" in joined
     assert "label-stability" in joined
+
+
+# ---------------------------------------------------------------------------
+# weight_sensitivity evidence section (PRS-MODEL-011)
+# ---------------------------------------------------------------------------
+
+
+def test_weight_sensitivity_section_present(tmp_path) -> None:
+    """The weight_sensitivity section is always present in the report.
+
+    With the healthy-workspace fixture the feature matrix is minimal
+    (no position_group), so the report returns status=ok with empty
+    role_summaries. The section must not block the verdict (sensitivity
+    metrics are evidence-only signals).
+    """
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["weight_sensitivity"]
+    assert section["schema"] == "scoutfootball.weight-sensitivity"
+    assert section["schema_version"] == "1.0.0"
+    # Either ok (matrix readable, no scored roles) or unavailable (if
+    # the minimal fixture lacks columns the loader needs). Both are
+    # honest; neither blocks the verdict.
+    assert section["status"] in ("ok", "unavailable")
+    assert all("weight_sensitivity" not in r for r in report["blocking_reasons"])
+
+
+def test_weight_sensitivity_section_unavailable_when_matrix_missing(
+    tmp_path,
+) -> None:
+    """No feature matrix -> weight_sensitivity reports unavailable."""
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["weight_sensitivity"]
+    assert section["schema"] == "scoutfootball.weight-sensitivity"
+    assert section["status"] == "unavailable"
+    # Evidence-only: must not appear in blocking_reasons.
+    assert all("weight_sensitivity" not in r for r in report["blocking_reasons"])
+
+
+def test_weight_sensitivity_limitation_present_in_report(tmp_path) -> None:
+    """The limitations list must explain the weight_sensitivity section."""
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    joined = " ".join(report["limitations"])
+    assert "weight_sensitivity" in joined
+    assert "PRS-MODEL-011" in joined
+    assert "weight-sensitivity" in joined
+
+
+# ---------------------------------------------------------------------------
+# minutes_sensitivity evidence section (PRS-MODEL-012)
+# ---------------------------------------------------------------------------
+
+
+def test_minutes_sensitivity_section_present(tmp_path) -> None:
+    """The minutes_sensitivity section is always present in the report.
+
+    With the healthy-workspace fixture the feature matrix is minimal
+    (no position_group), so the report returns status=ok with empty
+    role_summaries. The section must not block the verdict (sensitivity
+    metrics are evidence-only signals).
+    """
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["minutes_sensitivity"]
+    assert section["schema"] == "scoutfootball.minutes-sensitivity"
+    assert section["schema_version"] == "1.0.0"
+    assert section["status"] in ("ok", "unavailable")
+    assert all("minutes_sensitivity" not in r for r in report["blocking_reasons"])
+
+
+def test_minutes_sensitivity_section_unavailable_when_matrix_missing(
+    tmp_path,
+) -> None:
+    """No feature matrix -> minutes_sensitivity reports unavailable."""
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["minutes_sensitivity"]
+    assert section["schema"] == "scoutfootball.minutes-sensitivity"
+    assert section["status"] == "unavailable"
+    assert all("minutes_sensitivity" not in r for r in report["blocking_reasons"])
+
+
+def test_minutes_sensitivity_limitation_present_in_report(tmp_path) -> None:
+    """The limitations list must explain the minutes_sensitivity section."""
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    joined = " ".join(report["limitations"])
+    assert "minutes_sensitivity" in joined
+    assert "PRS-MODEL-012" in joined
+    assert "minutes-sensitivity" in joined
