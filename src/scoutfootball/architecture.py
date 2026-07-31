@@ -276,6 +276,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball label-list [--cohort-hash H] [--label-type T] [--role-family R] [--season-id S] [--player-id P] [--include-revoked]",  # noqa: E501
             "uv run python -m scoutfootball label-stats",
             "uv run python -m scoutfootball label-audit [--strict]",
+            "uv run python -m scoutfootball label-review-queue [--tier-conflict-threshold N] [--evidence-min-chars N] [--max-age-days N] [--json]",  # noqa: E501
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -639,6 +640,34 @@ def build_capability_registry() -> CapabilityRegistry:
                 "label-stats",
                 "label-audit",
             ),
+        ),
+        Capability(
+            id="ratings.label_review_queue",
+            name="PRS-LABEL-005 标签复核队列诊断",
+            description=(
+                "PRS-3 切片 2 label_review_queue：在 label_ledger 之上"
+                "叠加只读诊断，识别三类需要维护者注意的 active 标签子集。"
+                "(1) 冲突队列：同 cohort+role+season+observation_window 下"
+                "对同一比较对象存在矛盾判断——pairwise 把 (A vs B) 与 "
+                "(B vs A) 标准化为 sorted pair + normalised preference "
+                "(first/second/tie)，仅当 first 与 second 同时出现才标记"
+                "冲突（tie 是'无法判断'不与明确偏好冲突）；tier 当 "
+                "max-min >= threshold（默认 2 档）标记冲突。冲突组携带"
+                "所有涉及的 decision_id 便于一次看到矛盾全貌。(2) 低信心"
+                "队列：confidence=low 或 evidence 长度 < evidence_min_chars"
+                "（默认 50）的标签。(3) 待复测队列：recorded_at 距今 >= "
+                "max_age_days（默认 180）的 active 标签，老化标签不被"
+                "自动作废仅标记为值得重新评估；recorded_at 解析失败的"
+                "记录跳过 retest 并计入 retest_skipped_count。status=ok "
+                "表示三个队列都为空，status=review_needed 表示至少一个"
+                "非空；ok 不证明标签正确，只表示没有自动可检测的复核"
+                "信号。基于 active_labels 集合，被 revoke/supersede 的"
+                "记录不参与。CLI label-review-queue 支持 --tier-conflict-"
+                "threshold/--evidence-min-chars/--max-age-days/--json。"
+                "read-only 诊断；不修改 decisions.jsonl 或任何 parquet 产物。"
+            ),
+            domain="player_ratings",
+            cli_commands=("label-review-queue",),
         ),
         Capability(
             id="predictions.match",

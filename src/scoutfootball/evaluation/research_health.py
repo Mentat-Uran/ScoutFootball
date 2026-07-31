@@ -885,7 +885,7 @@ def _build_role_system_audit(
 
 def _build_label_ledger_audit(
     settings: PlatformSettings,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Surface the PRS-3 personal evaluation label ledger in the health report.
 
     PRS-3 slice 1: the ledger is the maintainer's append-only JSONL record
@@ -900,6 +900,10 @@ def _build_label_ledger_audit(
     can see at a glance how many independent labels exist and whether
     any ``model_derived`` label has leaked into the supervision-eligible
     set.
+
+    Returns ``(summary, records)`` where ``records`` is the raw ledger
+    list, so downstream sections (e.g. ``label_review_queue``) can reuse
+    it without re-reading the JSONL file.
     """
     try:
         from scoutfootball.evaluation.label_ledger import (
@@ -915,13 +919,52 @@ def _build_label_ledger_audit(
         # active set. The audit is structural; it does not prove the
         # annotator was truly blind or that evidence is correct.
         summary = {**summary, "independence_audit": label_independence_audit(records)}
-        return summary
+        return summary, records
+    except Exception as exc:  # read-only diagnostic; never raise
+        return (
+            {
+                "schema": "scoutfootball.label_ledger",
+                "schema_version": "1.0",
+                "status": "unavailable",
+                "evidence": {"reason": f"label ledger read failed: {exc}"},
+            },
+            [],
+        )
+
+
+def _build_label_review_queue_audit(
+    settings: PlatformSettings,
+    records: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Surface the PRS-LABEL-005 review queue in the health report.
+
+    PRS-3 slice 2: identifies active labels that need maintainer re-review
+    — pairwise preference contradictions, tier rating conflicts, low-
+    confidence/thin-evidence labels, and aged labels for re-test. Like
+    the label ledger audit, this section does **not** participate in the
+    fail-closed verdict: the presence of review items is not a storage
+    or lineage failure, it is a signal to the maintainer. ``status=ok``
+    only means no auto-detectable review signals exist, not that the
+    labels are correct or supervision-ready.
+
+    If ``records`` is provided (e.g. by ``_build_label_ledger_audit``
+    returning the raw list), reuse it to avoid re-reading the JSONL.
+    Otherwise read the ledger here.
+    """
+    try:
+        from scoutfootball.evaluation.label_review_queue import build_review_queue
+
+        if records is None:
+            from scoutfootball.evaluation.label_ledger import read_ledger
+            records = read_ledger(settings=settings)
+
+        return build_review_queue(records)
     except Exception as exc:  # read-only diagnostic; never raise
         return {
-            "schema": "scoutfootball.label_ledger",
-            "schema_version": "1.0",
+            "schema": "scoutfootball.label-review-queue",
+            "schema_version": "1.0.0",
             "status": "unavailable",
-            "evidence": {"reason": f"label ledger read failed: {exc}"},
+            "evidence": {"reason": f"label review queue build failed: {exc}"},
         }
 
 
@@ -1095,7 +1138,10 @@ def build_research_health_report(
     identity_registry = _build_identity_registry_audit(resolved)
     canonical_resolution = _build_canonical_resolution_audit(resolved)
     role_system = _build_role_system_audit(resolved)
-    label_ledger = _build_label_ledger_audit(resolved)
+    label_ledger, ledger_records = _build_label_ledger_audit(resolved)
+    label_review_queue = _build_label_review_queue_audit(
+        resolved, records=ledger_records
+    )
     layers = {
         "storage_health": storage,
         "lineage_health": lineage,
@@ -1118,6 +1164,7 @@ def build_research_health_report(
         "canonical_resolution": canonical_resolution,
         "role_system": role_system,
         "label_ledger": label_ledger,
+        "label_review_queue": label_review_queue,
         "limitations": [
             (
                 "Local-only read-only diagnostic; no telemetry is uploaded. "
@@ -1189,6 +1236,18 @@ def build_research_health_report(
                 "annotator was truly blind or that evidence is correct. "
                 "Use `scoutfootball label-append`/`label-list`/`label-"
                 "stats`/`label-audit` CLI to record or inspect labels."
+            ),
+            (
+                "label_review_queue is PRS-LABEL-005's diagnostic of "
+                "which active labels need maintainer re-review: pairwise "
+                "preference contradictions, tier rating conflicts (span "
+                ">= 2), low-confidence/thin-evidence labels, and aged "
+                "labels (>= 180 days). It does not participate in the "
+                "fail-closed verdict because review items are signals, "
+                "not failures. status=ok only means no auto-detectable "
+                "review signals exist, not that labels are correct or "
+                "supervision-ready. Use `scoutfootball label-review-"
+                "queue` CLI for the full report."
             ),
         ],
     }

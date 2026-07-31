@@ -1374,6 +1374,111 @@ def _cmd_label_audit(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _cmd_label_review_queue(args: argparse.Namespace) -> None:
+    """Build the PRS-LABEL-005 review queue report.
+
+    Identifies active labels that need maintainer re-review: pairwise
+    preference contradictions, tier rating conflicts, low-confidence or
+    thinly-evidenced labels, and aged labels that may warrant re-testing.
+    Read-only; does not modify ``decisions.jsonl``.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.label_ledger import read_ledger
+    from scoutfootball.evaluation.label_review_queue import build_review_queue
+
+    settings = PlatformSettings.from_root()
+    records = read_ledger(settings=settings)
+    report = build_review_queue(
+        records,
+        tier_conflict_threshold=args.tier_conflict_threshold,
+        evidence_min_chars=args.evidence_min_chars,
+        max_age_days=args.max_age_days,
+    )
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    print(
+        f"Label review queue report "
+        f"(schema {report['schema']} v{report['schema_version']})"
+    )
+    print(f"status: {report['status']}")
+    s = report["summary"]
+    print(f"active_label_count: {s['active_label_count']}")
+    print(f"total_review_items: {s['total_review_items']}")
+    print(
+        f"  pairwise_conflict_groups: {s['pairwise_conflict_groups']}"
+    )
+    print(f"  tier_conflict_groups: {s['tier_conflict_groups']}")
+    print(f"  low_confidence_items: {s['low_confidence_items']}")
+    print(f"  retest_items: {s['retest_items']}")
+    if s["retest_skipped_count"] > 0:
+        print(f"  retest_skipped (bad timestamp): {s['retest_skipped_count']}")
+    print()
+
+    p = report["parameters"]
+    print(
+        f"parameters: tier_threshold={p['tier_conflict_threshold']} "
+        f"evidence_min_chars={p['evidence_min_chars']} "
+        f"max_age_days={p['max_age_days']}"
+    )
+    print()
+
+    cq = report["conflict_queue"]
+    if cq["pairwise"]:
+        print("--- Pairwise preference conflicts ---")
+        for g in cq["pairwise"]:
+            print(
+                f"  [{g['role_family']} {g['season_id']} {g['observation_window']}] "
+                f"pair={g['player_pair']} "
+                f"prefs={g['preferences_seen']} "
+                f"decisions={g['decision_ids']}"
+            )
+        print()
+
+    if cq["tier"]:
+        print("--- Tier rating conflicts ---")
+        for g in cq["tier"]:
+            print(
+                f"  [{g['role_family']} {g['season_id']} {g['observation_window']}] "
+                f"player={g['canonical_player_id']} "
+                f"tier_range={g['tier_range']} "
+                f"tier_values={g['tier_values']} "
+                f"decisions={g['decision_ids']}"
+            )
+        print()
+
+    if report["low_confidence_queue"]:
+        print("--- Low confidence / thin evidence queue ---")
+        for item in report["low_confidence_queue"]:
+            print(
+                f"  {item['decision_id']} "
+                f"reasons={item['reasons']} "
+                f"conf={item['confidence']} "
+                f"evidence_len={item['evidence_length']} "
+                f"type={item['label_type']} "
+                f"role={item['role_family']} season={item['season_id']}"
+            )
+        print()
+
+    if report["retest_queue"]:
+        print("--- Retest queue (aged labels) ---")
+        for item in report["retest_queue"]:
+            print(
+                f"  {item['decision_id']} "
+                f"age_days={item['age_days']} "
+                f"recorded_at={item['recorded_at']} "
+                f"type={item['label_type']} "
+                f"role={item['role_family']} season={item['season_id']}"
+            )
+        print()
+
+    print("Limitations:")
+    for lim in report["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -5244,6 +5349,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit 1 if any violation is found (for CI gating)",
     )
 
+    label_review_queue_p = sub.add_parser(
+        "label-review-queue",
+        help=(
+            "Build the PRS-LABEL-005 review queue report: pairwise "
+            "preference contradictions, tier rating conflicts, "
+            "low-confidence/thin-evidence labels, and aged labels for "
+            "re-test. Read-only; does not modify decisions.jsonl."
+        ),
+    )
+    label_review_queue_p.add_argument(
+        "--tier-conflict-threshold",
+        type=int,
+        default=2,
+        help=(
+            "Tier span (max-min) at which two tier labels on the same "
+            "player+window count as a conflict (default: 2)"
+        ),
+    )
+    label_review_queue_p.add_argument(
+        "--evidence-min-chars",
+        type=int,
+        default=50,
+        help=(
+            "Active labels with evidence shorter than this many "
+            "characters enter the low-confidence queue (default: 50)"
+        ),
+    )
+    label_review_queue_p.add_argument(
+        "--max-age-days",
+        type=int,
+        default=180,
+        help=(
+            "Active labels older than this many days enter the retest "
+            "queue (default: 180)"
+        ),
+    )
+    label_review_queue_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -6243,6 +6390,7 @@ def main() -> None:
         "label-list": _cmd_label_list,
         "label-stats": _cmd_label_stats,
         "label-audit": _cmd_label_audit,
+        "label-review-queue": _cmd_label_review_queue,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
