@@ -863,6 +863,174 @@ def _cmd_cohort_preview(args: argparse.Namespace) -> None:
         print(f"  - {lim}")
 
 
+def _cmd_baseline_b0(args: argparse.Namespace) -> None:
+    """Compute the PRS-2 B0 raw_percentile baseline (transparent within-role percentile).
+
+    Loads ``rating_feature_matrix.parquet`` and computes an equal-weighted
+    average of within-role percentiles for role-specific dimensions. The
+    output includes per-player scores, ranks, bootstrap rank intervals,
+    confidence levels (high/medium/low), and explicit missing-data flags.
+
+    Read-only; does not modify any parquet artifact. Use ``--json`` for
+    machine-readable output.
+    """
+    from scoutfootball.evaluation.baseline_b0 import compute_b0_baseline
+
+    rep = compute_b0_baseline(
+        n_bootstrap=args.n_bootstrap,
+        seed=args.seed,
+    )
+
+    if args.json:
+        print(json.dumps(rep, indent=2, ensure_ascii=False))
+        return
+
+    print(f"B0 baseline report (schema {rep['schema']} v{rep['schema_version']})")
+    print(f"status: {rep['status']}")
+    if rep["status"] != "ok":
+        ev = rep.get("evidence", {})
+        print(f"reason: {ev.get('reason', 'unknown')}")
+        return
+
+    ev = rep["evidence"]
+    print(f"total_players_scored: {ev['total_players_scored']}")
+    print(f"by_role_family: {ev['by_role_family']}")
+    print()
+
+    print("--- Role summaries ---")
+    for rs in ev["role_summaries"]:
+        cc = rs["confidence_counts"]
+        print(
+            f"  {rs['role_family']}: n={rs['member_count']} "
+            f"high/med/low={cc['high']}/{cc['medium']}/{cc['low']} "
+            f"min/med/max={rs['score_min']:.2f}/{rs['score_median']:.2f}/{rs['score_max']:.2f} "
+            f"dims={rs['dimensions_available']}"
+        )
+    print()
+
+    # Show top-N per role
+    top_n = args.top
+    if top_n > 0:
+        by_role: dict[str, list] = {}
+        for p in ev["players"]:
+            by_role.setdefault(p["role_family"], []).append(p)
+        print(f"--- Top-{top_n} per role (by rank) ---")
+        for role in sorted(by_role):
+            players = sorted(by_role[role], key=lambda p: p["rank_in_role"] or 999999)
+            print(f"  [{role}]")
+            for p in players[:top_n]:
+                ri = p.get("rank_interval")
+                ri_str = (
+                    f"p5={ri['p5']}/p50={ri['p50']}/p95={ri['p95']}"
+                    if ri else "n/a"
+                )
+                print(
+                    f"    {p['rank_in_role']:>4}/{p['role_pool_size']:<4} "
+                    f"{p['player_name']:<30} "
+                    f"score={p['score']:.2f} "
+                    f"conf={p['confidence']:<6} "
+                    f"interval={ri_str}"
+                )
+        print()
+
+    print("Limitations:")
+    for lim in rep["limitations"]:
+        print(f"  - {lim}")
+
+
+def _cmd_baseline_b2(args: argparse.Namespace) -> None:
+    """Compute the PRS-2 B2 minutes-shrinkage baseline.
+
+    Loads ``rating_feature_matrix.parquet`` and computes both B0 and B2
+    scores. B2 applies empirical Bayes shrinkage to B0 using minutes-based
+    reliability: b2 = w * prior_mean + (1 - w) * b0 where
+    w = reference_minutes / (reference_minutes + minutes_played).
+
+    Output includes per-player B0 and B2 scores, ranks, bootstrap rank
+    intervals, shrinkage weights, prior mean, and explicit limitations.
+
+    Read-only; does not modify any parquet artifact. Use ``--json`` for
+    machine-readable output.
+    """
+    from scoutfootball.evaluation.baseline_b2 import compute_b2_baseline
+
+    rep = compute_b2_baseline(
+        reference_minutes=args.reference_minutes,
+        n_bootstrap=args.n_bootstrap,
+        seed=args.seed,
+    )
+
+    if args.json:
+        print(json.dumps(rep, indent=2, ensure_ascii=False))
+        return
+
+    print(f"B2 baseline report (schema {rep['schema']} v{rep['schema_version']})")
+    print(f"status: {rep['status']}")
+    if rep["status"] != "ok":
+        ev = rep.get("evidence", {})
+        print(f"reason: {ev.get('reason', 'unknown')}")
+        return
+
+    params = rep["parameters"]
+    print(
+        f"parameters: reference_minutes={params['reference_minutes']} "
+        f"n_bootstrap={params['n_bootstrap']} seed={params['seed']}"
+    )
+    ev = rep["evidence"]
+    print(f"total_players_scored: {ev['total_players_scored']}")
+    print(f"by_role_family: {ev['by_role_family']}")
+    print()
+
+    print("--- Role summaries ---")
+    for rs in ev["role_summaries"]:
+        cc = rs["confidence_counts"]
+        print(
+            f"  {rs['role_family']}: n={rs['member_count']} "
+            f"stable_core={rs['stable_core_count']} "
+            f"prior_mean={rs['prior_mean']:.2f} "
+            f"prior_source={rs['prior_source']} "
+            f"b0_med={rs['b0_score_median']:.2f} "
+            f"b2_min/med/max={rs['b2_score_min']:.2f}/"
+            f"{rs['b2_score_median']:.2f}/{rs['b2_score_max']:.2f} "
+            f"high/med/low={cc['high']}/{cc['medium']}/{cc['low']}"
+        )
+    print()
+
+    # Show top-N per role under B2
+    top_n = args.top
+    if top_n > 0:
+        by_role: dict[str, list] = {}
+        for p in ev["players"]:
+            by_role.setdefault(p["role_family"], []).append(p)
+        print(f"--- Top-{top_n} per role (by B2 rank) ---")
+        for role in sorted(by_role):
+            players = sorted(
+                by_role[role], key=lambda p: p["b2_rank_in_role"] or 999999
+            )
+            print(f"  [{role}]")
+            for p in players[:top_n]:
+                ri = p.get("b2_rank_interval")
+                ri_str = (
+                    f"p5={ri['p5']}/p50={ri['p50']}/p95={ri['p95']}"
+                    if ri else "n/a"
+                )
+                print(
+                    f"    b2_rank={p['b2_rank_in_role']:>4}/{p['b2_role_pool_size']:<4} "
+                    f"b0_rank={p['b0_rank_in_role']:>4} "
+                    f"{p['player_name']:<28} "
+                    f"b0={p['b0_score']:.2f} b2={p['b2_score']:.2f} "
+                    f"w={p['shrinkage_weight']:.3f} "
+                    f"min={p['minutes_played']} "
+                    f"conf={p['b2_confidence']:<6} "
+                    f"interval={ri_str}"
+                )
+        print()
+
+    print("Limitations:")
+    for lim in rep["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -4427,6 +4595,79 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit full report as JSON",
     )
 
+    baseline_b0_p = sub.add_parser(
+        "baseline-b0",
+        help=(
+            "Compute the PRS-2 B0 raw_percentile baseline (transparent "
+            "within-role percentile). Read-only; does not modify any "
+            "parquet artifact."
+        ),
+    )
+    baseline_b0_p.add_argument(
+        "--n-bootstrap",
+        type=int,
+        default=200,
+        help="Bootstrap resample count for rank intervals (default: 200)",
+    )
+    baseline_b0_p.add_argument(
+        "--seed",
+        type=int,
+        default=20260731,
+        help="Random seed for bootstrap (default: 20260731)",
+    )
+    baseline_b0_p.add_argument(
+        "--top",
+        type=int,
+        default=5,
+        help="Show top-N players per role in human-readable output (0 to hide, default: 5)",
+    )
+    baseline_b0_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
+    baseline_b2_p = sub.add_parser(
+        "baseline-b2",
+        help=(
+            "Compute the PRS-2 B2 minutes-shrinkage baseline (empirical "
+            "Bayes shrinkage of B0 toward role prior). Read-only; does "
+            "not modify any parquet artifact."
+        ),
+    )
+    baseline_b2_p.add_argument(
+        "--reference-minutes",
+        type=float,
+        default=900.0,
+        help=(
+            "Minutes at which shrinkage weight = 0.5 (default: 900 = 10 "
+            "full matches). Lower = more aggressive shrinkage."
+        ),
+    )
+    baseline_b2_p.add_argument(
+        "--n-bootstrap",
+        type=int,
+        default=200,
+        help="Bootstrap resample count for B2 rank intervals (default: 200)",
+    )
+    baseline_b2_p.add_argument(
+        "--seed",
+        type=int,
+        default=20260731,
+        help="Random seed for bootstrap (default: 20260731)",
+    )
+    baseline_b2_p.add_argument(
+        "--top",
+        type=int,
+        default=5,
+        help="Show top-N players per role in human-readable output (0 to hide, default: 5)",
+    )
+    baseline_b2_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -5418,6 +5659,8 @@ def main() -> None:
         "suggest-identity-mappings": _cmd_suggest_identity_mappings,
         "role-system-report": _cmd_role_system_report,
         "cohort-preview": _cmd_cohort_preview,
+        "baseline-b0": _cmd_baseline_b0,
+        "baseline-b2": _cmd_baseline_b2,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
