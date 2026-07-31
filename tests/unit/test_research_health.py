@@ -1055,3 +1055,227 @@ def test_feature_coverage_and_data_grain_do_not_affect_verdict(tmp_path) -> None
     assert report["verdict"] in (VERDICT_NOT_READY, VERDICT_UNAVAILABLE)
     assert "feature_coverage" not in report["blocking_reasons"]
     assert "data_grain" not in report["blocking_reasons"]
+
+
+# ---------------------------------------------------------------------------
+# label_ledger evidence section (PRS-3 slice 1)
+# ---------------------------------------------------------------------------
+
+
+def test_label_ledger_section_present_and_empty_by_default(tmp_path) -> None:
+    """No ledger file → label_ledger section shows zero counts.
+
+    An empty ledger is the honest default before any personal evaluation
+    has been recorded; it must not block the verdict (the absence of
+    independent labels is already reflected in research_readiness).
+    """
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["label_ledger"]
+    assert section["schema"] == "scoutfootball.label_ledger"
+    assert section["schema_version"] == "1.0"
+    assert section["total_records"] == 0
+    assert section["active_label_count"] == 0
+    assert section["blind_annotation_count"] == 0
+    assert section["records_by_action"] == {}
+    assert section["records_by_label_type"] == {}
+    assert section["records_by_cohort_hash"] == {}
+    assert section["latest_revision"] == 0
+    # Independence audit is attached and clean on an empty ledger.
+    audit = section["independence_audit"]
+    assert audit["status"] == "ok"
+    assert audit["supervision_eligible_count"] == 0
+    assert audit["model_derived_active_count"] == 0
+    assert audit["violation_count"] == 0
+    # Must not appear in blocking_reasons — empty ledger is not a failure.
+    assert all("label_ledger" not in r for r in report["blocking_reasons"])
+
+
+def test_label_ledger_section_reflects_recorded_labels(tmp_path) -> None:
+    """A confirmed pairwise + tier label is reflected in the section counts."""
+    from scoutfootball.evaluation.label_ledger import (
+        append_label,
+        build_label,
+        read_ledger,
+    )
+
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    existing = read_ledger(settings=settings)
+    pairwise = build_label(
+        action="confirmed",
+        label_type="human_pairwise_preference",
+        cohort_hash="abc123def4567890",
+        role_family="CB",
+        season_id="2425",
+        observation_window="2024-08-01/2025-05-31",
+        confidence="high",
+        evidence="Player A had more interceptions/90 than Player B",
+        decided_by="maintainer",
+        revision=len(existing) + 1,
+        player_a_id="unresolved:u:1",
+        player_b_id="unresolved:u:2",
+        preferred_player="a",
+    )
+    append_label(pairwise, settings=settings)
+    tier = build_label(
+        action="confirmed",
+        label_type="human_tier",
+        cohort_hash="abc123def4567890",
+        role_family="CB",
+        season_id="2425",
+        observation_window="2024-08-01/2025-05-31",
+        confidence="medium",
+        evidence="Elite ball-playing CB, top progressive passes",
+        decided_by="maintainer",
+        revision=len(read_ledger(settings=settings)) + 1,
+        canonical_player_id="canonical:fbref:lara:1998:ar",
+        tier=1,
+    )
+    append_label(tier, settings=settings)
+
+    report = build_research_health_report(settings=settings)
+    section = report["label_ledger"]
+    assert section["total_records"] == 2
+    assert section["active_label_count"] == 2
+    assert section["blind_annotation_count"] == 2
+    assert section["records_by_action"] == {"confirmed": 2}
+    assert section["records_by_label_type"] == {
+        "human_pairwise_preference": 1,
+        "human_tier": 1,
+    }
+    assert section["records_by_confidence"] == {"high": 1, "medium": 1}
+    assert section["records_by_role_family"] == {"CB": 2}
+    assert section["records_by_cohort_hash"] == {"abc123def4567890": 2}
+    assert section["latest_revision"] == 2
+    # Independence audit sees 2 supervision-eligible active labels.
+    audit = section["independence_audit"]
+    assert audit["status"] == "ok"
+    assert audit["supervision_eligible_count"] == 2
+    assert audit["supervision_eligible_by_type"] == {
+        "human_pairwise_preference": 1,
+        "human_tier": 1,
+    }
+    assert audit["violation_count"] == 0
+
+
+def test_label_ledger_section_surfaces_revoked_and_superseded(tmp_path) -> None:
+    """A revoked label clears active count; a supersede replaces it."""
+    from scoutfootball.evaluation.label_ledger import (
+        append_label,
+        build_label,
+        build_revoke_label,
+        read_ledger,
+    )
+
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    existing = read_ledger(settings=settings)
+    r1 = build_label(
+        action="confirmed",
+        label_type="human_pairwise_preference",
+        cohort_hash="abc123def4567890",
+        role_family="CB",
+        season_id="2425",
+        observation_window="2024-08-01/2025-05-31",
+        confidence="high",
+        evidence="first attempt: prefer A",
+        decided_by="maintainer",
+        revision=len(existing) + 1,
+        player_a_id="unresolved:u:1",
+        player_b_id="unresolved:u:2",
+        preferred_player="a",
+    )
+    append_label(r1, settings=settings)
+    # Revoke r1.
+    revoke = build_revoke_label(
+        target_decision_id=r1["decision_id"],
+        label_type="human_pairwise_preference",
+        cohort_hash="abc123def4567890",
+        role_family="CB",
+        season_id="2425",
+        observation_window="2024-08-01/2025-05-31",
+        evidence="re-review showed B was better",
+        decided_by="maintainer",
+        revision=len(read_ledger(settings=settings)) + 1,
+    )
+    append_label(revoke, settings=settings)
+
+    report = build_research_health_report(settings=settings)
+    section = report["label_ledger"]
+    assert section["total_records"] == 2
+    assert section["active_label_count"] == 0
+    assert section["records_by_action"] == {"confirmed": 1, "revoked": 1}
+    audit = section["independence_audit"]
+    assert audit["supervision_eligible_count"] == 0
+    assert audit["status"] == "ok"
+
+
+def test_label_ledger_section_unavailable_on_corrupt_file(tmp_path) -> None:
+    """A corrupt ledger JSONL is surfaced as unavailable, not crashed."""
+    _build_healthy_workspace(tmp_path)
+    ledger = tmp_path / "data" / "gold" / "label_ledger" / "decisions.jsonl"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text("{not valid json}\n", encoding="utf-8")
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["label_ledger"]
+    assert section["schema"] == "scoutfootball.label_ledger"
+    assert section["status"] == "unavailable"
+    assert "label ledger read failed" in section["evidence"]["reason"]
+    # The verdict is unaffected — the ledger is evidence-only.
+    assert report["verdict"] == VERDICT_READY
+
+
+def test_label_ledger_section_independence_audit_surfaces_violations(tmp_path) -> None:
+    """A model_derived active label is flagged by the independence audit."""
+    from scoutfootball.evaluation.label_ledger import (
+        append_label,
+        build_label,
+        read_ledger,
+    )
+
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    existing = read_ledger(settings=settings)
+    bad = build_label(
+        action="confirmed",
+        label_type="model_derived",
+        cohort_hash="abc123def4567890",
+        role_family="CB",
+        season_id="2425",
+        observation_window="2024-08-01/2025-05-31",
+        confidence="low",
+        evidence="leaked model-derived label must not supervise ratings",
+        decided_by="maintainer",
+        revision=len(existing) + 1,
+    )
+    append_label(bad, settings=settings)
+
+    report = build_research_health_report(settings=settings)
+    section = report["label_ledger"]
+    assert section["active_label_count"] == 1
+    audit = section["independence_audit"]
+    # model_derived is self-referential: it must be flagged and excluded
+    # from the supervision-eligible count.
+    assert audit["status"] == "violations_found"
+    assert audit["model_derived_active_count"] == 1
+    assert audit["supervision_eligible_count"] == 0
+    assert audit["violation_count"] >= 1
+    # Even with a violation, the ledger is evidence-only and must not
+    # block the verdict — research_readiness already gates on label
+    # independence at its own layer.
+    assert all("label_ledger" not in r for r in report["blocking_reasons"])
+
+
+def test_label_ledger_limitation_present_in_report(tmp_path) -> None:
+    """The limitations list must explain the label_ledger section."""
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    joined = " ".join(report["limitations"])
+    assert "label_ledger" in joined
+    assert "PRS-3" in joined
+    assert "independence" in joined
+    assert "label-append" in joined
