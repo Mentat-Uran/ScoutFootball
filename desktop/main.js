@@ -183,7 +183,7 @@ function checkApiHealth() {
   });
 }
 
-async function waitForBackend(maxWaitMs = 15000) {
+async function waitForBackend(maxWaitMs = 30000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     const health = await checkApiHealth();
@@ -431,10 +431,16 @@ app.on("ready", async () => {
   createWindow();
   createTray();
 
-  // Check for updates after window is shown
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
-  }, 5000);
+  // Check for updates after window is shown.
+  // Skip in packaged builds without a publish server (local-only distribution);
+  // autoUpdater reads app-update.yml which doesn't exist without a publish config.
+  if (app.isPackaged) {
+    log("Skipping auto-updater: local-only distribution (no publish server)");
+  } else {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(() => {});
+    }, 5000);
+  }
 });
 
 app.on("window-all-closed", () => {

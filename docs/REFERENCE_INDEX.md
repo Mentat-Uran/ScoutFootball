@@ -3,9 +3,9 @@
 > 自动生成：请勿手工编辑。来源为 `data/project_manifest.json`；重新生成命令为 `PYTHONPATH=src uv run python scripts/generate_manifest.py`。
 
 - manifest schema：`1.0.0`
-- package version：`1.0.3`
-- manifest generated_at：`2026-07-30T18:40:19.423545+00:00`
-- content SHA-256：`d48a3c6dae0642c1909e0d54923a82341c576c0d74a7f1008718184ae946a7b9`
+- package version：`1.1.0`
+- manifest generated_at：`2026-07-31T04:14:53.799936+00:00`
+- content SHA-256：`b7bf7c82ee1b4d74cdc0c807b19601aaed70935f8afa863d265a5ff84c716bdd`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 

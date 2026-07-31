@@ -284,11 +284,11 @@ const TacticalRenderer = {
         ctx.fillStyle = "rgba(0,0,0,0.5)";
         ctx.fillRect(x - 4, y - 2, 86, (hasHome && hasAway ? 2 : 1) * lineH + 8);
 
-        ctx.font = "bold 11px Inter, sans-serif";
+        ctx.font = "bold 11px -apple-system, 'SF Pro Display', sans-serif";
         ctx.textBaseline = "middle";
 
         if (hasHome) {
-            ctx.fillStyle = "#7ca8ff";
+            ctx.fillStyle = "#007aff";
             ctx.beginPath();
             ctx.arc(x + 6, y + lineH / 2 + 2, 5, 0, Math.PI * 2);
             ctx.fill();
@@ -298,7 +298,7 @@ const TacticalRenderer = {
             y += lineH;
         }
         if (hasAway) {
-            ctx.fillStyle = "#ff6b7b";
+            ctx.fillStyle = "#ff3b30";
             ctx.beginPath();
             ctx.arc(x + 6, y + lineH / 2 + 2, 5, 0, Math.PI * 2);
             ctx.fill();
@@ -335,7 +335,7 @@ const TacticalRenderer = {
         for (var i = 0; i < check.warnings.length; i++) {
             var msg = check.warnings[i];
             var tw = ctx.measureText(msg).width + 16;
-            ctx.fillStyle = "rgba(255,80,80,0.85)";
+            ctx.fillStyle = "rgba(255,59,48,0.85)";
             ctx.fillRect((w - tw) / 2, y, tw, 22);
             ctx.fillStyle = "#ffffff";
             ctx.textAlign = "center";
@@ -381,7 +381,7 @@ const TacticalRenderer = {
         var txt = "FPS: " + pm.fps + "  Render: " + pm.renderTime.toFixed(1) + "ms";
         ctx.fillStyle = "rgba(0,0,0,0.7)";
         ctx.fillRect(8, 8, ctx.measureText(txt).width + 12, 18);
-        ctx.fillStyle = "#00ff88";
+        ctx.fillStyle = "#34c759";
         ctx.fillText(txt, 14, 11);
         ctx.restore();
     },
@@ -880,7 +880,7 @@ const TacticalRenderer = {
             const badgeR = Math.max(7, r * 0.45);
             const bx = pos.x + r * 0.7;
             const by = pos.y - r * 0.7;
-            const badgeColor = rating > 70 ? "#57d68d" : rating >= 50 ? "#f0c040" : "#ff6b6b";
+            const badgeColor = rating > 70 ? "#34c759" : rating >= 50 ? "#ff9500" : "#ff3b30";
             ctx.fillStyle = badgeColor;
             ctx.beginPath();
             ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
@@ -951,7 +951,7 @@ const TacticalRenderer = {
         if (obj.possession === "home" || obj.possession === "away") {
             const dotR = r * 0.4;
             const dotOffset = r + dotR + 2;
-            const dotColor = obj.possession === "home" ? "#7ca8ff" : "#ff6b7b";
+            const dotColor = obj.possession === "home" ? "#007aff" : "#ff3b30";
             ctx.fillStyle = dotColor;
             ctx.beginPath();
             ctx.arc(pos.x + dotOffset, pos.y - dotOffset, dotR, 0, Math.PI * 2);
@@ -1203,7 +1203,7 @@ const TacticalRenderer = {
         const pos = this.toCanvas(obj.x, obj.y);
         const r = (obj.radius || 1.5) * this.scale;
         // Triangle (cone shape)
-        ctx.fillStyle = obj.color || "#ff9800";
+        ctx.fillStyle = obj.color || "#ff9500";
         ctx.beginPath();
         ctx.moveTo(pos.x, pos.y - r);
         ctx.lineTo(pos.x - r * 0.87, pos.y + r * 0.5);
@@ -1220,7 +1220,7 @@ const TacticalRenderer = {
         const pos = this.toCanvas(obj.x, obj.y);
         const r = (obj.radius || 1.5) * this.scale;
         // Diamond shape
-        ctx.fillStyle = obj.color || "#4caf50";
+        ctx.fillStyle = obj.color || "#34c759";
         ctx.beginPath();
         ctx.moveTo(pos.x, pos.y - r);
         ctx.lineTo(pos.x + r, pos.y);
@@ -1239,7 +1239,7 @@ const TacticalRenderer = {
         const h = (obj.height || 6) * this.scale;
         const w = 0.3 * this.scale;
         // Thin vertical line
-        ctx.fillStyle = obj.color || "#ffeb3b";
+        ctx.fillStyle = obj.color || "#ffd60a";
         ctx.fillRect(pos.x - w / 2, pos.y - h / 2, w, h);
         // Small circle at top
         ctx.beginPath();
@@ -2130,7 +2130,7 @@ const TacticalRenderer = {
         el.id = "player-detail-panel";
         el.style.cssText = "position:fixed;display:none;z-index:10001;" +
             "background:rgba(16,20,32,0.96);backdrop-filter:blur(16px);border:1px solid rgba(124,168,255,0.35);" +
-            "border-radius:10px;padding:14px 16px;color:#e0e6f0;font:13px/1.4 Inter,sans-serif;" +
+            "border-radius:var(--radius-md);padding:14px 16px;color:#e0e6f0;font:13px/1.4 Inter,sans-serif;" +
             "box-shadow:0 8px 32px rgba(0,0,0,0.6);width:280px;";
         document.body.appendChild(el);
         this._playerDetailPanelEl = el;
@@ -2168,26 +2168,26 @@ const TacticalRenderer = {
         const opacity = (obj.appearance && typeof obj.appearance.opacity === "number") ? obj.appearance.opacity : 1.0;
 
         el.innerHTML = `
-            <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#7ca8ff">Player Detail</div>
+            <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:#007aff">Player Detail</div>
             <div style="margin-bottom:6px">
                 <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Name</label>
-                <input type="text" id="_pd_name" value="${this._escAttr(name)}" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                <input type="text" id="_pd_name" value="${this._escAttr(name)}" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius-xs);color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
             </div>
             <div style="display:flex;gap:8px;margin-bottom:6px">
                 <div style="flex:1">
                     <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Number</label>
-                    <input type="number" id="_pd_number" min="0" max="99" value="${num}" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                    <input type="number" id="_pd_number" min="0" max="99" value="${num}" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius-xs);color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
                 </div>
                 <div style="flex:1">
                     <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Position</label>
-                    <select id="_pd_position" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                    <select id="_pd_position" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius-xs);color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
                         ${["GK","CB","FB","DM","CM","AM","W","ST"].map(p => `<option value="${p}" ${role===p?"selected":""}>${p}</option>`).join("")}
                     </select>
                 </div>
             </div>
             <div style="margin-bottom:6px">
                 <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Team</label>
-                <select id="_pd_team" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                <select id="_pd_team" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius-xs);color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
                     <option value="home" ${team==="home"?"selected":""}>Home</option>
                     <option value="away" ${team==="away"?"selected":""}>Away</option>
                 </select>
@@ -2195,26 +2195,26 @@ const TacticalRenderer = {
             <div style="display:flex;gap:8px;margin-bottom:6px">
                 <div style="flex:1">
                     <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Shape</label>
-                    <select id="_pd_shape" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
+                    <select id="_pd_shape" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius-xs);color:#e0e6f0;font:13px/1 Inter,sans-serif;outline:none">
                         ${["circle","square","triangle","diamond"].map(s => `<option value="${s}" ${shape===s?"selected":""}>${s}</option>`).join("")}
                     </select>
                 </div>
                 <div style="flex:1">
                     <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Size (${size})</label>
-                    <input type="range" id="_pd_size" min="1" max="5" step="1" value="${size}" style="width:100%;accent-color:#7ca8ff">
+                    <input type="range" id="_pd_size" min="1" max="5" step="1" value="${size}" style="width:100%;accent-color:#007aff">
                 </div>
             </div>
             <div style="margin-bottom:6px">
                 <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Opacity (${opacity.toFixed(1)})</label>
-                <input type="range" id="_pd_opacity" min="0.3" max="1.0" step="0.1" value="${opacity}" style="width:100%;accent-color:#7ca8ff">
+                <input type="range" id="_pd_opacity" min="0.3" max="1.0" step="0.1" value="${opacity}" style="width:100%;accent-color:#007aff">
             </div>
             <div style="margin-bottom:10px">
                 <label style="display:block;font-size:11px;color:#8892a4;margin-bottom:2px">Notes</label>
-                <textarea id="_pd_notes" rows="3" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#e0e6f0;font:12px/1.3 Inter,sans-serif;outline:none;resize:vertical">${this._escHtml(notes)}</textarea>
+                <textarea id="_pd_notes" rows="3" style="width:100%;padding:4px 6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius-xs);color:#e0e6f0;font:12px/1.3 Inter,sans-serif;outline:none;resize:vertical">${this._escHtml(notes)}</textarea>
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end">
-                <button id="_pd_cancel" style="padding:5px 14px;border:1px solid rgba(255,255,255,0.2);border-radius:5px;background:transparent;color:#c0c8d8;cursor:pointer;font:12px/1 Inter,sans-serif">Cancel</button>
-                <button id="_pd_save" style="padding:5px 14px;border:none;border-radius:5px;background:#7ca8ff;color:#0a0e1a;cursor:pointer;font:12px/1 Inter,sans-serif;font-weight:600">Save</button>
+                <button id="_pd_cancel" style="padding:5px 14px;border:1px solid rgba(255,255,255,0.2);border-radius:var(--radius-xs);background:transparent;color:#c0c8d8;cursor:pointer;font:12px/1 Inter,sans-serif">Cancel</button>
+                <button id="_pd_save" style="padding:5px 14px;border:none;border-radius:var(--radius-xs);background:#007aff;color:#0a0e1a;cursor:pointer;font:12px/1 Inter,sans-serif;font-weight:600">Save</button>
             </div>
         `;
 
@@ -2265,8 +2265,8 @@ const TacticalRenderer = {
             // Update label to position role if name is empty
             if (!target.label) target.label = newPosition;
             target.team = newTeam;
-            if (target.team === "away") target.color = "#ff6b7b";
-            else target.color = "#7ca8ff";
+            if (target.team === "away") target.color = "#ff3b30";
+            else target.color = "#007aff";
             if (!target.appearance) target.appearance = {};
             target.appearance.shape = ["circle","square","triangle","diamond"].includes(newShape) ? newShape : "circle";
             target.appearance.size = Math.max(1, Math.min(5, newSize || 3));
@@ -2637,7 +2637,7 @@ const TacticalRenderer = {
         const el = document.createElement("div");
         el.style.cssText = "position:fixed;display:none;z-index:9999;pointer-events:none;" +
             "background:rgba(20,24,36,0.92);backdrop-filter:blur(12px);border:1px solid rgba(124,168,255,0.3);" +
-            "border-radius:8px;padding:8px 12px;color:#e0e6f0;font:12px/1.4 Inter,sans-serif;" +
+            "border-radius:var(--radius-sm);padding:8px 12px;color:#e0e6f0;font:12px/1.4 Inter,sans-serif;" +
             "box-shadow:0 4px 20px rgba(0,0,0,0.4);min-width:120px;max-width:220px;";
         document.body.appendChild(el);
         this._hoverCardEl = el;
@@ -2676,16 +2676,17 @@ const TacticalRenderer = {
         const parent = this.canvas.parentElement;
         if (this._timelineEl && this._timelineEl.parentNode) return;
         const el = document.createElement("div");
+        el.className = "tactical-timeline-bar";
         el.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;" +
             "background:rgba(20,24,36,0.85);backdrop-filter:blur(8px);border-top:1px solid rgba(255,255,255,0.08);" +
             "font:12px/1 Inter,sans-serif;color:#c0c8d8;user-select:none;";
         el.innerHTML =
             '<button data-act="prev" style="background:none;border:none;color:inherit;cursor:pointer;font-size:16px" title="\u4E0A\u4E00\u5E27">\u25C1</button>' +
             '<div style="flex:1;position:relative;height:20px;cursor:pointer" data-act="scrub">' +
-            '<div style="position:absolute;top:8px;left:0;right:0;height:3px;background:rgba(255,255,255,0.12);border-radius:2px"></div>' +
-            '<div data-el="progress" style="position:absolute;top:8px;left:0;height:3px;background:#7ca8ff;border-radius:2px;width:0%"></div>' +
+            '<div style="position:absolute;top:8px;left:0;right:0;height:3px;background:rgba(255,255,255,0.12);border-radius:var(--radius-xs)"></div>' +
+            '<div data-el="progress" style="position:absolute;top:8px;left:0;height:3px;background:#007aff;border-radius:var(--radius-xs);width:0%"></div>' +
             '<div data-el="markers" style="position:absolute;top:0;left:0;right:0;height:20px"></div>' +
-            '<div data-el="indicator" style="position:absolute;top:3px;left:0;width:14px;height:14px;background:#7ca8ff;border-radius:50%;transform:translateX(-7px);box-shadow:0 0 6px rgba(124,168,255,0.6)"></div>' +
+            '<div data-el="indicator" style="position:absolute;top:3px;left:0;width:14px;height:14px;background:#007aff;border-radius:50%;transform:translateX(-7px);box-shadow:0 0 6px rgba(124,168,255,0.6)"></div>' +
             '</div>' +
             '<button data-act="next" style="background:none;border:none;color:inherit;cursor:pointer;font-size:16px" title="\u4E0B\u4E00\u5E27">\u25B7</button>' +
             '<span data-el="label" style="min-width:48px;text-align:center;font-size:11px;color:#8892a4">1 / 1</span>';
@@ -2726,7 +2727,7 @@ const TacticalRenderer = {
                 const m = document.createElement("div");
                 const mp = frames.length > 1 ? (i / (frames.length - 1)) * 100 : 0;
                 m.style.cssText = `position:absolute;top:2px;left:${mp}%;width:6px;height:6px;transform:translateX(-3px);` +
-                    `background:${i === idx ? "#7ca8ff" : "rgba(255,255,255,0.25)"};border-radius:50%;cursor:pointer`;
+                    `background:${i === idx ? "#007aff" : "rgba(255,255,255,0.25)"};border-radius:50%;cursor:pointer`;
                 m.title = frames[i].name || ("Frame " + (i + 1));
                 const fi = i;
                 m.addEventListener("click", (ev) => { ev.stopPropagation(); this.goToFrame(fi); this.updateTimeline(); });
@@ -2767,7 +2768,7 @@ const TacticalRenderer = {
             '<style>@media print{body{margin:0}img{max-width:100%;height:auto}}body{margin:20px;text-align:center}</style>' +
             '</head><body>' +
             '<h2 style="font-family:Inter,sans-serif;color:#333">\u6218\u672F\u677F \u2014 Tactical Board</h2>' +
-            '<img src="' + dataUrl + '" style="max-width:100%;border:1px solid #ccc;border-radius:4px" />' +
+            '<img src="' + dataUrl + '" style="max-width:100%;border:1px solid #ccc;border-radius:var(--radius-xs)" />' +
             '<div style="margin-top:8px;font-size:11px;color:#999;font-family:Inter,sans-serif">' + this._escapeNotesHtml(attribution) + ' \u2014 ' + new Date().toISOString().slice(0, 10) + '</div>' +
             '<script>setTimeout(function(){window.print()},500)<\/script>' +
             '</body></html>'
@@ -3338,7 +3339,7 @@ const TacticalRenderer = {
             let notesHtml = "";
             if (notes) {
                 const lines = notes.split("\n").filter(l => l.trim());
-                notesHtml = '<div style="margin:8px 0;padding:8px 12px;background:#f9f9f9;border-radius:4px;font-size:13px;line-height:1.6">';
+                notesHtml = '<div style="margin:8px 0;padding:8px 12px;background:#f9f9f9;border-radius:var(--radius-xs);font-size:13px;line-height:1.6">';
                 for (const line of lines) {
                     const trimmed = line.trim();
                     if (trimmed.startsWith("- ")) {
@@ -3353,7 +3354,7 @@ const TacticalRenderer = {
             framePages += '<div class="print-frame" style="page-break-inside:avoid;margin:20px 0">';
             framePages += '<h3 style="margin:0 0 4px;font-size:16px;color:#222">' + this._escapeNotesHtml(frames[i].name || ("Frame " + (i + 1))) + ' <span style="font-size:12px;color:#888">(' + duration + 'ms)</span></h3>';
             framePages += metaHtml;
-            framePages += '<img src="' + dataUrl + '" style="max-width:100%;border:1px solid #ddd;border-radius:4px" />';
+            framePages += '<img src="' + dataUrl + '" style="max-width:100%;border:1px solid #ddd;border-radius:var(--radius-xs)" />';
             framePages += notesHtml;
             framePages += '</div>';
         }

@@ -786,15 +786,15 @@
                         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.4rem;margin-bottom:0.5rem">
                             <label style="font-size:0.7rem;display:flex;flex-direction:column;gap:0.2rem">
                                 <span data-i18n="value_bet_home_odds">主胜赔率</span>
-                                <input type="number" id="value-bet-home-odds" min="1" max="1000" step="0.01" value="2.00" style="font-size:0.8rem;padding:0.2rem 0.4rem" />
+                                <input type="number" id="value-bet-home-odds" min="1" max="1000" step="0.01" value="2.00" class="glass-control" style="font-size:0.8rem;height:30px" />
                             </label>
                             <label style="font-size:0.7rem;display:flex;flex-direction:column;gap:0.2rem">
                                 <span data-i18n="value_bet_draw_odds">平局赔率</span>
-                                <input type="number" id="value-bet-draw-odds" min="1" max="1000" step="0.01" value="3.50" style="font-size:0.8rem;padding:0.2rem 0.4rem" />
+                                <input type="number" id="value-bet-draw-odds" min="1" max="1000" step="0.01" value="3.50" class="glass-control" style="font-size:0.8rem;height:30px" />
                             </label>
                             <label style="font-size:0.7rem;display:flex;flex-direction:column;gap:0.2rem">
                                 <span data-i18n="value_bet_away_odds">客胜赔率</span>
-                                <input type="number" id="value-bet-away-odds" min="1" max="1000" step="0.01" value="3.00" style="font-size:0.8rem;padding:0.2rem 0.4rem" />
+                                <input type="number" id="value-bet-away-odds" min="1" max="1000" step="0.01" value="3.00" class="glass-control" style="font-size:0.8rem;height:30px" />
                             </label>
                         </div>
                         <div id="match-value-bet-result"></div>
@@ -1237,7 +1237,7 @@
                     <div class="panel-head">
                         <h3 data-i18n="league_difficulty_title">赛程难度评估</h3>
                         <div style="display:flex;gap:0.5rem;align-items:center">
-                            <input id="league-difficulty-team" type="text" placeholder="Arsenal / Liverpool / 留空看全部" style="font-size:0.8rem;padding:0.25rem 0.5rem;width:220px;border:1px solid var(--border-color);border-radius:4px;background:var(--surface);color:var(--text)" aria-label="Team filter" />
+                            <input id="league-difficulty-team" type="text" placeholder="Arsenal / Liverpool / 留空看全部" style="font-size:0.8rem;padding:0.25rem 0.5rem;width:220px;border:1px solid var(--border-color);border-radius:var(--radius-xs);background:var(--surface);color:var(--text)" aria-label="Team filter" />
                             <button id="league-difficulty-btn" class="cta-button" type="button" data-i18n="league_difficulty_btn">查询</button>
                         </div>
                     </div>
@@ -1888,10 +1888,10 @@
                         </div>
                         <div id="tactical-a11y-live" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
                         <div id="tactical-export-preview" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);align-items:center;justify-content:center">
-                            <div style="background:var(--bg,#1a1a2e);border:1px solid var(--border,#333);border-radius:8px;padding:1.5rem;max-width:500px;width:90%">
+                            <div style="background:var(--bg,#1a1a2e);border:1px solid var(--border,#333);border-radius:var(--radius-sm);padding:1.5rem;max-width:500px;width:90%">
                                 <h3 style="margin:0 0 0.5rem">Export Preview</h3>
                                 <p style="font-size:0.82rem;color:var(--text-muted);margin:0 0 0.5rem">The following attribution will be included in the export:</p>
-                                <pre id="tactical-export-attribution" style="background:var(--bg-alt,#111);padding:0.5rem;border-radius:4px;font-size:0.78rem;white-space:pre-wrap;word-break:break-all;color:var(--text,#ccc);max-height:200px;overflow-y:auto"></pre>
+                                <pre id="tactical-export-attribution" style="background:var(--bg-alt,#111);padding:0.5rem;border-radius:var(--radius-xs);font-size:0.78rem;white-space:pre-wrap;word-break:break-all;color:var(--text,#ccc);max-height:200px;overflow-y:auto"></pre>
                                 <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
                                     <button class="text-button" id="tactical-export-confirm" type="button" aria-label="Confirm export">Confirm Export</button>
                                     <button class="text-button" id="tactical-export-cancel" type="button" aria-label="Cancel export">Cancel</button>
@@ -1936,7 +1936,7 @@
                             <button class="text-button" id="tactical-save-frame" type="button" aria-label="Save current frame state">保存当前帧</button>
                         </div>
                         <div id="tactical-frame-list" class="rank-list" style="margin-bottom:0.5rem"></div>
-                        <div id="tactical-decision-pack" class="signal-list" hidden style="white-space:pre-line;font-size:0.78rem;line-height:1.5;margin:0.5rem 0;padding:0.65rem;border:1px solid var(--border);border-radius:8px;color:var(--text-muted)"></div>
+                        <div id="tactical-decision-pack" class="signal-list" hidden style="white-space:pre-line;font-size:0.78rem;line-height:1.5;margin:0.5rem 0;padding:0.65rem;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted)"></div>
                         <div class="panel-head" style="margin-top:0.5rem">
                             <h3>Coaching Notes</h3>
                         </div>
@@ -2807,7 +2807,7 @@
                             <span class="kicker" data-i18n="team_profile_desc">单队预测准确率/校准/超额表现/常见比分/最佳最差预测</span>
                         </div>
                         <div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">
-                            <input id="team-profile-input" type="text" placeholder="Team name" style="font-size:0.75rem;padding:0.25rem 0.5rem;width:160px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:4px;color:var(--text-base)" />
+                            <input id="team-profile-input" type="text" placeholder="Team name" style="font-size:0.75rem;padding:0.25rem 0.5rem;width:160px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:var(--radius-xs);color:var(--text-base)" />
                             <button class="text-button" id="btn-team-profile" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="team_profile_fetch">加载</button>
                         </div>
                     </div>
@@ -2822,7 +2822,7 @@
                         <h2>用户说明书</h2>
                         <a class="text-button" href="user-guide.html" target="_blank" rel="noopener" style="font-size:0.82rem">在新标签页打开 ↗</a>
                     </div>
-                    <iframe src="user-guide.html" style="width:100%;height:calc(100dvh - 200px);border:none;border-radius:8px;background:var(--bg-base)" title="ScoutFootball User Guide"></iframe>
+                    <iframe src="user-guide.html" style="width:100%;height:calc(100dvh - 200px);border:none;border-radius:var(--radius-sm);background:var(--bg-base)" title="ScoutFootball User Guide"></iframe>
                 </article>
             </section>
         </main>

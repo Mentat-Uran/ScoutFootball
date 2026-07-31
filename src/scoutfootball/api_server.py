@@ -80,6 +80,7 @@ from scoutfootball.api import (
     get_league_form_table,
     get_league_style_evolution,
     get_league_style_percentiles,
+    get_market_value_summary,
     get_match_momentum,
     get_match_prediction,
     get_match_prediction_dc,
@@ -93,6 +94,7 @@ from scoutfootball.api import (
     get_player_career_trajectory,
     get_player_comparison,
     get_player_comparison_multi,
+    get_player_market_value_history,
     get_player_peer_benchmark,
     get_player_profile,
     get_player_ratings,
@@ -189,6 +191,7 @@ from scoutfootball.api import (
     import_local_pack,
     import_wc_tournament_state,
     list_decision_dossier_backups,
+    list_market_value_players,
     list_opposition_briefing_backups,
     list_players,
     list_post_match_review_backups,
@@ -833,6 +836,57 @@ def create_app() -> FastAPI:
     @app.get("/value-summary")
     def value_summary():
         return get_value_summary()
+
+    # ── Market value (身价) endpoints ──────────────────────────────
+    # Read-only Transfermarkt market value access. All responses carry
+    # source attribution and the Transfermarkt ToS license boundary so
+    # consumers cannot mistake subjective valuations for market prices.
+    @app.get("/market-value/summary")
+    def market_value_summary():
+        """Aggregate market value stats with source attribution.
+
+        Returns total_players, total_snapshots, value distribution by
+        EUR band, and top-10 players by latest market value. Reads
+        local raw Transfermarkt data only; never scrapes.
+        """
+        return get_market_value_summary()
+
+    @app.get("/market-value/players")
+    def market_value_players(
+        limit: int = Query(100, ge=1, le=1000),
+        offset: int = Query(0, ge=0),
+        min_value_eur: float | None = Query(None, ge=0.0),
+        max_value_eur: float | None = Query(None, ge=0.0),
+        team: str | None = Query(None, max_length=128),
+        position: str | None = Query(None, max_length=64),
+        sort_by: str = Query("market_value_eur", max_length=32),
+        sort_order: str = Query("desc", max_length=4),
+    ):
+        """List players with their latest market value (paginated).
+
+        Returns one row per player (the latest snapshot). Filters by
+        value range, team name (substring), and position (substring).
+        """
+        return list_market_value_players(
+            limit=limit,
+            offset=offset,
+            min_value_eur=min_value_eur,
+            max_value_eur=max_value_eur,
+            team=team,
+            position=position,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+
+    @app.get("/market-value/players/{player_name}")
+    def market_value_player_history(player_name: str):
+        """Full market value history for a single player.
+
+        Case-insensitive exact match first, then substring fallback.
+        Returns all matching histories grouped by player_id so the
+        caller can disambiguate common names.
+        """
+        return get_player_market_value_history(player_name)
 
     @app.get("/action-values")
     def action_values(limit: int = 20, offset: int = 0):

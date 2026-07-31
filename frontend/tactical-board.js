@@ -442,7 +442,7 @@ const TACTICAL_BOARD = {
             team,
             label: this._safeString(label),
             number: Math.round(this._clampNumber(number, 0, 99, 0)),
-            color: team === "home" ? "#7ca8ff" : "#ff6b7b",
+            color: team === "home" ? "#007aff" : "#ff3b30",
             radius: 2,
             locked: false,
             visible: true,
@@ -450,37 +450,37 @@ const TACTICAL_BOARD = {
     },
 
     /* ── Training equipment factories ─────────────────────────────── */
-    createCone(x, y, color = "#ff9800") {
+    createCone(x, y, color = "#ff9500") {
         return {
             id: this._uuid(),
             type: "cone",
             x, y,
-            color: this._safeString(color, "#ff9800").slice(0, 32),
+            color: this._safeString(color, "#ff9500").slice(0, 32),
             radius: 1.5,
             locked: false,
             visible: true,
         };
     },
 
-    createMarker(x, y, color = "#4caf50") {
+    createMarker(x, y, color = "#34c759") {
         return {
             id: this._uuid(),
             type: "marker",
             x, y,
-            color: this._safeString(color, "#4caf50").slice(0, 32),
+            color: this._safeString(color, "#34c759").slice(0, 32),
             radius: 1.5,
             locked: false,
             visible: true,
         };
     },
 
-    createPole(x, y, height = 6, color = "#ffeb3b") {
+    createPole(x, y, height = 6, color = "#ffd60a") {
         return {
             id: this._uuid(),
             type: "pole",
             x, y,
             height: this._clampNumber(height, 2, 20, 6),
-            color: this._safeString(color, "#ffeb3b").slice(0, 32),
+            color: this._safeString(color, "#ffd60a").slice(0, 32),
             locked: false,
             visible: true,
         };
@@ -762,7 +762,7 @@ const TACTICAL_BOARD = {
             team,   // "home" | "away"
             label,
             number,
-            color: team === "home" ? "#7ca8ff" : "#ff6b7b",
+            color: team === "home" ? "#007aff" : "#ff3b30",
             radius: 3,
             locked: false,
             visible: true,
@@ -1039,7 +1039,7 @@ const TACTICAL_BOARD = {
         }
         safe.x = this._clampNumber(object.x, 0, 100, 50);
         safe.y = this._clampNumber(object.y, 0, 100, 50);
-        safe.color = this._safeString(object.color, type === "player" ? "#7ca8ff" : "#ffffff").slice(0, 32);
+        safe.color = this._safeString(object.color, type === "player" ? "#007aff" : "#ffffff").slice(0, 32);
         safe.radius = this._clampNumber(object.radius, 0.5, 8, type === "ball" ? 1.5 : 3);
         if (type === "ball") {
             safe.possession = (object.possession === "home" || object.possession === "away") ? object.possession : null;
@@ -1093,12 +1093,12 @@ const TACTICAL_BOARD = {
             safe.fontSize = this._clampNumber(object.fontSize, 8, 36, 14);
         }
         if (type === "cone" || type === "marker") {
-            safe.color = this._safeString(object.color, type === "cone" ? "#ff9800" : "#4caf50").slice(0, 32);
+            safe.color = this._safeString(object.color, type === "cone" ? "#ff9500" : "#34c759").slice(0, 32);
             safe.radius = this._clampNumber(object.radius, 0.5, 5, 1.5);
         }
         if (type === "pole") {
             safe.height = this._clampNumber(object.height, 2, 20, 6);
-            safe.color = this._safeString(object.color, "#ffeb3b").slice(0, 32);
+            safe.color = this._safeString(object.color, "#ffd60a").slice(0, 32);
             safe.width = 0.3;
         }
         if (type === "ladder") {
@@ -1939,7 +1939,7 @@ const TACTICAL_BOARD = {
         title: "Old Project",
         sport: "football",
         objects: [
-            { id: "p1", type: "player", x: 50, y: 50, team: "home", color: "#7ca8ff", radius: 3, label: "", number: 1 },
+            { id: "p1", type: "player", x: 50, y: 50, team: "home", color: "#007aff", radius: 3, label: "", number: 1 },
             { id: "b1", type: "ball", x: 50, y: 50, color: "#ffffff", radius: 1.5 },
             { id: "a1", type: "arrow", startX: 10, startY: 10, endX: 90, endY: 90, style: "solid", color: "#ffffff", width: 2 },
         ],

@@ -4084,9 +4084,9 @@ class TestLeagueFormHeatmapFunction:
         assert idx > 0
         body = js[idx : idx + 6000]
         assert 'type: "piecewise"' in body
-        assert "#16a34a" in body  # W green
-        assert "#ca8a04" in body  # D amber
-        assert "#dc2626" in body  # L red
+        assert "#34c759" in body  # W green
+        assert "#ff9500" in body  # D amber
+        assert "#ff3b30" in body  # L red
 
     def test_uses_heatmap_series_type(self):
         js = _read_app_js()
@@ -4491,9 +4491,9 @@ class TestLeagueDifficultyHeatmapFunction:
         idx = js.find("function renderLeagueDifficultyHeatmap")
         assert idx > 0
         body = js[idx : idx + 6000]
-        assert "#16a34a" in body  # green (easy)
-        assert "#ca8a04" in body  # amber (moderate)
-        assert "#dc2626" in body  # red (hard)
+        assert "#34c759" in body  # green (easy)
+        assert "#ff9500" in body  # amber (moderate)
+        assert "#ff3b30" in body  # red (hard)
 
     def test_uses_heatmap_series_type(self):
         js = _read_app_js()
@@ -4780,9 +4780,9 @@ class TestLeagueDifficultyDistributionFunction:
         body = js[idx : idx + 4000]
         assert ">= 70" in body
         assert ">= 50" in body
-        assert "#dc2626" in body  # red
-        assert "#ca8a04" in body  # amber
-        assert "#16a34a" in body  # green
+        assert "#ff3b30" in body  # red
+        assert "#ff9500" in body  # amber
+        assert "#34c759" in body  # green
 
     def test_tooltip_uses_escape_html_for_team(self):
         """Tooltip must escape team name."""
@@ -5691,9 +5691,9 @@ class TestWcMatchPredictionPillFunction:
         assert idx > 0
         body = js[idx : idx + 3500]
         # Three color segments: green home, amber draw, red away
-        assert "#16a34a" in body
-        assert "#ca8a04" in body
-        assert "#dc2626" in body
+        assert "#34c759" in body
+        assert "#ff9500" in body
+        assert "#ff3b30" in body
 
     def test_pending_bar_uses_home_draw_away_probs(self):
         js = _read_app_js()

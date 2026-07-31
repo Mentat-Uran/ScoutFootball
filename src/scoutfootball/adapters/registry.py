@@ -442,7 +442,24 @@ def build_fbref_manifest() -> AdapterManifest:
 
 
 def build_transfermarkt_manual_manifest() -> AdapterManifest:
-    """Transfermarkt manual import: market value and identity."""
+    """Transfermarkt manual import: market value and identity.
+
+    Two on-disk CSV shapes are supported:
+
+    1. **Denormalized single-CSV snapshot** consumed by
+       ``adapters.transfermarkt_manual.load_snapshot`` (used by the
+       truth-label bridge). Expected columns: ``player_name``,
+       ``team_name``, ``snapshot_date``, ``market_value_raw``.
+    2. **Normalized two-CSV profiles + valuations** consumed directly by
+       ``api._load_market_value_frame`` Path 2 (used by the market-value
+       API endpoints). Files: ``player_profiles.csv`` (player_id →
+       name/club/position) and ``player_market_value.csv`` (player_id,
+       date_unix, value). The API joins on ``player_id`` and strips the
+       trailing ``(<id>)`` suffix Transfermarkt appends to display names.
+
+    The schema_mappings below document the **normalized two-CSV path**
+    because that is the shape currently on disk (2026-07-31).
+    """
     return AdapterManifest(
         source_id="transfermarkt_manual",
         parser_version="transfermarkt_manual/v0.1.0",
@@ -453,35 +470,50 @@ def build_transfermarkt_manual_manifest() -> AdapterManifest:
         ),
         schema_mappings=(
             SchemaMapping(
-                source_field="player_id",
+                source_field="player_profiles.player_id",
                 internal_field="transfermarkt_player_id",
                 conversion="direct",
-                note="Transfermarkt numeric ID; used as truth-label anchor.",
+                note="Transfermarkt numeric ID; join key between profiles and valuations.",
             ),
             SchemaMapping(
-                source_field="player_name",
+                source_field="player_profiles.player_name",
                 internal_field="player_name",
                 conversion="direct",
+                note=(
+                    "Transfermarkt appends '(<id>)' suffix to disambiguate "
+                    "duplicates; api._load_market_value_frame strips it via "
+                    "regex r'\\s*\\(\\d+\\)\\s*$' so responses carry the bare name."
+                ),
             ),
             SchemaMapping(
-                source_field="current_market_value_eur",
-                internal_field="market_value_eur",
+                source_field="player_profiles.current_club_name",
+                internal_field="team_name",
                 conversion="direct",
-                note="Latest snapshot value; historical values in player_market_value.csv.",
+                note="Free-text club name; not normalized to internal team_id.",
             ),
             SchemaMapping(
-                source_field="date_unix",
+                source_field="player_profiles.position",
+                internal_field="position",
+                conversion="direct",
+                note=(
+                    "Transfermarkt position label (e.g. 'Attack - Right Winger'); "
+                    "not normalized to internal RoleFamily."
+                ),
+            ),
+            SchemaMapping(
+                source_field="player_market_value.date_unix",
                 internal_field="snapshot_date",
                 conversion="unit_conversion",
-                note="Unix timestamp converted to datetime for snapshot ledger.",
+                note="YYYY-MM-DD string parsed to datetime64[ns] via pd.to_datetime.",
             ),
             SchemaMapping(
-                source_field="player_market_value_eur",
-                internal_field="historical_market_value_eur",
+                source_field="player_market_value.value",
+                internal_field="market_value_eur",
                 conversion="direct",
+                note="Numeric EUR value; Transfermarkt subjective estimate, not market price.",
             ),
             SchemaMapping(
-                source_field="player_profile_url",
+                source_field="player_profiles.player_profile_url",
                 internal_field="transfermarkt_profile_url",
                 conversion="direct",
             ),
@@ -491,7 +523,11 @@ def build_transfermarkt_manual_manifest() -> AdapterManifest:
             "in data/raw/transfermarkt_manual/. No automated scraping. Market "
             "values are subjective Transfermarkt estimates, not market prices; "
             "used as supervision labels for the rating NN, not as ground truth. "
-            "The date_unix field is data content time, not a source snapshot date."
+            "The date_unix field is data content time, not a source snapshot date. "
+            "The denormalized load_snapshot path (used by snapshot_to_truth_labels) "
+            "expects a different single-CSV schema and will raise SourceSchemaError "
+            "if pointed at the normalized two-CSV files; the two paths serve "
+            "different consumers and are not interchangeable."
         ),
         ingestion_cli="scoutfootball ingest --source transfermarkt_manual",
         artifact_paths=(
@@ -500,7 +536,11 @@ def build_transfermarkt_manual_manifest() -> AdapterManifest:
             "raw/transfermarkt_manual/player_latest_market_value.csv",
         ),
         maintained=True,
-        notes="Manual import only; no automated scraping.",
+        notes=(
+            "Manual import only; no automated scraping. Maintainer confirmed "
+            "personal local use OK; redistribution requires Transfermarkt ToS "
+            "review. Market values are subjective estimates, not market prices."
+        ),
     )
 
 
