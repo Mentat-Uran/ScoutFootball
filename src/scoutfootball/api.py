@@ -5692,6 +5692,596 @@ def get_value_summary() -> dict:
     })
 
 
+# ── Market value (身价) service ────────────────────────────────────────
+#
+# 切片目标：把 Transfermarkt 身价数据接入 API，让维护者能在前端/CLI
+# 直接查询球员的最新身价、历史身价序列，以及全库聚合统计。
+#
+# 数据源优先级（fail-closed，绝不编造数据）：
+# 1. ``data/raw/transfermarkt_datasets/player_valuations.parquet``
+#    — 通过 ``adapters.transfermarkt_datasets.export_table`` 或
+#      ``load_csv_table`` 从 dcaribou/transfermarkt-datasets DuckDB 或
+#      Kaggle CSV 导出的官方表（schema 见
+#      ``adapters/transfermarkt_datasets.py``）。
+# 2. ``data/raw/transfermarkt_manual/player_latest_market_value.csv``
+#    + ``player_profiles.csv`` — 维护者手动放置的快照 CSV，schema
+#    见 ``adapters/transfermarkt_manual.py``。这是当前磁盘上唯一真实
+#    存在的数据路径。
+#
+# 所有响应必须携带：
+# - ``source_name``：``"transfermarkt_datasets"`` 或 ``"transfermarkt_manual"``
+# - ``source_uri``：实际读取的文件相对路径
+# - ``license_boundary``：Transfermarkt ToS 边界（个人本地使用，不可再分发）
+# - ``currency``：``"EUR"``（Transfermarkt 原始货币）
+#
+# 当两个数据源都不存在时返回 ``status="no_data"``，并附 ``evidence``
+# 字段说明检查了哪些路径，让前端能诚实渲染空状态而非假装有数据。
+
+_MARKET_VALUE_LICENSE_BOUNDARY = (
+    "Personal local use only. Transfermarkt ToS prohibit scraping, "
+    "redistribution, and commercial reuse without written permission. "
+    "See docs/DATA_RIGHTS.md §2.1. Market values are subjective "
+    "Transfermarkt estimates, not market prices."
+)
+
+
+def _load_market_value_frame() -> tuple[pd.DataFrame | None, dict[str, Any]]:
+    """Load and normalize the market value frame from local raw data.
+
+    Returns ``(frame, source_meta)`` where ``frame`` is None when no
+    data source is available, and ``source_meta`` always carries
+    ``source_name``, ``source_uri``, ``license_boundary``, ``currency``,
+    and ``checked_paths`` so the API can render an honest empty state.
+
+    Normalized columns:
+        - ``player_id`` (str): source-native Transfermarkt numeric ID
+        - ``player_name`` (str): from profiles join
+        - ``team_name`` (str): current club name (may be empty)
+        - ``position`` (str): source position label (may be empty)
+        - ``snapshot_date`` (pd.Timestamp): valuation date
+        - ``market_value_eur`` (float): market value in EUR
+    """
+    settings = _settings()
+    checked: list[str] = []
+
+    # Path 1: transfermarkt_datasets bulk export (player_valuations.parquet)
+    tm_datasets_dir = settings.raw_root / "transfermarkt_datasets"
+    valuations_path = tm_datasets_dir / "player_valuations.parquet"
+    checked.append(str(valuations_path.relative_to(settings.data_root)))
+    if valuations_path.exists():
+        try:
+            df = _read_parquet(valuations_path)
+        except Exception:
+            logger.warning(
+                "market_value: player_valuations.parquet read failed",
+                exc_info=True,
+            )
+            df = None
+        if df is not None and not df.empty:
+            normalized = _normalize_tm_datasets_valuations(df, tm_datasets_dir)
+            if normalized is not None and not normalized.empty:
+                return normalized, {
+                    "source_name": "transfermarkt_datasets",
+                    "source_uri": str(valuations_path.relative_to(settings.data_root)),
+                    "license_boundary": _MARKET_VALUE_LICENSE_BOUNDARY,
+                    "currency": "EUR",
+                    "checked_paths": checked,
+                }
+
+    # Path 2: transfermarkt_manual raw CSVs (player_latest_market_value.csv
+    # or player_market_value.csv) + player_profiles.csv
+    tm_manual_dir = settings.raw_root / "transfermarkt_manual"
+    profiles_path = tm_manual_dir / "player_profiles.csv"
+    latest_path = tm_manual_dir / "player_latest_market_value.csv"
+    history_path = tm_manual_dir / "player_market_value.csv"
+
+    checked.append(str(latest_path.relative_to(settings.data_root)))
+    checked.append(str(history_path.relative_to(settings.data_root)))
+    checked.append(str(profiles_path.relative_to(settings.data_root)))
+
+    mv_path = latest_path if latest_path.exists() else history_path
+    if not mv_path.exists() or not profiles_path.exists():
+        return None, {
+            "source_name": "none",
+            "source_uri": None,
+            "license_boundary": _MARKET_VALUE_LICENSE_BOUNDARY,
+            "currency": "EUR",
+            "checked_paths": checked,
+        }
+
+    try:
+        mv_df = pd.read_csv(mv_path)
+        profiles_df = pd.read_csv(
+            profiles_path,
+            usecols=lambda c: c in {
+                "player_id",
+                "player_name",
+                "current_club_name",
+                "position",
+                "main_position",
+            },
+        )
+    except Exception:
+        logger.warning(
+            "market_value: transfermarkt_manual CSV read failed",
+            exc_info=True,
+        )
+        return None, {
+            "source_name": "none",
+            "source_uri": None,
+            "license_boundary": _MARKET_VALUE_LICENSE_BOUNDARY,
+            "currency": "EUR",
+            "checked_paths": checked,
+        }
+
+    merged = mv_df.merge(profiles_df, on="player_id", how="left")
+    # Transfermarkt profiles append the numeric player_id to the display
+    # name to disambiguate duplicates (e.g. "Lamine Yamal (937958)"). Strip
+    # the trailing "(<id>)" suffix so API responses carry the bare name;
+    # the canonical player_id remains in the dedicated ``player_id`` field.
+    raw_names = merged["player_name"].astype("string").str.strip()
+    raw_names = raw_names.str.replace(
+        r"\s*\(\d+\)\s*$", "", regex=True
+    ).str.strip()
+    normalized = pd.DataFrame(
+        {
+            "player_id": merged["player_id"].astype("string"),
+            "player_name": raw_names,
+            "team_name": merged.get(
+                "current_club_name", pd.Series(index=merged.index, dtype="object")
+            ).astype("string").str.strip(),
+            "position": merged.get(
+                "position", pd.Series(index=merged.index, dtype="object")
+            ).astype("string").str.strip(),
+            "snapshot_date": pd.to_datetime(
+                merged["date_unix"], errors="coerce"
+            ),
+            "market_value_eur": pd.to_numeric(
+                merged["value"], errors="coerce"
+            ).astype("float64"),
+        }
+    )
+    # Drop rows with missing critical fields (player_name or market_value_eur).
+    # A missing snapshot_date is kept (some latest-snapshot rows omit it) but
+    # surfaced as NaT in the response.
+    normalized = normalized.dropna(
+        subset=["player_name", "market_value_eur"]
+    ).reset_index(drop=True)
+
+    return normalized, {
+        "source_name": "transfermarkt_manual",
+        "source_uri": str(mv_path.relative_to(settings.data_root)),
+        "license_boundary": _MARKET_VALUE_LICENSE_BOUNDARY,
+        "currency": "EUR",
+        "checked_paths": checked,
+    }
+
+
+def _normalize_tm_datasets_valuations(
+    df: pd.DataFrame, tm_datasets_dir: Path
+) -> pd.DataFrame | None:
+    """Normalize the player_valuations table from transfermarkt-datasets.
+
+    The upstream schema (dcaribou/transfermarkt-datasets) columns:
+        - ``player_id`` (int)
+        - ``date`` (datetime)
+        - ``market_value_in_eur`` (float)
+        - ``player_club_id`` (int)
+        - ``last_update`` (datetime)
+
+    Player name / team name live in the sibling ``players`` / ``clubs``
+    tables. When those parquet files are present we join them; otherwise
+    we return the valuations with empty name columns rather than
+    blocking the endpoint.
+    """
+    required = {"player_id", "date", "market_value_in_eur"}
+    if not required.issubset(df.columns):
+        return None
+
+    players_path = tm_datasets_dir / "players.parquet"
+    clubs_path = tm_datasets_dir / "clubs.parquet"
+
+    out = pd.DataFrame(
+        {
+            "player_id": df["player_id"].astype("string"),
+            "player_name": pd.Series(index=df.index, dtype="object"),
+            "team_name": pd.Series(index=df.index, dtype="object"),
+            "position": pd.Series(index=df.index, dtype="object"),
+            "snapshot_date": pd.to_datetime(df["date"], errors="coerce"),
+            "market_value_eur": pd.to_numeric(
+                df["market_value_in_eur"], errors="coerce"
+            ).astype("float64"),
+        }
+    )
+
+    # Best-effort name/team enrichment. Failures here do not block the
+    # endpoint — the valuations are still valid, just less readable.
+    if players_path.exists():
+        try:
+            players_df = _read_parquet(players_path)
+            if "player_id" in players_df.columns:
+                name_cols = [
+                    c
+                    for c in ("name", "pretty_name", "player_name")
+                    if c in players_df.columns
+                ]
+                pos_cols = [
+                    c
+                    for c in ("position", "main_position", "sub_type")
+                    if c in players_df.columns
+                ]
+                cols = ["player_id"] + name_cols[:1] + pos_cols[:1]
+                players_df = players_df[cols].copy()
+                players_df["player_id"] = players_df["player_id"].astype("string")
+                if name_cols:
+                    players_df = players_df.rename(
+                        columns={name_cols[0]: "player_name"}
+                    )
+                if pos_cols:
+                    players_df = players_df.rename(
+                        columns={pos_cols[0]: "position"}
+                    )
+                out = out.merge(
+                    players_df, on="player_id", how="left", suffixes=("", "_p")
+                )
+                if "player_name_p" in out.columns:
+                    out["player_name"] = out["player_name"].fillna(
+                        out["player_name_p"]
+                    )
+                    out = out.drop(columns=["player_name_p"])
+                if "position_p" in out.columns:
+                    out["position"] = out["position"].fillna(out["position_p"])
+                    out = out.drop(columns=["position_p"])
+        except Exception:
+            logger.warning(
+                "market_value: players.parquet enrichment failed",
+                exc_info=True,
+            )
+
+    if clubs_path.exists() and "player_club_id" in df.columns:
+        try:
+            clubs_df = _read_parquet(clubs_path)
+            name_cols = [
+                c
+                for c in ("name", "pretty_name", "club_name")
+                if c in clubs_df.columns
+            ]
+            if "club_id" in clubs_df.columns and name_cols:
+                clubs_df = clubs_df[["club_id", name_cols[0]]].copy()
+                clubs_df = clubs_df.rename(
+                    columns={name_cols[0]: "team_name", "club_id": "player_club_id"}
+                )
+                clubs_df["player_club_id"] = clubs_df[
+                    "player_club_id"
+                ].astype("string")
+                df_join = df.copy()
+                df_join["player_club_id"] = df_join[
+                    "player_club_id"
+                ].astype("string")
+                out["team_name"] = df_join.merge(
+                    clubs_df, on="player_club_id", how="left"
+                )["team_name"].astype("string").str.strip().values
+        except Exception:
+            logger.warning(
+                "market_value: clubs.parquet enrichment failed",
+                exc_info=True,
+            )
+
+    out["player_name"] = out["player_name"].astype("string").str.strip()
+    out["team_name"] = out["team_name"].astype("string").str.strip()
+    out["position"] = out["position"].astype("string").str.strip()
+
+    # Drop rows with no usable identity or value.
+    out = out.dropna(subset=["market_value_eur"])
+    out = out[out["market_value_eur"] > 0].reset_index(drop=True)
+    return out
+
+
+def get_market_value_summary() -> dict:
+    """Return aggregate market value stats with source attribution.
+
+    Reads the local raw Transfermarkt data and reports:
+    - ``total_players``: distinct players with at least one valuation
+    - ``total_snapshots``: total valuation rows
+    - ``latest_snapshot_date``: most recent valuation date across all players
+    - ``value_distribution``: count of players in each EUR band
+    - ``top_players``: top 10 players by latest market value
+    - ``source``: source_name, source_uri, license_boundary, currency
+
+    Fail-closed: when no data is available, returns ``status="no_data"``
+    with the checked paths so the maintainer can see what's missing
+    rather than guessing.
+    """
+    df, source_meta = _load_market_value_frame()
+    if df is None or df.empty:
+        return {
+            "status": "no_data",
+            "source": source_meta,
+            "evidence": {
+                "reason": (
+                    "No Transfermarkt market value data found locally. "
+                    "Run `python scripts/download_transfermarkt_kaggle.py` "
+                    "or place CSVs in data/raw/transfermarkt_manual/."
+                ),
+            },
+        }
+
+    df = df.dropna(subset=["market_value_eur"])
+    df = df[df["market_value_eur"] > 0]
+
+    if df.empty:
+        return {
+            "status": "no_data",
+            "source": source_meta,
+            "evidence": {"reason": "All rows have non-positive market_value_eur"},
+        }
+
+    # Latest snapshot per player for distribution + top players.
+    latest_per_player = df.sort_values("snapshot_date").drop_duplicates(
+        subset=["player_id"], keep="last"
+    )
+
+    bands = [
+        (0, 1_000_000, "<1m"),
+        (1_000_000, 5_000_000, "1m-5m"),
+        (5_000_000, 20_000_000, "5m-20m"),
+        (20_000_000, 50_000_000, "20m-50m"),
+        (50_000_000, float("inf"), ">=50m"),
+    ]
+    distribution: dict[str, int] = {}
+    for low, high, label in bands:
+        mask = (latest_per_player["market_value_eur"] >= low) & (
+            latest_per_player["market_value_eur"] < high
+        )
+        distribution[label] = int(mask.sum())
+
+    top = latest_per_player.nlargest(10, "market_value_eur")
+    top_records = []
+    for _, row in top.iterrows():
+        top_records.append(
+            {
+                "player_name": row.get("player_name") or None,
+                "player_id": row.get("player_id"),
+                "team_name": row.get("team_name") or None,
+                "position": row.get("position") or None,
+                "market_value_eur": float(row["market_value_eur"]),
+                "snapshot_date": (
+                    row["snapshot_date"].strftime("%Y-%m-%d")
+                    if pd.notna(row["snapshot_date"])
+                    else None
+                ),
+            }
+        )
+
+    latest_date = df["snapshot_date"].max()
+    earliest_date = df["snapshot_date"].min()
+
+    return _clean_json_value(
+        {
+            "status": "ok",
+            "source": source_meta,
+            "total_players": int(latest_per_player["player_id"].nunique()),
+            "total_snapshots": int(len(df)),
+            "latest_snapshot_date": (
+                latest_date.strftime("%Y-%m-%d") if pd.notna(latest_date) else None
+            ),
+            "earliest_snapshot_date": (
+                earliest_date.strftime("%Y-%m-%d") if pd.notna(earliest_date) else None
+            ),
+            "value_distribution_eur": distribution,
+            "top_players": top_records,
+        }
+    )
+
+
+def list_market_value_players(
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    min_value_eur: float | None = None,
+    max_value_eur: float | None = None,
+    team: str | None = None,
+    position: str | None = None,
+    sort_by: str = "market_value_eur",
+    sort_order: str = "desc",
+) -> dict:
+    """List players with their latest market value (paginated).
+
+    Returns one row per player (the latest snapshot). Filters:
+    - ``min_value_eur`` / ``max_value_eur``: inclusive range
+    - ``team``: case-insensitive substring match on team_name
+    - ``position``: case-insensitive substring match on position
+    - ``sort_by``: ``"market_value_eur"`` (default) or ``"player_name"`` or
+      ``"snapshot_date"``
+    - ``sort_order``: ``"desc"`` (default) or ``"asc"``
+
+    ``limit`` is capped at 1000 to protect against unbounded payloads.
+    """
+    if limit < 1 or limit > 1000:
+        limit = max(1, min(1000, limit))
+    if offset < 0:
+        offset = 0
+
+    df, source_meta = _load_market_value_frame()
+    if df is None or df.empty:
+        return {
+            "status": "no_data",
+            "source": source_meta,
+            "count": 0,
+            "players": [],
+            "evidence": {"reason": "No Transfermarkt market value data found locally"},
+        }
+
+    df = df.dropna(subset=["market_value_eur"])
+    df = df[df["market_value_eur"] > 0]
+
+    if min_value_eur is not None:
+        df = df[df["market_value_eur"] >= float(min_value_eur)]
+    if max_value_eur is not None:
+        df = df[df["market_value_eur"] <= float(max_value_eur)]
+    if team:
+        team_lower = team.lower()
+        df = df[df["team_name"].fillna("").str.lower().str.contains(team_lower)]
+    if position:
+        pos_lower = position.lower()
+        df = df[df["position"].fillna("").str.lower().str.contains(pos_lower)]
+
+    if df.empty:
+        return _clean_json_value(
+            {
+                "status": "ok",
+                "source": source_meta,
+                "count": 0,
+                "players": [],
+                "filters_applied": {
+                    "min_value_eur": min_value_eur,
+                    "max_value_eur": max_value_eur,
+                    "team": team,
+                    "position": position,
+                },
+            }
+        )
+
+    # Latest snapshot per player.
+    latest = df.sort_values("snapshot_date").drop_duplicates(
+        subset=["player_id"], keep="last"
+    )
+
+    valid_sort_by = {"market_value_eur", "player_name", "snapshot_date"}
+    if sort_by not in valid_sort_by:
+        sort_by = "market_value_eur"
+    ascending = sort_order.lower() != "desc"
+    latest = latest.sort_values(by=sort_by, ascending=ascending, na_position="last")
+
+    total = len(latest)
+    page = latest.iloc[offset : offset + limit]
+
+    players = []
+    for _, row in page.iterrows():
+        players.append(
+            {
+                "player_id": row.get("player_id"),
+                "player_name": row.get("player_name") or None,
+                "team_name": row.get("team_name") or None,
+                "position": row.get("position") or None,
+                "market_value_eur": float(row["market_value_eur"]),
+                "snapshot_date": (
+                    row["snapshot_date"].strftime("%Y-%m-%d")
+                    if pd.notna(row["snapshot_date"])
+                    else None
+                ),
+            }
+        )
+
+    return _clean_json_value(
+        {
+            "status": "ok",
+            "source": source_meta,
+            "count": total,
+            "returned": len(players),
+            "offset": offset,
+            "limit": limit,
+            "players": players,
+            "filters_applied": {
+                "min_value_eur": min_value_eur,
+                "max_value_eur": max_value_eur,
+                "team": team,
+                "position": position,
+            },
+            "sort": {"by": sort_by, "order": sort_order},
+        }
+    )
+
+
+def get_player_market_value_history(player_name: str) -> dict:
+    """Return the full market value history for a single player.
+
+    ``player_name`` is matched case-insensitively against the
+    ``player_name`` column. When multiple players match (e.g. common
+    names), all matching histories are returned grouped by player_id so
+    the caller can disambiguate.
+    """
+    if not player_name or not player_name.strip():
+        return _make_error_response(
+            "invalid_player_name",
+            message="player_name must be a non-empty string",
+        )
+
+    df, source_meta = _load_market_value_frame()
+    if df is None or df.empty:
+        return {
+            "status": "no_data",
+            "source": source_meta,
+            "player_name": player_name,
+            "histories": [],
+            "evidence": {"reason": "No Transfermarkt market value data found locally"},
+        }
+
+    target = player_name.strip().lower()
+    matches = df[df["player_name"].fillna("").str.lower() == target]
+    if matches.empty:
+        # Fall back to substring match for friendlier UX.
+        matches = df[df["player_name"].fillna("").str.lower().str.contains(target)]
+
+    if matches.empty:
+        return _clean_json_value(
+            {
+                "status": "not_found",
+                "source": source_meta,
+                "player_name": player_name,
+                "histories": [],
+                "evidence": {
+                    "reason": (
+                        f"No market value records found for player '{player_name}'"
+                    ),
+                },
+            }
+        )
+
+    histories: list[dict[str, Any]] = []
+    for player_id, group in matches.groupby("player_id", sort=False):
+        group = group.sort_values("snapshot_date")
+        snapshots = []
+        for _, row in group.iterrows():
+            snapshots.append(
+                {
+                    "snapshot_date": (
+                        row["snapshot_date"].strftime("%Y-%m-%d")
+                        if pd.notna(row["snapshot_date"])
+                        else None
+                    ),
+                    "market_value_eur": float(row["market_value_eur"]),
+                    "team_name": row.get("team_name") or None,
+                }
+            )
+        first_row = group.iloc[0]
+        histories.append(
+            {
+                "player_id": player_id,
+                "player_name": first_row.get("player_name") or None,
+                "position": first_row.get("position") or None,
+                "team_name": first_row.get("team_name") or None,
+                "snapshot_count": int(len(snapshots)),
+                "first_snapshot_date": snapshots[0]["snapshot_date"] if snapshots else None,
+                "latest_snapshot_date": snapshots[-1]["snapshot_date"] if snapshots else None,
+                "latest_market_value_eur": (
+                    snapshots[-1]["market_value_eur"] if snapshots else None
+                ),
+                "snapshots": snapshots,
+            }
+        )
+
+    return _clean_json_value(
+        {
+            "status": "ok",
+            "source": source_meta,
+            "player_name": player_name,
+            "matched_players": len(histories),
+            "histories": histories,
+        }
+    )
+
+
 def get_player_ratings(
     position: str | None = None,
     league: str | None = None,

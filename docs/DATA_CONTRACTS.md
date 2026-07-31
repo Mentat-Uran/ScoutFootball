@@ -1367,6 +1367,108 @@ Value deviation analysis from OOF predictions.
 
 **Response**: `{ players: [...], summary: { ... } }`
 
+### GET /market-value/summary
+
+Aggregate market value stats with source attribution. Reads local raw
+Transfermarkt data only; never scrapes.
+
+**Fail-closed**: when no Transfermarkt data is on disk, returns
+`status="no_data"` with `source.checked_paths` listing every file the
+loader inspected, so the maintainer can see exactly what is missing
+rather than guessing from an empty 200.
+
+**Response (status="ok")**:
+```json
+{
+  "status": "ok",
+  "source": {
+    "source_name": "transfermarkt_manual",
+    "source_uri": "raw/transfermarkt_manual/player_market_value.csv",
+    "license_boundary": "Personal local use only. Transfermarkt ToS prohibit scraping, redistribution, and commercial reuse without written permission. See docs/DATA_RIGHTS.md §2.1. Market values are subjective Transfermarkt estimates, not market prices.",
+    "currency": "EUR",
+    "checked_paths": ["raw/transfermarkt_datasets/player_valuations.parquet", "raw/transfermarkt_manual/player_latest_market_value.csv", "raw/transfermarkt_manual/player_market_value.csv", "raw/transfermarkt_manual/player_profiles.csv"]
+  },
+  "total_players": 33420,
+  "total_snapshots": 33420,
+  "latest_snapshot_date": "2025-09-11",
+  "earliest_snapshot_date": "2024-01-01",
+  "value_distribution_eur": {"<1m": 28000, "1m-5m": 4000, "5m-20m": 1000, "20m-50m": 300, ">=50m": 120},
+  "top_players": [{"player_name": "Lamine Yamal", "player_id": "937958", "team_name": "FC Barcelona", "position": "Attack - Right Winger", "market_value_eur": 200000000.0, "snapshot_date": "2025-06-08"}]
+}
+```
+
+**Response (status="no_data")**:
+```json
+{
+  "status": "no_data",
+  "source": {"source_name": "none", "source_uri": null, "license_boundary": "...", "currency": "EUR", "checked_paths": ["..."]},
+  "evidence": {"reason": "No Transfermarkt market value data found locally. Run `python scripts/download_transfermarkt_kaggle.py` or place CSVs in data/raw/transfermarkt_manual/."}
+}
+```
+
+**Source priority**: (1) `data/raw/transfermarkt_datasets/player_valuations.parquet` (bulk DuckDB export); (2) `data/raw/transfermarkt_manual/player_latest_market_value.csv` + `player_profiles.csv` (manual snapshot); (3) `data/raw/transfermarkt_manual/player_market_value.csv` + `player_profiles.csv` (manual history). Path 2 is preferred over path 3 when both exist.
+
+**License boundary**: Transfermarkt market values are subjective estimates, not market prices. Personal local use only; no redistribution. The `license_boundary` field must be displayed alongside any market-value data in the frontend.
+
+### GET /market-value/players
+
+List players with their latest market value (paginated). Returns one row
+per player (the latest snapshot by `snapshot_date`).
+
+**Query params**:
+- `limit` (int, default 100, range 1–1000): max players to return
+- `offset` (int, default 0, ≥0): pagination offset
+- `min_value_eur` (float, optional, ≥0): inclusive lower bound on `market_value_eur`
+- `max_value_eur` (float, optional, ≥0): inclusive upper bound on `market_value_eur`
+- `team` (str, optional, max 128 chars): case-insensitive substring match on `team_name`
+- `position` (str, optional, max 64 chars): case-insensitive substring match on `position`
+- `sort_by` (str, default `"market_value_eur"`, max 32 chars): one of `"market_value_eur"`, `"player_name"`, `"snapshot_date"`; invalid values fall back to `"market_value_eur"`
+- `sort_order` (str, default `"desc"`, max 4 chars): `"desc"` or `"asc"`
+
+**Response (status="ok")**:
+```json
+{
+  "status": "ok",
+  "source": {"source_name": "transfermarkt_manual", "...": "..."},
+  "count": 117,
+  "returned": 3,
+  "offset": 0,
+  "limit": 3,
+  "players": [{"player_id": "937958", "player_name": "Lamine Yamal", "team_name": "FC Barcelona", "position": "Attack - Right Winger", "market_value_eur": 200000000.0, "snapshot_date": "2025-06-08"}],
+  "filters_applied": {"min_value_eur": 50000000.0, "max_value_eur": null, "team": null, "position": null},
+  "sort": {"by": "market_value_eur", "order": "desc"}
+}
+```
+
+**Response (status="no_data")**: same shape as `/market-value/summary` no_data, plus `count: 0`, `players: []`.
+
+**player_name cleaning**: Transfermarkt profiles append `(<player_id>)` to display names to disambiguate duplicates (e.g. `"Lamine Yamal (937958)"`). The API strips the trailing `(<digits>)` suffix via regex `\s*\(\d+\)\s*$` so responses carry the bare name; the canonical `player_id` remains in its dedicated field.
+
+### GET /market-value/players/{player_name}
+
+Full market value history for a single player. Case-insensitive exact
+match first, then substring fallback. Returns all matching histories
+grouped by `player_id` so the caller can disambiguate common names.
+
+**Path param**: `player_name` (str, non-empty): the player name to search for.
+
+**Response (status="ok")**:
+```json
+{
+  "status": "ok",
+  "source": {"source_name": "transfermarkt_manual", "...": "..."},
+  "player_name": "Lamine Yamal",
+  "matched_players": 1,
+  "histories": [{"player_id": "937958", "player_name": "Lamine Yamal", "position": "Attack - Right Winger", "team_name": "FC Barcelona", "snapshot_count": 1, "first_snapshot_date": "2025-06-08", "latest_snapshot_date": "2025-06-08", "latest_market_value_eur": 200000000.0, "snapshots": [{"snapshot_date": "2025-06-08", "market_value_eur": 200000000.0, "team_name": "FC Barcelona"}]}]
+}
+```
+
+**Response (status="not_found")**: `{status: "not_found", source: {...}, player_name: "...", histories: [], evidence: {reason: "No market value records found for player '...'"}}`
+
+**Response (status="error")** (empty/whitespace player_name): `{status: "error", error: "invalid_player_name", message: "player_name must be a non-empty string"}`
+
+**Response (status="no_data")**: same as other market-value endpoints when no Transfermarkt data is on disk.
+
 ### GET /predictions/meta
 Match prediction model metadata.
 

@@ -79,3 +79,9 @@ data/logs/**/*
 data/raw/statsbomb_open/events/
 data/raw/statsbomb_open/matches/
 data/raw/statsbomb_open/lineups/
+
+# Agent working state (investigations, scratch scripts)
+.agents/
+
+# electron-builder caches (winCodeSign .7z etc.)
+desktop/.cache/

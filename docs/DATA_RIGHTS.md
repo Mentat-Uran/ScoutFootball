@@ -108,12 +108,13 @@
 | 项 | 值 |
 |---|---|
 | 适配器 | [transfermarkt_datasets.py](../src/scoutfootball/adapters/transfermarkt_datasets.py) |
-| 获取方式 | HTTP 下载预构建 DuckDB 文件（~500MB，源自 `dcaribou/transfermarkt-datasets`） |
-| 许可 | 维护者确认个人本地使用 OK（2026-07-17）。再分发需核对上游数据集许可和 Transfermarkt ToS |
-| 保存 | 本地 DuckDB 文件 |
-| 删除 | 可随时删除本地文件 |
-| 导出/再分发 | 个人本地使用 OK；公开导出需核对上游数据集许可 |
+| 获取方式 | 二选一：①HTTP 下载预构建 DuckDB 文件（~500MB，源自 `dcaribou/transfermarkt-datasets`，调用 `download_duckdb()`/`export_table()`）；②Kaggle CLI 下载 CSV（数据集 `davidcariboo/player-scores`，调用 [scripts/download_transfermarkt_kaggle.py](../scripts/download_transfermarkt_kaggle.py) 后用 `load_csv_table()` 读取）。两条路径产出相同的 `{table_name}.parquet` |
+| 许可 | 维护者确认个人本地使用 OK（2026-07-17）。底层内容仍受 Transfermarkt ToS 约束。德转官方 FAQ 明确**没有公开 API**，条款禁止机器人/爬虫/页面抓取，复制或存入数据载体原则上需书面许可；Kaggle 第三方发布不等于德转已授权再分发其底层内容 |
+| 保存 | 本地 `data/raw/transfermarkt_datasets/`（DuckDB 文件、`csv/` 子目录下的 Kaggle CSV、导出的 Parquet、`transfermarkt_kaggle_manifest.json` 溯源清单）。整个目录被 `.gitignore` 排除，不进入仓库 |
+| 删除 | 可随时删除本地文件；删除后下游 parquet 需重新生成 |
+| 导出/再分发 | 个人本地使用 OK；公开导出或再分发必须先向德转申请书面许可（`sales@transfermarkt.com` 或 `info@transfermarkt.com`），MIT 许可证只覆盖本仓库自有代码，不会让第三方德转数据自动变成 MIT 数据 |
 | 合规缺口 | 在 [desktop/app.js](../desktop/app.js) 和 [api.py](../src/scoutfootball/api.py) 的许可清单中**完全缺失** |
+| 当前状态 | 实验性/停止。下载与 CSV→Parquet 转换链路已落地，但未注册到 [architecture.py](../src/scoutfootball/architecture.py) `planned_components`，未被任何下游特征/训练/真值标签流程消费。若要进入实际工作流，需先补齐 architecture.py 注册和许可清单声明 |
 
 ### 2.2 WhoScored
 
@@ -219,6 +220,7 @@
 | 2026-07-17 | Reep identity register | 维护者授权下载并保留 CC0 声明的本地 `people.csv` 身份映射快照；仅用于后续人工身份映射复核，不进入市场价值、表现、名单或真值标签流程 |
 | 2026-07-17 | 许可状态 | 5 个此前"未确认"的数据源，维护者确认个人本地使用 OK；公开导出需遵守上游 ToS |
 | 2026-07-17 | 适用范围 | 世界杯是第一个参考包，后续扩展到更多联赛、国家队和俱乐部比赛；权利边界以"个人本地使用"为基线 |
+| 2026-07-31 | transfermarkt_datasets 新增 Kaggle 获取路径 | 维护者授权添加 `scripts/download_transfermarkt_kaggle.py` 与适配器 `load_csv_table()`，作为既有 DuckDB 下载路径的并列选项。仍是实验性数据源，未注册到 architecture.py，未进入下游分析流程。Kaggle 第三方发布不等于德转已授权再分发其底层内容，公开导出仍需德转书面许可 |
 
 ## 5. 更新规则
 

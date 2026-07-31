@@ -1,15 +1,14 @@
 {
   "name": "scoutfootball",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "ScoutFootball — Local-first football analytics platform",
   "main": "main.js",
   "author": "Mentaturan",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac --arm64",
-    "build:mac": "electron-builder --mac --arm64",
     "build:win": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac --arm64",
     "build:all": "electron-builder --mac --arm64 --win --x64"
   },
   "dependencies": {
@@ -20,79 +19,51 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.scoutfootball.desktop",
+    "appId": "com.mentaturan.scoutfootball",
     "productName": "ScoutFootball",
-    "icon": "build/icon.png",
-    "directories": {
-      "output": "dist"
-    },
+    "asar": true,
     "files": [
       "main.js",
       "preload.js",
-      "frontend/**/*"
+      "frontend/**/*",
+      "package.json",
+      "!frontend/data/**"
     ],
     "extraResources": [
       {
-        "from": "backend-dist/scoutfootball-server/",
-        "to": "backend/"
+        "from": "../backend-dist/scoutfootball-server",
+        "to": "backend",
+        "filter": ["**/*"]
       },
       {
-        "from": "../data/gold/feature_store/",
-        "to": "data/gold/feature_store/"
+        "from": "../data/gold",
+        "to": "data/gold",
+        "filter": ["**/*"]
       },
       {
-        "from": "../data/gold/scoutlab.duckdb",
-        "to": "data/gold/scoutlab.duckdb"
+        "from": "../data/models",
+        "to": "data/models",
+        "filter": ["**/*"]
       },
       {
-        "from": "../data/models/",
-        "to": "data/models/"
+        "from": "../data/reports",
+        "to": "data/reports",
+        "filter": ["**/*"]
       },
       {
-        "from": "../data/reports/",
-        "to": "data/reports/"
-      },
-      {
-        "from": "../data/raw/statsbomb_open/",
-        "to": "data/raw/statsbomb_open/"
+        "from": "../data/raw/statsbomb_open",
+        "to": "data/raw/statsbomb_open",
+        "filter": ["**/*"]
       }
     ],
-    "mac": {
-      "category": "public.app-category.sports",
+    "win": {
       "target": [
         {
-          "target": "dmg",
-          "arch": ["arm64"]
-        },
-        {
-          "target": "zip",
-          "arch": ["arm64"]
+          "target": "dir",
+          "arch": ["x64"]
         }
       ]
     },
-    "win": {
-      "icon": "build/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "zip",
-          "arch": ["x64"]
-        }
-      ],
-      "artifactName": "ScoutFootball-${version}-win-x64.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "ScoutFootball",
-      "artifactName": "ScoutFootball-Setup-${version}-win-x64.${ext}",
-      "unicode": true,
-      "deleteAppDataOnUninstall": false
-    }
+    "publish": null
   }
 }

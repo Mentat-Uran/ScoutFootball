@@ -1960,11 +1960,12 @@ class TestPipeline:
 
 class TestAPI:
     def test_health_check(self):
+        from scoutfootball import __version__
         from scoutfootball.api import health_check
 
         resp = health_check()
         assert resp.status == "ok"
-        assert resp.version == "1.0.3"
+        assert resp.version == __version__
 
     def test_list_players(self):
         from scoutfootball.api import list_players

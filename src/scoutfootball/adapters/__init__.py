@@ -11,7 +11,12 @@ from .registry import build_adapter_registry
 from .sofascore import fetch_player_match_stats, fetch_team_match_stats
 from .sofifa import fetch_player_attributes
 from .statsbomb_open import load_events, load_lineups, load_matches
-from .transfermarkt_datasets import download_duckdb, export_priority_tables, export_table
+from .transfermarkt_datasets import (
+    download_duckdb,
+    export_priority_tables,
+    export_table,
+    load_csv_table,
+)
 from .transfermarkt_manual import load_snapshot
 from .understat import fetch_league_players
 from .whoscored import fetch_match_events, fetch_missing_players, fetch_player_match_ratings
@@ -42,6 +47,7 @@ __all__ = [
     "fetch_missing_players",
     "fetch_player_standard",
     "fetch_transfers",
+    "load_csv_table",
     "load_snapshot",
     "load_events",
     "load_lineups",

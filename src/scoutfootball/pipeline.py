@@ -753,33 +753,126 @@ def _ingest_transfermarkt_datasets(
     *,
     ingest_config: IngestConfig | None = None,
 ) -> str:
-    """Import Transfermarkt dataset files from the manual import directory."""
-    tm_dir = settings.raw_root / "transfermarkt_manual"
-    if not tm_dir.exists():
-        return "skipped: no transfermarkt_manual directory"
+    """Import Transfermarkt dataset files.
 
-    from scoutfootball.adapters.transfermarkt_manual import load_snapshot
+    Two acquisition paths are supported (see
+    ``adapters/transfermarkt_datasets.py``):
 
-    csv_files = sorted(f for f in tm_dir.glob("*.csv") if not f.name.startswith("."))
-    if not csv_files:
-        return "skipped: no CSV files in transfermarkt_manual"
+    1. ``transfermarkt_datasets`` bulk export — DuckDB file or Kaggle
+       CSVs that have been materialised to
+       ``data/raw/transfermarkt_datasets/{table}.parquet`` by
+       ``export_table`` / ``load_csv_table``. The priority table for
+       market value is ``player_valuations``.
+    2. ``transfermarkt_manual`` snapshot CSVs — maintainer-placed
+       CSVs in ``data/raw/transfermarkt_manual/`` read by
+       ``adapters.transfermarkt_manual.load_snapshot``.
 
+    The two paths are complementary: the bulk dataset is the canonical
+    source for historical valuations, while the manual snapshot path is
+    used for ad-hoc latest-value imports. This function reports the
+    status of each path separately so the maintainer can see which one
+    produced data.
+    """
+    parts: list[str] = []
     total = 0
-    errors: list[str] = []
 
-    for csv_file in csv_files:
-        try:
-            result = load_snapshot(csv_file)
-            total += result.metadata.record_count
-        except Exception as exc:
-            errors.append(f"{csv_file.name}: {type(exc).__name__}")
-            logger.warning("Transfermarkt import failed for %s: %s", csv_file.name, exc)
+    # Path 1: transfermarkt_datasets bulk export (player_valuations etc.)
+    tm_datasets_dir = settings.raw_root / "transfermarkt_datasets"
+    bulk_exported: list[str] = []
+    if tm_datasets_dir.exists():
+        from scoutfootball.adapters.transfermarkt_datasets import PRIORITY_TABLES
+
+        for table_name in PRIORITY_TABLES:
+            parquet_path = tm_datasets_dir / f"{table_name}.parquet"
+            csv_path = tm_datasets_dir / "csv" / f"{table_name}.csv"
+            if parquet_path.exists():
+                try:
+                    from scoutfootball.adapters.transfermarkt_datasets import (
+                        load_csv_table,
+                    )
+
+                    # load_csv_table returns the cached frame when the
+                    # parquet already exists; safe to call as a freshness
+                    # check. force_refresh=False keeps it read-only.
+                    result = load_csv_table(
+                        table_name, settings=settings, force_refresh=False
+                    )
+                    rows = result.metadata.record_count
+                    total += rows
+                    bulk_exported.append(f"{table_name}={rows}")
+                except Exception as exc:
+                    logger.warning(
+                        "transfermarkt_datasets: %s parquet read failed: %s",
+                        table_name,
+                        exc,
+                    )
+            elif csv_path.exists():
+                # CSV present but parquet not yet materialised — invoke
+                # load_csv_table to perform the CSV→parquet conversion.
+                try:
+                    from scoutfootball.adapters.transfermarkt_datasets import (
+                        load_csv_table,
+                    )
+
+                    result = load_csv_table(
+                        table_name, settings=settings, force_refresh=False
+                    )
+                    rows = result.metadata.record_count
+                    total += rows
+                    bulk_exported.append(f"{table_name}={rows}(from-csv)")
+                except Exception as exc:
+                    logger.warning(
+                        "transfermarkt_datasets: %s CSV load failed: %s",
+                        table_name,
+                        exc,
+                    )
+        if bulk_exported:
+            parts.append(
+                f"transfermarkt_datasets: {', '.join(bulk_exported)}"
+            )
+
+    # Path 2: transfermarkt_manual snapshot CSVs.
+    tm_manual_dir = settings.raw_root / "transfermarkt_manual"
+    if tm_manual_dir.exists():
+        from scoutfootball.adapters.transfermarkt_manual import load_snapshot
+
+        csv_files = sorted(
+            f for f in tm_manual_dir.glob("*.csv") if not f.name.startswith(".")
+        )
+        if csv_files:
+            manual_total = 0
+            manual_errors: list[str] = []
+            for csv_file in csv_files:
+                try:
+                    result = load_snapshot(csv_file)
+                    manual_total += result.metadata.record_count
+                except Exception as exc:
+                    manual_errors.append(f"{csv_file.name}: {type(exc).__name__}")
+                    logger.warning(
+                        "Transfermarkt manual import failed for %s: %s",
+                        csv_file.name,
+                        exc,
+                    )
+            if manual_total > 0:
+                total += manual_total
+                parts.append(
+                    f"transfermarkt_manual: {manual_total} rows from "
+                    f"{len(csv_files)} file(s)"
+                )
+            elif manual_errors:
+                parts.append(
+                    f"transfermarkt_manual: degraded ({'; '.join(manual_errors)})"
+                )
 
     if total > 0:
-        return f"ok ({total} player records from {len(csv_files)} file(s))"
-    if errors:
-        return f"degraded: all Transfermarkt imports failed ({'; '.join(errors)})"
-    return "skipped: no valid Transfermarkt data found"
+        return "ok (" + "; ".join(parts) + ")"
+    if parts:
+        return "degraded: " + "; ".join(parts)
+    return (
+        "skipped: no transfermarkt_datasets parquet or transfermarkt_manual CSVs "
+        "found. Run `python scripts/download_transfermarkt_kaggle.py` or place "
+        "CSVs in data/raw/transfermarkt_manual/."
+    )
 
 
 def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataFrame:

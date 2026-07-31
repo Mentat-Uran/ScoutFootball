@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-30T18:40:19.423545+00:00",
-  "package_version": "1.0.3",
+  "generated_at": "2026-07-31T04:14:53.799936+00:00",
+  "package_version": "1.1.0",
   "architecture": {
     "package_name": "scoutfootball",
     "status": "Phase 10 pipeline and API layer initialized; CLI ingest/build-features/train/validate/serve commands, data validation gates, probability calibration, FastAPI read-only endpoints, and Streamlit multi-page app all operational.",
@@ -351,8 +351,8 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-30T18:40:19.422546+00:00",
-    "package_version": "1.0.3",
+    "generated_at": "2026-07-31T04:14:53.798935+00:00",
+    "package_version": "1.1.0",
     "domains": [
       "action_value",
       "data_pipeline",
@@ -1273,8 +1273,8 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-30T18:40:19.423545+00:00",
-    "package_version": "1.0.3",
+    "generated_at": "2026-07-31T04:14:53.799936+00:00",
+    "package_version": "1.1.0",
     "layers": [
       "gold",
       "logs",
@@ -2199,5 +2199,5 @@
       }
     ]
   },
-  "content_sha256": "d48a3c6dae0642c1909e0d54923a82341c576c0d74a7f1008718184ae946a7b9"
+  "content_sha256": "b7bf7c82ee1b4d74cdc0c807b19601aaed70935f8afa863d265a5ff84c716bdd"
 }

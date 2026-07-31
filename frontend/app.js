@@ -1,4 +1,4 @@
-const APP_VERSION = "1.0.3";
+const APP_VERSION = "1.1.0";
 const i18n = {
     zh: {
         nav_overview: "总览",
@@ -4264,7 +4264,7 @@ async function renderPlayerProfile() {
             if (!trend) return '';
             const trendDir = typeof trend === 'string' ? trend : (trend > 0 ? 'up' : trend < 0 ? 'down' : 'stable');
             const trendSym = trendDir === 'up' ? '\u25B2' : trendDir === 'down' ? '\u25BC' : '\u25CB';
-            const trendColor = trendDir === 'up' ? '#57d68d' : trendDir === 'down' ? '#ff6b6b' : 'var(--text-muted)';
+            const trendColor = trendDir === 'up' ? '#34c759' : trendDir === 'down' ? '#ff3b30' : 'var(--text-muted)';
             const trendLabel = appState.lang === 'zh' ? '赛季趋势' : 'Season trend';
             return `<div><span>${escapeHtml(trendLabel)}</span><strong style="color:${trendColor}">${trendSym} ${escapeHtml(trendDir)}</strong></div>`;
         })()}
@@ -4316,10 +4316,10 @@ async function renderPlayerProfile() {
             const cells = entries.map(([key, info]) => {
                 const label = info.label || key;
                 const pct = Math.round(info.percentile);
-                const color = pct >= 80 ? '#57d68d' : pct >= 60 ? '#4f9cff' : pct >= 40 ? '#f5a623' : '#ff6b6b';
+                const color = pct >= 80 ? '#34c759' : pct >= 60 ? '#007aff' : pct >= 40 ? '#ff9500' : '#ff3b30';
                 const isOverall = key === 'overall_score';
-                const highlight = isOverall ? 'border:1px solid var(--accent, #4f9cff);background:rgba(79,156,255,0.08)' : 'background:rgba(255,255,255,0.03)';
-                return `<div style="text-align:center;padding:6px 4px;${highlight};border-radius:6px">
+                const highlight = isOverall ? 'border:1px solid var(--accent, #007aff);background:rgba(79,156,255,0.08)' : 'background:rgba(255,255,255,0.03)';
+                return `<div style="text-align:center;padding:6px 4px;${highlight};border-radius:var(--radius-sm)">
                     <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:2px">${escapeHtml(label)}</div>
                     <div style="font-size:1.1rem;font-weight:700;color:${color}">${pct}<span style="font-size:0.65rem;color:var(--text-muted)">pct</span></div>
                 </div>`;
@@ -4348,7 +4348,7 @@ async function renderPlayerProfile() {
                     const conf = info.confidence || '';
                     const pctStr = (pct !== undefined && pct !== null) ? Math.round(pct) + '%' : '—';
                     const contribStr = (contrib !== undefined && contrib !== null) ? Math.round(contrib * 10) / 10 + '' : '—';
-                    const confColor = conf === 'HIGH' ? '#57d68d' : conf === 'MEDIUM' ? '#f5a623' : '#ff6b6b';
+                    const confColor = conf === 'HIGH' ? '#34c759' : conf === 'MEDIUM' ? '#ff9500' : '#ff3b30';
                     return `<tr>
                         <td style="padding:3px 6px;font-size:0.78rem">${escapeHtml(label)}</td>
                         <td style="padding:3px 6px;font-size:0.78rem;text-align:right">${pctStr}</td>
@@ -4378,7 +4378,7 @@ async function renderPlayerProfile() {
             const seasons = trend.seasons;
             const delta = trend.delta;
             const cells = seasons.map(s => {
-                return `<div style="text-align:center;padding:6px 4px;background:rgba(255,255,255,0.03);border-radius:6px">
+                return `<div style="text-align:center;padding:6px 4px;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm)">
                     <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:2px">${escapeHtml(String(s.season))}</div>
                     <div style="font-size:1rem;font-weight:600">${escapeHtml(String(s.optimized_score))}</div>
                     <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(String(s.minutes))}min</div>
@@ -4387,7 +4387,7 @@ async function renderPlayerProfile() {
             let deltaHtml = '';
             if (delta) {
                 const sc = delta.score_change;
-                const scColor = sc > 0 ? '#57d68d' : sc < 0 ? '#ff6b6b' : 'var(--text-muted)';
+                const scColor = sc > 0 ? '#34c759' : sc < 0 ? '#ff3b30' : 'var(--text-muted)';
                 const scSym = sc > 0 ? '\u25B2' : sc < 0 ? '\u25BC' : '\u25CB';
                 deltaHtml = `<div style="margin-top:6px;font-size:0.75rem;color:var(--text-muted)">
                     ${escapeHtml(delta.season_from)} \u2192 ${escapeHtml(delta.season_to)}:
@@ -4446,7 +4446,7 @@ async function renderPlayerProfile() {
             if (!reasons || reasons.length === 0) return '';
             const z = appState.lang === 'zh';
             const header = z ? '低置信度原因' : 'Low Confidence Reasons';
-            const items = reasons.map(r => `<li style="font-size:0.75rem;color:#f5a623;margin:2px 0">${escapeHtml(String(r))}</li>`).join('');
+            const items = reasons.map(r => `<li style="font-size:0.75rem;color:#ff9500;margin:2px 0">${escapeHtml(String(r))}</li>`).join('');
             return `<div style="grid-column:1/-1">
                 <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">${escapeHtml(header)}</span>
                 <ul style="margin:0;padding-left:1.2rem;list-style:none">${items}</ul>
@@ -4461,7 +4461,7 @@ async function renderPlayerProfile() {
             if (profile && profile.has_gk === false) missing.push('gk');
             if (missing.length === 0) return '';
             const label = appState.lang === 'zh' ? '缺失字段' : 'Missing fields';
-            return `<div><span>${escapeHtml(label)}</span><strong style="color:#ff6b6b">\u25CB ${escapeHtml(missing.join(', '))}</strong></div>`;
+            return `<div><span>${escapeHtml(label)}</span><strong style="color:#ff3b30">\u25CB ${escapeHtml(missing.join(', '))}</strong></div>`;
         })()}
         ${/* Watchlist/Shortlist notes */ (() => {
             const wlNote = watchlistNotes[player.name] || "";
@@ -4511,7 +4511,7 @@ async function renderPlayerProfile() {
             if (phases.length > 0) {
                 const items = phases.map(p => {
                     const name = phaseNames[p.phase] || p.phase;
-                    return `<span style="display:inline-block;padding:2px 8px;background:rgba(74,144,217,0.12);border-radius:10px;font-size:0.7rem;margin-right:4px;margin-bottom:2px">${escapeHtml(name)} · ${escapeHtml(String(p.season_start || ''))}–${escapeHtml(String(p.season_end || ''))}</span>`;
+                    return `<span style="display:inline-block;padding:2px 8px;background:rgba(0,122,255,0.12);border-radius:var(--radius-md);font-size:0.7rem;margin-right:4px;margin-bottom:2px">${escapeHtml(name)} · ${escapeHtml(String(p.season_start || ''))}–${escapeHtml(String(p.season_end || ''))}</span>`;
                 }).join('');
                 phasesHtml = `<div style="margin-bottom:0.3rem"><span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(phasesLabel)}:</span> ${items}</div>`;
             }
@@ -4520,8 +4520,8 @@ async function renderPlayerProfile() {
                 const cells = yoy.map(d => {
                     const change = d.score_change;
                     const arrow = change === null || change === undefined ? '\u2014' : (change > 0 ? '\u2197' : change < 0 ? '\u2198' : '\u2192');
-                    const color = change === null || change === undefined ? 'var(--text-muted)' : (change > 0 ? '#4ade80' : change < 0 ? '#f87171' : 'var(--text-muted)');
-                    return `<div style="text-align:center;padding:4px 4px;background:rgba(255,255,255,0.03);border-radius:4px">
+                    const color = change === null || change === undefined ? 'var(--text-muted)' : (change > 0 ? '#34c759' : change < 0 ? '#ff3b30' : 'var(--text-muted)');
+                    return `<div style="text-align:center;padding:4px 4px;background:rgba(255,255,255,0.03);border-radius:var(--radius-xs)">
                         <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(String(d.from_season || d.season_from || ''))}\u2192${escapeHtml(String(d.to_season || d.season_to || ''))}</div>
                         <div style="font-size:0.85rem;font-weight:600;color:${color}">${arrow} ${change === null || change === undefined ? '\u2014' : (change > 0 ? '+' : '') + change}</div>
                     </div>`;
@@ -4572,11 +4572,11 @@ async function renderPlayerProfile() {
                 const isPrimary = primary && primary.position === pos;
                 const isAlt = alt.some(a => a.position === pos);
                 const isStretch = stretch.some(s => s.position === pos);
-                const color = isPrimary ? '#4ade80' : isAlt ? '#60a5fa' : isStretch ? '#fbbf24' : '#6b7280';
+                const color = isPrimary ? '#34c759' : isAlt ? '#5ac8fa' : isStretch ? '#ff9500' : '#8e8e93';
                 const tag = isPrimary ? (z ? '主' : 'P') : isAlt ? (z ? '备' : 'A') : isStretch ? (z ? '试' : 'S') : '';
                 return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:0.72rem">
                     <span style="width:28px;color:var(--text-muted)">${escapeHtml(labels[pos])}</span>
-                    <div style="flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden">
+                    <div style="flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:var(--radius-xs);overflow:hidden">
                         <div style="width:${Math.max(0, Math.min(100, v))}%;height:100%;background:${color}"></div>
                     </div>
                     <span style="width:32px;text-align:right;font-weight:600">${Math.round(v)}</span>
@@ -4632,7 +4632,7 @@ async function renderPlayerProfile() {
                     return `<tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.04))">
                         <td style="padding:2px 4px;font-size:0.7rem">${escapeHtml(String(m.label || m.metric || ''))}</td>
                         <td style="padding:2px 4px;font-size:0.7rem;text-align:right">${escapeHtml(String(m.value ?? '\u2014'))}</td>
-                        <td style="padding:2px 4px;font-size:0.7rem;text-align:right;color:#60a5fa">${escapeHtml(String(m.percentile ?? '\u2014'))}</td>
+                        <td style="padding:2px 4px;font-size:0.7rem;text-align:right;color:#5ac8fa">${escapeHtml(String(m.percentile ?? '\u2014'))}</td>
                         <td style="padding:2px 4px;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(String(m.rank ?? '\u2014'))}</td>
                     </tr>`;
                 }).join('');
@@ -4649,7 +4649,7 @@ async function renderPlayerProfile() {
             let topPeersHtml = '';
             if (topPeers.length > 0) {
                 const items = topPeers.map((p, i) => {
-                    return `<span style="display:inline-block;font-size:0.7rem;margin-right:6px;margin-bottom:2px;padding:2px 6px;background:rgba(255,255,255,0.04);border-radius:8px">
+                    return `<span style="display:inline-block;font-size:0.7rem;margin-right:6px;margin-bottom:2px;padding:2px 6px;background:rgba(255,255,255,0.04);border-radius:var(--radius-sm)">
                         ${i + 1}. ${escapeHtml(String(p.player || p.name || ''))} <span style="color:var(--text-muted)">${escapeHtml(String(p.optimized_score ?? ''))}</span>
                     </span>`;
                 }).join('');
@@ -4718,7 +4718,7 @@ async function renderPlayerProfile() {
                     x: 50,
                     y: 50,
                     radius: 3,
-                    color: "#4a90d9",
+                    color: "#007aff",
                     label: escapeHtml(player.name),
                     number: String(Math.round(detailScore || player.rating || 0)),
                     rating: detailScore || player.rating || null,
@@ -4774,7 +4774,7 @@ function _renderCareerTrajectoryChart(trajectory) {
             name: z ? '峰值' : 'Peak',
             coord: [String(peak.season || ''), peak.optimized_score],
             symbolSize: 28,
-            itemStyle: { color: '#4ade80' },
+            itemStyle: { color: '#34c759' },
             label: { show: false },
         }],
     } : undefined;
@@ -4835,15 +4835,15 @@ function _renderCareerTrajectoryChart(trajectory) {
                 smooth: true,
                 symbol: 'circle',
                 symbolSize: 6,
-                lineStyle: { color: '#4a90d9', width: 2 },
-                itemStyle: { color: '#4a90d9' },
+                lineStyle: { color: '#007aff', width: 2 },
+                itemStyle: { color: '#007aff' },
                 areaStyle: {
                     color: {
                         type: 'linear',
                         x: 0, y: 0, x2: 0, y2: 1,
                         colorStops: [
-                            { offset: 0, color: 'rgba(74,144,217,0.25)' },
-                            { offset: 1, color: 'rgba(74,144,217,0)' },
+                            { offset: 0, color: 'rgba(0,122,255,0.25)' },
+                            { offset: 1, color: 'rgba(0,122,255,0)' },
                         ],
                     },
                 },
@@ -4857,8 +4857,8 @@ function _renderCareerTrajectoryChart(trajectory) {
                 smooth: false,
                 symbol: 'diamond',
                 symbolSize: 4,
-                lineStyle: { color: '#9ca3af', width: 1, type: 'dashed' },
-                itemStyle: { color: '#9ca3af' },
+                lineStyle: { color: '#8e8e93', width: 1, type: 'dashed' },
+                itemStyle: { color: '#8e8e93' },
             },
         ],
     });
@@ -4949,14 +4949,14 @@ async function _fetchAndRenderSimilarPlayers(playerName, profile) {
         const target = data.target || {};
         let html = '<div style="display:flex;flex-wrap:wrap;gap:0.4rem">';
         for (const p of data.similar) {
-            const simColor = p.similarity >= 80 ? 'var(--accent)' : p.similarity >= 60 ? '#5b9fd6' : 'var(--text-muted)';
+            const simColor = p.similarity >= 80 ? 'var(--accent)' : p.similarity >= 60 ? '#5ac8fa' : 'var(--text-muted)';
             const strengths = (p.shared_strengths || []).length > 0
                 ? `<span style="font-size:0.65rem;color:var(--accent)">+${escapeHtml(p.shared_strengths.join('/'))}</span>` : '';
             const weaknesses = (p.shared_weaknesses || []).length > 0
-                ? `<span style="font-size:0.65rem;color:#ff6b6b">-${escapeHtml(p.shared_weaknesses.join('/'))}</span>` : '';
+                ? `<span style="font-size:0.65rem;color:#ff3b30">-${escapeHtml(p.shared_weaknesses.join('/'))}</span>` : '';
             const posBadge = p.position_group && p.position_group !== (target.position_group || '')
-                ? `<span style="font-size:0.6rem;background:rgba(91,159,214,0.2);padding:0.05rem 0.3rem;border-radius:4px;margin-left:0.2rem">${escapeHtml(p.position_group)}</span>` : '';
-            html += `<div class="similar-player-card" data-player="${escapeAttr(p.name)}" style="cursor:pointer;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:0.4rem 0.5rem;min-width:120px;background:rgba(255,255,255,0.03)">
+                ? `<span style="font-size:0.6rem;background:rgba(90,200,250,0.2);padding:0.05rem 0.3rem;border-radius:var(--radius-xs);margin-left:0.2rem">${escapeHtml(p.position_group)}</span>` : '';
+            html += `<div class="similar-player-card" data-player="${escapeAttr(p.name)}" style="cursor:pointer;border:1px solid rgba(255,255,255,0.1);border-radius:var(--radius-sm);padding:0.4rem 0.5rem;min-width:120px;background:rgba(255,255,255,0.03)">
                 <div style="font-weight:600;font-size:0.8rem">${escapeHtml(p.name)}${posBadge}</div>
                 <div style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(p.team || '')} · ${escapeHtml(p.league || '')}</div>
                 <div style="font-size:0.75rem;color:${simColor};font-weight:600">${p.similarity.toFixed(0)}% ${z ? '相似' : 'sim.'}</div>
@@ -5299,11 +5299,11 @@ function getChart(id) {
 }
 
 function chartTextColor() {
-    return document.body.classList.contains("dark-mode") ? "rgba(247,248,251,.68)" : "rgba(21,23,28,.65)";
+    return document.body.classList.contains("dark-mode") ? "rgba(235,235,245,.60)" : "rgba(60,60,67,.60)";
 }
 
 function chartGridColor() {
-    return document.body.classList.contains("dark-mode") ? "rgba(247,248,251,.13)" : "rgba(21,23,28,.12)";
+    return document.body.classList.contains("dark-mode") ? "rgba(84,84,88,.36)" : "rgba(60,60,67,.12)";
 }
 
 function renderRadar(player) {
@@ -5369,13 +5369,13 @@ function renderComparePanel() {
 
     // Info cards
     let html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.8rem;gap:0.5rem">`;
-    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:8px;background:rgba(74,144,217,.12)">`;
+    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:var(--radius-sm);background:rgba(0,122,255,.12)">`;
     html += `<div style="font-weight:700;font-size:0.95rem">${escapeHtml(p1.name)}</div>`;
     html += `<div style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(p1.team)} · ${escapeHtml(p1.position)}</div>`;
     html += `<div style="font-size:1.1rem;font-weight:700;margin-top:0.2rem">${p1.rating.toFixed(1)}</div>`;
     html += `</div>`;
     html += `<div style="flex:0 0 auto;align-self:center;font-size:0.8rem;color:var(--text-muted);font-weight:700">VS</div>`;
-    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:8px;background:rgba(255,159,67,.12)">`;
+    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:var(--radius-sm);background:rgba(255,149,0,.12)">`;
     html += `<div style="font-weight:700;font-size:0.95rem">${escapeHtml(p2.name)}</div>`;
     html += `<div style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(p2.team)} · ${escapeHtml(p2.position)}</div>`;
     html += `<div style="font-size:1.1rem;font-weight:700;margin-top:0.2rem">${p2.rating.toFixed(1)}</div>`;
@@ -5384,7 +5384,7 @@ function renderComparePanel() {
 
     // Position mismatch warning
     if (p1.position !== p2.position) {
-        html += `<div style="font-size:0.72rem;color:#ff9f43;margin-bottom:0.5rem;text-align:center">${escapeHtml(t("compare_no_same_pos"))}</div>`;
+        html += `<div style="font-size:0.72rem;color:#ff9500;margin-bottom:0.5rem;text-align:center">${escapeHtml(t("compare_no_same_pos"))}</div>`;
     }
 
     // Radar chart container
@@ -5405,7 +5405,7 @@ function renderComparePanel() {
         const v1 = r1[i] ?? 0;
         const v2 = r2[i] ?? 0;
         const diff = v1 - v2;
-        const diffColor = diff > 0 ? "#57d68d" : diff < 0 ? "#ff6b6b" : "var(--text-muted)";
+        const diffColor = diff > 0 ? "#34c759" : diff < 0 ? "#ff3b30" : "var(--text-muted)";
         html += `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">`;
         html += `<td style="padding:0.3rem 0.4rem">${escapeHtml(radarLabels[i])}</td>`;
         html += `<td style="text-align:center;padding:0.3rem 0.4rem">${Math.round(v1)}pct</td>`;
@@ -5425,7 +5425,7 @@ function renderComparePanel() {
         const v1 = p1[m.k] ?? 0;
         const v2 = p2[m.k] ?? 0;
         const diff = v1 - v2;
-        const diffColor = diff > 0 ? "#57d68d" : diff < 0 ? "#ff6b6b" : "var(--text-muted)";
+        const diffColor = diff > 0 ? "#34c759" : diff < 0 ? "#ff3b30" : "var(--text-muted)";
         html += `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">`;
         html += `<td style="padding:0.3rem 0.4rem">${escapeHtml(m.label)}</td>`;
         html += `<td style="text-align:center;padding:0.3rem 0.4rem">${typeof v1 === "number" ? (m.k === "npg_p90" || m.k === "assists_p90" ? v1.toFixed(3) : v1) : escapeHtml(String(v1))}</td>`;
@@ -5462,16 +5462,16 @@ function renderComparePanel() {
                         {
                             value: r1,
                             name: p1.name,
-                            areaStyle: { color: "rgba(74,144,217,.18)" },
-                            lineStyle: { color: "#4a90d9", width: 2 },
-                            itemStyle: { color: "#4a90d9" },
+                            areaStyle: { color: "rgba(0,122,255,.18)" },
+                            lineStyle: { color: "#007aff", width: 2 },
+                            itemStyle: { color: "#007aff" },
                         },
                         {
                             value: r2,
                             name: p2.name,
-                            areaStyle: { color: "rgba(255,159,67,.18)" },
-                            lineStyle: { color: "#ff9f43", width: 2 },
-                            itemStyle: { color: "#ff9f43" },
+                            areaStyle: { color: "rgba(255,149,0,.18)" },
+                            lineStyle: { color: "#ff9500", width: 2 },
+                            itemStyle: { color: "#ff9500" },
                         },
                     ],
                 }],
@@ -5692,7 +5692,7 @@ function _renderFormTrendCard(teamName, trend) {
     html += `<div class="h2h-form-team">${teamName}</div>`;
 
     // Form rating bar (0-100)
-    const ratingColor = rating >= 60 ? "var(--accent,#5fd4a8)" : rating >= 35 ? "var(--warn,#f0c869)" : "var(--danger,#f0877a)";
+    const ratingColor = rating >= 60 ? "var(--accent,#34c759)" : rating >= 35 ? "var(--warn,#ff9500)" : "var(--danger,#ff3b30)";
     html += `<div class="trend-rating">`;
     html += `<div class="trend-rating-bar" role="img" aria-label="状态评分 ${rating.toFixed(0)}">`;
     html += `<span style="width:${Math.max(2, Math.min(100, rating))}%;background:${ratingColor}"></span>`;
@@ -5792,7 +5792,7 @@ async function renderMomentum(home, away) {
             <div><span>${escapeHtml(z ? "分钟" : "Minute")}</span><strong>${escapeHtml(String(data.current_minute))}'</strong></div>
             <div><span>${escapeHtml(z ? "主胜" : "Home")}</span><strong style="color:var(--accent)">${(current.home_win * 100).toFixed(1)}%</strong></div>
             <div><span>${escapeHtml(z ? "平" : "Draw")}</span><strong>${(current.draw * 100).toFixed(1)}%</strong></div>
-            <div><span>${escapeHtml(z ? "客胜" : "Away")}</span><strong style="color:var(--warn, #f59e0b)">${(current.away_win * 100).toFixed(1)}%</strong></div>
+            <div><span>${escapeHtml(z ? "客胜" : "Away")}</span><strong style="color:var(--warn, #ff9500)">${(current.away_win * 100).toFixed(1)}%</strong></div>
         </div>`;
 
     // ECharts timeline chart
@@ -5834,7 +5834,7 @@ async function renderMomentum(home, away) {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 2 },
-                itemStyle: { color: "#64b5f6" },
+                itemStyle: { color: "#5ac8fa" },
                 areaStyle: { opacity: 0.1 },
             },
             {
@@ -5845,7 +5845,7 @@ async function renderMomentum(home, away) {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 2 },
-                itemStyle: { color: "#9e9e9e" },
+                itemStyle: { color: "#8e8e93" },
             },
             {
                 name: z ? "客胜" : "Away Win",
@@ -5855,7 +5855,7 @@ async function renderMomentum(home, away) {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 2 },
-                itemStyle: { color: "#ff9800" },
+                itemStyle: { color: "#ff9500" },
                 areaStyle: { opacity: 0.1 },
             },
         ],
@@ -5903,7 +5903,7 @@ async function fetchAndRenderPredictionAttribution(home, away) {
 
     const deltaColor = (d) => {
         if (d == null || Number.isNaN(d)) return "var(--text-muted)";
-        return d > 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+        return d > 0 ? "var(--accent, #007aff)" : "var(--warn, #ff9500)";
     };
     const fmtPct = (v) => v != null && !Number.isNaN(Number(v)) ? `${(Number(v) * 100).toFixed(2)}%` : "—";
     const fmtDeltaPct = (d) => d != null && !Number.isNaN(Number(d))
@@ -6001,7 +6001,7 @@ async function fetchAndRenderPredictionAttributionCI(home, away) {
             const hi = Number(c.delta_high);
             const mean = Number(c.delta_mean);
             const crossesZero = (!Number.isNaN(lo) && !Number.isNaN(hi) && lo <= 0 && hi >= 0);
-            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #64b5f6)";
+            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #007aff)";
             return `<tr>
                 <td><strong>${escapeHtml(c.factor || "—")}</strong></td>
                 <td style="color:${ciColor}">${fmtCI(lo, hi)}</td>
@@ -6102,7 +6102,7 @@ async function fetchAndRenderDiagnostics(home, away) {
         const rows = factors.map((f) => {
             const delta = Number(f.delta);
             const dStr = !Number.isNaN(delta) ? `${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(2)}pp` : "—";
-            const color = delta > 0 ? "var(--accent, #64b5f6)" : (delta < 0 ? "var(--warn, #f59e0b)" : "var(--text-muted)");
+            const color = delta > 0 ? "var(--accent, #007aff)" : (delta < 0 ? "var(--warn, #ff9500)" : "var(--text-muted)");
             return `<tr><td><strong>${escapeHtml(f.factor || "—")}</strong></td><td style="color:${color}">${dStr}</td></tr>`;
         }).join("");
         attrHtml += `<table class="data-table" style="width:100%;font-size:0.76rem"><tbody>${rows}</tbody></table>`;
@@ -6168,7 +6168,7 @@ async function fetchAndRenderEnsembleAttribution(home, away) {
         : "—";
     const deltaColor = (d) => {
         if (d == null || Number.isNaN(d)) return "var(--text-muted)";
-        return d > 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+        return d > 0 ? "var(--accent, #007aff)" : "var(--warn, #ff9500)";
     };
 
     // Weights header
@@ -6299,7 +6299,7 @@ async function fetchAndRenderEnsembleAttributionCI(home, away) {
             const hi = Number(c.delta_high);
             const mean = Number(c.delta_mean);
             const crossesZero = (!Number.isNaN(lo) && !Number.isNaN(hi) && lo <= 0 && hi >= 0);
-            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #64b5f6)";
+            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #007aff)";
             return `<tr>
                 <td><strong>${escapeHtml(c.factor || "—")}</strong></td>
                 <td style="color:${ciColor}">${fmtCI(lo, hi)}</td>
@@ -6442,7 +6442,7 @@ async function fetchAndRenderDriftTimeline() {
                 symbol: "circle",
                 symbolSize: 5,
                 lineStyle: { width: 2 },
-                itemStyle: { color: "#64b5f6" },
+                itemStyle: { color: "#5ac8fa" },
             },
             {
                 name: "Brier",
@@ -6452,7 +6452,7 @@ async function fetchAndRenderDriftTimeline() {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 1.5, type: "dashed" },
-                itemStyle: { color: "#f59e0b" },
+                itemStyle: { color: "#ff9500" },
             },
             {
                 name: "LogLoss",
@@ -6462,15 +6462,15 @@ async function fetchAndRenderDriftTimeline() {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 1.5, type: "dotted" },
-                itemStyle: { color: "#10b981" },
+                itemStyle: { color: "#34c759" },
             },
             {
                 name: "Threshold",
                 type: "line",
                 data: thresholdLine,
                 symbol: "none",
-                lineStyle: { width: 1, type: "dashed", color: "#ef4444" },
-                itemStyle: { color: "#ef4444" },
+                lineStyle: { width: 1, type: "dashed", color: "#ff3b30" },
+                itemStyle: { color: "#ff3b30" },
             },
         ],
     });
@@ -6527,26 +6527,26 @@ async function fetchAndRenderValueBet(home, away) {
         const evPct = (o.expected_value * 100).toFixed(1);
         const edgePct = (o.edge * 100).toFixed(1);
         const kellyPct = (o.kelly_fraction * 100).toFixed(1);
-        const recColor = isValue ? "var(--status-high, #10b981)" : "var(--text-muted)";
+        const recColor = isValue ? "var(--status-high, #34c759)" : "var(--text-muted)";
         const recText = isValue ? (z ? "有价值" : "Value") : (z ? "无价值" : "No Value");
         return `<tr style="border-bottom:1px solid var(--border)">
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem">${escapeHtml(outcomeLabels[o.outcome] || o.outcome)}</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${(o.model_probability * 100).toFixed(1)}%</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${o.decimal_odds.toFixed(2)}</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${(o.implied_probability * 100).toFixed(1)}%</td>
-            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.expected_value >= 0 ? "var(--status-high, #10b981)" : "var(--status-low, #ef4444)"}">${evPct >= 0 ? "+" : ""}${evPct}%</td>
-            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.edge >= 0 ? "var(--status-high, #10b981)" : "var(--status-low, #ef4444)"}">${edgePct >= 0 ? "+" : ""}${edgePct}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.expected_value >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${evPct >= 0 ? "+" : ""}${evPct}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.edge >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${edgePct >= 0 ? "+" : ""}${edgePct}%</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${kellyPct}%</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;color:${recColor};font-weight:600">${recText}</td>
         </tr>`;
     }).join("");
 
     const bestBetHtml = data.best_bet
-        ? `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:6px;border-left:3px solid var(--status-high, #10b981)">
+        ? `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:var(--radius-sm);border-left:3px solid var(--status-high, #34c759)">
             <span style="font-size:0.75rem;font-weight:600">${escapeHtml(t("value_bet_best_bet"))}: ${escapeHtml(outcomeLabels[data.best_bet.outcome] || data.best_bet.outcome)}</span>
             <span style="font-size:0.72rem;color:var(--text-muted);margin-left:0.5rem">EV: ${(data.best_bet.expected_value * 100).toFixed(1)}% · Kelly: ${(data.best_bet.kelly_fraction * 100).toFixed(1)}%</span>
           </div>`
-        : `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:6px">
+        : `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:var(--radius-sm)">
             <span style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("value_bet_no_value"))}</span>
           </div>`;
 
@@ -6632,7 +6632,7 @@ async function fetchAndRenderReliabilityDiagram() {
     const diagonal = [[0, 0], [1, 1]];
 
     // Build per-outcome series
-    const outcomeColors = { home_win: "#64b5f6", draw: "#f59e0b", away_win: "#10b981" };
+    const outcomeColors = { home_win: "#5ac8fa", draw: "#ff9500", away_win: "#34c759" };
     const outcomeLabels = {
         home_win: z ? "主胜" : "Home Win",
         draw: z ? "平局" : "Draw",
@@ -6645,8 +6645,8 @@ async function fetchAndRenderReliabilityDiagram() {
             type: "line",
             data: diagonal,
             symbol: "none",
-            lineStyle: { width: 1, type: "dashed", color: "#999" },
-            itemStyle: { color: "#999" },
+            lineStyle: { width: 1, type: "dashed", color: "#8e8e93" },
+            itemStyle: { color: "#8e8e93" },
         },
     ];
 
@@ -6658,7 +6658,7 @@ async function fetchAndRenderReliabilityDiagram() {
             type: "scatter",
             data: pts,
             symbolSize: (bins.length > 0 ? 8 : 5),
-            itemStyle: { color: outcomeColors[outcome] || "#888" },
+            itemStyle: { color: outcomeColors[outcome] || "#8e8e93" },
         });
         // Also add a connecting line
         const sorted = pts.slice().sort((a, b) => a[0] - b[0]);
@@ -6667,8 +6667,8 @@ async function fetchAndRenderReliabilityDiagram() {
             type: "line",
             data: sorted,
             symbol: "none",
-            lineStyle: { width: 1, color: outcomeColors[outcome] || "#888", opacity: 0.5 },
-            itemStyle: { color: outcomeColors[outcome] || "#888" },
+            lineStyle: { width: 1, color: outcomeColors[outcome] || "#8e8e93", opacity: 0.5 },
+            itemStyle: { color: outcomeColors[outcome] || "#8e8e93" },
         });
     }
 
@@ -6739,15 +6739,15 @@ async function fetchAndRenderModelComparison() {
         ];
         const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(4) : String(v));
         let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.2rem;font-weight:600">${data.n_aligned ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("model_comparison_n_aligned"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.2rem;font-weight:600">${data.n_models ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("model_comparison_n_models"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.2rem;font-weight:600">${models.length}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">Models Listed</div>
             </div>
@@ -6893,15 +6893,15 @@ async function fetchAndRenderConfidenceDistribution() {
         const buckets = Array.isArray(data.buckets) ? data.buckets : [];
         const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
         let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">Predictions</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_accuracy)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("confidence_dist_overall_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_confidence)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("confidence_dist_overall_conf"))}</div>
             </div>
@@ -6953,19 +6953,19 @@ async function fetchAndRenderErrorAnalysis() {
         const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(4) : String(v));
         const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">N</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmtPct(data.overall_accuracy)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_avg_brier)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_avg_log_loss)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_log_loss"))}</div>
             </div>
@@ -7056,11 +7056,11 @@ async function fetchAndRenderOutcomeDistribution() {
         const entries = Array.isArray(data.entries) ? data.entries : [];
         const biasColor = (data.dominant_bias && data.dominant_bias !== "none") ? "var(--status-medium)" : "var(--status-high)";
         let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">N</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${biasColor}">${escapeHtml(data.dominant_bias || "none")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("outcome_dist_dominant_bias"))}</div>
             </div>
@@ -7129,11 +7129,11 @@ async function fetchAndRenderH2HBiasCorrection() {
         const adj = data.adjustments || {};
         const rates = data.h2h_rates || {};
         let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_meetings ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("h2h_bias_n_meetings"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${appliedColor}">${escapeHtml(appliedText)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("h2h_bias_applied"))}</div>
             </div>
@@ -7200,15 +7200,15 @@ async function fetchAndRenderTemporalValidation() {
         const fmtNum = (v, d) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(d) : String(v));
         const trendColor = data.trend === "improving" ? "var(--status-medium)" : (data.trend === "degrading" ? "var(--status-low)" : "var(--text-muted)");
         let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_n_windows"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_trend"))}</div>
             </div>
@@ -7271,15 +7271,15 @@ async function fetchAndRenderProbabilityHeatmap() {
         const cells = data.cells || [];
         const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
         let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_n_predictions"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_bins ?? 0}×${data.n_bins ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_grid"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmtPct(data.total_density)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_coverage"))}</div>
             </div>
@@ -7340,11 +7340,11 @@ async function fetchAndRenderPredictionStaleness() {
         }
         const levelColor = data.staleness_level === "fresh" ? "var(--status-medium)" : (data.staleness_level === "stale" ? "var(--status-low)" : "var(--status-high)");
         let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${levelColor}">${escapeHtml(data.staleness_level || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("staleness_level"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.days_since_backtest_end ?? "–"}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("staleness_days"))}</div>
             </div>
@@ -7401,19 +7401,19 @@ async function fetchAndRenderConfidenceIntervalPlot() {
             ? "–"
             : Number(data.correlation).toFixed(3);
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_n_points"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_confidence || 0).toFixed(3)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_avg_conf"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_ci_width || 0).toFixed(3)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_avg_width"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${corrText}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_corr"))}</div>
             </div>
@@ -7491,19 +7491,19 @@ async function fetchAndRenderFoldComparison() {
             ? "var(--status-medium)"
             : (data.stability === "unstable" ? "var(--status-low)" : "var(--status-high)");
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600;color:${stabilityColor}">${escapeHtml(data.stability || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_stability"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_folds ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_n_folds"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.accuracy_std || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_acc_std"))}</div>
             </div>
@@ -7568,19 +7568,19 @@ async function fetchAndRenderLeagueErrorAnalysis() {
             return;
         }
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_leagues ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_n_leagues"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_accuracy"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_brier"))}</div>
             </div>
@@ -7589,7 +7589,7 @@ async function fetchAndRenderLeagueErrorAnalysis() {
         if (leagues.length > 0) {
             for (const lg of leagues) {
                 const ll = (lg.log_loss === null || lg.log_loss === undefined) ? "–" : Number(lg.log_loss).toFixed(4);
-                html += `<details style="margin-bottom:0.6rem;border:1px solid var(--border-color);border-radius:6px;padding:0.4rem 0.6rem">
+                html += `<details style="margin-bottom:0.6rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:0.4rem 0.6rem">
                     <summary style="cursor:pointer;font-size:0.85rem;font-weight:600">
                         ${escapeHtml(lg.league || "–")} — acc ${Number(lg.accuracy || 0).toFixed(4)} / brier ${Number(lg.brier || 0).toFixed(4)} / n ${lg.n_matches ?? 0}
                     </summary>
@@ -7654,19 +7654,19 @@ async function fetchAndRenderFeatureImportance() {
             return;
         }
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_features ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_n_features"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_overall_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.features && data.features.length > 0 ? Number(data.features[0].importance || 0).toFixed(6) : "–"}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_top"))}</div>
             </div>
@@ -7734,27 +7734,27 @@ async function fetchAndRenderCICoverage() {
             return;
         }
         const assessmentColors = {
-            well_calibrated: "var(--status-high, #4ade80)",
-            undercoverage: "var(--status-low, #f87171)",
-            overcoverage: "var(--status-medium, #fbbf24)",
+            well_calibrated: "var(--status-high, #34c759)",
+            undercoverage: "var(--status-low, #ff3b30)",
+            overcoverage: "var(--status-medium, #ff9500)",
             insufficient_data: "var(--text-muted)",
         };
         const assessmentColor = assessmentColors[data.coverage_assessment] || "var(--text-muted)";
         const nominalText = (data.nominal_level === null || data.nominal_level === undefined) ? "–" : Number(data.nominal_level).toFixed(2);
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.coverage_assessment || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_assessment"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_coverage || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_overall"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_ci_width || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_avg_width"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${nominalText}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_nominal"))}</div>
             </div>
@@ -7815,22 +7815,22 @@ async function fetchAndRenderDriftHeatmap() {
             if (btn) btn.disabled = false;
             return;
         }
-        const driftColor = data.drift_detected ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        const driftColor = data.drift_detected ? "var(--status-low, #ff3b30)" : "var(--status-high, #34c759)";
         const driftText = data.drift_detected ? t("drift_heatmap_drift_yes") : t("drift_heatmap_drift_no");
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${driftColor}">${escapeHtml(driftText)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_drift"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_windows"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_confidence_buckets ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_buckets"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_matches"))}</div>
             </div>
@@ -7899,19 +7899,19 @@ async function fetchAndRenderErrorClustering() {
             return;
         }
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_clusters ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_clusters"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_worst_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_worst"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_features_used ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_features"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_avg_brier"))}</div>
             </div>
@@ -7920,7 +7920,7 @@ async function fetchAndRenderErrorClustering() {
         if (clusters.length > 0) {
             for (const c of clusters) {
                 const brierColor = `hsl(${Math.max(0, 120 - Number(c.avg_brier || 0) * 500)}, 70%, 45%)`;
-                html += `<details style="margin-bottom:0.5rem;border:1px solid var(--border-color);border-radius:6px;padding:0.4rem">
+                html += `<details style="margin-bottom:0.5rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:0.4rem">
                     <summary style="cursor:pointer;font-size:0.8rem;font-weight:600">
                         ${escapeHtml(t("error_clustering_cluster"))} #${c.cluster_id} · ${c.n_matches} ${escapeHtml(t("error_clustering_matches"))} · ${escapeHtml(t("error_clustering_brier"))}: <span style="color:${brierColor}">${Number(c.avg_brier || 0).toFixed(4)}</span>
                     </summary>
@@ -7940,7 +7940,7 @@ async function fetchAndRenderErrorClustering() {
                             <tbody>`;
                 const feats = Array.isArray(c.top_centroid_features) ? c.top_centroid_features : [];
                 for (const f of feats) {
-                    const valColor = f.centroid_value >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                    const valColor = f.centroid_value >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
                     html += `<tr style="border-bottom:1px solid var(--border-color)">
                         <td style="padding:0.2rem">${escapeHtml(f.feature || "–")}</td>
                         <td style="padding:0.2rem;text-align:right;color:${valColor}">${Number(f.centroid_value || 0).toFixed(4)}</td>
@@ -7981,21 +7981,21 @@ async function fetchAndRenderDataDrift() {
             return;
         }
         const driftRatio = Number(data.drift_ratio || 0);
-        const driftColor = driftRatio > 0.3 ? "var(--status-low, #f87171)" : (driftRatio > 0.1 ? "var(--status-medium, #fbbf24)" : "var(--status-high, #4ade80)");
+        const driftColor = driftRatio > 0.3 ? "var(--status-low, #ff3b30)" : (driftRatio > 0.1 ? "var(--status-medium, #ff9500)" : "var(--status-high, #34c759)");
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${driftColor}">${(driftRatio * 100).toFixed(1)}%</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_ratio"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_drifted ?? 0}/${data.n_features ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_drifted"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_train ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_n_train"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_holdout ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_n_holdout"))}</div>
             </div>
@@ -8019,9 +8019,9 @@ async function fetchAndRenderDataDrift() {
                 </thead>
                 <tbody>`;
             for (const f of features) {
-                const statusColor = f.drifted ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+                const statusColor = f.drifted ? "var(--status-low, #ff3b30)" : "var(--status-high, #34c759)";
                 const statusText = f.drifted ? t("data_drift_drifted_yes") : t("data_drift_drifted_no");
-                const deltaColor = (f.mean_delta || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                const deltaColor = (f.mean_delta || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
                 html += `<tr style="border-bottom:1px solid var(--border-color)">
                     <td style="padding:0.25rem">${escapeHtml(f.feature || "–")}</td>
                     <td style="padding:0.25rem;text-align:right">${Number(f.ks_statistic || 0).toFixed(4)}</td>
@@ -8065,28 +8065,28 @@ async function fetchAndRenderCIWidth() {
             return;
         }
         const assessmentColors = {
-            "expected_narrowing": "var(--status-high, #4ade80)",
-            "weak_correlation": "var(--status-medium, #fbbf24)",
-            "anomalous_widening": "var(--status-low, #f87171)",
+            "expected_narrowing": "var(--status-high, #34c759)",
+            "weak_correlation": "var(--status-medium, #ff9500)",
+            "anomalous_widening": "var(--status-low, #ff3b30)",
             "insufficient_data": "var(--text-muted)",
         };
         const assessmentColor = assessmentColors[data.assessment] || "var(--text-muted)";
         const corr = data.width_confidence_correlation;
-        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #4ade80)" : (corr > 0.3 ? "var(--status-low, #f87171)" : "var(--status-medium, #fbbf24)")) : "var(--text-muted)";
+        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #34c759)" : (corr > 0.3 ? "var(--status-low, #ff3b30)" : "var(--status-medium, #ff9500)")) : "var(--text-muted)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.assessment || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_assessment"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_ci_width || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_avg"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_confidence || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_avg_conf"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${corrColor}">${corr !== null && corr !== undefined ? Number(corr).toFixed(4) : "–"}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_corr"))}</div>
             </div>
@@ -8151,27 +8151,27 @@ async function fetchAndRenderStressTest() {
             return;
         }
         const assessmentColors = {
-            "severe": "var(--status-low, #f87171)",
-            "moderate": "var(--status-medium, #fbbf24)",
-            "mild": "var(--status-high, #4ade80)",
-            "negligible": "var(--status-high, #4ade80)",
+            "severe": "var(--status-low, #ff3b30)",
+            "moderate": "var(--status-medium, #ff9500)",
+            "mild": "var(--status-high, #34c759)",
+            "negligible": "var(--status-high, #34c759)",
         };
         const assessmentColor = assessmentColors[data.assessment] || "var(--text-muted)";
-        const degColor = data.degradation_score >= 0.5 ? "var(--status-low, #f87171)" : (data.degradation_score >= 0.2 ? "var(--status-medium, #fbbf24)" : "var(--status-high, #4ade80)");
+        const degColor = data.degradation_score >= 0.5 ? "var(--status-low, #ff3b30)" : (data.degradation_score >= 0.2 ? "var(--status-medium, #ff9500)" : "var(--status-high, #34c759)");
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.assessment || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_assessment"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${degColor}">${Number(data.degradation_score || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_degradation"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(data.shift_type || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_shift_type"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_shifted ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_n_shifted"))}</div>
             </div>
@@ -8179,7 +8179,7 @@ async function fetchAndRenderStressTest() {
         const baseline = data.baseline || {};
         const stressed = data.stressed || {};
         const fmt = (v) => v !== null && v !== undefined ? Number(v).toFixed(4) : "–";
-        const deltaColor = (d) => d > 0 ? "var(--status-low, #f87171)" : (d < 0 ? "var(--status-high, #4ade80)" : "var(--text-muted)");
+        const deltaColor = (d) => d > 0 ? "var(--status-low, #ff3b30)" : (d < 0 ? "var(--status-high, #34c759)" : "var(--text-muted)");
         html += `<table class="data-table" style="width:100%;font-size:0.72rem;border-collapse:collapse;margin-bottom:0.4rem">
             <thead>
                 <tr style="border-bottom:1px solid var(--border-color);text-align:left">
@@ -8241,7 +8241,7 @@ async function fetchAndRenderTeamDrift() {
     if (!teamName) {
         body.innerHTML = `<div style="margin-bottom:0.4rem">
             <label style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(t("stress_test_team_input"))}</label>
-            <input id="team-drift-input" type="text" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-base);color:var(--text-primary)" />
+            <input id="team-drift-input" type="text" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:var(--radius-xs);background:var(--bg-base);color:var(--text-primary)" />
         </div>
         <p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_drift_not_available"))}</p>`;
         if (btn) btn.disabled = false;
@@ -8253,7 +8253,7 @@ async function fetchAndRenderTeamDrift() {
         const data = await apiFetch(`/predictions/calibration/team-drift?${params.toString()}`);
         const inputHtml = `<div style="margin-bottom:0.4rem">
             <label style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(t("stress_test_team_input"))}</label>
-            <input id="team-drift-input" type="text" value="${escapeHtml(teamName)}" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-base);color:var(--text-primary)" />
+            <input id="team-drift-input" type="text" value="${escapeHtml(teamName)}" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:var(--radius-xs);background:var(--bg-base);color:var(--text-primary)" />
         </div>`;
         if (!data || data.status === "not_available") {
             body.innerHTML = inputHtml + `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_drift_not_available"))}</p>`;
@@ -8265,42 +8265,42 @@ async function fetchAndRenderTeamDrift() {
             if (btn) btn.disabled = false;
             return;
         }
-        const driftColor = data.drift_detected ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        const driftColor = data.drift_detected ? "var(--status-low, #ff3b30)" : "var(--status-high, #34c759)";
         const trendColors = {
-            "improving": "var(--status-high, #4ade80)",
-            "degrading": "var(--status-low, #f87171)",
-            "stable": "var(--status-medium, #fbbf24)",
+            "improving": "var(--status-high, #34c759)",
+            "degrading": "var(--status-low, #ff3b30)",
+            "stable": "var(--status-medium, #ff9500)",
             "insufficient_data": "var(--text-muted)",
         };
         const trendColor = trendColors[data.trend] || "var(--text-muted)";
         let html = inputHtml + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${driftColor}">${data.drift_detected ? escapeHtml(t("team_drift_drift_yes")) : escapeHtml(t("team_drift_drift_no"))}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_drift_detected"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_n_windows"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_trend"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.latest_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_latest_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.historical_avg_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_hist_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600;color:${driftColor}">${Number(data.relative_change || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_rel_change"))}</div>
             </div>
@@ -8361,36 +8361,36 @@ async function fetchAndRenderUncertainty() {
             return;
         }
         const corr = data.entropy_accuracy_correlation;
-        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #4ade80)" : (corr > 0.3 ? "var(--status-low, #f87171)" : "var(--status-medium, #fbbf24)")) : "var(--text-muted)";
-        const highAccColor = data.high_uncertainty_accuracy < 0.5 ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #34c759)" : (corr > 0.3 ? "var(--status-low, #ff3b30)" : "var(--status-medium, #ff9500)")) : "var(--text-muted)";
+        const highAccColor = data.high_uncertainty_accuracy < 0.5 ? "var(--status-low, #ff3b30)" : "var(--status-high, #34c759)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_entropy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_entropy"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_margin || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_margin"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_dispersion || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_dispersion"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.high_uncertainty_count ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_high_count"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600;color:${highAccColor}">${Number(data.high_uncertainty_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_high_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.low_uncertainty_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_low_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600;color:${corrColor}">${corr !== null && corr !== undefined ? Number(corr).toFixed(4) : "–"}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_entropy_corr"))}</div>
             </div>
@@ -8414,14 +8414,14 @@ async function fetchAndRenderUncertainty() {
             const shown = points.slice(0, 50);
             for (const p of shown) {
                 const labelColors = {
-                    "high": "var(--status-low, #f87171)",
-                    "medium": "var(--status-medium, #fbbf24)",
-                    "low": "var(--status-high, #4ade80)",
+                    "high": "var(--status-low, #ff3b30)",
+                    "medium": "var(--status-medium, #ff9500)",
+                    "low": "var(--status-high, #34c759)",
                 };
                 const labelColor = labelColors[p.uncertainty_label] || "var(--text-muted)";
                 const matchLabel = p.home_team && p.away_team ? `${escapeHtml(p.home_team)} vs ${escapeHtml(p.away_team)}` : (p.match_id ? escapeHtml(p.match_id) : "–");
                 const correctMark = p.correct === true ? "✓" : (p.correct === false ? "✗" : "–");
-                const correctColor = p.correct === true ? "var(--status-high, #4ade80)" : (p.correct === false ? "var(--status-low, #f87171)" : "var(--text-muted)");
+                const correctColor = p.correct === true ? "var(--status-high, #34c759)" : (p.correct === false ? "var(--status-low, #ff3b30)" : "var(--text-muted)");
                 html += `<tr style="border-bottom:1px solid var(--border-color)">
                     <td style="padding:0.25rem">${matchLabel}</td>
                     <td style="padding:0.25rem;text-align:right">${Number(p.confidence || 0).toFixed(4)}</td>
@@ -8469,44 +8469,44 @@ async function fetchAndRenderProfitLoss() {
             return;
         }
         const assessmentColors = {
-            "profitable": "var(--status-high, #4ade80)",
-            "breakeven": "var(--status-medium, #fbbf24)",
-            "unprofitable": "var(--status-low, #f87171)",
+            "profitable": "var(--status-high, #34c759)",
+            "breakeven": "var(--status-medium, #ff9500)",
+            "unprofitable": "var(--status-low, #ff3b30)",
         };
         const assColor = assessmentColors[data.assessment] || "var(--text-muted)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.win_rate || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_win_rate"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.flat_roi || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.flat_roi || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.flat_roi || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.flat_roi || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_flat_roi"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${assColor}">${escapeHtml(data.assessment || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_assessment"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_flat_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.total_flat_profit || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_flat_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.total_flat_profit || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_flat_profit"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.max_flat_drawdown || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_max_dd"))} (Flat)</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_kelly_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.total_kelly_profit || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_kelly_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.total_kelly_profit || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_kelly_profit"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.kelly_roi || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.kelly_roi || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.kelly_roi || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.kelly_roi || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_kelly_roi"))}</div>
             </div>
         </div>`;
@@ -8531,9 +8531,9 @@ async function fetchAndRenderProfitLoss() {
             const shown = points.slice(0, 50);
             for (const p of shown) {
                 const correctMark = p.correct ? "✓" : "✗";
-                const correctColor = p.correct ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
-                const flatColor = Number(p.flat_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
-                const kellyColor = Number(p.kelly_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                const correctColor = p.correct ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
+                const flatColor = Number(p.flat_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
+                const kellyColor = Number(p.kelly_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
                 html += `<tr style="border-bottom:1px solid var(--border-color)">
                     <td style="padding:0.25rem">${p.match_index ?? 0}</td>
                     <td style="padding:0.25rem;text-align:right">${escapeHtml(p.predicted_outcome || "–")}</td>
@@ -8583,44 +8583,44 @@ async function fetchAndRenderTrajectory() {
             return;
         }
         const trendColors = {
-            "improving": "var(--status-high, #4ade80)",
-            "degrading": "var(--status-low, #f87171)",
-            "stable": "var(--status-medium, #fbbf24)",
+            "improving": "var(--status-high, #34c759)",
+            "degrading": "var(--status-low, #ff3b30)",
+            "stable": "var(--status-medium, #ff9500)",
             "insufficient_data": "var(--text-muted)",
         };
         const trendColor = trendColors[data.trend] || "var(--text-muted)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.final_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.final_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_trend"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.final_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.final_profit || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.final_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.final_profit || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_profit"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.best_window_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_best_win"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.worst_window_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_worst_win"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${data.n_change_points ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_change_points"))}</div>
             </div>
@@ -8642,7 +8642,7 @@ async function fetchAndRenderTrajectory() {
                 <tbody>`;
             const shown = points.slice(0, 50);
             for (const p of shown) {
-                const profitColor = Number(p.cumulative_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                const profitColor = Number(p.cumulative_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
                 html += `<tr style="border-bottom:1px solid var(--border-color)">
                     <td style="padding:0.25rem">${p.match_index ?? 0}</td>
                     <td style="padding:0.25rem;text-align:right">${Number(p.cumulative_accuracy || 0).toFixed(4)}</td>
@@ -8689,19 +8689,19 @@ async function fetchAndRenderDifficulty() {
             return;
         }
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_overall_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${escapeHtml(data.best_tier || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_best_tier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${escapeHtml(data.worst_tier || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_worst_tier"))}</div>
             </div>
@@ -8724,9 +8724,9 @@ async function fetchAndRenderDifficulty() {
                 </thead>
                 <tbody>`;
             const assessmentColors = {
-                "strong": "var(--status-high, #4ade80)",
-                "average": "var(--status-medium, #fbbf24)",
-                "weak": "var(--status-low, #f87171)",
+                "strong": "var(--status-high, #34c759)",
+                "average": "var(--status-medium, #ff9500)",
+                "weak": "var(--status-low, #ff3b30)",
                 "no_data": "var(--text-muted)",
             };
             for (const tr of tiers) {
@@ -9049,7 +9049,7 @@ async function _renderMultiCompareResult(names) {
     const playersEl = document.getElementById("compare-multi-players");
     if (playersEl) {
         const chips = (data.players || []).map(p => {
-            return `<span style="display:inline-block;padding:4px 10px;background:rgba(74,144,217,0.12);border-radius:12px;font-size:0.78rem">
+            return `<span style="display:inline-block;padding:4px 10px;background:rgba(0,122,255,0.12);border-radius:var(--radius-md);font-size:0.78rem">
                 <strong>${escapeHtml(String(p.name || ''))}</strong>
                 <span style="color:var(--text-muted);margin-left:4px">${escapeHtml(String(p.position_group || ''))} · ${escapeHtml(String(p.team || ''))}</span>
             </span>`;
@@ -9072,7 +9072,7 @@ async function _renderMultiCompareResult(names) {
                     if (v === null || v === undefined) {
                         return `<td style="padding:4px 8px;font-size:0.78rem;color:var(--text-muted);text-align:right">—</td>`;
                     }
-                    const color = v >= 80 ? '#4ade80' : v >= 50 ? '#60a5fa' : v >= 20 ? '#fbbf24' : '#f87171';
+                    const color = v >= 80 ? '#34c759' : v >= 50 ? '#5ac8fa' : v >= 20 ? '#ff9500' : '#ff3b30';
                     return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;font-weight:600;color:${color}">${v}</td>`;
                 }))
                 .join('');
@@ -9087,9 +9087,9 @@ async function _renderMultiCompareResult(names) {
         const rankings = data.composite_ranking || [];
         const items = rankings.map((r, i) => {
             const medal = i === 0 ? '\uD83E\uDD47' : i === 1 ? '\uD83E\uDD48' : i === 2 ? '\uD83E\uDD49' : '';
-            return `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:3px">
+            return `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);margin-bottom:3px">
                 <span>${medal} <strong>${escapeHtml(String(r.player || r.name || ''))}</strong> <span style="color:var(--text-muted);font-size:0.7rem">#${r.rank || (i + 1)}</span></span>
-                <span style="color:#60a5fa;font-weight:600">${escapeHtml(String(r.avg_percentile ?? ''))}</span>
+                <span style="color:#5ac8fa;font-weight:600">${escapeHtml(String(r.avg_percentile ?? ''))}</span>
             </div>`;
         }).join('');
         rankingEl.innerHTML = items || '—';
@@ -9114,7 +9114,7 @@ async function _renderMultiCompareResult(names) {
                     if (v === null || v === undefined) {
                         return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">—</td>`;
                     }
-                    const color = v >= 0.8 ? '#4ade80' : v >= 0.6 ? '#60a5fa' : v >= 0.4 ? '#fbbf24' : '#f87171';
+                    const color = v >= 0.8 ? '#34c759' : v >= 0.6 ? '#5ac8fa' : v >= 0.4 ? '#ff9500' : '#ff3b30';
                     const display = (v * 100).toFixed(0);
                     return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;color:${color}">${display}</td>`;
                 }))
@@ -9548,7 +9548,7 @@ function renderValue() {
                     const r = params.data.residual;
                     if (r > 0.5) return "#34d399";
                     if (r > 0.15) return "#6ee7b7";
-                    if (r < -0.5) return "#f87171";
+                    if (r < -0.5) return "#ff3b30";
                     if (r < -0.15) return "#fca5a5";
                     return "rgba(216,221,231,.86)";
                 },
@@ -9591,8 +9591,8 @@ function renderValue() {
 
 // ── Age Curve Scatter Chart ──────────────────────────────────────
 const POS_COLORS = {
-    GK: "#f59e0b", CB: "#3b82f6", FB: "#06b6d4", DM: "#8b5cf6",
-    CM: "#6366f1", AM: "#ec4899", W: "#10b981", ST: "#ef4444",
+    GK: "#ff9500", CB: "#3b82f6", FB: "#06b6d4", DM: "#8b5cf6",
+    CM: "#6366f1", AM: "#ec4899", W: "#34c759", ST: "#ff3b30",
 };
 
 function renderAgeCurveScatter(data) {
@@ -9913,7 +9913,7 @@ async function renderMatches() {
 
         // Coverage gate warning
         if (coverage != null && Number(coverage) < 0.90) {
-            calibHtml += `<div style="font-size:0.78rem;color:#ff6b6b;margin:0.3rem 0;padding:0.25rem 0.4rem;background:rgba(255,107,107,.1);border-radius:4px">`;
+            calibHtml += `<div style="font-size:0.78rem;color:#ff3b30;margin:0.3rem 0;padding:0.25rem 0.4rem;background:rgba(255,107,107,.1);border-radius:var(--radius-xs)">`;
             calibHtml += `\u25B2 ${z ? '覆盖率低于90%，预测可能不可靠' : 'Coverage below 90% \u2014 predictions may be unreliable'} (${(Number(coverage) * 100).toFixed(1)}%)`;
             calibHtml += `</div>`;
         }
@@ -10013,7 +10013,7 @@ async function renderMatches() {
             const ciLevel = ciData.confidence_level ? `${(ciData.confidence_level * 100).toFixed(0)}%` : '90%';
             const ciN = ciData.n_bootstrap || '?';
             const ciFailed = ciData.failed_iterations || 0;
-            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px">`;
+            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(0,122,255,0.06);border-radius:var(--radius-sm)">`;
             calibHtml += `<p style="margin:0 0 0.3rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">`;
             calibHtml += `${z ? '置信区间' : 'Confidence Intervals'} (${escapeHtml(ciLevel)}, n=${escapeHtml(String(ciN))})`;
             if (ciFailed > 0) calibHtml += ` <span style="opacity:0.6">(${ciFailed} ${z ? '失败' : 'failed'})</span>`;
@@ -10052,7 +10052,7 @@ async function renderMatches() {
         if (match.model_type === "ensemble" && match.weights && match.model_predictions) {
             const weights = match.weights;
             const mp = match.model_predictions;
-            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px">`;
+            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(0,122,255,0.06);border-radius:var(--radius-sm)">`;
             calibHtml += `<p style="margin:0 0 0.3rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">`;
             calibHtml += `${z ? '集成模型分解' : 'Ensemble Breakdown'}</p>`;
             const modelNames = Object.keys(weights);
@@ -10183,7 +10183,7 @@ function renderScoreMatrixInto(chartId, match) {
             min: 0,
             max: 0.18,
             show: false,
-            inRange: { color: ["rgba(255,255,255,.05)", "rgba(124,168,255,.82)"] },
+            inRange: { color: ["rgba(255,255,255,.05)", "rgba(0,122,255,.82)"] },
         },
         series: [{
             type: "heatmap",
@@ -10204,7 +10204,7 @@ function renderOutcomeBarInto(chartId, match) {
     const z = appState.lang === "zh";
     const labels = [z ? "主胜" : "Home", z ? "平局" : "Draw", z ? "客胜" : "Away"];
     const values = [match.hw, match.draw, match.aw];
-    const colors = ["#4a90d9", "#8e8e93", "#ff9f43"];
+    const colors = ["#007aff", "#8e8e93", "#ff9500"];
     chart.setOption({
         tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
         grid: { left: 60, right: 20, top: 20, bottom: 36 },
@@ -10878,7 +10878,7 @@ function _dhSourceHealthBody(sh) {
     ];
     let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
     if (Array.isArray(sh.unregistered_raw_directories) && sh.unregistered_raw_directories.length > 0) {
-        html += `<p style="font-size:0.68rem;color:var(--warn,#ff9800);margin-top:0.3rem">Unregistered: ${escapeHtml(sh.unregistered_raw_directories.join(", "))}</p>`;
+        html += `<p style="font-size:0.68rem;color:var(--warn,#ff9500);margin-top:0.3rem">Unregistered: ${escapeHtml(sh.unregistered_raw_directories.join(", "))}</p>`;
     }
     return html;
 }
@@ -10993,7 +10993,7 @@ function _metricColor(metricKey, value) {
     if (metricKey === "spearman" || metricKey === "pearson") {
         if (v >= 0.7) return "var(--accent, #4caf50)";
         if (v >= 0.5) return "var(--text, #ccc)";
-        return "var(--warn, #ff9800)";
+        return "var(--warn, #ff9500)";
     }
     return "var(--text, #ccc)";
 }
@@ -11163,7 +11163,7 @@ function _renderRunDetailExtra(detail) {
             parts.push(`<div style="margin-top:0.2rem;font-size:0.72rem;line-height:1.5">${escapeHtml(da.license_note)}</div>`);
         }
         if (da.statsbomb_attribution_required) {
-            parts.push(`<div style="margin-top:0.3rem;padding:0.3rem 0.4rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.72rem;line-height:1.5"><strong>StatsBomb:</strong> ${escapeHtml(da.statsbomb_attribution_required)}</div>`);
+            parts.push(`<div style="margin-top:0.3rem;padding:0.3rem 0.4rem;background:var(--bg-alt,#1a1a2e);border-radius:var(--radius-xs);font-size:0.72rem;line-height:1.5"><strong>StatsBomb:</strong> ${escapeHtml(da.statsbomb_attribution_required)}</div>`);
         }
         if (parts.length > 0) {
             sections.push(`<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "数据归属" : "Data Attribution"}</p>
@@ -11334,7 +11334,7 @@ function _renderDataAttributionPanel() {
             html += `<div style="display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.2rem;flex-wrap:wrap">
                 <strong>${escapeHtml(name)}</strong>
                 <span style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(note)}</span>
-                ${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--accent,#4f9cff)">${z ? "链接" : "link"}</a>` : ""}
+                ${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--accent,#007aff)">${z ? "链接" : "link"}</a>` : ""}
             </div>`;
         });
         html += `</div>`;
@@ -11343,7 +11343,7 @@ function _renderDataAttributionPanel() {
     // StatsBomb special callout
     const statsbombAttr = la.statsbomb_attribution_required;
     if (statsbombAttr) {
-        html += `<div style="margin:0.4rem 0;padding:0.4rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.75rem;line-height:1.5">
+        html += `<div style="margin:0.4rem 0;padding:0.4rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:var(--radius-xs);font-size:0.75rem;line-height:1.5">
             <strong>StatsBomb Open Data:</strong> ${escapeHtml(statsbombAttr)}
         </div>`;
     }
@@ -11558,7 +11558,7 @@ function leagueFormString(formString) {
     // form_string is a string like "WWDLW" from the API
     const chars = String(formString).split("");
     if (chars.length === 0) return "—";
-    const colorMap = { W: "color:#16a34a;font-weight:600", D: "color:#ca8a04;font-weight:600", L: "color:#dc2626;font-weight:600" };
+    const colorMap = { W: "color:#34c759;font-weight:600", D: "color:#ff9500;font-weight:600", L: "color:#ff3b30;font-weight:600" };
     return chars.map((r) => `<span style="${colorMap[r] || ""}">${escapeHtml(r)}</span>`).join(" ");
 }
 
@@ -11718,11 +11718,11 @@ function renderLeagueFormHeatmap(data) {
                     : cell.venue;
                 const dateStr = cell.date ? cell.date.slice(0, 10) : "—";
                 return '<div style="font-weight:600">' + escapeHtml(cell.team)
-                    + ' <span style="color:#888">' + escapeHtml(t("league_form_heatmap_match_n").replace("{n}", String(cell.match_n))) + '</span></div>'
-                    + '<div>' + escapeHtml(resultLabel) + ' <span style="color:#888">' + escapeHtml(t("league_form_heatmap_opponent")) + ':</span> ' + escapeHtml(cell.opponent) + '</div>'
-                    + '<div><span style="color:#888">' + escapeHtml(t("league_form_heatmap_score")) + ':</span> ' + cell.gf + '-' + cell.ga
-                    + ' <span style="color:#888">' + escapeHtml(t("league_form_heatmap_venue")) + ':</span> ' + escapeHtml(venueLabel) + '</div>'
-                    + '<div><span style="color:#888">' + escapeHtml(t("league_form_heatmap_date")) + ':</span> ' + escapeHtml(dateStr) + '</div>';
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_match_n").replace("{n}", String(cell.match_n))) + '</span></div>'
+                    + '<div>' + escapeHtml(resultLabel) + ' <span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_opponent")) + ':</span> ' + escapeHtml(cell.opponent) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_score")) + ':</span> ' + cell.gf + '-' + cell.ga
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_venue")) + ':</span> ' + escapeHtml(venueLabel) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_date")) + ':</span> ' + escapeHtml(dateStr) + '</div>';
             },
         },
         grid: { left: 130, right: 30, top: 20, bottom: 70 },
@@ -11743,9 +11743,9 @@ function renderLeagueFormHeatmap(data) {
         visualMap: {
             type: "piecewise",
             pieces: [
-                { value: 3, label: "W", color: "#16a34a" },
-                { value: 1, label: "D", color: "#ca8a04" },
-                { value: 0, label: "L", color: "#dc2626" },
+                { value: 3, label: "W", color: "#34c759" },
+                { value: 1, label: "D", color: "#ff9500" },
+                { value: 0, label: "L", color: "#ff3b30" },
             ],
             left: "center",
             bottom: 5,
@@ -11858,13 +11858,13 @@ function renderLeagueDifficultyHeatmap(data) {
                 const levelLabel = leagueDiffLabel(cell.difficulty_label);
                 const dateStr = cell.date ? cell.date.slice(0, 10) : "—";
                 return '<div style="font-weight:600">' + escapeHtml(cell.team)
-                    + ' <span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_match_n").replace("{n}", String(cell.match_n))) + '</span></div>'
-                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_opponent")) + ':</span> ' + escapeHtml(cell.opponent)
-                    + ' <span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_venue")) + ':</span> ' + escapeHtml(venueLabel) + '</div>'
-                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_date")) + ':</span> ' + escapeHtml(dateStr) + '</div>'
-                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_score")) + ':</span> ' + cell.difficulty_score
-                    + ' <span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_xpts")) + ':</span> ' + cell.expected_points.toFixed(2) + '</div>'
-                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_level")) + ':</span> ' + escapeHtml(levelLabel) + '</div>';
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_match_n").replace("{n}", String(cell.match_n))) + '</span></div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_opponent")) + ':</span> ' + escapeHtml(cell.opponent)
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_venue")) + ':</span> ' + escapeHtml(venueLabel) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_date")) + ':</span> ' + escapeHtml(dateStr) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_score")) + ':</span> ' + cell.difficulty_score
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_xpts")) + ':</span> ' + cell.expected_points.toFixed(2) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_level")) + ':</span> ' + escapeHtml(levelLabel) + '</div>';
             },
         },
         grid: { left: 130, right: 30, top: 20, bottom: 70 },
@@ -11888,7 +11888,7 @@ function renderLeagueDifficultyHeatmap(data) {
             max: 100,
             calculable: true,
             inRange: {
-                color: ["#16a34a", "#ca8a04", "#dc2626"],
+                color: ["#34c759", "#ff9500", "#ff3b30"],
             },
             left: "center",
             bottom: 5,
@@ -11959,9 +11959,9 @@ function renderLeagueDifficultyDistribution(data) {
     const fixtureCounts = sorted.map((tm) => Number(tm.n_fixtures != null ? tm.n_fixtures : 0));
     const barColors = sorted.map((tm) => {
         const avg = Number(tm.avg_difficulty != null ? tm.avg_difficulty : 0);
-        if (avg >= 70) return "#dc2626";
-        if (avg >= 50) return "#ca8a04";
-        return "#16a34a";
+        if (avg >= 70) return "#ff3b30";
+        if (avg >= 50) return "#ff9500";
+        return "#34c759";
     });
 
     const textColor = chartTextColor();
@@ -11977,9 +11977,9 @@ function renderLeagueDifficultyDistribution(data) {
                 const avg = values[idx];
                 const nFix = fixtureCounts[idx];
                 return '<div style="font-weight:600">' + escapeHtml(team) + '</div>'
-                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_distribution_avg")) + ':</span> ' + avg.toFixed(1) + '</div>'
-                    + '<div><span style="color:#888">' + escapeHtml(t("league_difficulty_heatmap_score")) + ':</span> 0-100</div>'
-                    + '<div><span style="color:#888">' + escapeHtml(z ? "场次数" : "Fixtures") + ':</span> ' + nFix + '</div>';
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_distribution_avg")) + ':</span> ' + avg.toFixed(1) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_score")) + ':</span> 0-100</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(z ? "场次数" : "Fixtures") + ':</span> ' + nFix + '</div>';
             },
         },
         grid: { left: 130, right: 30, top: 20, bottom: 30 },
@@ -12054,7 +12054,7 @@ async function loadLeagueDifficulty() {
                 const diffScore = Number(f.difficulty_score || 0).toFixed(0);
                 const diffLabel = leagueDiffLabel(f.difficulty_label);
                 const diffClass = leagueDiffClass(f.difficulty_label);
-                const actual = f.actual_result ? `<span style="color:${f.actual_result === "W" ? "#16a34a" : f.actual_result === "L" ? "#dc2626" : "#ca8a04"};font-weight:600">${escapeHtml(f.actual_result)}</span>` : "—";
+                const actual = f.actual_result ? `<span style="color:${f.actual_result === "W" ? "#34c759" : f.actual_result === "L" ? "#ff3b30" : "#ff9500"};font-weight:600">${escapeHtml(f.actual_result)}</span>` : "—";
                 return `<tr>
                     <td>${escapeHtml(f.date || "—")}</td>
                     <td>${escapeHtml(f.opponent || "")}</td>
@@ -12324,7 +12324,7 @@ async function _renderTeamCompareResult(a, b) {
             radar: {
                 indicator: labels.map(l => ({ name: l, max: 100 })),
                 shape: "polygon",
-                splitArea: { areaStyle: { color: ["rgba(100,180,255,0.02)", "rgba(100,180,255,0.05)"] } },
+                splitArea: { areaStyle: { color: ["rgba(0,122,255,0.02)", "rgba(0,122,255,0.05)"] } },
             },
             series: [{
                 type: "radar",
@@ -12332,16 +12332,16 @@ async function _renderTeamCompareResult(a, b) {
                     {
                         value: radarA,
                         name: nameA,
-                        areaStyle: { opacity: 0.15, color: "#4a90d9" },
-                        lineStyle: { width: 2, color: "#4a90d9" },
-                        itemStyle: { color: "#4a90d9" },
+                        areaStyle: { opacity: 0.15, color: "#007aff" },
+                        lineStyle: { width: 2, color: "#007aff" },
+                        itemStyle: { color: "#007aff" },
                     },
                     {
                         value: radarB,
                         name: nameB,
-                        areaStyle: { opacity: 0.15, color: "#ff9f43" },
-                        lineStyle: { width: 2, color: "#ff9f43" },
-                        itemStyle: { color: "#ff9f43" },
+                        areaStyle: { opacity: 0.15, color: "#ff9500" },
+                        lineStyle: { width: 2, color: "#ff9500" },
+                        itemStyle: { color: "#ff9500" },
                     },
                 ],
             }],
@@ -12488,7 +12488,7 @@ async function _renderTeamStyleClusters(season, league, nClusters) {
         appState.charts.teamStyle = chart;
 
         // Group points by cluster_id so each cluster gets its own color.
-        const palette = ["#4a90d9", "#ff9f43", "#26c281", "#e84c3d", "#9b59b6", "#34495e", "#16a085", "#f1c40f"];
+        const palette = ["#007aff", "#ff9500", "#34c759", "#ff3b30", "#af52de", "#5856d6", "#5ac8fa", "#ff2d55"];
         const seriesByCluster = new Map();
         for (const p of profiles) {
             const cid = String(p.cluster_id ?? "?");
@@ -12609,7 +12609,7 @@ async function _renderClusterSimilarityMatrix(season, league, nClusters) {
                 left: "center",
                 bottom: 5,
                 textStyle: { color: chartTextColor() },
-                inRange: { color: ["#e84c3d", "#f1c40f", "#26c281"] },
+                inRange: { color: ["#ff3b30", "#ff9500", "#34c759"] },
             },
             series: [{
                 name: z ? "相似度" : "Similarity",
@@ -12752,7 +12752,7 @@ async function _renderStyleMatchup(homeTeam, awayTeam, season, league) {
             };
             clashText = `${clashMap[data.cluster_clash] || data.cluster_clash || ""} (${Number(data.cluster_similarity).toFixed(2)})`;
         }
-        clusterHtml = `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px;font-size:0.75rem">`
+        clusterHtml = `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(0,122,255,0.06);border-radius:var(--radius-sm);font-size:0.75rem">`
             + `<p style="margin:0 0 0.3rem;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "簇上下文" : "Cluster context"}</p>`
             + `<div style="display:grid;grid-template-columns:auto 1fr;gap:0.15rem 0.6rem">`
             + `<div style="color:var(--text-muted)">${escapeHtml(homeTeam)}:</div><div>${fmtCluster(hc)}</div>`
@@ -12959,7 +12959,7 @@ async function _renderLeagueStylePercentiles(team, season, league) {
             <td>${val.toFixed(2)}</td>
             <td>
                 <div style="display:flex;align-items:center;gap:0.4rem">
-                    <div style="flex:1;min-width:60px;height:6px;background:rgba(120,120,120,0.15);border-radius:3px;overflow:hidden">
+                    <div style="flex:1;min-width:60px;height:6px;background:rgba(120,120,120,0.15);border-radius:var(--radius-xs);overflow:hidden">
                         <div style="width:${barWidth}%;height:100%;background:linear-gradient(90deg,#5b8def,#3eb87f)"></div>
                     </div>
                     <strong style="font-size:0.75rem">${pct.toFixed(1)}%</strong>
@@ -13012,7 +13012,7 @@ async function _renderStyleAtlas(season, league) {
             const range = `${Number(b.low ?? 0).toFixed(1)}–${Number(b.high ?? 0).toFixed(1)}`;
             return `<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.65rem">
                 <div style="width:70px;text-align:right;color:var(--text-muted)">${escapeHtml(range)}</div>
-                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:2px;overflow:hidden">
+                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:var(--radius-xs);overflow:hidden">
                     <div style="width:${h}%;height:100%;background:#5b8def"></div>
                 </div>
                 <div style="width:24px;text-align:right;font-weight:600">${Number(b.count ?? 0)}</div>
@@ -13028,7 +13028,7 @@ async function _renderStyleAtlas(season, league) {
                 return `<span class="status-pill ${dirClass}" style="font-size:0.62rem;padding:0.08rem 0.35rem;margin:0.1rem 0.2rem 0.1rem 0">${escapeHtml(o.team)} (${Number(o.z_score ?? 0).toFixed(2)}σ, ${dirLabel})</span>`;
             }).join("") + (outliers.length > 5 ? `<span style="font-size:0.65rem;color:var(--text-muted)">+${outliers.length - 5}</span>` : "");
 
-        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
                 <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
                 <span style="font-size:0.68rem;color:var(--text-muted)">${z ? "min" : "min"} ${Number(d.min ?? 0).toFixed(2)} · Q1 ${Number(d.q1 ?? 0).toFixed(2)} · ${z ? "中位" : "med"} ${Number(d.median ?? 0).toFixed(2)} · Q3 ${Number(d.q3 ?? 0).toFixed(2)} · ${z ? "最大" : "max"} ${Number(d.max ?? 0).toFixed(2)} · IQR ${Number(d.iqr ?? 0).toFixed(2)}</span>
@@ -13133,7 +13133,7 @@ async function _renderTeamStyleDrift(team, league) {
         const perSeason = (d.per_season || []).map(ps => {
             return `<span style="font-size:0.65rem;color:var(--text-muted);margin-right:0.4rem">${escapeHtml(ps.season)}: <strong>${Number(ps.value ?? 0).toFixed(2)}</strong></span>`;
         }).join("");
-        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.2rem">
                 <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
                 <span class="status-pill ${driftLabelClass(d.drift_label)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(driftLabelMap(d.drift_label))}</span>
@@ -13379,7 +13379,7 @@ async function _renderPositionStyleEvolution(league) {
             return `<div style="font-size:0.65rem;color:var(--text-muted);margin-right:0.4rem"><strong>${escapeHtml(d.label || d.feature || "")}</strong>: ${escapeHtml(vals)}</div>`;
         }).join("");
 
-        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
                 <strong style="font-size:0.8rem">${escapeHtml(g.position_group || "")}</strong>
                 <span style="font-size:0.68rem;color:var(--text-muted)">${z ? "赛季数" : "Seasons"}: ${g.n_seasons ?? 0} (${escapeHtml((g.seasons || []).join(" → "))})</span>
@@ -13458,7 +13458,7 @@ async function _renderPositionStyleDrift(pos, league) {
         const perSeason = (d.per_season || []).map(ps => {
             return `<span style="font-size:0.65rem;color:var(--text-muted);margin-right:0.4rem">${escapeHtml(ps.season)}: <strong>${Number(ps.value ?? 0).toFixed(2)}</strong> <span style="font-size:0.6rem">(${escapeHtml(String(ps.n_players ?? 0))}p)</span></span>`;
         }).join("");
-        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.2rem">
                 <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
                 <span class="status-pill ${driftLabelClass(d.drift_label)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(driftLabelMap(d.drift_label))}</span>
@@ -13772,8 +13772,8 @@ async function _renderPositionGapReport(team, season) {
             `<div style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(data.team || "")}${data.league ? " · " + escapeHtml(data.league) : ""}${season ? " · " + escapeHtml(season) : ""}</div>`,
         `</div>`,
         `<div style="display:flex;gap:0.6rem;margin-bottom:0.4rem">`,
-            `<div style="flex:1;padding:0.4rem;background:rgba(255,100,100,0.06);border-radius:6px;text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-danger)">${data.n_gaps ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "缺口" : "Gaps"}</div></div>`,
-            `<div style="flex:1;padding:0.4rem;background:rgba(100,255,100,0.06);border-radius:6px;text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-success)">${data.n_strengths ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "优势" : "Strengths"}</div></div>`,
+            `<div style="flex:1;padding:0.4rem;background:rgba(255,100,100,0.06);border-radius:var(--radius-sm);text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-danger)">${data.n_gaps ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "缺口" : "Gaps"}</div></div>`,
+            `<div style="flex:1;padding:0.4rem;background:rgba(100,255,100,0.06);border-radius:var(--radius-sm);text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-success)">${data.n_strengths ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "优势" : "Strengths"}</div></div>`,
         `</div>`,
         gapRows
             ? `<div style="margin-bottom:0.4rem"><p style="font-size:0.72rem;font-weight:bold;margin:0 0 0.2rem">${z ? "缺口位置" : "Gap Positions"}</p><div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "位置" : "Position"}</th><th>${z ? "类型" : "Type"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "原因" : "Reason"}</th></tr></thead><tbody>${gapRows}</tbody></table></div></div>`
@@ -14322,7 +14322,7 @@ async function _renderLeagueActionAtlas(season, league) {
             const range = `${Number(b.low ?? 0).toFixed(2)}–${Number(b.high ?? 0).toFixed(2)}`;
             return `<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.65rem">
                 <div style="width:80px;text-align:right;color:var(--text-muted)">${escapeHtml(range)}</div>
-                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:2px;overflow:hidden">
+                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:var(--radius-xs);overflow:hidden">
                     <div style="width:${h}%;height:100%;background:#5b8def"></div>
                 </div>
                 <div style="width:24px;text-align:right;font-weight:600">${Number(b.count ?? 0)}</div>
@@ -14338,7 +14338,7 @@ async function _renderLeagueActionAtlas(season, league) {
                 return `<span class="status-pill ${dirClass}" style="font-size:0.62rem;padding:0.08rem 0.35rem;margin:0.1rem 0.2rem 0.1rem 0">${escapeHtml(o.team)} (${Number(o.z_score ?? 0).toFixed(2)}σ, ${dirLabel})</span>`;
             }).join("") + (outliers.length > 5 ? `<span style="font-size:0.65rem;color:var(--text-muted)">+${outliers.length - 5}</span>` : "");
 
-        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
                 <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
                 <span style="font-size:0.68rem;color:var(--text-muted)">min ${Number(d.min ?? 0).toFixed(2)} · Q1 ${Number(d.q1 ?? 0).toFixed(2)} · ${z ? "中位" : "med"} ${Number(d.median ?? 0).toFixed(2)} · Q3 ${Number(d.q3 ?? 0).toFixed(2)} · max ${Number(d.max ?? 0).toFixed(2)} · IQR ${Number(d.iqr ?? 0).toFixed(2)}</span>
@@ -14872,7 +14872,7 @@ function _renderCompareTray() {
     }
     tray.style.display = "block";
     const itemHtml = trayItems.map((p, i) =>
-        `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;background:var(--surface-alt);border-radius:0.3rem;font-size:0.8rem">
+        `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;background:var(--surface-alt);border-radius:var(--radius-sm);font-size:0.8rem">
             <strong>${escapeHtml(p.name)}</strong>
             <span style="color:var(--text-muted)">${escapeHtml(p.team)}</span>
             <button class="text-button" data-cs-compare-remove="${i}" type="button" style="font-size:0.75rem;padding:0 0.2rem">×</button>
@@ -15613,7 +15613,7 @@ async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, max
         `</div>`,
     ].join("") : "";
 
-    const badgeStyle = "display:inline-block;padding:0.1rem 0.4rem;border-radius:0.3rem;font-size:0.72rem;background:var(--surface-alt);color:var(--text-muted);margin-left:0.4rem";
+    const badgeStyle = "display:inline-block;padding:0.1rem 0.4rem;border-radius:var(--radius-sm);font-size:0.72rem;background:var(--surface-alt);color:var(--text-muted);margin-left:0.4rem";
     const badges = [
         `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_n_gaps"))}: ${escapeHtml(String(nGaps))}</span>`,
         `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_n_matched"))}: ${escapeHtml(String(nMatched))}</span>`,
@@ -16004,7 +16004,7 @@ function renderReports() {
             const cmd = run.reproduce_command || "";
             const cmdHtml = cmd
                 ? `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Reproduce</p>
-                   <pre style="margin:0;padding:0.35rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.72rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace;color:var(--text,#ccc)">${escapeHtml(cmd)}</pre>`
+                   <pre style="margin:0;padding:0.35rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:var(--radius-xs);font-size:0.72rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace;color:var(--text,#ccc)">${escapeHtml(cmd)}</pre>`
                 : "";
 
             // Assemble detail block (everything below the header)
@@ -16314,7 +16314,7 @@ function renderActions() {
         series: [{
             type: "bar",
             data: chartPlayers.map((player) => Number(player[metricKey] ?? player[legacyMetricKey] ?? 0)),
-            itemStyle: { color: mode === "vaep" ? "rgba(124,168,255,.82)" : "rgba(87,214,141,.78)" },
+            itemStyle: { color: mode === "vaep" ? "rgba(0,122,255,.82)" : "rgba(52,199,89,.78)" },
             label: { show: false },
         }],
     }, true);
@@ -19497,12 +19497,12 @@ async function renderCalibration() {
                 xAxis: { type: "value", name: "Predicted", min: 0, max: 1 },
                 yAxis: { type: "value", name: "Actual", min: 0, max: 1 },
                 series: [
-                    { type: "line", data: [[0, 0], [1, 1]], lineStyle: { type: "dashed", color: "#888" }, symbol: "none", silent: true },
+                    { type: "line", data: [[0, 0], [1, 1]], lineStyle: { type: "dashed", color: "#8e8e93" }, symbol: "none", silent: true },
                     {
                         type: "scatter",
                         data: calPlot.map(p => [p.mean_predicted, p.mean_actual]),
                         symbolSize: calPlot.map(p => Math.max(8, Math.sqrt(p.n_matches) * 3)),
-                        itemStyle: { color: "#4a90d9" },
+                        itemStyle: { color: "#007aff" },
                         label: { show: false },
                     },
                 ],
@@ -19523,7 +19523,7 @@ async function renderCalibration() {
                         <span>${escapeHtml(String(b.n_matches))} ${escapeHtml(appState.lang === "zh" ? "场" : "matches")}</span>
                         <span>${escapeHtml(appState.lang === "zh" ? "实际" : "Actual")}: ${escapeHtml(String(b.actual_pct))}%</span>
                         <span>${escapeHtml(appState.lang === "zh" ? "预测" : "Pred")}: ${escapeHtml(String(b.mean_predicted_pct))}%</span>
-                        <span style="color:${b.calibration_error > 5 ? '#ff6b6b' : '#57d68d'}">${escapeHtml(String(b.calibration_error))}% err</span>
+                        <span style="color:${b.calibration_error > 5 ? '#ff3b30' : '#34c759'}">${escapeHtml(String(b.calibration_error))}% err</span>
                     </div>`
                 ).join("");
             }
@@ -19878,7 +19878,7 @@ function _renderDecayTuning(data) {
         const hl = c.half_life_days === Infinity || c.half_life_days === "inf"
             ? "∞"
             : fmtMetric(c.half_life_days);
-        const cls = isBest ? ' style="background:var(--accent-alpha, rgba(100,180,255,0.12))"' : "";
+        const cls = isBest ? ' style="background:var(--accent-alpha, rgba(0,122,255,0.12))"' : "";
         const badge = isBest
             ? ` <span class="status-pill status-high" style="font-size:0.6rem">BEST</span>`
             : "";
@@ -19971,7 +19971,7 @@ function _renderCalibrationDrift(data) {
 
     const windowRows = windows.map((w) => {
         const isLatest = latest && w.start_date === latest.start_date && w.end_date === latest.end_date;
-        const cls = isLatest ? ' style="background:var(--accent-alpha, rgba(100,180,255,0.12))"' : "";
+        const cls = isLatest ? ' style="background:var(--accent-alpha, rgba(0,122,255,0.12))"' : "";
         const badge = isLatest
             ? ` <span class="status-pill status-medium" style="font-size:0.6rem">${z ? "最新" : "LATEST"}</span>`
             : "";
@@ -19998,13 +19998,13 @@ function _renderCalibrationDrift(data) {
     const latestBlock = latest ? `
         <div class="detail-grid" style="margin-top:0.8rem">
             <div><span>${escapeHtml(z ? "最新窗口 RPS" : "Latest RPS")}</span><strong>${fmtMetric(latest.rps_1x2)}</strong></div>
-            <div><span>${escapeHtml(z ? "相对变化" : "Relative change")}</span><strong style="color:${driftDetected ? "var(--warn, #f59e0b)" : "var(--accent)"}">${latestRelChange !== null ? `${(latestRelChange >= 0 ? "+" : "")}${(latestRelChange * 100).toFixed(2)}%` : "—"}</strong></div>
+            <div><span>${escapeHtml(z ? "相对变化" : "Relative change")}</span><strong style="color:${driftDetected ? "var(--warn, #ff9500)" : "var(--accent)"}">${latestRelChange !== null ? `${(latestRelChange >= 0 ? "+" : "")}${(latestRelChange * 100).toFixed(2)}%` : "—"}</strong></div>
             <div><span>${escapeHtml(z ? "阈值" : "Threshold")}</span><strong>${(Number(driftThreshold) * 100).toFixed(1)}%</strong></div>
         </div>` : "";
 
     body.innerHTML = `
         <div class="detail-grid" style="margin-bottom:0.8rem">
-            <div><span>${escapeHtml(z ? "漂移检测" : "Drift detected")}</span><strong style="color:${driftDetected ? "var(--warn, #f59e0b)" : "var(--accent)"}">${driftDetected ? (z ? "是" : "YES") : (z ? "否" : "NO")}</strong></div>
+            <div><span>${escapeHtml(z ? "漂移检测" : "Drift detected")}</span><strong style="color:${driftDetected ? "var(--warn, #ff9500)" : "var(--accent)"}">${driftDetected ? (z ? "是" : "YES") : (z ? "否" : "NO")}</strong></div>
             <div><span>${escapeHtml(z ? "监控指标" : "Drift metric")}</span><strong>${escapeHtml(String(driftMetric))}</strong></div>
             <div><span>${escapeHtml(z ? "窗口数" : "Windows")}</span><strong>${escapeHtml(String(nWindows))}</strong></div>
             <div><span>${escapeHtml(z ? "整体 RPS" : "Overall RPS")}</span><strong>${fmtMetric(overall.rps_1x2)}</strong></div>
@@ -20078,8 +20078,8 @@ function _renderEnsembleWeights(data) {
             <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.2rem">
                 <span>${escapeHtml(k)}</span><strong>${pct}%</strong>
             </div>
-            <div style="height:6px;background:var(--bg-elevated, rgba(255,255,255,0.08));border-radius:3px;overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:var(--accent, #64b5f6);border-radius:3px"></div>
+            <div style="height:6px;background:var(--bg-elevated, rgba(255,255,255,0.08));border-radius:var(--radius-xs);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:var(--accent, #007aff);border-radius:var(--radius-xs)"></div>
             </div>
         </div>`;
     }).join("");
@@ -20125,7 +20125,7 @@ function _renderCalibrationComparison(data) {
     // Overall metrics card
     const brierImp = improvement.brier_improvement_pct;
     const rpsImp = improvement.rps_improvement_pct;
-    const impColor = (v) => v != null && v < 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+    const impColor = (v) => v != null && v < 0 ? "var(--accent, #007aff)" : "var(--warn, #ff9500)";
 
     const overallHtml = `
         <h4 style="margin:0 0 0.5rem;font-size:0.85rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("calibration_comparison_overall"))}</h4>
@@ -20234,7 +20234,7 @@ function _renderBacktestFoldChart(data, models, folds) {
     const metricLabels = z
         ? { log_loss: "Log Loss", brier: "Brier", rps: "RPS" }
         : { log_loss: "Log Loss", brier: "Brier", rps: "RPS" };
-    const modelColors = ["#4f9cff", "#6bcf7f", "#f5a623"];
+    const modelColors = ["#007aff", "#6bcf7f", "#ff9500"];
 
     const foldLabels = folds.map((f) => String(f.fold));
 
@@ -20279,13 +20279,13 @@ function _renderBacktestFoldChart(data, models, folds) {
             type: "category",
             data: foldLabels,
             name: z ? "折" : "Fold",
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
         },
         yAxis: {
             type: "value",
             name: z ? "指标值（越低越好）" : "Metric (lower=better)",
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
         },
@@ -20338,7 +20338,7 @@ function _renderTemporalValidationChart(data) {
                 type: "value",
                 name: z ? "误差（越低越好）" : "Error (lower=better)",
                 position: "left",
-                nameTextStyle: { color: "#888", fontSize: 10 },
+                nameTextStyle: { color: "#8e8e93", fontSize: 10 },
                 axisLabel: { color: "#aaa", fontSize: 10 },
                 splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
             },
@@ -20348,15 +20348,15 @@ function _renderTemporalValidationChart(data) {
                 position: "right",
                 min: 0,
                 max: 100,
-                nameTextStyle: { color: "#888", fontSize: 10 },
+                nameTextStyle: { color: "#8e8e93", fontSize: 10 },
                 axisLabel: { color: "#aaa", fontSize: 10, formatter: "{value}%" },
                 splitLine: { show: false },
             },
         ],
         series: [
-            mkSeries("brier", "Brier", "#4f9cff"),
+            mkSeries("brier", "Brier", "#007aff"),
             mkSeries("rps", "RPS", "#6bcf7f"),
-            mkSeries("log_loss", "Log Loss", "#f5a623"),
+            mkSeries("log_loss", "Log Loss", "#ff9500"),
             {
                 name: z ? "准确率" : "Accuracy",
                 type: "line",
@@ -20463,7 +20463,7 @@ function _renderProbabilityHeatmapChart(data) {
                 left: "center",
                 bottom: "2%",
                 textStyle: { color: "#aaa", fontSize: 9 },
-                inRange: { color: ["#f87171", "#fbbf24", "#4ade80"] },
+                inRange: { color: ["#ff3b30", "#ff9500", "#34c759"] },
                 seriesIndex: 0,
                 text: [z ? "高准确率" : "High acc", z ? "低准确率" : "Low acc"],
             },
@@ -20475,7 +20475,7 @@ function _renderProbabilityHeatmapChart(data) {
                 left: "center",
                 bottom: "12%",
                 textStyle: { color: "#aaa", fontSize: 9 },
-                inRange: { color: ["#1e293b", "#4f9cff"] },
+                inRange: { color: ["#1e293b", "#007aff"] },
                 seriesIndex: 1,
                 text: [z ? "高密度" : "High density", z ? "低密度" : "Low density"],
                 show: false,
@@ -20549,14 +20549,14 @@ function _renderCIPlotChart(data) {
             name: z ? "置信度" : "Confidence",
             min: 0,
             max: 1,
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
         },
         yAxis: {
             type: "value",
             name: z ? "CI 宽度" : "CI width",
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
         },
@@ -20566,14 +20566,14 @@ function _renderCIPlotChart(data) {
                 type: "scatter",
                 data: correct,
                 symbolSize: 6,
-                itemStyle: { color: "#4ade80", opacity: 0.7 },
+                itemStyle: { color: "#34c759", opacity: 0.7 },
             },
             {
                 name: z ? "错误" : "Wrong",
                 type: "scatter",
                 data: wrong,
                 symbolSize: 6,
-                itemStyle: { color: "#f87171", opacity: 0.7 },
+                itemStyle: { color: "#ff3b30", opacity: 0.7 },
             },
         ],
     }, true);
@@ -20611,7 +20611,7 @@ function _renderFeatureImportanceChart(data) {
         xAxis: {
             type: "value",
             name: z ? "重要性（Brier 分离度）" : "Importance (Brier separation)",
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
         },
@@ -20627,7 +20627,7 @@ function _renderFeatureImportanceChart(data) {
                 data: importanceValues,
                 itemStyle: {
                     color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        { offset: 0, color: "#4f9cff" },
+                        { offset: 0, color: "#007aff" },
                         { offset: 1, color: "#6bcf7f" },
                     ]),
                 },
@@ -20715,7 +20715,7 @@ function _renderDriftHeatmapChart(data) {
             left: "center",
             bottom: "2%",
             textStyle: { color: "#aaa", fontSize: 9 },
-            inRange: { color: ["#4ade80", "#fbbf24", "#f87171"] },
+            inRange: { color: ["#34c759", "#ff9500", "#ff3b30"] },
             text: [z ? "高 Brier" : "High Brier", z ? "低 Brier" : "Low Brier"],
         },
         series: [
@@ -20754,7 +20754,7 @@ function _renderPredictionStreaksChart(data) {
         if (p.streak_break_type === "upset") {
             markPoints.push({
                 coord: [i, streakSigned[i]],
-                itemStyle: { color: "#f87171" },
+                itemStyle: { color: "#ff3b30" },
                 symbol: "pin",
                 symbolSize: 36,
                 value: z ? "爆冷" : "Upset",
@@ -20762,7 +20762,7 @@ function _renderPredictionStreaksChart(data) {
         } else if (p.streak_break_type === "recovery") {
             markPoints.push({
                 coord: [i, streakSigned[i]],
-                itemStyle: { color: "#4ade80" },
+                itemStyle: { color: "#34c759" },
                 symbol: "pin",
                 symbolSize: 36,
                 value: z ? "反弹" : "Recovery",
@@ -20815,7 +20815,7 @@ function _renderPredictionStreaksChart(data) {
                 type: "value",
                 name: z ? "连胜长度" : "Streak length",
                 position: "left",
-                nameTextStyle: { color: "#888", fontSize: 10 },
+                nameTextStyle: { color: "#8e8e93", fontSize: 10 },
                 axisLabel: { color: "#aaa", fontSize: 10 },
                 splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
             },
@@ -20825,7 +20825,7 @@ function _renderPredictionStreaksChart(data) {
                 position: "right",
                 min: 0,
                 max: 1,
-                nameTextStyle: { color: "#888", fontSize: 10 },
+                nameTextStyle: { color: "#8e8e93", fontSize: 10 },
                 axisLabel: { color: "#aaa", fontSize: 10, formatter: "{value}" },
                 splitLine: { show: false },
             },
@@ -20837,7 +20837,7 @@ function _renderPredictionStreaksChart(data) {
                 data: streakSigned.map((v, i) => ({
                     value: v,
                     itemStyle: {
-                        color: v > 0 ? "#4ade80" : v < 0 ? "#f87171" : "#94a3b8",
+                        color: v > 0 ? "#34c759" : v < 0 ? "#ff3b30" : "#94a3b8",
                     },
                 })),
                 markPoint: { data: markPoints, symbolSize: 36 },
@@ -20851,8 +20851,8 @@ function _renderPredictionStreaksChart(data) {
                 symbol: "circle",
                 symbolSize: 4,
                 data: confidence,
-                lineStyle: { width: 2, color: "#4f9cff" },
-                itemStyle: { color: "#4f9cff" },
+                lineStyle: { width: 2, color: "#007aff" },
+                itemStyle: { color: "#007aff" },
             },
         ],
     }, true);
@@ -20889,47 +20889,47 @@ async function fetchAndRenderPredictionStreaks() {
             none: z ? "无" : "None",
         }[data.current_streak_type || "none"] || "–";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmtNum(data.n_matches)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:var(--accent)">${fmtNum(data.current_streak)} <span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(currentTypeLabel)}</span></div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_current"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.1rem;font-weight:600;color:#4ade80">${fmtNum(data.longest_correct_streak)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.1rem;font-weight:600;color:#34c759">${fmtNum(data.longest_correct_streak)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_longest_correct"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.1rem;font-weight:600;color:#f87171">${fmtNum(data.longest_wrong_streak)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.1rem;font-weight:600;color:#ff3b30">${fmtNum(data.longest_wrong_streak)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_longest_wrong"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${fmtNum(data.total_streak_breaks)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_total_breaks"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:#f87171">${fmtNum(data.upset_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.upset_rate)})</span></div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:#ff3b30">${fmtNum(data.upset_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.upset_rate)})</span></div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_upset_breaks"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:#4ade80">${fmtNum(data.recovery_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.recovery_rate)})</span></div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:#34c759">${fmtNum(data.recovery_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.recovery_rate)})</span></div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_recovery_breaks"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${fmtNum(data.neutral_breaks)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_neutral_breaks"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.avg_correct_streak_length || 0).toFixed(2)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_avg_correct"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.avg_wrong_streak_length || 0).toFixed(2)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_avg_wrong"))}</div>
             </div>
@@ -20980,23 +20980,23 @@ async function fetchAndRenderBacktestReportCard() {
         const z = appState.lang === "zh";
         const fmtPct = (v) => (v == null) ? "–" : `${(Number(v) * 100).toFixed(1)}%`;
         const fmtScore = (v) => (v == null) ? "–" : Number(v).toFixed(1);
-        const gradeColors = { A: "#4ade80", B: "#a3e635", C: "#facc15", D: "#fb923c", F: "#f87171" };
+        const gradeColors = { A: "#34c759", B: "#a3e635", C: "#facc15", D: "#fb923c", F: "#ff3b30" };
         const overallGrade = data.overall_grade || "–";
         const gradeColor = gradeColors[overallGrade] || "var(--text-base)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.6rem;font-weight:700;color:${gradeColor}">${escapeHtml(overallGrade)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_grade"))}</div>
             </div>
-            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.2rem;font-weight:600">${fmtScore(data.overall_score)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_score"))}</div>
             </div>
-            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${escapeHtml(data.model_type || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_model_type"))}</div>
             </div>
@@ -21071,8 +21071,8 @@ function _renderReportCardChart(data) {
                 value: values,
                 name: z ? "得分" : "Score",
                 areaStyle: { color: "rgba(79,156,255,0.18)" },
-                lineStyle: { color: "#4f9cff", width: 2 },
-                itemStyle: { color: "#4f9cff" },
+                lineStyle: { color: "#007aff", width: 2 },
+                itemStyle: { color: "#007aff" },
             }],
         }],
     }, true);
@@ -21103,7 +21103,7 @@ async function fetchAndRenderPredictionAnomalies() {
         }
         const z = appState.lang === "zh";
         const fmtPct = (v) => (v == null) ? "–" : `${(Number(v) * 100).toFixed(1)}%`;
-        const sevColors = { critical: "#dc2626", high: "#f87171", medium: "#fbbf24", low: "#a3e635" };
+        const sevColors = { critical: "#ff3b30", high: "#ff3b30", medium: "#ff9500", low: "#a3e635" };
         const typeLabels = {
             high_entropy: t("anomalies_high_entropy"),
             overconfident_wrong: t("anomalies_overconfident_wrong"),
@@ -21119,24 +21119,24 @@ async function fetchAndRenderPredictionAnomalies() {
         };
         const counts = data.anomaly_counts || {};
         let html = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.1rem;font-weight:600;color:#f87171">${escapeHtml(String(data.n_anomalies ?? "–"))}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.1rem;font-weight:600;color:#ff3b30">${escapeHtml(String(data.n_anomalies ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_n_anomalies"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${escapeHtml(String(counts.high_entropy ?? 0))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_high_entropy"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:#f87171">${escapeHtml(String(counts.overconfident_wrong ?? 0))}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:#ff3b30">${escapeHtml(String(counts.overconfident_wrong ?? 0))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_overconfident_wrong"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:#4ade80">${escapeHtml(String(counts.underconfident_correct ?? 0))}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:#34c759">${escapeHtml(String(counts.underconfident_correct ?? 0))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_underconfident_correct"))}</div>
             </div>
         </div>`;
@@ -21145,7 +21145,7 @@ async function fetchAndRenderPredictionAnomalies() {
             html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("anomalies_no_anomalies"))}</p>`;
         } else {
             html += `<p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(t("anomalies_table_tip"))}</p>`;
-            html += `<div style="max-height:320px;overflow:auto;border:1px solid var(--border-color);border-radius:6px"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
+            html += `<div style="max-height:320px;overflow:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm)"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
                 <thead style="position:sticky;top:0;background:var(--bg-elevated)"><tr style="text-align:left;color:var(--text-muted)">
                     <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_idx"))}</th>
                     <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_type"))}</th>
@@ -21246,68 +21246,68 @@ async function fetchAndRenderTeamProfile(team) {
             underperformer: t("team_profile_underperformer"),
             aligned: t("team_profile_aligned"),
         };
-        const assessmentColor = { overperformer: "#4ade80", underperformer: "#f87171", aligned: "var(--text-base)" };
+        const assessmentColor = { overperformer: "#34c759", underperformer: "#ff3b30", aligned: "var(--text-base)" };
         const assessment = data.assessment || "aligned";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_home ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_home"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_away ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_away"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600;color:${assessmentColor[assessment] || "var(--text-base)"}">${escapeHtml(assessmentMap[assessment] || assessment)}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_assessment"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.overall_accuracy)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_overall_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.home_accuracy)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_home_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.away_accuracy)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_away_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.avg_confidence)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_avg_conf"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtNum(data.calibration_gap, 3)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_cal_gap"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600;color:${assessmentColor[assessment] || "var(--text-base)"}">${fmtNum(data.overperformance, 3)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_overperf"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600">${escapeHtml(String(data.n_wins ?? 0))}/${escapeHtml(String(data.n_draws ?? 0))}/${escapeHtml(String(data.n_losses ?? 0))}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_wdl"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600">${fmtNum(data.avg_goals_scored, 2)}/${fmtNum(data.avg_goals_conceded, 2)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_avg_gf"))}/${escapeHtml(t("team_profile_avg_ga"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.clean_sheet_rate)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_clean_sheet"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.btts_rate)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_btts"))}</div>
             </div>
@@ -21317,14 +21317,14 @@ async function fetchAndRenderTeamProfile(team) {
             html += `<h4 style="margin:0.4rem 0 0.2rem;font-size:0.82rem">${escapeHtml(t("team_profile_common_scorelines"))}</h4>`;
             html += `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.6rem">`;
             for (const s of scorelines) {
-                html += `<span style="padding:0.2rem 0.5rem;background:var(--bg-elevated);border-radius:4px;font-size:0.75rem;font-family:monospace">${escapeHtml(String(s[0] || "–"))} × ${escapeHtml(String(s[1] || 0))}</span>`;
+                html += `<span style="padding:0.2rem 0.5rem;background:var(--bg-elevated);border-radius:var(--radius-xs);font-size:0.75rem;font-family:monospace">${escapeHtml(String(s[0] || "–"))} × ${escapeHtml(String(s[1] || 0))}</span>`;
             }
             html += `</div>`;
         }
         const renderPredList = (title, preds) => {
             if (!Array.isArray(preds) || preds.length === 0) return "";
             let h = `<h4 style="margin:0.4rem 0 0.2rem;font-size:0.82rem">${escapeHtml(title)}</h4>`;
-            h += `<div style="max-height:200px;overflow:auto;border:1px solid var(--border-color);border-radius:6px"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
+            h += `<div style="max-height:200px;overflow:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm)"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
                 <thead style="position:sticky;top:0;background:var(--bg-elevated)"><tr style="text-align:left;color:var(--text-muted)">
                     <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_match"))}</th>
                     <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_pred"))}</th>
@@ -23168,7 +23168,7 @@ function renderWcOutlook(outlook) {
 
     function probBar(label, value, color) {
         const pct = Math.max(0, Math.min(100, (value || 0) * 100));
-        const barColor = color || "var(--accent, #4f9cff)";
+        const barColor = color || "var(--accent, #007aff)";
         return `<div class="prob-row" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
             <span style="min-width:60px;font-size:0.8rem;color:var(--text-muted)">${escapeHtml(label)}</span>
             <div class="probability-track" style="flex:1">
@@ -23182,7 +23182,7 @@ function renderWcOutlook(outlook) {
     const finishBars = ["p1st", "p2nd", "p3rd", "p4th", "p_advance"]
         .map((key, i) => {
             const label = z ? ["第1", "第2", "第3", "第4", "出线"][i] : ["1st", "2nd", "3rd", "4th", "Advance"][i];
-            const colors = ["#4f9cff", "#6bcf7f", "#f5a623", "#e0556a", "#9b6cf5"];
+            const colors = ["#007aff", "#6bcf7f", "#ff9500", "#e0556a", "#9b6cf5"];
             if (gf[key] === undefined || gf[key] === null) return "";
             return probBar(label, gf[key], colors[i]);
         })
@@ -23269,7 +23269,7 @@ function renderWcOutlook(outlook) {
             ${champPct === null
                 ? `<p style="color:var(--text-muted);font-size:0.8rem">—</p>`
                 : `<div style="display:flex;align-items:baseline;gap:0.3rem">
-                    <span style="font-size:1.8rem;font-weight:700;color:var(--accent, #4f9cff)">${champPct.toFixed(2)}%</span>
+                    <span style="font-size:1.8rem;font-weight:700;color:var(--accent, #007aff)">${champPct.toFixed(2)}%</span>
                 </div>`
             }
             <h4 style="font-size:0.85rem;margin:0.8rem 0 0.5rem;color:var(--text-secondary, #ccc)">${z ? "阵容强度分解" : "Squad Strength Breakdown"}</h4>
@@ -23298,7 +23298,7 @@ function renderWcOutlook(outlook) {
     <div style="margin-top:1rem">
         <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-secondary, #ccc)">${z ? "阵容位置深度" : "Squad Role Depth"}</h4>
         <div>${roleBalance || `<span style="color:var(--text-muted);font-size:0.8rem">—</span>`}</div>
-        ${planningFlags.length ? `<p style="font-size:0.72rem;color:var(--warn, #f5a623);margin:0.45rem 0 0">${escapeHtml(z ? "规划关注：" : "Planning flags: ")}${escapeHtml(planningFlags.join(" · "))}</p>` : ""}
+        ${planningFlags.length ? `<p style="font-size:0.72rem;color:var(--warn, #ff9500);margin:0.45rem 0 0">${escapeHtml(z ? "规划关注：" : "Planning flags: ")}${escapeHtml(planningFlags.join(" · "))}</p>` : ""}
         ${balanceNote}
     </div>
     <div style="margin-top:1rem">
@@ -23414,9 +23414,9 @@ function _wcMatchPredictionPill(matchId) {
     const dr = Math.round((entry.draw_prob || 0) * 100);
     const aw = Math.max(0, 100 - hw - dr);
     return `<div style="display:flex;align-items:center;gap:0.2rem;font-size:0.65rem" title="${escapeAttr(`${t("wc_match_pred_home")} ${hw}% · ${t("wc_match_pred_draw")} ${dr}% · ${t("wc_match_pred_away")} ${aw}%`)}">
-        <span style="background:#16a34a;color:#fff;padding:0.1rem 0.25rem;border-radius:2px 0 0 2px;min-width:1.6rem;text-align:center">${hw}</span>
-        <span style="background:#ca8a04;color:#fff;padding:0.1rem 0.25rem;min-width:1.6rem;text-align:center">${dr}</span>
-        <span style="background:#dc2626;color:#fff;padding:0.1rem 0.25rem;border-radius:0 2px 2px 0;min-width:1.6rem;text-align:center">${aw}</span>
+        <span style="background:#34c759;color:#fff;padding:0.1rem 0.25rem;border-radius:var(--radius-xs) 0 0 var(--radius-xs);min-width:1.6rem;text-align:center">${hw}</span>
+        <span style="background:#ff9500;color:#fff;padding:0.1rem 0.25rem;min-width:1.6rem;text-align:center">${dr}</span>
+        <span style="background:#ff3b30;color:#fff;padding:0.1rem 0.25rem;border-radius:0 2px 2px 0;min-width:1.6rem;text-align:center">${aw}</span>
     </div>`;
 }
 
@@ -24738,7 +24738,7 @@ function renderWcKnockoutReviewLedger() {
                     : (z ? "无方向判断" : "No call");
         return `<tr><td>${escapeHtml(review.match_id || "")}</td><td>${escapeHtml(fixture.home_team || "TBD")} ${outcome.home_goals ?? "-"}-${outcome.away_goals ?? "-"} ${escapeHtml(fixture.away_team || "TBD")}</td><td>${escapeHtml(direction)}</td></tr>`;
     }).join("");
-    panel.innerHTML = `<div style="margin-bottom:0.65rem;padding:0.65rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03))">
+    panel.innerHTML = `<div style="margin-bottom:0.65rem;padding:0.65rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03))">
         <div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:center"><strong style="font-size:0.8rem">${z ? "本地赛果复盘总览" : "Local Result Review Ledger"}</strong><button class="text-button" id="wc-ko-review-ledger-export" type="button" style="font-size:0.68rem">${z ? "导出 JSON" : "Export JSON"}</button></div>
         <p style="font-size:0.67rem;color:var(--text-muted);margin:0.3rem 0">${z ? "已完成" : "Completed"}: ${summary.completed_matches || 0} · ${z ? "有赛前快照" : "Snapshots"}: ${summary.reviews_with_snapshot || 0} · ${z ? "缺失" : "Missing"}: ${summary.snapshots_missing || 0} · ${z ? "方向一致" : "Matched"}: ${summary.matched_direction || 0} · ${z ? "本地冷门" : "Upsets"}: ${summary.recorded_upset || 0}</p>
         ${rows ? `<div class="table-scroll"><table style="font-size:0.7rem"><thead><tr><th>ID</th><th>${z ? "本地录入赛果" : "Local recorded result"}</th><th>${z ? "对照" : "Comparison"}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p style="font-size:0.7rem;color:var(--text-muted)">${z ? "尚无已录入淘汰赛赛果。" : "No local knockout results have been recorded."}</p>`}
@@ -24829,7 +24829,7 @@ function renderWcKnockoutScenarios(team) {
     const nm = data.next_match;
     const scenarios = data.scenarios || [];
 
-    let html = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+    let html = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
             <h4 style="font-size:0.9rem">${escapeHtml(team)} ${z ? "夺冠情景分析" : "Championship Scenarios"}</h4>
             <button class="text-button" onclick="document.getElementById('wc-ko-scenarios-display').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
@@ -25008,7 +25008,7 @@ function renderWcShareDialog() {
         exported_at: data.exported_at,
     }, null, 2);
 
-    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
             <h4 style="font-size:0.9rem">${z ? "分享锦标赛状态" : "Share Tournament State"}</h4>
             <button class="text-button" onclick="document.getElementById('wc-ko-share-dialog').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
@@ -25017,7 +25017,7 @@ function renderWcShareDialog() {
             ${z ? "格式" : "Format"}: ${escapeHtml(data.format || "")} · ${z ? "大小" : "Size"}: ${sizeKb} KB · ${z ? "导出时间" : "Exported"}: ${escapeHtml(data.exported_at || "")}
         </div>
         <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "复制下方编码字符串，在其他设备粘贴到「导入」对话框即可恢复锦标赛状态。" : "Copy the encoded string below and paste it into the Import dialog on another device to restore the tournament state."}</p>
-        <textarea id="wc-ko-share-code" readonly style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:4px;background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical" onclick="this.select()">${escapeHtml(encoded)}</textarea>
+        <textarea id="wc-ko-share-code" readonly style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-xs);background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical" onclick="this.select()">${escapeHtml(encoded)}</textarea>
         <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
             <button class="text-button" id="wc-ko-share-copy" type="button" style="font-size:0.75rem">${z ? "复制编码" : "Copy Code"}</button>
             <button class="text-button" id="wc-ko-share-download" type="button" style="font-size:0.75rem">${z ? "下载 JSON" : "Download JSON"}</button>
@@ -25069,13 +25069,13 @@ function renderWcImportDialog() {
         bracketPanel.parentElement.insertBefore(dlg, bracketPanel);
     }
 
-    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
             <h4 style="font-size:0.9rem">${z ? "导入锦标赛状态" : "Import Tournament State"}</h4>
             <button class="text-button" onclick="document.getElementById('wc-ko-import-dialog').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
         </div>
         <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "先预览编码的状态差异，再确认替换本地应用中的锦标赛状态。" : "Preview state differences first, then explicitly confirm replacement of the local application tournament state."}</p>
-        <textarea id="wc-ko-import-code" placeholder="${z ? "粘贴编码..." : "Paste encoded string..."}" style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:4px;background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical"></textarea>
+        <textarea id="wc-ko-import-code" placeholder="${z ? "粘贴编码..." : "Paste encoded string..."}" style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-xs);background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical"></textarea>
         <div id="wc-ko-import-msg" style="font-size:0.7rem;margin-top:0.4rem;min-height:1rem"></div>
         <div id="wc-ko-import-details" style="font-size:0.7rem;color:var(--text-muted)"></div>
         <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
@@ -25240,12 +25240,12 @@ function renderWcGroupStageSimulation() {
             const winPct = (t.win_group_prob * 100).toFixed(1);
             const barWidth = Math.max(1, t.advance_prob * 100);
             const barColor = t.advance_prob >= 0.8 ? "var(--status-high-color,#4caf50)" :
-                             t.advance_prob >= 0.4 ? "var(--status-medium-color,#ff9800)" :
+                             t.advance_prob >= 0.4 ? "var(--status-medium-color,#ff9500)" :
                              "var(--status-low-color,#f44336)";
             html += `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.7rem">
                 <span style="min-width:30px;color:var(--text-muted)">${escapeHtml(t.group)}</span>
                 <span style="min-width:100px">${escapeHtml(t.team)}</span>
-                <div style="flex:1;background:var(--border-color,rgba(255,255,255,0.1));border-radius:3px;height:6px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:${barColor}"></div></div>
+                <div style="flex:1;background:var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-xs);height:6px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:${barColor}"></div></div>
                 <span style="min-width:45px;text-align:right">${advPct}%</span>
                 <span style="min-width:60px;text-align:right;color:var(--text-muted)">${z ? "小组第一" : "Win"} ${winPct}%</span>
             </div>`;
@@ -25296,7 +25296,7 @@ function renderWcKnockoutBracket() {
     let html = "";
 
     if (champ) {
-        html += `<div style="text-align:center;padding:0.8rem;margin-bottom:1rem;background:var(--panel-bg,rgba(255,255,255,0.05));border-radius:8px">
+        html += `<div style="text-align:center;padding:0.8rem;margin-bottom:1rem;background:var(--panel-bg,rgba(255,255,255,0.05));border-radius:var(--radius-sm)">
             <span style="font-size:1.2rem">🏆</span>
             <span style="font-size:1.1rem;font-weight:bold;margin-left:0.5rem">${escapeHtml(champ)}</span>
             <span style="color:var(--text-muted);margin-left:0.5rem">${z ? "冠军" : "Champion"}</span>
@@ -25310,7 +25310,7 @@ function renderWcKnockoutBracket() {
     // Tournament win odds table
     if (probsData && probsData.tournament_win_probability && probsData.tournament_win_probability.length > 0) {
         const odds = probsData.tournament_win_probability.slice(0, 8);
-        html += `<div style="margin-bottom:1rem;padding:0.6rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03))">
+        html += `<div style="margin-bottom:1rem;padding:0.6rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03))">
             <h4 style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em">${z ? "夺冠概率" : "Tournament Win Odds"} <span style="font-weight:normal;text-transform:none">(${z ? "蒙特卡洛 " + probsData.num_simulations + " 次模拟" : "MC " + probsData.num_simulations + " sims"})</span></h4>
             <div style="display:flex;flex-wrap:wrap;gap:0.4rem">`;
         for (const t of odds) {
@@ -25318,7 +25318,7 @@ function renderWcKnockoutBracket() {
             const barWidth = Math.max(2, t.win_probability * 100);
             html += `<div style="min-width:110px;flex:1">
                 <div style="font-size:0.7rem;margin-bottom:0.1rem">${escapeHtml(t.team)}</div>
-                <div style="background:var(--border-color,rgba(255,255,255,0.1));border-radius:3px;height:4px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:var(--accent-color,#4a9eff)"></div></div>
+                <div style="background:var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-xs);height:4px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:var(--accent-color,#4a9eff)"></div></div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${pct}%</div>
             </div>`;
         }
@@ -25425,7 +25425,7 @@ function renderKnockoutMatchCard(m, z, prob) {
             : comparison.directional_result === "recorded_upset"
                 ? (z ? "本地录入结果偏离模型方向" : "recorded upset")
                 : (z ? "没有方向性判断" : "no directional call");
-        reviewHtml = `<div style="margin-top:0.35rem;padding:0.3rem;background:var(--bg-elevated);border-radius:4px;font-size:0.62rem;color:var(--text-muted)">
+        reviewHtml = `<div style="margin-top:0.35rem;padding:0.3rem;background:var(--bg-elevated);border-radius:var(--radius-xs);font-size:0.62rem;color:var(--text-muted)">
             <div>${z ? "赛前本地快照" : "Pre-recording snapshot"}: ${(Number(prediction.home_win_probability || 0) * 100).toFixed(0)}% / ${(Number(prediction.away_win_probability || 0) * 100).toFixed(0)}%</div>
             <div>${escapeHtml(resultText)} · ${z ? "胜方当时概率" : "winner probability"} ${(Number(comparison.recorded_winner_probability || 0) * 100).toFixed(0)}%</div>
             <div style="margin-top:0.15rem">${z ? "仅与本地录入结果对照，不构成模型评估。" : "Local result comparison only; not a model evaluation."}</div>
@@ -25438,7 +25438,7 @@ function renderKnockoutMatchCard(m, z, prob) {
     const probBar = (prob && prob.home_win_probability != null && prob.away_win_probability != null)
         ? `<div style="display:flex;align-items:center;gap:0.2rem;margin-top:0.2rem;font-size:0.6rem;color:var(--text-muted)">
               <span style="font-weight:bold;color:var(--text-secondary)">${(prob.home_win_probability * 100).toFixed(0)}%</span>
-              <div style="flex:1;height:3px;border-radius:2px;overflow:hidden;display:flex">
+              <div style="flex:1;height:3px;border-radius:var(--radius-xs);overflow:hidden;display:flex">
                   <div style="width:${prob.home_win_probability * 100}%;background:var(--accent-color,#4a9eff)"></div>
                   <div style="width:${prob.away_win_probability * 100}%;background:var(--border-color,rgba(255,255,255,0.2))"></div>
               </div>
@@ -25447,7 +25447,7 @@ function renderKnockoutMatchCard(m, z, prob) {
         : "";
 
     if (hasResult) {
-        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
+        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
             <div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-weight:${m.winner === m.home ? 'bold' : 'normal'}">${escapeHtml(home)}</span>
                 <span style="font-weight:bold;margin:0 0.3rem">${hg}-${ag}${decidedByPen ? " (pen)" : ""}</span>
@@ -25459,7 +25459,7 @@ function renderKnockoutMatchCard(m, z, prob) {
     }
 
     if (!isReady) {
-        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;opacity:0.6;background:var(--panel-bg,rgba(255,255,255,0.03))">
+        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);font-size:0.8rem;opacity:0.6;background:var(--panel-bg,rgba(255,255,255,0.03))">
             <div style="display:flex;justify-content:space-between">
                 <span>${escapeHtml(home)}</span>
                 <span style="color:var(--text-muted)">vs</span>
@@ -25469,7 +25469,7 @@ function renderKnockoutMatchCard(m, z, prob) {
     }
 
     // Ready for input
-    return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
+    return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
             <span>${escapeHtml(home)}</span>
             <span style="color:var(--text-muted);font-size:0.7rem">vs</span>
@@ -26177,7 +26177,7 @@ function renderWcFormTrendPanel(team) {
                 xAxis: {type: "category", data: xLabels, axisLabel: {color: chartTextColor(), fontSize: 10}},
                 yAxis: {type: "value", axisLabel: {color: chartTextColor(), fontSize: 10}, splitLine: {lineStyle: {color: chartGridColor()}}},
                 series: [
-                    {name: z ? "本队预期进球" : "Team xG", type: "line", smooth: true, data: teamGoals, itemStyle: {color: "#7ca8ff"}},
+                    {name: z ? "本队预期进球" : "Team xG", type: "line", smooth: true, data: teamGoals, itemStyle: {color: "#007aff"}},
                     {name: z ? "对手预期进球" : "Opp xG", type: "line", smooth: true, data: oppGoals, itemStyle: {color: "#ff7c7c"}},
                 ],
             });
@@ -26272,7 +26272,7 @@ function renderWcSquads() {
         grid: {left: 80, right: 20, top: 20, bottom: 40},
         xAxis: {type: "value", axisLabel: {color: chartTextColor()}, splitLine: {lineStyle: {color: chartGridColor()}}},
         yAxis: {type: "category", data: chartData.map((p) => p.name), axisLabel: {color: chartTextColor(), fontSize: 11}},
-        series: [{type: "bar", data: chartData.map((p) => p.rating), itemStyle: {color: "#7ca8ff"}}],
+        series: [{type: "bar", data: chartData.map((p) => p.rating), itemStyle: {color: "#007aff"}}],
     }, true);
     chart.resize();
 
@@ -26525,7 +26525,7 @@ function renderWcCompare() {
             grid: {left: 80, right: 20, top: 20, bottom: 40},
             xAxis: {type: "value", axisLabel: {color: chartTextColor()}, splitLine: {lineStyle: {color: chartGridColor()}}},
             yAxis: {type: "category", data: allRated.map((p) => p.name), axisLabel: {color: chartTextColor(), fontSize: 11}},
-            series: [{type: "bar", data: allRated.map((p) => ({value: p.rating, itemStyle: {color: p.team === teamA ? "#7ca8ff" : "#57d68d"}}))}],
+            series: [{type: "bar", data: allRated.map((p) => ({value: p.rating, itemStyle: {color: p.team === teamA ? "#007aff" : "#34c759"}}))}],
         }, true);
         chart.resize();
     }
@@ -26765,8 +26765,8 @@ function renderWcMatchSpotlightPanel(teamA, teamB) {
                                 <td>
                                     <div style="display:flex;align-items:center;gap:0.4rem">
                                         <span class="status-pill ${scoreCls}" style="font-size:0.65rem">${(p.spotlight_score || 0).toFixed(3)}</span>
-                                        <div style="width:60px;height:6px;background:var(--border-color,rgba(128,128,128,0.2));border-radius:3px;overflow:hidden">
-                                            <div style="width:${sanitizeCssPercent(Number(scorePct))}%;height:100%;background:var(--accent,#7ca8ff)"></div>
+                                        <div style="width:60px;height:6px;background:var(--border-color,rgba(128,128,128,0.2));border-radius:var(--radius-xs);overflow:hidden">
+                                            <div style="width:${sanitizeCssPercent(Number(scorePct))}%;height:100%;background:var(--accent,#007aff)"></div>
                                         </div>
                                     </div>
                                 </td>
@@ -27487,7 +27487,7 @@ function renderTacticalProjectList() {
             const input = document.createElement("input");
             input.type = "text";
             input.value = currentTitle;
-            input.style.cssText = "font-size:inherit;font-weight:bold;width:100%;padding:0 0.15rem;border:1px solid var(--accent,#7ca8ff);border-radius:3px;background:var(--bg,#1a1a2e);color:var(--text,#e0e0e0)";
+            input.style.cssText = "font-size:inherit;font-weight:bold;width:100%;padding:0 0.15rem;border:1px solid var(--accent,#007aff);border-radius:var(--radius-xs);background:var(--bg,#1a1a2e);color:var(--text,#e0e0e0)";
             titleSpan.replaceWith(input);
             input.focus();
             input.select();
@@ -27752,7 +27752,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (existingBanner) return;
         const demoBanner = document.createElement("div");
         demoBanner.id = "global-demo-banner";
-        demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff6b6b;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
+        demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff3b30;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
         const z = appState.lang === "zh";
         demoBanner.textContent = z
             ? "◆ API 离线 — 使用静态缓存数据。启动后端获取实时数据：PYTHONPATH=src uv run python -m scoutfootball serve"
