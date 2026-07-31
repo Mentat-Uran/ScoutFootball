@@ -883,6 +883,48 @@ def _build_role_system_audit(
         }
 
 
+def _build_label_ledger_audit(
+    settings: PlatformSettings,
+) -> dict[str, Any]:
+    """Surface the PRS-3 personal evaluation label ledger in the health report.
+
+    PRS-3 slice 1: the ledger is the maintainer's append-only JSONL record
+    of ``human_pairwise_preference`` (A vs B within a role + observation
+    window) and ``human_tier`` (1-5 tier) labels, plus
+    ``external_reference`` / ``future_outcome`` / ``model_derived`` types
+    reserved by the schema. An empty ledger is **not** a failure — it is
+    the honest default before the maintainer has recorded any personal
+    evaluation. The health report therefore surfaces counts, the
+    supervision-eligible breakdown, and the independence audit status
+    without participating in the fail-closed verdict, so the maintainer
+    can see at a glance how many independent labels exist and whether
+    any ``model_derived`` label has leaked into the supervision-eligible
+    set.
+    """
+    try:
+        from scoutfootball.evaluation.label_ledger import (
+            label_independence_audit,
+            ledger_summary,
+            read_ledger,
+        )
+
+        records = read_ledger(settings=settings)
+        summary = ledger_summary(records)
+        # Attach the independence audit so the report surfaces whether any
+        # model_derived label has leaked into the supervision-eligible
+        # active set. The audit is structural; it does not prove the
+        # annotator was truly blind or that evidence is correct.
+        summary = {**summary, "independence_audit": label_independence_audit(records)}
+        return summary
+    except Exception as exc:  # read-only diagnostic; never raise
+        return {
+            "schema": "scoutfootball.label_ledger",
+            "schema_version": "1.0",
+            "status": "unavailable",
+            "evidence": {"reason": f"label ledger read failed: {exc}"},
+        }
+
+
 def _build_research_readiness(
     settings: PlatformSettings,
     *,
@@ -1053,6 +1095,7 @@ def build_research_health_report(
     identity_registry = _build_identity_registry_audit(resolved)
     canonical_resolution = _build_canonical_resolution_audit(resolved)
     role_system = _build_role_system_audit(resolved)
+    label_ledger = _build_label_ledger_audit(resolved)
     layers = {
         "storage_health": storage,
         "lineage_health": lineage,
@@ -1074,6 +1117,7 @@ def build_research_health_report(
         "identity_registry": identity_registry,
         "canonical_resolution": canonical_resolution,
         "role_system": role_system,
+        "label_ledger": label_ledger,
         "limitations": [
             (
                 "Local-only read-only diagnostic; no telemetry is uploaded. "
@@ -1129,6 +1173,22 @@ def build_research_health_report(
                 "v1 does not auto-invent DM from MF and does not include "
                 "a role override registry. An all-unknown result does "
                 "not block the verdict."
+            ),
+            (
+                "label_ledger is PRS-3 slice 1's append-only JSONL ledger "
+                "of maintainer personal evaluations (human_pairwise_"
+                "preference and human_tier labels). The independence "
+                "audit excludes model_derived labels from the "
+                "supervision-eligible set, checks pairwise labels do not "
+                "self-compare, and checks observation windows are valid. "
+                "An empty ledger is the honest default before any "
+                "personal evaluation has been recorded; it does not "
+                "block the verdict because the absence of independent "
+                "labels is already reflected in research_readiness. The "
+                "audit is structural only; it does not prove the "
+                "annotator was truly blind or that evidence is correct. "
+                "Use `scoutfootball label-append`/`label-list`/`label-"
+                "stats`/`label-audit` CLI to record or inspect labels."
             ),
         ],
     }
