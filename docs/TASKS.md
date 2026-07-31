@@ -139,13 +139,29 @@
 
 退出门槛（部分完成）：B0/B1/B2/B3 至少一个透明 baseline 可手工复算并通过 PRS-4 切片评估——B0 和 B2 已可手工复算，PRS-4 切片评估仍 blocked；同一 cohort 内榜单有 bootstrap 排名区间——已满足（B0 和 B2 均报告 p5/p50/p95）；GK 不再使用外场防守代理作为核心指标——已满足（B0/B2 GK 仅 availability，gk_provisional）；分钟收缩或样本量惩罚对低出场球员可见——已满足（B2 收缩在真实数据上可见：1 分钟 ST 球员 b0=0.00→b2=58.17，向 prior 收缩）；评分语义 v1 文档明确每个 baseline 的角色、限制和晋级门禁——未完成。
 
+### PRS-3：个人评价集与标签工作台 — `in_progress`
+
+切片 1：append-only 标签账本 v1（2026-07-31）。
+
+- [x] 实现 `evaluation/label_ledger.py`：append-only JSONL 账本 `data/gold/label_ledger/decisions.jsonl`，记录维护者对 cohort+role+season 球员的人工评价。复用 `identity_registry` 的 record_type + record_version + revision 单调 + fsync 模式，但独立于身份注册表，承载 PRS-3 评价语义。支持两类核心标签：`human_pairwise_preference`（同角色同观察窗内 A vs B 偏好：a/b/tie）和 `human_tier`（1-5 档评级，1=elite，5=below average）。每条记录携带 `cohort_hash`（16 hex，来自 `CohortDefinition.cohort_hash()`）、`role_family`、`season_id`、`observation_window`（ISO `YYYY-MM-DD/YYYY-MM-DD`，校验 start<=end）、`confidence`（high/medium/low）、`evidence`（<=500 字符，必须非空）、`decided_by`、`blind`（默认 True，标记评价时是否看到模型分数）、`supersedes_decision_id`。账本只追加不修改：revoke 通过新增 `action=revoked` 记录实现，re-annotation 通过新增 `confirmed` 记录并设置 `supersedes_decision_id` 实现；`active_labels()` 跳过被任何后续记录（confirmed 或 revoked）通过 `supersedes_decision_id` 指向的记录，返回当前 active 集合。schema 严格校验：confirmed 必带类型特定 payload（pairwise 三字段全在、tier 两字段全在）、revoked 允许 payload 全有或全无（partial payload 拒绝）、所有字段长度上限、tier 范围 [1,5]、observation_window 格式与日期合法性、revision 正整数（拒绝 bool）。
+- [x] `label_independence_audit()` 验证 PRS-3 独立性不变量：(1) `model_derived` 标签不在 supervision-eligible active 集合（`SUPERVISION_ELIGIBLE_LABEL_TYPES = {human_pairwise_preference, human_tier, external_reference, future_outcome}`，`SELF_REFERENTIAL_LABEL_TYPES = {model_derived}`）；(2) pairwise 标签不自比（`player_a_id != player_b_id`）；(3) observation_window 格式合法且 start<=end；(4) evidence 非空。审计返回 `policy=independence-audit-v1`、`status=ok|violations_found`、`supervision_eligible_count`、`supervision_eligible_by_type`、`model_derived_active_count`、`violations` 列表。caveat 明确声明审计只检查结构性不变量，不证明评价者真正盲标或证据正确。`label_stats()` 返回 by_action/by_label_type/by_confidence/by_role_family/by_cohort_hash 分布 + active_label_count + blind_annotation_count。
+- [x] 5 个 CLI 子命令接入 `__main__.py`：`label-append`（confirmed，按 label_type 校验类型特定 payload）、`label-revoke`（revoke by `--target-decision-id`，自动设置 `supersedes_decision_id`）、`label-list`（过滤 by cohort_hash/label_type/role_family/season_id/player_id + `--include-revoked` 默认只看 active）、`label-stats`（只读汇总）、`label-audit`（独立性审计 + 可选 `--strict` 把 violations_found 升级为退出码 1）。`architecture.py` 新增 `ratings.label_ledger` capability 并把 5 个命令注册到 `supported_commands`。
+- [x] 112 个单元测试覆盖：`validate_record` 全部 schema 拒绝路径（wrong type/version、invalid action、missing decision_id、zero/bool revision、empty/cohort_hash 长度、role_family/season_id/observation_window/confidence/evidence/decided_by 长度、tier 范围/bool/not_int、preference 枚举、payload missing/partial、supersedes 空）、`build_label` 的 confirmed-requires-payload 与 revoked-payload-all-or-none、`read_ledger` 的 blank-line/invalid-json/wrong-record-type/revision-gap 检测、`append_label` 的并发冲突检测（stale revision）、`active_labels` 的 single-confirmed/revoke-clears/supersede-replaces/multiple-independent/mixed-revoked-and-superseded、`lookup_labels` 的 cohort+role+season 过滤与 include-revoked、`label_independence_audit` 的 ok/multiple-types/pairwise-self-compare/invalid-window/empty-evidence/model-derived-active/revoked-model-derived-not-flagged/mixed、`label_stats` 的 empty/single/mixed/by-action/by-type/by-confidence/by-role/by-cohort、端到端 round-trip（append→read→list→stats→audit）。（`tests/unit/test_label_ledger.py`）
+- [x] 本地烟雾测试（`SCOUTFOOTBALL_DATA_ROOT` 临时目录）：空账本 `label-stats` 返回 0/0、`label-audit` 返回 `status=ok` 0 violations；append 1 pairwise + 1 tier → `label-stats` 报告 2 records / 2 active / by_type={pairwise:1, tier:1} / by_confidence={high:1, medium:1} / by_role={CB:2} / by_cohort={abc123def4567890:2}；`label-audit` 返回 `status=ok` / 2 supervision_eligible / 0 violations。revoke + supersede round-trip：append r1(prefer A) → revoke r1 → active=0/total=2 → append r3(prefer B, supersedes r1) → active=1(r3) → audit ok。read-only 诊断；不修改任何 parquet 产物；不证明评价者真正盲标或证据正确，只保证结构性不变量。
+
+未完成切片（仍 `in_progress`，不进入 verified）：
+
+- [ ] PRS-3 后续：标签工作台 UI（盲评模式隐藏模型分数、冲突/低信心待复核队列）、外部参考标签导入协议、标签一致性和维护者复测稳定性报告、至少一个明确角色和时间窗拥有可用的独立评价集（需维护者实际标注）。
+
+退出门槛（部分完成）：pairwise 和 tier 标签 schema——已满足；标签创建/修改/撤销历史——已满足（append-only + revoke + supersede）；盲评模式——已满足（`blind` 字段记录，但 UI 隐藏模型分数未实现）；冲突、低信心和待复核队列——未完成；外部参考标签导入协议——未完成；标签独立性审计——已满足；至少一个明确角色和时间窗拥有可用的独立评价集——未完成（需维护者实际标注）；同一球员的标签能追溯到证据和观察窗口——已满足（`evidence` + `observation_window` 字段）；模型衍生标签无法通过默认监督训练门禁——已满足（`label_independence_audit` 排除 `model_derived`）；标签一致性和维护者复测稳定性报告——未完成。
+
 ### 后续专项节点
 
 | 节点 | 状态 | 解锁条件 | 核心结果 |
 | --- | --- | --- | --- |
 | PRS-1 身份、粒度和 cohort 内核 | `verified` | PRS-0 verified（2026-07-31） | canonical 主键、转会/同名处理、观测粒度、缺失原因、角色体系 v1 |
 | PRS-2 透明 baseline 与评分语义 v1 | `in_progress` | PRS-1 verified（2026-07-31） | 角色内 baseline、分钟收缩、门将独立模型、不确定性和敏感性 |
-| PRS-3 个人评价集与标签工作台 | `ready` | PRS-1 verified（2026-07-31） | pairwise/tier 独立标签、盲评、撤销、冲突和独立性审计 |
+| PRS-3 个人评价集与标签工作台 | `in_progress` | PRS-1 verified（2026-07-31） | pairwise/tier 独立标签、盲评、撤销、冲突和独立性审计 |
 | PRS-4 实验注册与严谨评估 | `blocked` | PRS-2 + PRS-3 verified | baseline 对照、时间外/联赛外/转会/覆盖切片、错误分析和晋级门禁 |
 | PRS-5 个人研究工作区 | `blocked` | PRS-2 verified；完整比较依赖 PRS-4 | 研究项目、cohort builder、球员 dossier、版本比较和研究包 |
 | PRS-6 动作价值受控融合 | `blocked` | PRS-1 + PRS-4 verified，且有合法共同覆盖数据 | xT/VAEP 粒度对齐、共同 cohort、消融和 domain-shift |

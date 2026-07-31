@@ -270,6 +270,11 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball cohort-preview [filters] [--json]",
             "uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
             "uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball label-append --label-type T --cohort-hash H --role-family R --season-id S --observation-window W --confidence C --evidence E [pairwise/tier payload]",  # noqa: E501
+            "uv run python -m scoutfootball label-revoke --target-decision-id D --evidence E",
+            "uv run python -m scoutfootball label-list [--cohort-hash H] [--label-type T] [--role-family R] [--season-id S] [--player-id P] [--include-revoked]",  # noqa: E501
+            "uv run python -m scoutfootball label-stats",
+            "uv run python -m scoutfootball label-audit [--strict]",
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -566,6 +571,42 @@ def build_capability_registry() -> CapabilityRegistry:
             ),
             domain="player_ratings",
             cli_commands=("baseline-b2",),
+        ),
+        Capability(
+            id="ratings.label_ledger",
+            name="PRS-3 个人评价标签账本 v1",
+            description=(
+                "PRS-3 slice 1 label_ledger：append-only JSONL 账本，记录"
+                "维护者对 cohort+role+season 球员的人工评价。支持两类核心"
+                "标签：human_pairwise_preference（同角色同观察窗内 A vs B "
+                "偏好：a/b/tie）和 human_tier（1-5 档评级，1=elite，"
+                "5=below average）。每条记录携带 cohort_hash（16 hex，来自"
+                "CohortDefinition.cohort_hash()）、role_family、season_id、"
+                "observation_window（ISO YYYY-MM-DD/YYYY-MM-DD）、confidence"
+                "（high/medium/low）、evidence（<=500 字符，必须非空）、"
+                "decided_by、blind（默认 True，标记评价时是否看到模型分数）、"
+                "supersedes_decision_id。账本只追加不修改：revoke 通过新增"
+                "action=revoked 记录实现，active_labels() 跳过被 revoke 的"
+                "记录。label_independence_audit 检查：model_derived 不在"
+                "supervision-eligible 集合、pairwise 不自比、observation_"
+                "window 合法、evidence 非空。SUPERVISION_ELIGIBLE_LABEL_"
+                "TYPES = {human_pairwise_preference, human_tier, "
+                "external_reference, future_outcome}；SELF_REFERENTIAL_"
+                "LABEL_TYPES = {model_derived}。CLI 提供 5 个子命令："
+                "label-append（confirmed）、label-revoke（revoke by "
+                "target-decision-id）、label-list（过滤 + active-only 默认）、"
+                "label-stats（只读汇总）、label-audit（独立性审计 + 可选 "
+                "--strict CI 门禁）。read-only 诊断；不修改任何 parquet 产物；"
+                "不证明评价者真正盲标或证据正确，只保证结构性不变量。"
+            ),
+            domain="player_ratings",
+            cli_commands=(
+                "label-append",
+                "label-revoke",
+                "label-list",
+                "label-stats",
+                "label-audit",
+            ),
         ),
         Capability(
             id="predictions.match",

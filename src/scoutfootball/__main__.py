@@ -7,6 +7,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -1029,6 +1030,266 @@ def _cmd_baseline_b2(args: argparse.Namespace) -> None:
     print("Limitations:")
     for lim in rep["limitations"]:
         print(f"  - {lim}")
+
+
+# ---------------------------------------------------------------------------
+# PRS-3 label ledger CLI
+# ---------------------------------------------------------------------------
+
+
+def _cmd_label_append(args: argparse.Namespace) -> None:
+    """Append one confirmed personal evaluation label to the local ledger.
+
+    Supports both ``human_pairwise_preference`` (A vs B within a role) and
+    ``human_tier`` (1-5 tier for one player) label types per PRS-3 slice 1.
+
+    The ledger is append-only: a new confirmed record does not mutate or
+    delete prior records. To supersede a prior label, use ``--supersedes``
+    pointing at the prior ``decision_id``; to revoke without replacement,
+    use ``scoutfootball label-revoke``.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.label_ledger import (
+        append_label,
+        build_label,
+        read_ledger,
+    )
+
+    settings = PlatformSettings.from_root()
+    existing = read_ledger(settings=settings)
+    revision = len(existing) + 1
+
+    # Build type-specific payload from CLI args.
+    pairwise_payload: dict[str, Any] = {}
+    tier_payload: dict[str, Any] = {}
+    if args.label_type == "human_pairwise_preference":
+        if not args.player_a_id or not args.player_b_id or not args.preferred_player:
+            print(
+                "Error: --player-a-id, --player-b-id and --preferred-player "
+                "are required for human_pairwise_preference labels",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        pairwise_payload = {
+            "player_a_id": args.player_a_id,
+            "player_b_id": args.player_b_id,
+            "preferred_player": args.preferred_player,
+        }
+    elif args.label_type == "human_tier":
+        if not args.canonical_player_id or args.tier is None:
+            print(
+                "Error: --canonical-player-id and --tier are required for "
+                "human_tier labels",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        tier_payload = {
+            "canonical_player_id": args.canonical_player_id,
+            "tier": args.tier,
+        }
+    else:
+        # external_reference / future_outcome / model_derived: no
+        # type-specific payload required at the CLI level. They are still
+        # valid label types per PRS plan §5, but the CLI does not
+        # provide dedicated import paths for them yet.
+        if args.player_a_id or args.player_b_id or args.preferred_player:
+            print(
+                "Error: pairwise payload fields are only valid for "
+                "human_pairwise_preference labels",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        if args.canonical_player_id or args.tier is not None:
+            print(
+                "Error: tier payload fields are only valid for "
+                "human_tier labels",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+    record = build_label(
+        action="confirmed",
+        label_type=args.label_type,
+        cohort_hash=args.cohort_hash,
+        role_family=args.role_family,
+        season_id=args.season_id,
+        observation_window=args.observation_window,
+        confidence=args.confidence,
+        evidence=args.evidence,
+        decided_by=args.decided_by,
+        notes=args.notes or "",
+        blind=not args.not_blind,
+        supersedes_decision_id=args.supersedes,
+        revision=revision,
+        **pairwise_payload,
+        **tier_payload,
+    )
+    try:
+        append_label(record, settings=settings)
+    except ValueError as exc:
+        print(f"Error: cannot append label: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(json.dumps({"record": record}, indent=2, ensure_ascii=False))
+
+
+def _cmd_label_revoke(args: argparse.Namespace) -> None:
+    """Append a revoke record that supersedes one prior confirmed label.
+
+    The revoke record carries the same envelope fields (cohort_hash,
+    role_family, season_id, observation_window, label_type) as the target
+    so the ledger remains self-describing. The original record is never
+    mutated or deleted; ``active_labels()`` will skip it after the revoke.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.label_ledger import (
+        append_label,
+        build_revoke_label,
+        read_ledger,
+    )
+
+    settings = PlatformSettings.from_root()
+    existing = read_ledger(settings=settings)
+
+    # If --target is given, look up the target record to copy envelope
+    # fields; otherwise the caller must supply them explicitly.
+    target_id = args.target_decision_id
+    target_record: dict[str, Any] | None = None
+    if target_id:
+        for r in existing:
+            if r["decision_id"] == target_id:
+                target_record = r
+                break
+        if target_record is None:
+            print(
+                f"Error: target decision_id {target_id!r} not found in ledger",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+    cohort_hash = args.cohort_hash or (
+        target_record["cohort_hash"] if target_record else None
+    )
+    role_family = args.role_family or (
+        target_record["role_family"] if target_record else None
+    )
+    season_id = args.season_id or (
+        target_record["season_id"] if target_record else None
+    )
+    observation_window = args.observation_window or (
+        target_record["observation_window"] if target_record else None
+    )
+    label_type = args.label_type or (
+        target_record["label_type"] if target_record else None
+    )
+
+    missing = [
+        name
+        for name, value in (
+            ("cohort_hash", cohort_hash),
+            ("role_family", role_family),
+            ("season_id", season_id),
+            ("observation_window", observation_window),
+            ("label_type", label_type),
+        )
+        if not value
+    ]
+    if missing:
+        print(
+            f"Error: missing required envelope fields (provide directly or "
+            f"use --target-decision-id to copy from target): {missing}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    if target_id is None:
+        print(
+            "Error: --target-decision-id is required to identify which "
+            "label is being revoked",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    record = build_revoke_label(
+        target_decision_id=target_id,
+        cohort_hash=cohort_hash,
+        role_family=role_family,
+        season_id=season_id,
+        observation_window=observation_window,
+        label_type=label_type,
+        evidence=args.evidence,
+        decided_by=args.decided_by,
+        notes=args.notes or "",
+        revision=len(existing) + 1,
+    )
+    try:
+        append_label(record, settings=settings)
+    except ValueError as exc:
+        print(f"Error: cannot revoke label: {exc}", file=sys.stderr)
+        sys.exit(2)
+    print(json.dumps({"record": record}, indent=2, ensure_ascii=False))
+
+
+def _cmd_label_list(args: argparse.Namespace) -> None:
+    """List labels, optionally filtered, with active-only by default."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.label_ledger import (
+        lookup_labels,
+        read_ledger,
+    )
+
+    settings = PlatformSettings.from_root()
+    records = read_ledger(settings=settings)
+    active_only = not args.include_revoked
+    filtered = lookup_labels(
+        records,
+        cohort_hash=args.cohort_hash,
+        label_type=args.label_type,
+        role_family=args.role_family,
+        season_id=args.season_id,
+        player_id=args.player_id,
+        active_only=active_only,
+    )
+    print(
+        json.dumps(
+            {
+                "count": len(filtered),
+                "active_only": active_only,
+                "labels": filtered,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+
+def _cmd_label_stats(args: argparse.Namespace) -> None:
+    """Print a read-only summary of the local label ledger."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.label_ledger import (
+        ledger_summary,
+        read_ledger,
+    )
+
+    settings = PlatformSettings.from_root()
+    records = read_ledger(settings=settings)
+    summary = ledger_summary(records)
+    print(json.dumps(summary, indent=2, ensure_ascii=False))
+
+
+def _cmd_label_audit(args: argparse.Namespace) -> None:
+    """Audit label independence for supervised training eligibility."""
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.label_ledger import (
+        label_independence_audit,
+        read_ledger,
+    )
+
+    settings = PlatformSettings.from_root()
+    records = read_ledger(settings=settings)
+    audit = label_independence_audit(records)
+    print(json.dumps(audit, indent=2, ensure_ascii=False))
+    if audit["status"] != "ok" and args.strict:
+        sys.exit(1)
 
 
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
@@ -4668,6 +4929,207 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit full report as JSON",
     )
 
+    # PRS-3 label ledger CLI (slice 1)
+    label_append_p = sub.add_parser(
+        "label-append",
+        help=(
+            "Append one confirmed personal evaluation label to the local "
+            "append-only label ledger (PRS-3 slice 1). Supports "
+            "human_pairwise_preference and human_tier label types."
+        ),
+    )
+    label_append_p.add_argument(
+        "--label-type",
+        required=True,
+        choices=[
+            "human_pairwise_preference",
+            "human_tier",
+            "external_reference",
+            "future_outcome",
+            "model_derived",
+        ],
+        help="Label type per PRS plan §5",
+    )
+    label_append_p.add_argument(
+        "--cohort-hash",
+        required=True,
+        help="16-hex-char cohort_hash from CohortDefinition.cohort_hash()",
+    )
+    label_append_p.add_argument(
+        "--role-family",
+        required=True,
+        help="RoleFamily value (GK/CB/FB/DM/CM/AM/W/ST/UNKNOWN)",
+    )
+    label_append_p.add_argument(
+        "--season-id", required=True, help="Season ID (e.g. 2425)"
+    )
+    label_append_p.add_argument(
+        "--observation-window",
+        required=True,
+        help="ISO date range YYYY-MM-DD/YYYY-MM-DD (e.g. 2024-08-01/2025-05-31)",
+    )
+    label_append_p.add_argument(
+        "--confidence",
+        required=True,
+        choices=["high", "medium", "low"],
+        help="Annotator confidence in the label",
+    )
+    label_append_p.add_argument(
+        "--evidence",
+        required=True,
+        help="What was observed (<=500 chars). Cite concrete signals.",
+    )
+    label_append_p.add_argument(
+        "--decided-by",
+        default="maintainer",
+        help="Annotator identity (default: maintainer)",
+    )
+    label_append_p.add_argument(
+        "--notes", default="", help="Optional free-form notes (<=500 chars)"
+    )
+    label_append_p.add_argument(
+        "--not-blind",
+        action="store_true",
+        help=(
+            "Annotator was NOT blind to model scores (default: blind=True; "
+            "pass this flag only if the annotator saw model output)"
+        ),
+    )
+    label_append_p.add_argument(
+        "--supersedes",
+        default=None,
+        help="decision_id of a prior confirmed label this one corrects",
+    )
+    # Pairwise payload
+    label_append_p.add_argument(
+        "--player-a-id",
+        default=None,
+        help="player_a_id (required for human_pairwise_preference)",
+    )
+    label_append_p.add_argument(
+        "--player-b-id",
+        default=None,
+        help="player_b_id (required for human_pairwise_preference)",
+    )
+    label_append_p.add_argument(
+        "--preferred-player",
+        default=None,
+        choices=["a", "b", "tie"],
+        help="Which player is preferred (required for human_pairwise_preference)",
+    )
+    # Tier payload
+    label_append_p.add_argument(
+        "--canonical-player-id",
+        default=None,
+        help="canonical_player_id (required for human_tier)",
+    )
+    label_append_p.add_argument(
+        "--tier",
+        type=int,
+        default=None,
+        choices=[1, 2, 3, 4, 5],
+        help="Tier 1-5 (1=elite, 5=below average; required for human_tier)",
+    )
+
+    label_revoke_p = sub.add_parser(
+        "label-revoke",
+        help=(
+            "Append a revoke record that supersedes one prior confirmed "
+            "label (PRS-3 slice 1). The original record is never mutated "
+            "or deleted; active_labels() will skip it after the revoke."
+        ),
+    )
+    label_revoke_p.add_argument(
+        "--target-decision-id",
+        required=True,
+        help="decision_id of the confirmed label being revoked",
+    )
+    label_revoke_p.add_argument(
+        "--evidence",
+        required=True,
+        help="Why the prior label is being revoked (<=500 chars)",
+    )
+    label_revoke_p.add_argument(
+        "--decided-by",
+        default="maintainer",
+        help="Annotator identity (default: maintainer)",
+    )
+    label_revoke_p.add_argument(
+        "--notes", default="", help="Optional free-form notes (<=500 chars)"
+    )
+    # Envelope fields are optional when --target-decision-id resolves; if
+    # the caller wants to override them (e.g. to record a different
+    # observation_window), they can pass them explicitly.
+    label_revoke_p.add_argument(
+        "--cohort-hash", default=None, help="Override cohort_hash from target"
+    )
+    label_revoke_p.add_argument(
+        "--role-family", default=None, help="Override role_family from target"
+    )
+    label_revoke_p.add_argument(
+        "--season-id", default=None, help="Override season_id from target"
+    )
+    label_revoke_p.add_argument(
+        "--observation-window",
+        default=None,
+        help="Override observation_window from target",
+    )
+    label_revoke_p.add_argument(
+        "--label-type",
+        default=None,
+        help="Override label_type from target",
+    )
+
+    label_list_p = sub.add_parser(
+        "label-list",
+        help=(
+            "List labels, optionally filtered (PRS-3 slice 1). "
+            "Default: active only (latest action = confirmed)."
+        ),
+    )
+    label_list_p.add_argument(
+        "--cohort-hash", default=None, help="Filter by cohort_hash"
+    )
+    label_list_p.add_argument(
+        "--label-type", default=None, help="Filter by label_type"
+    )
+    label_list_p.add_argument(
+        "--role-family", default=None, help="Filter by role_family"
+    )
+    label_list_p.add_argument(
+        "--season-id", default=None, help="Filter by season_id"
+    )
+    label_list_p.add_argument(
+        "--player-id",
+        default=None,
+        help="Filter by player_id (matches pairwise a/b and tier canonical)",
+    )
+    label_list_p.add_argument(
+        "--include-revoked",
+        action="store_true",
+        help="Include revoked and superseded records (default: active only)",
+    )
+
+    sub.add_parser(
+        "label-stats",
+        help="Print a read-only summary of the local label ledger (PRS-3 slice 1)",
+    )
+
+    label_audit_p = sub.add_parser(
+        "label-audit",
+        help=(
+            "Audit label independence for supervised training eligibility "
+            "(PRS-3 slice 1). Checks that model_derived labels are never "
+            "in the active supervision-eligible set, pairwise labels are "
+            "within-role, no self-comparisons, and evidence is non-empty."
+        ),
+    )
+    label_audit_p.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit 1 if any violation is found (for CI gating)",
+    )
+
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -5661,6 +6123,11 @@ def main() -> None:
         "cohort-preview": _cmd_cohort_preview,
         "baseline-b0": _cmd_baseline_b0,
         "baseline-b2": _cmd_baseline_b2,
+        "label-append": _cmd_label_append,
+        "label-revoke": _cmd_label_revoke,
+        "label-list": _cmd_label_list,
+        "label-stats": _cmd_label_stats,
+        "label-audit": _cmd_label_audit,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
