@@ -1032,6 +1032,88 @@ def _cmd_baseline_b2(args: argparse.Namespace) -> None:
         print(f"  - {lim}")
 
 
+def _cmd_baseline_b1(args: argparse.Namespace) -> None:
+    """Compute the PRS-2 B1 expert_weighted baseline (versioned role weights).
+
+    Loads ``rating_feature_matrix.parquet`` and computes a weighted
+    average of within-role percentiles, where the weights come from a
+    versioned, hand-defined expert weight set (``B1_WEIGHTS`` v1.0).
+    Weights are renormalised over present dimensions per player. Output
+    includes per-player scores, ranks, bootstrap rank intervals,
+    effective weights, confidence levels, and explicit missing-data
+    flags.
+
+    Read-only; does not modify any parquet artifact. Use ``--json`` for
+    machine-readable output.
+    """
+    from scoutfootball.evaluation.baseline_b1 import compute_b1_baseline
+
+    rep = compute_b1_baseline(
+        n_bootstrap=args.n_bootstrap,
+        seed=args.seed,
+    )
+
+    if args.json:
+        print(json.dumps(rep, indent=2, ensure_ascii=False))
+        return
+
+    print(f"B1 baseline report (schema {rep['schema']} v{rep['schema_version']})")
+    print(f"status: {rep['status']}")
+    if rep["status"] != "ok":
+        ev = rep.get("evidence", {})
+        print(f"reason: {ev.get('reason', 'unknown')}")
+        return
+
+    print(f"weight_version: {rep['weight_version']}")
+    ev = rep["evidence"]
+    print(f"total_players_scored: {ev['total_players_scored']}")
+    print(f"by_role_family: {ev['by_role_family']}")
+    print()
+
+    print("--- Role summaries ---")
+    for rs in ev["role_summaries"]:
+        cc = rs["confidence_counts"]
+        weights_str = "/".join(
+            f"{k}={v:.2f}" for k, v in rs["weights"].items()
+        )
+        print(
+            f"  {rs['role_family']}: n={rs['member_count']} "
+            f"min/med/max={rs['score_min']:.2f}/{rs['score_median']:.2f}/{rs['score_max']:.2f} "
+            f"high/med/low={cc['high']}/{cc['medium']}/{cc['low']} "
+            f"weights[{rs['weight_version']}]: {weights_str}"
+        )
+    print()
+
+    # Show top-N per role
+    top_n = args.top
+    if top_n > 0:
+        by_role: dict[str, list] = {}
+        for p in ev["players"]:
+            by_role.setdefault(p["role_family"], []).append(p)
+        print(f"--- Top-{top_n} per role (by rank) ---")
+        for role in sorted(by_role):
+            players = sorted(by_role[role], key=lambda p: p["rank_in_role"] or 999999)
+            print(f"  [{role}]")
+            for p in players[:top_n]:
+                ri = p.get("rank_interval")
+                ri_str = (
+                    f"p5={ri['p5']}/p50={ri['p50']}/p95={ri['p95']}"
+                    if ri else "n/a"
+                )
+                print(
+                    f"    {p['rank_in_role']:>4}/{p['role_pool_size']:<4} "
+                    f"{p['player_name']:<30} "
+                    f"score={p['score']:.2f} "
+                    f"conf={p['confidence']:<6} "
+                    f"interval={ri_str}"
+                )
+        print()
+
+    print("Limitations:")
+    for lim in rep["limitations"]:
+        print(f"  - {lim}")
+
+
 # ---------------------------------------------------------------------------
 # PRS-3 label ledger CLI
 # ---------------------------------------------------------------------------
@@ -4929,6 +5011,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit full report as JSON",
     )
 
+    baseline_b1_p = sub.add_parser(
+        "baseline-b1",
+        help=(
+            "Compute the PRS-2 B1 expert_weighted baseline (versioned "
+            "transparent role weights). Read-only; does not modify any "
+            "parquet artifact."
+        ),
+    )
+    baseline_b1_p.add_argument(
+        "--n-bootstrap",
+        type=int,
+        default=200,
+        help="Bootstrap resample count for rank intervals (default: 200)",
+    )
+    baseline_b1_p.add_argument(
+        "--seed",
+        type=int,
+        default=20260731,
+        help="Random seed for bootstrap (default: 20260731)",
+    )
+    baseline_b1_p.add_argument(
+        "--top",
+        type=int,
+        default=5,
+        help="Show top-N players per role in human-readable output (0 to hide, default: 5)",
+    )
+    baseline_b1_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
     # PRS-3 label ledger CLI (slice 1)
     label_append_p = sub.add_parser(
         "label-append",
@@ -6122,6 +6236,7 @@ def main() -> None:
         "role-system-report": _cmd_role_system_report,
         "cohort-preview": _cmd_cohort_preview,
         "baseline-b0": _cmd_baseline_b0,
+        "baseline-b1": _cmd_baseline_b1,
         "baseline-b2": _cmd_baseline_b2,
         "label-append": _cmd_label_append,
         "label-revoke": _cmd_label_revoke,

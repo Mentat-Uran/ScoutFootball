@@ -269,6 +269,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball role-system-report [--json]",
             "uv run python -m scoutfootball cohort-preview [filters] [--json]",
             "uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball baseline-b1 [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
             "uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
             "uv run python -m scoutfootball label-append --label-type T --cohort-hash H --role-family R --season-id S --observation-window W --confidence C --evidence E [pairwise/tier payload]",  # noqa: E501
             "uv run python -m scoutfootball label-revoke --target-decision-id D --evidence E",
@@ -543,6 +544,37 @@ def build_capability_registry() -> CapabilityRegistry:
             ),
             domain="player_ratings",
             cli_commands=("baseline-b0",),
+        ),
+        Capability(
+            id="ratings.baseline_b1",
+            name="B1 专家权重 baseline (PRS-2)",
+            description=(
+                "PRS-2 B1 expert_weighted baseline：在 B0 角色内百分位之上"
+                "替换等权为版本化专家权重。B1_WEIGHTS v1.0 为每个 RoleFamily "
+                "手工定义维度权重（如 ST: finishing=0.55/attacking=0.25/"
+                "availability=0.20；CB: defending=0.50/possession=0.20/"
+                "availability=0.30；GK: availability=1.0 占位）。权重和必须"
+                "为 1.0，权重是显式专家选择而非优化器 softmax 输出（遵循 "
+                "AGENTS.md '不得把 raw softmax 权重当作实际模型权重'）。"
+                "缺失维度下权重自动再归一化（如 CB 缺 possession 时 "
+                "defending/availability 重新分配到 0.625/0.375）；全部核心"
+                "维度缺失时 score=50.0、confidence=low，权重不被应用。"
+                "B1 复用 B0_DIMENSIONS，因此与 B0 的角色特定维度/列/方向/"
+                "core 标记完全一致，唯一差异是聚合方式（B0 等权，B1 加权），"
+                "任何 B1 vs B0 的分数差异都归因于权重选择。GK 权重集为 "
+                "availability=1.0（唯一维度），因此 GK 的 B1 == B0，仍为 "
+                "gk_provisional 占位。cross_position_comparable=False。"
+                "Bootstrap 排名区间（固定 seed，默认 200 次重采样，每次"
+                "重采样后重新计算所有球员分数含权重再归一化并赋予 1-indexed "
+                "rank）给出每位球员 rank 的 p5/p50/p95。每条 B1DimensionScore "
+                "记录 weight（原始权重）+ effective_weight（再归一化后）+ "
+                "contribution（=effective_weight * dimension_percentile），"
+                "可手工复算。read-only 诊断；不修改 rating_feature_matrix"
+                ".parquet。CLI baseline-b1 支持 --n-bootstrap/--seed/--top/"
+                "--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("baseline-b1",),
         ),
         Capability(
             id="ratings.baseline_b2",
