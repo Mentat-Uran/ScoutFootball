@@ -1572,6 +1572,112 @@ def _cmd_weight_sensitivity(args: argparse.Namespace) -> None:
         print(f"  - {lim}")
 
 
+def _cmd_minutes_sensitivity(args: argparse.Namespace) -> None:
+    """Build the PRS-MODEL-012 B2 minutes-threshold sensitivity report.
+
+    Perturbs B2's ``reference_minutes`` by configurable absolute minute
+    deltas, recomputes B2 scores (shrinkage weight + prior_mean + stable
+    core membership all change), and measures ranking stability versus
+    the baseline. Read-only; does not modify the feature matrix, B2
+    parameters, or any parquet artifact.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.minutes_sensitivity import (
+        DEFAULT_MINUTES_DELTAS,
+        compute_minutes_sensitivity_report,
+    )
+
+    settings = PlatformSettings.from_root()
+
+    # Parse --deltas "-600,-300,150,300" into a tuple of ints.
+    if args.deltas:
+        try:
+            deltas = tuple(
+                int(d.strip()) for d in args.deltas.split(",") if d.strip()
+            )
+        except ValueError:
+            print(f"error: --deltas must be comma-separated integers, got {args.deltas!r}")
+            sys.exit(2)
+        if not deltas:
+            deltas = DEFAULT_MINUTES_DELTAS
+    else:
+        deltas = DEFAULT_MINUTES_DELTAS
+
+    report = compute_minutes_sensitivity_report(
+        settings=settings,
+        baseline_reference_minutes=args.baseline_minutes,
+        perturbation_deltas=deltas,
+        top_n=args.top_n,
+    )
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    if report["status"] != "ok":
+        print(f"Minutes sensitivity report: {report['status']}")
+        ev = report.get("evidence", {})
+        if ev:
+            print(f"  reason: {ev.get('reason', 'unknown')}")
+        return
+
+    print(
+        f"Minutes sensitivity report "
+        f"(schema {report['schema']} v{report['schema_version']})"
+    )
+    print(f"status: {report['status']}")
+    print(f"baseline: {report['baseline_schema']} v{report['baseline_version']}")
+    print(f"baseline_reference_minutes: {report['baseline_reference_minutes']}")
+    print(f"perturbation_deltas: {report['perturbation_deltas']}")
+    print(f"top_n: {report['top_n']}")
+    print()
+
+    print("--- Per-role sensitivity ---")
+    for rs in report["role_summaries"]:
+        role = rs["role_family"]
+        n = rs["player_count"]
+        baseline_prior = rs["baseline_prior_mean"]
+        baseline_src = rs["baseline_prior_source"]
+        baseline_sc = rs["baseline_stable_core_count"]
+        most_delta = rs["most_sensitive_delta"]
+        least_delta = rs["least_sensitive_delta"]
+        min_sp = rs["min_spearman_correlation"]
+        max_sp = rs["max_spearman_correlation"]
+        print(
+            f"{role}: {n} players, prior={baseline_prior:.2f} ({baseline_src}), "
+            f"stable_core={baseline_sc}"
+        )
+        if min_sp is not None:
+            print(
+                f"  most sensitive: delta={most_delta:+d} "
+                f"(min_spearman={min_sp:.4f})"
+            )
+            print(
+                f"  least sensitive: delta={least_delta:+d} "
+                f"(max_spearman={max_sp:.4f})"
+            )
+        for p in rs["perturbations"]:
+            pref = p["perturbed_reference_minutes"]
+            clamped = " (clamped)" if p["clamped"] else ""
+            sp = p["spearman_correlation"]
+            mean_shift = p["mean_abs_rank_shift"]
+            max_shift = p["max_abs_rank_shift"]
+            overlap = p["top_n_overlap"]
+            psrc = p["prior_source"]
+            psc = p["stable_core_count"]
+            print(
+                f"  delta={p['delta']:+d} -> ref={pref:.0f}{clamped}: "
+                f"spearman={sp:.4f}, mean_shift={mean_shift:.2f}, "
+                f"max_shift={max_shift}, top_n_overlap={overlap:.2f} "
+                f"(prior={psrc}, stable_core={psc})"
+            )
+        print()
+
+    print("Limitations:")
+    for lim in report["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_label_stability(args: argparse.Namespace) -> None:
     """Build the PRS-LABEL-006 label stability report.
 
@@ -4859,6 +4965,9 @@ def _cmd_validate_review(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from scoutfootball.evaluation.minutes_sensitivity import (
+        DEFAULT_MINUTES_DELTAS,
+    )
     from scoutfootball.evaluation.sensitivity import (
         DEFAULT_PERTURBATION_DELTAS,
         DEFAULT_TOP_N,
@@ -5639,6 +5748,48 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     weight_sensitivity_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
+    minutes_sensitivity_p = sub.add_parser(
+        "minutes-sensitivity",
+        help=(
+            "Build the PRS-MODEL-012 B2 minutes-threshold sensitivity "
+            "report: perturbs reference_minutes by configurable absolute "
+            "minute deltas, recomputes B2 scores (shrinkage weight + "
+            "prior_mean + stable_core membership all change), and "
+            "measures ranking stability versus the baseline. Read-only; "
+            "does not modify the feature matrix, B2 parameters, or any "
+            "parquet artifact."
+        ),
+    )
+    minutes_sensitivity_p.add_argument(
+        "--deltas",
+        type=str,
+        help=(
+            "Comma-separated list of absolute minute deltas (e.g. "
+            "-600,-300,300,600). Default: "
+            f"{','.join(map(str, DEFAULT_MINUTES_DELTAS))}"
+        ),
+    )
+    minutes_sensitivity_p.add_argument(
+        "--baseline-minutes",
+        type=float,
+        default=900.0,
+        help=(
+            "Baseline reference_minutes to perturb around (default: 900, "
+            "matching B2 default)"
+        ),
+    )
+    minutes_sensitivity_p.add_argument(
+        "--top-n",
+        type=int,
+        default=10,
+        help="Top-N window for overlap calculation (default: 10)",
+    )
+    minutes_sensitivity_p.add_argument(
         "--json",
         action="store_true",
         help="Emit full report as JSON",
@@ -6646,6 +6797,7 @@ def main() -> None:
         "label-review-queue": _cmd_label_review_queue,
         "label-stability": _cmd_label_stability,
         "weight-sensitivity": _cmd_weight_sensitivity,
+        "minutes-sensitivity": _cmd_minutes_sensitivity,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
