@@ -268,6 +268,8 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball suggest-identity-mappings [--json]",
             "uv run python -m scoutfootball role-system-report [--json]",
             "uv run python -m scoutfootball cohort-preview [filters] [--json]",
+            "uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -516,6 +518,54 @@ def build_capability_registry() -> CapabilityRegistry:
             ),
             domain="player_ratings",
             cli_commands=("cohort-preview",),
+        ),
+        Capability(
+            id="ratings.baseline_b0",
+            name="B0 透明 baseline (PRS-2)",
+            description=(
+                "PRS-2 B0 raw_percentile baseline：角色内等权百分位评分。"
+                "对每个 RoleFamily 定义角色特定的维度（defending/possession/"
+                "creation/finishing/attacking/availability），每维度计算球员"
+                "值在角色池中的严格小于百分位（strict-less-than），B0 score = "
+                "可用维度百分位的等权均值。核心维度全部缺失时 confidence=low、"
+                "score=50.0（占位），部分缺失时 confidence=medium，全部可用时 "
+                "confidence=high。Bootstrap 排名区间（固定 seed，默认 200 次"
+                "重采样）给出每位球员 rank 的 p5/p50/p95。GK 当前为 "
+                "availability-only 占位（gk_provisional），不消费外场防守代理。"
+                "B0 不产生跨位置可比分数（cross_position_comparable=False）。"
+                "read-only 诊断；不修改 rating_feature_matrix.parquet。"
+                "CLI baseline-b0 支持 --n-bootstrap/--seed/--top/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("baseline-b0",),
+        ),
+        Capability(
+            id="ratings.baseline_b2",
+            name="B2 分钟收缩 baseline (PRS-2)",
+            description=(
+                "PRS-2 B2 shrinkage baseline：在 B0 角色内等权百分位之上"
+                "叠加基于 minutes_played 的经验贝叶斯收缩。收缩公式 "
+                "b2_score = w * prior_mean + (1 - w) * b0_score，其中 "
+                "w = reference_minutes / (reference_minutes + minutes_played)，"
+                "默认 reference_minutes=900（10 场 full match，w=0.5）。低"
+                "出场球员被向角色先验收缩（90 min 球员 w≈0.91，3000 min "
+                "球员 w≈0.23）。prior_mean 取角色池中 minutes_played >= "
+                "reference_minutes 的 stable core 球员的分钟加权 B0 分数"
+                "均值；若无球员达标则 fallback 到全池简单均值并标记 "
+                "prior_source=fallback_full_pool。B2 同时报告 B0 分数、B0 "
+                "rank、B2 分数、B2 rank 和两者的 bootstrap 排名区间（p5/"
+                "p50/p95，固定 seed，默认 200 次重采样），便于维护者对比"
+                "B0/B2 排名差异。B2 不修改 B0 的缺失数据处理：B0 low 球员"
+                "保持 low 并应用完全收缩（b2=prior_mean）；minutes_played "
+                "缺失或非正的球员应用完全收缩并标记 minutes_input_missing"
+                "=True，B2 confidence 上限为 medium。GK 仍为 "
+                "gk_provisional。cross_position_comparable=False。"
+                "read-only 诊断；不修改 rating_feature_matrix.parquet。"
+                "CLI baseline-b2 支持 --reference-minutes/--n-bootstrap/"
+                "--seed/--top/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("baseline-b2",),
         ),
         Capability(
             id="predictions.match",

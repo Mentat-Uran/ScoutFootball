@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.1.0`
-- manifest generated_at：`2026-07-31T04:14:53.799936+00:00`
-- content SHA-256：`b7bf7c82ee1b4d74cdc0c807b19601aaed70935f8afa863d265a5ff84c716bdd`
+- manifest generated_at：`2026-07-31T06:05:58.848712+00:00`
+- content SHA-256：`fb01b4e097696db85bfbb188b1015fb092d99ddd6c7db7873c752ce3fdb4f0f3`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -60,6 +60,8 @@
 - `uv run python -m scoutfootball suggest-identity-mappings [--json]`
 - `uv run python -m scoutfootball role-system-report [--json]`
 - `uv run python -m scoutfootball cohort-preview [filters] [--json]`
+- `uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]`
+- `uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]`
 - `uv run python -m scoutfootball backtest`
 - `uv run python -m scoutfootball tune-predictions`
 - `uv run python -m scoutfootball optimize-ensemble`
@@ -102,6 +104,8 @@
 | ratings.identity_suggester | player_ratings | delivered | — | suggest-identity-mappings | — |
 | ratings.role_system | player_ratings | delivered | — | role-system-report | — |
 | ratings.cohort | player_ratings | delivered | — | cohort-preview | — |
+| ratings.baseline_b0 | player_ratings | delivered | — | baseline-b0 | — |
+| ratings.baseline_b2 | player_ratings | delivered | — | baseline-b2 | — |
 | predictions.match | match_predictions | delivered | /predictions/{home_team}/{away_team}, /predictions/meta, /predictions/ensemble/weights, /predictions/models/comparison, /predictions/staleness, /predictions/team-accuracy/{team_id}, /predictions/{home_team}/{away_team}/attribution, /predictions/{home_team}/{away_team}/attribution/ci, /predictions/{home_team}/{away_team}/ensemble-attribution, /predictions/{home_team}/{away_team}/ensemble-attribution/ci, /predictions/{home_team}/{away_team}/diagnostics, /predictions/{home_team}/{away_team}/h2h, /predictions/{home_team}/{away_team}/h2h-bias-correction, /predictions/{home_team}/{away_team}/momentum | backtest, tune-predictions, optimize-ensemble | matches |
 | predictions.calibration | match_predictions | delivered | /predictions/calibration, /predictions/backtest, /predictions/tuning, /predictions/drift, /predictions/drift/timeline, /predictions/calibration/reliability, /predictions/calibration/scoreline, /predictions/calibration/comparison, /predictions/calibration/confidence-distribution, /predictions/calibration/error-analysis, /predictions/calibration/outcome-distribution, /predictions/calibration/temporal-validation, /predictions/calibration/probability-heatmap, /predictions/calibration/ci-plot, /predictions/calibration/ci-coverage, /predictions/calibration/ci-width, /predictions/calibration/fold-comparison, /predictions/calibration/league-errors, /predictions/calibration/feature-importance, /predictions/calibration/drift-heatmap, /predictions/calibration/error-clustering, /predictions/calibration/data-drift, /predictions/calibration/stress-test, /predictions/calibration/team-drift, /predictions/calibration/team-profile, /predictions/calibration/uncertainty, /predictions/calibration/profit-loss, /predictions/calibration/trajectory, /predictions/calibration/difficulty, /predictions/calibration/streaks, /predictions/calibration/report-card, /predictions/calibration/anomalies | backtest, tune-predictions | matches, calibration, backtest |
 | predictions.value_bet | match_predictions | delivered | /predictions/{home_team}/{away_team}/value | — | matches |
