@@ -277,6 +277,7 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball label-stats",
             "uv run python -m scoutfootball label-audit [--strict]",
             "uv run python -m scoutfootball label-review-queue [--tier-conflict-threshold N] [--evidence-min-chars N] [--max-age-days N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball label-stability [--tier-tolerance N] [--json]",
             "uv run python -m scoutfootball backtest",
             "uv run python -m scoutfootball tune-predictions",
             "uv run python -m scoutfootball optimize-ensemble",
@@ -668,6 +669,35 @@ def build_capability_registry() -> CapabilityRegistry:
             ),
             domain="player_ratings",
             cli_commands=("label-review-queue",),
+        ),
+        Capability(
+            id="ratings.label_stability",
+            name="PRS-LABEL-006 标签稳定性诊断",
+            description=(
+                "PRS-3 切片 3 label_stability：在 label_ledger 之上叠加"
+                "只读诊断，量化维护者标注的稳定性。"
+                "(1) retest_pairs：通过 supersedes_decision_id 链追踪"
+                "re-annotation 对（original → retest），对比两者标签"
+                "值是否一致——pairwise 比较 first/second/tie 方向，"
+                "tier 比较 |original_tier - retest_tier| <= tier_tolerance"
+                "（默认 1）。每对报告 consistent、days_between、"
+                "same_decided_by、original/retest value 和 decision_id。"
+                "revoked retest 不产生 retest pair（revoke 是撤销不是"
+                "复测）；不同 label_type 的 supersedes 不产生 pair。"
+                "(2) annotator_agreement：按业务键（pairwise 为 sorted "
+                "player pair + cohort + role + season，tier 为 canonical"
+                "_player_id + cohort + role + season）分组所有 confirmed"
+                "记录（包括被 superseded 的），只报告有 >= 2 个不同 "
+                "decided_by 的组，对比组内标签值一致性。summary 报告"
+                "retest_consistency_rate 和 agreement_rate；rate=None"
+                "当对应集合为空。基于全部 records（不只 active）"
+                "追踪历史；read-only 诊断；不修改 decisions.jsonl 或"
+                "任何 parquet 产物；不参与 fail-closed verdict（稳定性"
+                "指标是信号不是门禁，空报告不意味标签正确或监督就绪）。"
+                "CLI label-stability 支持 --tier-tolerance/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("label-stability",),
         ),
         Capability(
             id="predictions.match",

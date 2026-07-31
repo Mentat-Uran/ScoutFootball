@@ -1279,3 +1279,131 @@ def test_label_ledger_limitation_present_in_report(tmp_path) -> None:
     assert "PRS-3" in joined
     assert "independence" in joined
     assert "label-append" in joined
+
+
+# ---------------------------------------------------------------------------
+# label_stability evidence section (PRS-LABEL-006 / PRS-3 slice 3)
+# ---------------------------------------------------------------------------
+
+
+def test_label_stability_section_present_and_empty_by_default(tmp_path) -> None:
+    """No ledger file -> label_stability section shows zero counts.
+
+    An empty ledger must return 0/0/0/0 honestly and must not block the
+    verdict (stability metrics are signals, not gates).
+    """
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    section = report["label_stability"]
+    assert section["schema"] == "scoutfootball.label-stability"
+    assert section["schema_version"] == "1.0.0"
+    assert section["status"] == "ok"
+    summary = section["summary"]
+    assert summary["total_retest_pairs"] == 0
+    assert summary["consistent_retest_pairs"] == 0
+    assert summary["retest_consistency_rate"] is None
+    assert summary["total_agreement_groups"] == 0
+    assert summary["consistent_agreement_groups"] == 0
+    assert summary["agreement_rate"] is None
+    assert summary["active_label_count"] == 0
+    # Must not appear in blocking_reasons — stability is evidence-only.
+    assert all("label_stability" not in r for r in report["blocking_reasons"])
+
+
+def test_label_stability_section_empty_when_ledger_corrupt(tmp_path) -> None:
+    """A corrupt ledger JSONL surfaces as empty in label_stability.
+
+    The label_ledger audit catches the read failure and returns an empty
+    records list (with its own status=unavailable); downstream sections
+    like label_stability therefore see an empty list and honestly report
+    0/0/0/0 with status=ok. The corrupt-file failure is surfaced by the
+    label_ledger section, not duplicated here. The verdict stays READY
+    because stability is evidence-only.
+    """
+    _build_healthy_workspace(tmp_path)
+    ledger = tmp_path / "data" / "gold" / "label_ledger" / "decisions.jsonl"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text("{not valid json}\n", encoding="utf-8")
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    # label_ledger surfaces the corrupt-file failure.
+    assert report["label_ledger"]["status"] == "unavailable"
+    # label_stability sees an empty list and reports 0/0/0/0 honestly.
+    section = report["label_stability"]
+    assert section["schema"] == "scoutfootball.label-stability"
+    assert section["status"] == "ok"
+    assert section["summary"]["total_retest_pairs"] == 0
+    assert section["summary"]["total_agreement_groups"] == 0
+    assert report["verdict"] == VERDICT_READY
+
+
+def test_label_stability_section_reflects_retest_pair(tmp_path) -> None:
+    """A confirmed pairwise label plus its retest produces a retest_pair."""
+    from scoutfootball.evaluation.label_ledger import (
+        append_label,
+        build_label,
+        read_ledger,
+    )
+
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    existing = read_ledger(settings=settings)
+    original = build_label(
+        action="confirmed",
+        label_type="human_pairwise_preference",
+        cohort_hash="abc123def4567890",
+        role_family="CB",
+        season_id="2425",
+        observation_window="2024-08-01/2025-05-31",
+        confidence="high",
+        evidence="Player A had more interceptions/90 than Player B",
+        decided_by="maintainer",
+        revision=len(existing) + 1,
+        player_a_id="unresolved:understat:u|1",
+        player_b_id="unresolved:understat:u|2",
+        preferred_player="a",
+    )
+    append_label(original, settings=settings)
+
+    existing = read_ledger(settings=settings)
+    retest = build_label(
+        action="confirmed",
+        label_type="human_pairwise_preference",
+        cohort_hash="abc123def4567890",
+        role_family="CB",
+        season_id="2425",
+        observation_window="2024-08-01/2025-05-31",
+        confidence="high",
+        evidence="Retest confirms Player A still preferred over Player B",
+        decided_by="maintainer",
+        revision=len(existing) + 1,
+        player_a_id="unresolved:understat:u|1",
+        player_b_id="unresolved:understat:u|2",
+        preferred_player="a",
+        supersedes_decision_id=original["decision_id"],
+    )
+    append_label(retest, settings=settings)
+
+    report = build_research_health_report(settings=settings)
+    section = report["label_stability"]
+    assert section["status"] == "ok"
+    summary = section["summary"]
+    assert summary["total_retest_pairs"] == 1
+    assert summary["consistent_retest_pairs"] == 1
+    assert summary["retest_consistency_rate"] == 1.0
+    # Evidence-only: must not block the verdict.
+    assert all("label_stability" not in r for r in report["blocking_reasons"])
+
+
+def test_label_stability_limitation_present_in_report(tmp_path) -> None:
+    """The limitations list must explain the label_stability section."""
+    _build_healthy_workspace(tmp_path)
+    settings = PlatformSettings.from_root(tmp_path)
+    report = build_research_health_report(settings=settings)
+    joined = " ".join(report["limitations"])
+    assert "label_stability" in joined
+    assert "PRS-LABEL-006" in joined
+    assert "retest_pairs" in joined
+    assert "annotator_agreement" in joined
+    assert "label-stability" in joined

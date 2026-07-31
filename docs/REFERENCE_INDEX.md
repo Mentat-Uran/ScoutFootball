@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.1.0`
-- manifest generated_at：`2026-07-31T06:30:58.008730+00:00`
-- content SHA-256：`94469619f5bb77be7c8dad18e119fb87808749cd5150204eee98794722190e9d`
+- manifest generated_at：`2026-07-31T07:59:29.546694+00:00`
+- content SHA-256：`9ca79dc1f9ee48e1c4953e9853c2047086b7abd288a6b1074385ddbbe0a21327`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -61,12 +61,15 @@
 - `uv run python -m scoutfootball role-system-report [--json]`
 - `uv run python -m scoutfootball cohort-preview [filters] [--json]`
 - `uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]`
+- `uv run python -m scoutfootball baseline-b1 [--n-bootstrap N] [--seed S] [--top N] [--json]`
 - `uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]`
 - `uv run python -m scoutfootball label-append --label-type T --cohort-hash H --role-family R --season-id S --observation-window W --confidence C --evidence E [pairwise/tier payload]`
 - `uv run python -m scoutfootball label-revoke --target-decision-id D --evidence E`
 - `uv run python -m scoutfootball label-list [--cohort-hash H] [--label-type T] [--role-family R] [--season-id S] [--player-id P] [--include-revoked]`
 - `uv run python -m scoutfootball label-stats`
 - `uv run python -m scoutfootball label-audit [--strict]`
+- `uv run python -m scoutfootball label-review-queue [--tier-conflict-threshold N] [--evidence-min-chars N] [--max-age-days N] [--json]`
+- `uv run python -m scoutfootball label-stability [--tier-tolerance N] [--json]`
 - `uv run python -m scoutfootball backtest`
 - `uv run python -m scoutfootball tune-predictions`
 - `uv run python -m scoutfootball optimize-ensemble`
@@ -110,8 +113,11 @@
 | ratings.role_system | player_ratings | delivered | — | role-system-report | — |
 | ratings.cohort | player_ratings | delivered | — | cohort-preview | — |
 | ratings.baseline_b0 | player_ratings | delivered | — | baseline-b0 | — |
+| ratings.baseline_b1 | player_ratings | delivered | — | baseline-b1 | — |
 | ratings.baseline_b2 | player_ratings | delivered | — | baseline-b2 | — |
 | ratings.label_ledger | player_ratings | delivered | — | label-append, label-revoke, label-list, label-stats, label-audit | — |
+| ratings.label_review_queue | player_ratings | delivered | — | label-review-queue | — |
+| ratings.label_stability | player_ratings | delivered | — | label-stability | — |
 | predictions.match | match_predictions | delivered | /predictions/{home_team}/{away_team}, /predictions/meta, /predictions/ensemble/weights, /predictions/models/comparison, /predictions/staleness, /predictions/team-accuracy/{team_id}, /predictions/{home_team}/{away_team}/attribution, /predictions/{home_team}/{away_team}/attribution/ci, /predictions/{home_team}/{away_team}/ensemble-attribution, /predictions/{home_team}/{away_team}/ensemble-attribution/ci, /predictions/{home_team}/{away_team}/diagnostics, /predictions/{home_team}/{away_team}/h2h, /predictions/{home_team}/{away_team}/h2h-bias-correction, /predictions/{home_team}/{away_team}/momentum | backtest, tune-predictions, optimize-ensemble | matches |
 | predictions.calibration | match_predictions | delivered | /predictions/calibration, /predictions/backtest, /predictions/tuning, /predictions/drift, /predictions/drift/timeline, /predictions/calibration/reliability, /predictions/calibration/scoreline, /predictions/calibration/comparison, /predictions/calibration/confidence-distribution, /predictions/calibration/error-analysis, /predictions/calibration/outcome-distribution, /predictions/calibration/temporal-validation, /predictions/calibration/probability-heatmap, /predictions/calibration/ci-plot, /predictions/calibration/ci-coverage, /predictions/calibration/ci-width, /predictions/calibration/fold-comparison, /predictions/calibration/league-errors, /predictions/calibration/feature-importance, /predictions/calibration/drift-heatmap, /predictions/calibration/error-clustering, /predictions/calibration/data-drift, /predictions/calibration/stress-test, /predictions/calibration/team-drift, /predictions/calibration/team-profile, /predictions/calibration/uncertainty, /predictions/calibration/profit-loss, /predictions/calibration/trajectory, /predictions/calibration/difficulty, /predictions/calibration/streaks, /predictions/calibration/report-card, /predictions/calibration/anomalies | backtest, tune-predictions | matches, calibration, backtest |
 | predictions.value_bet | match_predictions | delivered | /predictions/{home_team}/{away_team}/value | — | matches |

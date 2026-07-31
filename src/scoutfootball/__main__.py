@@ -1479,6 +1479,101 @@ def _cmd_label_review_queue(args: argparse.Namespace) -> None:
         print(f"  - {lim}")
 
 
+def _cmd_label_stability(args: argparse.Namespace) -> None:
+    """Build the PRS-LABEL-006 label stability report.
+
+    Surfaces two maintainer-facing diagnostics: retest pairs traced via
+    supersedes_decision_id chains, and annotator agreement groups where
+    multiple distinct decided_by values annotated the same business key.
+    Read-only; does not modify ``decisions.jsonl``.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.label_ledger import read_ledger
+    from scoutfootball.evaluation.label_stability import build_stability_report
+
+    settings = PlatformSettings.from_root()
+    records = read_ledger(settings=settings)
+    report = build_stability_report(
+        records,
+        tier_tolerance=args.tier_tolerance,
+    )
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    print(
+        f"Label stability report "
+        f"(schema {report['schema']} v{report['schema_version']})"
+    )
+    print(f"status: {report['status']}")
+    s = report["summary"]
+    print(f"active_label_count: {s['active_label_count']}")
+    print(
+        f"retest_pairs: {s['total_retest_pairs']} total "
+        f"({s['consistent_retest_pairs']} consistent)"
+    )
+    rate = s["retest_consistency_rate"]
+    rate_str = f"{rate:.1%}" if rate is not None else "n/a"
+    print(f"  retest_consistency_rate: {rate_str}")
+    print(
+        f"agreement_groups: {s['total_agreement_groups']} total "
+        f"({s['consistent_agreement_groups']} consistent)"
+    )
+    arate = s["agreement_rate"]
+    arate_str = f"{arate:.1%}" if arate is not None else "n/a"
+    print(f"  agreement_rate: {arate_str}")
+    if s["active_by_decided_by"]:
+        annotators = ", ".join(
+            f"{k}={v}"
+            for k, v in sorted(s["active_by_decided_by"].items())
+        )
+        print(f"active_by_decided_by: {annotators}")
+    print()
+
+    t = report["thresholds"]
+    print(f"thresholds: tier_agreement_tolerance={t['tier_agreement_tolerance']}")
+    print()
+
+    if report["retest_pairs"]:
+        print("--- Retest pairs (supersedes chains) ---")
+        for p in report["retest_pairs"]:
+            cons = "consistent" if p["consistent"] is True else (
+                "inconsistent" if p["consistent"] is False else "unknown"
+            )
+            same = "same" if p["same_decided_by"] else "different"
+            days = p["days_between"]
+            days_str = f"{days}d" if days is not None else "?"
+            print(
+                f"  {p['label_type']} {p['original_decision_id'][:8]}..."
+                f" -> {p['retest_decision_id'][:8]}... "
+                f"{p['original_value']} -> {p['retest_value']} "
+                f"({cons}, {same} annotator, {days_str})"
+            )
+        print()
+
+    if report["annotator_agreement"]:
+        print("--- Annotator agreement groups ---")
+        for g in report["annotator_agreement"]:
+            cons = "consistent" if g["consistent"] is True else (
+                "inconsistent" if g["consistent"] is False else "unknown"
+            )
+            print(
+                f"  {g['label_type']} annotators={g['annotators']} "
+                f"count={g['annotation_count']} ({cons})"
+            )
+            for v in g["values"]:
+                print(
+                    f"    decided_by={v['decided_by']} "
+                    f"value={v['value']} recorded_at={v['recorded_at']}"
+                )
+        print()
+
+    print("Limitations:")
+    for lim in report["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_discard_model_run(args: argparse.Namespace) -> None:
     """Discard one explicitly selected local optimizer candidate after confirmation."""
     from scoutfootball.config import PlatformSettings
@@ -5391,6 +5486,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit full report as JSON",
     )
 
+    label_stability_p = sub.add_parser(
+        "label-stability",
+        help=(
+            "Build the PRS-LABEL-006 label stability report: retest "
+            "pairs traced via supersedes_decision_id chains and "
+            "annotator agreement groups where multiple distinct "
+            "decided_by values annotated the same business key. "
+            "Read-only; does not modify decisions.jsonl."
+        ),
+    )
+    label_stability_p.add_argument(
+        "--tier-tolerance",
+        type=int,
+        default=1,
+        help=(
+            "Maximum tier value difference at which two tier labels "
+            "on the same player are considered consistent "
+            "(default: 1)"
+        ),
+    )
+    label_stability_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
     discard_model_run_p = sub.add_parser(
         "discard-model-run",
         help="Preview or discard one unactivated local optimizer candidate",
@@ -6391,6 +6512,7 @@ def main() -> None:
         "label-stats": _cmd_label_stats,
         "label-audit": _cmd_label_audit,
         "label-review-queue": _cmd_label_review_queue,
+        "label-stability": _cmd_label_stability,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
