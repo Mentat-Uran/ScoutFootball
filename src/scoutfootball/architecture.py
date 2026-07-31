@@ -700,6 +700,23 @@ def build_capability_registry() -> CapabilityRegistry:
             cli_commands=("label-stability",),
         ),
         Capability(
+            id="ratings.weight_sensitivity",
+            name="PRS-MODEL-011 权重敏感性分析",
+            description=(
+                "PRS-2 切片 PRS-MODEL-011：B1 专家权重敏感性诊断。"
+                "对每个角色的每个维度权重应用可配置的扰动（delta），"
+                "重归一化后重新计算 B1 分数，通过四个指标衡量排名稳定性："
+                "Spearman 相关系数（排序相关性）、平均绝对排名变动、"
+                "最大绝对排名变动、top-N 重叠率。"
+                "诊断为只读，不修改 B1_WEIGHTS、特征矩阵或任何 parquet 产物；"
+                "不参与 fail-closed verdict（敏感性指标是信号不是门禁）。"
+                "支持通过 --deltas 自定义扰动幅度，--top-n 自定义重叠窗口。"
+                "CLI weight-sensitivity 支持 --deltas/--top-n/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("weight-sensitivity",),
+        ),
+        Capability(
             id="predictions.match",
             name="比赛结果预测",
             description="Poisson、Dixon-Coles、集成模型等多种比赛结果预测，含概率校准。",

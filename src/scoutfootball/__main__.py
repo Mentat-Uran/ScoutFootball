@@ -1479,6 +1479,99 @@ def _cmd_label_review_queue(args: argparse.Namespace) -> None:
         print(f"  - {lim}")
 
 
+def _cmd_weight_sensitivity(args: argparse.Namespace) -> None:
+    """Build the PRS-MODEL-011 B1 weight sensitivity report.
+
+    Perturbs each B1 dimension weight by configurable deltas,
+    renormalises, recomputes scores, and measures ranking stability
+    versus the baseline. Read-only; does not modify B1_WEIGHTS, the
+    feature matrix, or any parquet artifact.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.sensitivity import (
+        DEFAULT_PERTURBATION_DELTAS,
+        compute_weight_sensitivity_report,
+    )
+
+    settings = PlatformSettings.from_root()
+
+    # Parse --deltas "−0.20,−0.10,0.10,0.20" into a tuple of floats.
+    if args.deltas:
+        try:
+            deltas = tuple(
+                float(d.strip()) for d in args.deltas.split(",") if d.strip()
+            )
+        except ValueError:
+            print(f"error: --deltas must be comma-separated floats, got {args.deltas!r}")
+            sys.exit(2)
+        if not deltas:
+            deltas = DEFAULT_PERTURBATION_DELTAS
+    else:
+        deltas = DEFAULT_PERTURBATION_DELTAS
+
+    report = compute_weight_sensitivity_report(
+        settings=settings,
+        perturbation_deltas=deltas,
+        top_n=args.top_n,
+    )
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    if report["status"] != "ok":
+        print(f"Weight sensitivity report: {report['status']}")
+        ev = report.get("evidence", {})
+        if ev:
+            print(f"  reason: {ev.get('reason', 'unknown')}")
+        return
+
+    print(
+        f"Weight sensitivity report "
+        f"(schema {report['schema']} v{report['schema_version']})"
+    )
+    print(f"status: {report['status']}")
+    print(f"baseline: {report['baseline_schema']} v{report['baseline_version']}")
+    print(f"weight_version: {report['weight_version']}")
+    print(f"perturbation_deltas: {report['perturbation_deltas']}")
+    print(f"top_n: {report['top_n']}")
+    print()
+
+    print("--- Per-role sensitivity ---")
+    for rs in report["role_summaries"]:
+        role = rs["role_family"]
+        n = rs["player_count"]
+        dims = rs["dimensions_tested"]
+        single = rs["single_dimension"]
+        most = rs["most_sensitive_dimension"]
+        least = rs["least_sensitive_dimension"]
+        tag = " (single dimension)" if single else ""
+        print(f"{role}: {n} players, {len(dims)} dims{tag}")
+        if not single and most:
+            print(f"  most sensitive: {most}")
+            print(f"  least sensitive: {least}")
+        for dim_key in dims:
+            dim_data = rs["per_dimension"].get(dim_key, {})
+            min_spearman = dim_data.get("min_spearman_correlation")
+            worst_delta = dim_data.get("worst_delta")
+            max_shift = dim_data.get("max_abs_rank_shift")
+            min_overlap = dim_data.get("min_top_n_overlap")
+            if min_spearman is not None:
+                print(
+                    f"  {dim_key}: min_spearman={min_spearman:.4f} "
+                    f"(delta={worst_delta:+.2f}), "
+                    f"max_rank_shift={max_shift}, "
+                    f"min_top_n_overlap={min_overlap:.2f}"
+                )
+            else:
+                print(f"  {dim_key}: all perturbations skipped")
+        print()
+
+    print("Limitations:")
+    for lim in report["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_label_stability(args: argparse.Namespace) -> None:
     """Build the PRS-LABEL-006 label stability report.
 
@@ -4766,6 +4859,11 @@ def _cmd_validate_review(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from scoutfootball.evaluation.sensitivity import (
+        DEFAULT_PERTURBATION_DELTAS,
+        DEFAULT_TOP_N,
+    )
+
     parser = argparse.ArgumentParser(
         prog="scoutfootball",
         description="ScoutFootball — local-first football data research platform",
@@ -5507,6 +5605,40 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     label_stability_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
+    weight_sensitivity_p = sub.add_parser(
+        "weight-sensitivity",
+        help=(
+            "Build the PRS-MODEL-011 B1 weight sensitivity report: "
+            "perturbs each dimension weight by configurable deltas, "
+            "renormalises, recomputes scores, and measures ranking "
+            "stability versus the baseline. Read-only; does not modify "
+            "B1_WEIGHTS, the feature matrix, or any parquet artifact."
+        ),
+    )
+    weight_sensitivity_p.add_argument(
+        "--deltas",
+        type=str,
+        help=(
+            "Comma-separated list of weight perturbation deltas (e.g. "
+            "-0.20,-0.10,0.10,0.20). Default: "
+            f"{','.join(map(str, DEFAULT_PERTURBATION_DELTAS))}"
+        ),
+    )
+    weight_sensitivity_p.add_argument(
+        "--top-n",
+        type=int,
+        default=DEFAULT_TOP_N,
+        help=(
+            "Top-N window for overlap calculation (default: "
+            f"{DEFAULT_TOP_N})"
+        ),
+    )
+    weight_sensitivity_p.add_argument(
         "--json",
         action="store_true",
         help="Emit full report as JSON",
@@ -6513,6 +6645,7 @@ def main() -> None:
         "label-audit": _cmd_label_audit,
         "label-review-queue": _cmd_label_review_queue,
         "label-stability": _cmd_label_stability,
+        "weight-sensitivity": _cmd_weight_sensitivity,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
