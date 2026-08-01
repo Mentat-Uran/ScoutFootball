@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: uv sync
+
+      - run: uv run ruff check .
+
+      - name: Verify generated capability manifest and reference index
+        env:
+          PYTHONPATH: src
+        run: uv run python scripts/generate_manifest.py --check
+
+      - name: Verify current-task authority boundary
+        run: uv run python scripts/archive_tasks_history.py --check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: uv sync
+
+      - name: Run tests
+        env:
+          MPLBACKEND: Agg
+        run: uv run pytest --tb=short -q
+
+  frontend-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check frontend JavaScript
+        run: |
+          node --check frontend/app.js
+          node --check frontend/action-value-explorer.js
+          node --check frontend/scouting-workspace.js
+          node --check frontend/tactical-board.js
+          node --check frontend/tactical-renderer.js
+
+      - name: Test frontend contracts
+        run: node --test frontend/tests/*.test.js
+
+  static-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify static snapshot inventory
+        run: uv run --no-sync python scripts/check_frontend_manifest.py
+
+      - name: Build verified static package
+        run: npm run build:sites

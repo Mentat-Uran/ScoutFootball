@@ -1,0 +1,77 @@
+name: Export static frontend data
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: export-static-data
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pull Git LFS objects (best-effort)
+        run: git lfs pull 2>&1 || echo "LFS pull skipped — continuing without LFS data"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Export static data
+        env:
+          MPLBACKEND: Agg
+          PYTHONPATH: src
+        run: |
+          uv run python scripts/export_static_frontend_data.py \
+            --profile release \
+            --ratings-limit 3000 \
+            --action-values-limit 100 \
+            --player-profiles 30
+
+      - name: Compute World Cup group-stage predictions
+        env:
+          MPLBACKEND: Agg
+          PYTHONPATH: src
+        run: |
+          uv run python scripts/compute_worldcup_predictions.py --profile release
+
+      - name: Refresh and verify static snapshot inventory
+        env:
+          MPLBACKEND: Agg
+          PYTHONPATH: src
+        run: |
+          uv run python scripts/export_static_frontend_data.py \
+            --profile release \
+            --skip basics ratings value predictions action_values scouting model_runs worldcup compare h2h player_profiles
+          uv run python scripts/check_frontend_manifest.py
+
+      - name: Commit exported data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f frontend/data frontend/data_manifest.json
+          git status --short
+          if git diff --cached --quiet; then
+            echo "No static data changes to commit."
+          else
+            git commit -m "data: export static frontend JSON $(date -u +%Y-%m-%d)"
+            git push
+          fi
