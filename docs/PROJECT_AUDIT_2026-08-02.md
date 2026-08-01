@@ -1,5 +1,17 @@
 # ScoutFootball 全项目独立审计 2026-08-02
 
+## 执行记录（2026-08-02 开发窗口）
+
+- 基线工作区：`main`，`git status --short` 为空，未发现未提交改动。
+- `uv run ruff check src tests`：通过。
+- `node --check frontend/app.js`：通过。
+- `uv run pytest tests/unit tests/integration -m "not e2e" -q`：命令本身触发 Windows `uv trampoline failed to canonicalize script path`；等价的 `uv run python -m pytest tests/unit tests/integration -m "not e2e" -q` 运行超过 120 秒后超时，未产生失败汇总。
+- `uv run python -m scoutfootball research-health`：退出码 0，运行态 verdict=`not_ready`；blocking reasons 为 lineage unverified、no_reviewable_runs、active_rating_freshness unverified、research_readiness blocked。
+- 开发后聚焦验证：`/ratings?limit=5` 返回 `canonical_resolution=ok`，每行带 `canonical_player_id` 与 `canonical_match_ambiguous`；当前样本仍为 unresolved，未做未经确认的同名合并。canonical resolver、API/写入防护相关聚焦测试，以及 Ruff 和 Node 语法检查通过。
+- 提交前回归：默认收集明确排除 `tests/e2e`；显式 `-m e2e` 收集 48 项。`uv run python -m pytest tests/unit tests/integration -q` 运行 184 秒后超时，未产生失败汇总；等价命令的超时不作为通过证据。
+- 分支清理：在确认当前工作树仅使用 `main` 后，按维护者指令删除 18 个无工作树历史本地分支；未删除远端分支、未推送。
+- 运行态边界：以上只证明静态检查、CLI 诊断和测试执行边界；不证明完整回归或外部发布验收。
+
 > 审计性质：独立只读复核（git 历史、测试配置、依赖管理、仓库卫生、文档契约），与 2026-07-31 的前后端核心审计（`FRONTEND_BACKEND_CORE_AUDIT_2026-07-31.md`）重叠部分重新验证并注明；本文件是新发现 + 确认未修复项的当前清单，是下一个开发窗口的工作输入。
 > 审计时点：2026-08-02，分支 `main`（`fc44ac2`），工作区有未提交的版本号类改动（10 文件、18 行，未含任何审计项修复）。
 > 已执行：`ruff check src tests` 通过；`test_grain.py`/`test_role_system.py` 定向通过；pytest 收集 5,865 项（含 48 e2e + 34 integration）；`node --check frontend/app.js`、`desktop/app.js` 通过。
@@ -33,7 +45,7 @@
   - 前端评分表格按行渲染 `name/team/league/season/optimized_score`（app.js 约 5003 行），同一球员跨赛季在排名中占多行，视觉上像多个球员。
   - `players_list.json` 按**名字字符串**去重（10,260 名）——名字去重 ≠ 实体去重：真同名不同人会被合并，名字变体会被分裂（静态 profile 同时存在 `Kylian_Mbappe-Lottin.json` 与 `Kylian_Mbappé.json`）。
   - `player_match.parquet` 的 player_id 双格式混用（`understat|10381` vs `malinovskyi|1993|ukr`）；同源 85 处 (name, source) 映射到多个 player_id（fbref 16 + understat 69）；statsbomb 数值 ID 与 understat/fbref 字符串 ID 无法 join。
-- 已有基础设施：PRS-1 已交付 `canonical_resolver`（`load_resolved_player_ratings` 派生视图）与 `identity_registry`，但主链路（评分表 → 前端）未使用，1,640 行 `canonical_match_ambiguous` 与 7 行 resolved 说明应用极浅。
+- 开发窗口进展：`/ratings` 已消费 `load_resolved_player_ratings` 派生视图，前端支持默认实体视图/赛季视图，并对 unresolved/ambiguous 行显示标记且不合并；当前 registry 仍只有 7 行 resolved，故 Messi 等未确认实体不会被伪造为已聚合。
 - 工作项见 WP-E4。
 
 ## 二、P0 — 数据真实性（先修）

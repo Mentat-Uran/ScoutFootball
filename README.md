@@ -23,7 +23,7 @@ Requirements: Python 3.11+, [`uv`](https://docs.astral.sh/uv/), and Node.js for 
 ```bash
 uv sync
 uv run python -m scoutfootball --help
-uv run pytest -q
+uv run pytest -q                 # unit/integration; e2e requires -m e2e explicitly
 node --check frontend/app.js
 ```
 

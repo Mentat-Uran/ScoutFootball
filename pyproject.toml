@@ -49,7 +49,7 @@ where = ["src"]
 link-mode = "copy"
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q -m \"not e2e\""
 pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [

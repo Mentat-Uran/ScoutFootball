@@ -1,6 +1,17 @@
 # 任务路线图
 
-> 当前队列更新：2026-07-29。项目定位见 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md)，球员评分专项规划见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)，长期依赖见 [`ROADMAP.md`](ROADMAP.md)，行业依据见 [`FOOTBALL_TOOLING_LANDSCAPE_2026.md`](FOOTBALL_TOOLING_LANDSCAPE_2026.md)，能力边界见 [`CAPABILITIES.md`](CAPABILITIES.md)。本文件顶部是当前任务真源；旧阶段和交付记录已归档为历史证据，其中的日期不构成当前期限。
+> 当前队列更新：2026-08-02。项目定位见 [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md)，球员评分专项规划见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)，长期依赖见 [`ROADMAP.md`](ROADMAP.md)，行业依据见 [`FOOTBALL_TOOLING_LANDSCAPE_2026.md`](FOOTBALL_TOOLING_LANDSCAPE_2026.md)，能力边界见 [`CAPABILITIES.md`](CAPABILITIES.md)。本文件顶部是当前任务真源；旧阶段和交付记录已归档为历史证据，其中的日期不构成当前期限。
+
+## 2026-08-02 整体更新窗口执行状态
+
+- [x] 建立基线并写入 [`PROJECT_AUDIT_2026-08-02.md`](PROJECT_AUDIT_2026-08-02.md)：Ruff/Node 通过；非 E2E 测试在 Windows `uv` trampoline 错误后改用等价入口，运行超过 120 秒未完成；`research-health` 真实 verdict=`not_ready`。
+- [x] A1：前端消费 `/market-value/summary` 与 `/market-value/players`，显示真实快照日期/来源/许可边界；API 离线时不消费 synthetic 身价。
+- [x] A2：消灭首页硬编码指标；移除 `predictions_default.json` 前端 fallback；建立 [`VIEW_DATA_SOURCES.md`](VIEW_DATA_SOURCES.md)，隐藏无可信离线回测数据的 `backtest` 入口。
+- [x] A3：主球员页显示优化器代理目标、最近 run_id、训练/当前 feature manifest hash；`research_health!=ready` 时评分列显示 `—` 且不按评分排序。
+- [x] C1/C3：所有 mutating API 路由统一 loopback/Bearer 访问门；战术板 hover 使用 `textContent`；MP4 上传流式限额、`finally` 清理，响应不含绝对路径。
+- [x] C2：pytest 默认排除 `e2e`，README/AGENTS/CI 同步。
+- [~] A4：`/ratings` 已消费 `load_resolved_player_ratings` 派生视图，前端已提供默认实体视图/赛季视图且 unresolved/ambiguous 不合并；详情请求会携带 resolved `canonical_player_id`，Kylian profile 旧 slug 已归一到单一静态 profile。当前真实 registry 仅少量人工映射，Messi 等未确认实体仍需维护者决策后才能满足“实体只出现一次”的验收。
+- [~] B1：冲突清单已建立；维护者已明确授权并完成 18 个无工作树历史本地分支清理。双前端真源、评分文件迁移和静态数据删除仍保留为需单独决策的高风险项。
 
 当前状态：仓库已形成宽幅本地原型，当前开发焦点收敛到“本地个人球员评分研究系统”。主要矛盾不是功能数量，而是评分目标语义、独立标签、canonical 身份、数据粒度、跨位置可比性、不确定性、active rating 新鲜度和个人研究闭环。路线不设工期，只执行依赖已满足的节点。
 
