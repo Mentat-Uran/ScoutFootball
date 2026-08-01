@@ -276,7 +276,7 @@ function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
-    title: `ScoutFootball v${APP_VERSION}`,
+    title: `ScoutFootball — Local-First Football Analytics & Player Research v${APP_VERSION}`,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,

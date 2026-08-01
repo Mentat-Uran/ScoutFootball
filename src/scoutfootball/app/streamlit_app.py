@@ -11,10 +11,14 @@ SRC_ROOT = Path(__file__).resolve().parents[2]
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-st.set_page_config(page_title="ScoutFootball", page_icon="⚽", layout="wide")
+st.set_page_config(
+    page_title="ScoutFootball — Local-First Football Analytics & Player Research",
+    page_icon="⚽",
+    layout="wide",
+)
 
-st.title("⚽ ScoutFootball for World Cup")
-st.caption("2026 美加墨世界杯分析工具箱")
+st.title("⚽ ScoutFootball — Local-First Football Analytics & Player Research")
+st.caption("本地优先的足球分析与球员研究工具箱")
 
 from scoutfootball.app.data_loader import data_source_label  # noqa: E402
 

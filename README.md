@@ -1,4 +1,4 @@
-# ScoutFootball for World Cup
+# ScoutFootball — Local-First Football Analytics & Player Research
 
 ScoutFootball is a local-first, open-source football analytics and research toolkit. It combines reproducible data workflows, interpretable rating experiments, match prediction baselines, and a browser-based local workbench.
 

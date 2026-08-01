@@ -2,7 +2,7 @@
 
 ## 1. 产品简介
 
-ScoutFootball 是一款本地优先的足球分析平台，为 2026 美加墨世界杯打造。它将公开数据、球员评分、比赛预测和战术板整合为一个可复现的研究工作台。
+ScoutFootball 是一款本地优先的足球分析与球员研究工具，将公开数据、球员评分、比赛预测和战术板整合为一个可复现的研究工作台。
 
 核心功能：
 
@@ -242,4 +242,4 @@ brew install ffmpeg
 
 ---
 
-*ScoutFootball v1.0.3 — 为 2026 美加墨世界杯打造*
+*ScoutFootball v1.1.1 — Local-First Football Analytics & Player Research*

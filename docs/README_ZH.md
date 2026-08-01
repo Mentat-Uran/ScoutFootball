@@ -1,4 +1,4 @@
-# ScoutFootball for World Cup
+# ScoutFootball — Local-First Football Analytics & Player Research
 
 > **本地优先、开放源代码、个人维护、非盈利的足球分析工具箱。**
 
@@ -12,9 +12,9 @@
 
 ---
 
-## 2026 世界杯来了
+## 足球分析与球员研究
 
-2026 美加墨世界杯 6 月 11 日开赛，48 支球队、104 场比赛、一座奖杯。ScoutFootball for World Cup 帮你看懂数据：谁在超常发挥、谁被低估、每支球队的数字画像。
+ScoutFootball 将可复现的数据工作流、球员评分研究、比赛分析和战术工具组织在一个本地优先的研究工作台中，帮助你理解球员表现、球队差异和模型不确定性。
 
 ## 它做什么
 
@@ -220,4 +220,4 @@ uv run streamlit run src/scoutfootball/app/streamlit_app.py
   - 公开 StatsBomb Open Data 衍生产物必须标明数据来源。
 
 ---
-*ScoutFootball for World Cup — 为足球最盛大的舞台而生。*
+*ScoutFootball — Local-First Football Analytics & Player Research*
