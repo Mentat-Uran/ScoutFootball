@@ -27,7 +27,7 @@ When documents disagree, prefer the charter for positioning, the capability tabl
 
 ```bash
 uv sync
-uv run pytest -q                 # unit/integration; e2e requires -m e2e explicitly
+uv run python -m pytest -q       # unit/integration; e2e requires -m e2e explicitly
 node --check frontend/app.js
 ```
 

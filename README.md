@@ -23,9 +23,14 @@ Requirements: Python 3.11+, [`uv`](https://docs.astral.sh/uv/), and Node.js for 
 ```bash
 uv sync
 uv run python -m scoutfootball --help
-uv run pytest -q                 # unit/integration; e2e requires -m e2e explicitly
+uv run python -m pytest -q       # unit/integration; e2e requires -m e2e explicitly
 node --check frontend/app.js
 ```
+
+The optional optimizer extra is installed in the development group so the
+default local test command can exercise optimizer and MLP candidate tests.
+Candidate training remains local-only and writes unactivated artifacts under
+`data/models/runs/`.
 
 To run the local service:
 

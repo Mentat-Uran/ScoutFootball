@@ -20,8 +20,8 @@
 - 仓库已经是一个跨数据、模型、API、静态前端、桌面包装和世界杯场景的完整原型，不是空壳。
 - 产品宽度显著超过旧文档的"7 个分析视图 + 4 个世界杯视图"：当前 HTML 中可见 24 个顶层 `data-view` 目标（含 P1 新增的 `workflow` 和 `versions`）。
 - 当前焦点已收敛为本地个人球员评分研究。关键缺口不是"有没有更多功能"，而是评分目标语义、独立标签、canonical 身份、数据粒度、跨位置校准、不确定性、active rating 新鲜度和可重放研究闭环。
-- 当前 41 个模型运行中没有可复核运行；29,723 条标签全部为模型体系衍生的 `expert_tier`，独立合格监督标签为 0。现有评分只能保持“部分交付/研究候选”，不能写成已验证的球员能力真值。
-- 当前评分文件早于当前特征矩阵；最新候选因训练时 feature manifest hash 与现行 hash 不一致而不可复核。`scoutfootball research-health` 已用 `storage_health`、`lineage_health`、`model_reviewability`、`active_rating_freshness`、`research_readiness` 五层 fail-closed verdict 替代顶层 `ok`，并附带 `feature_coverage` 与 `data_grain` 证据 section；任何一层失败都会让评分系统明确进入 `not_ready`/`unavailable`，不再被隐藏为 `ok`。
+- 当前模型运行登记为 43 个，其中 1 个候选 run 可复核；但 active rating 仍没有被激活 run 的 chain of custody。29,723 条标签全部为模型体系衍生的 `expert_tier`，独立合格监督标签为 0。现有评分只能保持“部分交付/研究候选”，不能写成已验证的球员能力真值。
+- 当前评分文件早于当前特征矩阵；新优化器和球队积分 MLP 都只写入未激活 candidate run。`scoutfootball research-health` 已用 `storage_health`、`lineage_health`、`model_reviewability`、`active_rating_freshness`、`research_readiness` 五层 fail-closed verdict 替代顶层 `ok`，并附带 `feature_coverage` 与 `data_grain` 证据 section；任何一层失败都会让评分系统明确进入 `not_ready`/`unavailable`，不再被隐藏为 `ok`。
 - 浏览器球探工作区、战术工程和部分世界杯输入仍是本地状态；动作价值下钻仍只有 3 场比赛、94 条球员—比赛证据记录，并非 tracking；预计名单和模拟结果不是官方实时事实。
 - 2026-07-29 在当前锁定 `uv` 运行时执行 `scoutfootball validate`，31/31 检查通过；该结果只覆盖当前文件、schema、部分唯一键和 lineage，不证明标签独立、模型语义正确或评分新鲜。
 - 2026-08-02 开发窗口已将评分来源与 `research-health` 接入主球员界面；`not_ready` 时评分列不作强排名，并显示优化器代理目标、最近 run_id 与 manifest hash。市场身价视图已消费 `/market-value/*` 本地 API，synthetic `value_summary.json` 不再作为身价展示。默认测试配置排除 E2E；API 写路由统一受 loopback/Bearer 门保护；战术板 MP4 不再返回绝对路径。
@@ -49,7 +49,7 @@
 | --- | --- | --- | --- |
 | 数据流水线 | `ingest`、`build-features`、`train`、验证和多类导出入口 | 已交付 | 当前工作区全部已登记来源已有本地保留/删除政策；上游快照日期、陈旧度与来源主张审计仍须逐项保留证据 |
 | 本地数据层 | raw/silver/gold/models/reports/logs，DuckDB + Parquet | 已交付 | 当前锁定 `uv` 运行时的 21 个关键 Parquet 已通过内容级 preflight；每次数据或运行时变更后仍须重新检查，且这不替代来源、快照与许可审计 |
-| 球员评分 | 球队积分代理优化器、覆盖/可用性约束、holdout 指标、模型运行登记、候选评分快照与本地准入/拒绝/晋级/回滚 | 部分交付 | 当前 41 个运行无 reviewable 候选，active rating 早于当前特征矩阵；默认特征未实际使用 xT/VAEP，角色、身份、跨位置校准和独立真值均未完成。只能作为研究候选，不能解释为已验证能力真值 |
+| 球员评分 | 球队积分代理优化器、覆盖/可用性约束、holdout 指标、模型运行登记、候选评分快照与本地准入/拒绝/晋级/回滚；新增未激活球队积分 MLP 候选 | 部分交付 | 43 个运行中仅 1 个可复核候选，active rating 仍早于当前特征矩阵且未绑定激活 run；默认特征未实际使用 xT/VAEP，角色、身份、跨位置校准和独立真值均未完成。只能作为研究候选，不能解释为已验证能力真值 |
 | 评分研究健康门禁 | `scoutfootball research-health` CLI、`GET /health/research`、`evaluation.research_health` 五层 fail-closed verdict（storage/lineage/model_reviewability/active_rating_freshness/research_readiness）+ `feature_coverage`/`data_grain` 证据；`lineage_health` 现覆盖完整链路：评分文件 → 激活模型运行 → 训练 args 摘要 → feature manifest hash ↔ 当前 manifest → `source_lineage[i].input_hash` ↔ 当前 source parquet | 已交付 | 五层任一失败即整体 `not_ready`/`unavailable`，不再被顶层 `ok` 隐藏；source parquet 漂移即使 manifest 未重建也会被标为 `stale`；不证明评分语义正确，只如实呈现当前可发布性 |
 | Synthetic fallback 隔离 | `data_loader.frame_is_synthetic`/`assert_real_frame` + `SyntheticDataError`；`get_player_profile` CSV 拒绝 synthetic、JSON 路径打 `data_mode=synthetic`；`get_player_ratings`/`get_value_summary` 同步标记 | 已交付 | Demo 数据进入 API 时必须显式标记；研究/评估/导出路径拒绝 synthetic；不阻止 UI 在 synthetic 下展示，但用户能立即看到状态 |
 | Canonical 身份风险审计 | `scoutfootball audit-identity` CLI、`evaluation.identity_audit` 四维只读扫描（player_id 格式分布、同名不同 ID、多队赛季转会、跨源对齐缺口）；`ratings.identity_audit` capability | 已交付的诊断 | 只读扫描 `player_match.parquet`，不解决冲突、不修改任何产物；任一风险 present 即 verdict=`risks_present`；不证明身份层已 canonical，只如实呈现 PRS-1 R-005 风险面供维护者人工复核 |

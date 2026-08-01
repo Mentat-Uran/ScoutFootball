@@ -37,6 +37,8 @@ dev = [
   "pyinstaller>=6.20.0",
   "pytest>=8.4,<9.0",
   "ruff>=0.12,<1.0",
+  # Optimizer and team-points MLP tests exercise the optional torch path.
+  "torch>=2.4,<3.0",
 ]
 
 [tool.setuptools.package-dir]

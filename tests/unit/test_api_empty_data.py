@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -197,6 +198,23 @@ class TestApiEmptyDataResponses:
                 result = get_ratings_meta()
         assert isinstance(result, dict)
         json.dumps(result)
+
+    def test_get_ratings_meta_skips_incomplete_run_directory(self, tmp_path: Path) -> None:
+        from scoutfootball.api import get_ratings_meta
+
+        runs_dir = tmp_path / "models" / "runs" / "incomplete-candidate"
+        runs_dir.mkdir(parents=True)
+        manifest_path = tmp_path / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
+        manifest_path.parent.mkdir(parents=True)
+        manifest_path.write_text(json.dumps({"hash": "current"}), encoding="utf-8")
+        settings = SimpleNamespace(data_root=tmp_path)
+
+        with patch("scoutfootball.api._settings", return_value=settings):
+            with patch("scoutfootball.api.load_model_meta", return_value=pd.DataFrame()):
+                with patch("scoutfootball.api.load_league_metrics", return_value=pd.DataFrame()):
+                    result = get_ratings_meta()
+
+        assert result["rating_source"]["latest_run_id"] is None
 
     def test_get_review_queue_empty(self) -> None:
         from scoutfootball.api import get_review_queue

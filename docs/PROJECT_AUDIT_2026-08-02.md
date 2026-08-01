@@ -11,6 +11,13 @@
 - 提交前回归：默认收集明确排除 `tests/e2e`；显式 `-m e2e` 收集 48 项。`uv run python -m pytest tests/unit tests/integration -q` 运行 184 秒后超时，未产生失败汇总；等价命令的超时不作为通过证据。
 - 分支清理：在确认当前工作树仅使用 `main` 后，按维护者指令删除 18 个无工作树历史本地分支；未删除远端分支、未推送。
 - 运行态边界：以上只证明静态检查、CLI 诊断和测试执行边界；不证明完整回归或外部发布验收。
+- 追加复核（2026-08-02）：`uv run pytest ...` 在 Windows 仍先触发 `uv trampoline failed to canonicalize script path`，改用等价入口 `uv run python -m pytest tests/unit tests/integration -m "not e2e" -q --durations=20` 后完整运行约 428 秒，全部通过，2 项跳过；最慢测试为 `tests/unit/test_phase10.py::TestAPI::test_get_match_prediction`，约 177 秒。等待窗口本身不是失败根因，缺失/不完整的可选 PyTorch 环境和生成式 manifest 漂移才是此前失败原因。
+- 追加环境修复：`uv sync --extra optimizer` 安装并验证 `torch==2.13.0+cpu`；`uv run python scripts/generate_manifest.py --check` 的 project manifest 与 reference index 均通过。
+- 追加候选实验：现有优化器 `20260801T224117Z-872e1349`（`--quick --no-viz`）holdout `N=95`，optimized Spearman=`0.6993`、Pearson=`0.7043`、points MAE=`14.75`、RMSE=`17.34`；新增球队积分 MLP 候选 `20260801T225209Z-team-points-mlp` 使用 fit/validation/test 赛季切分，holdout `N=95`，MAE=`9.94`、RMSE=`11.68`、R²=`0.5041`、Spearman=`0.8023`。两者都未激活；MLP 目标是球队赛季积分代理，不是独立球员能力真值。
+- 追加研究健康：候选运行后 `research-health` 仍为 `not_ready`，主要阻塞为 active rating 未绑定激活 run、lineage/freshness unverified、独立合格标签 `0`；不能因候选 holdout 指标改善而升级为 ready。
+- 追加最终复核：候选 MLP 写入标准 `meta.json` 后，`research-health` 登记 43 个 run，其中 1 个可复核、41 个不可复核、1 个不可用；独立合格标签仍为 0，故 verdict 仍为 `not_ready`。
+- 追加测试兼容性记录：完整回归仍出现 Starlette 的 TestClient/httpx 弃用告警，但不影响本次结果；后续单独评估升级到兼容的 httpx/Starlette 组合或固定兼容版本，避免把依赖迁移与评分模型实验混在同一变更中。
+- 追加问题清单复核：A1/A2/A3、写入访问门、MP4 安全边界和默认非 E2E 测试入口已落地；A4 身份覆盖、C3/C4 前端双真源与拆分、C5 单一依赖真源、静态 demo 快照清理及滚动文档归档仍为部分完成，不能标记为全部关闭。
 
 > 审计性质：独立只读复核（git 历史、测试配置、依赖管理、仓库卫生、文档契约），与 2026-07-31 的前后端核心审计（`FRONTEND_BACKEND_CORE_AUDIT_2026-07-31.md`）重叠部分重新验证并注明；本文件是新发现 + 确认未修复项的当前清单，是下一个开发窗口的工作输入。
 > 审计时点：2026-08-02，分支 `main`（`fc44ac2`），工作区有未提交的版本号类改动（10 文件、18 行，未含任何审计项修复）。

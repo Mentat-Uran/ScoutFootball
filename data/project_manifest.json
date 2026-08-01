@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-31T07:59:29.546694+00:00",
-  "package_version": "1.1.0",
+  "generated_at": "2026-08-01T22:32:16.187809+00:00",
+  "package_version": "1.1.1",
   "architecture": {
     "package_name": "scoutfootball",
     "status": "Phase 10 pipeline and API layer initialized; CLI ingest/build-features/train/validate/serve commands, data validation gates, probability calibration, FastAPI read-only endpoints, and Streamlit multi-page app all operational.",
@@ -327,6 +327,9 @@
       "uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]",
       "uv run python -m scoutfootball baseline-b1 [--n-bootstrap N] [--seed S] [--top N] [--json]",
       "uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]",
+      "uv run python -m scoutfootball weight-sensitivity [--deltas D] [--top-n N] [--json]",
+      "uv run python -m scoutfootball minutes-sensitivity [--deltas D] [--baseline-minutes M] [--top-n N] [--json]",
+      "uv run python -m scoutfootball cohort-sensitivity [--fractions F] [--baseline-minutes M] [--n-repeats N] [--top-n N] [--json]",
       "uv run python -m scoutfootball label-append --label-type T --cohort-hash H --role-family R --season-id S --observation-window W --confidence C --evidence E [pairwise/tier payload]",
       "uv run python -m scoutfootball label-revoke --target-decision-id D --evidence E",
       "uv run python -m scoutfootball label-list [--cohort-hash H] [--label-type T] [--role-family R] [--season-id S] [--player-id P] [--include-revoked]",
@@ -361,8 +364,8 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-07-31T07:59:29.545185+00:00",
-    "package_version": "1.1.0",
+    "generated_at": "2026-08-01T22:32:16.186771+00:00",
+    "package_version": "1.1.1",
     "domains": [
       "action_value",
       "data_pipeline",
@@ -698,6 +701,48 @@
         "api_paths": [],
         "cli_commands": [
           "label-stability"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.weight_sensitivity",
+        "name": "PRS-MODEL-011 权重敏感性分析",
+        "description": "PRS-2 切片 PRS-MODEL-011：B1 专家权重敏感性诊断。对每个角色的每个维度权重应用可配置的扰动（delta），重归一化后重新计算 B1 分数，通过四个指标衡量排名稳定性：Spearman 相关系数（排序相关性）、平均绝对排名变动、最大绝对排名变动、top-N 重叠率。诊断为只读，不修改 B1_WEIGHTS、特征矩阵或任何 parquet 产物；不参与 fail-closed verdict（敏感性指标是信号不是门禁）。支持通过 --deltas 自定义扰动幅度，--top-n 自定义重叠窗口。CLI weight-sensitivity 支持 --deltas/--top-n/--json。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "weight-sensitivity"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.minutes_sensitivity",
+        "name": "PRS-MODEL-012 分钟门槛敏感性分析",
+        "description": "PRS-2 切片 PRS-MODEL-012：B2 分钟门槛敏感性诊断。对 B2 的 reference_minutes 参数应用可配置的绝对分钟扰动（默认 -600/-300/-150/+150/+300/+600），重新计算 B2 分数。与 PRS-MODEL-011 不同，reference_minutes 扰动有复合效应：收缩权重 w、stable_core 成员、prior_mean 三者同时变化。通过四个指标衡量排名稳定性：Spearman 相关系数、平均绝对排名变动、最大绝对排名变动、top-N 重叠率。每条扰动报告perturbed_reference_minutes、prior_source、stable_core_count以便观察门槛变化是否触发 prior fallback 路径切换。诊断为只读，不修改特征矩阵、B2 参数或任何 parquet 产物；不参与 fail-closed verdict（敏感性指标是信号不是门禁）。CLI minutes-sensitivity 支持 --deltas/--baseline-minutes/--top-n/--json。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "minutes-sensitivity"
+        ],
+        "frontend_views": [],
+        "data_artifacts": [],
+        "notes": ""
+      },
+      {
+        "id": "ratings.cohort_sensitivity",
+        "name": "PRS-MODEL-013 cohort 子采样敏感性分析",
+        "description": "PRS-2 切片 PRS-MODEL-013：B2 cohort 成员敏感性诊断。对每个角色池随机 hold out 一定比例的球员（默认 5%/10%/20%），在缩减池上从零重新计算 B0→B2 分数，在 baseline 和 perturbed 池的公共球员上衡量排名稳定性。与 PRS-MODEL-011/012 不同，cohort 扰动有最根本的效应：B0 百分位变化（参考池变了）、B2 prior 变化（stable_core 成员变了）、B2 收缩变化（prior 变了）。整个 B0→B2 链在缩减池上重新计算。通过四个指标衡量排名稳定性：Spearman 相关系数、平均绝对排名变动、最大绝对排名变动、top-N 重叠率。每条扰动报告 common_player_count、perturbed_prior_mean、perturbed_prior_source 以便观察缩减池是否触发 prior fallback。种子确定性：每个 (base_seed, role_family, repeat_index) 三元组通过 SHA256 派生独立种子。池子小于 min_pool_size（默认 10）的角色跳过扰动。诊断为只读，不修改特征矩阵、cohort 定义或任何 parquet 产物；不参与 fail-closed verdict（敏感性指标是信号不是门禁）。CLI cohort-sensitivity 支持 --fractions/--baseline-minutes/--n-repeats/--top-n/--min-pool-size/--seed/--json。",
+        "domain": "player_ratings",
+        "status": "delivered",
+        "api_paths": [],
+        "cli_commands": [
+          "cohort-sensitivity"
         ],
         "frontend_views": [],
         "data_artifacts": [],
@@ -1371,8 +1416,8 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-07-31T07:59:29.546694+00:00",
-    "package_version": "1.1.0",
+    "generated_at": "2026-08-01T22:32:16.187809+00:00",
+    "package_version": "1.1.1",
     "layers": [
       "gold",
       "logs",
@@ -2297,5 +2342,5 @@
       }
     ]
   },
-  "content_sha256": "9ca79dc1f9ee48e1c4953e9853c2047086b7abd288a6b1074385ddbbe0a21327"
+  "content_sha256": "c9ffa680a25f0122ddd0f44e3bbe5d2637d3ae5a565bf3af125302ce122e5d1f"
 }

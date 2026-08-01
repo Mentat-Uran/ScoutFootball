@@ -9,6 +9,7 @@
 | Streamlit、静态前端、FastAPI、Electron 四个产品面 | 保留 FastAPI + 主静态前端；Streamlit/Electron 逐步标注适配边界 | 保留，未删除 | 直接删除会扩大回归面；本地优先需要先明确主链路。 |
 | Render/Vercel/Cloudflare 配置与 local-first 章程 | 弃用默认公共部署假设；配置保留为手动/历史发布路径 | 本地开发不触发云端 | 公共 URL、静态快照和本地事实源不能混称。 |
 | `player_ratings.parquet`、`v2`、`v3`、`optimized` 与 `data/models/runs/` | `player_ratings_optimized.parquet` 暂作兼容 active artifact；run 目录作为可审阅候选证据 | 主评分链路仍 fail-closed；未删产物 | 评分文件的唯一事实源尚未通过模型准入，不能贸然删除旧文件。 |
+| 新增球队积分 MLP 候选与现有优化器 | 两者并行作为候选实验；不自动替换 active rating | 已完成一次时间外 holdout；候选 run 保持 `not_activated` | MLP 优化的是球队赛季积分代理回归，不是独立球员能力；需独立标签、覆盖修复和相同切分比较后才可讨论晋级。 |
 | `requirements.txt` 与 `pyproject.toml`/`uv.lock` | `pyproject.toml` + `uv.lock` 为声明真源；requirements 仅作为手工 Streamlit 派生清单 | 当前注释已无乱码；未删除 | 删除 requirements 可能破坏现有手工部署；后续应自动生成。 |
 | `frontend/data/value_summary.json` synthetic 与 `/market-value/*` 真实本地 API | `/market-value/*` 为 market value 主链路；synthetic value summary 弃用为展示数据 | 已接入 market value；拒绝 synthetic fallback | 避免把匿名 Player A/B/C 说成真实身价。 |
 | `predictions_default.json` 与 prediction API | 弃用默认预测文件 | 已移除前端默认预测 fallback | API 不可达时必须显示无数据，而不是 generic prediction。 |

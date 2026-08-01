@@ -6362,7 +6362,14 @@ def get_ratings_meta() -> dict:
             key=lambda path: path.name,
             reverse=True,
         ):
-            candidate = _read_json(run_dir / "meta.json")
+            meta_path = run_dir / "meta.json"
+            if not meta_path.is_file():
+                continue
+            try:
+                candidate = _read_json(meta_path)
+            except (OSError, json.JSONDecodeError):
+                logger.warning("Skipping unreadable model run metadata: %s", meta_path)
+                continue
             if candidate:
                 latest_run_meta = {**candidate, "run_id": run_dir.name}
                 break
