@@ -3123,3 +3123,78 @@ def compute_team_outlook(
             "tactics and home-field advantage not captured here."
         ),
     }
+
+
+# ── Core data contract bindings ──────────────────────────────────────────
+#
+# The World Cup pack reuses the Core schemas.storage types instead of
+# duplicating identity, snapshot or export logic.  These helpers expose
+# the static SQUADS table and the rating join as Core DataContracts.
+
+
+def count_expected_callups() -> int:
+    """Return the total number of expected call-up entries across 48 teams."""
+    return sum(len(players) for players in SQUADS.values())
+
+
+def get_expected_callups_contract():
+    """Return the Core :class:`DataContract` for the static SQUADS table.
+
+    The SQUADS table is a maintainer-compiled expected-callup snapshot.
+    Its fact_type is ``expected_callup``; it is replaced by
+    ``official_roster`` once FIFA publishes 26-man squads.
+    """
+    from scoutfootball.worldcup.contracts import build_expected_callups_contract
+
+    return build_expected_callups_contract(record_count=count_expected_callups())
+
+
+def get_rating_coverage_contract(rated_player_count: int):
+    """Return the Core :class:`DataContract` for the per-player rating join.
+
+    Parameters
+    ----------
+    rated_player_count:
+        Number of players with a direct optimized rating (i.e. matched in
+        ``player_ratings_optimized.parquet``).  Players without a direct
+        rating fall back to league proxy ratings and are not counted here.
+    """
+    from scoutfootball.worldcup.contracts import build_rating_coverage_contract
+
+    return build_rating_coverage_contract(record_count=rated_player_count)
+
+
+def get_model_probability_contract(team_count: int = 48):
+    """Return the Core :class:`DataContract` for Bradley-Terry outputs.
+
+    Parameters
+    ----------
+    team_count:
+        Number of teams with a computed strength score.  Defaults to 48
+        (all World Cup teams).
+    """
+    from scoutfootball.worldcup.contracts import build_model_probability_contract
+
+    return build_model_probability_contract(record_count=team_count)
+
+
+def get_schedule_contract(match_count: int = 72):
+    """Return the Core :class:`DataContract` for the group-stage schedule.
+
+    Parameters
+    ----------
+    match_count:
+        Number of group-stage matches.  Defaults to 72 (12 groups × 6).
+    """
+    from scoutfootball.worldcup.contracts import build_schedule_contract
+
+    return build_schedule_contract(record_count=match_count)
+
+
+# Fact type for the static SQUADS table.  Exposed as a module-level constant
+# so callers can tag squad payloads without importing the contracts module.
+SQUADS_FACT_TYPE = "expected_callup"
+
+# Fact type for the OPTA_WIN_PROBABILITY priors.  Exposed for the same
+# reason: callers tag probability payloads without importing contracts.
+OPTA_PRIORS_FACT_TYPE = "model_probability"

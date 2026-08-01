@@ -15,7 +15,7 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/Mentaturan/ScoutFootball_for_World_Cup.git
+git clone https://github.com/Mentat-Uran/ScoutFootball_for_World_Cup.git
 cd ScoutFootball_for_World_Cup
 ```
 

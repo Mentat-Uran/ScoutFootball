@@ -272,6 +272,12 @@ def export_worldcup() -> int:
     _write_json(WORLDCUP_DIR / "predictions.json", get_wc_predictions())
     _write_json(WORLDCUP_DIR / "knockout.json", get_wc_knockout())
 
+    # Core DataContract registry enumerates every World Cup artifact with
+    # its source license, snapshot info, lineage and coverage so the
+    # exported pack is self-auditing offline.
+    from scoutfootball.api import get_wc_contracts
+    _write_json(WORLDCUP_DIR / "contracts.json", get_wc_contracts())
+
     schedule = get_wc_schedule()
     briefings = []
     for match in schedule.get("matches", []):
@@ -304,7 +310,7 @@ def export_worldcup() -> int:
         "  worldcup/teams.json, groups.json, schedule.json, predictions.json, "
         "knockout.json, match_briefings.json"
     )
-    print("  worldcup/tournament_summary.json, knockout_bracket.json")
+    print("  worldcup/tournament_summary.json, knockout_bracket.json, contracts.json")
     print(f"  worldcup/squads/*.json ({squad_count} teams)")
     return squad_count
 

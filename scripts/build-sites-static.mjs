@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
@@ -5,6 +6,15 @@ const root = resolve(import.meta.dirname, "..");
 const frontend = join(root, "frontend");
 const output = join(root, "dist");
 const publicDir = join(output, "public");
+
+// A STATIC package must not claim freshness from an inventory that no longer
+// matches the JSON copied into it.  Keep this before removing dist so a failed
+// gate leaves the previous local build available for inspection.
+const uv = process.env.SCOUTFOOTBALL_UV ?? (process.platform === "win32" ? "uv.exe" : "uv");
+execFileSync(uv, ["run", "--no-sync", "python", "scripts/check_frontend_manifest.py"], {
+  cwd: root,
+  stdio: "inherit",
+});
 
 await rm(output, { recursive: true, force: true });
 await mkdir(publicDir, { recursive: true });

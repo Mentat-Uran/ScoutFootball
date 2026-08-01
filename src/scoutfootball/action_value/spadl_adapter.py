@@ -1,4 +1,4 @@
-"""SPADL adapter: convert StatsBomb events to internal actions.
+"""StatsBomb event adapter: convert flat events to internal actions.
 
 This module reads StatsBomb Open Data events from Parquet and converts
 them to the InternalAction schema defined in schema.py.
@@ -9,7 +9,10 @@ StatsBomb Open Data uses a flat column format:
 - location_x, location_y: start coordinates (0-120, 0-80)
 - pass_end_location_x/y, shot_end_location_x/y: end coords
 
-Current status: P2. Reads events_all.parquet from data/raw/statsbomb_open/.
+This is a SPADL-informed internal representation, not a claim that the
+result is a complete canonical SPADL or atomic-SPADL export.  In particular,
+the converter does not infer an attacking direction or reconstruct provider
+fields that were not retained in the flat source artifact.
 """
 from __future__ import annotations
 
@@ -31,6 +34,25 @@ logger = logging.getLogger(__name__)
 # Event types that map to FREEZE or UNKNOWN — skip these entirely
 _SKIP_TYPES: set[ActionType] = {ActionType.FREEZE, ActionType.UNKNOWN}
 
+# These fields are required to preserve event identity, match scope, ordering,
+# and the source coordinate frame.  Optional event-specific end locations may
+# be absent (for example some goalkeeper events); those retain the existing
+# same-as-start fallback and must not be interpreted as an observed endpoint.
+_REQUIRED_EVENT_COLUMNS = frozenset({
+    "event_id",
+    "match_id",
+    "event_type",
+    "period",
+    "minute",
+    "second",
+    "location_x",
+    "location_y",
+})
+
+
+class EventConversionError(ValueError):
+    """Raised when a flat event artifact cannot safely become actions."""
+
 
 def load_statsbomb_events(events_path: Path) -> pd.DataFrame:
     """Load StatsBomb events from Parquet."""
@@ -42,6 +64,56 @@ def load_statsbomb_events(events_path: Path) -> pd.DataFrame:
     except Exception:
         logger.warning("Failed to read StatsBomb events", exc_info=True)
         return pd.DataFrame()
+
+
+def _validate_events(events: pd.DataFrame) -> None:
+    """Fail closed on missing event identity, timing, or retained coordinates."""
+    missing = sorted(_REQUIRED_EVENT_COLUMNS.difference(events.columns))
+    if missing:
+        raise EventConversionError(
+            "StatsBomb event artifact is missing required columns: "
+            + ", ".join(missing)
+        )
+
+    for column in ("event_id", "match_id", "event_type"):
+        values = events[column]
+        if values.isna().any() or values.astype(str).str.strip().eq("").any():
+            raise EventConversionError(
+                f"StatsBomb event artifact has blank {column} values."
+            )
+
+    if events["event_id"].duplicated().any():
+        raise EventConversionError(
+            "StatsBomb event artifact has duplicate event_id values; "
+            "provider action identity would not be preserved."
+        )
+
+    bounds = {"period": (1, None), "minute": (0, None), "second": (0, 59)}
+    for column, (minimum, maximum) in bounds.items():
+        values = pd.to_numeric(events[column], errors="coerce")
+        invalid = (
+            values.isna()
+            | ~np.isfinite(values)
+            | (values < minimum)
+            | (values % 1 != 0)
+        )
+        if maximum is not None:
+            invalid |= values > maximum
+        if invalid.any():
+            raise EventConversionError(
+                f"StatsBomb event artifact has invalid {column} values."
+            )
+
+
+def _validate_action_coordinates(events: pd.DataFrame) -> None:
+    """Ensure converted actions have finite coordinates in the StatsBomb frame."""
+    for column, upper_bound in (("location_x", 120.0), ("location_y", 80.0)):
+        values = pd.to_numeric(events[column], errors="coerce")
+        invalid = values.isna() | ~np.isfinite(values) | (values < 0) | (values > upper_bound)
+        if invalid.any():
+            raise EventConversionError(
+                f"Convertible StatsBomb events contain invalid {column} values."
+            )
 
 
 def _determine_result_vectorized(df: pd.DataFrame) -> pd.Series:
@@ -136,8 +208,8 @@ def _get_end_location_vectorized(df: pd.DataFrame) -> pd.DataFrame:
     is_pass = action_type == ActionType.PASS
     pass_end_x = df.get("pass_end_location_x")
     pass_end_y = df.get("pass_end_location_y")
-    if pass_end_x is not None:
-        valid = is_pass & pass_end_x.notna()
+    if pass_end_x is not None and pass_end_y is not None:
+        valid = is_pass & pass_end_x.notna() & pass_end_y.notna()
         end_x[valid] = pass_end_x[valid].values / 120.0 * 100.0
         end_y[valid] = pass_end_y[valid].values / 80.0 * 100.0
 
@@ -145,8 +217,8 @@ def _get_end_location_vectorized(df: pd.DataFrame) -> pd.DataFrame:
     is_shot = action_type == ActionType.SHOT
     shot_end_x = df.get("shot_end_location_x")
     shot_end_y = df.get("shot_end_location_y")
-    if shot_end_x is not None:
-        valid = is_shot & shot_end_x.notna()
+    if shot_end_x is not None and shot_end_y is not None:
+        valid = is_shot & shot_end_x.notna() & shot_end_y.notna()
         end_x[valid] = shot_end_x[valid].values / 120.0 * 100.0
         end_y[valid] = shot_end_y[valid].values / 80.0 * 100.0
 
@@ -154,8 +226,8 @@ def _get_end_location_vectorized(df: pd.DataFrame) -> pd.DataFrame:
     is_carry = action_type == ActionType.CARRY
     carry_end_x = df.get("carry_end_location_x")
     carry_end_y = df.get("carry_end_location_y")
-    if carry_end_x is not None:
-        valid = is_carry & carry_end_x.notna()
+    if carry_end_x is not None and carry_end_y is not None:
+        valid = is_carry & carry_end_x.notna() & carry_end_y.notna()
         end_x[valid] = carry_end_x[valid].values / 120.0 * 100.0
         end_y[valid] = carry_end_y[valid].values / 80.0 * 100.0
     # If carry_end_location columns don't exist, end_x/y already = start_x/y
@@ -164,23 +236,27 @@ def _get_end_location_vectorized(df: pd.DataFrame) -> pd.DataFrame:
     is_gk = action_type == ActionType.GOALKEEPER
     gk_end_x = df.get("goalkeeper_end_location_x")
     gk_end_y = df.get("goalkeeper_end_location_y")
-    if gk_end_x is not None:
-        valid = is_gk & gk_end_x.notna()
+    if gk_end_x is not None and gk_end_y is not None:
+        valid = is_gk & gk_end_x.notna() & gk_end_y.notna()
         end_x[valid] = gk_end_x[valid].values / 120.0 * 100.0
         end_y[valid] = gk_end_y[valid].values / 80.0 * 100.0
 
     return pd.DataFrame({"_end_x": end_x, "_end_y": end_y}, index=df.index)
 
 
-def convert_all_events(events_path: Path) -> pd.DataFrame:
-    """Convert all StatsBomb events to SPADL-format DataFrame.
+def convert_events(events: pd.DataFrame) -> pd.DataFrame:
+    """Convert a flat StatsBomb event frame to internal actions.
 
-    Returns a DataFrame with columns matching InternalAction fields,
-    ready for xT/VAEP computation.
+    The conversion keeps the provider event ID, generates a deterministic
+    zero-based ``action_id`` within each match in input order, and fails closed
+    when identity, timing, or coordinates for a convertible event are invalid.
+    It does not orient actions to a single attacking direction.
     """
-    df = load_statsbomb_events(events_path)
-    if df.empty:
+    if events.empty:
         return pd.DataFrame()
+
+    _validate_events(events)
+    df = events.copy()
 
     # Map event_type → ActionType
     df["_action_type"] = df["event_type"].map(STATSBOMB_ACTION_MAP).fillna(ActionType.UNKNOWN)
@@ -192,6 +268,8 @@ def convert_all_events(events_path: Path) -> pd.DataFrame:
     if df.empty:
         logger.info("No actionable events after filtering")
         return pd.DataFrame()
+
+    _validate_action_coordinates(df)
 
     # Normalize start coordinates
     loc_x = df.get("location_x", pd.Series(np.nan, index=df.index))
@@ -213,8 +291,8 @@ def convert_all_events(events_path: Path) -> pd.DataFrame:
     match_id = df.get("match_id", pd.Series("", index=df.index))
 
     out = pd.DataFrame({
-        "action_id": df.get("index", pd.Series(0, index=df.index)).fillna(0).astype(int),
-        "provider_action_id": df.get("event_id", pd.Series("", index=df.index)).astype(str),
+        "action_id": df.groupby("match_id", sort=False).cumcount().astype(int),
+        "provider_action_id": df["event_id"].astype(str),
         "match_id": match_id.fillna("").astype(str),
         "team_id": team_id.fillna("").apply(
             lambda x: str(int(float(x))) if pd.notna(x) and x != "" else ""
@@ -239,8 +317,13 @@ def convert_all_events(events_path: Path) -> pd.DataFrame:
     # Drop temp columns
     out.reset_index(drop=True, inplace=True)
 
-    logger.info("Converted %d events to %d SPADL actions", len(df), len(out))
+    logger.info("Converted %d events to %d internal actions", len(df), len(out))
     return out
+
+
+def convert_all_events(events_path: Path) -> pd.DataFrame:
+    """Load a StatsBomb Parquet artifact and convert it to internal actions."""
+    return convert_events(load_statsbomb_events(events_path))
 
 
 def convert_all_events_to_actions(events_path: Path) -> list[InternalAction]:
@@ -277,7 +360,7 @@ def convert_all_events_to_actions(events_path: Path) -> list[InternalAction]:
 
 
 def save_spadl_actions(events_path: Path, output_path: Path) -> pd.DataFrame:
-    """Convert StatsBomb events to SPADL and save as Parquet.
+    """Convert StatsBomb events to internal actions and save as Parquet.
 
     Returns the DataFrame for inspection.
     """

@@ -13,10 +13,12 @@ def test_desktop_package_keeps_build_configuration():
     assert package["scripts"]["build:mac"] == "electron-builder --mac --arm64"
     assert package["devDependencies"]["electron"]
     assert package["devDependencies"]["electron-builder"]
-    assert package["build"]["appId"] == "com.scoutfootball.desktop"
+    assert package["build"]["appId"] == "com.mentaturan.scoutfootball"
     assert "frontend/**/*" in package["build"]["files"]
+    # electron-builder normalises trailing slashes; accept either "backend" or "backend/"
     assert any(
-        resource["to"] == "backend/" for resource in package["build"]["extraResources"]
+        resource["to"].rstrip("/") == "backend"
+        for resource in package["build"]["extraResources"]
     )
 
 

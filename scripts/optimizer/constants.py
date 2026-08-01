@@ -13,10 +13,9 @@ import unicodedata
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import torch
-
 if TYPE_CHECKING:
     import pandas as pd
+    import torch
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Position / dimension constants
@@ -771,6 +770,8 @@ def refine_role_positions(df: pd.DataFrame) -> pd.DataFrame:
 
 def apply_position_weight_caps(weights: torch.Tensor) -> torch.Tensor:
     """限制明显不符合角色职责的维度权重，并保持每行归一化。"""
+    import torch
+
     caps = torch.tensor(POSITION_DIMENSION_CAPS, dtype=weights.dtype, device=weights.device)
     capped = torch.minimum(weights, caps)
     missing = torch.clamp(1.0 - capped.sum(dim=1, keepdim=True), min=0.0)

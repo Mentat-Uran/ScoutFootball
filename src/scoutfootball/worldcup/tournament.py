@@ -46,7 +46,7 @@ from scoutfootball.worldcup.data import (
     get_team_group,
 )
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 DEFAULT_STATE_PATH = "data/reports/worldcup/tournament_state.json"
 
 
@@ -118,6 +118,11 @@ class TournamentState:
     notes: str = ""
     created_at: str = ""
     updated_at: str = ""
+    # Core DataContract metadata describing this state artifact.  Optional
+    # so that 1.0.0 state files continue to load without it.  When present,
+    # consumers can trace the state back to the schedule snapshot and the
+    # maintainer-recorded results.
+    contract: dict[str, Any] | None = None
 
     def match_by_id(self, match_id: str) -> dict[str, Any] | None:
         for m in self.matches:
@@ -848,7 +853,7 @@ def _match_summary(m: dict[str, Any]) -> dict[str, Any]:
 
 def state_to_dict(state: TournamentState) -> dict[str, Any]:
     """Serialize tournament state to a JSON-safe dict."""
-    return {
+    payload: dict[str, Any] = {
         "schema_version": state.schema_version,
         "tournament_start": state.tournament_start,
         "tournament_end": state.tournament_end,
@@ -859,6 +864,9 @@ def state_to_dict(state: TournamentState) -> dict[str, Any]:
         "created_at": state.created_at,
         "updated_at": state.updated_at,
     }
+    if state.contract is not None:
+        payload["contract"] = state.contract
+    return payload
 
 
 def state_from_dict(
@@ -869,6 +877,10 @@ def state_from_dict(
     ``validate_integrity=False`` is reserved for read-only import diagnostics.
     Normal callers, including persisted state loading, always retain the full
     integrity gate.
+
+    The optional ``contract`` field (schema 1.1.0+) carries a serialized
+    Core :class:`DataContract` describing the state artifact.  It is absent
+    in 1.0.0 files; loading such a file yields ``state.contract = None``.
     """
     if not isinstance(data, dict):
         raise ValueError("Tournament state must be an object")
@@ -884,6 +896,9 @@ def state_from_dict(
     results = data.get("results") or {}
     if not isinstance(results, dict):
         raise ValueError("Tournament state 'results' must be a dict")
+    contract = data.get("contract")
+    if contract is not None and not isinstance(contract, dict):
+        raise ValueError("Tournament state 'contract' must be an object or null")
     state = TournamentState(
         schema_version=schema,
         tournament_start=data.get("tournament_start", TOURNAMENT_START),
@@ -894,6 +909,7 @@ def state_from_dict(
         notes=data.get("notes", ""),
         created_at=data.get("created_at", ""),
         updated_at=data.get("updated_at", ""),
+        contract=contract,
     )
     if validate_integrity:
         integrity_errors = validate_tournament_state_integrity(state)
@@ -994,6 +1010,73 @@ def load_state(path: str | Path | None = None) -> TournamentState:
         return init_state()
     data = json.loads(p.read_text(encoding="utf-8"))
     return state_from_dict(data)
+
+
+def attach_tournament_state_contract(
+    state: TournamentState,
+    *,
+    result_count: int | None = None,
+) -> TournamentState:
+    """Build and attach a Core :class:`DataContract` to *state*.
+
+    The contract records the number of locally recorded results, the
+    schedule snapshot upstream, and the maintainer-entered-result
+    transform.  After this call, ``state.contract`` is a JSON-safe dict
+    produced by :func:`contract_to_dict` and is included in subsequent
+    :func:`state_to_dict` serialization.
+
+    Parameters
+    ----------
+    state:
+        Tournament state to mutate in place.
+    result_count:
+        Optional override for the recorded-result count.  When None, the
+        count is derived from ``len(state.results)`` plus the number of
+        completed knockout matches.
+    """
+    from scoutfootball.worldcup.contracts import (
+        build_tournament_state_contract,
+        contract_to_dict,
+    )
+
+    if result_count is None:
+        knockout_matches = state.knockout.get("matches", []) if state.knockout else []
+        completed_knockout = sum(
+            1 for m in knockout_matches if m.get("status") == "completed"
+        )
+        result_count = len(state.results) + completed_knockout
+    contract = build_tournament_state_contract(record_count=result_count)
+    state.contract = contract_to_dict(contract)
+    return state
+
+
+def get_tournament_state_contract(
+    state: TournamentState,
+    *,
+    result_count: int | None = None,
+) -> dict[str, Any]:
+    """Return the contract dict attached to *state*, building it if absent.
+
+    When ``state.contract`` is None, the contract is built on demand using
+    :func:`attach_tournament_state_contract` and returned without mutation
+    of *state*.  Callers that want the contract persisted must call
+    :func:`attach_tournament_state_contract` explicitly.
+    """
+    if state.contract is not None:
+        return state.contract
+    from scoutfootball.worldcup.contracts import (
+        build_tournament_state_contract,
+        contract_to_dict,
+    )
+
+    if result_count is None:
+        knockout_matches = state.knockout.get("matches", []) if state.knockout else []
+        completed_knockout = sum(
+            1 for m in knockout_matches if m.get("status") == "completed"
+        )
+        result_count = len(state.results) + completed_knockout
+    contract = build_tournament_state_contract(record_count=result_count)
+    return contract_to_dict(contract)
 
 
 # ── Tournament summary ───────────────────────────────────────────────────

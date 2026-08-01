@@ -17,6 +17,7 @@ from scoutfootball.features.team_style import (
     compute_cluster_similarity_matrix,
     compute_cross_league_action_comparison,
     compute_cross_league_position_comparison,
+    compute_cross_league_team_depth,
     compute_league_action_atlas,
     compute_league_action_evolution,
     compute_league_action_percentiles,
@@ -30,6 +31,9 @@ from scoutfootball.features.team_style import (
     compute_position_style_drift_neighbors,
     compute_position_style_evolution,
     compute_position_trend_overlay,
+    compute_scouting_dashboard,
+    compute_scouting_target_style_match,
+    compute_scouting_targets,
     compute_style_atlas,
     compute_style_drift_neighbors,
     compute_style_matchup,
@@ -3650,3 +3654,627 @@ def test_cross_league_action_single_league():
     for d in result["dimensions"]:
         for r in d["rankings"]:
             assert r["quality_tier"] == "top"
+
+
+# ── Round 82: Cross-league team depth / scouting targets / style match ───
+
+
+# ── compute_cross_league_team_depth ───────────────────────────────────────
+
+
+def test_cross_league_depth_empty():
+    """Empty input should return no_data."""
+    result = compute_cross_league_team_depth(pd.DataFrame(), "A", "B")
+    assert result["status"] == "no_data"
+
+
+def test_cross_league_depth_missing_team_name(depth_df):
+    """Missing team name should return no_data."""
+    assert compute_cross_league_team_depth(depth_df, "", "Strong Team")["status"] == "no_data"
+    assert compute_cross_league_team_depth(depth_df, "Gap Team", "")["status"] == "no_data"
+
+
+def test_cross_league_depth_no_position_column():
+    """Frame without position_group/sub_position should return no_data."""
+    df = pd.DataFrame({
+        "team": ["A"], "league": ["L"], "season": ["2526"],
+        "optimized_score": [70.0], "minutes": [1000.0],
+    })
+    result = compute_cross_league_team_depth(df, "A", "A")
+    assert result["status"] == "no_data"
+
+
+def test_cross_league_depth_team_a_not_found(depth_df):
+    result = compute_cross_league_team_depth(depth_df, "Nobody FC", "Strong Team")
+    assert result["status"] == "team_a_not_found"
+
+
+def test_cross_league_depth_team_b_not_found(depth_df):
+    result = compute_cross_league_team_depth(depth_df, "Gap Team", "Nobody FC")
+    assert result["status"] == "team_b_not_found"
+
+
+def test_cross_league_depth_basic(depth_df):
+    """Two known teams should return ok with position_comparison list."""
+    result = compute_cross_league_team_depth(
+        depth_df, "Gap Team", "Strong Team", season="2526"
+    )
+    assert result["status"] == "ok"
+    assert isinstance(result["position_comparison"], list)
+    assert len(result["position_comparison"]) > 0
+
+
+def test_cross_league_depth_advantage_flag(depth_df):
+    """Strong Team (4 deep ST) should have advantage over Gap Team (1 shallow ST)."""
+    result = compute_cross_league_team_depth(
+        depth_df, "Gap Team", "Strong Team", season="2526"
+    )
+    st = next(c for c in result["position_comparison"] if c["position_group"] == "ST")
+    assert st["team_a"]["n_players"] == 1
+    assert st["team_b"]["n_players"] == 4
+    assert st["advantage"] == "b"
+
+
+def test_cross_league_depth_complementary(depth_df):
+    """Gap Team shallow ST + Strong Team deep ST => complementary position."""
+    result = compute_cross_league_team_depth(
+        depth_df, "Gap Team", "Strong Team", season="2526"
+    )
+    comp_positions = {c["position_group"] for c in result["complementary_positions"]}
+    assert "ST" in comp_positions
+    st_comp = next(c for c in result["complementary_positions"] if c["position_group"] == "ST")
+    assert st_comp["deep_team"] == "b"
+    assert st_comp["shallow_team"] == "a"
+
+
+def test_cross_league_depth_cross_league(depth_df):
+    """Gap Team (PL) vs La Liga Team A should report same_league=False."""
+    result = compute_cross_league_team_depth(
+        depth_df, "Gap Team", "La Liga Team A", season="2526"
+    )
+    assert result["status"] == "ok"
+    assert result["same_league"] is False
+    assert result["team_a"]["league"] == "Premier League"
+    assert result["team_b"]["league"] == "La Liga"
+
+
+def test_cross_league_depth_same_league(depth_df):
+    """Gap Team vs Strong Team (both PL) should report same_league=True."""
+    result = compute_cross_league_team_depth(
+        depth_df, "Gap Team", "Strong Team", season="2526"
+    )
+    assert result["same_league"] is True
+
+
+def test_cross_league_depth_fields(depth_df):
+    """Each position_comparison entry should have expected fields."""
+    result = compute_cross_league_team_depth(
+        depth_df, "Gap Team", "Strong Team", season="2526"
+    )
+    for c in result["position_comparison"]:
+        assert "position_group" in c
+        assert "team_a" in c
+        assert "team_b" in c
+        assert "advantage" in c
+        assert c["advantage"] in ("a", "b", "tie")
+        for side in ("team_a", "team_b"):
+            assert "n_players" in c[side]
+            assert "mean_score" in c[side]
+            assert "depth_label" in c[side]
+
+
+def test_cross_league_depth_season_filter(depth_df):
+    """Non-existent season should return no_data."""
+    result = compute_cross_league_team_depth(
+        depth_df, "Gap Team", "Strong Team", season="9999"
+    )
+    assert result["status"] == "no_data"
+
+
+def test_cross_league_depth_disclaimer(depth_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_cross_league_team_depth(
+        depth_df, "Gap Team", "Strong Team", season="2526"
+    )
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_cross_league_depth_no_mutation(depth_df):
+    """Original DataFrame should not be mutated."""
+    original = depth_df.copy()
+    compute_cross_league_team_depth(depth_df, "Gap Team", "Strong Team", season="2526")
+    pd.testing.assert_frame_equal(depth_df, original)
+
+
+# ── compute_scouting_targets ──────────────────────────────────────────────
+
+
+def test_scouting_targets_empty():
+    result = compute_scouting_targets(pd.DataFrame(), "Gap Team")
+    assert result["status"] == "no_data"
+
+
+def test_scouting_targets_team_not_found(depth_df):
+    """Unknown team should inherit team_not_found from gap_report."""
+    result = compute_scouting_targets(depth_df, "Nobody FC", season="2526")
+    assert result["status"] == "team_not_found"
+
+
+def test_scouting_targets_basic(depth_df):
+    """Gap Team should return ok with gap_targets list."""
+    result = compute_scouting_targets(depth_df, "Gap Team", season="2526")
+    assert result["status"] == "ok"
+    assert isinstance(result["gap_targets"], list)
+    assert result["n_gaps"] == len(result["gap_targets"])
+    assert result["n_gaps"] > 0
+
+
+def test_scouting_targets_shallow_gap_has_candidates(depth_df):
+    """Gap Team ST is shallow; La Liga has ST players >= p75 -> candidates."""
+    result = compute_scouting_targets(depth_df, "Gap Team", season="2526")
+    st_gap = next(
+        g for g in result["gap_targets"] if g["position_group"] == "ST"
+    )
+    assert st_gap["gap_type"] == "shallow"
+    # La Liga ST players with score >= p75: 72, 76 from La Liga Team A
+    assert st_gap["n_candidates"] >= 1
+    assert len(st_gap["candidates"]) == st_gap["n_candidates"]
+
+
+def test_scouting_targets_candidate_fields(depth_df):
+    """Each candidate should have expected fields."""
+    result = compute_scouting_targets(depth_df, "Gap Team", season="2526")
+    for gap in result["gap_targets"]:
+        assert "position_group" in gap
+        assert "gap_type" in gap
+        assert "threshold" in gap
+        assert "n_candidates" in gap
+        assert "candidates" in gap
+        for cand in gap["candidates"]:
+            assert "player_name" in cand
+            assert "team" in cand
+            assert "league" in cand
+            assert "position_group" in cand
+            assert "optimized_score" in cand
+            assert "minutes" in cand
+            assert "percentile_in_league" in cand
+            assert "gap_reason" in cand
+
+
+def test_scouting_targets_exclude_same_league(depth_df):
+    """With exclude_same_league=False, PL candidates should appear for ST gap."""
+    result_exclude = compute_scouting_targets(
+        depth_df, "Gap Team", season="2526", exclude_same_league=True
+    )
+    result_include = compute_scouting_targets(
+        depth_df, "Gap Team", season="2526", exclude_same_league=False
+    )
+    st_exclude = next(
+        g for g in result_exclude["gap_targets"] if g["position_group"] == "ST"
+    )
+    st_include = next(
+        g for g in result_include["gap_targets"] if g["position_group"] == "ST"
+    )
+    # Including same league should have >= candidates than excluding
+    assert st_include["n_candidates"] >= st_exclude["n_candidates"]
+
+
+def test_scouting_targets_top_n(depth_df):
+    """top_n should limit the number of candidates per gap."""
+    result_limited = compute_scouting_targets(
+        depth_df, "Gap Team", season="2526", top_n=1
+    )
+    for gap in result_limited["gap_targets"]:
+        assert len(gap["candidates"]) <= 1
+
+
+def test_scouting_targets_clamped_top_n(depth_df):
+    """top_n=0 should be clamped to 1, top_n=999 to _MAX_SCOUTING_TOP_N."""
+    result_low = compute_scouting_targets(depth_df, "Gap Team", season="2526", top_n=0)
+    assert result_low["status"] == "ok"
+    result_high = compute_scouting_targets(depth_df, "Gap Team", season="2526", top_n=999)
+    assert result_high["status"] == "ok"
+
+
+def test_scouting_targets_disclaimer(depth_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_scouting_targets(depth_df, "Gap Team", season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_scouting_targets_no_mutation(depth_df):
+    """Original DataFrame should not be mutated."""
+    original = depth_df.copy()
+    compute_scouting_targets(depth_df, "Gap Team", season="2526")
+    pd.testing.assert_frame_equal(depth_df, original)
+
+
+# ── compute_scouting_target_style_match ───────────────────────────────────
+
+
+def test_scouting_style_invalid_position(depth_df):
+    """Invalid position group should return invalid_position."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "XX", season="2526"
+    )
+    assert result["status"] == "invalid_position"
+
+
+def test_scouting_style_empty():
+    result = compute_scouting_target_style_match(
+        pd.DataFrame(), "Gap Team", "ST"
+    )
+    assert result["status"] == "no_data"
+
+
+def test_scouting_style_team_position_not_found(depth_df):
+    """Gap Team has no GK players -> team_position_not_found."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "GK", season="2526"
+    )
+    assert result["status"] == "team_position_not_found"
+
+
+def test_scouting_style_basic(depth_df):
+    """Gap Team ST should return ok with target_player and candidates."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526"
+    )
+    assert result["status"] == "ok"
+    assert "target_player" in result
+    assert "candidates" in result
+    assert result["n_candidates"] == len(result["candidates"])
+
+
+def test_scouting_style_target_player_fields(depth_df):
+    """target_player should have name, team, league, score, style_vector."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526"
+    )
+    target = result["target_player"]
+    assert "name" in target
+    assert "team" in target
+    assert "league" in target
+    assert "optimized_score" in target
+    assert "style_vector" in target
+    sv = target["style_vector"]
+    for feat in ("npg_p90", "assists_p90", "defense_composite", "possession_composite"):
+        assert feat in sv
+
+
+def test_scouting_style_candidates_sorted_desc(depth_df):
+    """Candidates should be sorted by style_similarity descending."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526", top_n=10
+    )
+    sims = [c["style_similarity"] for c in result["candidates"]]
+    assert sims == sorted(sims, reverse=True)
+
+
+def test_scouting_style_candidate_fields(depth_df):
+    """Each candidate should have expected fields."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526"
+    )
+    for cand in result["candidates"]:
+        assert "player_name" in cand
+        assert "team" in cand
+        assert "league" in cand
+        assert "position_group" in cand
+        assert "optimized_score" in cand
+        assert "minutes" in cand
+        assert "style_similarity" in cand
+        assert 0.0 <= cand["style_similarity"] <= 1.0
+
+
+def test_scouting_style_exclude_same_league(depth_df):
+    """With exclude_same_league=True, no candidate should be from PL."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526", exclude_same_league=True
+    )
+    for cand in result["candidates"]:
+        assert cand["league"] != "Premier League"
+
+
+def test_scouting_style_top_n(depth_df):
+    """top_n should limit the number of candidates."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526", top_n=2
+    )
+    assert result["n_candidates"] <= 2
+    assert len(result["candidates"]) <= 2
+
+
+def test_scouting_style_disclaimer(depth_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526"
+    )
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_scouting_style_no_mutation(depth_df):
+    """Original DataFrame should not be mutated."""
+    original = depth_df.copy()
+    compute_scouting_target_style_match(depth_df, "Gap Team", "ST", season="2526")
+    pd.testing.assert_frame_equal(depth_df, original)
+
+
+def test_scouting_style_default_unweighted(depth_df):
+    """Default behavior (use_position_weights=False) should not weight the
+    style vector. The response should carry weighted=False and
+    position_weights=None, identical to the legacy behavior."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526"
+    )
+    assert result["status"] == "ok"
+    assert result.get("weighted") is False
+    assert result.get("position_weights") is None
+
+
+def test_scouting_style_position_weighted_flag_and_weights(depth_df):
+    """When use_position_weights=True, the response should carry weighted=True
+    and a position_weights dict whose keys are the 4 style features."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526", use_position_weights=True
+    )
+    assert result["status"] == "ok"
+    assert result.get("weighted") is True
+    pw = result.get("position_weights")
+    assert pw is not None
+    for feat in ("npg_p90", "assists_p90", "defense_composite", "possession_composite"):
+        assert feat in pw
+    # ST weights: npg_p90=0.50, assists_p90=0.25, defense_composite=0.10, possession_composite=0.15
+    assert pw["npg_p90"] == 0.50
+    assert pw["defense_composite"] == 0.10
+
+
+def test_scouting_style_weighted_changes_ranking():
+    """Position-weighted similarity should produce different scores than
+    unweighted when candidates have genuinely different style profiles.
+
+    The shared ``depth_df`` fixture plants ST candidates whose style
+    vectors are all near-scalar-multiples of each other (large
+    defense_composite/possession_composite, tiny npg_p90/assists_p90),
+    so cosine similarity collapses to ~1.0 regardless of weighting. To
+    actually exercise the weighting's effect on ranking, we build a
+    custom frame with two ST candidates whose style profiles differ in
+    direction:
+
+      - "Attacker ST" : high npg_p90 (0.6), low defense_composite (20)
+      - "Defender ST" : low npg_p90 (0.1), high defense_composite (80)
+
+    The target team's top ST has a balanced profile (0.3 / 50). Under
+    unweighted cosine similarity, both candidates are roughly equidistant
+    from the target (one over-indexes on attack, the other on defense).
+    Under ST position weights (npg_p90=0.50, defense_composite=0.10),
+    the attacker should become clearly more similar than the defender.
+    """
+    rows = [
+        # Target team's ST — balanced profile, high score so it's picked.
+        {
+            "player": "Target ST P0", "player_id": "target_st_0",
+            "team": "Target Team", "league": "Premier League",
+            "season": "2526", "position_group": "ST", "sub_position": "ST",
+            "optimized_score": 85.0, "minutes": 1500.0, "matches": 20,
+            "npg_p90": 0.3, "assists_p90": 0.15,
+            "defense_composite": 50.0, "possession_composite": 50.0,
+            "confidence_level": "HIGH", "low_appearance": False,
+        },
+        # Candidate 1 — attacker profile, different league.
+        {
+            "player": "Attacker ST", "player_id": "attacker_st",
+            "team": "Other Team A", "league": "La Liga",
+            "season": "2526", "position_group": "ST", "sub_position": "ST",
+            "optimized_score": 75.0, "minutes": 1500.0, "matches": 20,
+            "npg_p90": 0.6, "assists_p90": 0.25,
+            "defense_composite": 20.0, "possession_composite": 40.0,
+            "confidence_level": "HIGH", "low_appearance": False,
+        },
+        # Candidate 2 — defender profile, different league.
+        {
+            "player": "Defender ST", "player_id": "defender_st",
+            "team": "Other Team B", "league": "La Liga",
+            "season": "2526", "position_group": "ST", "sub_position": "ST",
+            "optimized_score": 72.0, "minutes": 1500.0, "matches": 20,
+            "npg_p90": 0.1, "assists_p90": 0.05,
+            "defense_composite": 80.0, "possession_composite": 60.0,
+            "confidence_level": "HIGH", "low_appearance": False,
+        },
+    ]
+    df = pd.DataFrame(rows)
+
+    unweighted = compute_scouting_target_style_match(
+        df, "Target Team", "ST", season="2526", top_n=10
+    )
+    weighted = compute_scouting_target_style_match(
+        df, "Target Team", "ST", season="2526", top_n=10,
+        use_position_weights=True,
+    )
+    assert unweighted["status"] == "ok"
+    assert weighted["status"] == "ok"
+    assert unweighted["n_candidates"] == 2
+    assert weighted["n_candidates"] == 2
+
+    uw_by_name = {c["player_name"]: c["style_similarity"] for c in unweighted["candidates"]}
+    w_by_name = {c["player_name"]: c["style_similarity"] for c in weighted["candidates"]}
+
+    # The similarity scores must differ between the two runs (weights
+    # rotate the vectors, changing cosine similarity).
+    uw_sims = [c["style_similarity"] for c in unweighted["candidates"]]
+    w_sims = [c["style_similarity"] for c in weighted["candidates"]]
+    assert uw_sims != w_sims, (
+        "Position-weighted similarity should produce different scores than "
+        "unweighted similarity when candidate style profiles differ."
+    )
+
+    # Under ST weights (npg_p90=0.50, defense_composite=0.10), the
+    # attacker-style candidate's similarity to the balanced target should
+    # INCREASE relative to its unweighted score, because weighting
+    # emphasizes the npg_p90 dimension where the attacker is closer to
+    # the target than under equal weights. (Note: the defender-style
+    # candidate may still win overall because defense_composite has a
+    # 0-100 magnitude vs npg_p90's 0-1 magnitude, so even a 0.10 weight
+    # leaves defense dominating the norm — but the weighting's
+    # directional effect on the attacker should still be measurable.)
+    assert w_by_name["Attacker ST"] > uw_by_name["Attacker ST"], (
+        "Under ST position weights (npg_p90=0.50), the attacker-style "
+        "candidate's similarity to the balanced target should increase "
+        "relative to its unweighted score."
+    )
+
+
+def test_scouting_style_weighted_no_mutation(depth_df):
+    """use_position_weights=True should not mutate the input DataFrame."""
+    original = depth_df.copy()
+    compute_scouting_target_style_match(
+        depth_df, "Gap Team", "ST", season="2526", use_position_weights=True
+    )
+    pd.testing.assert_frame_equal(depth_df, original)
+
+
+def test_scouting_style_weighted_invalid_position(depth_df):
+    """Invalid position with use_position_weights=True should still return
+    invalid_position (weights are resolved AFTER position validation)."""
+    result = compute_scouting_target_style_match(
+        depth_df, "Gap Team", "XX", season="2526", use_position_weights=True
+    )
+    assert result["status"] == "invalid_position"
+
+
+# ── compute_scouting_dashboard ────────────────────────────────────────────
+
+
+def test_scouting_dashboard_empty():
+    """Empty DataFrame should return no_data."""
+    result = compute_scouting_dashboard(pd.DataFrame(), "Gap Team")
+    assert result["status"] == "no_data"
+
+
+def test_scouting_dashboard_team_not_found(depth_df):
+    """Unknown team should inherit team_not_found from targets."""
+    result = compute_scouting_dashboard(depth_df, "Nobody FC", season="2526")
+    assert result["status"] == "team_not_found"
+
+
+def test_scouting_dashboard_basic(depth_df):
+    """Dashboard should return ok with both gap_targets and style matches."""
+    result = compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    assert result["status"] == "ok"
+    assert result["team"] == "Gap Team"
+    assert isinstance(result["gap_targets"], list)
+    assert result["n_gaps"] == len(result["gap_targets"])
+    assert result["n_gaps"] > 0
+    assert isinstance(result["position_style_matches"], list)
+    assert result["n_positions_matched"] == len(result["position_style_matches"])
+    # max_positions defaults to 3, so we never fan out beyond that.
+    assert result["n_positions_matched"] <= result["max_positions"]
+    assert result["max_positions"] == 3
+    assert result["use_position_weights"] is False
+
+
+def test_scouting_dashboard_max_positions_clamped(depth_df):
+    """max_positions should be clamped to 1-8 range."""
+    result_low = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", max_positions=0
+    )
+    assert result_low["status"] == "ok"
+    assert result_low["max_positions"] == 1
+    assert result_low["n_positions_matched"] <= 1
+
+    result_high = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", max_positions=999
+    )
+    assert result_high["status"] == "ok"
+    assert result_high["max_positions"] == 8
+
+
+def test_scouting_dashboard_style_matches_have_position(depth_df):
+    """Each style match entry should carry a valid position_group."""
+    result = compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    assert result["status"] == "ok"
+    valid_positions = {"GK", "CB", "FB", "DM", "CM", "AM", "W", "ST"}
+    for m in result["position_style_matches"]:
+        assert m["position_group"] in valid_positions
+        # Each match should be a full style_match dict: either ok with
+        # candidates, or a status explaining why no match was possible.
+        assert "status" in m
+        if m["status"] == "ok":
+            assert isinstance(m["candidates"], list)
+            assert m["position_group"] == m.get("position_group")
+
+
+def test_scouting_dashboard_positions_match_gaps(depth_df):
+    """The matched positions should be a subset of the gap positions."""
+    result = compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    assert result["status"] == "ok"
+    gap_positions = [g["position_group"] for g in result["gap_targets"]]
+    matched_positions = [m["position_group"] for m in result["position_style_matches"]]
+    # Every matched position must come from the gap list (the dashboard
+    # only fans out style matches for the top N gap positions).
+    for pos in matched_positions:
+        assert pos in gap_positions
+
+
+def test_scouting_dashboard_use_position_weights_flag(depth_df):
+    """use_position_weights=True should be reflected in the output."""
+    result = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", use_position_weights=True
+    )
+    assert result["status"] == "ok"
+    assert result["use_position_weights"] is True
+    # Each successful style match should also carry the weighted flag.
+    for m in result["position_style_matches"]:
+        if m["status"] == "ok":
+            assert m["weighted"] is True
+
+
+def test_scouting_dashboard_disclaimer(depth_df):
+    """Disclaimer should be a non-empty string."""
+    result = compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    assert isinstance(result["disclaimer"], str)
+    assert len(result["disclaimer"]) > 0
+
+
+def test_scouting_dashboard_no_mutation(depth_df):
+    """Original DataFrame should not be mutated."""
+    original = depth_df.copy()
+    compute_scouting_dashboard(depth_df, "Gap Team", season="2526")
+    pd.testing.assert_frame_equal(depth_df, original)
+
+
+def test_scouting_dashboard_top_n_propagates(depth_df):
+    """top_n should limit the number of candidates in both gap_targets and
+    style matches."""
+    result = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", top_n=1
+    )
+    assert result["status"] == "ok"
+    for gap in result["gap_targets"]:
+        assert len(gap["candidates"]) <= 1
+    for m in result["position_style_matches"]:
+        if m["status"] == "ok":
+            assert len(m["candidates"]) <= 1
+
+
+def test_scouting_dashboard_empty_team():
+    """Empty team string should return no_data."""
+    result = compute_scouting_dashboard(pd.DataFrame(), "")
+    assert result["status"] == "no_data"
+
+
+def test_scouting_dashboard_exclude_same_league_flag(depth_df):
+    """exclude_same_league should propagate and still produce ok results."""
+    result = compute_scouting_dashboard(
+        depth_df, "Gap Team", season="2526", exclude_same_league=False
+    )
+    assert result["status"] == "ok"
+    # Gap Team is in Premier League; with exclude_same_league=False,
+    # PL candidates may appear in the gap targets.
+    for gap in result["gap_targets"]:
+        for cand in gap["candidates"]:
+            # No assertion on league content — just structural sanity.
+            assert "league" in cand

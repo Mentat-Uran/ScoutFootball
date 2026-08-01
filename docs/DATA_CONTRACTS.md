@@ -276,6 +276,31 @@ rows are excluded from supervision and written to
 /reports/transfermarkt-identities` exposes that local report; it is an audit
 of the current matrix, not a cross-provider identity authority.
 
+`scoutfootball transfermarkt-identity-review` records an explicit local
+`confirmed`, `rejected`, or `revoked` decision in an append-only JSONL ledger.
+Confirmation is accepted only for an ID already present in that report row's
+candidate set. On a later import, `--identity-ledger <path>` consumes only
+decisions whose snapshot SHA-256, feature-matrix SHA-256, season, and source
+row all match the current inputs. A revocation makes a prior manual choice
+ineligible for subsequent imports. Each non-empty import also writes a local
+append-only `transfermarkt_truth_label_import_ledger.jsonl` beside the output
+unless `--label-ledger` selects another path. It records the input hashes,
+source row, resolved ID, identity method, label key, and a fingerprint of the
+exact row written; it never copies the source snapshot.
+
+`scoutfootball reconcile-transfermarkt-truth-labels --identity-ledger <path>
+--label-ledger <path>` is preview-only by default. After a revocation it lists
+only labels whose ledger record proves they came from that manual confirmation
+and whose current row fingerprint still matches. `--apply` atomically removes
+only those proven rows. Historical labels without this new import ledger, rows
+replaced by a later import, and labels from another source remain untouched and
+are reported for maintainer review rather than silently deleted.
+
+Both the dry-run summary and the persisted identity report include SHA-256 and
+byte size for the explicitly supplied snapshot and local feature matrix. These
+fingerprints identify the exact input files without uploading or copying them;
+they do not turn an unrecorded historical snapshot into an earlier `as_of`.
+
 ---
 
 ## 7. team_match.parquet
@@ -310,6 +335,61 @@ of the current matrix, not a cross-provider identity authority.
 | elo_pre | float | ELO rating before match |
 | opponent_elo_pre | float | Opponent ELO before match |
 | elo_diff | float | ELO difference |
+
+---
+
+## 7.1 Manifests: team_match, player_match, rating_feature_matrix
+
+**Files**: `data/gold/feature_store/{team_match,player_match,rating_feature_matrix}_manifest.json`
+**Purpose**: Audit and reproducibility sidecars written next to the
+corresponding parquet artifact. They capture input file hashes, row and
+column counts, schema, and per-source lineage so consumers can detect
+input drift without re-reading the underlying raw parquet bytes. They
+are NOT uploaded anywhere and do not modify the parquet file itself.
+
+All three manifests share the same schema (legacy
+`rating_feature_matrix_manifest.json` was upgraded to the new schema on
+2026-07-20; consumers that only read the aligned subset
+`total_rows`/`columns`/`input_hash`/`timestamp` remain forward-compatible):
+
+| Field | Type | Description |
+|---|---|---|
+| `artifact` | str | Logical name (`team_match`, `player_match`, or `rating_feature_matrix`) |
+| `schema_version` | str | Manifest schema version (currently `"1.0"`) |
+| `total_rows` | int | Row count of the parquet file |
+| `column_count` | int | Column count of the parquet file |
+| `columns` | list | Per-column metadata, see below |
+| `input_hash` | str | sha256[:16] of the builder's combined input frames; falls back to a hash of the parquet content when the builder did not attach an explicit input hash |
+| `source_lineage` | list | Per-input-file lineage entries, see below; `rating_feature_matrix` currently writes `[]` (lineage is captured at the player_match level it is built from) |
+| `timestamp` | str | ISO 8601 UTC timestamp when the manifest was written |
+| `source_breakdown` | dict | (player_match only) Per-source row counts, since player_match is the concatenation of statsbomb_open + fbref + understat |
+
+`columns` entries:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | str | Column name |
+| `dtype` | str | pandas dtype string |
+| `source` | str | Category: `identifier`, `temporal`, `category`, `metric`, `derived`, `flag`, or `meta` |
+| `missing_rate` | float | Fraction of NaN values, rounded to 4 decimals |
+
+`source_lineage` entries:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | str | Logical source name (e.g. `football_data`, `statsbomb_open`, `fbref`, `understat`) |
+| `relative_path` | str | Path relative to `settings.data_root`, forward-slashed for cross-platform stability |
+| `rows_read` | int or null | Row count of the input file as observed during this build; `null` when the file was missing or unreadable |
+| `input_hash` | str or null | sha256[:16] of the input file bytes; `null` when the file was missing |
+| `notes` | str or null | Optional free-form note (e.g. filter applied before join, excluded seasons) |
+
+The manifest is regenerated on every `scoutfootball build-features` run.
+Manifest write failures are logged as warnings but do not block the main
+pipeline; a missing or stale manifest is a signal for manual review, not
+a hard failure. Consumers MUST NOT treat the absence of a manifest as
+evidence that the parquet artifact itself is invalid; the parquet file is
+the source of truth for content, the manifest is the source of truth for
+provenance.
 
 ---
 
@@ -360,6 +440,37 @@ of the current matrix, not a cross-provider identity authority.
 Returns server health status.
 
 **Response**: `{ status, data_source, version }`
+
+### GET /health/detailed
+Returns a comprehensive local health snapshot combining artifacts summary, pre-training validation, model admission, contract quality, and source health. Local-only diagnostic; no telemetry is uploaded.
+
+**Query params**:
+- `force_refresh` (bool, default=`false`): Bypass the in-memory TTL cache (default 300s) and recompute all sub-builders.
+
+**Response**:
+```json
+{
+  "schema": "scoutfootball.detailed-health",
+  "schema_version": "1.0.0",
+  "generated_at": "ISO-8601 timestamp",
+  "status": "ok | degraded",
+  "base": { "status": "ok", "data_source": "string", "version": "string" },
+  "artifacts": { "..." : "artifacts summary or {status: 'unavailable'}" },
+  "validation": { "status": "pass | fail", "checks": "..." },
+  "model_admission": { "status": "...", "reviewable_run_count": "int" },
+  "contract_quality": { "status": "pass | incomplete | fail", "checks": "..." },
+  "source_health": { "sources": "...", "snapshots_recorded": "int" },
+  "unavailable_sections": ["section_id", "..."],
+  "failed_sections": ["validation", "contract_quality:incomplete", "..."],
+  "limitations": ["string", "..."]
+}
+```
+
+**Status semantics**:
+- `ok`: All sub-builders succeeded and validation + contract_quality both pass.
+- `degraded`: Any sub-builder failed (section degrades to `{"status": "unavailable"}`) or any critical check failed (validation fail, contract_quality fail/incomplete).
+
+**Fail-soft design**: Sub-builder failures are logged and returned as `{"status": "unavailable"}` sections rather than raising—the health page renders available sections even when one source fails. This is a read-only diagnostic endpoint, not a release gate.
 
 ### GET /ratings
 Returns player ratings with optional filters.
@@ -726,13 +837,90 @@ Model run registry with holdout metrics. New optimizer runs include a
 snapshot `input_hash`, and a fingerprint/version of
 `rating_feature_matrix_manifest.json`. Legacy runs return
 `lineage.status: not_recorded` rather than implying that provenance was
-captured retroactively. A missing manifest yields `status: partial`.
+captured retroactively. A missing manifest yields `status: partial`. Each
+directory-backed run also has an `admission` summary from the local read-only
+model-admission checks: `status`, `failed_checks`, optional holdout comparison,
+and limitations. `reviewable` means evidence exists for human review only;
+`not_reviewable` is not a failed model score and neither status activates a
+rating artifact.
 
 ### GET /reports/model-runs/{run_id}
 Full details for a single model run, including the same lineage object for
 reproducibility review. New runs may also include `data_coverage` with source
 rows, observed-field counts, and optional-artifact statuses. Historic runs
 without that field are not retroactively labelled as fully audited.
+
+### Local model-admission report
+
+`scoutfootball model-admission` is a read-only local screen over
+`data/models/runs/<run_id>/`. A run is `reviewable` only when its own directory
+contains `optimized_params.npy`, recorded input and feature-manifest lineage,
+non-empty train/test season split, finite structured baseline and candidate
+holdout Spearman values, an error-case summary from that same holdout, all
+required optimizer inputs loaded, and a candidate rating artifact
+(`player_ratings_candidate.parquet`) whose SHA-256 matches the hash recorded
+in `meta.json`. The report fails closed when a required optimizer input is
+absent from the run metadata or explicitly unavailable, or when the candidate
+rating file is missing, escapes the run directory, or fails hash verification.
+It does not set a performance threshold, write a promotion pointer, alter
+`player_ratings_optimized.parquet`, or claim that a reviewable run is promoted.
+Historic records that predate these fields are `not_reviewable`, never upgraded
+from filenames, timestamps, or prose metrics.
+
+New optimizer run metadata preserves nested `baseline_*` and `optimized_*`
+metric objects and records the holdout's largest team-level under/over-estimates
+with residual definition `prediction_minus_actual`. These are evidence for a
+maintainer's comparison, not a substitute for calibration, slice, and scope
+review.
+
+The optimizer input hash lists only artifacts the optimizer can read: its raw
+FBref/Football-Data/Understat inputs and, when present, local matrix or
+truth-label inputs. The currently active
+`player_ratings_optimized.parquet` is explicitly excluded because it is an
+output, not optimizer input; changing an active score artifact must not change
+the lineage of a candidate that did not read it.
+
+Optimizer run metadata records the actual season lists returned by its time
+split, rather than configuration such as `--test-seasons 1`. A missing or
+numeric count in the metadata is not converted into a claimed holdout season.
+
+New optimizer executions write parameters, training visualizations, and a
+`player_ratings_candidate.parquet` score snapshot only to their unique
+`data/models/runs/<run_id>/` candidate directory. The run metadata records the
+candidate rating file name, SHA-256, row count, and columns. They do not
+overwrite `gold/feature_store` parameter files or activate
+`player_ratings_optimized.parquet` until a separate, explicit maintainer
+action is confirmed.
+
+### Local candidate decision, promotion, and rollback
+
+`scoutfootball reject-model-run <run_id> --decision <text>` records a retained
+local rejection only with `--confirm`; it never changes active artifacts.
+`scoutfootball promote-model-run <run_id> --decision <text>` is a default
+preview. Its confirmed form accepts only a `reviewable`, explicitly
+`not_activated` candidate with a readable candidate score snapshot whose
+SHA-256, row count, columns, identity keys, finite scores, and
+season-and-position percentile contract all match its metadata. It also reads
+the current active ratings, parameters, and metadata before copying all three
+to a unique local `data/models/backups/<backup_id>/` directory with hashes.
+Only then does it replace the three active artifacts and record the human
+decision and backup ID in both active and candidate metadata.
+
+`scoutfootball rollback-model-run <backup_id> --decision <text>` is likewise a
+preview until `--confirm`. It accepts only the verified backup belonging to the
+currently activated candidate and restores its three hashed files. The
+candidate is marked `rolled_back` and the backup retains a local rollback
+record. Neither command treats a positive holdout delta or `reviewable` status
+as an automatic promotion decision.
+
+### Local candidate discard
+
+`scoutfootball discard-model-run <run_id>` is a local-only preview. It only
+deletes after `--confirm`, and only accepts a run under `data/models/runs/`
+whose metadata explicitly says `activation.status: not_activated`. Historic or
+otherwise unclassified runs are retained. An interrupted run without readable
+metadata needs the additional `--allow-incomplete` opt-in; this is intended for
+explicit cleanup after a failed local run, not bulk retention management.
 
 ### GET /world-cup/groups, /world-cup/schedule, /world-cup/squads/{team}, /world-cup/predictions
 World Cup data endpoints.
@@ -776,6 +964,17 @@ The comparison view can download the briefing as a browser-local JSON export
 (`scoutfootball.world-cup-match-briefing-export` v1.0.0) or CSV report. Both
 retain source attribution and limitations; CSV cells use the shared formula
 injection guard and neither action writes server state.
+
+`scoutfootball validate-decision-package <path>` reads a user-selected local
+UTF-8 JSON file without importing or changing it. It fails closed for unknown
+schemas, malformed exports, missing source attribution or limitations,
+unrecorded-as-recorded input snapshots, invalid probability distributions, and
+out-of-range rating coverage. It currently supports individual World Cup
+briefings, their browser-local JSON export, the tracked static
+`scoutfootball.world-cup-match-briefings` collection, and browser-local
+shortlist decision packs. A passing result validates the local contract and
+recorded evidence fields only; it does not independently verify upstream facts.
+
 When a briefing creates a tactical-board project, its decision-pack provenance
 also stores the bounded briefing schema, version, and source attribution. The
 tactical JSON export preview surfaces those fields so the board can be checked
@@ -1167,6 +1366,108 @@ Data source license attribution.
 Value deviation analysis from OOF predictions.
 
 **Response**: `{ players: [...], summary: { ... } }`
+
+### GET /market-value/summary
+
+Aggregate market value stats with source attribution. Reads local raw
+Transfermarkt data only; never scrapes.
+
+**Fail-closed**: when no Transfermarkt data is on disk, returns
+`status="no_data"` with `source.checked_paths` listing every file the
+loader inspected, so the maintainer can see exactly what is missing
+rather than guessing from an empty 200.
+
+**Response (status="ok")**:
+```json
+{
+  "status": "ok",
+  "source": {
+    "source_name": "transfermarkt_manual",
+    "source_uri": "raw/transfermarkt_manual/player_market_value.csv",
+    "license_boundary": "Personal local use only. Transfermarkt ToS prohibit scraping, redistribution, and commercial reuse without written permission. See docs/DATA_RIGHTS.md §2.1. Market values are subjective Transfermarkt estimates, not market prices.",
+    "currency": "EUR",
+    "checked_paths": ["raw/transfermarkt_datasets/player_valuations.parquet", "raw/transfermarkt_manual/player_latest_market_value.csv", "raw/transfermarkt_manual/player_market_value.csv", "raw/transfermarkt_manual/player_profiles.csv"]
+  },
+  "total_players": 33420,
+  "total_snapshots": 33420,
+  "latest_snapshot_date": "2025-09-11",
+  "earliest_snapshot_date": "2024-01-01",
+  "value_distribution_eur": {"<1m": 28000, "1m-5m": 4000, "5m-20m": 1000, "20m-50m": 300, ">=50m": 120},
+  "top_players": [{"player_name": "Lamine Yamal", "player_id": "937958", "team_name": "FC Barcelona", "position": "Attack - Right Winger", "market_value_eur": 200000000.0, "snapshot_date": "2025-06-08"}]
+}
+```
+
+**Response (status="no_data")**:
+```json
+{
+  "status": "no_data",
+  "source": {"source_name": "none", "source_uri": null, "license_boundary": "...", "currency": "EUR", "checked_paths": ["..."]},
+  "evidence": {"reason": "No Transfermarkt market value data found locally. Run `python scripts/download_transfermarkt_kaggle.py` or place CSVs in data/raw/transfermarkt_manual/."}
+}
+```
+
+**Source priority**: (1) `data/raw/transfermarkt_datasets/player_valuations.parquet` (bulk DuckDB export); (2) `data/raw/transfermarkt_manual/player_latest_market_value.csv` + `player_profiles.csv` (manual snapshot); (3) `data/raw/transfermarkt_manual/player_market_value.csv` + `player_profiles.csv` (manual history). Path 2 is preferred over path 3 when both exist.
+
+**License boundary**: Transfermarkt market values are subjective estimates, not market prices. Personal local use only; no redistribution. The `license_boundary` field must be displayed alongside any market-value data in the frontend.
+
+### GET /market-value/players
+
+List players with their latest market value (paginated). Returns one row
+per player (the latest snapshot by `snapshot_date`).
+
+**Query params**:
+- `limit` (int, default 100, range 1–1000): max players to return
+- `offset` (int, default 0, ≥0): pagination offset
+- `min_value_eur` (float, optional, ≥0): inclusive lower bound on `market_value_eur`
+- `max_value_eur` (float, optional, ≥0): inclusive upper bound on `market_value_eur`
+- `team` (str, optional, max 128 chars): case-insensitive substring match on `team_name`
+- `position` (str, optional, max 64 chars): case-insensitive substring match on `position`
+- `sort_by` (str, default `"market_value_eur"`, max 32 chars): one of `"market_value_eur"`, `"player_name"`, `"snapshot_date"`; invalid values fall back to `"market_value_eur"`
+- `sort_order` (str, default `"desc"`, max 4 chars): `"desc"` or `"asc"`
+
+**Response (status="ok")**:
+```json
+{
+  "status": "ok",
+  "source": {"source_name": "transfermarkt_manual", "...": "..."},
+  "count": 117,
+  "returned": 3,
+  "offset": 0,
+  "limit": 3,
+  "players": [{"player_id": "937958", "player_name": "Lamine Yamal", "team_name": "FC Barcelona", "position": "Attack - Right Winger", "market_value_eur": 200000000.0, "snapshot_date": "2025-06-08"}],
+  "filters_applied": {"min_value_eur": 50000000.0, "max_value_eur": null, "team": null, "position": null},
+  "sort": {"by": "market_value_eur", "order": "desc"}
+}
+```
+
+**Response (status="no_data")**: same shape as `/market-value/summary` no_data, plus `count: 0`, `players: []`.
+
+**player_name cleaning**: Transfermarkt profiles append `(<player_id>)` to display names to disambiguate duplicates (e.g. `"Lamine Yamal (937958)"`). The API strips the trailing `(<digits>)` suffix via regex `\s*\(\d+\)\s*$` so responses carry the bare name; the canonical `player_id` remains in its dedicated field.
+
+### GET /market-value/players/{player_name}
+
+Full market value history for a single player. Case-insensitive exact
+match first, then substring fallback. Returns all matching histories
+grouped by `player_id` so the caller can disambiguate common names.
+
+**Path param**: `player_name` (str, non-empty): the player name to search for.
+
+**Response (status="ok")**:
+```json
+{
+  "status": "ok",
+  "source": {"source_name": "transfermarkt_manual", "...": "..."},
+  "player_name": "Lamine Yamal",
+  "matched_players": 1,
+  "histories": [{"player_id": "937958", "player_name": "Lamine Yamal", "position": "Attack - Right Winger", "team_name": "FC Barcelona", "snapshot_count": 1, "first_snapshot_date": "2025-06-08", "latest_snapshot_date": "2025-06-08", "latest_market_value_eur": 200000000.0, "snapshots": [{"snapshot_date": "2025-06-08", "market_value_eur": 200000000.0, "team_name": "FC Barcelona"}]}]
+}
+```
+
+**Response (status="not_found")**: `{status: "not_found", source: {...}, player_name: "...", histories: [], evidence: {reason: "No market value records found for player '...'"}}`
+
+**Response (status="error")** (empty/whitespace player_name): `{status: "error", error: "invalid_player_name", message: "player_name must be a non-empty string"}`
+
+**Response (status="no_data")**: same as other market-value endpoints when no Transfermarkt data is on disk.
 
 ### GET /predictions/meta
 Match prediction model metadata.
@@ -2242,6 +2543,325 @@ When only one league is present, a single `top`-tier entry is returned.
 The comparison does not modify the prediction model — it is an interpretive
 layer over aggregated team action signatures.
 
+### GET /teams/cross-league-depth
+
+Per-position-group depth comparison between two teams in a given season.
+For each of the 8 standard position groups (GK/CB/FB/DM/CM/AM/W/ST),
+returns n_players, total_minutes, score stats (min/median/max/mean/std),
+and a depth_label (`shallow` <2 players / `adequate` 2-3 / `deep` ≥4).
+Each position carries an `advantage` flag (`team_a` / `team_b` / `even`)
+using a 0.5-point mean-score threshold, and `complementary_positions`
+lists positions where the weaker side still has adequate depth (≥2
+players). All stats are non-additive interpretive overlays and do not
+modify the prediction model or imply transfer recommendations.
+
+**Query params**: `team_a` (required, min_length=1), `team_b` (required,
+min_length=1), `season` (optional), `min_player_minutes` (default 500.0,
+ge=0.0)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team_a": "Arsenal",
+  "team_b": "Barcelona",
+  "season": "2425",
+  "min_player_minutes": 500.0,
+  "position_comparison": [
+    {
+      "position_group": "CB",
+      "team_a": {"n_players": 4, "total_minutes": 8500, "mean": 78.2,
+        "median": 79.0, "min": 71.5, "max": 83.1, "std": 4.8,
+        "depth_label": "deep"},
+      "team_b": {"n_players": 2, "total_minutes": 5200, "mean": 75.4,
+        "median": 75.8, "min": 70.2, "max": 80.1, "std": 5.6,
+        "depth_label": "adequate"},
+      "advantage": "team_a"
+    }
+  ],
+  "complementary_positions": ["FB", "CM"],
+  "disclaimer": "Cross-league depth comparison is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `team_a_not_found`, `team_b_not_found` (returned
+instead of `no_data` when a requested team is absent from the filtered
+frame), `no_data` (empty input or no `position_group` column).
+
+### GET /teams/{team}/scouting-targets
+
+Recommends players from other leagues to fill the target team's position
+gaps. Reuses `compute_position_gap_report` to identify gaps
+(`shallow` <2 players / `low_quality` mean < p40 / `missing` no players),
+then for each gap position scans candidates from other leagues who:
+(a) play the gap position_group, (b) meet `min_player_minutes`, (c) score
+≥ the gap threshold (p60 of the candidate's own league at that position
+for shallow/missing gaps, team mean for low_quality gaps), (d) sit in the
+top quartile (p75) of their own league at that position. Candidates are
+sorted by score descending and capped at `top_n`. All recommendations are
+non-additive interpretive overlays and do not constitute transfer
+directives or scouting verdicts.
+
+**Query params**: `season` (optional), `min_player_minutes` (default
+500.0, ge=0.0), `top_n` (int, default 10, clamped to 1–50),
+`exclude_same_league` (bool, default true)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Arsenal",
+  "season": "2425",
+  "min_player_minutes": 500.0,
+  "top_n": 10,
+  "exclude_same_league": true,
+  "target_league": "Premier League",
+  "gaps": [
+    {
+      "position_group": "ST",
+      "gap_type": "shallow",
+      "team_score": 72.3,
+      "threshold": 74.0,
+      "candidates": [
+        {
+          "player": "Erling Haaland",
+          "team": "Manchester City",
+          "league": "Premier League",
+          "position_group": "ST",
+          "score": 88.6,
+          "minutes": 3100,
+          "npg_p90": 0.92,
+          "assists_p90": 0.18,
+          "defense_composite": 0.08,
+          "possession_composite": 0.42
+        }
+      ]
+    }
+  ],
+  "disclaimer": "Scouting target recommendation is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `team_not_found` (target team absent from filtered
+frame), `no_data` (empty input or no `position_group` column). When
+`exclude_same_league` is true, candidates from the target team's league
+are filtered out. When no candidates meet the threshold for a gap, the
+`candidates` list is empty (the gap is still reported).
+
+### GET /teams/{team}/scouting-style-match/{position_group}
+
+Finds players from other leagues whose 4-dim style vector (npg_p90 /
+assists_p90 / defense_composite / possession_composite) is most similar
+to the target team's aggregate style at the given position group, using
+cosine similarity. Returns the team's `target_player` (top player at that
+position by minutes), the team's `target_style_vector`, and a ranked
+`candidates` list with per-player `similarity` (0–1), `style_vector`, and
+`minutes`. Validates `position_group` against the 8 canonical groups
+(GK/CB/FB/DM/CM/AM/W/ST). All matches are non-additive interpretive
+overlays and do not constitute transfer directives.
+
+**Path params**: `team` (player name), `position_group` (one of
+GK/CB/FB/DM/CM/AM/W/ST)
+
+**Query params**: `season` (optional), `min_player_minutes` (default
+500.0, ge=0.0), `top_n` (int, default 10, clamped to 1–50),
+`exclude_same_league` (bool, default true)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "team": "Arsenal",
+  "position_group": "ST",
+  "season": "2425",
+  "min_player_minutes": 500.0,
+  "top_n": 10,
+  "exclude_same_league": true,
+  "target_player": {
+    "player": "Bukayo Saka",
+    "team": "Arsenal",
+    "league": "Premier League",
+    "position_group": "ST",
+    "minutes": 2950,
+    "score": 82.4
+  },
+  "target_style_vector": {"npg_p90": 0.45, "assists_p90": 0.38,
+    "defense_composite": 0.18, "possession_composite": 0.62},
+  "candidates": [
+    {
+      "player": "Ousmane Dembélé",
+      "team": "Paris Saint-Germain",
+      "league": "Ligue 1",
+      "position_group": "W",
+      "minutes": 2400,
+      "score": 80.1,
+      "similarity": 0.94,
+      "style_vector": {"npg_p90": 0.42, "assists_p90": 0.41,
+        "defense_composite": 0.15, "possession_composite": 0.65}
+    }
+  ],
+  "disclaimer": "Style-match scouting is a descriptive overlay..."
+}
+```
+
+Non-`ok` statuses: `invalid_position` (position_group not in the 8
+canonical groups), `team_not_found` (target team absent), `no_data`
+(empty input), `team_position_not_found` (target team has no players at
+the given position meeting the minutes threshold). Candidates are sorted
+by `similarity` descending. When `exclude_same_league` is true, players
+from the target team's league are filtered out.
+
+### GET /league/form-table
+
+Last-N recent-form table for every team in a league-season. For each team
+returns W/D/L counts, points, PPG, 0–100 form rating, chronological form
+string (e.g. `"WWDLW"`), trend label (rising/declining/stable), home/away
+PPG split, and goals for/against. Teams are sorted by PPG descending.
+
+**Query params**: `league` (optional), `season` (required),
+`last_n` (int, default 6, clamped to 1–30)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2425",
+  "last_n": 6,
+  "teams": [
+    {
+      "team": "Arsenal",
+      "played": 6,
+      "wins": 5,
+      "draws": 1,
+      "losses": 0,
+      "points": 16,
+      "ppg": 2.67,
+      "form_rating": 88.9,
+      "form_string": "WWWDW",
+      "trend_label": "rising",
+      "recent_ppg": 3.0,
+      "older_ppg": 2.0,
+      "home_ppg": 3.0,
+      "away_ppg": 2.5,
+      "goals_for": 14,
+      "goals_against": 3
+    }
+  ],
+  "disclaimer": "Descriptive season overlay based on in-season results only; does not use the Dixon-Coles prediction model..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input, missing required columns, or
+no matches in the requested league-season). The form string is a string
+(not a list) of W/D/L characters in chronological order (oldest → newest
+within the last-N window). The function is a non-additive interpretive
+overlay — it does not modify the prediction model or predict future form.
+
+### GET /league/fixture-difficulty
+
+Retrospective fixture difficulty rating for each team's most recent N
+matches in a league-season, using a Bradley-Terry expected-points model
+derived from in-season points-per-game. When `team` is omitted, returns
+difficulty ratings for every team in the league-season.
+
+**Query params**: `league` (optional), `season` (required),
+`team` (optional, case-insensitive), `upcoming_n` (int, default 10,
+clamped to 1–30)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2425",
+  "team": "Arsenal",
+  "upcoming_n": 10,
+  "fixtures": [
+    {
+      "date": "2025-04-12T00:00:00",
+      "opponent": "Liverpool",
+      "venue": "H",
+      "goals_for": 2,
+      "goals_against": 1,
+      "result": "W",
+      "expected_points": 1.42,
+      "actual_points": 3,
+      "difficulty_label": "very_hard"
+    }
+  ],
+  "summary": {
+    "n_matches": 10,
+    "avg_expected_points": 1.61,
+    "avg_actual_points": 2.10,
+    "avg_difficulty": 0.55,
+    "difficulty_label": "hard"
+  },
+  "disclaimer": "Descriptive season overlay based on in-season results only..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no matches in the requested
+league-season), `team_not_found` (the requested `team` is absent from the
+filtered frame — distinct from `no_data`). `difficulty_label` per fixture
+is one of `very_hard` / `hard` / `moderate` / `easy` / `very_easy`.
+Bradley-Terry strength uses `log1p(ppg)` plus a 0.25 home-advantage
+logit; draw intensity is `exp(-|delta|) * 0.28`. The function is a
+non-additive interpretive overlay — it does not modify the prediction
+model or predict future difficulty.
+
+### GET /league/season-projection
+
+Monte Carlo simulation of the remaining league season, producing
+per-team final-position distributions and title / top-N / relegation
+probabilities. Assumes a standard double round-robin fixture list
+(each pair meets twice, home and away); remaining fixtures are inferred
+as the complement of already-played pairs. Reproducible via `random_seed`
+(uses `np.random.default_rng`).
+
+**Query params**: `league` (optional), `season` (required),
+`num_simulations` (int, default 1000, clamped to 100–10000),
+`random_seed` (int, default 42, range 0–2,000,000,000),
+`top_n` (int, default 4, clamped to 1–20),
+`relegation_slots` (int, default 3, clamped to 0–10)
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "league": "Premier League",
+  "season": "2425",
+  "num_simulations": 1000,
+  "random_seed": 42,
+  "top_n": 4,
+  "relegation_slots": 3,
+  "teams": [
+    {
+      "team": "Arsenal",
+      "current_points": 78,
+      "games_played": 32,
+      "avg_final_points": 86.4,
+      "avg_position": 1.2,
+      "position_distribution": { "1": 760, "2": 210, "3": 30 },
+      "title_probability": 0.76,
+      "top_n_probability": 1.0,
+      "relegation_probability": 0.0
+    }
+  ],
+  "disclaimer": "Descriptive season overlay based on in-season results only..."
+}
+```
+
+Non-`ok` statuses: `no_data` (empty input or no matches in the requested
+league-season). Teams are sorted by `(avg_position, avg_final_points,
+team)` ascending. `position_distribution` only includes positions that
+actually occurred in the simulation (may be fewer than the total number
+of teams). Per-team probabilities sum to 1.0 across all teams for each
+of title / top-N / relegation. The function is a non-additive
+interpretive overlay — it does not use the Dixon-Coles prediction model,
+rating matrix, or any external odds feed. Projections assume a standard
+double round-robin fixture list and a Bradley-Terry strength estimate.
+
 ### GET /players/compare
 
 Side-by-side comparison of two players with radar overlay and metric diffs.
@@ -2772,3 +3392,126 @@ rather than reimplementing gradient-boosted feature engineering. Add as
 **Not recommended**: Using socceraction as the primary action schema.
 InternalAction's string-based enums and 0-100 normalized coordinates are
 better suited to our multi-source pipeline and frontend visualization needs.
+
+---
+
+## 12. Local Parquet preflight evidence report
+
+`scoutfootball preflight --evidence-out <path>` writes a local JSON evidence
+report for the artifacts inspected in that command invocation. It is an
+observation record, not a claim that every historical provenance field is
+complete.
+
+- `inspection` preserves the content-level decode result, footer comparison,
+  schema/content fingerprints, file size, and reader used.
+- `provenance.contract` and `provenance.source_license` are copied only when a
+  matching directory contract is registered.
+- `provenance.snapshot` and `provenance.lineage` are `not_recorded` when the
+  registry has no such metadata; filesystem timestamps and filenames are never
+  substituted as evidence.
+- Reports are local files. The command refuses to replace an existing report
+  unless the user explicitly adds `--overwrite-evidence`.
+
+Report type: `scoutfootball.parquet_preflight_evidence`; current report version:
+`1.0`.
+
+`scoutfootball source-health` is a separate read-only local observation. It
+lists registered raw sources, their recorded license, observed file counts, and
+unregistered raw directories. It also reports whether each registered source
+has an explicit local retention and deletion policy. A source license alone does
+not fill either field: absent policy fields remain `baseline_required` rather
+than being inferred from a license name, source URL, or local files. Local file
+modification times are never treated as an upstream snapshot timestamp. Its
+optional `--evidence <preflight JSON>` attaches only matching raw-artifact
+inspection fingerprints; malformed reports and path-escape attempts are
+rejected, and this attachment never fills in missing source snapshot provenance
+or retention/deletion terms. Its optional evidence input accepts either a
+Parquet preflight report or a `scoutfootball.raw_source_file_inspection` report
+for one registered raw CSV; both attach only local structural fingerprints.
+
+`scoutfootball contract-quality --evidence <JSON>` accepts either a Parquet
+preflight report or a registered raw-CSV inspection report. The latter passes
+the local content-readability check only when it records `status: ok`, a
+content hash, row count, and reader; it does not turn CSV inspection into a
+claim about source rights, freshness, or repository-wide coverage.
+
+`scoutfootball contract-quality` treats a non-empty unregistered raw directory
+as a failed gate. This prevents legacy or unknown local source files from being
+mistaken for contract-governed inputs. The check does not move, delete, or
+register those files: their source, rights, and migration decision must be
+explicit before they enter the active raw contract boundary.
+
+For that local review, `source-health` includes a metadata-only detail for each
+unregistered directory: relative file paths, file counts, byte sizes, and local
+modification times. It never reads file contents in this report, hashes are not
+presented as provenance, and local modification times remain explicitly distinct
+from upstream snapshot dates.
+
+`scoutfootball inspect-raw-source --source <registered source> --path
+raw/<source>/<file>.csv --evidence-out <inspection JSON>` fully reads one local
+UTF-8 CSV below that source's registered raw directory and writes a portable,
+local-only structural inspection. It records a content hash, header schema
+hash, row/column counts, byte size, and reader, but never copies cell values or
+uses file metadata as a source date. It rejects path escapes, malformed CSV,
+non-UTF-8 input, duplicate/blank headers, and inconsistent row widths.
+
+`scoutfootball record-source-snapshot --source <registered source> --snapshot-date
+YYYY-MM-DD --evidence <preflight-or-raw-inspection JSON>` appends one JSONL record to the local
+snapshot ledger (default: `data/reports/data_health/source_snapshot_ledger.jsonl`).
+It accepts only a registered raw source and evidence containing at least one
+matching inspected artifact. The supplied date remains an explicit maintainer
+declaration, never a timestamp inferred from the filesystem. Existing records
+are never rewritten; duplicate immutable snapshot IDs are refused. Pass the
+same ledger to `source-health --snapshot-ledger <path>` to display only its
+latest explicitly recorded entry for each source.
+
+`scoutfootball reep-identity-lookup --provider
+{transfermarkt,fbref,wikidata} --id <provider-id>` performs an exact,
+read-only search of the registered local `raw/reep/people.csv` snapshot. It
+returns a bounded set of Reep identity references and their cross-provider IDs,
+including duplicates when they exist. It reads no legacy `raw/transfermarkt/`
+file and does not create mappings to ScoutFootball canonical player IDs, truth
+labels, market values, ratings, or rosters. A reported match remains input for
+manual identity review. With `--snapshot-ledger <path>`, the output displays
+only an explicitly recorded Reep snapshot declaration; a missing ledger record
+stays `not_recorded`.
+
+`scoutfootball record-source-policy` previews an explicit local policy by
+default and appends it only with `--confirm` (default ledger:
+`data/reports/data_health/source_policy_ledger.jsonl`). A declaration must name
+a registered raw source and include a retention mode, deletion trigger, raw
+deletion strategy, dependent-artifact action, and maintainer decision text.
+Retention can be a positive number of days, `until_manual_deletion`, or
+`until_rights_change`; the latter two remain explicit non-numeric policies and
+are never converted into invented day counts. Recording a policy does not alter
+raw files or derived artifacts. Pass the ledger to `source-health --policy-ledger
+<path>` or `contract-quality --policy-ledger <path>` to observe the latest
+append-only declaration per source. A missing or malformed ledger remains a
+baseline gap or command error; it is never silently ignored.
+
+`scoutfootball record-quality-audit` records one maintainer-reviewed local
+sample for either `identity_resolution` or `source_claim`. It previews by
+default and appends only with `--confirm` (default ledger:
+`data/reports/data_health/quality_audit_ledger.jsonl`). Every record must name
+a registered raw source, an opaque local sample ID, an explicit
+`confirmed_correct` or `confirmed_error` outcome, reviewer, local evidence
+reference, and decision text. The command does not inspect the source or infer
+the outcome. A correction is another append-only record with `--supersedes`;
+the prior entry is retained in the ledger but excluded from the effective audit
+denominator. Malformed records, duplicate IDs, missing corrections, and
+cross-sample corrections are rejected.
+
+Pass the ledger to `contract-quality --audit-ledger <path>` to expose the
+effective reviewed sample count, correct/error counts, source scope, and
+observed error rate for identity resolution and source claims. The ledger is
+local-only and stores references rather than third-party source content.
+
+`scoutfootball record-quality-threshold` separately previews or, with
+`--confirm`, appends a maintainer-selected maximum error rate and minimum
+effective sample count for one audit kind (default ledger:
+`data/reports/data_health/quality_threshold_ledger.jsonl`). A threshold cannot
+be derived from observed data and must include decision text. Pass this ledger
+to `contract-quality --threshold-ledger <path>` together with the audit ledger:
+the relevant check remains `baseline_required` when either record is missing or
+the effective sample count is below the stated minimum, passes only when the
+observed rate is within the recorded maximum, and fails when it exceeds it.

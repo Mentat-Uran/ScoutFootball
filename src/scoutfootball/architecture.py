@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
-from .schemas import DataDirectorySpec, ModuleBoundary, ProjectArchitecture
+import datetime as _dt
+
+from . import __version__
+from .schemas import (
+    Capability,
+    CapabilityRegistry,
+    DataContract,
+    DataContractRegistry,
+    DataDirectorySpec,
+    ModuleBoundary,
+    ProjectArchitecture,
+    SourceLicense,
+    build_core_table_definitions,
+)
 
 
 def build_default_architecture() -> ProjectArchitecture:
@@ -62,37 +75,81 @@ def build_default_architecture() -> ProjectArchitecture:
                 purpose="Streamlit views that only read local artifacts.",
                 planned_components=("player_compare_page", "market_value_page", "match_page"),
             ),
+            ModuleBoundary(
+                name="recruitment",
+                purpose=(
+                    "Versioned recruitment briefs, role profiles and decision "
+                    "dossiers.  Personal local objects, not external facts."
+                ),
+                planned_components=("brief", "role_profile", "decision_dossier"),
+            ),
+            ModuleBoundary(
+                name="opposition",
+                purpose=(
+                    "Source-limited match briefings, pattern cards, scenario "
+                    "trees and post-match reviews.  Personal local objects; "
+                    "each fact section carries an explicit fact_tier."
+                ),
+                planned_components=(
+                    "briefing",
+                    "pattern_card",
+                    "scenario_tree",
+                    "post_match_review",
+                ),
+            ),
         ),
         data_directories=(
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/statsbomb_open",
                 purpose="Immutable official open-data JSON snapshots.",
+                source_name="statsbomb_open",
+                license_name="StatsBomb Open Data User Protocol",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/football_data",
                 purpose="Downloaded CSV baselines for fixtures, results and odds.",
+                source_name="football_data",
+                license_name="Football-Data.co.uk non-commercial",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/clubelo",
                 purpose="Team Elo snapshots before silver normalization.",
+                source_name="clubelo",
+                license_name="ClubElo public data",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/understat",
                 purpose="Cached supplemental attacking metrics.",
+                source_name="understat",
+                license_name="Understat public data",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/fbref",
                 purpose="Low-frequency cached standard-table extracts.",
+                source_name="fbref",
+                license_name="FBref personal research only; no redistribution",
             ),
             DataDirectorySpec(
                 layer="raw",
                 relative_path="raw/transfermarkt_manual",
                 purpose="Manually provided market and contract snapshots.",
+                source_name="transfermarkt_manual",
+                license_name="Transfermarkt manual import only",
+            ),
+            DataDirectorySpec(
+                layer="raw",
+                relative_path="raw/reep",
+                purpose=(
+                    "Local Reep identity-register snapshots for identifier mapping review; "
+                    "not market-value, performance, or truth-label inputs."
+                ),
+                source_name="reep",
+                license_name="CC0 1.0 Universal",
             ),
             DataDirectorySpec(
                 layer="silver",
@@ -160,11 +217,1222 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run pytest",
             "uv run ruff check .",
             "uv run python -m scoutfootball info",
+            "uv run python -m scoutfootball capabilities",
+            "uv run python -m scoutfootball data-contracts",
+            "uv run python -m scoutfootball list-adapters [--source S] [--capability C] [--json]",
+            "uv run python -m scoutfootball adapter-compatibility [--source S] [--json]",
             "uv run python -m scoutfootball ingest",
             "uv run python -m scoutfootball build-features",
             "uv run python -m scoutfootball train",
+            "uv run python -m scoutfootball train-rating-nn",
             "uv run python -m scoutfootball validate",
+            "uv run python -m scoutfootball source-health",
+            "uv run python -m scoutfootball inspect-raw-source",
+            "uv run python -m scoutfootball reep-identity-lookup",
+            "uv run python -m scoutfootball contract-quality",
+            "uv run python -m scoutfootball model-admission",
+            "uv run python -m scoutfootball research-health",
+            "uv run python -m scoutfootball discard-model-run <run_id>",
+            "uv run python -m scoutfootball reject-model-run <run_id> --decision <text>",
+            "uv run python -m scoutfootball promote-model-run <run_id> --decision <text>",
+            "uv run python -m scoutfootball rollback-model-run <backup_id> --decision <text>",
+            "uv run python -m scoutfootball validate-decision-package <path>",
+            "uv run python -m scoutfootball record-source-snapshot",
+            "uv run python -m scoutfootball record-source-policy",
+            "uv run python -m scoutfootball record-quality-audit",
+            "uv run python -m scoutfootball record-quality-threshold",
+            "uv run python -m scoutfootball preflight",
+            "uv run python -m scoutfootball preflight --evidence-out <path>",
+            "uv run python -m scoutfootball optimizer-preflight",
+            "uv run python -m scoutfootball action-value",
+            "uv run python -m scoutfootball action-value-matches",
+            "uv run python -m scoutfootball export-ratings",
+            "uv run python -m scoutfootball import-truth-labels",
+            "uv run python -m scoutfootball import-transfermarkt-truth-labels",
+            "uv run python -m scoutfootball transfermarkt-identity-review",
+            "uv run python -m scoutfootball reconcile-transfermarkt-truth-labels",
+            "uv run python -m scoutfootball audit-truth-labels",
+            "uv run python -m scoutfootball audit-identity",
+            "uv run python -m scoutfootball identity-registry-lookup --source S --source-id X",
+            (
+                "uv run python -m scoutfootball identity-registry-append "
+                "--source S --source-id X --canonical-id C --evidence E"
+            ),
+            (
+                "uv run python -m scoutfootball identity-registry-revoke "
+                "--source S --source-id X --evidence E"
+            ),
+            "uv run python -m scoutfootball identity-registry-list [--source S]",
+            "uv run python -m scoutfootball identity-registry-stats",
+            "uv run python -m scoutfootball resolve-canonical-ids [--sample N]",
+            "uv run python -m scoutfootball suggest-identity-mappings [--json]",
+            "uv run python -m scoutfootball role-system-report [--json]",
+            "uv run python -m scoutfootball cohort-preview [filters] [--json]",
+            "uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball baseline-b1 [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball label-append --label-type T --cohort-hash H --role-family R --season-id S --observation-window W --confidence C --evidence E [pairwise/tier payload]",  # noqa: E501
+            "uv run python -m scoutfootball label-revoke --target-decision-id D --evidence E",
+            "uv run python -m scoutfootball label-list [--cohort-hash H] [--label-type T] [--role-family R] [--season-id S] [--player-id P] [--include-revoked]",  # noqa: E501
+            "uv run python -m scoutfootball label-stats",
+            "uv run python -m scoutfootball label-audit [--strict]",
+            "uv run python -m scoutfootball label-review-queue [--tier-conflict-threshold N] [--evidence-min-chars N] [--max-age-days N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball label-stability [--tier-tolerance N] [--json]",
+            "uv run python -m scoutfootball backtest",
+            "uv run python -m scoutfootball tune-predictions",
+            "uv run python -m scoutfootball optimize-ensemble",
             "uv run python -m scoutfootball serve",
+            "uv run python -m scoutfootball tournament",
+            "uv run python -m scoutfootball create-brief",
+            "uv run python -m scoutfootball list-briefs",
+            "uv run python -m scoutfootball show-brief <brief_id>",
+            "uv run python -m scoutfootball validate-brief <path>",
+            "uv run python -m scoutfootball create-briefing",
+            "uv run python -m scoutfootball list-briefings",
+            "uv run python -m scoutfootball show-briefing <briefing_id>",
+            "uv run python -m scoutfootball validate-briefing <path>",
+            "uv run python -m scoutfootball create-dossier",
+            "uv run python -m scoutfootball list-dossiers",
+            "uv run python -m scoutfootball show-dossier <dossier_id>",
+            "uv run python -m scoutfootball validate-dossier <path>",
+            "uv run python -m scoutfootball create-review",
+            "uv run python -m scoutfootball list-reviews",
+            "uv run python -m scoutfootball show-review <review_id>",
+            "uv run python -m scoutfootball validate-review <path>",
+            "uv run python -m scoutfootball export-local-pack [--output <path>]",
+            "uv run python -m scoutfootball import-local-pack [--from <path>] [--confirm]",
             "uv run streamlit run src/scoutfootball/app/streamlit_app.py",
         ),
+    )
+
+
+def build_capability_registry() -> CapabilityRegistry:
+    """Build the canonical capability registry from static definitions.
+
+    Capabilities are grouped by domain and include cross-references to
+    CLI commands, API paths, and frontend views where applicable. This
+    registry is the single source of truth for "what can ScoutFootball do"
+    and is consumed by the ``capabilities`` CLI command, tests, and docs.
+    """
+    caps = (
+        Capability(
+            id="pipeline.adapters",
+            name="适配器清单注册表",
+            description=(
+                "机器可读的源适配器清单和本地准入矩阵：声明每个注册数据源的能力、"
+                "字段映射、转换损失及其与数据契约的关系。是 I1 开放互操作基线的入口，"
+                "只读元数据，不触发实际数据接入。"
+            ),
+            domain="data_pipeline",
+            cli_commands=("list-adapters", "adapter-compatibility"),
+            api_paths=("/adapters", "/adapters/compatibility"),
+            notes=(
+                "Manifest 是保守的：未记录的能力或映射直接省略，不猜测。"
+                "Tracking/video 能力位保留但当前无适配器声明，"
+                "需待合规样本数据就绪后才进入后续 I1 切片。"
+            ),
+        ),
+        Capability(
+            id="pipeline.ingest",
+            name="数据接入",
+            description=(
+                "从 StatsBomb、Football-Data、ClubElo 等数据源"
+                "拉取原始数据并落地到本地 Parquet。"
+            ),
+            domain="data_pipeline",
+            cli_commands=("ingest",),
+            data_artifacts=(
+                "raw/statsbomb_open",
+                "raw/football_data",
+                "raw/clubelo",
+                "raw/understat",
+                "raw/fbref",
+                "raw/transfermarkt_manual",
+            ),
+        ),
+        Capability(
+            id="pipeline.build_features",
+            name="特征工程",
+            description=(
+                "从原始数据构建球队级、球员级特征表，"
+                "含时间窗口滚动特征，无未来泄露。"
+            ),
+            domain="data_pipeline",
+            cli_commands=("build-features",),
+            data_artifacts=("gold/feature_store",),
+        ),
+        Capability(
+            id="pipeline.validate",
+            name="数据验证门禁",
+            description=(
+                "训练前的数据质量校验：schema、行数、非空率、"
+                "唯一性、时间连续性、来源覆盖度。"
+            ),
+            domain="data_pipeline",
+            cli_commands=(
+                "validate",
+                "preflight",
+                "optimizer-preflight",
+                "source-health",
+                "inspect-raw-source",
+                "reep-identity-lookup",
+                "contract-quality",
+                "model-admission",
+                "research-health",
+                "discard-model-run",
+                "reject-model-run",
+                "promote-model-run",
+                "rollback-model-run",
+                "validate-decision-package",
+                "record-source-snapshot",
+                "record-source-policy",
+                "record-quality-audit",
+                "record-quality-threshold",
+            ),
+            api_paths=("/health", "/artifacts"),
+        ),
+        Capability(
+            id="ratings.training",
+            name="球员评分训练",
+            description="多模型球员评分训练：市场价值、阵容评分、神经网络候选。",
+            domain="player_ratings",
+            cli_commands=("train", "train-rating-nn"),
+            data_artifacts=(
+                "models/artifacts",
+                "models/training_sets",
+                "models/oof_predictions",
+            ),
+        ),
+        Capability(
+            id="ratings.export",
+            name="评分导出",
+            description="将优化后的球员评分导出为 DuckDB 数据库，供前端和 API 使用。",
+            domain="player_ratings",
+            cli_commands=("export-ratings",),
+            api_paths=("/ratings", "/ratings/meta", "/ratings/snapshots"),
+            frontend_views=("players", "value"),
+        ),
+        Capability(
+            id="ratings.truth_labels",
+            name="真值标签管理",
+            description="导入球探评审和 Transfermarkt 快照作为真值标签，审计监督合规性。",
+            domain="player_ratings",
+            cli_commands=(
+                "import-truth-labels",
+                "import-transfermarkt-truth-labels",
+                "transfermarkt-identity-review",
+                "reconcile-transfermarkt-truth-labels",
+                "audit-truth-labels",
+            ),
+            api_paths=(
+                "/reports/truth-labels",
+                "/reports/transfermarkt-identities",
+            ),
+        ),
+        Capability(
+            id="ratings.identity_audit",
+            name="身份风险审计",
+            description=(
+                "只读扫描 player_match.parquet 的 canonical 身份风险面（PRS-1 R-005）："
+                "player_id 格式分布、同名不同 ID、多队赛季转会记录、跨源对齐缺口。"
+                "不解决冲突、不修改任何产物；每个风险都是维护者人工复核的证据，"
+                "unresolved 是诚实默认。"
+            ),
+            domain="player_ratings",
+            cli_commands=("audit-identity",),
+        ),
+        Capability(
+            id="ratings.identity_registry",
+            name="canonical 身份映射注册表",
+            description=(
+                "本地 append-only JSONL 注册表，记录人工确认的 "
+                "(source_name, source_player_id) -> canonical_player_id 映射决策（PRS-1 R-005）。"
+                "未录入的键保持 unresolved；不做自动跨源对齐、不修改 player_match.parquet；"
+                "支持 confirmed / revoked 两种动作，所有记录带 evidence、decided_by 和可选 "
+                "supersedes_decision_id 修正链。lookup 在未解析时退出码 1，避免脚本误读为成功。"
+            ),
+            domain="player_ratings",
+            cli_commands=(
+                "identity-registry-lookup",
+                "identity-registry-append",
+                "identity-registry-revoke",
+                "identity-registry-list",
+                "identity-registry-stats",
+            ),
+        ),
+        Capability(
+            id="ratings.canonical_resolver",
+            name="canonical 主键解析器",
+            description=(
+                "只读解析器：在 identity_registry v1 之上，把 active confirmed "
+                "映射应用到 player_match.parquet 派生视图（不修改原文件），为每行"
+                "派生 canonical_player_id。未解析行显式标记为 "
+                "unresolved:<source>:<id>（source-stable fallback），不静默使用 "
+                "source_player_id。空注册表下所有行 unresolved 是诚实默认，不阻断 "
+                "research-health verdict。CLI resolve-canonical-ids 输出解析摘要，"
+                "--sample N 同时打印 N 行样本。"
+            ),
+            domain="player_ratings",
+            cli_commands=("resolve-canonical-ids",),
+        ),
+        Capability(
+            id="ratings.identity_suggester",
+            name="canonical 映射建议工具",
+            description=(
+                "PRS-1 R-005 canonical 映射建议工具：以 statsbomb 为主源，按"
+                "season+competition 跨源（fbref/understat）匹配候选 canonical 映射。"
+                "采用精确标准化名称匹配（Unicode NFC + 去变音符 + 大小写归一 + "
+                "去后缀），分 high（name + team 同时匹配）/medium（name 匹配 team "
+                "不同）/no_match 三档置信度。只读：不修改 registry、不修改 "
+                "player_match.parquet、不自动写入任何 confirmed 决策。--unmatched-only "
+                "用于人工复核优先级排序。维护者需通过 identity-registry-append 显式录入。"
+            ),
+            domain="player_ratings",
+            cli_commands=("suggest-identity-mappings",),
+        ),
+        Capability(
+            id="ratings.role_system",
+            name="角色体系 v1",
+            description=(
+                "PRS-1 R-009 角色体系 v1：8 个位置族（GK/CB/FB/DM/CM/AM/W/ST）"
+                "的 typed 词汇和只读审计。classify_role_family 把现有 "
+                "position_group 列映射到 RoleFamily，粗位置 DF/MF/FW 收敛到"
+                "默认细角色（CB/CM/ST）并在审计中标记 coarse_position_rows。"
+                "v1 不自动从 MF 创造 DM，不修改 player_match.parquet，"
+                "不替换 position_metrics.POSITION_GROUP_MAP（优化器链保持不变）。"
+                "research-health 报告的 role_system section 提供分布审计；"
+                "CLI role-system-report 输出 JSON 或人类可读报告。"
+            ),
+            domain="player_ratings",
+            cli_commands=("role-system-report",),
+        ),
+        Capability(
+            id="ratings.cohort",
+            name="cohort 内核 v1",
+            description=(
+                "PRS-1 R-010 cohort 内核 v1：声明式 CohortDefinition（联赛/"
+                "赛季/球队/角色/分钟/年龄/身份/角色已知性过滤器）+ 只读 "
+                "preview_cohort。基于 canonical_player_id（切片 3）+ grain"
+                "（切片 1/4）+ RoleFamily（切片 6）构建可复用的研究人群。"
+                "cohort_hash 仅依赖定义（sha256[:16]），membership_hash 依赖"
+                "定义+数据（sorted canonical_player_id|season_id），两者共同"
+                "满足 PRS-1 退出门槛'cohort 重新运行能得到同一成员与相同 hash'。"
+                "排除原因 typed（ExclusionReason StrEnum），first-match-wins "
+                "固定顺序。cohort 单位是 player-season（匹配 "
+                "rating_feature_matrix 粒度），multi_team_season 标记但不拆分。"
+                "CLI cohort-preview 支持 --competition/--season/--team/--role/"
+                "--min-minutes/--age-min/--age-max/--require-resolved-identity/"
+                "--require-known-role 过滤器和 --json 输出。"
+            ),
+            domain="player_ratings",
+            cli_commands=("cohort-preview",),
+        ),
+        Capability(
+            id="ratings.baseline_b0",
+            name="B0 透明 baseline (PRS-2)",
+            description=(
+                "PRS-2 B0 raw_percentile baseline：角色内等权百分位评分。"
+                "对每个 RoleFamily 定义角色特定的维度（defending/possession/"
+                "creation/finishing/attacking/availability），每维度计算球员"
+                "值在角色池中的严格小于百分位（strict-less-than），B0 score = "
+                "可用维度百分位的等权均值。核心维度全部缺失时 confidence=low、"
+                "score=50.0（占位），部分缺失时 confidence=medium，全部可用时 "
+                "confidence=high。Bootstrap 排名区间（固定 seed，默认 200 次"
+                "重采样）给出每位球员 rank 的 p5/p50/p95。GK 当前为 "
+                "availability-only 占位（gk_provisional），不消费外场防守代理。"
+                "B0 不产生跨位置可比分数（cross_position_comparable=False）。"
+                "read-only 诊断；不修改 rating_feature_matrix.parquet。"
+                "CLI baseline-b0 支持 --n-bootstrap/--seed/--top/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("baseline-b0",),
+        ),
+        Capability(
+            id="ratings.baseline_b1",
+            name="B1 专家权重 baseline (PRS-2)",
+            description=(
+                "PRS-2 B1 expert_weighted baseline：在 B0 角色内百分位之上"
+                "替换等权为版本化专家权重。B1_WEIGHTS v1.0 为每个 RoleFamily "
+                "手工定义维度权重（如 ST: finishing=0.55/attacking=0.25/"
+                "availability=0.20；CB: defending=0.50/possession=0.20/"
+                "availability=0.30；GK: availability=1.0 占位）。权重和必须"
+                "为 1.0，权重是显式专家选择而非优化器 softmax 输出（遵循 "
+                "AGENTS.md '不得把 raw softmax 权重当作实际模型权重'）。"
+                "缺失维度下权重自动再归一化（如 CB 缺 possession 时 "
+                "defending/availability 重新分配到 0.625/0.375）；全部核心"
+                "维度缺失时 score=50.0、confidence=low，权重不被应用。"
+                "B1 复用 B0_DIMENSIONS，因此与 B0 的角色特定维度/列/方向/"
+                "core 标记完全一致，唯一差异是聚合方式（B0 等权，B1 加权），"
+                "任何 B1 vs B0 的分数差异都归因于权重选择。GK 权重集为 "
+                "availability=1.0（唯一维度），因此 GK 的 B1 == B0，仍为 "
+                "gk_provisional 占位。cross_position_comparable=False。"
+                "Bootstrap 排名区间（固定 seed，默认 200 次重采样，每次"
+                "重采样后重新计算所有球员分数含权重再归一化并赋予 1-indexed "
+                "rank）给出每位球员 rank 的 p5/p50/p95。每条 B1DimensionScore "
+                "记录 weight（原始权重）+ effective_weight（再归一化后）+ "
+                "contribution（=effective_weight * dimension_percentile），"
+                "可手工复算。read-only 诊断；不修改 rating_feature_matrix"
+                ".parquet。CLI baseline-b1 支持 --n-bootstrap/--seed/--top/"
+                "--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("baseline-b1",),
+        ),
+        Capability(
+            id="ratings.baseline_b2",
+            name="B2 分钟收缩 baseline (PRS-2)",
+            description=(
+                "PRS-2 B2 shrinkage baseline：在 B0 角色内等权百分位之上"
+                "叠加基于 minutes_played 的经验贝叶斯收缩。收缩公式 "
+                "b2_score = w * prior_mean + (1 - w) * b0_score，其中 "
+                "w = reference_minutes / (reference_minutes + minutes_played)，"
+                "默认 reference_minutes=900（10 场 full match，w=0.5）。低"
+                "出场球员被向角色先验收缩（90 min 球员 w≈0.91，3000 min "
+                "球员 w≈0.23）。prior_mean 取角色池中 minutes_played >= "
+                "reference_minutes 的 stable core 球员的分钟加权 B0 分数"
+                "均值；若无球员达标则 fallback 到全池简单均值并标记 "
+                "prior_source=fallback_full_pool。B2 同时报告 B0 分数、B0 "
+                "rank、B2 分数、B2 rank 和两者的 bootstrap 排名区间（p5/"
+                "p50/p95，固定 seed，默认 200 次重采样），便于维护者对比"
+                "B0/B2 排名差异。B2 不修改 B0 的缺失数据处理：B0 low 球员"
+                "保持 low 并应用完全收缩（b2=prior_mean）；minutes_played "
+                "缺失或非正的球员应用完全收缩并标记 minutes_input_missing"
+                "=True，B2 confidence 上限为 medium。GK 仍为 "
+                "gk_provisional。cross_position_comparable=False。"
+                "read-only 诊断；不修改 rating_feature_matrix.parquet。"
+                "CLI baseline-b2 支持 --reference-minutes/--n-bootstrap/"
+                "--seed/--top/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("baseline-b2",),
+        ),
+        Capability(
+            id="ratings.label_ledger",
+            name="PRS-3 个人评价标签账本 v1",
+            description=(
+                "PRS-3 slice 1 label_ledger：append-only JSONL 账本，记录"
+                "维护者对 cohort+role+season 球员的人工评价。支持两类核心"
+                "标签：human_pairwise_preference（同角色同观察窗内 A vs B "
+                "偏好：a/b/tie）和 human_tier（1-5 档评级，1=elite，"
+                "5=below average）。每条记录携带 cohort_hash（16 hex，来自"
+                "CohortDefinition.cohort_hash()）、role_family、season_id、"
+                "observation_window（ISO YYYY-MM-DD/YYYY-MM-DD）、confidence"
+                "（high/medium/low）、evidence（<=500 字符，必须非空）、"
+                "decided_by、blind（默认 True，标记评价时是否看到模型分数）、"
+                "supersedes_decision_id。账本只追加不修改：revoke 通过新增"
+                "action=revoked 记录实现，active_labels() 跳过被 revoke 的"
+                "记录。label_independence_audit 检查：model_derived 不在"
+                "supervision-eligible 集合、pairwise 不自比、observation_"
+                "window 合法、evidence 非空。SUPERVISION_ELIGIBLE_LABEL_"
+                "TYPES = {human_pairwise_preference, human_tier, "
+                "external_reference, future_outcome}；SELF_REFERENTIAL_"
+                "LABEL_TYPES = {model_derived}。CLI 提供 5 个子命令："
+                "label-append（confirmed）、label-revoke（revoke by "
+                "target-decision-id）、label-list（过滤 + active-only 默认）、"
+                "label-stats（只读汇总）、label-audit（独立性审计 + 可选 "
+                "--strict CI 门禁）。read-only 诊断；不修改任何 parquet 产物；"
+                "不证明评价者真正盲标或证据正确，只保证结构性不变量。"
+            ),
+            domain="player_ratings",
+            cli_commands=(
+                "label-append",
+                "label-revoke",
+                "label-list",
+                "label-stats",
+                "label-audit",
+            ),
+        ),
+        Capability(
+            id="ratings.label_review_queue",
+            name="PRS-LABEL-005 标签复核队列诊断",
+            description=(
+                "PRS-3 切片 2 label_review_queue：在 label_ledger 之上"
+                "叠加只读诊断，识别三类需要维护者注意的 active 标签子集。"
+                "(1) 冲突队列：同 cohort+role+season+observation_window 下"
+                "对同一比较对象存在矛盾判断——pairwise 把 (A vs B) 与 "
+                "(B vs A) 标准化为 sorted pair + normalised preference "
+                "(first/second/tie)，仅当 first 与 second 同时出现才标记"
+                "冲突（tie 是'无法判断'不与明确偏好冲突）；tier 当 "
+                "max-min >= threshold（默认 2 档）标记冲突。冲突组携带"
+                "所有涉及的 decision_id 便于一次看到矛盾全貌。(2) 低信心"
+                "队列：confidence=low 或 evidence 长度 < evidence_min_chars"
+                "（默认 50）的标签。(3) 待复测队列：recorded_at 距今 >= "
+                "max_age_days（默认 180）的 active 标签，老化标签不被"
+                "自动作废仅标记为值得重新评估；recorded_at 解析失败的"
+                "记录跳过 retest 并计入 retest_skipped_count。status=ok "
+                "表示三个队列都为空，status=review_needed 表示至少一个"
+                "非空；ok 不证明标签正确，只表示没有自动可检测的复核"
+                "信号。基于 active_labels 集合，被 revoke/supersede 的"
+                "记录不参与。CLI label-review-queue 支持 --tier-conflict-"
+                "threshold/--evidence-min-chars/--max-age-days/--json。"
+                "read-only 诊断；不修改 decisions.jsonl 或任何 parquet 产物。"
+            ),
+            domain="player_ratings",
+            cli_commands=("label-review-queue",),
+        ),
+        Capability(
+            id="ratings.label_stability",
+            name="PRS-LABEL-006 标签稳定性诊断",
+            description=(
+                "PRS-3 切片 3 label_stability：在 label_ledger 之上叠加"
+                "只读诊断，量化维护者标注的稳定性。"
+                "(1) retest_pairs：通过 supersedes_decision_id 链追踪"
+                "re-annotation 对（original → retest），对比两者标签"
+                "值是否一致——pairwise 比较 first/second/tie 方向，"
+                "tier 比较 |original_tier - retest_tier| <= tier_tolerance"
+                "（默认 1）。每对报告 consistent、days_between、"
+                "same_decided_by、original/retest value 和 decision_id。"
+                "revoked retest 不产生 retest pair（revoke 是撤销不是"
+                "复测）；不同 label_type 的 supersedes 不产生 pair。"
+                "(2) annotator_agreement：按业务键（pairwise 为 sorted "
+                "player pair + cohort + role + season，tier 为 canonical"
+                "_player_id + cohort + role + season）分组所有 confirmed"
+                "记录（包括被 superseded 的），只报告有 >= 2 个不同 "
+                "decided_by 的组，对比组内标签值一致性。summary 报告"
+                "retest_consistency_rate 和 agreement_rate；rate=None"
+                "当对应集合为空。基于全部 records（不只 active）"
+                "追踪历史；read-only 诊断；不修改 decisions.jsonl 或"
+                "任何 parquet 产物；不参与 fail-closed verdict（稳定性"
+                "指标是信号不是门禁，空报告不意味标签正确或监督就绪）。"
+                "CLI label-stability 支持 --tier-tolerance/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("label-stability",),
+        ),
+        Capability(
+            id="ratings.weight_sensitivity",
+            name="PRS-MODEL-011 权重敏感性分析",
+            description=(
+                "PRS-2 切片 PRS-MODEL-011：B1 专家权重敏感性诊断。"
+                "对每个角色的每个维度权重应用可配置的扰动（delta），"
+                "重归一化后重新计算 B1 分数，通过四个指标衡量排名稳定性："
+                "Spearman 相关系数（排序相关性）、平均绝对排名变动、"
+                "最大绝对排名变动、top-N 重叠率。"
+                "诊断为只读，不修改 B1_WEIGHTS、特征矩阵或任何 parquet 产物；"
+                "不参与 fail-closed verdict（敏感性指标是信号不是门禁）。"
+                "支持通过 --deltas 自定义扰动幅度，--top-n 自定义重叠窗口。"
+                "CLI weight-sensitivity 支持 --deltas/--top-n/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("weight-sensitivity",),
+        ),
+        Capability(
+            id="ratings.minutes_sensitivity",
+            name="PRS-MODEL-012 分钟门槛敏感性分析",
+            description=(
+                "PRS-2 切片 PRS-MODEL-012：B2 分钟门槛敏感性诊断。"
+                "对 B2 的 reference_minutes 参数应用可配置的绝对分钟扰动"
+                "（默认 -600/-300/-150/+150/+300/+600），重新计算 B2 分数。"
+                "与 PRS-MODEL-011 不同，reference_minutes 扰动有复合效应："
+                "收缩权重 w、stable_core 成员、prior_mean 三者同时变化。"
+                "通过四个指标衡量排名稳定性：Spearman 相关系数、平均绝对"
+                "排名变动、最大绝对排名变动、top-N 重叠率。每条扰动报告"
+                "perturbed_reference_minutes、prior_source、stable_core_count"
+                "以便观察门槛变化是否触发 prior fallback 路径切换。"
+                "诊断为只读，不修改特征矩阵、B2 参数或任何 parquet 产物；"
+                "不参与 fail-closed verdict（敏感性指标是信号不是门禁）。"
+                "CLI minutes-sensitivity 支持 --deltas/--baseline-minutes/"
+                "--top-n/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("minutes-sensitivity",),
+        ),
+        Capability(
+            id="ratings.cohort_sensitivity",
+            name="PRS-MODEL-013 cohort 子采样敏感性分析",
+            description=(
+                "PRS-2 切片 PRS-MODEL-013：B2 cohort 成员敏感性诊断。"
+                "对每个角色池随机 hold out 一定比例的球员（默认 "
+                "5%/10%/20%），在缩减池上从零重新计算 B0→B2 分数，"
+                "在 baseline 和 perturbed 池的公共球员上衡量排名稳定性。"
+                "与 PRS-MODEL-011/012 不同，cohort 扰动有最根本的效应："
+                "B0 百分位变化（参考池变了）、B2 prior 变化（stable_core "
+                "成员变了）、B2 收缩变化（prior 变了）。整个 B0→B2 链在"
+                "缩减池上重新计算。通过四个指标衡量排名稳定性："
+                "Spearman 相关系数、平均绝对排名变动、最大绝对排名变动、"
+                "top-N 重叠率。每条扰动报告 common_player_count、"
+                "perturbed_prior_mean、perturbed_prior_source 以便观察"
+                "缩减池是否触发 prior fallback。种子确定性：每个 "
+                "(base_seed, role_family, repeat_index) 三元组通过 SHA256 "
+                "派生独立种子。池子小于 min_pool_size（默认 10）的角色"
+                "跳过扰动。诊断为只读，不修改特征矩阵、cohort 定义或"
+                "任何 parquet 产物；不参与 fail-closed verdict（敏感性"
+                "指标是信号不是门禁）。CLI cohort-sensitivity 支持 "
+                "--fractions/--baseline-minutes/--n-repeats/--top-n/"
+                "--min-pool-size/--seed/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("cohort-sensitivity",),
+        ),
+        Capability(
+            id="predictions.match",
+            name="比赛结果预测",
+            description="Poisson、Dixon-Coles、集成模型等多种比赛结果预测，含概率校准。",
+            domain="match_predictions",
+            cli_commands=("backtest", "tune-predictions", "optimize-ensemble"),
+            api_paths=(
+                "/predictions/{home_team}/{away_team}",
+                "/predictions/meta",
+                "/predictions/ensemble/weights",
+                "/predictions/models/comparison",
+                "/predictions/staleness",
+                "/predictions/team-accuracy/{team_id}",
+                "/predictions/{home_team}/{away_team}/attribution",
+                "/predictions/{home_team}/{away_team}/attribution/ci",
+                "/predictions/{home_team}/{away_team}/ensemble-attribution",
+                "/predictions/{home_team}/{away_team}/ensemble-attribution/ci",
+                "/predictions/{home_team}/{away_team}/diagnostics",
+                "/predictions/{home_team}/{away_team}/h2h",
+                "/predictions/{home_team}/{away_team}/h2h-bias-correction",
+                "/predictions/{home_team}/{away_team}/momentum",
+            ),
+            frontend_views=("matches",),
+        ),
+        Capability(
+            id="predictions.calibration",
+            name="概率校准与回测",
+            description="时间序列回测、保序回归校准、RPS/Brier/Log Loss 指标、置信区间。",
+            domain="match_predictions",
+            cli_commands=("backtest", "tune-predictions"),
+            api_paths=(
+                "/predictions/calibration",
+                "/predictions/backtest",
+                "/predictions/tuning",
+                "/predictions/drift",
+                "/predictions/drift/timeline",
+                "/predictions/calibration/reliability",
+                "/predictions/calibration/scoreline",
+                "/predictions/calibration/comparison",
+                "/predictions/calibration/confidence-distribution",
+                "/predictions/calibration/error-analysis",
+                "/predictions/calibration/outcome-distribution",
+                "/predictions/calibration/temporal-validation",
+                "/predictions/calibration/probability-heatmap",
+                "/predictions/calibration/ci-plot",
+                "/predictions/calibration/ci-coverage",
+                "/predictions/calibration/ci-width",
+                "/predictions/calibration/fold-comparison",
+                "/predictions/calibration/league-errors",
+                "/predictions/calibration/feature-importance",
+                "/predictions/calibration/drift-heatmap",
+                "/predictions/calibration/error-clustering",
+                "/predictions/calibration/data-drift",
+                "/predictions/calibration/stress-test",
+                "/predictions/calibration/team-drift",
+                "/predictions/calibration/team-profile",
+                "/predictions/calibration/uncertainty",
+                "/predictions/calibration/profit-loss",
+                "/predictions/calibration/trajectory",
+                "/predictions/calibration/difficulty",
+                "/predictions/calibration/streaks",
+                "/predictions/calibration/report-card",
+                "/predictions/calibration/anomalies",
+            ),
+            frontend_views=("matches", "calibration", "backtest"),
+        ),
+        Capability(
+            id="predictions.value_bet",
+            name="价值投注分析",
+            description="对比模型概率与市场赔率，识别价值投注机会。",
+            domain="match_predictions",
+            api_paths=("/predictions/{home_team}/{away_team}/value",),
+            frontend_views=("matches",),
+        ),
+        Capability(
+            id="team.analysis",
+            name="球队分析",
+            description="球队实力对比、风格聚类、风格演变、战术画像、赛程难度。",
+            domain="team_analysis",
+            api_paths=(
+                "/teams",
+                "/teams/compare",
+                "/teams/strength",
+                "/teams/style-clusters",
+                "/teams/style-clusters/similarity",
+                "/teams/style-atlas",
+                "/teams/style-matchup",
+                "/teams/style-evolution",
+                "/teams/{team}/style-neighbors",
+                "/teams/{team}/style-percentiles",
+                "/teams/{team}/style-drift",
+                "/teams/{team}/style-drift-neighbors",
+                "/teams/cross-league-depth",
+            ),
+            frontend_views=("teams", "league"),
+        ),
+        Capability(
+            id="team.action_profile",
+            name="球队动作画像",
+            description="基于事件数据的球队动作风格画像和跨联赛对比。",
+            domain="team_analysis",
+            api_paths=(
+                "/teams/action-profile",
+                "/teams/action-atlas",
+                "/teams/action-evolution",
+                "/teams/{team}/action-percentiles",
+                "/teams/{team}/action-similarity",
+                "/teams/cross-league-action",
+            ),
+            frontend_views=("actions",),
+        ),
+        Capability(
+            id="league.season_projection",
+            name="联赛赛季预测",
+            description="蒙特卡洛模拟联赛最终排名、夺冠/降级概率、赛程难度分析。",
+            domain="team_analysis",
+            api_paths=(
+                "/league/season-projection",
+                "/league/form-table",
+                "/league/fixture-difficulty",
+            ),
+            frontend_views=("league",),
+        ),
+        Capability(
+            id="player.comparison",
+            name="球员对比",
+            description="多球员并排对比，百分位矩阵、指标排名、风格相似度。",
+            domain="player_analysis",
+            api_paths=(
+                "/players",
+                "/players/compare",
+                "/players/compare-multi",
+                "/players/{player_name}",
+                "/players/{player_name}/similar",
+                "/players/{player_name}/career-trajectory",
+                "/player/{player_name}/profile",
+            ),
+            frontend_views=("compare", "players"),
+        ),
+        Capability(
+            id="player.style_fit",
+            name="球员风格适配",
+            description="球员与球队风格匹配度、位置角色适配、风格邻居。",
+            domain="player_analysis",
+            api_paths=(
+                "/players/{player_name}/style-fit",
+                "/players/{player_name}/role-fit",
+                "/players/{player_name}/peer-benchmark",
+            ),
+            frontend_views=("players",),
+        ),
+        Capability(
+            id="position.analysis",
+            name="位置分析",
+            description="位置深度画像、位置风格演变、跨联赛位置对比、位置动作画像。",
+            domain="player_analysis",
+            api_paths=(
+                "/positions/depth-profile",
+                "/positions/style-evolution",
+                "/positions/action-profile",
+                "/positions/trend-overlay",
+                "/positions/{position_group}/style-drift",
+                "/positions/{position_group}/style-drift-neighbors",
+                "/positions/{position_group}/cross-league",
+                "/positions/{position_group}/action-similarity",
+            ),
+            frontend_views=("players",),
+        ),
+        Capability(
+            id="action_value.core",
+            name="动作价值计算",
+            description="基于 SPADL 的事件-动作转换，xT 期望值计算，球员动作价值聚合。",
+            domain="action_value",
+            cli_commands=("action-value", "action-value-matches"),
+            api_paths=(
+                "/action-values",
+                "/action-values/evidence",
+                "/action-values/evidence/{player_id}",
+                "/action-values/players/{player_id}/context",
+                "/action-values/players/{player_id}/rating-links",
+                "/action-values/matches",
+                "/value-summary",
+            ),
+            frontend_views=("actions",),
+        ),
+        Capability(
+            id="action_value.position_similarity",
+            name="动作位置相似度",
+            description="基于动作分布的位置相似度分析，跨联赛动作对比。",
+            domain="action_value",
+            api_paths=(
+                "/positions/{position_group}/action-similarity",
+                "/teams/cross-league-action",
+            ),
+            frontend_views=("actions",),
+        ),
+        Capability(
+            id="scouting.targets",
+            name="球探目标推荐",
+            description="基于球队需求的引援目标推荐，风格匹配度、位置缺口分析。",
+            domain="scouting",
+            api_paths=(
+                "/teams/{team}/scouting-targets",
+                "/teams/{team}/scouting-style-match/{position_group}",
+                "/teams/{team}/scouting-dashboard",
+                "/teams/{team}/position-gap-report",
+                "/teams/style-clusters/recruits",
+            ),
+            frontend_views=("scouting",),
+        ),
+        Capability(
+            id="scouting.watchlist",
+            name="观察名单与短名单",
+            description="上升/下滑球员观察名单、球探短名单、评审队列管理。",
+            domain="scouting",
+            api_paths=(
+                "/scouting/risers-decliners",
+                "/watchlist",
+                "/shortlist",
+                "/review-queue",
+            ),
+            frontend_views=("scouting",),
+        ),
+        Capability(
+            id="scouting.workspace",
+            name="球探工作区",
+            description="本地球探评审工作区，支持多工作区版本管理和并发控制。",
+            domain="scouting",
+            api_paths=(
+                "/scouting-workspaces",
+                "/scouting-workspaces/capabilities",
+                "/scouting-workspaces/latest",
+                "/scouting-workspaces/{workspace_id}",
+                "/scouting-workspaces/{workspace_id} (PUT)",
+            ),
+            frontend_views=("scouting",),
+        ),
+        Capability(
+            id="recruitment.briefs",
+            name="招募需求 brief",
+            description=(
+                "版本化招募需求 brief：球队、位置、角色、预算、年龄、合同、"
+                "联赛、语言和风险偏好。维护者本地对象，非外部事实。"
+                "支持原子写、备份、乐观并发和 Core 契约复用。"
+            ),
+            domain="recruitment",
+            cli_commands=(
+                "create-brief",
+                "list-briefs",
+                "show-brief",
+                "validate-brief",
+            ),
+            api_paths=(
+                "/recruitment/briefs",
+                "/recruitment/briefs (POST)",
+                "/recruitment/briefs/{brief_id}",
+                "/recruitment/briefs/{brief_id}/backups",
+                "/recruitment/briefs/{brief_id}/backups/{backup_filename}",
+                "/recruitment/briefs/{brief_id}/diff",
+                "/recruitment/briefs/{brief_id}/restore (POST)",
+                "/recruitment/contracts",
+            ),
+        ),
+        Capability(
+            id="recruitment.dossiers",
+            name="决策档案",
+            description=(
+                "版本化决策档案：整合支持证据、反证、对比、风险和人工判断，"
+                "形成从需求 brief 到人工结论的可追溯 round-trip。"
+                "维护者本地对象，非外部事实。"
+                "支持原子写、备份、乐观并发和 Core 契约复用。"
+            ),
+            domain="recruitment",
+            cli_commands=(
+                "create-dossier",
+                "list-dossiers",
+                "show-dossier",
+                "validate-dossier",
+            ),
+            api_paths=(
+                "/recruitment/dossiers",
+                "/recruitment/dossiers (POST)",
+                "/recruitment/dossiers/{dossier_id}",
+                "/recruitment/dossiers/{dossier_id} (PUT)",
+                "/recruitment/dossiers/{dossier_id}/backups",
+                "/recruitment/dossiers/{dossier_id}/backups/{backup_filename}",
+                "/recruitment/dossiers/{dossier_id}/diff",
+                "/recruitment/dossiers/{dossier_id}/restore (POST)",
+            ),
+        ),
+        Capability(
+            id="opposition.briefings",
+            name="比赛对手简报",
+            description=(
+                "来源受限的比赛对手简报：每条事实段携带 fact_tier "
+                "(official/recorded/estimated/unknown)，区分官方、记录、"
+                "估计和未知。维护者本地对象，非外部事实。"
+                "支持原子写、备份、乐观并发和 Core 契约复用。"
+            ),
+            domain="opposition",
+            cli_commands=(
+                "create-briefing",
+                "list-briefings",
+                "show-briefing",
+                "validate-briefing",
+            ),
+            api_paths=(
+                "/opposition/briefs",
+                "/opposition/briefs (POST)",
+                "/opposition/briefs/{briefing_id}",
+                "/opposition/briefs/{briefing_id} (PUT)",
+                "/opposition/briefs/{briefing_id}/backups",
+                "/opposition/briefs/{briefing_id}/backups/{backup_filename}",
+                "/opposition/briefs/{briefing_id}/diff",
+                "/opposition/briefs/{briefing_id}/restore (POST)",
+                "/opposition/contracts",
+            ),
+        ),
+        Capability(
+            id="opposition.post_match_reviews",
+            name="赛后复盘",
+            description=(
+                "版本化赛后复盘：比较假设-计划-执行-结果，记录被证伪的模式、"
+                "新问题和支持/反对证据，形成从赛前简报到赛后结论的可追溯 "
+                "round-trip。每条证据携带 fact_tier，区分官方、记录、估计和"
+                "未知。维护者本地对象，非外部事实。"
+                "支持原子写、备份、乐观并发和 Core 契约复用。"
+            ),
+            domain="opposition",
+            cli_commands=(
+                "create-review",
+                "list-reviews",
+                "show-review",
+                "validate-review",
+            ),
+            api_paths=(
+                "/opposition/reviews",
+                "/opposition/reviews (POST)",
+                "/opposition/reviews/{review_id}",
+                "/opposition/reviews/{review_id} (PUT)",
+                "/opposition/reviews/{review_id}/backups",
+                "/opposition/reviews/{review_id}/backups/{backup_filename}",
+                "/opposition/reviews/{review_id}/diff",
+                "/opposition/reviews/{review_id}/restore (POST)",
+            ),
+        ),
+        Capability(
+            id="worldcup.tournament",
+            name="世界杯锦标赛管理",
+            description="2026 世界杯 48 队锦标赛状态管理：积分榜、晋级计算、淘汰赛生成。",
+            domain="world_cup",
+            cli_commands=(
+                "tournament",
+                "tournament show",
+                "tournament standings",
+                "tournament apply",
+                "tournament clear",
+                "tournament reset",
+                "tournament matches",
+                "tournament scenarios",
+                "tournament qualification",
+                "tournament tiebreaks",
+            ),
+            api_paths=(
+                "/world-cup/groups",
+                "/world-cup/schedule",
+                "/worldcup/teams",
+                "/world-cup/contracts",
+                "/world-cup/tournament/summary",
+                "/world-cup/tournament/standings",
+                "/world-cup/tournament/standings-probabilities",
+                "/world-cup/tournament/overall-leaderboard",
+                "/world-cup/tournament/qualification-impact",
+                "/world-cup/tournament/tiebreak-diagnostics",
+                "/world-cup/tournament/matches",
+                "/world-cup/tournament/match-predictions",
+                "/world-cup/tournament/match-impact",
+                "/world-cup/tournament/top-matches",
+                "/world-cup/tournament/scenarios/{team}",
+                "/world-cup/tournament/group-simulation",
+                "/world-cup/tournament/export",
+                "/world-cup/tournament/import (POST)",
+                "/world-cup/tournament/import/preview (POST)",
+                "/world-cup/tournament/result (POST/DELETE)",
+                "/world-cup/tournament/reset (POST)",
+                "/world-cup/match-briefings/{home}/{away}/spotlight",
+                "/world-cup/teams/{team}/form-trend",
+            ),
+            frontend_views=("wc_schedule", "wc_knockout", "wc_tournament"),
+        ),
+        Capability(
+            id="worldcup.knockout",
+            name="世界杯淘汰赛",
+            description="淘汰赛对阵生成、结果录入、晋级路径、概率模拟。",
+            domain="world_cup",
+            cli_commands=(
+                "tournament knockout",
+                "tournament knockout generate",
+                "tournament knockout show",
+                "tournament knockout apply",
+                "tournament knockout clear",
+            ),
+            api_paths=(
+                "/world-cup/knockout",
+                "/world-cup/tournament/knockout",
+                "/world-cup/tournament/knockout/{match_id}/briefing",
+                "/world-cup/tournament/knockout/{match_id}/review",
+                "/world-cup/tournament/knockout/reviews",
+                "/world-cup/tournament/knockout/probabilities",
+                "/world-cup/tournament/knockout/scenarios/{team}",
+                "/world-cup/tournament/knockout/match-impact",
+                "/world-cup/tournament/knockout/generate (POST)",
+                "/world-cup/tournament/knockout/result (POST/DELETE)",
+            ),
+            frontend_views=("wc_knockout", "wc_tournament"),
+        ),
+        Capability(
+            id="worldcup.predictions",
+            name="世界杯预测",
+            description="世界杯小组赛预测、出线概率、淘汰赛概率、比赛预测。",
+            domain="world_cup",
+            api_paths=(
+                "/world-cup/predictions",
+                "/world-cup/predictions/{home_team}/{away_team}",
+                "/world-cup/match-briefings/{home_team}/{away_team}",
+                "/world-cup/outlook/{team}",
+            ),
+            frontend_views=("wc_probability", "wc_compare"),
+        ),
+        Capability(
+            id="worldcup.squads",
+            name="世界杯名单分析",
+            description="各队大名单、阵容平衡对比、球探需求分析。",
+            domain="world_cup",
+            api_paths=(
+                "/world-cup/squads/{team}",
+                "/world-cup/squads/{team}/scouting-needs",
+                "/world-cup/squad-balance-comparison/{team_a}/{team_b}",
+            ),
+            frontend_views=("wc_squads", "wc_compare"),
+        ),
+        Capability(
+            id="api.server",
+            name="API 服务",
+            description="FastAPI 只读 API 服务，支持 CORS、静态文件托管、工作区写操作。",
+            domain="infrastructure",
+            cli_commands=("serve",),
+            api_paths=(
+                "/health",
+                "/health/detailed",
+                "/health/research",
+                "/license",
+                "/search",
+                "/local-pack/export",
+                "/local-pack/import (POST)",
+                "/tactical-board/capabilities",
+                "/tactical-board/export/mp4 (POST)",
+            ),
+        ),
+        Capability(
+            id="local.portable_pack",
+            name="本地便携包",
+            description=(
+                "将本地招募 brief 与对手 briefing 打包为带 section SHA-256 的"
+                " JSON 便携包，用于跨机器迁移、本地备份和恢复；"
+                "导入时按 section 校验哈希、按 record 处理冲突，"
+                "不依赖云同步或外部账号。"
+            ),
+            domain="infrastructure",
+            cli_commands=(
+                "export-local-pack",
+                "import-local-pack",
+            ),
+            api_paths=(
+                "/local-pack/export",
+                "/local-pack/import (POST)",
+            ),
+        ),
+        Capability(
+            id="frontend.analyst_console",
+            name="分析师工作台",
+            description=(
+                "单页前端应用，包含球员、球队、预测、球探、"
+                "动作价值、世界杯等多个分析视图。"
+            ),
+            domain="infrastructure",
+            frontend_views=(
+                "overview",
+                "players",
+                "compare",
+                "value",
+                "matches",
+                "teams",
+                "league",
+                "scouting",
+                "actions",
+                "reports",
+                "tactical",
+                "wc_schedule",
+                "wc_squads",
+                "wc_compare",
+                "wc_probability",
+                "wc_knockout",
+                "wc_tournament",
+                "license",
+                "data",
+                "calibration",
+                "backtest",
+                "help",
+                "workflow",
+                "versions",
+            ),
+            data_artifacts=("frontend/data/",),
+        ),
+        Capability(
+            id="data.artifacts",
+            name="数据产物清单",
+            description="所有数据产物的元数据清单、版本信息、来源归属。",
+            domain="infrastructure",
+            cli_commands=("info", "capabilities", "data-contracts"),
+            api_paths=(
+                "/artifacts",
+                "/model-runs",
+                "/reports/model-runs",
+                "/reports/model-runs/{run_id}",
+            ),
+            frontend_views=("data",),
+        ),
+    )
+
+    domains = tuple(sorted({c.domain for c in caps}))
+
+    return CapabilityRegistry(
+        generated_at=_dt.datetime.now(_dt.UTC).isoformat(),
+        package_version=__version__,
+        domains=domains,
+        capabilities=caps,
+    )
+
+
+def _source_licenses() -> dict[str, SourceLicense]:
+    """Return the canonical source license definitions."""
+    return {
+        "statsbomb_open": SourceLicense(
+            source_name="statsbomb_open",
+            license_name="StatsBomb Open Data User Protocol",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://github.com/statsbomb/open-data",
+            notes="Free for research; attribution required.",
+        ),
+        "football_data": SourceLicense(
+            source_name="football_data",
+            license_name="Football-Data.co.uk non-commercial",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://www.football-data.co.uk/",
+            notes="Free for non-commercial use; attribution suggested.",
+        ),
+        "clubelo": SourceLicense(
+            source_name="clubelo",
+            license_name="ClubElo public data",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="http://api.clubelo.com/",
+            notes="Public data; attribution suggested.",
+        ),
+        "understat": SourceLicense(
+            source_name="understat",
+            license_name="Understat public data",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://understat.com/",
+            notes="Public data; scrape respects robots.txt and ToS.",
+        ),
+        "fbref": SourceLicense(
+            source_name="fbref",
+            license_name="FBref personal research only",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://fbref.com/",
+            notes="Personal research only; no redistribution of raw data.",
+        ),
+        "transfermarkt_manual": SourceLicense(
+            source_name="transfermarkt_manual",
+            license_name="Transfermarkt manual import only",
+            attribution_required=True,
+            redistribution_allowed=False,
+            commercial_use_allowed=False,
+            source_url="https://www.transfermarkt.com/",
+            notes="Manual import only; no automated scraping.",
+        ),
+        "reep": SourceLicense(
+            source_name="reep",
+            license_name="CC0 1.0 Universal",
+            attribution_required=False,
+            redistribution_allowed=True,
+            commercial_use_allowed=True,
+            source_url="https://github.com/withqwerty/reep",
+            notes=(
+                "Repository-published Wikidata-derived identity register; local use is limited "
+                "to identifier mapping review and does not establish market-value "
+                "or performance facts."
+            ),
+        ),
+    }
+
+
+def build_data_contract_registry() -> DataContractRegistry:
+    """Build the canonical data contract registry.
+
+    Combines core table schemas with source license, lineage and
+    coverage metadata into a single machine-readable catalog.
+    Raw-layer artifacts carry explicit source licenses; derived
+    layers inherit from their upstream sources.
+    """
+    licenses = _source_licenses()
+    arch = build_default_architecture()
+    table_defs = build_core_table_definitions()
+
+    raw_dirs = [d for d in arch.data_directories if d.layer == "raw"]
+    raw_contracts = tuple(
+        DataContract(
+            artifact_id=d.relative_path,
+            layer=d.layer,
+            purpose=d.purpose,
+            license=licenses.get(d.source_name) if d.source_name else None,
+            recorded=d.recorded,
+            recorded_note=d.recorded_note,
+        )
+        for d in raw_dirs
+    )
+
+    silver_contracts = tuple(
+        DataContract(
+            artifact_id=t.name,
+            layer=t.layer,
+            purpose=t.purpose,
+            primary_keys=t.primary_keys,
+            columns=t.columns,
+        )
+        for t in table_defs
+    )
+
+    derived_dirs = [
+        d for d in arch.data_directories if d.layer not in ("raw", "silver")
+    ]
+    derived_contracts = tuple(
+        DataContract(
+            artifact_id=d.relative_path,
+            layer=d.layer,
+            purpose=d.purpose,
+            recorded=d.recorded,
+            recorded_note=d.recorded_note,
+        )
+        for d in derived_dirs
+    )
+
+    all_contracts = raw_contracts + silver_contracts + derived_contracts
+    layers = tuple(sorted({c.layer for c in all_contracts}))
+
+    return DataContractRegistry(
+        generated_at=_dt.datetime.now(_dt.UTC).isoformat(),
+        package_version=__version__,
+        layers=layers,
+        contracts=all_contracts,
     )

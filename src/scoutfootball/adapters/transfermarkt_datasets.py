@@ -1,7 +1,16 @@
-"""Transfermarkt-datasets adapter for bulk data import from pre-built DuckDB.
+"""Transfermarkt-datasets adapter for bulk data import.
 
-Downloads the dcaribou/transfermarkt-datasets DuckDB file (~500MB) and
-exports individual tables to Parquet for downstream ingestion.
+Two acquisition paths are supported for the same upstream dataset
+(``dcariboo/player-scores`` on Kaggle, mirrored by the
+``dcariboo/transfermarkt-datasets`` GitHub project):
+
+1. ``download_duckdb()`` / ``export_table()`` — pull a pre-built ~500MB DuckDB
+   file and export individual tables to Parquet.
+2. ``load_csv_table()`` — read a CSV downloaded via the Kaggle CLI (see
+   ``scripts/download_transfermarkt_kaggle.py``) and export to Parquet.
+
+Both paths write to ``data/raw/transfermarkt_datasets/{table_name}.parquet``
+and return the same :class:`AdapterResult` shape.
 """
 
 from __future__ import annotations
@@ -186,6 +195,79 @@ def export_priority_tables(
             results[table_name] = f"error: {exc}"
             logger.error("Failed to export %s: %s", table_name, exc)
     return results
+
+
+def load_csv_table(
+    table_name: str,
+    *,
+    settings: PlatformSettings | None = None,
+    force_refresh: bool = False,
+) -> AdapterResult:
+    """Load a Transfermarkt table from a locally downloaded Kaggle CSV.
+
+    Reads ``data/raw/transfermarkt_datasets/csv/{table_name}.csv`` (populated
+    by ``scripts/download_transfermarkt_kaggle.py``) and writes a Parquet
+    snapshot alongside the DuckDB-exported tables. The CSV path is the
+    Kaggle alternative to :func:`export_table`; both produce the same
+    ``{table_name}.parquet`` artifact.
+
+    Raises ``ValueError`` if the table name is unknown and ``FileNotFoundError``
+    if the CSV is missing.
+    """
+    if table_name not in EXPECTED_TABLES:
+        raise ValueError(
+            f"Unknown table '{table_name}'. Expected one of: {sorted(EXPECTED_TABLES)}"
+        )
+
+    import pandas as pd
+
+    resolved_settings = settings or PlatformSettings.from_root()
+    csv_dir = resolved_settings.raw_root / SOURCE_NAME / "csv"
+    csv_path = csv_dir / f"{table_name}.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"Kaggle CSV for table '{table_name}' not found at {csv_path}. "
+            "Run `scripts/download_transfermarkt_kaggle.py` first."
+        )
+
+    dest_dir = resolved_settings.raw_root / SOURCE_NAME
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    parquet_path = dest_dir / f"{table_name}.parquet"
+
+    if parquet_path.exists() and not force_refresh:
+        con = connect_duckdb()
+        try:
+            frame = con.execute("SELECT * FROM read_parquet(?)", [str(parquet_path)]).fetchdf()
+        finally:
+            con.close()
+        metadata = _build_metadata(
+            settings=resolved_settings,
+            source_uri=f"kaggle-csv:{table_name}",
+            cache_path=parquet_path,
+            payload_hash=_sha256_file(parquet_path),
+            record_count=len(frame),
+            cache_hit=True,
+        )
+        return AdapterResult(dataframe=frame, metadata=metadata)
+
+    frame = pd.read_csv(csv_path)
+    frame.to_parquet(parquet_path, index=False)
+    logger.info(
+        "Loaded Kaggle CSV %s -> %s (%d rows)",
+        csv_path.name,
+        parquet_path,
+        len(frame),
+    )
+
+    metadata = _build_metadata(
+        settings=resolved_settings,
+        source_uri=f"kaggle-csv:{table_name}",
+        cache_path=parquet_path,
+        payload_hash=_sha256_file(parquet_path),
+        record_count=len(frame),
+        cache_hit=False,
+    )
+    return AdapterResult(dataframe=frame, metadata=metadata)
 
 
 def _validate_duckdb_tables(duckdb_path: Path) -> None:

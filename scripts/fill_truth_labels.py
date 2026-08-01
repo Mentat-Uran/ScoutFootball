@@ -76,7 +76,7 @@ def validate_truth_labels(df: pd.DataFrame) -> list[str]:
 # Paths
 RATINGS_PATH = PROJECT_ROOT / "data" / "gold" / "feature_store" / "player_ratings_optimized.parquet"
 OUTPUT_PATH = PROJECT_ROOT / "data" / "gold" / "feature_store" / "player_truth_labels.parquet"
-TRANSFERMARKT_DIR = PROJECT_ROOT / "data" / "raw" / "transfermarkt"
+TRANSFERMARKT_DIR = PROJECT_ROOT / "data" / "raw" / "transfermarkt_manual"
 
 # Seasons to label
 TARGET_SEASONS = ["2223", "2324", "2425", "2526"]

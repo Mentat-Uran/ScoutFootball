@@ -26,6 +26,56 @@ def test_world_cup_match_briefing_returns_prediction_and_coverage() -> None:
     assert "placeholder" in " ".join(briefing["limitations"]).lower()
 
 
+def test_input_snapshot_exposes_recorded_feature_manifest_hash(monkeypatch) -> None:
+    """The input_snapshot.feature_manifest_hash field must surface the
+    real hash recorded in the latest model run's lineage, not an empty
+    string. Previously this read manifest.get("sha256", "") but the
+    actual field name in meta.json.lineage.feature_manifest is "hash",
+    so the API always returned "" even when a hash was recorded.
+    """
+    monkeypatch.setattr(api, "get_model_runs", lambda: {
+        "runs": [{
+            "run_id": "test-run",
+            "lineage": {
+                "status": "recorded",
+                "dataset_snapshot": {"input_hash": "abc123"},
+                "feature_manifest": {"hash": "bba38aa0f9c1b233"},
+            },
+        }]
+    })
+
+    snapshot = api._world_cup_briefing_input_snapshot()
+
+    assert snapshot["status"] == "recorded"
+    assert snapshot["rating_model_run_id"] == "test-run"
+    assert snapshot["rating_input_hash"] == "abc123"
+    assert snapshot["feature_manifest_hash"] == "bba38aa0f9c1b233"
+
+
+def test_input_snapshot_returns_empty_hash_for_legacy_run_without_lineage(monkeypatch) -> None:
+    """Legacy runs that predate feature-manifest lineage capture still
+    flow through _model_run_lineage which returns feature_manifest.hash=None.
+    The API must surface an empty string in that case, not crash or
+    invent a value.
+    """
+    monkeypatch.setattr(api, "get_model_runs", lambda: {
+        "runs": [{
+            "run_id": "legacy-run",
+            "lineage": {
+                "status": "not_recorded",
+                "dataset_snapshot": {"input_hash": None},
+                "feature_manifest": {"hash": None, "schema_version": None},
+                "note": "This legacy run predates feature-manifest lineage capture.",
+            },
+        }]
+    })
+
+    snapshot = api._world_cup_briefing_input_snapshot()
+
+    assert snapshot["status"] == "not_recorded"
+    assert snapshot["feature_manifest_hash"] == ""
+
+
 def test_world_cup_match_briefing_rejects_unknown_team() -> None:
     briefing = get_world_cup_match_briefing("Unknown XI", "France")
 

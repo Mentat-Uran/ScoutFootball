@@ -382,11 +382,27 @@ def test_multi_compare_too_few(synthetic_df):
 
 
 def test_multi_compare_too_many(synthetic_df):
-    """Six players should return an error."""
-    names = [f"ST Player {i}" for i in range(6)]
+    """Seven players should return an error (max is 6 since Round 84)."""
+    names = [f"ST Player {i}" for i in range(7)]
     rows = {n: synthetic_df[synthetic_df["player"] == n].iloc[0] for n in names}
     result = compute_multi_player_comparison(rows, synthetic_df)
     assert result["error"] == "too_many_players"
+
+
+def test_multi_compare_six_players_ok(synthetic_df):
+    """Six players should succeed (Round 84 raised the cap from 5 to 6)."""
+    names = [f"ST Player {i}" for i in range(6)]
+    rows = {n: synthetic_df[synthetic_df["player"] == n].iloc[0] for n in names}
+    result = compute_multi_player_comparison(rows, synthetic_df)
+    assert "error" not in result
+    assert result["n_players"] == 6
+    assert len(result["players"]) == 6
+    # Pairwise similarity matrix should be 6x6 with diagonal == 1.0
+    matrix = result["pairwise_similarity"]["matrix"]
+    assert len(matrix) == 6
+    assert all(len(row) == 6 for row in matrix)
+    for i in range(6):
+        assert matrix[i][i] == 1.0
 
 
 def test_multi_compare_basic(synthetic_df):

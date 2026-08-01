@@ -1169,25 +1169,50 @@ def permutation_feature_importance(
     return result
 
 
-def compute_input_hash(data_dir: Path) -> str:
-    """Compute SHA256 hash of key input files for reproducibility."""
-    hasher = hashlib.sha256()
-    key_files = [
-        "gold/feature_store/rating_feature_matrix.parquet",
+def optimizer_input_artifacts(data_dir: Path) -> list[str]:
+    """List the local artifacts that can influence an optimizer run.
+
+    The active player-rating output is deliberately excluded: the optimizer
+    does not read it, so including it would make a candidate's lineage depend
+    on the score artifact it may later replace. Optional FBref inputs follow
+    the same five-season/three-season fallback that ``load_data`` uses.
+    """
+    root = Path(data_dir)
+    candidates = [
+        "raw/fbref/player_stats_big5_3seasons.parquet",
         "raw/football_data/combined_results.parquet",
-        "gold/feature_store/player_ratings_optimized.parquet",
+        "raw/understat/players_10seasons.parquet",
+        "gold/feature_store/rating_feature_matrix.parquet",
+        "gold/feature_store/player_truth_labels.parquet",
     ]
-    for rel_path in key_files:
+    for preferred, fallback in (
+        (
+            "raw/fbref/player_misc_5seasons.parquet",
+            "raw/fbref/player_misc_3seasons.parquet",
+        ),
+        (
+            "raw/fbref/player_shooting_5seasons.parquet",
+            "raw/fbref/player_shooting_3seasons.parquet",
+        ),
+    ):
+        candidates.append(preferred if (root / preferred).exists() else fallback)
+    return [relative for relative in candidates if (root / relative).exists()]
+
+
+def compute_input_hash(data_dir: Path) -> str:
+    """Compute SHA256 hash of artifacts actually read by the optimizer."""
+    hasher = hashlib.sha256()
+    for rel_path in optimizer_input_artifacts(data_dir):
         fpath = data_dir / rel_path
-        if fpath.exists():
-            hasher.update(fpath.read_bytes())
+        hasher.update(fpath.read_bytes())
     return hasher.hexdigest()[:16]
 
 
 def build_run_lineage(data_dir: Path, *, input_hash: str | None = None) -> dict:
     """Describe the local dataset and feature-manifest snapshot used by a run.
 
-    The rating optimizer's input hash identifies the selected source artifacts.
+    The rating optimizer's input hash identifies source artifacts actually read
+    by the run, never an active player-rating output.
     The adjacent feature-manifest hash identifies the schema and feature build
     metadata separately, so a run can be reproduced or explicitly marked as
     partially recorded when older artifacts lack that manifest.
@@ -1212,11 +1237,7 @@ def build_run_lineage(data_dir: Path, *, input_hash: str | None = None) -> dict:
         "status": "recorded" if manifest_hash else "partial",
         "dataset_snapshot": {
             "input_hash": snapshot_hash,
-            "input_artifacts": [
-                "gold/feature_store/rating_feature_matrix.parquet",
-                "raw/football_data/combined_results.parquet",
-                "gold/feature_store/player_ratings_optimized.parquet",
-            ],
+            "input_artifacts": optimizer_input_artifacts(root),
         },
         "feature_manifest": {
             "path": "gold/feature_store/rating_feature_matrix_manifest.json",
@@ -1286,9 +1307,14 @@ def save_model_run(
     metrics: dict,
     args: argparse.Namespace | None = None,
     output_dir: Path | None = None,
+    run_id: str | None = None,
     feat_hash: str | None = None,
     data_dir: Path | None = None,
     data_coverage: dict | None = None,
+    error_cases: dict | None = None,
+    candidate_artifacts: dict | None = None,
+    train_seasons: tuple[str, ...] | list[str] | None = None,
+    test_seasons: tuple[str, ...] | list[str] | None = None,
 ):
     """Save model run with full provenance to data/models/runs/<timestamp>/.
 
@@ -1301,7 +1327,9 @@ def save_model_run(
     import platform
     from datetime import UTC, datetime
 
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    if Path(timestamp).name != timestamp:
+        raise ValueError("run_id must be a single directory name")
     run_dir = (output_dir or Path("data/models/runs")) / timestamp
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1311,18 +1339,26 @@ def save_model_run(
     # Build meta
     meta: dict = {
         "timestamp": timestamp,
+        "run_id": timestamp,
         "params_shape": list(params.shape),
         "params_mean": float(params.mean()),
         "params_std": float(params.std()),
         "input_hash": feat_hash,
-        "metrics": {
-            k: float(v) if isinstance(v, (int, float, np.floating)) else str(v)
-            for k, v in metrics.items()
-        },
+        # Metrics contain nested baseline/holdout dictionaries. Preserve that
+        # structure so a later promotion review can compare like-for-like
+        # evidence; converting nested values to ``str`` makes it impossible to
+        # distinguish an evaluated candidate from a legacy opaque record.
+        "metrics": _json_ready(metrics),
         "lineage": build_run_lineage(data_dir or Path("data"), input_hash=feat_hash),
+        "activation": {
+            "status": "not_activated",
+            "note": "Candidate artifacts remain local until an explicit promotion workflow exists.",
+        },
     }
     if data_coverage is not None:
         meta["data_coverage"] = _json_ready(data_coverage)
+    if candidate_artifacts is not None:
+        meta["candidate_artifacts"] = _json_ready(candidate_artifacts)
 
     # Dependency versions for reproducibility
     dep_versions: dict[str, str] = {
@@ -1342,20 +1378,28 @@ def save_model_run(
             pass
     meta["dependency_versions"] = dep_versions
 
-    # Train/test season split
-    if args is not None:
-        train_seasons = getattr(args, "train_seasons", None)
-        test_seasons = getattr(args, "test_seasons", None)
-        if train_seasons:
-            meta["train_seasons"] = (
-                [train_seasons] if isinstance(train_seasons, str)
-                else list(train_seasons)
-            )
-        if test_seasons:
-            meta["test_seasons"] = (
-                [test_seasons] if isinstance(test_seasons, str)
-                else list(test_seasons)
-            )
+    # Record the actual split selected by ``make_holdout_split``. CLI knobs
+    # such as ``--test-seasons 1`` are configuration counts, not a season
+    # list, and must never be represented as the holdout itself.
+    def _season_list(value: object) -> list[str] | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (list, tuple)):
+            return [str(season) for season in value]
+        return None
+
+    recorded_train = _season_list(train_seasons)
+    recorded_test = _season_list(test_seasons)
+    if recorded_train is None and args is not None:
+        recorded_train = _season_list(getattr(args, "train_seasons", None))
+    if recorded_test is None and args is not None:
+        recorded_test = _season_list(getattr(args, "test_seasons", None))
+    if recorded_train:
+        meta["train_seasons"] = recorded_train
+    if recorded_test:
+        meta["test_seasons"] = recorded_test
 
     # Position-level metrics (if provided in metrics dict)
     for pos_key in ("position_metrics", "position_metrics_by_group"):
@@ -1363,10 +1407,12 @@ def save_model_run(
             meta[pos_key] = _json_ready(metrics[pos_key])
             break
 
-    # Error cases: load holdout predictions and find biggest residuals
-    error_cases = _compute_error_cases(output_dir)
-    if error_cases:
-        meta["error_cases"] = error_cases
+    # Prefer error cases derived from this exact holdout evaluation. The legacy
+    # file lookup remains only as a compatibility fallback and must not make a
+    # run depend on a stale shared file.
+    recorded_error_cases = error_cases or _compute_error_cases(output_dir)
+    if recorded_error_cases:
+        meta["error_cases"] = _json_ready(recorded_error_cases)
 
     if args is not None:
         meta["args"] = {
@@ -1400,6 +1446,50 @@ def save_model_run(
 
     print(f"  模型运行登记已保存: {run_dir}")
     return run_dir
+
+
+def compute_error_cases(matched_df: pd.DataFrame) -> dict | None:
+    """Summarize the largest team-level residuals for one holdout evaluation."""
+    if matched_df.empty or "team" not in matched_df.columns:
+        return None
+
+    prepared = matched_df.copy()
+    residual_col = "residual"
+    prediction_columns = ("pred_points_calibrated", "pred_points_global", "pred_rating")
+    prediction_column = next(
+        (column for column in prediction_columns if column in prepared),
+        None,
+    )
+    if prediction_column is not None and "actual_points" in prepared.columns:
+        prepared[residual_col] = (
+            pd.to_numeric(prepared[prediction_column], errors="coerce")
+            - pd.to_numeric(prepared["actual_points"], errors="coerce")
+        )
+        residual_definition = "prediction_minus_actual"
+    elif residual_col in prepared.columns:
+        # A historical fallback file may have an undocumented residual sign.
+        # Preserve it for inspection instead of mislabelling the direction.
+        residual_definition = "legacy_residual_column_direction_not_recorded"
+    else:
+        return None
+
+    prepared[residual_col] = pd.to_numeric(prepared[residual_col], errors="coerce")
+    prepared = prepared.dropna(subset=["team", residual_col])
+    if prepared.empty:
+        return None
+
+    aggregated = prepared.groupby("team", observed=True)[residual_col].mean().sort_values()
+    return {
+        "residual_definition": residual_definition,
+        "over_estimated": [
+            {"team": str(team), "residual": round(float(value), 1)}
+            for team, value in aggregated.tail(5).items()
+        ],
+        "under_estimated": [
+            {"team": str(team), "residual": round(float(value), 1)}
+            for team, value in aggregated.head(5).items()
+        ],
+    }
 
 
 def _compute_error_cases(output_dir: Path | None) -> dict | None:
@@ -1463,19 +1553,8 @@ def _compute_error_cases(output_dir: Path | None) -> dict | None:
         else:
             return None
 
-    # Aggregate by team (a team may appear in multiple seasons)
-    agg = df.groupby(team_col)[residual_col].mean().sort_values()
-    over_estimated = [
-        {"team": str(team), "residual": round(float(val), 1)}
-        for team, val in agg.tail(5).items()
-    ]
-    under_estimated = [
-        {"team": str(team), "residual": round(float(val), 1)}
-        for team, val in agg.head(5).items()
-    ]
-    # over_estimated = model predicts too high (positive residual)
-    # under_estimated = model predicts too low (negative residual)
-    return {"over_estimated": over_estimated, "under_estimated": under_estimated}
+    prepared = df.rename(columns={team_col: "team", residual_col: "residual"})
+    return compute_error_cases(prepared)
 
 
 def _json_ready(value):

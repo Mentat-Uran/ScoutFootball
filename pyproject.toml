@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scoutfootball"
-version = "1.0.3"
+version = "1.1.0"
 description = "ScoutFootball for World Cup — local-first football analytics platform for the 2026 FIFA World Cup."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,6 +32,7 @@ scoutfootball = "scoutfootball.__main__:main"
 [dependency-groups]
 dev = [
   "httpx>=0.28.1",
+  "playwright>=1.61.0",
   "py>=1.11.0",
   "pyinstaller>=6.20.0",
   "pytest>=8.4,<9.0",
@@ -54,6 +55,7 @@ testpaths = ["tests"]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "e2e: marks tests as real-browser E2E tests (run explicitly with '-m e2e')",
 ]
 filterwarnings = [
     "ignore:Mean of empty slice:RuntimeWarning",

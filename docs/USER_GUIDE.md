@@ -30,14 +30,14 @@ ScoutFootball 是一款本地优先的足球分析平台，为 2026 美加墨世
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 克隆项目
-git clone https://github.com/Mentaturan/ScoutFootball_for_World_Cup.git
+git clone https://github.com/Mentat-Uran/ScoutFootball_for_World_Cup.git
 cd ScoutFootball_for_World_Cup
 uv sync
 ```
 
 ### 3.2 桌面应用安装
 
-- **macOS**：从 [GitHub Releases](https://github.com/Mentaturan/ScoutFootball_for_World_Cup/releases) 下载 `.dmg` 文件，拖入 Applications 文件夹
+- **macOS**：从 [GitHub Releases](https://github.com/Mentat-Uran/ScoutFootball_for_World_Cup/releases) 下载 `.dmg` 文件，拖入 Applications 文件夹
 - **Windows**：从 GitHub Releases 下载 `.exe` 安装程序，按提示安装
 - 首次打开 macOS 应用时需右键点击 → 打开（未签名应用）
 

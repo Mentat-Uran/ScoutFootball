@@ -8,26 +8,46 @@ from .match import (
     PeriodType,
     TrackingFrame,
 )
-from .project import DataDirectorySpec, ModuleBoundary, ProjectArchitecture
+from .project import (
+    Capability,
+    CapabilityRegistry,
+    DataDirectorySpec,
+    ModuleBoundary,
+    ProjectArchitecture,
+)
 from .storage import (
     ColumnDefinition,
+    CoverageInfo,
+    DataContract,
+    DataContractRegistry,
     IngestMetadata,
+    LineageEntry,
+    SnapshotInfo,
+    SourceLicense,
     SourceRequestLogEntry,
     TableDefinition,
     build_core_table_definitions,
 )
 
 __all__ = [
+    "Capability",
+    "CapabilityRegistry",
     "ColumnDefinition",
+    "CoverageInfo",
+    "DataContract",
+    "DataContractRegistry",
     "DataDirectorySpec",
     "IngestMetadata",
     "InternalEvent",
     "InternalLineup",
     "InternalMatch",
+    "LineageEntry",
     "MatchStatus",
     "ModuleBoundary",
     "PeriodType",
     "ProjectArchitecture",
+    "SnapshotInfo",
+    "SourceLicense",
     "SourceRequestLogEntry",
     "TableDefinition",
     "TrackingFrame",

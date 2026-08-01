@@ -29,10 +29,12 @@ Mac 完整模式 (较慢但更准):
 """
 
 import argparse
+import hashlib
 import time
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
-import numpy as np
 import pandas as pd
 import torch
 
@@ -48,6 +50,7 @@ from optimizer.cv import _print_metric_block, run_cross_validation, run_paramete
 from optimizer.data import (
     _filter_by_seasons,
     build_dc_tensors,
+    compute_error_cases,
     compute_input_hash,
     evaluate_params,
     fit_team_points_calibrator,
@@ -59,8 +62,17 @@ from optimizer.data import (
     summarize_optimizer_data_coverage,
 )
 from optimizer.optimization import _get_default_params_tensor, optimize
-from optimizer.scoring import build_feature_tensors
+from optimizer.scoring import build_feature_tensors, score_player_ratings_frame
 from optimizer.truth import build_truth_label_anchor
+from optimizer.validation_gate import add_force_flag, run_validation_gate
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def main():
@@ -138,6 +150,9 @@ def main():
                         help="快速模式：大幅降低种群/步数/耐心，适合 Mac CPU/MPS 本地快速迭代")
     parser.add_argument("--no-viz", action="store_true",
                         help="禁用实时可视化（适用于无 GUI 环境或远程服务器）")
+    # Pre-training validation gate (mirrors `train` and `train-rating-nn` CLI
+    # gates). Default: fail-closed; --force overrides at the maintainer's risk.
+    add_force_flag(parser)
     args = parser.parse_args()
 
     # Quick mode: Mac-friendly defaults
@@ -162,6 +177,19 @@ def main():
         args.prior_weight = args.prior_strength
 
     data_dir = Path(args.data_dir).resolve()
+
+    # Pre-training validation gate (parallel to `train` and `train-rating-nn`
+    # CLI gates). Without this, the GPU optimizer is a third ungated path that
+    # produces the same kind of candidate runs reviewed by `model-admission`.
+    # The gate runs before any data loading or device detection so it fails
+    # fastest on inconsistent data (NaN goals, stale manifests, broken
+    # source_lineage, duplicate keys, negative metrics, corrupted truth labels).
+    should_proceed, gate_msg = run_validation_gate(args, data_dir)
+    if gate_msg:
+        print(gate_msg)
+    if not should_proceed:
+        return
+
     print("=" * 80)
     print("球员评分权重优化器 (PyTorch GPU)")
     print("=" * 80)
@@ -301,6 +329,9 @@ def main():
             )
         else:
             print(f"  球员真值标签锚定跳过: {truth_anchor.get('reason')}")
+    candidate_run_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    candidate_dir = data_dir / "models" / "runs" / candidate_run_id
+    candidate_dir.mkdir(parents=True, exist_ok=False)
     best_params = optimize(
         train_feat, train_team_pts, device,
         n_steps=args.steps, lr=args.lr, pop_size=args.pop,
@@ -325,7 +356,7 @@ def main():
         warmup_steps=args.warmup_steps, min_lr_ratio=args.min_lr_ratio,
         grad_clip=args.grad_clip, seed=args.seed,
         enable_viz=not args.no_viz,
-        output_dir=data_dir / "gold" / "feature_store",
+        output_dir=candidate_dir,
     )
     print(f"  总耗时: {time.time()-t0:.1f}s")
 
@@ -516,11 +547,18 @@ def main():
 
     # Save outputs
     print("\n[13] 保存输出...")
-    output_dir = data_dir / "gold" / "feature_store"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    np.save(output_dir / "optimized_params.npy", best_params_cpu.numpy())
-
+    candidate_ratings_path = candidate_dir / "player_ratings_candidate.parquet"
+    candidate_ratings = score_player_ratings_frame(df, best_params, device)
+    candidate_ratings.to_parquet(candidate_ratings_path, index=False)
+    candidate_artifacts = {
+        "ratings": {
+            "path": candidate_ratings_path.name,
+            "sha256": _sha256_file(candidate_ratings_path),
+            "rows": int(len(candidate_ratings)),
+            "columns": list(candidate_ratings.columns),
+            "scope": "unactivated_local_candidate",
+        }
+    }
     # Build metrics dict for save_model_run
     metrics = {
         "baseline_train": baseline_train_eval["metrics"],
@@ -530,19 +568,26 @@ def main():
         "overfit_rank_loss_gap": overfit_gap,
     }
 
-    save_model_run(
+    run_dir = save_model_run(
         params=best_params_cpu.numpy(),
         metrics=metrics,
         args=args,
+        output_dir=candidate_dir.parent,
+        run_id=candidate_run_id,
         feat_hash=feat_hash,
         data_dir=data_dir,
         data_coverage=data_coverage,
+        error_cases=compute_error_cases(optimized_test_eval["matched"]),
+        candidate_artifacts=candidate_artifacts,
+        train_seasons=holdout.train_seasons,
+        test_seasons=holdout.test_seasons,
     )
 
     print(f"\n{'='*80}")
     print("完成!")
-    print(f"  optimized_params.npy: {output_dir / 'optimized_params.npy'}")
-    print(f"  optimized_params_meta.json: {output_dir / 'optimized_params_meta.json'}")
+    print(f"  candidate run (not activated): {run_dir}")
+    print(f"  optimized_params.npy: {run_dir / 'optimized_params.npy'}")
+    print(f"  candidate ratings: {candidate_ratings_path}")
     print(f"{'='*80}")
 
 

@@ -1,5 +1,7 @@
 # 用 Codex 开发足球数据平台的分析报告
 
+> **历史资料（已被新战略取代）：** 本文保留早期数据源和建模调研背景，但其中的内部 `turn...` 引用不可移植，部分时间敏感事实、数据行数、优先级和能力状态未经 2026-07-16 重新核验。当前市场判断使用 [`FOOTBALL_TOOLING_LANDSCAPE_2026.md`](FOOTBALL_TOOLING_LANDSCAPE_2026.md)，当前能力使用 [`CAPABILITIES.md`](CAPABILITIES.md)，未来顺序使用 [`ROADMAP.md`](ROADMAP.md)。不要从本文直接创建新任务。
+
 ## 执行摘要
 
 这个项目最合理的落地路径，不是“先把所有网站都爬一遍”，而是先按**合规性、稳定性、字段价值、可复现性**做数据源分层：用 **StatsBomb Open Data** 做官方事件流主源，用 **Understat** 补充公开 xG、xA、xGChain、xGBuildup，用 **Football-Data.co.uk** 提供结果与赔率基线，用 **Club Elo** 提供球队强度时间序列；**FBref** 只建议保留为标准表与补充源，因为 Sports Reference 已在 **2026-01-20** 公告移除了 FBref 的 advanced data，且其 Bot Traffic 页面明确说明 FBref/Stathead 超过约 **10 次/分钟** 会被限流或封禁；**Transfermarkt** 则不应做自动化抓取，因为其官方条款明确禁止 bots、screen scraping，以及将数字内容用于 AI/机器学习系统训练。citeturn19view0turn11search7turn11search4turn27search0turn27search1turn27search5turn7search2turn7search4turn28search0turn28search1turn35search0turn35search4turn35search6turn4view1

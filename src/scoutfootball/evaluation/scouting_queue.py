@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 BIG5_LEAGUES = {
     "Premier League",
@@ -145,6 +148,12 @@ def _load_curated_queues(reports_root: Path, *, run_id: str) -> ScoutingQueues |
         try:
             frame = pd.read_parquet(path)
         except Exception:
+            logger.warning(
+                "Scouting queue: failed to read parquet %s; "
+                "returning empty frame (scouting queue will be incomplete)",
+                path,
+                exc_info=True,
+            )
             return pd.DataFrame(columns=SCOUTING_QUEUE_COLUMNS)
         for col in SCOUTING_QUEUE_COLUMNS:
             if col not in frame.columns:

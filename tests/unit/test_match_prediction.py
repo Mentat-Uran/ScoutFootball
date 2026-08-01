@@ -14,7 +14,9 @@ from scoutfootball.models.match_prediction import (
     PoissonPrediction,
     _dc_tau_scalar,
     calibrate_predictions,
+    compute_form_weights,
     fit_dixon_coles,
+    fit_dixon_coles_with_form,
     fit_independent_poisson,
     predict_match,
     predict_match_dc,
@@ -77,6 +79,34 @@ class TestFitIndependentPoisson:
         })
         with pytest.raises(ValueError, match="both home and away"):
             fit_independent_poisson(df)
+
+    def test_nan_goals_skipped_in_aggregations(self) -> None:
+        """NaN goals must not propagate into NaN team strengths.
+
+        ``_fit_strength_lookup`` relies on pandas' default ``skipna=True`` for
+        ``groupby.sum`` and on ``count`` counting only non-NaN values. If a future
+        refactor changes that behavior, this test will catch it before the model
+        silently produces NaN parameters.
+        """
+        df = _make_team_match_df(n_teams=6, n_rounds=4)
+        # Corrupt one home row's goals_for with NaN
+        df.loc[df.index[0], "goals_for"] = np.nan
+
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            model = fit_independent_poisson(df)
+
+        assert np.isfinite(model.league_home_rate)
+        assert model.league_home_rate > 0
+        for lookup in (
+            model.home_attack_strength,
+            model.away_attack_strength,
+            model.home_defense_strength,
+            model.away_defense_strength,
+        ):
+            assert all(np.isfinite(v) for v in lookup.values()), lookup
 
 
 class TestPredictMatch:
@@ -202,6 +232,92 @@ class TestFitDixonColes:
         df = pd.DataFrame({"team_id": ["A"], "is_home": [True]})
         with pytest.raises(ValueError, match="missing required columns"):
             fit_dixon_coles(df)
+
+    def test_nan_goals_dropped_with_warning(self) -> None:
+        """NaN goals must be dropped, not silently cast to invalid ints.
+
+        Regression for the bug where ``hg.astype(int)`` produced platform-dependent
+        invalid values on NaN, scipy's numerical differentiation then emitted
+        ``RuntimeWarning: invalid value encountered in cast/subtract``, and the
+        L-BFGS-B fit could converge to unreliable parameters without any error.
+        """
+        df = _make_team_match_df(n_teams=6, n_rounds=4)
+        # Pick a home row and corrupt its goals_for with NaN; the matching away
+        # row's goals_against is the same match, so the merged pair becomes NaN.
+        df.loc[df.index[0], "goals_for"] = np.nan
+        df.loc[df.index[0 + 1], "goals_against"] = np.nan
+
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            model = fit_dixon_coles(df)
+
+        # NaN match dropped, total matches is original minus one
+        expected_matches = 6 * 4 // 2 - 1
+        assert model.num_matches == expected_matches
+        # Parameters must be finite, not NaN propagated through the optimizer
+        assert np.isfinite(model.home_advantage)
+        assert np.isfinite(model.rho)
+        assert all(np.isfinite(v) for v in model.team_attack.values())
+        assert all(np.isfinite(v) for v in model.team_defense.values())
+
+    def test_all_nan_goals_raises(self) -> None:
+        """If every match has NaN goals, the fit must fail loudly, not silently."""
+        df = _make_team_match_df(n_teams=4, n_rounds=2)
+        df["goals_for"] = np.nan
+        df["goals_against"] = np.nan
+        with pytest.raises(ValueError, match="non-NaN goals"):
+            fit_dixon_coles(df)
+
+
+class TestFitDixonColesWithForm:
+    def test_returns_model(self) -> None:
+        df = _make_team_match_df(n_teams=6, n_rounds=4)
+        model = fit_dixon_coles_with_form(df, form_factor=0.3)
+        assert isinstance(model, DixonColesModel)
+
+    def test_nan_goals_dropped_without_length_mismatch(self) -> None:
+        """NaN-goal matches must be dropped without raising length-mismatch.
+
+        Regression for the bug where compute_form_weights returned an array
+        aligned to the unfiltered team_match_df (length included NaN matches),
+        while fit_dixon_coles internally dropped NaN matches from
+        matches_merged, causing ``ValueError: match_weights length N does not
+        match number of fixtures M``. NaN goals also silently corrupted form
+        calculation (pts defaulted to 0 via NaN comparison fallthrough).
+        """
+        df = _make_team_match_df(n_teams=6, n_rounds=4)
+        # Corrupt one match pair with NaN goals
+        df.loc[df.index[0], "goals_for"] = np.nan
+        df.loc[df.index[0 + 1], "goals_against"] = np.nan
+
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            model = fit_dixon_coles_with_form(df, form_factor=0.3)
+
+        # NaN match dropped, total matches is original minus one
+        expected_matches = 6 * 4 // 2 - 1
+        assert model.num_matches == expected_matches
+        # Parameters must be finite
+        assert np.isfinite(model.home_advantage)
+        assert np.isfinite(model.rho)
+        assert all(np.isfinite(v) for v in model.team_attack.values())
+        assert all(np.isfinite(v) for v in model.team_defense.values())
+
+    def test_form_weights_length_matches_filtered_fixtures(self) -> None:
+        """compute_form_weights output length must match fit_dixon_coles filtered length."""
+        df = _make_team_match_df(n_teams=6, n_rounds=4)
+        df.loc[df.index[0], "goals_for"] = np.nan
+        df.loc[df.index[0 + 1], "goals_against"] = np.nan
+
+        weights = compute_form_weights(df, form_factor=0.3)
+        # 6 teams × 4 rounds / 2 = 12 fixtures; 1 NaN match dropped → 11
+        assert len(weights) == 11
+        assert np.all(np.isfinite(weights))
+        assert np.all(weights > 0)  # form weights are positive multipliers
 
 
 class TestPredictMatchDC:

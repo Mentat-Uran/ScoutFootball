@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ from scoutfootball.models.match_prediction import (
     predict_match,
     predict_match_dc,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -305,6 +308,14 @@ def run_dc_calibration_backtest(
         try:
             prediction = predict_match_dc(model, home_id, away_id, max_goals=max_goals)
         except Exception:
+            logger.warning(
+                "DC calibration backtest: prediction failed for match_id=%s "
+                "home=%s away=%s; skipping (may bias metrics)",
+                fixture.get("match_id", "?"),
+                home_id,
+                away_id,
+                exc_info=True,
+            )
             continue
 
         hg = int(fixture["home_goals"])
@@ -5842,6 +5853,11 @@ def compute_prediction_uncertainty(
             if not np.isnan(r):
                 correlation = round(float(r), 4)
         except Exception:
+            logger.debug(
+                "Uncertainty correlation computation failed; "
+                "leaving entropy_accuracy_correlation=None",
+                exc_info=True,
+            )
             correlation = None
 
     return UncertaintyReport(
@@ -6386,6 +6402,12 @@ def compute_difficulty_stratification(
     try:
         df["_bin"] = pd.qcut(df["_max_prob"], n_bins, labels=False, duplicates="drop")
     except Exception:
+        logger.debug(
+            "qcut binning failed for difficulty tiers; falling back to cut "
+            "(typically caused by too few unique probabilities for n_bins=%s)",
+            n_bins,
+            exc_info=True,
+        )
         df["_bin"] = pd.cut(df["_max_prob"], n_bins, labels=False)
 
     actual_n_bins = int(df["_bin"].nunique()) if "_bin" in df.columns else 0
@@ -6998,6 +7020,11 @@ def compute_backtest_report_card(
             # diff: 0 → 100, 0.15 → 0
             stab_score = max(0.0, min(100.0, (1.0 - stab_diff / 0.15) * 100.0))
         except Exception:
+            logger.warning(
+                "Report card stability score computation failed; "
+                "falling back to stab_score=50.0 (neutral)",
+                exc_info=True,
+            )
             stab_score = 50.0
 
     dimensions = [

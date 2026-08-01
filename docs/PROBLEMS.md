@@ -1,5 +1,7 @@
-# 评分系统当前问题记录
+# 评分系统历史问题记录
 
+> 历史快照，主要记录 2026-06 的缺陷与修复，不是当前问题真源。2026-07-29 的当前缺陷、证据边界和优先级见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)，当前已交付边界见 [`CAPABILITIES.md`](CAPABILITIES.md)。下文中的行数、测试状态、标签为空和浏览器 E2E 未完成等表述均只适用于各段标注的历史日期。
+>
 > 2026-06-05 优化器修复后的评估结果
 
 ## 2026-06-10 前端安全边界修复
