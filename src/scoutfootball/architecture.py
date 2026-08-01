@@ -271,6 +271,16 @@ def build_default_architecture() -> ProjectArchitecture:
             "uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
             "uv run python -m scoutfootball baseline-b1 [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
             "uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]",  # noqa: E501
+            "uv run python -m scoutfootball weight-sensitivity [--deltas D] [--top-n N] [--json]",
+            (
+                "uv run python -m scoutfootball minutes-sensitivity "
+                "[--deltas D] [--baseline-minutes M] [--top-n N] [--json]"
+            ),
+            (
+                "uv run python -m scoutfootball cohort-sensitivity "
+                "[--fractions F] [--baseline-minutes M] [--n-repeats N] "
+                "[--top-n N] [--json]"
+            ),
             "uv run python -m scoutfootball label-append --label-type T --cohort-hash H --role-family R --season-id S --observation-window W --confidence C --evidence E [pairwise/tier payload]",  # noqa: E501
             "uv run python -m scoutfootball label-revoke --target-decision-id D --evidence E",
             "uv run python -m scoutfootball label-list [--cohort-hash H] [--label-type T] [--role-family R] [--season-id S] [--player-id P] [--include-revoked]",  # noqa: E501
