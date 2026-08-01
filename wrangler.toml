@@ -1,0 +1,17 @@
+name = "scoutfootball-fullstack"
+main = "cloudflare/index.ts"
+compatibility_date = "2026-06-12"
+
+[[containers]]
+class_name = "ScoutBackend"
+image = "./Dockerfile"
+max_instances = 1
+instance_type = "standard-1"
+
+[[durable_objects.bindings]]
+name = "SCOUT_BACKEND"
+class_name = "ScoutBackend"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ScoutBackend"]

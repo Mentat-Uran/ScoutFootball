@@ -1,0 +1,3503 @@
+{
+  "model": "poisson_strength_ratio",
+  "base_goals_per_game": 2.6,
+  "home_advantage": 1.08,
+  "group_count": 12,
+  "match_count": 72,
+  "teams": [
+    "Algeria",
+    "Argentina",
+    "Australia",
+    "Austria",
+    "Belgium",
+    "Bosnia and Herzegovina",
+    "Brazil",
+    "Canada",
+    "Cape Verde",
+    "Croatia",
+    "Curacao",
+    "DR Congo",
+    "Egypt",
+    "England",
+    "France",
+    "Germany",
+    "Ghana",
+    "Haiti",
+    "Iran",
+    "Iraq",
+    "Ivory Coast",
+    "Japan",
+    "Mexico",
+    "Morocco",
+    "Netherlands",
+    "Paraguay",
+    "Portugal",
+    "Qatar",
+    "Saudi Arabia",
+    "Senegal",
+    "South Africa",
+    "South Korea",
+    "Spain",
+    "Sweden",
+    "United States",
+    "Uzbekistan"
+  ],
+  "matches": [
+    {
+      "group": "A",
+      "matchday": 1,
+      "date": "2026-06-11",
+      "time_et": "15:00",
+      "venue": "Estadio Azteca",
+      "city": "Mexico City",
+      "stage": "Group Stage",
+      "home": "Mexico",
+      "away": "South Africa",
+      "exp_home_goals": 1.74,
+      "exp_away_goals": 1.15,
+      "home_win_p": 0.512,
+      "draw_p": 0.2362,
+      "away_win_p": 0.2517,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11105
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09676
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09639
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08399
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.06397
+        }
+      ],
+      "exp_points_home": 1.77,
+      "exp_points_away": 0.99,
+      "home_strength": 0.412,
+      "away_strength": 0.324
+    },
+    {
+      "group": "A",
+      "matchday": 1,
+      "date": "2026-06-11",
+      "time_et": "22:00",
+      "venue": "Estadio Akron",
+      "city": "Guadalajara",
+      "stage": "Group Stage",
+      "home": "South Korea",
+      "away": "Czech Republic",
+      "exp_home_goals": 1.34,
+      "exp_away_goals": 1.36,
+      "home_win_p": 0.3665,
+      "draw_p": 0.2581,
+      "away_win_p": 0.3755,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12241
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09126
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.08996
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08329
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.08209
+        }
+      ],
+      "exp_points_home": 1.36,
+      "exp_points_away": 1.38,
+      "home_strength": 0.369,
+      "away_strength": 0.404
+    },
+    {
+      "group": "A",
+      "matchday": 2,
+      "date": "2026-06-18",
+      "time_et": "12:00",
+      "venue": "Mercedes-Benz Stadium",
+      "city": "Atlanta",
+      "stage": "Group Stage",
+      "home": "South Africa",
+      "away": "Czech Republic",
+      "exp_home_goals": 1.26,
+      "exp_away_goals": 1.45,
+      "home_win_p": 0.3269,
+      "draw_p": 0.2563,
+      "away_win_p": 0.4169,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12155
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09673
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08828
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.08369
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.07637
+        }
+      ],
+      "exp_points_home": 1.24,
+      "exp_points_away": 1.51,
+      "home_strength": 0.324,
+      "away_strength": 0.404
+    },
+    {
+      "group": "A",
+      "matchday": 2,
+      "date": "2026-06-18",
+      "time_et": "21:00",
+      "venue": "Estadio Akron",
+      "city": "Guadalajara",
+      "stage": "Group Stage",
+      "home": "Mexico",
+      "away": "South Korea",
+      "exp_home_goals": 1.63,
+      "exp_away_goals": 1.23,
+      "home_win_p": 0.4679,
+      "draw_p": 0.244,
+      "away_win_p": 0.2881,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1147
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09364
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09328
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.07615
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.07052
+        }
+      ],
+      "exp_points_home": 1.65,
+      "exp_points_away": 1.11,
+      "home_strength": 0.412,
+      "away_strength": 0.369
+    },
+    {
+      "group": "A",
+      "matchday": 3,
+      "date": "2026-06-24",
+      "time_et": "21:00",
+      "venue": "Estadio Azteca",
+      "city": "Mexico City",
+      "stage": "Group Stage",
+      "home": "Mexico",
+      "away": "Czech Republic",
+      "exp_home_goals": 1.56,
+      "exp_away_goals": 1.29,
+      "home_win_p": 0.4373,
+      "draw_p": 0.2478,
+      "away_win_p": 0.3149,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11649
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09085
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.0905
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.07497
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07468
+        }
+      ],
+      "exp_points_home": 1.56,
+      "exp_points_away": 1.19,
+      "home_strength": 0.412,
+      "away_strength": 0.404
+    },
+    {
+      "group": "A",
+      "matchday": 3,
+      "date": "2026-06-24",
+      "time_et": "21:00",
+      "venue": "Estadio BBVA",
+      "city": "Monterrey",
+      "stage": "Group Stage",
+      "home": "South Africa",
+      "away": "South Korea",
+      "exp_home_goals": 1.32,
+      "exp_away_goals": 1.39,
+      "home_win_p": 0.3545,
+      "draw_p": 0.2578,
+      "away_win_p": 0.3877,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1223
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09298
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.08814
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08485
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.08044
+        }
+      ],
+      "exp_points_home": 1.32,
+      "exp_points_away": 1.42,
+      "home_strength": 0.324,
+      "away_strength": 0.369
+    },
+    {
+      "group": "B",
+      "matchday": 1,
+      "date": "2026-06-12",
+      "time_et": "15:00",
+      "venue": "BMO Field",
+      "city": "Toronto",
+      "stage": "Group Stage",
+      "home": "Canada",
+      "away": "Bosnia and Herzegovina",
+      "exp_home_goals": 1.57,
+      "exp_away_goals": 1.28,
+      "home_win_p": 0.4407,
+      "draw_p": 0.2475,
+      "away_win_p": 0.3119,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11632
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09118
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09083
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.07448
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07419
+        }
+      ],
+      "exp_points_home": 1.57,
+      "exp_points_away": 1.18,
+      "home_strength": 0.452,
+      "away_strength": 0.439
+    },
+    {
+      "group": "B",
+      "matchday": 1,
+      "date": "2026-06-13",
+      "time_et": "15:00",
+      "venue": "Levi's Stadium",
+      "city": "San Francisco Bay Area",
+      "stage": "Group Stage",
+      "home": "Qatar",
+      "away": "Switzerland",
+      "exp_home_goals": 0.97,
+      "exp_away_goals": 1.88,
+      "home_win_p": 0.1905,
+      "draw_p": 0.2222,
+      "away_win_p": 0.5873,
+      "most_likely_score": "0-1",
+      "top_scorelines": [
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10866
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1054
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.10224
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09917
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 3,
+          "probability": 0.06413
+        }
+      ],
+      "exp_points_home": 0.79,
+      "exp_points_away": 1.98,
+      "home_strength": 0.271,
+      "away_strength": 0.568
+    },
+    {
+      "group": "B",
+      "matchday": 2,
+      "date": "2026-06-18",
+      "time_et": "15:00",
+      "venue": "SoFi Stadium",
+      "city": "Los Angeles",
+      "stage": "Group Stage",
+      "home": "Bosnia and Herzegovina",
+      "away": "Switzerland",
+      "exp_home_goals": 1.23,
+      "exp_away_goals": 1.48,
+      "home_win_p": 0.3164,
+      "draw_p": 0.2553,
+      "away_win_p": 0.4283,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12108
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09808
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08951
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.0819
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.07474
+        }
+      ],
+      "exp_points_home": 1.2,
+      "exp_points_away": 1.54,
+      "home_strength": 0.439,
+      "away_strength": 0.568
+    },
+    {
+      "group": "B",
+      "matchday": 2,
+      "date": "2026-06-18",
+      "time_et": "18:00",
+      "venue": "BC Place",
+      "city": "Vancouver",
+      "stage": "Group Stage",
+      "home": "Canada",
+      "away": "Qatar",
+      "exp_home_goals": 2.0,
+      "exp_away_goals": 1.01,
+      "home_win_p": 0.6033,
+      "draw_p": 0.2123,
+      "away_win_p": 0.1844,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.0998
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09957
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09919
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09896
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 1,
+          "probability": 0.06623
+        }
+      ],
+      "exp_points_home": 2.02,
+      "exp_points_away": 0.77,
+      "home_strength": 0.452,
+      "away_strength": 0.271
+    },
+    {
+      "group": "B",
+      "matchday": 3,
+      "date": "2026-06-24",
+      "time_et": "15:00",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "Bosnia and Herzegovina",
+      "away": "Qatar",
+      "exp_home_goals": 1.79,
+      "exp_away_goals": 1.02,
+      "home_win_p": 0.5533,
+      "draw_p": 0.232,
+      "away_win_p": 0.2147,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11007
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10776
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09834
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09628
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06159
+        }
+      ],
+      "exp_points_home": 1.89,
+      "exp_points_away": 0.88,
+      "home_strength": 0.439,
+      "away_strength": 0.271
+    },
+    {
+      "group": "B",
+      "matchday": 3,
+      "date": "2026-06-24",
+      "time_et": "15:00",
+      "venue": "BC Place",
+      "city": "Vancouver",
+      "stage": "Group Stage",
+      "home": "Canada",
+      "away": "Switzerland",
+      "exp_home_goals": 1.38,
+      "exp_away_goals": 1.46,
+      "home_win_p": 0.357,
+      "draw_p": 0.2508,
+      "away_win_p": 0.3922,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1179
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08585
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.08552
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.08126
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.08095
+        }
+      ],
+      "exp_points_home": 1.32,
+      "exp_points_away": 1.43,
+      "home_strength": 0.452,
+      "away_strength": 0.568
+    },
+    {
+      "group": "C",
+      "matchday": 1,
+      "date": "2026-06-13",
+      "time_et": "18:00",
+      "venue": "MetLife Stadium",
+      "city": "New York/New Jersey",
+      "stage": "Group Stage",
+      "home": "Brazil",
+      "away": "Morocco",
+      "exp_home_goals": 1.78,
+      "exp_away_goals": 1.03,
+      "home_win_p": 0.5501,
+      "draw_p": 0.2329,
+      "away_win_p": 0.217,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11047
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10764
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09823
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09571
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06211
+        }
+      ],
+      "exp_points_home": 1.88,
+      "exp_points_away": 0.88,
+      "home_strength": 0.818,
+      "away_strength": 0.51
+    },
+    {
+      "group": "C",
+      "matchday": 1,
+      "date": "2026-06-13",
+      "time_et": "21:00",
+      "venue": "Gillette Stadium",
+      "city": "Boston",
+      "stage": "Group Stage",
+      "home": "Haiti",
+      "away": "Scotland",
+      "exp_home_goals": 1.34,
+      "exp_away_goals": 1.36,
+      "home_win_p": 0.3678,
+      "draw_p": 0.2581,
+      "away_win_p": 0.3741,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12241
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09107
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09016
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08311
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.08228
+        }
+      ],
+      "exp_points_home": 1.36,
+      "exp_points_away": 1.38,
+      "home_strength": 0.413,
+      "away_strength": 0.45
+    },
+    {
+      "group": "C",
+      "matchday": 2,
+      "date": "2026-06-19",
+      "time_et": "18:00",
+      "venue": "Gillette Stadium",
+      "city": "Boston",
+      "stage": "Group Stage",
+      "home": "Morocco",
+      "away": "Scotland",
+      "exp_home_goals": 1.49,
+      "exp_away_goals": 1.22,
+      "home_win_p": 0.4353,
+      "draw_p": 0.2546,
+      "away_win_p": 0.3101,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12074
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09887
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09023
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.08079
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.07388
+        }
+      ],
+      "exp_points_home": 1.56,
+      "exp_points_away": 1.18,
+      "home_strength": 0.51,
+      "away_strength": 0.45
+    },
+    {
+      "group": "C",
+      "matchday": 2,
+      "date": "2026-06-19",
+      "time_et": "21:00",
+      "venue": "Lincoln Financial Field",
+      "city": "Philadelphia",
+      "stage": "Group Stage",
+      "home": "Haiti",
+      "away": "Brazil",
+      "exp_home_goals": 1.0,
+      "exp_away_goals": 1.83,
+      "home_win_p": 0.2031,
+      "draw_p": 0.2276,
+      "away_win_p": 0.5693,
+      "most_likely_score": "0-1",
+      "top_scorelines": [
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10828
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10796
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.09912
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09882
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 3,
+          "probability": 0.06049
+        }
+      ],
+      "exp_points_home": 0.84,
+      "exp_points_away": 1.94,
+      "home_strength": 0.413,
+      "away_strength": 0.818
+    },
+    {
+      "group": "C",
+      "matchday": 3,
+      "date": "2026-06-24",
+      "time_et": "18:00",
+      "venue": "Mercedes-Benz Stadium",
+      "city": "Atlanta",
+      "stage": "Group Stage",
+      "home": "Morocco",
+      "away": "Haiti",
+      "exp_home_goals": 1.56,
+      "exp_away_goals": 1.17,
+      "home_win_p": 0.4638,
+      "draw_p": 0.2509,
+      "away_win_p": 0.2853,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11901
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10178
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09288
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.07944
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07624
+        }
+      ],
+      "exp_points_home": 1.64,
+      "exp_points_away": 1.11,
+      "home_strength": 0.51,
+      "away_strength": 0.413
+    },
+    {
+      "group": "C",
+      "matchday": 3,
+      "date": "2026-06-24",
+      "time_et": "18:00",
+      "venue": "Hard Rock Stadium",
+      "city": "Miami",
+      "stage": "Group Stage",
+      "home": "Brazil",
+      "away": "Scotland",
+      "exp_home_goals": 1.89,
+      "exp_away_goals": 0.96,
+      "home_win_p": 0.5912,
+      "draw_p": 0.221,
+      "away_win_p": 0.1878,
+      "most_likely_score": "1-0",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10872
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10482
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.1029
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09921
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.06494
+        }
+      ],
+      "exp_points_home": 1.99,
+      "exp_points_away": 0.78,
+      "home_strength": 0.818,
+      "away_strength": 0.45
+    },
+    {
+      "group": "D",
+      "matchday": 1,
+      "date": "2026-06-12",
+      "time_et": "21:00",
+      "venue": "SoFi Stadium",
+      "city": "Los Angeles",
+      "stage": "Group Stage",
+      "home": "United States",
+      "away": "Paraguay",
+      "exp_home_goals": 1.83,
+      "exp_away_goals": 1.1,
+      "home_win_p": 0.5456,
+      "draw_p": 0.2286,
+      "away_win_p": 0.2258,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10747
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09839
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09801
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08974
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 1,
+          "probability": 0.06005
+        }
+      ],
+      "exp_points_home": 1.87,
+      "exp_points_away": 0.91,
+      "home_strength": 0.567,
+      "away_strength": 0.403
+    },
+    {
+      "group": "D",
+      "matchday": 1,
+      "date": "2026-06-13",
+      "time_et": "00:00",
+      "venue": "BC Place",
+      "city": "Vancouver",
+      "stage": "Group Stage",
+      "home": "Australia",
+      "away": "Turkey",
+      "exp_home_goals": 1.23,
+      "exp_away_goals": 1.48,
+      "home_win_p": 0.3152,
+      "draw_p": 0.2551,
+      "away_win_p": 0.4296,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12102
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09823
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08964
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.08169
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.07455
+        }
+      ],
+      "exp_points_home": 1.2,
+      "exp_points_away": 1.54,
+      "home_strength": 0.378,
+      "away_strength": 0.491
+    },
+    {
+      "group": "D",
+      "matchday": 2,
+      "date": "2026-06-19",
+      "time_et": "00:00",
+      "venue": "Levi's Stadium",
+      "city": "San Francisco Bay Area",
+      "stage": "Group Stage",
+      "home": "Paraguay",
+      "away": "Turkey",
+      "exp_home_goals": 1.27,
+      "exp_away_goals": 1.43,
+      "home_win_p": 0.3341,
+      "draw_p": 0.2568,
+      "away_win_p": 0.4091,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12182
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09577
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.0874
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.0849
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.07748
+        }
+      ],
+      "exp_points_home": 1.26,
+      "exp_points_away": 1.48,
+      "home_strength": 0.403,
+      "away_strength": 0.491
+    },
+    {
+      "group": "D",
+      "matchday": 2,
+      "date": "2026-06-19",
+      "time_et": "15:00",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "United States",
+      "away": "Australia",
+      "exp_home_goals": 1.89,
+      "exp_away_goals": 1.06,
+      "home_win_p": 0.5671,
+      "draw_p": 0.223,
+      "away_win_p": 0.2099,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10482
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09908
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.0987
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09329
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 1,
+          "probability": 0.06243
+        }
+      ],
+      "exp_points_home": 1.92,
+      "exp_points_away": 0.85,
+      "home_strength": 0.567,
+      "away_strength": 0.378
+    },
+    {
+      "group": "D",
+      "matchday": 3,
+      "date": "2026-06-25",
+      "time_et": "22:00",
+      "venue": "SoFi Stadium",
+      "city": "Los Angeles",
+      "stage": "Group Stage",
+      "home": "United States",
+      "away": "Turkey",
+      "exp_home_goals": 1.66,
+      "exp_away_goals": 1.21,
+      "home_win_p": 0.4787,
+      "draw_p": 0.2424,
+      "away_win_p": 0.279,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11393
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.0945
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09414
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.07808
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.06894
+        }
+      ],
+      "exp_points_home": 1.68,
+      "exp_points_away": 1.08,
+      "home_strength": 0.567,
+      "away_strength": 0.491
+    },
+    {
+      "group": "D",
+      "matchday": 3,
+      "date": "2026-06-25",
+      "time_et": "22:00",
+      "venue": "Levi's Stadium",
+      "city": "San Francisco Bay Area",
+      "stage": "Group Stage",
+      "home": "Paraguay",
+      "away": "Australia",
+      "exp_home_goals": 1.45,
+      "exp_away_goals": 1.26,
+      "home_win_p": 0.4155,
+      "draw_p": 0.2564,
+      "away_win_p": 0.3281,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1216
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09657
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.08813
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.08389
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.07656
+        }
+      ],
+      "exp_points_home": 1.5,
+      "exp_points_away": 1.24,
+      "home_strength": 0.403,
+      "away_strength": 0.378
+    },
+    {
+      "group": "E",
+      "matchday": 1,
+      "date": "2026-06-14",
+      "time_et": "13:00",
+      "venue": "NRG Stadium",
+      "city": "Houston",
+      "stage": "Group Stage",
+      "home": "Germany",
+      "away": "Curacao",
+      "exp_home_goals": 2.13,
+      "exp_away_goals": 0.85,
+      "home_win_p": 0.6679,
+      "draw_p": 0.1935,
+      "away_win_p": 0.1386,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.11462
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10738
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09799
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.0918
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.08157
+        }
+      ],
+      "exp_points_home": 2.2,
+      "exp_points_away": 0.61,
+      "home_strength": 0.771,
+      "away_strength": 0.333
+    },
+    {
+      "group": "E",
+      "matchday": 1,
+      "date": "2026-06-14",
+      "time_et": "19:00",
+      "venue": "Lincoln Financial Field",
+      "city": "Philadelphia",
+      "stage": "Group Stage",
+      "home": "Ivory Coast",
+      "away": "Ecuador",
+      "exp_home_goals": 1.63,
+      "exp_away_goals": 1.12,
+      "home_win_p": 0.4916,
+      "draw_p": 0.2462,
+      "away_win_p": 0.2622,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11678
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10417
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09506
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.0848
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07173
+        }
+      ],
+      "exp_points_home": 1.72,
+      "exp_points_away": 1.03,
+      "home_strength": 0.602,
+      "away_strength": 0.448
+    },
+    {
+      "group": "E",
+      "matchday": 2,
+      "date": "2026-06-20",
+      "time_et": "16:00",
+      "venue": "BMO Field",
+      "city": "Toronto",
+      "stage": "Group Stage",
+      "home": "Germany",
+      "away": "Ivory Coast",
+      "exp_home_goals": 1.59,
+      "exp_away_goals": 1.15,
+      "home_win_p": 0.4755,
+      "draw_p": 0.2491,
+      "away_win_p": 0.2754,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11813
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10284
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09385
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.0817
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07435
+        }
+      ],
+      "exp_points_home": 1.68,
+      "exp_points_away": 1.08,
+      "home_strength": 0.771,
+      "away_strength": 0.602
+    },
+    {
+      "group": "E",
+      "matchday": 2,
+      "date": "2026-06-20",
+      "time_et": "20:00",
+      "venue": "Arrowhead Stadium",
+      "city": "Kansas City",
+      "stage": "Group Stage",
+      "home": "Curacao",
+      "away": "Ecuador",
+      "exp_home_goals": 1.21,
+      "exp_away_goals": 1.51,
+      "home_win_p": 0.3056,
+      "draw_p": 0.254,
+      "away_win_p": 0.4404,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12047
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09942
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09073
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.07998
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.07488
+        }
+      ],
+      "exp_points_home": 1.17,
+      "exp_points_away": 1.58,
+      "home_strength": 0.333,
+      "away_strength": 0.448
+    },
+    {
+      "group": "E",
+      "matchday": 3,
+      "date": "2026-06-25",
+      "time_et": "16:00",
+      "venue": "MetLife Stadium",
+      "city": "New York/New Jersey",
+      "stage": "Group Stage",
+      "home": "Germany",
+      "away": "Ecuador",
+      "exp_home_goals": 1.84,
+      "exp_away_goals": 0.99,
+      "home_win_p": 0.5735,
+      "draw_p": 0.2264,
+      "away_win_p": 0.2002,
+      "most_likely_score": "1-0",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10839
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10737
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09986
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09892
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.06133
+        }
+      ],
+      "exp_points_home": 1.95,
+      "exp_points_away": 0.83,
+      "home_strength": 0.771,
+      "away_strength": 0.448
+    },
+    {
+      "group": "E",
+      "matchday": 3,
+      "date": "2026-06-25",
+      "time_et": "16:00",
+      "venue": "Lincoln Financial Field",
+      "city": "Philadelphia",
+      "stage": "Group Stage",
+      "home": "Curacao",
+      "away": "Ivory Coast",
+      "exp_home_goals": 1.04,
+      "exp_away_goals": 1.75,
+      "home_win_p": 0.2258,
+      "draw_p": 0.236,
+      "away_win_p": 0.5382,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11192
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10711
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09775
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.09354
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.06408
+        }
+      ],
+      "exp_points_home": 0.91,
+      "exp_points_away": 1.85,
+      "home_strength": 0.333,
+      "away_strength": 0.602
+    },
+    {
+      "group": "F",
+      "matchday": 1,
+      "date": "2026-06-14",
+      "time_et": "16:00",
+      "venue": "AT&T Stadium",
+      "city": "Dallas",
+      "stage": "Group Stage",
+      "home": "Netherlands",
+      "away": "Japan",
+      "exp_home_goals": 1.66,
+      "exp_away_goals": 1.1,
+      "home_win_p": 0.5045,
+      "draw_p": 0.2436,
+      "away_win_p": 0.2518,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11557
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10512
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09593
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08726
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06961
+        }
+      ],
+      "exp_points_home": 1.76,
+      "exp_points_away": 1.0,
+      "home_strength": 0.728,
+      "away_strength": 0.521
+    },
+    {
+      "group": "F",
+      "matchday": 1,
+      "date": "2026-06-14",
+      "time_et": "19:00",
+      "venue": "Estadio BBVA",
+      "city": "Monterrey",
+      "stage": "Group Stage",
+      "home": "Sweden",
+      "away": "Tunisia",
+      "exp_home_goals": 1.6,
+      "exp_away_goals": 1.14,
+      "home_win_p": 0.4812,
+      "draw_p": 0.2481,
+      "away_win_p": 0.2707,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11767
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10333
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.0943
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.0828
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07342
+        }
+      ],
+      "exp_points_home": 1.69,
+      "exp_points_away": 1.06,
+      "home_strength": 0.527,
+      "away_strength": 0.405
+    },
+    {
+      "group": "F",
+      "matchday": 2,
+      "date": "2026-06-20",
+      "time_et": "13:00",
+      "venue": "NRG Stadium",
+      "city": "Houston",
+      "stage": "Group Stage",
+      "home": "Netherlands",
+      "away": "Sweden",
+      "exp_home_goals": 1.65,
+      "exp_away_goals": 1.11,
+      "home_win_p": 0.5002,
+      "draw_p": 0.2445,
+      "away_win_p": 0.2553,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11599
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10481
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09565
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08643
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07033
+        }
+      ],
+      "exp_points_home": 1.75,
+      "exp_points_away": 1.01,
+      "home_strength": 0.728,
+      "away_strength": 0.527
+    },
+    {
+      "group": "F",
+      "matchday": 2,
+      "date": "2026-06-20",
+      "time_et": "00:00",
+      "venue": "Estadio BBVA",
+      "city": "Monterrey",
+      "stage": "Group Stage",
+      "home": "Japan",
+      "away": "Tunisia",
+      "exp_home_goals": 1.59,
+      "exp_away_goals": 1.15,
+      "home_win_p": 0.4769,
+      "draw_p": 0.2488,
+      "away_win_p": 0.2743,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11803
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10296
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09396
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08197
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07413
+        }
+      ],
+      "exp_points_home": 1.68,
+      "exp_points_away": 1.07,
+      "home_strength": 0.521,
+      "away_strength": 0.405
+    },
+    {
+      "group": "F",
+      "matchday": 3,
+      "date": "2026-06-25",
+      "time_et": "19:00",
+      "venue": "Arrowhead Stadium",
+      "city": "Kansas City",
+      "stage": "Group Stage",
+      "home": "Netherlands",
+      "away": "Tunisia",
+      "exp_home_goals": 1.88,
+      "exp_away_goals": 0.97,
+      "home_win_p": 0.5876,
+      "draw_p": 0.2221,
+      "away_win_p": 0.1903,
+      "most_likely_score": "1-0",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10867
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10535
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.1023
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09917
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.0642
+        }
+      ],
+      "exp_points_home": 1.98,
+      "exp_points_away": 0.79,
+      "home_strength": 0.728,
+      "away_strength": 0.405
+    },
+    {
+      "group": "F",
+      "matchday": 3,
+      "date": "2026-06-25",
+      "time_et": "19:00",
+      "venue": "AT&T Stadium",
+      "city": "Dallas",
+      "stage": "Group Stage",
+      "home": "Japan",
+      "away": "Sweden",
+      "exp_home_goals": 1.39,
+      "exp_away_goals": 1.31,
+      "home_win_p": 0.391,
+      "draw_p": 0.2577,
+      "away_win_p": 0.3513,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12225
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09342
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.08765
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.08526
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.07999
+        }
+      ],
+      "exp_points_home": 1.43,
+      "exp_points_away": 1.31,
+      "home_strength": 0.521,
+      "away_strength": 0.527
+    },
+    {
+      "group": "G",
+      "matchday": 1,
+      "date": "2026-06-15",
+      "time_et": "15:00",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "Belgium",
+      "away": "Egypt",
+      "exp_home_goals": 1.76,
+      "exp_away_goals": 1.04,
+      "home_win_p": 0.5421,
+      "draw_p": 0.235,
+      "away_win_p": 0.2229,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11146
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10729
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09791
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09425
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06344
+        }
+      ],
+      "exp_points_home": 1.86,
+      "exp_points_away": 0.9,
+      "home_strength": 0.599,
+      "away_strength": 0.383
+    },
+    {
+      "group": "G",
+      "matchday": 1,
+      "date": "2026-06-15",
+      "time_et": "21:00",
+      "venue": "SoFi Stadium",
+      "city": "Los Angeles",
+      "stage": "Group Stage",
+      "home": "Iran",
+      "away": "New Zealand",
+      "exp_home_goals": 1.07,
+      "exp_away_goals": 1.7,
+      "home_win_p": 0.2386,
+      "draw_p": 0.24,
+      "away_win_p": 0.5214,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11383
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10621
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09692
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.09043
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.06684
+        }
+      ],
+      "exp_points_home": 0.96,
+      "exp_points_away": 1.8,
+      "home_strength": 0.231,
+      "away_strength": 0.396
+    },
+    {
+      "group": "G",
+      "matchday": 2,
+      "date": "2026-06-21",
+      "time_et": "15:00",
+      "venue": "SoFi Stadium",
+      "city": "Los Angeles",
+      "stage": "Group Stage",
+      "home": "Belgium",
+      "away": "Iran",
+      "exp_home_goals": 2.26,
+      "exp_away_goals": 0.81,
+      "home_win_p": 0.7032,
+      "draw_p": 0.1787,
+      "away_win_p": 0.1181,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.11892
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.1051
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09592
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.0897
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.08477
+        }
+      ],
+      "exp_points_home": 2.29,
+      "exp_points_away": 0.53,
+      "home_strength": 0.599,
+      "away_strength": 0.231
+    },
+    {
+      "group": "G",
+      "matchday": 2,
+      "date": "2026-06-21",
+      "time_et": "21:00",
+      "venue": "BC Place",
+      "city": "Vancouver",
+      "stage": "Group Stage",
+      "home": "Egypt",
+      "away": "New Zealand",
+      "exp_home_goals": 1.38,
+      "exp_away_goals": 1.32,
+      "home_win_p": 0.3844,
+      "draw_p": 0.2579,
+      "away_win_p": 0.3576,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12234
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09253
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.08863
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.08444
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08088
+        }
+      ],
+      "exp_points_home": 1.41,
+      "exp_points_away": 1.33,
+      "home_strength": 0.383,
+      "away_strength": 0.396
+    },
+    {
+      "group": "G",
+      "matchday": 3,
+      "date": "2026-06-26",
+      "time_et": "23:00",
+      "venue": "BC Place",
+      "city": "Vancouver",
+      "stage": "Group Stage",
+      "home": "Belgium",
+      "away": "New Zealand",
+      "exp_home_goals": 1.73,
+      "exp_away_goals": 1.06,
+      "home_win_p": 0.5309,
+      "draw_p": 0.2378,
+      "away_win_p": 0.2314,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11278
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10674
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09741
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09219
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06529
+        }
+      ],
+      "exp_points_home": 1.83,
+      "exp_points_away": 0.93,
+      "home_strength": 0.599,
+      "away_strength": 0.396
+    },
+    {
+      "group": "G",
+      "matchday": 3,
+      "date": "2026-06-26",
+      "time_et": "23:00",
+      "venue": "Lumen Field",
+      "city": "Seattle",
+      "stage": "Group Stage",
+      "home": "Egypt",
+      "away": "Iran",
+      "exp_home_goals": 1.81,
+      "exp_away_goals": 1.01,
+      "home_win_p": 0.5611,
+      "draw_p": 0.2299,
+      "away_win_p": 0.209,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10905
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10804
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.0986
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09768
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.0603
+        }
+      ],
+      "exp_points_home": 1.91,
+      "exp_points_away": 0.86,
+      "home_strength": 0.383,
+      "away_strength": 0.231
+    },
+    {
+      "group": "H",
+      "matchday": 1,
+      "date": "2026-06-15",
+      "time_et": "12:00",
+      "venue": "Mercedes-Benz Stadium",
+      "city": "Atlanta",
+      "stage": "Group Stage",
+      "home": "Spain",
+      "away": "Cape Verde",
+      "exp_home_goals": 2.07,
+      "exp_away_goals": 0.88,
+      "home_win_p": 0.6478,
+      "draw_p": 0.2013,
+      "away_win_p": 0.1508,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.11183
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10818
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09872
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.0955
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.07707
+        }
+      ],
+      "exp_points_home": 2.14,
+      "exp_points_away": 0.65,
+      "home_strength": 0.925,
+      "away_strength": 0.427
+    },
+    {
+      "group": "H",
+      "matchday": 1,
+      "date": "2026-06-15",
+      "time_et": "18:00",
+      "venue": "Hard Rock Stadium",
+      "city": "Miami",
+      "stage": "Group Stage",
+      "home": "Saudi Arabia",
+      "away": "Uruguay",
+      "exp_home_goals": 1.2,
+      "exp_away_goals": 1.52,
+      "home_win_p": 0.2986,
+      "draw_p": 0.253,
+      "away_win_p": 0.4484,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12002
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10026
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.0915
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.07872
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.07643
+        }
+      ],
+      "exp_points_home": 1.15,
+      "exp_points_away": 1.6,
+      "home_strength": 0.381,
+      "away_strength": 0.523
+    },
+    {
+      "group": "H",
+      "matchday": 2,
+      "date": "2026-06-21",
+      "time_et": "12:00",
+      "venue": "Mercedes-Benz Stadium",
+      "city": "Atlanta",
+      "stage": "Group Stage",
+      "home": "Spain",
+      "away": "Saudi Arabia",
+      "exp_home_goals": 2.19,
+      "exp_away_goals": 0.83,
+      "home_win_p": 0.6833,
+      "draw_p": 0.1872,
+      "away_win_p": 0.1295,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.1166
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10652
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09721
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.08881
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.08509
+        }
+      ],
+      "exp_points_home": 2.24,
+      "exp_points_away": 0.58,
+      "home_strength": 0.925,
+      "away_strength": 0.381
+    },
+    {
+      "group": "H",
+      "matchday": 2,
+      "date": "2026-06-21",
+      "time_et": "18:00",
+      "venue": "Hard Rock Stadium",
+      "city": "Miami",
+      "stage": "Group Stage",
+      "home": "Cape Verde",
+      "away": "Uruguay",
+      "exp_home_goals": 1.27,
+      "exp_away_goals": 1.44,
+      "home_win_p": 0.332,
+      "draw_p": 0.2567,
+      "away_win_p": 0.4113,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12175
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.09605
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.08766
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.08455
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.07716
+        }
+      ],
+      "exp_points_home": 1.25,
+      "exp_points_away": 1.49,
+      "home_strength": 0.427,
+      "away_strength": 0.523
+    },
+    {
+      "group": "H",
+      "matchday": 3,
+      "date": "2026-06-26",
+      "time_et": "20:00",
+      "venue": "Estadio Akron",
+      "city": "Guadalajara",
+      "stage": "Group Stage",
+      "home": "Spain",
+      "away": "Uruguay",
+      "exp_home_goals": 1.87,
+      "exp_away_goals": 0.98,
+      "home_win_p": 0.582,
+      "draw_p": 0.2238,
+      "away_win_p": 0.1942,
+      "most_likely_score": "1-0",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10858
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10617
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.10133
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09909
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.06305
+        }
+      ],
+      "exp_points_home": 1.97,
+      "exp_points_away": 0.81,
+      "home_strength": 0.925,
+      "away_strength": 0.523
+    },
+    {
+      "group": "H",
+      "matchday": 3,
+      "date": "2026-06-26",
+      "time_et": "20:00",
+      "venue": "NRG Stadium",
+      "city": "Houston",
+      "stage": "Group Stage",
+      "home": "Cape Verde",
+      "away": "Saudi Arabia",
+      "exp_home_goals": 1.49,
+      "exp_away_goals": 1.23,
+      "home_win_p": 0.4319,
+      "draw_p": 0.2549,
+      "away_win_p": 0.3132,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12091
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09848
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.08988
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.08133
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.07423
+        }
+      ],
+      "exp_points_home": 1.55,
+      "exp_points_away": 1.19,
+      "home_strength": 0.427,
+      "away_strength": 0.381
+    },
+    {
+      "group": "I",
+      "matchday": 1,
+      "date": "2026-06-16",
+      "time_et": "15:00",
+      "venue": "MetLife Stadium",
+      "city": "New York/New Jersey",
+      "stage": "Group Stage",
+      "home": "France",
+      "away": "Senegal",
+      "exp_home_goals": 1.66,
+      "exp_away_goals": 1.1,
+      "home_win_p": 0.5052,
+      "draw_p": 0.2435,
+      "away_win_p": 0.2513,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1155
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10517
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09598
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08739
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.0695
+        }
+      ],
+      "exp_points_home": 1.76,
+      "exp_points_away": 1.0,
+      "home_strength": 0.863,
+      "away_strength": 0.616
+    },
+    {
+      "group": "I",
+      "matchday": 1,
+      "date": "2026-06-16",
+      "time_et": "18:00",
+      "venue": "Gillette Stadium",
+      "city": "Boston",
+      "stage": "Group Stage",
+      "home": "Iraq",
+      "away": "Norway",
+      "exp_home_goals": 1.1,
+      "exp_away_goals": 1.66,
+      "home_win_p": 0.2511,
+      "draw_p": 0.2435,
+      "away_win_p": 0.5054,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11548
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10518
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09599
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.08743
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.06946
+        }
+      ],
+      "exp_points_home": 1.0,
+      "exp_points_away": 1.76,
+      "home_strength": 0.324,
+      "away_strength": 0.529
+    },
+    {
+      "group": "I",
+      "matchday": 2,
+      "date": "2026-06-22",
+      "time_et": "17:00",
+      "venue": "Lincoln Financial Field",
+      "city": "Philadelphia",
+      "stage": "Group Stage",
+      "home": "France",
+      "away": "Iraq",
+      "exp_home_goals": 2.29,
+      "exp_away_goals": 0.8,
+      "home_win_p": 0.711,
+      "draw_p": 0.1752,
+      "away_win_p": 0.1137,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.11975
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10443
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09531
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.09154
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.08312
+        }
+      ],
+      "exp_points_home": 2.31,
+      "exp_points_away": 0.52,
+      "home_strength": 0.863,
+      "away_strength": 0.324
+    },
+    {
+      "group": "I",
+      "matchday": 2,
+      "date": "2026-06-22",
+      "time_et": "20:00",
+      "venue": "MetLife Stadium",
+      "city": "New York/New Jersey",
+      "stage": "Group Stage",
+      "home": "Senegal",
+      "away": "Norway",
+      "exp_home_goals": 1.52,
+      "exp_away_goals": 1.2,
+      "home_win_p": 0.4442,
+      "draw_p": 0.2535,
+      "away_win_p": 0.3022,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12026
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09983
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.0911
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07938
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.07562
+        }
+      ],
+      "exp_points_home": 1.59,
+      "exp_points_away": 1.16,
+      "home_strength": 0.616,
+      "away_strength": 0.529
+    },
+    {
+      "group": "I",
+      "matchday": 3,
+      "date": "2026-06-26",
+      "time_et": "15:00",
+      "venue": "Gillette Stadium",
+      "city": "Boston",
+      "stage": "Group Stage",
+      "home": "France",
+      "away": "Norway",
+      "exp_home_goals": 1.79,
+      "exp_away_goals": 1.02,
+      "home_win_p": 0.5556,
+      "draw_p": 0.2314,
+      "away_win_p": 0.2129,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10976
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10785
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09842
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.0967
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06121
+        }
+      ],
+      "exp_points_home": 1.9,
+      "exp_points_away": 0.87,
+      "home_strength": 0.863,
+      "away_strength": 0.529
+    },
+    {
+      "group": "I",
+      "matchday": 3,
+      "date": "2026-06-26",
+      "time_et": "15:00",
+      "venue": "BMO Field",
+      "city": "Toronto",
+      "stage": "Group Stage",
+      "home": "Iraq",
+      "away": "Senegal",
+      "exp_home_goals": 1.02,
+      "exp_away_goals": 1.79,
+      "home_win_p": 0.2128,
+      "draw_p": 0.2313,
+      "away_win_p": 0.5559,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10974
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10786
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09843
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.09674
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.06117
+        }
+      ],
+      "exp_points_home": 0.87,
+      "exp_points_away": 1.9,
+      "home_strength": 0.324,
+      "away_strength": 0.616
+    },
+    {
+      "group": "J",
+      "matchday": 1,
+      "date": "2026-06-16",
+      "time_et": "21:00",
+      "venue": "Arrowhead Stadium",
+      "city": "Kansas City",
+      "stage": "Group Stage",
+      "home": "Argentina",
+      "away": "Algeria",
+      "exp_home_goals": 1.51,
+      "exp_away_goals": 1.21,
+      "home_win_p": 0.441,
+      "draw_p": 0.2539,
+      "away_win_p": 0.3051,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12045
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09948
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09078
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.0799
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.07498
+        }
+      ],
+      "exp_points_home": 1.58,
+      "exp_points_away": 1.17,
+      "home_strength": 0.788,
+      "away_strength": 0.683
+    },
+    {
+      "group": "J",
+      "matchday": 1,
+      "date": "2026-06-16",
+      "time_et": "00:00",
+      "venue": "Levi's Stadium",
+      "city": "San Francisco Bay Area",
+      "stage": "Group Stage",
+      "home": "Austria",
+      "away": "Jordan",
+      "exp_home_goals": 1.86,
+      "exp_away_goals": 0.98,
+      "home_win_p": 0.5799,
+      "draw_p": 0.2244,
+      "away_win_p": 0.1956,
+      "most_likely_score": "1-0",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10854
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10646
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.10098
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09905
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.06263
+        }
+      ],
+      "exp_points_home": 1.96,
+      "exp_points_away": 0.81,
+      "home_strength": 0.568,
+      "away_strength": 0.324
+    },
+    {
+      "group": "J",
+      "matchday": 2,
+      "date": "2026-06-22",
+      "time_et": "13:00",
+      "venue": "AT&T Stadium",
+      "city": "Dallas",
+      "stage": "Group Stage",
+      "home": "Argentina",
+      "away": "Austria",
+      "exp_home_goals": 1.65,
+      "exp_away_goals": 1.1,
+      "home_win_p": 0.5015,
+      "draw_p": 0.2443,
+      "away_win_p": 0.2542,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11586
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10491
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09574
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08669
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.0701
+        }
+      ],
+      "exp_points_home": 1.75,
+      "exp_points_away": 1.01,
+      "home_strength": 0.788,
+      "away_strength": 0.568
+    },
+    {
+      "group": "J",
+      "matchday": 2,
+      "date": "2026-06-22",
+      "time_et": "23:00",
+      "venue": "Levi's Stadium",
+      "city": "San Francisco Bay Area",
+      "stage": "Group Stage",
+      "home": "Algeria",
+      "away": "Jordan",
+      "exp_home_goals": 2.04,
+      "exp_away_goals": 0.89,
+      "home_win_p": 0.6394,
+      "draw_p": 0.2045,
+      "away_win_p": 0.1561,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.11059
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10842
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09894
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.097
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.0752
+        }
+      ],
+      "exp_points_home": 2.12,
+      "exp_points_away": 0.67,
+      "home_strength": 0.683,
+      "away_strength": 0.324
+    },
+    {
+      "group": "J",
+      "matchday": 3,
+      "date": "2026-06-27",
+      "time_et": "22:00",
+      "venue": "AT&T Stadium",
+      "city": "Dallas",
+      "stage": "Group Stage",
+      "home": "Argentina",
+      "away": "Jordan",
+      "exp_home_goals": 2.19,
+      "exp_away_goals": 0.83,
+      "home_win_p": 0.6836,
+      "draw_p": 0.1871,
+      "away_win_p": 0.1293,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.11664
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.1065
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09719
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.08875
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.08516
+        }
+      ],
+      "exp_points_home": 2.24,
+      "exp_points_away": 0.58,
+      "home_strength": 0.788,
+      "away_strength": 0.324
+    },
+    {
+      "group": "J",
+      "matchday": 3,
+      "date": "2026-06-27",
+      "time_et": "22:00",
+      "venue": "Arrowhead Stadium",
+      "city": "Kansas City",
+      "stage": "Group Stage",
+      "home": "Algeria",
+      "away": "Austria",
+      "exp_home_goals": 1.54,
+      "exp_away_goals": 1.19,
+      "home_win_p": 0.4546,
+      "draw_p": 0.2522,
+      "away_win_p": 0.2932,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11963
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10089
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09207
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07772
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.07765
+        }
+      ],
+      "exp_points_home": 1.62,
+      "exp_points_away": 1.13,
+      "home_strength": 0.683,
+      "away_strength": 0.568
+    },
+    {
+      "group": "K",
+      "matchday": 1,
+      "date": "2026-06-17",
+      "time_et": "13:00",
+      "venue": "NRG Stadium",
+      "city": "Houston",
+      "stage": "Group Stage",
+      "home": "Portugal",
+      "away": "DR Congo",
+      "exp_home_goals": 2.06,
+      "exp_away_goals": 0.89,
+      "home_win_p": 0.6447,
+      "draw_p": 0.2025,
+      "away_win_p": 0.1528,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.11138
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10827
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09881
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.09606
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.07638
+        }
+      ],
+      "exp_points_home": 2.14,
+      "exp_points_away": 0.66,
+      "home_strength": 0.753,
+      "away_strength": 0.351
+    },
+    {
+      "group": "K",
+      "matchday": 1,
+      "date": "2026-06-17",
+      "time_et": "22:00",
+      "venue": "Estadio Azteca",
+      "city": "Mexico City",
+      "stage": "Group Stage",
+      "home": "Uzbekistan",
+      "away": "Colombia",
+      "exp_home_goals": 1.01,
+      "exp_away_goals": 1.8,
+      "home_win_p": 0.2103,
+      "draw_p": 0.2304,
+      "away_win_p": 0.5593,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10928
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10798
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09854
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.09737
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.0606
+        }
+      ],
+      "exp_points_home": 0.86,
+      "exp_points_away": 1.91,
+      "home_strength": 0.271,
+      "away_strength": 0.522
+    },
+    {
+      "group": "K",
+      "matchday": 2,
+      "date": "2026-06-23",
+      "time_et": "13:00",
+      "venue": "NRG Stadium",
+      "city": "Houston",
+      "stage": "Group Stage",
+      "home": "Portugal",
+      "away": "Uzbekistan",
+      "exp_home_goals": 2.34,
+      "exp_away_goals": 0.78,
+      "home_win_p": 0.7225,
+      "draw_p": 0.1701,
+      "away_win_p": 0.1075,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.12086
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10336
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09433
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.09422
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.08066
+        }
+      ],
+      "exp_points_home": 2.34,
+      "exp_points_away": 0.49,
+      "home_strength": 0.753,
+      "away_strength": 0.271
+    },
+    {
+      "group": "K",
+      "matchday": 2,
+      "date": "2026-06-23",
+      "time_et": "22:00",
+      "venue": "Estadio Akron",
+      "city": "Guadalajara",
+      "stage": "Group Stage",
+      "home": "DR Congo",
+      "away": "Colombia",
+      "exp_home_goals": 1.15,
+      "exp_away_goals": 1.59,
+      "home_win_p": 0.2763,
+      "draw_p": 0.2492,
+      "away_win_p": 0.4745,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11822
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.10275
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 2,
+          "probability": 0.09377
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 2,
+          "probability": 0.0815
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.07452
+        }
+      ],
+      "exp_points_home": 1.08,
+      "exp_points_away": 1.67,
+      "home_strength": 0.351,
+      "away_strength": 0.522
+    },
+    {
+      "group": "K",
+      "matchday": 3,
+      "date": "2026-06-27",
+      "time_et": "19:30",
+      "venue": "Hard Rock Stadium",
+      "city": "Miami",
+      "stage": "Group Stage",
+      "home": "Portugal",
+      "away": "Colombia",
+      "exp_home_goals": 1.69,
+      "exp_away_goals": 1.08,
+      "home_win_p": 0.5147,
+      "draw_p": 0.2415,
+      "away_win_p": 0.2438,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11454
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.1058
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09655
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08918
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06794
+        }
+      ],
+      "exp_points_home": 1.79,
+      "exp_points_away": 0.97,
+      "home_strength": 0.753,
+      "away_strength": 0.522
+    },
+    {
+      "group": "K",
+      "matchday": 3,
+      "date": "2026-06-27",
+      "time_et": "19:30",
+      "venue": "Mercedes-Benz Stadium",
+      "city": "Atlanta",
+      "stage": "Group Stage",
+      "home": "DR Congo",
+      "away": "Uzbekistan",
+      "exp_home_goals": 1.6,
+      "exp_away_goals": 1.14,
+      "home_win_p": 0.4785,
+      "draw_p": 0.2486,
+      "away_win_p": 0.273,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1179
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.1031
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09409
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08227
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07387
+        }
+      ],
+      "exp_points_home": 1.68,
+      "exp_points_away": 1.07,
+      "home_strength": 0.351,
+      "away_strength": 0.271
+    },
+    {
+      "group": "L",
+      "matchday": 1,
+      "date": "2026-06-17",
+      "time_et": "16:00",
+      "venue": "AT&T Stadium",
+      "city": "Dallas",
+      "stage": "Group Stage",
+      "home": "England",
+      "away": "Croatia",
+      "exp_home_goals": 1.71,
+      "exp_away_goals": 1.07,
+      "home_win_p": 0.5256,
+      "draw_p": 0.239,
+      "away_win_p": 0.2354,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.11337
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10645
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09714
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09121
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06616
+        }
+      ],
+      "exp_points_home": 1.82,
+      "exp_points_away": 0.95,
+      "home_strength": 0.85,
+      "away_strength": 0.57
+    },
+    {
+      "group": "L",
+      "matchday": 1,
+      "date": "2026-06-17",
+      "time_et": "19:00",
+      "venue": "BMO Field",
+      "city": "Toronto",
+      "stage": "Group Stage",
+      "home": "Ghana",
+      "away": "Panama",
+      "exp_home_goals": 1.68,
+      "exp_away_goals": 1.09,
+      "home_win_p": 0.5132,
+      "draw_p": 0.2418,
+      "away_win_p": 0.245,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.1147
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.1057
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09646
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.08889
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.0682
+        }
+      ],
+      "exp_points_home": 1.78,
+      "exp_points_away": 0.98,
+      "home_strength": 0.495,
+      "away_strength": 0.345
+    },
+    {
+      "group": "L",
+      "matchday": 2,
+      "date": "2026-06-23",
+      "time_et": "16:00",
+      "venue": "Gillette Stadium",
+      "city": "Boston",
+      "stage": "Group Stage",
+      "home": "England",
+      "away": "Ghana",
+      "exp_home_goals": 1.84,
+      "exp_away_goals": 0.99,
+      "home_win_p": 0.572,
+      "draw_p": 0.2268,
+      "away_win_p": 0.2012,
+      "most_likely_score": "1-0",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10836
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10757
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09961
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09889
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.06105
+        }
+      ],
+      "exp_points_home": 1.94,
+      "exp_points_away": 0.83,
+      "home_strength": 0.85,
+      "away_strength": 0.495
+    },
+    {
+      "group": "L",
+      "matchday": 2,
+      "date": "2026-06-23",
+      "time_et": "19:00",
+      "venue": "BMO Field",
+      "city": "Toronto",
+      "stage": "Group Stage",
+      "home": "Croatia",
+      "away": "Panama",
+      "exp_home_goals": 1.8,
+      "exp_away_goals": 1.01,
+      "home_win_p": 0.5597,
+      "draw_p": 0.2303,
+      "away_win_p": 0.21,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.10923
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10799
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09855
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.09743
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.06054
+        }
+      ],
+      "exp_points_home": 1.91,
+      "exp_points_away": 0.86,
+      "home_strength": 0.57,
+      "away_strength": 0.345
+    },
+    {
+      "group": "L",
+      "matchday": 3,
+      "date": "2026-06-27",
+      "time_et": "17:00",
+      "venue": "MetLife Stadium",
+      "city": "New York/New Jersey",
+      "stage": "Group Stage",
+      "home": "England",
+      "away": "Panama",
+      "exp_home_goals": 2.2,
+      "exp_away_goals": 0.83,
+      "home_win_p": 0.6869,
+      "draw_p": 0.1857,
+      "away_win_p": 0.1274,
+      "most_likely_score": "2-0",
+      "top_scorelines": [
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.11705
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.10629
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.097
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.08808
+        },
+        {
+          "home_goals": 3,
+          "away_goals": 0,
+          "probability": 0.08593
+        }
+      ],
+      "exp_points_home": 2.25,
+      "exp_points_away": 0.57,
+      "home_strength": 0.85,
+      "away_strength": 0.345
+    },
+    {
+      "group": "L",
+      "matchday": 3,
+      "date": "2026-06-27",
+      "time_et": "17:00",
+      "venue": "Lincoln Financial Field",
+      "city": "Philadelphia",
+      "stage": "Group Stage",
+      "home": "Croatia",
+      "away": "Ghana",
+      "exp_home_goals": 1.51,
+      "exp_away_goals": 1.21,
+      "home_win_p": 0.4404,
+      "draw_p": 0.254,
+      "away_win_p": 0.3056,
+      "most_likely_score": "1-1",
+      "top_scorelines": [
+        {
+          "home_goals": 1,
+          "away_goals": 1,
+          "probability": 0.12047
+        },
+        {
+          "home_goals": 1,
+          "away_goals": 0,
+          "probability": 0.09942
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 1,
+          "probability": 0.09073
+        },
+        {
+          "home_goals": 0,
+          "away_goals": 1,
+          "probability": 0.07998
+        },
+        {
+          "home_goals": 2,
+          "away_goals": 0,
+          "probability": 0.07488
+        }
+      ],
+      "exp_points_home": 1.58,
+      "exp_points_away": 1.17,
+      "home_strength": 0.57,
+      "away_strength": 0.495
+    }
+  ]
+}
