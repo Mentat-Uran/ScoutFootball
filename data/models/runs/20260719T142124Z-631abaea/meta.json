@@ -1,0 +1,348 @@
+{
+  "timestamp": "20260719T142124Z-631abaea",
+  "run_id": "20260719T142124Z-631abaea",
+  "params_shape": [
+    77
+  ],
+  "params_mean": -0.03692160174250603,
+  "params_std": 0.8696786165237427,
+  "input_hash": "12fe978180be411c",
+  "metrics": {
+    "baseline_train": {
+      "n_team_seasons": 860,
+      "spearman": 0.5105852089898201,
+      "pearson": 0.5151378602731957,
+      "rank_loss": 0.48941479101017993,
+      "z_mse": 0.9697242794536082,
+      "calibration_mae": 12.132639264467281,
+      "raw_pred_range": 29.46221160888672,
+      "actual_points_range": 88.0,
+      "raw_spread_ratio": 0.2747596391592243,
+      "points_mae": 11.376574133394968,
+      "points_rmse": 14.563849051320998,
+      "points_bias": 0.9862422307539902,
+      "points_spread_ratio": 0.8615019737249694,
+      "split": "train",
+      "n_players": 12799,
+      "target_team_seasons": 3269,
+      "rated_team_seasons": 1111,
+      "team_coverage": 0.26307739369837874,
+      "n_excluded_na_teams": 0
+    },
+    "baseline_test": {
+      "n_team_seasons": 95,
+      "spearman": 0.6027805506323702,
+      "pearson": 0.5995152612031424,
+      "rank_loss": 0.39721944936762976,
+      "z_mse": 0.8009694775937155,
+      "calibration_mae": 11.833795013850416,
+      "raw_pred_range": 20.50794219970703,
+      "actual_points_range": 77.0,
+      "raw_spread_ratio": 0.2811203280165085,
+      "points_mae": 18.219569187724368,
+      "points_rmse": 21.067790729498725,
+      "points_bias": -17.780019860362888,
+      "points_spread_ratio": 0.8393645787681746,
+      "split": "test",
+      "n_players": 2775,
+      "target_team_seasons": 358,
+      "rated_team_seasons": 158,
+      "team_coverage": 0.26536312849162014,
+      "n_excluded_na_teams": 0
+    },
+    "optimized_train": {
+      "n_team_seasons": 860,
+      "spearman": 0.6805803985643919,
+      "pearson": 0.6938318016235652,
+      "rank_loss": 0.3194196014356081,
+      "z_mse": 0.6123363967528694,
+      "calibration_mae": 8.221471065440781,
+      "raw_pred_range": 32.150787353515625,
+      "actual_points_range": 88.0,
+      "raw_spread_ratio": 0.3210879055487577,
+      "points_mae": 9.03048573180351,
+      "points_rmse": 11.430210502098385,
+      "points_bias": 0.3089084111752548,
+      "points_spread_ratio": 0.9105878595878514,
+      "split": "train",
+      "n_players": 12799,
+      "target_team_seasons": 3269,
+      "rated_team_seasons": 1111,
+      "team_coverage": 0.26307739369837874,
+      "n_excluded_na_teams": 0
+    },
+    "optimized_test": {
+      "n_team_seasons": 95,
+      "spearman": 0.6993380307771121,
+      "pearson": 0.7042888670507442,
+      "rank_loss": 0.3006619692228879,
+      "z_mse": 0.5914222658985118,
+      "calibration_mae": 8.05540166204986,
+      "raw_pred_range": 23.448638916015625,
+      "actual_points_range": 77.0,
+      "raw_spread_ratio": 0.324861303722582,
+      "points_mae": 14.74586944600243,
+      "points_rmse": 17.344086376238824,
+      "points_bias": -14.34716713054548,
+      "points_spread_ratio": 0.8832501712936742,
+      "split": "test",
+      "n_players": 2775,
+      "target_team_seasons": 358,
+      "rated_team_seasons": 158,
+      "team_coverage": 0.26536312849162014,
+      "n_excluded_na_teams": 0
+    },
+    "overfit_rank_loss_gap": -0.0187576322127202
+  },
+  "lineage": {
+    "schema": "scoutfootball.model-run-lineage",
+    "version": "1.0.0",
+    "status": "recorded",
+    "dataset_snapshot": {
+      "input_hash": "12fe978180be411c",
+      "input_artifacts": [
+        "raw/fbref/player_stats_big5_3seasons.parquet",
+        "raw/football_data/combined_results.parquet",
+        "raw/understat/players_10seasons.parquet",
+        "gold/feature_store/rating_feature_matrix.parquet",
+        "gold/feature_store/player_truth_labels.parquet",
+        "raw/fbref/player_misc_5seasons.parquet",
+        "raw/fbref/player_shooting_5seasons.parquet"
+      ]
+    },
+    "feature_manifest": {
+      "path": "gold/feature_store/rating_feature_matrix_manifest.json",
+      "hash": "bba38aa0f9c1b233",
+      "schema_version": null,
+      "generated_at": "2026-07-16T21:19:59.979539+00:00",
+      "input_hash": "unknown"
+    }
+  },
+  "activation": {
+    "status": "rolled_back",
+    "rolled_back_at": "2026-07-19T14:23:52Z",
+    "decision": "C1 admission gate verification: restore original active artifacts after promote test",
+    "backup_id": "20260719T142324Z-20260719T142124Z-631abaea-f1416f39",
+    "note": "The prior active local artifacts were restored from the verified backup."
+  },
+  "data_coverage": {
+    "rows": 27256,
+    "seasons": [
+      "1617",
+      "1718",
+      "1819",
+      "1920",
+      "2021",
+      "2122",
+      "2223",
+      "2324",
+      "2425",
+      "2526"
+    ],
+    "starts_observed_rows": 8347,
+    "artifact_statuses": [
+      {
+        "source": "fbref_standard",
+        "status": "loaded",
+        "path": "C:\\football\\scoutlab\\data\\raw\\fbref\\player_stats_big5_3seasons.parquet"
+      },
+      {
+        "source": "fbref_misc",
+        "status": "loaded",
+        "path": "C:\\football\\scoutlab\\data\\raw\\fbref\\player_misc_5seasons.parquet"
+      },
+      {
+        "source": "fbref_shooting",
+        "status": "loaded",
+        "path": "C:\\football\\scoutlab\\data\\raw\\fbref\\player_shooting_5seasons.parquet"
+      },
+      {
+        "source": "understat",
+        "status": "loaded",
+        "path": "C:\\football\\scoutlab\\data\\raw\\understat\\players_10seasons.parquet"
+      },
+      {
+        "source": "football_data_results",
+        "status": "loaded",
+        "path": "C:\\football\\scoutlab\\data\\raw\\football_data\\combined_results.parquet"
+      }
+    ],
+    "sources": [
+      {
+        "source_name": "fbref",
+        "data_granularity": "season_proxy",
+        "rows": 8347,
+        "seasons": [
+          "2223",
+          "2324",
+          "2425"
+        ],
+        "starts_observed_rows": 8347
+      },
+      {
+        "source_name": "understat",
+        "data_granularity": "season_proxy",
+        "rows": 18909,
+        "seasons": [
+          "1617",
+          "1718",
+          "1819",
+          "1920",
+          "2021",
+          "2122",
+          "2526"
+        ],
+        "starts_observed_rows": 0
+      }
+    ]
+  },
+  "candidate_artifacts": {
+    "ratings": {
+      "path": "player_ratings_candidate.parquet",
+      "sha256": "f6034d7fa3a72b41e9ce4e27dc38b3ab9664318aaab6d885cdbba37b3b9e9eb8",
+      "rows": 27256,
+      "columns": [
+        "player",
+        "team",
+        "league",
+        "season",
+        "source_position",
+        "sub_position",
+        "pos_idx",
+        "position_source",
+        "position_confidence",
+        "matches",
+        "starts",
+        "minutes",
+        "npg_p90",
+        "assists_p90",
+        "g_a_volume",
+        "source_name",
+        "data_granularity",
+        "starts_observed",
+        "tackles_won",
+        "interceptions",
+        "fouls",
+        "fouls_drawn",
+        "crosses",
+        "yellow_cards",
+        "shots",
+        "shots_on_target",
+        "shot_accuracy",
+        "tackles_p90",
+        "interceptions_p90",
+        "crosses_p90",
+        "fouls_drawn_p90",
+        "fouls_p90",
+        "shots_p90",
+        "sot_p90",
+        "defense_composite",
+        "possession_composite",
+        "season_rank",
+        "npg_trend",
+        "def_trend",
+        "pos_trend",
+        "experience_factor",
+        "low_appearance",
+        "optimized_score",
+        "same_position_score"
+      ],
+      "scope": "unactivated_local_candidate"
+    }
+  },
+  "dependency_versions": {
+    "python": "3.12.11",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "torch": "2.13.0+cpu",
+    "sklearn": "1.8.0",
+    "scipy": "1.17.1",
+    "duckdb": "1.5.3"
+  },
+  "train_seasons": [
+    "1617",
+    "1718",
+    "1819",
+    "1920",
+    "2021",
+    "2122",
+    "2223",
+    "2324",
+    "2425"
+  ],
+  "test_seasons": [
+    "2526"
+  ],
+  "error_cases": {
+    "residual_definition": "prediction_minus_actual",
+    "over_estimated": [
+      {
+        "team": "Wolfsburg",
+        "residual": 1.4
+      },
+      {
+        "team": "Ein Frankfurt",
+        "residual": 2.0
+      },
+      {
+        "team": "Heidenheim",
+        "residual": 2.3
+      },
+      {
+        "team": "Brentford",
+        "residual": 3.4
+      },
+      {
+        "team": "Burnley",
+        "residual": 8.9
+      }
+    ],
+    "under_estimated": [
+      {
+        "team": "Parma",
+        "residual": -35.0
+      },
+      {
+        "team": "Getafe",
+        "residual": -33.6
+      },
+      {
+        "team": "Real Madrid",
+        "residual": -33.5
+      },
+      {
+        "team": "Barcelona",
+        "residual": -31.1
+      },
+      {
+        "team": "Bologna",
+        "residual": -30.8
+      }
+    ]
+  },
+  "args": {
+    "pop_size": 6,
+    "n_steps": 80,
+    "lr": 0.035,
+    "patience": 15,
+    "seed": 42,
+    "spearman_weight": 0.3,
+    "ndcg_weight": 0.12,
+    "position_consistency_weight": 0.1,
+    "points_regression_weight": 0.2,
+    "distribution_weight": 0.05,
+    "quantile_weight": 0.08,
+    "range_penalty_weight": 0.1,
+    "tail_calibration_weight": 0.08,
+    "league_bias_weight": 0.05,
+    "extreme_penalty_weight": 0.02,
+    "prior_weight": 0.01,
+    "dc_likelihood_weight": 0.0,
+    "warmup_steps": 8,
+    "min_lr_ratio": 0.08,
+    "grad_clip": 5.0,
+    "league_calibration_prior_n": 60.0,
+    "league_calibration_cap": 8.0,
+    "disable_league_calibration": false
+  }
+}

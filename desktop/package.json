@@ -1,6 +1,6 @@
 {
   "name": "scoutfootball",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "ScoutFootball — Local-first football analytics platform",
   "main": "main.js",
   "author": "Uran",
@@ -31,7 +31,7 @@
     ],
     "extraResources": [
       {
-        "from": "../backend-dist/scoutfootball-server",
+        "from": "backend-dist/scoutfootball-server",
         "to": "backend",
         "filter": ["**/*"]
       },
@@ -59,10 +59,28 @@
     "win": {
       "target": [
         {
-          "target": "dir",
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
           "arch": ["x64"]
         }
-      ]
+      ],
+      "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64"]
+        }
+      ],
+      "identity": null
     },
     "publish": null
   }

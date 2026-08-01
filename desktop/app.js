@@ -1,4 +1,4 @@
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.1.1";
 const i18n = {
     zh: {
         nav_overview: "总览",
