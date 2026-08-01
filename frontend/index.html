@@ -163,19 +163,19 @@
                         </div>
                         <div class="coverage-strip">
                             <div>
-                                <span class="metric-value">8,689</span>
+                                <span class="metric-value">—</span>
                                 <span data-i18n="metric_player_match">球员比赛行</span>
                             </div>
                             <div>
-                                <span class="metric-value">10,660</span>
+                                <span class="metric-value">—</span>
                                 <span data-i18n="metric_team_match">球队比赛行</span>
                             </div>
                             <div>
-                                <span class="metric-value">27,254</span>
+                                <span class="metric-value">—</span>
                                 <span data-i18n="metric_ratings">评分行</span>
                             </div>
                             <div>
-                                <span class="metric-value">11,871</span>
+                                <span class="metric-value">—</span>
                                 <span data-i18n="metric_events">事件样本</span>
                             </div>
                         </div>
@@ -187,9 +187,9 @@
                             <span class="status-pill status-low">LOW</span>
                         </div>
                         <ul class="signal-list" id="data-health-list">
-                            <li class="health-item"><span class="dot status-high"></span><span data-i18n="health_oof">身价 OOF 可用</span> <span class="status-pill status-low">LOW</span></li>
-                            <li class="health-item"><span class="dot status-medium"></span><span data-i18n="health_proxy">球员 match-level 覆盖不足</span> <span class="status-pill status-medium">MED</span></li>
-                            <li class="health-item"><span class="dot status-low"></span><span data-i18n="health_truth">真实标签仍为空表</span> <span class="status-pill status-low">LOW</span></li>
+                            <li class="health-item"><span class="dot status-medium"></span><span data-i18n="health_oof">身价 OOF 可用</span> <span class="status-pill status-medium">—</span></li>
+                            <li class="health-item"><span class="dot status-medium"></span><span data-i18n="health_proxy">球员 match-level 覆盖不足</span> <span class="status-pill status-medium">—</span></li>
+                            <li class="health-item"><span class="dot status-medium"></span><span data-i18n="health_truth">真实标签仍为空表</span> <span class="status-pill status-medium">—</span></li>
                         </ul>
                     </article>
                 </div>
@@ -449,9 +449,14 @@
                                 <select id="league-filter" class="glass-control">
                                     <option value="ALL">ALL</option>
                                 </select>
+                                <select id="player-view-mode" class="glass-control" aria-label="player view mode">
+                                    <option value="player">球员视图 / Player</option>
+                                    <option value="season">赛季视图 / Season</option>
+                                </select>
                                 <button class="text-button" id="export-players" type="button" data-i18n="export">导出</button>
                             </div>
                         </div>
+                        <div id="rating-source-note" class="feature-note" style="margin:0 0.8rem 0.6rem;padding:0.55rem 0.7rem;border-left:2px solid var(--accent);font-size:0.72rem;color:var(--text-muted)"></div>
                         <div class="table-scroll">
                             <table>
                                 <thead>
@@ -594,6 +599,15 @@
             </section>
 
             <section class="view" id="view-value" aria-label="value">
+                <article class="liquid-panel feature-hero" id="market-value-panel" style="margin-bottom:var(--space)">
+                    <div class="hero-copy">
+                        <p class="eyebrow">Transfermarkt manual snapshot</p>
+                        <h2>最新真实身价（本地快照）</h2>
+                        <p class="feature-note" id="market-value-provenance">正在读取本地 API；无 API 时不显示 synthetic 身价。</p>
+                    </div>
+                    <div class="feature-metric-strip" id="market-value-summary"></div>
+                    <div id="market-value-list" class="rank-list" style="margin-top:0.8rem"></div>
+                </article>
                 <div class="layout-2 reverse">
                     <article class="liquid-panel chart-panel">
                         <div class="panel-head">

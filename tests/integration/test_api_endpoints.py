@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -54,6 +55,58 @@ def test_ratings_snapshots_endpoint(client: TestClient):
     """/ratings/snapshots should return 200."""
     response = client.get("/ratings/snapshots")
     assert response.status_code == 200
+
+
+def test_ratings_endpoint_exposes_canonical_identity_boundary(client: TestClient):
+    response = client.get("/ratings?limit=5")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["canonical_resolution"] in {"ok", "unavailable"}
+    for player in payload["players"]:
+        assert "canonical_player_id" in player
+        assert "canonical_match_ambiguous" in player
+        if str(player["canonical_player_id"]).startswith("unresolved:"):
+            assert player["canonical_match_ambiguous"] in {True, False}
+
+
+def test_player_detail_accepts_canonical_identity_selector(client: TestClient):
+    ratings = client.get("/ratings?limit=1").json().get("players", [])
+    if not ratings:
+        pytest.skip("ratings artifact unavailable")
+
+    row = ratings[0]
+    query = f"canonical_player_id={quote(str(row['canonical_player_id']), safe='')}"
+    if row.get("season"):
+        query += f"&season={quote(str(row['season']), safe='')}"
+    response = client.get(f"/players/{quote(str(row['player']), safe='')}?{query}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["found"] is True
+    assert payload["canonical_player_id"] == row["canonical_player_id"]
+
+
+def test_ratings_meta_exposes_proxy_source_lineage(client: TestClient):
+    response = client.get("/ratings/meta")
+    assert response.status_code == 200
+    source = response.json()["rating_source"]
+    assert source["kind"] == "optimizer_proxy_objective"
+    assert source["latest_run_id"]
+    assert source["training_objective"]
+    assert "current_manifest_hash" in source
+    assert "/health/research" in source["research_health_endpoint"]
+
+
+def test_market_value_endpoint_preserves_source_boundary(client: TestClient):
+    response = client.get("/market-value/summary")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"ok", "no_data"}
+    assert "source" in payload
+    assert "license_boundary" in payload["source"]
+    if payload["status"] == "ok":
+        assert payload["latest_snapshot_date"]
+        assert all("player_name" in row for row in payload["top_players"])
 
 
 def test_predictions_meta_endpoint(client: TestClient):

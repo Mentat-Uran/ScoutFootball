@@ -2972,6 +2972,12 @@ function _teamSlug(name) {
     return String(name || "").replace(/\s+/g, "_").replace(/\//g, "_");
 }
 
+// Keep one static profile source for known display-name variants. This is an
+// alias only; it does not merge unresolved rating entities or identity rows.
+const PROFILE_SLUG_ALIASES = new Map([
+    ["Kylian Mbappe-Lottin", "Kylian_Mbappé"],
+]);
+
 // Map an API path to a local static JSON file URL.
 // Returns null if no static equivalent exists.
 function _staticUrlFor(apiPath) {
@@ -3018,15 +3024,16 @@ function _staticUrlFor(apiPath) {
     if (squad) return `/data/worldcup/squads/${encodeURIComponent(_teamSlug(decodeURIComponent(squad[1])))}.json`;
     // Player profile: use pre-exported file if available.
     const player = m.match(/^\/players?\/(.+)$/);
-    if (player) return `/data/player_profiles/${encodeURIComponent(_teamSlug(decodeURIComponent(player[1])))}.json`;
+    if (player) {
+        const playerName = decodeURIComponent(player[1]);
+        const profileSlug = PROFILE_SLUG_ALIASES.get(playerName) || _teamSlug(playerName);
+        return `/data/player_profiles/${encodeURIComponent(profileSlug)}.json`;
+    }
     const actionEvidence = m.match(/^\/action-values\/evidence\/(.+)$/);
     if (actionEvidence) return "/data/action_value_evidence.json";
     // H2H: /predictions/<home>/<away>/h2h → pairs file (searched client-side by key)
     const h2h = m.match(/^\/predictions\/(.+)\/(.+)\/h2h$/);
     if (h2h) return "/data/h2h_pairs.json";
-    // Match predictions: /predictions/<home>/<away> → generic static prediction
-    const pred = m.match(/^\/predictions\/.+\/.+$/);
-    if (pred) return "/data/predictions_default.json";
     return null;
 }
 
@@ -3109,9 +3116,11 @@ async function _fetchJsonApiFirst(apiPath, params, fetchOpts) {
 }
 
 let players = [];
+let ratingRows = [];
 let reviews = [];
 let matches = [];
 let ratingsMeta = { model_meta: {}, league_metrics: [] };
+let ratingResearchHealth = { verdict: "unavailable", blocking_reasons: [] };
 let artifactSummary = { data_health: {}, artifacts: [] };
 let detailedHealth = null; // populated by fetchDetailedHealth(); null = never fetched
 let detailedHealthState = "idle"; // "idle" | "loading" | "ok" | "error"
@@ -3154,7 +3163,11 @@ async function fetchRatings(position, league) {
             team: p.team || "",
             league: p.league || "",
             season: p.season || "",
-            key: `${p.player || ""}|${p.season || ""}|${p.team || ""}`,
+            key: p.canonical_player_id && !String(p.canonical_player_id).startsWith("unresolved:")
+                ? `${p.canonical_player_id}|${p.season || ""}`
+                : `${p.player || ""}|${p.season || ""}|${p.team || ""}`,
+            canonical_player_id: p.canonical_player_id || null,
+            canonical_match_ambiguous: !!p.canonical_match_ambiguous,
             rating: +(p.optimized_score || 0).toFixed(1),
             confidence: (p.confidence_level || "LOW").toUpperCase(),
             minutes: Math.round(p.minutes || 0),
@@ -3214,6 +3227,74 @@ async function fetchRatingsMeta() {
     } catch (err) {
         console.warn("Failed to fetch ratings meta:", err);
         return { model_meta: {}, league_metrics: [] };
+    }
+}
+
+function isResolvedRatingEntity(player) {
+    return Boolean(
+        player.canonical_player_id
+        && !String(player.canonical_player_id).startsWith("unresolved:")
+        && !player.canonical_match_ambiguous
+    );
+}
+
+function buildPlayerView(rows) {
+    if (appState.playerView === "season") return rows;
+
+    const groups = new Map();
+    for (const row of rows) {
+        // Never merge unresolved or ambiguous rows: the same name can be two
+        // real people, and a missing identity decision is not permission to
+        // infer one.
+        const groupKey = isResolvedRatingEntity(row)
+            ? `entity:${row.canonical_player_id}`
+            : `row:${row.key}`;
+        if (!groups.has(groupKey)) groups.set(groupKey, []);
+        groups.get(groupKey).push(row);
+    }
+
+    return Array.from(groups, ([key, group]) => {
+        if (group.length === 1) return group[0];
+        const seasons = [...new Set(group.map((p) => p.season).filter(Boolean))];
+        const teams = [...new Set(group.map((p) => p.team).filter(Boolean))];
+        const leagues = [...new Set(group.map((p) => p.league).filter(Boolean))];
+        const totalMinutes = group.reduce((sum, p) => sum + (p.minutes || 0), 0);
+        const weights = group.map((p) => Math.max(p.minutes || 0, 1));
+        const weightTotal = weights.reduce((sum, value) => sum + value, 0);
+        const weightedRating = group.reduce(
+            (sum, p, index) => sum + p.rating * weights[index],
+            0,
+        ) / weightTotal;
+        const representative = [...group].sort((a, b) => b.minutes - a.minutes)[0];
+        const confidenceOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+        const confidence = group.reduce(
+            (best, p) => confidenceOrder[p.confidence] > confidenceOrder[best] ? p.confidence : best,
+            "LOW",
+        );
+        return {
+            ...representative,
+            key,
+            team: teams.join(" / "),
+            league: leagues.join(" / "),
+            season: seasons.join(" / "),
+            seasons,
+            leagues,
+            minutes: totalMinutes,
+            matches: group.reduce((sum, p) => sum + (p.matches || 0), 0),
+            rating: +weightedRating.toFixed(1),
+            confidence,
+            seasonCount: seasons.length,
+            entityRowCount: group.length,
+        };
+    });
+}
+
+async function fetchResearchHealth() {
+    try {
+        return await fetchJson("/health/research");
+    } catch (err) {
+        console.warn("Failed to fetch research health:", err);
+        return { verdict: "unavailable", blocking_reasons: ["health_unavailable"] };
     }
 }
 
@@ -3826,6 +3907,7 @@ const appState = {
     charts: {},
     playerPage: 1,
     playerPageSize: 50,
+    playerView: "player",
     playerSortCol: "rating",
     playerSortAsc: false,
     compareKeys: [],
@@ -4098,23 +4180,55 @@ async function setView(view) {
             button.removeAttribute("aria-current");
         }
     });
+    if (GATED_VIEWS.has(view)) renderViewGatePlaceholder(view);
     requestAnimationFrame(renderActiveView);
+}
+
+const GATED_VIEWS = new Map([
+    ["backtest", "当前没有可供离线展示的可信回测产物；该视图待真实 artifact 与垂直验收完成后恢复。"],
+]);
+
+function applyViewExposureGate() {
+    document.querySelectorAll(".nav-action[data-view]").forEach((button) => {
+        if (GATED_VIEWS.has(button.dataset.view)) button.hidden = true;
+    });
+}
+
+function renderViewGatePlaceholder(view) {
+    const section = document.getElementById(`view-${view}`);
+    if (!section) return;
+    Array.from(section.children).forEach((child) => {
+        if (!child.classList.contains("view-gated-placeholder")) child.hidden = true;
+    });
+    let placeholder = section.querySelector(".view-gated-placeholder");
+    if (!placeholder) {
+        placeholder = document.createElement("article");
+        placeholder.className = "liquid-panel compact view-gated-placeholder";
+        placeholder.style.cssText = "padding:1.4rem;color:var(--text-muted)";
+        section.appendChild(placeholder);
+    }
+    placeholder.textContent = GATED_VIEWS.get(view) || "该视图暂未开放。";
 }
 
 function filteredPlayers() {
     const query = document.getElementById("global-search").value.trim().toLowerCase();
     return players.filter((player) => {
         const matchesPosition = appState.position === "ALL" || player.position === appState.position;
-        const matchesSeason = appState.season === "ALL" || player.season === appState.season;
-        const matchesLeague = appState.league === "ALL" || player.league === appState.league;
+        const matchesSeason = appState.season === "ALL"
+            || (player.seasons || [player.season]).includes(appState.season);
+        const matchesLeague = appState.league === "ALL"
+            || (player.leagues || [player.league]).includes(appState.league);
         const matchesQuery = !query || [player.name, player.team, player.position].join(" ").toLowerCase().includes(query);
         return matchesPosition && matchesSeason && matchesLeague && matchesQuery;
     });
 }
 
 function renderPlayers() {
+    const rankingAllowed = ratingResearchHealth.verdict === "ready";
     const sorted = filteredPlayers().sort((a, b) => {
-        const col = appState.playerSortCol;
+        const col = !rankingAllowed && appState.playerSortCol === "rating"
+            ? "name"
+            : appState.playerSortCol;
         const dir = appState.playerSortAsc ? 1 : -1;
         if (col === "rating") return dir * (a.rating - b.rating);
         const va = String(a[col] || "").toLowerCase();
@@ -4130,6 +4244,7 @@ function renderPlayers() {
     const tbody = document.getElementById("player-table");
     if (players.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Loading...</td></tr>';
+        renderRatingSourceNotice();
         return;
     }
     tbody.innerHTML = rows.map((player, i) => {
@@ -4137,14 +4252,19 @@ function renderPlayers() {
         const lowAppBadge = player.low_appearance
             ? `<span class="status-pill low-appearance" title="${appState.lang === 'zh' ? '出场不足20场，评分已扣减' : 'Under 20 matches, score penalized'}">${appState.lang === 'zh' ? '低出场' : 'LOW APP'}</span>`
             : '';
+        const identityBadge = player.canonical_match_ambiguous
+            ? '<span class="status-pill" title="canonical identity match is ambiguous">AMBIGUOUS</span>'
+            : (!isResolvedRatingEntity(player)
+                ? '<span class="status-pill" title="canonical identity is unresolved">UNRESOLVED</span>'
+                : '');
         return `
         <tr class="${player.key === appState.selectedPlayerKey ? "selected" : ""}${player.low_appearance ? " low-appearance-row" : ""}" data-player-key="${escapeAttr(player.key)}" style="cursor:pointer">
             <td>${index + 1}</td>
-            <td>${escapeHtml(player.name)}${lowAppBadge}</td>
+            <td>${escapeHtml(player.name)}${identityBadge}${lowAppBadge}</td>
             <td>${escapeHtml(player.position)}</td>
             <td>${escapeHtml(player.team)}</td>
             <td>${escapeHtml(player.season)}</td>
-            <td>${player.rating.toFixed(1)}</td>
+            <td title="${rankingAllowed ? "" : escapeHtml(appState.lang === "zh" ? "研究健康未就绪，暂不作强排名" : "Research health is not ready; strong ranking is disabled")}">${rankingAllowed ? player.rating.toFixed(1) : "—"}</td>
             <td><span class="status-pill ${confidenceClass(player.confidence)}">${escapeHtml(player.confidence)}</span></td>
             <td class="actions-cell">
                 <button class="action-btn${isInPlayerWatchlist(player.key) ? ' active' : ''}" data-action-watch="${escapeAttr(player.key)}" title="${escapeHtml(t('action_watchlist'))}" type="button">\u25A1</button>
@@ -4216,6 +4336,8 @@ function renderPlayers() {
     if (prevBtn) prevBtn.disabled = appState.playerPage <= 1;
     if (nextBtn) nextBtn.disabled = appState.playerPage >= totalPages;
 
+    renderRatingSourceNotice();
+
     // Update sort indicators on headers
     document.querySelectorAll("th[data-sort]").forEach((th) => {
         const isActive = th.dataset.sort === appState.playerSortCol;
@@ -4231,6 +4353,29 @@ function renderPlayers() {
     renderComparePanel();
 }
 
+function renderRatingSourceNotice() {
+    const note = document.getElementById("rating-source-note");
+    if (!note) return;
+    const source = ratingsMeta.rating_source || {};
+    const ready = ratingResearchHealth.verdict === "ready";
+    const runId = source.latest_run_id || "not_recorded";
+    const trainHash = source.training_manifest_hash || "not_recorded";
+    const currentHash = source.current_manifest_hash || "not_recorded";
+    const status = ready
+        ? (appState.lang === "zh" ? "可用于研究视图" : "Research view available")
+        : (appState.lang === "zh" ? "未就绪：不作强排名" : "Not ready: strong ranking disabled");
+    const blocker = Array.isArray(ratingResearchHealth.blocking_reasons)
+        ? ratingResearchHealth.blocking_reasons.join(", ")
+        : "";
+    note.innerHTML = `<div style="display:grid;gap:0.2rem">
+        <strong>${escapeHtml(source.label || (appState.lang === "zh" ? "评分来源未记录" : "Rating source not recorded"))}</strong>
+        <span>${escapeHtml(status)} · run_id=${escapeHtml(runId)}</span>
+        <span>objective=${escapeHtml(source.training_objective || "not_recorded")}</span>
+        <span>feature_hash=${escapeHtml(trainHash)} → current=${escapeHtml(currentHash)} · match=${source.manifest_match ? "yes" : "no"}</span>
+        ${blocker ? `<span style="color:var(--text-muted)">research_health: ${escapeHtml(blocker)}</span>` : ""}
+    </div>`;
+}
+
 async function renderPlayerProfile() {
     const player = players.find((item) => item.key === appState.selectedPlayerKey) || players[0];
     if (!player) return;
@@ -4239,11 +4384,21 @@ async function renderPlayerProfile() {
     // Fetch real profile data for radar
     let profile = null;
     try {
-        profile = await fetchJson(`/players/${encodeURIComponent(player.name)}?season=${player.season}`);
+        const profileParams = new URLSearchParams();
+        if (player.season) profileParams.set("season", player.season);
+        if (isResolvedRatingEntity(player)) {
+            profileParams.set("canonical_player_id", player.canonical_player_id);
+        }
+        const profileQuery = profileParams.toString();
+        profile = await fetchJson(
+            `/players/${encodeURIComponent(player.name)}${profileQuery ? `?${profileQuery}` : ""}`,
+        );
     } catch (err) { /* fallback to list data */ }
 
     const detailMinutes = profile ? profile.minutes : player.minutes;
-    const detailScore = profile ? profile.optimized_score : player.rating;
+    const detailScore = ratingResearchHealth.verdict === "ready"
+        ? (profile ? profile.optimized_score : player.rating)
+        : null;
     const detailPosition = profile ? profile.position_group : player.position;
     const detailMatches = profile ? profile.matches : player.matches;
     const detailLowApp = profile ? profile.low_appearance : player.low_appearance;
@@ -4257,7 +4412,7 @@ async function renderPlayerProfile() {
         <div><span>${escapeHtml(t("minutes"))}</span><strong>${escapeHtml(detailMinutes)}</strong></div>
         <div><span>${appState.lang === "zh" ? "出场" : "Matches"}</span><strong>${escapeHtml(detailMatches)}</strong></div>
         <div><span>${escapeHtml(t("th_pos"))}</span><strong>${escapeHtml(detailPosition)}</strong></div>
-        <div><span>${escapeHtml(t("th_rating"))}</span><strong>${escapeHtml(detailScore)}</strong></div>
+        <div><span>${escapeHtml(t("th_rating"))}</span><strong>${escapeHtml(detailScore == null ? "—" : String(detailScore))}</strong></div>
         <div><span>${appState.lang === "zh" ? "联赛" : "League"}</span><strong>${escapeHtml(detailLeague || "–")}</strong></div>
         ${/* Season trend */ (() => {
             const trend = profile ? (profile.season_trend || profile.rating_trend || null) : null;
@@ -5493,6 +5648,61 @@ function renderComparePanel() {
 
 let valuePlayers = [];
 let valueStratification = {};
+let marketValueSummary = { status: "no_data" };
+let marketValuePlayers = [];
+
+async function fetchMarketValueData() {
+    try {
+        const [summary, page] = await Promise.all([
+            fetchJson("/market-value/summary"),
+            fetchJson("/market-value/players", { params: "limit=12" }),
+        ]);
+        return {
+            summary: summary && typeof summary === "object" ? summary : { status: "no_data" },
+            players: Array.isArray(page && page.players) ? page.players : [],
+        };
+    } catch (err) {
+        console.warn("Failed to fetch market value data:", err);
+        return { summary: { status: "no_data", evidence: { reason: "market_value_api_unavailable" } }, players: [] };
+    }
+}
+
+function formatMarketValue(value) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return "—";
+    if (amount >= 1e9) return `€${(amount / 1e9).toFixed(2)}B`;
+    if (amount >= 1e6) return `€${(amount / 1e6).toFixed(1)}M`;
+    return `€${Math.round(amount / 1e3)}K`;
+}
+
+function renderMarketValue() {
+    const summaryEl = document.getElementById("market-value-summary");
+    const provenanceEl = document.getElementById("market-value-provenance");
+    const listEl = document.getElementById("market-value-list");
+    if (!summaryEl || !provenanceEl || !listEl) return;
+    if (marketValueSummary.status !== "ok" || marketValuePlayers.length === 0) {
+        summaryEl.innerHTML = "";
+        listEl.textContent = appState.lang === "zh"
+            ? "本地市场数据不可用；未使用 synthetic 或旧静态快照。"
+            : "Local market data is unavailable; no synthetic or stale static snapshot is shown.";
+        const reason = marketValueSummary.evidence && marketValueSummary.evidence.reason;
+        provenanceEl.textContent = reason || (appState.lang === "zh" ? "需要本地 API 与手动 Transfermarkt 快照。" : "Requires the local API and a manually supplied Transfermarkt snapshot.");
+        return;
+    }
+    const source = marketValueSummary.source || {};
+    const latest = marketValueSummary.latest_snapshot_date || "not_recorded";
+    provenanceEl.textContent = `${source.source_name || "transfermarkt_manual"} · snapshot=${latest} · ${source.license_boundary || "Personal local use only; no redistribution."}`;
+    summaryEl.innerHTML = [
+        [marketValueSummary.total_players, appState.lang === "zh" ? "球员" : "players"],
+        [marketValueSummary.total_snapshots, appState.lang === "zh" ? "快照行" : "snapshots"],
+        [latest, appState.lang === "zh" ? "最新日期" : "latest snapshot"],
+    ].map(([value, label]) => `<div><span class="metric-value">${escapeHtml(String(value ?? "—"))}</span><span>${escapeHtml(label)}</span></div>`).join("");
+    listEl.innerHTML = marketValuePlayers.map((player, index) => `<div class="rank-item">
+        <div><strong>${index + 1}. ${escapeHtml(player.player_name || "—")}</strong>
+        <span class="rank-meta">${escapeHtml(player.team_name || "—")} · ${escapeHtml(player.position || "—")} · snapshot ${escapeHtml(player.snapshot_date || "—")}</span></div>
+        <span class="status-pill status-high">${escapeHtml(formatMarketValue(player.market_value_eur))}</span>
+    </div>`).join("");
+}
 
 // No mock value data — API must be online for value report
 
@@ -5500,6 +5710,9 @@ async function fetchValueReport() {
     try {
         const data = await fetchJson("/value-summary");
         valueSummaryMeta = data;
+        if (data && (data.status === "demo" || data.data_mode === "synthetic")) {
+            return [];
+        }
         // Prefer dedicated stratification fields, fall back to nested
         // structure from newer API payloads.
         if (data && typeof data === "object") {
@@ -9351,6 +9564,7 @@ async function _renderCompareResult(a, b) {
 }
 
 function renderValue() {
+    renderMarketValue();
     const isMock = valuePlayers.length === 0;
     const data = valuePlayers;
     // Apply price band filter
@@ -9373,7 +9587,9 @@ function renderValue() {
             valueTitle.appendChild(indicator);
         }
         if (isMock) {
-            indicator.textContent = appState.lang === "zh" ? "DEMO" : "DEMO";
+            indicator.textContent = valueSummaryMeta.status === "demo"
+                ? "UNAVAILABLE"
+                : (appState.lang === "zh" ? "NO DATA" : "NO DATA");
             indicator.className = "status-pill status-low data-source-indicator";
         } else {
             indicator.textContent = "";
@@ -16874,6 +17090,10 @@ function renderData() {
 }
 
 async function renderActiveView() {
+    if (GATED_VIEWS.has(appState.view)) {
+        renderViewGatePlaceholder(appState.view);
+        return;
+    }
     if (appState.view === "overview") {
         renderOverview();
         // Re-render the detailed-health panel with current cached data so
@@ -21366,7 +21586,7 @@ function exportPlayers() {
         player.team,
         player.league || "",
         player.season,
-        player.rating,
+        ratingResearchHealth.verdict === "ready" ? player.rating : "",
         player.confidence,
         player.minutes || "",
         player.goals || "",
@@ -21417,6 +21637,13 @@ function bindEvents() {
     document.getElementById("league-filter").addEventListener("change", (event) => {
         appState.league = event.target.value;
         appState.playerPage = 1;
+        renderPlayers();
+    });
+    document.getElementById("player-view-mode")?.addEventListener("change", (event) => {
+        appState.playerView = event.target.value === "season" ? "season" : "player";
+        players = buildPlayerView(ratingRows);
+        appState.playerPage = 1;
+        appState.selectedPlayerKey = players[0]?.key || "";
         renderPlayers();
     });
     // Pagination
@@ -22160,7 +22387,7 @@ function bindEvents() {
         fetchJson("/tactical-board/capabilities").then(caps => {
             if (caps.ffmpeg_available) {
                 tacticalExportMp4.style.opacity = "1";
-                tacticalExportMp4.title = "ffmpeg detected: " + (caps.ffmpeg_path || "");
+                tacticalExportMp4.title = "ffmpeg detected on local API";
             } else {
                 tacticalExportMp4.title = "ffmpeg not found on server — MP4 export unavailable";
             }
@@ -22203,8 +22430,8 @@ function bindEvents() {
 
                 if (result.status === "ok") {
                     alert(zT
-                        ? `◆ MP4 导出成功！\n保存到: ${result.path}\n大小: ${(result.size_bytes / 1024).toFixed(1)} KB`
-                        : `◆ MP4 exported!\nSaved to: ${result.path}\nSize: ${(result.size_bytes / 1024).toFixed(1)} KB`
+                        ? `◆ MP4 导出成功！\n文件: ${result.filename}\n大小: ${(result.size_bytes / 1024).toFixed(1)} KB`
+                        : `◆ MP4 exported!\nFile: ${result.filename}\nSize: ${(result.size_bytes / 1024).toFixed(1)} KB`
                     );
                 } else {
                     alert(zT
@@ -27624,6 +27851,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     themeToggle.setAttribute("aria-pressed", startsDark ? "true" : "false");
     themeToggle.setAttribute("aria-label", startsDark ? "切换为浅色主题" : "切换为深色主题");
     applyLocale();
+    applyViewExposureGate();
     renderMatchSelectors();
     // Start WC init early — it runs in parallel with other API calls
     const wcInitPromise = initWorldCup();
@@ -27642,12 +27870,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadWatchlistNotes();
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, truthSupervision, transfermarktIdentity, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
+    const [ratingsData, meta, researchHealth, artifacts, teams, valueData, marketValueData, reviewData, predictionArtifact, predictionCalibrationData, runs, truthSupervision, transfermarktIdentity, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
+        fetchResearchHealth(),
         fetchArtifacts(),
         fetchTeams(),
         fetchValueReport(),
+        fetchMarketValueData(),
         fetchReviewQueue(),
         fetchPredictionMeta(),
         fetchPredictionCalibration(),
@@ -27663,8 +27893,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         fetchLicense(),
     ]);
 
-    players = ratingsData;
+    ratingRows = ratingsData;
+    players = buildPlayerView(ratingRows);
     ratingsMeta = meta;
+    ratingResearchHealth = researchHealth;
+    marketValueSummary = marketValueData.summary;
+    marketValuePlayers = marketValueData.players;
     artifactSummary = artifacts;
     valuePlayers = valueData;
     reviewQueue = reviewData;
@@ -27686,13 +27920,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Populate season filter dropdown
-    const seasons = [...new Set(players.map((p) => p.season).filter(Boolean))].sort();
+    const seasons = [...new Set(ratingRows.flatMap((p) => p.seasons || [p.season]).filter(Boolean))].sort();
     const seasonSelect = document.getElementById("season-filter");
     seasonSelect.innerHTML = '<option value="ALL">ALL</option>' + seasons.map((s) => `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`).join("");
     seasonSelect.value = appState.season;
 
     // Populate league filter dropdown
-    const leagues = [...new Set(players.map((p) => p.league).filter(Boolean))].sort();
+    const leagues = [...new Set(ratingRows.flatMap((p) => p.leagues || [p.league]).filter(Boolean))].sort();
     const leagueSelect = document.getElementById("league-filter");
     leagueSelect.innerHTML = '<option value="ALL">ALL</option>' + leagues.map((l) => `<option value="${escapeAttr(l)}">${escapeHtml(l)}</option>`).join("");
     leagueSelect.value = appState.league;

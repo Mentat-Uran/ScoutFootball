@@ -50,6 +50,7 @@ from scoutfootball.app.data_loader import (
     load_score_prediction_dc,
     load_team_match,
 )
+from scoutfootball.evaluation.canonical_resolver import load_resolved_player_ratings
 from scoutfootball.evaluation.scouting_queue import build_scouting_queues
 from scoutfootball.head_to_head import get_head_to_head as _compute_head_to_head
 from scoutfootball.head_to_head import load_match_results as _load_match_results
@@ -6294,6 +6295,20 @@ def get_player_ratings(
     if df.empty:
         return {"count": 0, "players": [], "data_mode": "empty"}
 
+    canonical_resolution = "unavailable"
+    if {
+        "player",
+        "season",
+    }.issubset(df.columns) and "canonical_player_id" not in df.columns:
+        try:
+            df = load_resolved_player_ratings(settings=_settings(), ratings_df=df)
+            canonical_resolution = "ok"
+        except Exception as exc:  # noqa: BLE001 — ratings remain read-only
+            logger.warning("Canonical ratings resolution unavailable: %s", exc)
+            df = df.copy()
+            df["canonical_player_id"] = "unresolved:unknown:missing"
+            df["canonical_match_ambiguous"] = False
+
     # PRS-0 R-003: stamp synthetic fallback in the response so consumers
     # cannot mistake demo data for a real rating artifact. The data is still
     # served (so the UI does not break) but is clearly labeled.
@@ -6316,6 +6331,7 @@ def get_player_ratings(
         "count": len(players),
         "players": players,
         "data_mode": "synthetic" if synthetic else "artifact",
+        "canonical_resolution": canonical_resolution,
         # PRS-1 R-006: stamp the evidence grain so season-proxy ratings
         # cannot be mistaken for match-level evidence in the UI/exports.
         "evidence_grain": _infer_evidence_grain(df),
@@ -6323,7 +6339,7 @@ def get_player_ratings(
 
 
 def get_ratings_meta() -> dict:
-    """Return model metadata and league metrics."""
+    """Return model metadata, league metrics, and rating-source disclosure."""
     meta_df = load_model_meta()
     league_df = load_league_metrics()
 
@@ -6333,7 +6349,59 @@ def get_ratings_meta() -> dict:
 
     leagues = league_df.to_dict(orient="records") if not league_df.empty else []
 
-    return _clean_json_value({"model_meta": meta, "league_metrics": leagues})
+    # The active table is a legacy optimizer artifact. Expose the nearest
+    # recorded run and manifest comparison without mutating or silently
+    # promoting it to a reviewed rating. The frontend uses this disclosure to
+    # avoid presenting a proxy objective as independently validated ability.
+    settings = _settings()
+    latest_run_meta: dict[str, Any] = {}
+    runs_dir = settings.data_root / "models" / "runs"
+    if runs_dir.exists():
+        for run_dir in sorted(
+            (path for path in runs_dir.iterdir() if path.is_dir()),
+            key=lambda path: path.name,
+            reverse=True,
+        ):
+            candidate = _read_json(run_dir / "meta.json")
+            if candidate:
+                latest_run_meta = {**candidate, "run_id": run_dir.name}
+                break
+
+    current_manifest = _read_json(
+        settings.data_root / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
+    )
+    training_manifest_hash = (
+        latest_run_meta.get("lineage", {})
+        .get("feature_manifest", {})
+        .get("hash")
+    )
+    current_manifest_hash = current_manifest.get("hash")
+    rating_source = {
+        "kind": "optimizer_proxy_objective",
+        "label": "优化器代理目标产物（非独立验证的球员能力）",
+        "latest_run_id": latest_run_meta.get("run_id"),
+        "training_objective": (
+            "球队积分代理目标：Spearman/NDCG、积分回归、分布/校准与联赛偏差惩罚"
+        ),
+        "training_manifest_hash": training_manifest_hash,
+        "current_manifest_hash": current_manifest_hash,
+        "manifest_match": (
+            training_manifest_hash is not None
+            and current_manifest_hash is not None
+            and training_manifest_hash == current_manifest_hash
+        ),
+        "research_health_endpoint": "/health/research",
+        "limitations": [
+            "该评分优化球队积分代理目标，不等同于独立监督的球员能力真值。",
+            "research_health=not_ready 时，主界面不得把它作为强排名结论。",
+        ],
+    }
+
+    return _clean_json_value({
+        "model_meta": meta,
+        "league_metrics": leagues,
+        "rating_source": rating_source,
+    })
 
 
 # ── Position group mapping for team strength aggregation ──────────
@@ -8106,6 +8174,7 @@ def get_player_profile(
     limit: int = 50,
     offset: int = 0,
     fmt: str = "json",
+    canonical_player_id: str | None = None,
 ) -> dict:
     """Return detailed player profile with radar dimensions.
 
@@ -8116,6 +8185,25 @@ def get_player_profile(
     import pandas as pd
 
     df = load_player_ratings()
+
+    # Canonical identity is optional for backward-compatible name routes, but
+    # when supplied it becomes the primary detail selector. This keeps the
+    # UI from silently switching to a same-name row after entity aggregation.
+    if canonical_player_id and {
+        "player",
+        "season",
+    }.issubset(df.columns) and "canonical_player_id" not in df.columns:
+        try:
+            df = load_resolved_player_ratings(
+                settings=_settings(),
+                ratings_df=df,
+            )
+            canonical_mask = (
+                df["canonical_player_id"].astype(str) == canonical_player_id
+            )
+            df = df[canonical_mask].reset_index(drop=True)
+        except Exception as exc:  # noqa: BLE001 — keep legacy name fallback
+            logger.warning("Canonical profile resolution unavailable: %s", exc)
 
     # PRS-0 R-003: refuse to export synthetic fallback as real research CSV.
     # Check at the top so the maintainer gets an immediate, clear error
@@ -8306,6 +8394,8 @@ def get_player_profile(
         "team": row.get("team", ""),
         "league": row.get("league", ""),
         "season": row.get("season", ""),
+        "canonical_player_id": row.get("canonical_player_id"),
+        "canonical_match_ambiguous": bool(row.get("canonical_match_ambiguous", False)),
         "position_group": position,
         "optimized_score": round(score, 1),
         "minutes": round(minutes),

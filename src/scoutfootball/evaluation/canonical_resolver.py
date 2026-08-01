@@ -304,8 +304,9 @@ def load_resolved_player_match(
 
 def load_resolved_player_ratings(
     settings: PlatformSettings | None = None,
+    ratings_df: Any | None = None,
 ) -> Any:
-    """Load ``player_ratings_optimized.parquet`` and return a resolved view.
+    """Load a legacy ratings frame and return a resolved view.
 
     The returned DataFrame is a copy of the legacy ratings table with
     ``player_id``, ``source_name``, ``canonical_player_id`` and
@@ -330,8 +331,14 @@ def load_resolved_player_ratings(
     ``canonical_player_id=unresolved:unknown:missing`` (the defensive
     fallback in ``resolve_canonical_ids``).
 
-    Raises ``ValueError`` if ``player_ratings_optimized.parquet`` is
-    missing, empty or unreadable. A missing or unreadable
+    When ``ratings_df`` is omitted, the frame is loaded from
+    ``player_ratings_optimized.parquet``. Callers that already loaded or
+    filtered the frame may pass it explicitly; it is copied before any
+    derived columns are added. This keeps the API path on the same resolver
+    contract without reading the ratings artifact twice.
+
+    Raises ``ValueError`` if the ratings frame is missing, empty or unreadable.
+    A missing or unreadable
     ``player_match.parquet`` is not fatal: every row gets
     ``canonical_player_id=unresolved:unknown:missing`` so the legacy
     ratings table is still honest about its unresolved state.
@@ -341,9 +348,16 @@ def load_resolved_player_ratings(
     from scoutfootball.evaluation.identity_registry import read_registry
 
     resolved = settings or PlatformSettings.from_root()
-    ratings_df, error = _read_player_ratings(resolved)
     if ratings_df is None:
-        raise ValueError(f"canonical_resolver_load_failed:{error}")
+        ratings_df, error = _read_player_ratings(resolved)
+        if ratings_df is None:
+            raise ValueError(f"canonical_resolver_load_failed:{error}")
+    else:
+        if not isinstance(ratings_df, pd.DataFrame):
+            raise ValueError("canonical_resolver_ratings_frame_invalid")
+        ratings_df = ratings_df.copy()
+        if ratings_df.empty:
+            raise ValueError("canonical_resolver_load_failed:player ratings has 0 rows")
 
     # Defensive: if the ratings table already carries a canonical_player_id
     # column, the caller must drop it first. The resolver never silently

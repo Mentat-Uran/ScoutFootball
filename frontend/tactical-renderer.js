@@ -2658,9 +2658,17 @@ const TacticalRenderer = {
             const pos = hovered.type === "bench" ? " \u66FF\u8865" : "";
             const num = hovered.number ? `#${hovered.number}` : "";
             const label = hovered.label || "";
-            this._hoverCardEl.innerHTML = `<div style="font-weight:600;margin-bottom:2px">\u25CB ${label} ${num}</div>` +
-                `<div style="opacity:0.7;font-size:11px">\u7403\u961F: ${team}${pos}</div>` +
-                `<div style="opacity:0.7;font-size:11px">\u4F4D\u7F6E: (${hovered.x.toFixed(0)}, ${hovered.y.toFixed(0)})</div>`;
+            this._hoverCardEl.replaceChildren();
+            const title = document.createElement("div");
+            title.style.cssText = "font-weight:600;margin-bottom:2px";
+            title.textContent = `\u25CB ${label} ${num}`;
+            const teamLine = document.createElement("div");
+            teamLine.style.cssText = "opacity:0.7;font-size:11px";
+            teamLine.textContent = `\u7403\u961F: ${team}${pos}`;
+            const positionLine = document.createElement("div");
+            positionLine.style.cssText = "opacity:0.7;font-size:11px";
+            positionLine.textContent = `\u4F4D\u7F6E: (${hovered.x.toFixed(0)}, ${hovered.y.toFixed(0)})`;
+            this._hoverCardEl.append(title, teamLine, positionLine);
             const rect = this.canvas.getBoundingClientRect();
             this._hoverCardEl.style.display = "block";
             this._hoverCardEl.style.left = (rect.left + cx + 16) + "px";

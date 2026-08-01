@@ -120,6 +120,13 @@ def test_static_server_404_continues_to_mapped_json_fallback() -> None:
     assert '"/action-values": "/data/action_values.json"' in app_js
 
 
+def test_profile_name_variant_uses_one_static_slug() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "PROFILE_SLUG_ALIASES" in app_js
+    assert '["Kylian Mbappe-Lottin", "Kylian_Mbappé"]' in app_js
+
+
 def test_league_coverage_counts_rated_teams_not_player_rows() -> None:
     app_js = _read(FRONTEND / "app.js")
 
