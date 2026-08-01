@@ -1,0 +1,25 @@
+name: Brief CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  brief:
+    name: brief
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Compile Python sources
+        run: python -m compileall -q src
+
+      - name: Check frontend syntax
+        run: node --check frontend/app.js

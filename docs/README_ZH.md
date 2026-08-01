@@ -188,7 +188,7 @@ README 不再维护易漂移的缓存行数，当前状态以生成的数据健�
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 克隆并安装
-git clone https://github.com/Mentaturan/ScoutFootball_for_World_Cup.git
+git clone https://github.com/Mentat-Uran/ScoutFootball_for_World_Cup.git
 cd ScoutFootball_for_World_Cup
 uv sync
 
