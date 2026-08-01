@@ -85,6 +85,3 @@ data/raw/statsbomb_open/lineups/
 
 # electron-builder caches (winCodeSign .7z etc.)
 desktop/.cache/
-
-# This public repository intentionally does not use GitHub Actions.
-.github/workflows/
