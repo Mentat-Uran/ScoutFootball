@@ -31,7 +31,7 @@
     ],
     "extraResources": [
       {
-        "from": "../backend-dist/scoutfootball-server",
+        "from": "backend-dist/scoutfootball-server",
         "to": "backend",
         "filter": ["**/*"]
       },
@@ -62,7 +62,8 @@
           "target": "dir",
           "arch": ["x64"]
         }
-      ]
+      ],
+      "signAndEditExecutable": false
     },
     "publish": null
   }
